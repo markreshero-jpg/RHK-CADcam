@@ -31,3 +31,8 @@ insert into hardware_handles (name, handle_type, grip_kind, needs_finger_gap, be
 select 'Linear sharknose strip 35 (front material)', 'linear', 'linear', false, 38, 0, 35, 350, 50, 4.5, '[]'::jsonb, true,
        'Strip of the front''s own board on the face, full length, sharknose edge; screwed from the back of the front (z_handles D17)'
 where not exists (select 1 from hardware_handles where grip_kind = 'linear');
+
+-- H9b (2026-10-25): the strip's sharknose travels with the saved part, so views
+-- drawn from saved parts (the room 3D view) can draw the bevel.
+alter table case_parts add column if not exists lh jsonb;
+comment on column case_parts.lh is 'Linear strip handle (z_handles D17): {bevel_edge, angle_deg, land} — the sharknose drawn on lh:<n> parts';

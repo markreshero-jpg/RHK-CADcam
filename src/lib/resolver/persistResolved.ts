@@ -66,6 +66,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       ...(p.wrap ? { wrap: p.wrap } : {}),
       // Rib cut-outs (z_curved_end C4).
       ...(p.cutouts?.length ? { cutouts: p.cutouts } : {}),
+      // Linear strip handle's sharknose (z_handles D17), for views drawn from saved parts.
+      ...(p.lh ? { lh: p.lh } : {}),
     })),
     toekick_parts: resolved.toekick_parts.map(p => ({
       part_key:        p.part_key,

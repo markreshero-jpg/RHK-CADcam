@@ -144,6 +144,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       ...(p.bevel_hi ? { bevel_hi: Number(p.bevel_hi) } : {}),
       ...(p.upright ? { upright: true } : {}),
       ...(p.wrap ? { wrap: p.wrap } : {}),
+      ...(p.lh ? { lh: p.lh } : {}),   // linear strip handle's sharknose (z_handles D17)
     }))
     const intPartsArr = myInt.map(p => ({
       part_type: p.part_type,
