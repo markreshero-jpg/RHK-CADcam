@@ -155,6 +155,12 @@ interface ElevationSVGProps {
   onSetElevWall: (id: string) => void
   elevWallSide: 'face' | 'back'
   onSetElevWallSide: (side: 'face' | 'back') => void
+  /** Cross section cut line (z_section_view): elevation x, null = off. */
+  crossCutX?: number | null
+  onCrossCutX?: (x: number) => void
+  onToggleCrossSection?: () => void
+  /** A drag of the cut line finished. */
+  onCrossCutDone?: () => void
   onUpdateCabinet: (id: string, u: Partial<CabinetInstance>) => void
   onPlaceAtWall: (wall: Wall, pos_x: number, pos_y: number, dx?: number) => Promise<void>
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
@@ -230,6 +236,7 @@ export default function ElevationSVG({
   onBlankWallContextMenu, onFixtureContextMenu, onShiftSelectCabinet, onMarqueeSelect, onEqualizeWidths,
   cabResize, onCabResizeStart, onCabResizeUpdate, onCabResizeDone,
   resolvedParts: resolvedPartsRaw, onDeselect, onSeamClick, onCabinetDoubleClick, elevWallSide, onSetElevWallSide,
+  crossCutX, onCrossCutX, onToggleCrossSection, onCrossCutDone,
   elevSnapSettings, onElevSnapSettingsChange,
   elevSnapResult, setElevSnapResult,
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
@@ -921,6 +928,16 @@ export default function ElevationSVG({
               }`}>
               Section
             </button>
+            {onToggleCrossSection && (
+              <button
+                onClick={onToggleCrossSection}
+                title="Cross section: a side-on cut through this wall at a line you drag along it (shows in the right-hand column)"
+                className={`px-2.5 py-0.5 text-[10px] rounded whitespace-nowrap transition-colors ${
+                  crossCutX != null ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
+                }`}>
+                Cross section
+              </button>
+            )}
           </>
         )}
         {multiSelect.length >= 2 && (
@@ -2425,6 +2442,41 @@ export default function ElevationSVG({
             })()}
 
             {annotationsLayer}
+
+            {/* Cross section cut line (z_section_view) — drag it along the wall */}
+            {crossCutX != null && onCrossCutX && (() => {
+              const x = crossCutX, y0 = -14 / z, y1 = roomH + 14 / z, s = 6 / z
+              const toX = (e: React.PointerEvent) => {
+                const r = svgRef.current!.getBoundingClientRect()
+                return Math.max(0, Math.min(wall.length, Math.round((e.clientX - r.left - view.panX) / z)))
+              }
+              return (
+                <g>
+                  <line x1={x} y1={y0} x2={x} y2={y1} stroke="#8b5cf6" strokeWidth={1.5 / lz} strokeDasharray={`${10 / z} ${4 / z}`} style={{ pointerEvents: 'none' }} />
+                  <path d={`M${x - s},${y0 - s * 1.6}L${x + s},${y0 - s * 1.6}L${x},${y0}Z M${x - s},${y1 + s * 1.6}L${x + s},${y1 + s * 1.6}L${x},${y1}Z`}
+                    fill="#8b5cf6" style={{ pointerEvents: 'none' }} />
+                  <line x1={x} y1={y0 - s * 1.6} x2={x} y2={y1 + s * 1.6} stroke="transparent" strokeWidth={14 / z}
+                    style={{ cursor: 'ew-resize' }}
+                    onPointerDown={e => {
+                      if (e.button !== 0) return
+                      e.stopPropagation(); e.preventDefault()
+                      ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+                    }}
+                    onPointerMove={e => {
+                      if (!(e.currentTarget as Element).hasPointerCapture(e.pointerId)) return
+                      e.stopPropagation()
+                      onCrossCutX(toX(e))
+                    }}
+                    onPointerUp={e => {
+                      e.stopPropagation()
+                      if ((e.currentTarget as Element).hasPointerCapture(e.pointerId)) { (e.currentTarget as Element).releasePointerCapture(e.pointerId); onCrossCutDone?.() }
+                    }}
+                    onClick={e => e.stopPropagation()}>
+                    <title>Cross section cut — drag along the wall</title>
+                  </line>
+                </g>
+              )
+            })()}
           </g>
         )}
       </svg>

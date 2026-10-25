@@ -4,15 +4,13 @@ import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { useLongPressMenu } from './useLongPressMenu'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
-import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3 } from 'three'
+import { Shape, ExtrudeGeometry, Vector3 } from 'three'
 import type { Wall, CabinetInstance, Room, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
-import { btSegments, outlinePoints, outwardNormal, effectiveProfileId, waterfallJoin } from '@/src/lib/benchtopGeometry'
-import { loftSlab, undersideOutline, apronStrip } from '@/src/lib/benchtopSlab3d'
 import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
-  wallDir, wallInwardNormal, cabWallSide, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad, cabBottomZ,
+  wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad,
 } from '@/src/lib/geometry'
 import { openingOnWall } from '@/src/lib/fixtureGeometry'
 import type { Pt, RoomRef } from '@/src/lib/geometry'
@@ -25,6 +23,8 @@ import { useHandOpMarkersMulti } from './HandOpMarkers'
 import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import Measure3D, { NO_MEASURE } from './Measure3D'
 import Fixtures3D, { type Fixtures3DProps } from './Fixtures3D'
+import { benchtopGeometries } from '@/src/lib/benchtopSolids'
+import { cabPlacement3d } from '@/src/lib/cabPlacement3d'
 
 const TO_RAD = Math.PI / 180
 const FOV    = 40
@@ -183,10 +183,8 @@ function WallLabel({ wall, room, rc }: { wall: Wall; room: Room; rc: RoomRef }) 
 
 // ── Benchtop mesh (benchtop Phase 3b, P-i) ────────────────────────────────────
 // Outline (curves sampled, cutouts as holes) extruded by the top's thickness so
-// its surface sits at topZ. Same plan → world mapping as WallMesh. Waterfall
-// edges (profile generates = 'waterfall') get a leg panel from the floor to
-// the underside, set in by the thickness under that edge; mitred apron edges
-// (generates = 'apron') a strip down to apron_drop_mm below the top surface.
+// its surface sits at topZ, plus waterfall legs and mitred aprons — built by
+// benchtopGeometries (src/lib/benchtopSolids.ts). Same plan → world mapping as WallMesh.
 
 function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wire = false }: {
   bt: BenchtopInstance
@@ -199,84 +197,17 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
   alpha: number
   wire?: boolean
 }) {
-  const { topZ, thick, defaultProfileId } = info
-  const T = thick.total
-  const segs = useMemo(() => btSegments(bt), [bt])
+  // Slab + waterfall legs + mitred aprons (src/lib/benchtopSolids.ts; the cross section slices the same solids).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- info is rebuilt per render; its fields are the inputs
+  const geos = useMemo(() => benchtopGeometries(bt, info, profiles), [bt, info.topZ, info.thick.total, info.defaultProfileId, profiles])
+  useEffect(() => () => { geos.forEach(g => g.geo.dispose()) }, [geos])
 
-  // Waterfall edges (straight only). Mitre: the slab's underside is set back by
-  // T on that edge, so its end IS the 45° bevel (one solid — loftSlab), and the
-  // leg is a full-height prism with the matching 45° top: one diagonal joint.
-  // (A separate wedge piece used to draw its own outline, which read as a butt
-  // joint too.) Butt: the top runs over a leg that stops at the underside.
-  const waterfalls = useMemo(() => segs.flatMap((s, i) => {
-    if (s.type !== 'line' || s.edge?.wall || topZ - T <= 0) return []
-    const pid = effectiveProfileId(s, defaultProfileId)
-    if (!pid || profiles[pid]?.generates !== 'waterfall') return []
-    return [{ i, s, n: outwardNormal(segs, i), join: waterfallJoin(s) }]
-  }), [segs, defaultProfileId, profiles, topZ, T])
-
-  // Mitred aprons (profile generates = 'apron'): a strip under the edge, its
-  // outer face from the top surface down to apron_drop_mm below it, mitred
-  // 45° to the slab like a mitred waterfall (curved edges follow the curve).
-  const aprons = useMemo(() => segs.flatMap((s, i) => {
-    if (s.edge?.wall) return []
-    const pid = effectiveProfileId(s, defaultProfileId)
-    const prof = pid ? profiles[pid] : undefined
-    const drop = Number(prof?.apron_drop_mm) || 0
-    return prof?.generates === 'apron' && drop > T && topZ - drop > 0 ? [{ i, drop }] : []
-  }), [segs, defaultProfileId, profiles, topZ, T])
-
-  const outline = useMemo(() => {
-    // Underside outline: mitred waterfall + apron edges set back by T (neighbours' ends follow).
-    const set = new Set([...waterfalls.filter(w => w.join === 'mitre').map(w => w.i), ...aprons.map(a => a.i)])
-    return undersideOutline(segs, i => (set.has(i) ? T : 0), 24)
-  }, [segs, waterfalls, aprons, T])
-
-  const slab = useMemo(() => {
-    const { top: topPts, bottom: botPts } = outline
-    if (topPts.length < 3 || botPts.length !== topPts.length) return null
-    return loftSlab(topPts, botPts, (bt.cutout_polygons ?? []).filter(c => c.length >= 3), topZ, topZ - T)
-  }, [outline, bt.cutout_polygons, T, topZ])
-
-  const apronGeos = useMemo(() => aprons.map(a => {
-    const { top, bottom, start } = outline
-    const k0 = start[a.i], k1 = a.i + 1 < start.length ? start[a.i + 1] : top.length
-    const idx = [...Array.from({ length: k1 - k0 }, (_, k) => k0 + k), k1 % top.length]
-    return { key: `a${a.i}`, geo: apronStrip(idx.map(k => top[k]), idx.map(k => bottom[k]), topZ, topZ - T, topZ - a.drop) }
-  }), [aprons, outline, topZ, T])
-
-  // Leg / wedge prisms: a profile in (u = inward from the outer face, v = up),
-  // extruded along the edge, placed by a basis matrix (u → −n, v → up, z → edge).
-  const legGeos = useMemo(() => waterfalls.flatMap(w => {
-    const len = Math.hypot(w.s.p1.x - w.s.p0.x, w.s.p1.y - w.s.p0.y)
-    const prism = (prof: [number, number][]) => {
-      const g = new ExtrudeGeometry(new Shape(prof.map(([u, v]) => new Vector2(u, v))), { depth: len, bevelEnabled: false })
-      // u × up must point along +z; pick the end so the basis is right-handed.
-      const zv = { x: w.n.y, y: -w.n.x }
-      const d = { x: (w.s.p1.x - w.s.p0.x) / len, y: (w.s.p1.y - w.s.p0.y) / len }
-      const o = zv.x * d.x + zv.y * d.y > 0 ? w.s.p0 : w.s.p1
-      const m = new Matrix4().makeBasis(new Vector3(-w.n.x, 0, -w.n.y), new Vector3(0, 1, 0), new Vector3(zv.x, 0, zv.y))
-      m.setPosition(o.x, 0, o.y)
-      g.applyMatrix4(m)
-      g.computeVertexNormals()
-      return g
-    }
-    const under = topZ - T
-    return w.join === 'mitre'
-      ? [{ key: `l${w.i}`, geo: prism([[0, 0], [T, 0], [T, under], [0, topZ]]) }]
-      : [{ key: `l${w.i}`, geo: prism([[0, 0], [T, 0], [T, under], [0, under]]) }]
-  }), [waterfalls, T, topZ])
-
-  useEffect(() => () => { slab?.dispose() }, [slab])
-  useEffect(() => () => { legGeos.forEach(l => l.geo.dispose()) }, [legGeos])
-  useEffect(() => () => { apronGeos.forEach(l => l.geo.dispose()) }, [apronGeos])
-
-  if (!slab) return null
+  if (!geos.length) return null
   const col = selected ? '#f59e0b' : color
   const click = onSelect ? (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect() } : undefined
   return (
     <group>
-      {[{ key: 'slab', geo: slab }, ...legGeos, ...apronGeos].map(m => (
+      {geos.map(m => (
         <mesh key={m.key + (wire ? '-w' : '')} geometry={m.geo} onClick={click}>
           <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
           <Edges threshold={20} color={selected ? '#f59e0b' : wire ? WIRE_EDGE : '#64748b'} transparent opacity={wire ? Math.max(alpha, 0.8) : alpha} />
@@ -290,19 +221,8 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
 // Parts are drawn by Cabinet3DView's CabinetScene — the same renderer as the
 // cabinet editor — so part overrides, drawn shapes, added parts and hardware
 // models match the editor exactly, gated by the display layer set.
-// The resolved cabinet's local space matches Cabinet3DView exactly:
-//   +X = along wall (width), +Y = up (height), +Z = into room (depth).
-// We place the group's origin at the cabinet's bottom-back-left world corner,
-// then apply rotY = −angleRad so local +X aligns with the wall direction.
-//
-// When +Z must point the other way, the cabinet is turned 180° (rotY + π) with
-// its origin moved to the far end of its span — a real rotation, never a mirror:
-// a negative scale flips face winding, which culls drei <Edges> (fat-line quads)
-// and see-through faces, and swaps the cabinet's left/right.
-//   isNaturalPerp = true  → rotY=−angle makes +Z point toward wall inward ✓
-//   isNaturalPerp = false → +Z points outward → turn
-//   isFlipped (back side) → cabinet faces opposite side → turn again
-//   net: needTurn = (isNaturalPerp === isFlipped)
+// Placement (origin, turn, floor height): cabPlacement3d (src/lib/cabPlacement3d.ts),
+// shared with the cross section.
 
 type MatColEntry = string | { face?: string; back?: string; edge?: string }
 
@@ -324,23 +244,7 @@ function CabinetMesh({ cab, wall, rc, room, selected, onSelect, onContextMenu, r
   /** Wire view: every part a faint see-through panel with its edges drawn. */
   wire: boolean
 }) {
-  const angleRad = wall.angle * TO_RAD
-  const perp     = wallInwardNormal(wall, rc)
-  const wd       = wallDir(wall)
-
-  // Back-side cabinets (islands and standard walls alike) face away from the
-  // room — same test the plan view uses via cabWallPerp.
-  const isFlipped = cabWallSide(cab, wall) === 'back'
-
-  // natural +Z after rotY=−angle = (−sin θ, cos θ) in plan space
-  const isNaturalPerp = (perp.x * (-Math.sin(angleRad)) + perp.y * Math.cos(angleRad)) >= 0
-  const needTurn = isNaturalPerp === isFlipped
-
-  const floorY = cabBottomZ(cab, room, wall)
-  const rotY   = -angleRad + (needTurn ? Math.PI : 0)
-  // Turned: local +X runs back along the wall, so the origin is the span's far end.
-  const originX = cab.pos_x + (needTurn ? cab.dx * wd.x : 0)
-  const originZ = cab.pos_y + (needTurn ? cab.dx * wd.y : 0)
+  const { originX, originZ, floorY, rotY, isFlipped, perp, wd } = cabPlacement3d(cab, wall, rc, room)
 
   const SEL  = '#d97706'
   const SELE = '#fbbf24'

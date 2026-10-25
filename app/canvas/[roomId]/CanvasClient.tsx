@@ -84,6 +84,7 @@ import CanvasSidebar from './CanvasSidebar'
 import CanvasSVG from './CanvasSVG'
 import ElevationSVG from './ElevationSVG'
 import SectionSVG from './SectionSVG'
+import CrossSectionPane from './CrossSectionPane'
 import CanvasContextMenu from './CanvasContextMenu'
 import { buildContextMenuGroups } from './canvasContextItems'
 import ConfirmDeleteModal from '@/src/components/ConfirmDeleteModal'
@@ -310,6 +311,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [annotations, setAnnotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
   const planAnnotations = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
+  // Cross section in elevation (z_section_view): cut x along the elevation + look direction; null = off.
+  // A cut made on another wall re-centres on the current one.
+  const [crossCut, setCrossCut] = useState<{ wallId: string; x: number; look: 1 | -1 } | null>(null)
   const [sectionDrag, setSectionDrag] = useState<{ offsetX: number; offsetY: number } | null>(null)
   // Plan reference grid (dots). Per-user, persisted to localStorage.
   const [planGrid, setPlanGridState] = useState<PlanGridPrefs>(() => getUserPrefs().planGrid)
@@ -382,6 +386,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // raw map is kept for the edit modal, which always shows every part.
   const planResolvedParts = useMemo(() => filterHiddenMap(resolvedParts, 'plan', showHiddenParts), [resolvedParts, showHiddenParts])
   const elevResolvedParts = useMemo(() => filterHiddenMap(resolvedParts, 'elevation', showHiddenParts), [resolvedParts, showHiddenParts])
+  const crossWall = canvasView === 'elevation' && crossCut ? walls.find(w => w.id === elevWallId) ?? null : null
+  const crossX = crossWall && crossCut
+    ? (crossCut.wallId === crossWall.id && crossCut.x >= 0 ? Math.min(crossCut.x, crossWall.length) : crossWall.length / 2)
+    : null
+  const setCrossX = (x: number) => setCrossCut(c => c && elevWallId ? { ...c, wallId: elevWallId, x } : c)
   const resolvedParts3D   = useMemo(() => filterHiddenMap(resolvedParts, '3d', showHiddenParts), [resolvedParts, showHiddenParts])
 
   const svgRef = useRef<SVGSVGElement>(null)
@@ -3335,6 +3344,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             multiSelect={multiSelect}
             armedDef={armedDef}
             canEqualize={canEqualize}
+            crossCutX={crossX}
+            onCrossCutX={setCrossX}
+            onToggleCrossSection={() => {
+              if (!crossCut) useTutorial.getState().emit('xsec_on')   // tutorial cross_section
+              setCrossCut(c => c ? null : elevWallId ? { wallId: elevWallId, x: -1, look: 1 } : null)
+            }}
+            onCrossCutDone={() => useTutorial.getState().emit('xsec_moved')}
             mode={mode}
             clipboard={clipboard}
             clipboardGroup={clipboardGroup}
@@ -3492,7 +3508,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         {phone && <PhoneDrawerTab hidden={phonePanelHidden} onToggle={() => setPhonePanelHidden(h => !h)} />}
         <div className={phone
           ? 'panel-stack h-full w-[min(18rem,82vw)] overflow-y-auto flex flex-col bg-gray-900 border-l border-gray-700 shadow-2xl [&>*]:w-full! [&>*]:shrink-0 [&>*]:border-l-0'
-          : canvasView === '3d' ? 'absolute top-0 right-0 bottom-0 z-20 flex shadow-xl' : 'contents'}>
+          : canvasView === '3d' ? 'absolute top-0 right-0 bottom-0 z-20 flex shadow-xl'
+          // Cross section on: one column, the pane on top of whichever panel is open.
+          : crossWall ? 'flex-none w-72 flex flex-col min-h-0 overflow-y-auto bg-gray-900 border-l border-gray-800 [&>*]:w-full! [&>*]:shrink-0 [&>*]:border-l-0' : 'contents'}>
+        {crossWall && crossCut && (
+          <CrossSectionPane
+            walls={walls} cabinets={cabinets} room={room} wall={crossWall} side={elevWallSide}
+            cutX={crossX!} look={crossCut.look}
+            onCutX={x => { setCrossX(x); useTutorial.getState().emit('xsec_moved') }}
+            onFlip={() => { setCrossCut(c => c ? { ...c, look: c.look === 1 ? -1 : 1 } : c); useTutorial.getState().emit('xsec_flip') }}
+            onClose={() => setCrossCut(null)}
+            resolvedParts={resolvedParts3D} layers={layers3D}
+            benchtops={benchtopsDrawn} btInfo={btInfo} profiles={btCatalog.profileById}
+            fixtures={fixtures}
+          />
+        )}
         {mode !== 'draw_wall' && mode !== 'draw_island' && multiWallObjs.length >= 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
           <MultiWallPanel
             walls={multiWallObjs}

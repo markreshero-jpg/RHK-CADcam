@@ -834,6 +834,24 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double-click a cabinet → Fronts, click a door or drawer front, and under Handle type a Length. It turns amber (an override) — ↺ puts it back to full length. A shorter strip keeps to the non-hinged side on doors, centres on drawers, and hangs from the top on tall doors; the second box moves it in. Handle holes → Don’t drill turns the screw holes off, like any handle.',
       canvas: true, done: (c, s) => ev(c, 'handle_length_set') > ev(s, 'handle_length_set') },
   ]},
+
+  // Appended 2026-10-25 (z_section_view X7 — cross section in elevation).
+  { id: 'cross_section', level: 'basics', topic: 'room', title: 'Cross section through a wall',
+    blurb: 'Slide a cut line along an elevation and see every part it passes through, side-on.',
+    keywords: 'section cut side view profile depth slice elevation', steps: [
+    { id: 'elev', title: 'Open an elevation',
+      body: 'Click Elevation and pick a wall with cabinets on it.',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+    { id: 'on', title: 'Turn on Cross section',
+      body: 'Click Cross section in the elevation toolbar (next to Section). A purple dashed line appears across the wall, and the right-hand column shows the side-on cut at that line: the wall hatched, and every cabinet part, kick, front and benchtop it passes through in its true shape.',
+      canvas: true, done: (c, s) => ev(c, 'xsec_on') > ev(s, 'xsec_on') },
+    { id: 'drag', title: 'Slide the line',
+      body: 'Drag the purple line along the wall (or type a distance in the At box) and watch the cut change. In the pane, scroll to zoom in, drag to move around, double-click to fit it again. Hover a shape to see which cabinet and part it is.',
+      canvas: true, done: (c, s) => ev(c, 'xsec_moved') > ev(s, 'xsec_moved') },
+    { id: 'flip', title: 'Look the other way',
+      body: 'Click Flip. The arrow shows which end of the wall you are looking toward: → has the wall on the left, ← has it on the right. The cut follows the 3D layer set, so backs and walls show even when the elevation hides them.',
+      canvas: true, done: (c, s) => ev(c, 'xsec_flip') > ev(s, 'xsec_flip') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
