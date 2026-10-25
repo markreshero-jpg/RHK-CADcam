@@ -7,7 +7,7 @@
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
 import { Suspense, useState, useEffect, useMemo, useRef, createContext, useContext } from 'react'
-import { GrainContext, boxGrainMaps, singleGrainMap } from './woodGrain'
+import { GrainContext, boxGrainMaps, singleGrainMap, grainExtents, shapedGrainMaps } from './woodGrain'
 import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
@@ -370,17 +370,19 @@ export function Part({
   const meshKey = (wire ? 'wire' : csgGeom ? 'csg' : shapeGeom ? 'shaped' : 'box') + (alpha < 1 ? '-t' : '')
 
   // Generic wood grain on grained colours (z_material_colours MC9): the two
-  // big faces get the shared grain tile at true scale, grain along DY. Shaped
-  // (extruded) parts stay flat for now.
+  // big faces get the shared grain tile at true scale (direction per
+  // grainExtents; shaped parts per shapedGrainMaps).
   const grainIds = useContext(GrainContext)
-  const grainOn = !wire && !shapeGeom && !!meta.materialId && grainIds.has(meta.materialId)
+  const grainOn = !wire && !!meta.materialId && grainIds.has(meta.materialId)
   const grainMaps = useMemo(() => {
     if (!grainOn) return null
-    const ext = extForAxes(meta.panelKind, meta.dxIsWidth)
+    if (shapeGeom && !csgGeom) return shapedGrainMaps(shape?.extrude, meta.panelKind, meta.id)
+    if (shapeGeom) return null   // shaped + pocket cuts: single flat material
+    const ext = grainExtents(meta.panelKind, meta.id)
     return csgGeom
-      ? [singleGrainMap(core.w, core.h, core.d, ext.DY, ext.DZ)]
-      : boxGrainMaps(core.w, core.h, core.d, ext.DY, ext.DZ)
-  }, [grainOn, csgGeom, meta.panelKind, meta.dxIsWidth, core.w, core.h, core.d])
+      ? [singleGrainMap(core.w, core.h, core.d, ext.grain, ext.thick)]
+      : boxGrainMaps(core.w, core.h, core.d, ext.grain, ext.thick)
+  }, [grainOn, csgGeom, shapeGeom, shape?.extrude, meta.panelKind, meta.id, core.w, core.h, core.d])
   useEffect(() => () => { grainMaps?.forEach(t => t?.dispose()) }, [grainMaps])
 
   if (wire) {
@@ -475,8 +477,10 @@ export function Part({
             const wall = across ? mats[4] : up ? mats[4] : kind === 'side' ? mats[2] : mats[0]
             return (
               <>
-                <meshStandardMaterial attach="material-0" color={cap}  roughness={0.7} metalness={0.05} {...am} />
-                <meshStandardMaterial attach="material-1" color={wall} roughness={0.7} metalness={0.05} {...am} />
+                {[cap, wall].map((c, i) => {
+                  const map = (!selected && !highlighted && grainMaps?.[i]) || null
+                  return <meshStandardMaterial key={`${i}${map ? 'g' : ''}`} attach={`material-${i}`} color={c} map={map} roughness={0.7} metalness={0.05} {...am} />
+                })}
                 <Edges threshold={10} color={edgeLine} linewidth={lineWidth} transparent opacity={alpha} />
               </>
             )

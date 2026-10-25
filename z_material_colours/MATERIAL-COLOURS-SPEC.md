@@ -227,10 +227,10 @@ between two oaks).
 
 ### 8a. Generic grain (default)
 
-- **One shared tile, drawn in code (changed at MC9):** instead of a downloaded
-  CC0 image, `woodGrain.ts` draws a seamless greyscale grain procedurally
-  (sums of integer-frequency sines, so it tiles), levelled light (mean ~0.9) so
-  tinting keeps the colour close. One tile = 300 mm across × 1200 mm along.
+- **One shared tile, drawn in code (MC9 / MC9b):** `woodGrain.ts` draws a white
+  tile with thin dark grey grain lines (line-drawing style, Mark 2026-10-25), so
+  the face keeps its exact colour and the grain reads as linework. One tile =
+  300 mm across × 1200 mm along.
 - **Tint:** in 3D, a grained colour's face = generic grain map × `face_colour`.
   Boston Oak, Elegant Oak and Walnut each read as their own colour from the same
   image.
@@ -269,6 +269,7 @@ between two oaks).
 ### Phases
 
 - [x] **MC9** (2026-10-25) Generic grain in 3D: `src/components/three/woodGrain.ts` draws the tile procedurally (no image file); `GrainContext` set from `materialColours[*].grain` (has_grain) in `CabinetScene`; `Part` maps the two big faces at true scale (tile 300 across × 1200 along) with grain along DY via `extForAxes`; CSG-cut panels get one map for their big faces; shaped (extruded) parts stay flat. Room 3D, cabinet modal 3D and preview all go through CabinetScene. Checked in the room 3D on RHK1234 (Boston Oak doors grained vertically, Whiteboard flat).
+- [x] **MC9b** (2026-10-25, Mark: "looks a bit funny", wrong direction on backs + curved panels) Restyled for the line-drawing 3D: white tile (= exact face colour) with thin dark grey grain lines that wander gently, some in close pairs (seeded random, wrapped so it tiles), no tonal shading. Direction rule `grainExtents` replaces DY: upright panels (sides, doors, fronts, backs, wrap / shaped panels, end panels) grain up the panel; kick boards (`tk_`) and horizontals along their length. Shaped / curved (extruded) parts now grained via `shapedGrainMaps` (ExtrudeGeometry uvs are mm): wrap panels up the extrusion, sharknose along the profile. Checked on RHK6581 Living J06 with grain forced in-page (curved end + backs + doors vertical, kick horizontal).
 - [ ] **MC10** Supplier image override: storage bucket, library upload / thumbnail,
   untinted use when set.
 - [ ] **MC11** (optional) Elevation / print grain fills; second generic grain style.
