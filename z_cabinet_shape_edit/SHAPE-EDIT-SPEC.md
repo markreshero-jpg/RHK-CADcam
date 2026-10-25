@@ -9,8 +9,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → spec drafted 2026-10-25 from Mark's Q&A. Open questions at
-> the bottom need answers before E1 starts (OQ1 + OQ2 block E1).
+> **RESUME HERE** → spec drafted 2026-10-25; all questions answered the same day
+> (2 rounds, see Q&A log). Ready for **E1**.
 
 ---
 
@@ -20,7 +20,7 @@ Right-click a cabinet in plan → **Edit shape**. The room dims, the cabinet's
 footprint is highlighted, and the CAD sidebar panel switches to a **shape
 toolset**: the same F7 tools (select + grips, line, arc, fillet, chamfer, join,
 offset, typed entry, snaps) working on the footprint instead of on annotations.
-Click an **edge** → pick its **type** (front / side / back / open / none) and
+Click an **edge** → pick its **type** (front / side / back / open) and
 **sub-type** (finished gable, unfinished gable, scribe…). Click a **corner** →
 pick how the two pieces meet (butt with A or B running through, butt-bevel,
 mitre; door-facet corners: mitre / reveal; panel-to-facet: square / bevelled).
@@ -43,6 +43,9 @@ sub-types and junction choices and builds the parts as it does today.
 - F7 CAD tools (`z_CAD_tool/ANNOTATION-SPEC.md`): `useAnnotationTool.ts` (~1500
   lines) + `CadRibbon.tsx` + `CadPanel.tsx`, geometry in `src/lib/annotations/`.
   They edit `room_annotations` rows only.
+- `SaveToLibraryModal.tsx` already has preserve ticks: carcase material, toekick
+  material, hinge, slide, exposed interior, and Width / Height / Depth
+  (unticked = cascades room → job → shop at placement).
 
 ---
 
@@ -59,8 +62,8 @@ sub-types and junction choices and builds the parts as it does today.
    module. A plain cabinet can still be shape-edited: Edit shape gives it a
    rectangle footprint first (a rectangle footprint resolves to exactly the box
    parts — existing tests).
-4. **Every edge can be `none`.** The resolver adjusts the other parts to suit
-   (see OQ1 for how none differs from open).
+4. **No `none` type for now** (round 2 — first asked for, then dropped): `open`
+   covers it. An edge with nothing built on it is `open`.
 5. **Thickness follows the board.** A sub-type that uses a different board
    (e.g. finished gable in a 25 mm exposed product) takes that board's thickness;
    the inset polygon and every junction use the per-edge thickness. Otherwise
@@ -78,14 +81,21 @@ sub-types and junction choices and builds the parts as it does today.
     allowed as `open` / `front` as today; arc `side` / `back` keeps the
     `SHAPE_CURVED_PANEL` error.
 11. **Shaped cabinets can be saved to the library** (lifts shape-spec decision 7
-    for custom shapes, not only BCNP). The footprint goes with it — edge types,
-    sub-types, junctions and the **formula vertices**, so a library shape resizes
-    like a preset. *(Mark wrote "with preserves" — read as this; see OQ5.)*
+    for custom shapes, not only BCNP) **with preserve ticks** — the existing
+    modal's Width / Height / Depth + material / hardware ticks, plus
+    shape-specific ones (see "Library save"), so it comes out of the library
+    with everything already set up.
 12. **Spec lives in its own folder** (`z_cabinet_shape_edit/`).
+13. **Sub-type list as in the table below.** No "shared with neighbour" side —
+    never used (round 2).
+14. **A newly drawn edge is a front** (`front / faces`) until changed (round 2).
+15. **Code modifier `/CS`** (custom shape) for a library shape that isn't a
+    preset, alongside `/AE` `/CC` `/RE` `/TZ` (shape decision 6). The parser
+    (`rhk-crm/lib/cabinetCodes.ts`) and the cabinet-codes skill get it at E5.
 
 ---
 
-## Edge types and sub-types (proposed defaults — Mark to overrule)
+## Edge types and sub-types (decision 13)
 
 | Type | Sub-type | Builds | Material / tape |
 |---|---|---|---|
@@ -99,17 +109,16 @@ sub-types and junction choices and builds the parts as it does today.
 | | `finished` | exposed back (island) | exposed board |
 | | `scribe` | back with SCRBK allowance | back board |
 | **open** | — | no panel; shelves come flush with the outline (2026-10-16 rule), front edges taped | shelf board |
-| **none** | — | nothing on that edge (OQ1) | — |
 
-- The old `scribe` **role** becomes side / back sub-type `scribe`. The old
-  `finish: neighbour` becomes OQ1's answer (probably `none`).
+- The old `scribe` **role** becomes side / back sub-type `scribe`. The unused
+  `Edge.finish` field is replaced by `sub` (`neighbour` dropped).
 - Old footprints are upgraded **on read** (`role_overrides` → `edge_overrides`,
   `role: 'scribe'` → side/scribe, `flush_ends` → junction entries). No DB
   migration — it's all inside the `footprint` jsonb.
 - Material picks use the cabinet's existing carcass / exposed / back materials
   (`cab.exposed_material` etc.); no per-edge material picker this module.
 
-## Junctions (proposed)
+## Junctions
 
 A **junction** is the vertex between two consecutive edges. Keyed by the two
 edge ids (`"<edgeA>|<edgeB>"`, outline order), never by vertex index, so it
@@ -120,7 +129,7 @@ dropped with a visible warning, never re-attached.
 |---|---|---|
 | panel ↔ panel (side / back, any angle) | **butt, A runs through** · **butt, B runs through** · **butt-bevel** (off-square only: through panel flush, stopping panel bevelled) · **mitre** (both bevelled on the corner line, square corners too = 45° each) | BACK_JOIN priority at square corners; ANGLE_JOIN at off-square |
 | panel ↔ front facet | **square end** · **bevelled flush to facet** | square (shape decision 12) |
-| panel ↔ open / none | **square end** · **bevelled flush** (angled only) | square |
+| panel ↔ open | **square end** · **bevelled flush** (angled only) | square |
 | front facet ↔ front facet | **mitre** (doors bevelled) · **reveal** (square doors, gap) | mitre (shape decision 9) |
 
 - Stored as `footprint.joins: { [junctionKey]: JoinChoice }`; absent = rule
@@ -143,12 +152,12 @@ dropped with a visible warning, never re-attached.
 }
 ```
 
-- `EdgeRole` gains `none`; loses `scribe` (upgrade on read). New `EdgeSub` per
-  role. Types in `src/lib/cabinetShape/footprint.ts`.
+- `EdgeRole` loses `scribe` (upgrade on read). New `EdgeSub` per role. Types in
+  `src/lib/cabinetShape/footprint.ts`.
 - `JoinChoice` = `through_a | through_b | butt_bevel | mitre | square | flush | reveal`.
 - Every consumer keeps reading `segments` (shape decision 8).
 
-## Plan edit mode (proposed)
+## Plan edit mode
 
 - **Entry:** right-click a cabinet in plan → **Edit shape** (also from the
   cabinet panel's Shape section). A plain cabinet gets a rectangle footprint
@@ -168,13 +177,14 @@ dropped with a visible warning, never re-attached.
 - **Frame:** tools work in room plan mm; the footprint is stored cabinet-local.
   Convert through `cabinetToPlan` / its inverse — a rotation, never a mirror
   (shape spec "Plan handedness").
+- **New edges** are `front / faces` (decision 14).
 - **Ids and formulas** (shape decision 8): moving a vertex keeps ids; splitting
   an edge keeps the id on one half; new edges get new ids; a hand-dragged
   vertex is re-expressed against its nearest bbox side (`W - 250`). Any hand
   edit sets `preset: null`, keeps `from_preset`.
 - **Validity, checked live:** one closed loop, no self-crossing, no edge under
-  10 mm, at least one edge not `none`. An invalid shape can't be saved (Done
-  stays disabled, the problem is marked).
+  10 mm, at least one panel edge (side / back). An invalid shape can't be saved
+  (Done stays disabled, the problem is marked).
 - **Save:** Done writes `footprint` (and `dx` / `dz` = new bbox), re-resolves,
   and is **one undo step** in `useCanvasHistory`. Cancel restores. The cabinet's
   `pos_x / pos_y` is adjusted so the shape stays where it was drawn when the bbox
@@ -193,43 +203,50 @@ already lives there) and give the hook a **target adapter** — `annotations`
 the extraction as its own step with the annotation behaviour unchanged and
 checked before shape mode builds on it. This is the main risk in the module.
 
+## Library save (decision 11)
+
+Extends `SaveToLibraryModal.tsx` (existing ticks listed under "What exists").
+
+**Always kept** (part of the shape, no tick): the outline, edge types +
+sub-types, junction choices, the face grid / door + drawer layout on every facet.
+
+**New ticks** (Claude's proposal — Mark to overrule at E5):
+
+| Tick | Ticked | Unticked |
+|---|---|---|
+| Exposed material | finished gables / backs + applied panels keep the saved exposed board | job / room exposed board |
+| Edge banding | keep the saved exposed tape | job default tape |
+| Joinery rules | keep the cabinet's BACK_JOIN / ANGLE_JOIN (the defaults behind unset corners) | room / job rules |
+| Shape sizes fixed (default **on**) | vertices keep their mm offsets from the sides (a 300 clip stays 300 when the width changes) | vertices scale with the bbox |
+| Can flip hand | placement offers LH / RH (mirrored footprint, ids kept) | placed as saved only |
+
+W / H / D ticks work as today — for a shape, an unticked axis means the
+footprint is evaluated at the cascaded size (that's what formula vertices are
+for). The code gets `/CS` unless the shape is still a preset (decision 15).
+
 ---
 
 ## Phases
 
 | Phase | Scope | Status |
 |---|---|---|
-| E0 | Spec + Mark's Q&A | [~] drafted 2026-10-25; open questions below |
-| E1 | **Types + sub-types in the resolver.** `none` role, `sub` on edges, upgrade-on-read (scribe, role_overrides, flush_ends), per-edge material + thickness (decision 5) through the inset polygon + joins, applied end panel part, finished tape. Pickers added to the existing Shape section dropdowns so it's checkable before plan editing exists. Tests: rectangle footprint = box parts still; every preset × every sub-type stays inside the outline, no overlaps | [ ] |
-| E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [ ] |
+| E0 | Spec + Mark's Q&A | [x] 2026-10-25 |
+| E1 | **Types + sub-types in the resolver.** `sub` on edges, upgrade-on-read (scribe, role_overrides, flush_ends), per-edge material + thickness (decision 5) through the inset polygon + joins, applied end panel part, finished tape. Pickers added to the existing Shape section dropdowns so it's checkable before plan editing exists. Tests: rectangle footprint = box parts still; every preset × every sub-type stays inside the outline, no overlaps | [ ] |
+| E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet + panel↔open square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [ ] |
 | E3 | **Plan edit mode — picking only.** Right-click Edit shape, dim + highlight, edges coloured by type, click edge / corner → panels in the sidebar, Done / Cancel / undo. No geometry editing yet | [ ] |
 | E4a | **CAD tool extraction** — target adapter in `useAnnotationTool`, annotation behaviour unchanged (headless check of the B-phase tools) | [ ] |
 | E4b | **CAD tools on the footprint** — grips, side drag, line / arc / box drawing from scratch, fillet / chamfer / join / offset, snaps (walls, neighbours, own points), typed entry; validity; ids + formula re-expression; pos / bbox update | [ ] |
-| E5 | **Library** — save shaped cabinets with their footprint (types, subs, joins, formulas); placement copies and evaluates at the placed size; code (OQ4) | [ ] |
+| E5 | **Library** — save shaped cabinets with their footprint (types, subs, joins, formulas) + the new preserve ticks; placement evaluates at the placed size, optional hand flip; `/CS` in the parser + skill | [ ] |
 | E6 | Tutorial lesson ("Editing a cabinet shape"), in-app check list | [ ] |
 
 Later (not this module): rectangular cabinets on the same edge model (decision
-3); kick / benchtop per edge (decision 9); fixed post between facets; curved
-side panels (decision 10); fixings at angled joints (decision 6); recognition /
-auto-classify (shape spec S-e).
+3); a `none` edge type (decision 4); kick / benchtop per edge (decision 9);
+fixed post between facets; curved side panels (decision 10); fixings at angled
+joints (decision 6); recognition / auto-classify (shape spec S-e).
 
----
+## Q&A log
 
-## Open questions (for Mark)
-
-- **OQ1 — `none` vs `open`.** Proposal: **open** = an exposed open end — no
-  panel, shelves flush and taped. **none** = nothing built and nothing
-  finished — for an edge that sits against another cabinet's gable or a wall
-  with no panel of its own: shelves / bottom stop at the outline, no tape, and
-  the neighbouring panels butt the outline as if a panel were there. Right?
-  *(blocks E1)*
-- **OQ2 — sub-type list.** Is the table above right? Anything to add (e.g. side
-  `shared` with a neighbour, back `none`/rails only — or is that just type
-  `none`)? *(blocks E1)*
-- **OQ3 — new edge's type.** An edge drawn from scratch: default to touching a
-  wall face → `back`, else `side / unfinished`? Or always `none` until picked?
-- **OQ4 — cabinet code** for a library shape that isn't a preset: a `/CS`
-  ("custom shape") modifier, or a code typed by hand when saving?
-- **OQ5 — "save to library with preserves"** — read as "the shape and its
-  settings are preserved, formula vertices included, so it resizes". Or did you
-  mean saved shapes appear as **presets** in the preset list?
+- Round 1 (2026-10-25): decisions 1–12 (4 later changed).
+- Round 2 (2026-10-25): `none` dropped → open (4), no shared side (13), new
+  edge = front (14), `/CS` (15), library preserve ticks (11). The "Library save"
+  new-tick list is Claude's proposal — Mark to overrule at E5.
