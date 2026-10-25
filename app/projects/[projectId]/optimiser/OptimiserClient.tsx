@@ -684,6 +684,10 @@ function Stage4Nesting() {
     if (!cab?.colour_warnings?.some(w => w.material_id === p.material_id)) continue
     noColourGroups.set(p.material_id, (noColourGroups.get(p.material_id) ?? new Set<string>()).add(p.cabinet_label))
   }
+  // Cabinets in this nest with angled joints left for hand fixing (HAND_FIX_JOINT).
+  const handFix = [...new Set(nestableParts.map(p => p.cabinet_instance_id))]
+    .map(id => cabById.get(id)).filter(c => c?.hand_fix?.length)
+    .map(c => ({ label: c!.label, joints: c!.hand_fix! }))
 
   function run() {
     const isBatch = includedProjectIds.length > 1
@@ -769,6 +773,11 @@ function Stage4Nesting() {
             {`⚠ Colour not chosen: ${matById.get(matId)?.name ?? 'material'} is the board's default colour, used because `
               + `no colour was picked for ${cabs.size} cabinet(s): ${[...cabs].slice(0, 6).join(', ')}${cabs.size > 6 ? '…' : ''}. `
               + 'Pick the colour in Job / Room materials and re-save those cabinets.'}
+          </p>
+        ))}
+        {handFix.map(h => (
+          <p key={h.label} className="text-[11px] text-amber-500 mb-4">
+            {`⚠ Hand-fix joints, ${h.label}: ${h.joints.map(j => j.replace(' — no CNC holes, fix by hand', '')).join('; ')}. No CNC holes — fix these by hand.`}
           </p>
         ))}
         {ebMissing.length > 0 && (

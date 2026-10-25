@@ -124,6 +124,8 @@ export interface OptiCabinet {
   // Saved COLOUR_NOT_CHOSEN warnings (z_material_colours MC5): material_id =
   // the default colour the cabinet fell back to.
   colour_warnings?: { material_id: string; message: string }[]
+  // Saved HAND_FIX_JOINT warnings: angled panel-to-panel joints with no CNC holes.
+  hand_fix?: string[]
 }
 
 // Everything the server hands the client at load.

@@ -1,6 +1,6 @@
 import { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
 import { toGenericSeamKey, topSeamPartKeys, topSeamSibling } from '../cabinetSeams'
-import { enumerateShapedSeams } from './shapedSeams'
+import { enumerateShapedSeams, partsTouch } from './shapedSeams'
 
 // ── Internal seams (shelves & dividers ↔ their supports) ─────────────────────
 // Enumerated geometrically from the resolved parts: a shelf's supports are
@@ -166,6 +166,12 @@ export function resolveJoints(
   const result: ResolvedSeamJoint[] = []
 
   for (const seamKey of seamKeys) {
+    // A shaped cabinet's box parts may not meet (a clipped corner leaves the
+    // back short of a gable): only drill a gable seam where they touch.
+    if (cab.footprint && /:(left|right)_side$/.test(seamKey)) {
+      const [a, b] = seamKey.split(':')
+      if (!partsTouch(caseParts, a, b)) continue
+    }
     const genericKey = toGenericSeamKey(seamKey)
     const sibling    = topSeamSibling(seamKey, has)
     const cabAssign  = (k: string | null) => k && Object.prototype.hasOwnProperty.call(carcaseJoints, k)

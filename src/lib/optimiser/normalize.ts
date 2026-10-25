@@ -89,7 +89,11 @@ export function normalizeProject(
     const colour_warnings = (Array.isArray(c.warnings) ? c.warnings : [])
       .filter(w => w.code === 'COLOUR_NOT_CHOSEN' && w.material_id)
       .map(w => ({ material_id: w.material_id!, message: w.message ?? '' }))
-    return { id: c.id, label: c.label ?? humanize(c.assembly_class), room_id: c.room_id, ...(colour_warnings.length ? { colour_warnings } : {}) }
+    // Angled panel-to-panel joints left for hand fixing (HAND_FIX_JOINT).
+    const hand_fix = (Array.isArray(c.warnings) ? c.warnings : [])
+      .filter(w => w.code === 'HAND_FIX_JOINT' && w.message).map(w => w.message!)
+    return { id: c.id, label: c.label ?? humanize(c.assembly_class), room_id: c.room_id,
+      ...(colour_warnings.length ? { colour_warnings } : {}), ...(hand_fix.length ? { hand_fix } : {}) }
   })
   const cabById = new Map(cabinets.map(c => [c.id, c]))
   // Assembly-level no_cnc cascades to ALL of a cabinet's parts (standard + custom).

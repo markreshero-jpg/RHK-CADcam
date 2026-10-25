@@ -588,13 +588,18 @@ export default function CabinetSheetSVG({
       const unplaced = binZoneCount - binStacks.length
       if (unplaced > 0) out.push({ item: 'Pull-out bin — none fits', qty: unplaced, note: 'see cabinet warnings' })
     }
-    // Drawer runners — chosen from the slide schedule per drawer, aggregated by model
+    // Drawer runners — the runner the resolver gave each drawer (honours a
+    // per-drawer runner choice); else chosen from the slide schedule. Aggregated by model.
     if (drawerZones.length) {
       if (hardware && (hardware.slideProducts.length || hardware.slideEntries.length)) {
         const avail = dz - 40   // ≈ internal depth minus slide setback
         const byKey = new Map<string, { name: string; nl: number; qty: number }>()
+        const stackOf = (z: (typeof drawerZones)[number]) => (rp.drawer_stacks ?? []).find(st =>
+          st.drawer_type !== 'bin' && st.face_zone_row === z.row_index && st.face_zone_col === z.col_index && (st.facet ?? null) === (z.facet ?? null))
         for (const z of drawerZones) {
-          const slide = findSlide(avail, z.DY, hardware.slideProducts, hardware.slideEntries)   // DY = opening height
+          const sid = stackOf(z)?.slides[0]?.slide_id
+          const slide = (sid ? hardware.slideProducts.find(s => s.id === sid) : undefined)
+            ?? findSlide(avail, z.DY, hardware.slideProducts, hardware.slideEntries)   // DY = opening height
           const name = slide?.name ?? 'Drawer runner'
           const nl = slide?.nominal_length ?? 0
           const k = `${name}|${nl}`
@@ -654,6 +659,11 @@ export default function CabinetSheetSVG({
     }
     for (const [name, qty] of byHandle) out.push({ item: name, qty, note: '' })
     if (isBase && cab.toe_type === 'leg') out.push({ item: 'Adjustable leg', qty: 4, note: '' })
+    // Angled panel-to-panel joints: no CNC holes, fixed by hand (HAND_FIX_JOINT).
+    for (const w of rp.warnings ?? []) {
+      if (w.code !== 'HAND_FIX_JOINT') continue
+      out.push({ item: `Hand-fix joint ${/(\d+)°/.exec(w.message)?.[1] ?? ''}°`, qty: 1, note: w.message.split(' meet at ')[0] })
+    }
     return out
   }
   function tableHeader(box: { x: number; y: number; w: number; h: number }, title: string, cols: [string, number, 'start' | 'end'][]) {

@@ -15,6 +15,7 @@ import { resolveInternalParts }  from './resolveInternal'
 import { resolveFace }           from './resolveFace'
 import { resolveDrawerStacks, treeHasDrawerFittings } from './resolveDrawerStack'
 import { resolveJoints }         from './resolveJoints'
+import { enumerateHandFixJoints, handFixPartName } from './shapedSeams'
 import { resolveHinges }         from './resolveHinges'
 import { checkHingeFixedShelfClash, checkHingeInnerDrawerClash, checkHingeShelfHoleClash } from './hingeClash'
 import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
@@ -142,6 +143,14 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // part seams plus internal seams (shelf ↔ support, divider ↔ panel) — collect
   // the joint type operations ready for display and drilling export.
   const seamJoints = resolveJoints(cab, caseParts, internalParts, declaredSeams)
+  // Upright panels meeting off square get no CNC holes — fixed by hand.
+  if (cab.footprint) {
+    for (const h of enumerateHandFixJoints(caseParts)) allWarnings.push({
+      code: 'HAND_FIX_JOINT',
+      message: `${handFixPartName(h.part_a_key)} ↔ ${handFixPartName(h.part_b_key)} meet at ${h.angle}° — no CNC holes, fix by hand`,
+      part: `${h.part_a_key}|${h.part_b_key}`,
+    })
+  }
 
   // ── 6b. Hinges ────────────────────────────────────────────────
   // One instance per physical hinge on each door zone. Count is driven by the

@@ -500,6 +500,15 @@ Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
         back (FIXSB_B = 0, within 1mm) gets `int_fixed_shelf_N|back` on CM key `fixed_shelf:back`
         (CM builder Fixed Shelf → "Back edge"), falling back to `fixed_shelf:side`, so it is drilled
         with the same joint as the gables. Adjustable shelves still only pin into multi-back (L) backs.
+      - 2026-10-25 angled backs (RHK6581 TC-08, a clipped back-right corner: back + back2 at 30°):
+        (a) on a footprint cabinet a legacy gable seam (`back:right_side`, …) is only drilled where
+        the parts touch (`partsTouch`) — no more holes in thin air; (b) shelves with angled edges
+        drill into a back along their straight contact edge (`contactSpan`), holes follow the angle;
+        (c) `panelTurn` no longer calls an angled panel square because its bevelled END is square
+        (back2 → bottom holes were all at one depth); (d) LOCKED (Mark, choice 1): upright panels
+        meeting off square get NO CNC holes — warning `HAND_FIX_JOINT` ("Back ↔ Back (back2) meet at
+        30° …"), listed on the cabinet sheet hardware table and above the CNC nest. Fixing blocks /
+        shallow-angle drilling were offered and declined for now.
       - Through top rail: at the pie corner the earlier facet's rail now runs on across the other
         leg to the inset outline (other leg's back less back.t / scribe), not just past the corner
         by one rail depth (`resolveShapedCase` runOn). New seam rail → back (`rail:front|back:back2`

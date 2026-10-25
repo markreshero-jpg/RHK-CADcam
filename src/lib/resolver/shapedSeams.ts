@@ -14,6 +14,7 @@
 
 import type { ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint } from './types'
 import { turnedBox, partPlan, squareIn, panelTurn, contactSpan, runsAlongX, type PlanPart } from '../jointDrilling'
+import { shapedPartLabel } from '../cabinetShape/partKeys'
 
 const TOUCH = 1      // carcass parts: end on the face within this (mm)
 const MAX_GAP = 30   // shelves: clearance to their support (matches enumerateInternalSeams)
@@ -176,13 +177,19 @@ export function enumerateShapedSeams(
     for (const s of shelves) {
       if (loneBack && s.part_type !== 'fixed_shelf') continue
       const S = partPlan(s)
-      if (!squareIn(S, turn)) continue
       const bS = turnedBox(S, turn)
       const midY = s.Y + s.DZ / 2
       if (midY < bB.y || midY > bB.y + bB.h) continue
       if (overlap(bS.z, bS.z + bS.d, bB.z, bB.z + bB.d) < MIN_OVERLAP) continue
       const side = touchSide(bS, bB, loneBack ? TOUCH : MAX_GAP)
-      if (side) hits.push({ p: s, side })
+      if (!side) continue
+      // A shaped shelf (angled edges) still needs a straight edge along B's
+      // face; the holes follow that edge (Mark, 2026-10-25).
+      if (!squareIn(S, turn)) {
+        const cs = contactSpan(S, turn, side)
+        if (!cs || overlap(cs.z0, cs.z1, bB.z, bB.z + bB.d) < MIN_OVERLAP) continue
+      }
+      hits.push({ p: s, side })
     }
     // Pins on a back use the method's back-support joint (one centred row, Mark
     // 2026-10-15), falling back to the side joint.
@@ -214,3 +221,78 @@ export function enumerateShapedSeams(
 
   return out
 }
+
+/** Does part A's end actually sit on panel B's face? Shaped cabinets: a legacy
+ *  box seam (back:right_side, …) is only drilled where the parts meet — a
+ *  clipped corner can leave the back nowhere near a gable. */
+export function partsTouch(caseParts: ResolvedCasePart[], aKey: string, bKey: string): boolean {
+  const pa = caseParts.find(p => p.part_key === aKey), pb = caseParts.find(p => p.part_key === bKey)
+  if (!pa || !pb) return false
+  const B = partPlan(pb)
+  const turn = panelTurn(B)
+  if (!B.vertical || turn == null) return true   // nothing to test against: keep the seam
+  const bA = turnedBox(partPlan(pa), turn), bB = turnedBox(B, turn)
+  if (overlap(bA.y, bA.y + bA.h, bB.y, bB.y + bB.h) < MIN_OVERLAP) return false
+  if (overlap(bA.z, bA.z + bA.d, bB.z, bB.z + bB.d) < MIN_OVERLAP) return false
+  return touchSide(bA, bB, TOUCH) !== null
+}
+
+// ── Angled panel-to-panel joints (Mark, 2026-10-25) ──────────────────────────
+// Two upright panels meeting off square can't be screwed from the CNC holes: a
+// screw square through one face runs out of the other panel's face. No holes —
+// the joint is flagged for fixing by hand (resolver warning HAND_FIX_JOINT,
+// cabinet sheet hardware list, CNC nest).
+
+export interface HandFixJoint {
+  part_a_key: string
+  part_b_key: string
+  angle:      number   // angle between the two panels' faces, degrees (90 = square)
+}
+
+const HAND_TOL = 1.5
+
+function distToPoly(q: { x: number; z: number }, poly: { x: number; z: number }[]): number {
+  let inside = false, best = Infinity
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[j], b = poly[i]
+    if ((b.z > q.z) !== (a.z > q.z) && q.x < (a.x - b.x) * (q.z - b.z) / (a.z - b.z) + b.x) inside = !inside
+    const ex = b.x - a.x, ez = b.z - a.z, L2 = ex * ex + ez * ez
+    const t = L2 ? Math.max(0, Math.min(1, ((q.x - a.x) * ex + (q.z - a.z) * ez) / L2)) : 0
+    best = Math.min(best, Math.hypot(q.x - a.x - t * ex, q.z - a.z - t * ez))
+  }
+  return inside ? 0 : best
+}
+
+/** The direction a vertical panel's faces run in plan (its longest edge). */
+function faceDir(pp: PlanPart): { x: number; z: number } {
+  const c = pp.corners
+  const edges = c.map((q, i) => { const r = c[(i + 1) % c.length]; return { x: r.x - q.x, z: r.z - q.z } })
+  return edges.reduce((m, e) => (Math.hypot(e.x, e.z) > Math.hypot(m.x, m.z) ? e : m))
+}
+
+export function enumerateHandFixJoints(caseParts: ResolvedCasePart[]): HandFixJoint[] {
+  const panels = caseParts
+    .filter(p => roleOf(p.part_key) === 'side' || roleOf(p.part_key) === 'back')
+    .map(p => ({ key: p.part_key, pp: partPlan(p) }))
+    .filter(p => p.pp.vertical && p.pp.corners.length === 4)
+  const out: HandFixJoint[] = []
+  for (let i = 0; i < panels.length; i++) {
+    for (let j = i + 1; j < panels.length; j++) {
+      const A = panels[i], B = panels[j]
+      if (overlap(A.pp.y, A.pp.y + A.pp.h, B.pp.y, B.pp.y + B.pp.h) < MIN_OVERLAP) continue
+      const touching = A.pp.corners.some(q => distToPoly(q, B.pp.corners) <= HAND_TOL)
+        || B.pp.corners.some(q => distToPoly(q, A.pp.corners) <= HAND_TOL)
+      if (!touching) continue
+      const da = faceDir(A.pp), db = faceDir(B.pp)
+      const cos = Math.abs(da.x * db.x + da.z * db.z) / (Math.hypot(da.x, da.z) * Math.hypot(db.x, db.z))
+      const angle = Math.acos(Math.min(1, cos)) * 180 / Math.PI
+      // Square (a drilled seam) or in line (not a joint): nothing to flag.
+      if (angle > 89.5 || angle < 1) continue
+      out.push({ part_a_key: A.key, part_b_key: B.key, angle: Math.round(angle) })
+    }
+  }
+  return out
+}
+
+const LEGACY_NAMES: Record<string, string> = { left_side: 'Left Gable', right_side: 'Right Gable', back: 'Back' }
+export const handFixPartName = (k: string) => LEGACY_NAMES[k] ?? shapedPartLabel(k) ?? k

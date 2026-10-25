@@ -730,9 +730,13 @@ export function panelTurn(pp: PlanPart): number | null {
   const t = Math.hypot(e0.x, e0.z) <= Math.hypot(e1.x, e1.z) ? e0 : e1
   const turn = -Math.atan2(t.z, t.x) * 180 / Math.PI
   const snap = Math.round(turn / 90) * 90
-  if (Math.abs(turn - snap) <= 0.5) return ((snap % 360) + 360) % 360
   const edges = pp.corners.map((q, i) => { const r = pp.corners[(i + 1) % 4]; return { x: r.x - q.x, z: r.z - q.z } })
   const L = edges.reduce((m, e) => (Math.hypot(e.x, e.z) > Math.hypot(m.x, m.z) ? e : m))
+  // The short edge may be a bevelled end cut square to the cabinet on an
+  // angled panel (TC-08's back2 meeting a gable): square only if the long
+  // faces are too.
+  const longSquare = Math.min(Math.abs(L.x), Math.abs(L.z)) <= Math.hypot(L.x, L.z) * Math.sin(0.5 * Math.PI / 180)
+  if (Math.abs(turn - snap) <= 0.5 && longSquare) return ((snap % 360) + 360) % 360
   const raw = -Math.atan2(L.x, -L.z) * 180 / Math.PI     // thickness = L turned 90°
   const s2 = Math.round(raw / 90) * 90
   // A square panel whose first corners are a bevelled end: still square.
@@ -779,10 +783,10 @@ export function shapedSeamDrillOps(
   let bA = turnedBox(pA, sh.turn)
   const bB = turnedBox(partPlan(b), sh.turn)
   // A part that isn't square in the turned frame (a bottom meeting an angled
-  // side, z_angled_filler): lay the holes along the edge that actually meets
-  // the panel, not its whole bounding box.
+  // side, z_angled_filler, or a shaped shelf on a back): lay the holes along
+  // the edge that actually meets the panel, not its whole bounding box.
   const square = squareIn(pA, sh.turn)
-  if (!square && sh.kind === 'side' && !sj.internal_edge) {
+  if (!square && sh.kind === 'side') {
     const cs = contactSpan(pA, sh.turn, sh.side)
     if (cs) bA = { ...bA, z: cs.z0, d: cs.z1 - cs.z0 }
   }
