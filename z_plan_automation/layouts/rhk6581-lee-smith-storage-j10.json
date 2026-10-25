@@ -5,23 +5,107 @@
     "L->R (plan top->bottom, back on the wall): TEPF 18 seen end (stops at 2400, bulkhead above) | T2D 950 5 adj (marked 1000 -> 950) | VOID 500 (marked 518 -> 500, incl the 18 side panel): false front 482 to the floor + 3 full-height L fixing brackets (2 x 100 strips, internal board each): side panel to back wall, false front to side panel, false front to the cupboard carcass | TEPF 18 side panel (separate assembly) | 400 open bay (marked 415 -> 400) to the wall: small cabinet with a false front to the floor (397 carcass, no kick) + 18 LAM01 top at 415 (drawn 50 + 365).",
     "Void assembly = a TEPF whose custom parts are replaced after placement: Applied Panel stood front (z = cab.d + t.door + 2 - t.exposed) + 6 Nailer / Cleat strips (t.gable thick, 100 wide, cab.h tall).",
     "Handles client supplied, undrilled. Internals white MEL01.",
-    "Done after placement (room b10e1ba1-5f02-485c-a5e6-b631bde5de20): TC-03 custom parts = False Front (Applied Panel, front, z cab.d + t.door + 2 - t.exposed) + 6 Nailer / Cleat strips 100 x cab.h x t.gable (L1 back-right, L2 front-right, L3 front-left); BC-01 has_toekick off, face false_panel, no shelf; WC-01 UNDER_PANEL pos_z 397; WC-02 front carcase + left return 580. Spec block from J12. 0 errors / 0 warnings."
+    "Done after placement (room b10e1ba1-5f02-485c-a5e6-b631bde5de20): TC-03 custom parts = False Front (Applied Panel, front, z cab.d + t.door + 2 - t.exposed) + 6 Nailer / Cleat strips 100 x cab.h x t.gable (L1 back-right, L2 front-right, L3 front-left); BC-01 has_toekick off, face false_panel, no shelf; WC-01 UNDER_PANEL pos_z 397; WC-02 front carcase + left return 580. Spec block from J12. 0 errors / 0 warnings.",
+    "2026-10-25 Mark: TC-02 5 adj (6 openings, as the elevation) + hinges [2196,1630,870,100] (copied from J12 TC-02, no shelf-hole clash). Elevation CAD with leader arrows: FALSE PANEL (void front) + LOW LEVEL SHELF (low cabinet top)."
   ],
   "projectName": "RHK6581 Lee Smith",
   "roomName": "Storage J10",
   "roomHeight": 2770,
   "wallCabinetTop": 2400,
   "walls": [
-    { "x": 0, "y": 0, "length": 1868, "angle": 0, "_": "back wall, elevation left->right; left end open (seen end panel)" },
-    { "x": 1868, "y": 0, "length": 1000, "angle": 90, "_": "right wall at the shelf bay (doorway side), length placeholder" }
+    {
+      "x": 0,
+      "y": 0,
+      "length": 1868,
+      "angle": 0,
+      "_": "back wall, elevation left->right; left end open (seen end panel)"
+    },
+    {
+      "x": 1868,
+      "y": 0,
+      "length": 1000,
+      "angle": 90,
+      "_": "right wall at the shelf bay (doorway side), length placeholder"
+    }
   ],
   "cabinets": [
-    { "def": "TEPF", "wall": 1, "offset": 0, "dx": 18, "dy": 2400, "dz": 580, "rules": { "SCRBK": 0 }, "note": "J10 18 LAM01 seen end panel (left), to the floor, bulkhead above" },
-    { "def": "T2D", "wall": 1, "offset": 18, "dx": 950, "dy": 2400, "dz": 580, "rules": { "SCRBK": 0 }, "note": "J10 5-shelf cpbd, 5 adj 16 white, LAM01 doors. HD01 by client, undrilled" },
-    { "def": "TEPF", "wall": 1, "offset": 968, "dx": 482, "dy": 2400, "dz": 580, "rules": { "SCRBK": 0 }, "note": "J10 VOID: 18 LAM01 false front to the floor, flush with the doors + 3 full-height L fixing brackets (2 x 100 internal board): side panel to back wall, false front to side panel, false front to cupboard" },
-    { "def": "TEPF", "wall": 1, "offset": 1450, "dx": 18, "dy": 2400, "dz": 580, "rules": { "SCRBK": 0 }, "note": "J10 18 LAM01 side panel between the void and the open bay, to the floor, bulkhead above" },
-    { "def": "B1D", "wall": 1, "offset": 1468, "dx": 400, "dy": 397, "dz": 580, "rules": { "SCRBK": 0 }, "note": "J10 low shelf cabinet in the open bay: false front to the floor (no kick), LAM01 top over it at 415" },
-    { "def": "WUP", "wall": 1, "offset": 1468, "dx": 400, "dy": 18, "dz": 600, "note": "J10 18 LAM01 top on the low shelf cabinet, top at 415 AFFL (pos_z 397 set after placement)" },
-    { "def": "BH", "wall": 1, "offset": 18, "dx": 1850, "dy": 370, "dz": 580, "note": "J10 LAM01 bulkhead 2400-2770, flush with the carcass, from the seen end panel to the right wall, left return 580" }
+    {
+      "def": "TEPF",
+      "wall": 1,
+      "offset": 0,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J10 18 LAM01 seen end panel (left), to the floor, bulkhead above"
+    },
+    {
+      "def": "T2D",
+      "wall": 1,
+      "offset": 18,
+      "dx": 950,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J10 5-shelf cpbd: 5 adj 16 white (6 openings), LAM01 doors, hinges 2196/1630/870/100. HD01 by client, undrilled"
+    },
+    {
+      "def": "TEPF",
+      "wall": 1,
+      "offset": 968,
+      "dx": 482,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J10 VOID: 18 LAM01 false front to the floor, flush with the doors + 3 full-height L fixing brackets (2 x 100 internal board): side panel to back wall, false front to side panel, false front to cupboard"
+    },
+    {
+      "def": "TEPF",
+      "wall": 1,
+      "offset": 1450,
+      "dx": 18,
+      "dy": 2400,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J10 18 LAM01 side panel between the void and the open bay, to the floor, bulkhead above"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 1468,
+      "dx": 400,
+      "dy": 397,
+      "dz": 580,
+      "rules": {
+        "SCRBK": 0
+      },
+      "note": "J10 low shelf cabinet in the open bay: false front to the floor (no kick), LAM01 top over it at 415"
+    },
+    {
+      "def": "WUP",
+      "wall": 1,
+      "offset": 1468,
+      "dx": 400,
+      "dy": 18,
+      "dz": 600,
+      "note": "J10 18 LAM01 top on the low shelf cabinet, top at 415 AFFL (pos_z 397 set after placement)"
+    },
+    {
+      "def": "BH",
+      "wall": 1,
+      "offset": 18,
+      "dx": 1850,
+      "dy": 370,
+      "dz": 580,
+      "note": "J10 LAM01 bulkhead 2400-2770, flush with the carcass, from the seen end panel to the right wall, left return 580"
+    }
   ]
 }
