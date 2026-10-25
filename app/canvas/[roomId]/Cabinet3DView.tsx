@@ -1,6 +1,7 @@
 'use client'
 
 import PartInfoCard from './PartInfoCard'
+import { GrainContext } from '@/src/components/three/woodGrain'
 import { useRef, useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import * as THREE from 'three'
@@ -1353,7 +1354,11 @@ export function CabinetScene({
     return m
   }, [handMarkers])
 
+  // Grained colours render the generic wood grain (z_material_colours MC9).
+  const grainIds = new Set(Object.entries(materialColours ?? {})
+    .filter(([, v]) => typeof v === 'object' && v.grain).map(([k]) => k))
   return (
+    <GrainContext.Provider value={grainIds}>
     <group position={[-dx / 2, -dy / 2, -dz / 2]}>
       {showDrilling && handMarkers.length > 0 && (
         <HandOpMarkers3D markers={handMarkers} csgPartKeys={new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_')))} />
@@ -1774,6 +1779,7 @@ export function CabinetScene({
         <SlideDrillMarkers drills={hingeDrills} wire={wire} color={palette.hinges} />
       )}
     </group>
+    </GrainContext.Provider>
   )
 }
 

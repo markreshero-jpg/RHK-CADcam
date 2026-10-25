@@ -7,6 +7,7 @@
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
 import { Suspense, useState, useEffect, useMemo, useRef, createContext, useContext } from 'react'
+import { GrainContext, boxGrainMaps, singleGrainMap } from './woodGrain'
 import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
@@ -61,7 +62,8 @@ export interface PartMeta {
   outline?: OutlinePt[]
 }
 
-export type MatColSpec = { face?: string; back?: string; edge?: string }
+// grain: the material is grained (has_grain) — renders the generic wood grain (MC9).
+export type MatColSpec = { face?: string; back?: string; edge?: string; grain?: boolean }
 export type MatColMap  = Record<string, string | MatColSpec>
 export type EbSpec     = { thick: number; color: string }
 
@@ -367,6 +369,20 @@ export function Part({
   // material, so the panel would keep rendering opaque.
   const meshKey = (wire ? 'wire' : csgGeom ? 'csg' : shapeGeom ? 'shaped' : 'box') + (alpha < 1 ? '-t' : '')
 
+  // Generic wood grain on grained colours (z_material_colours MC9): the two
+  // big faces get the shared grain tile at true scale, grain along DY. Shaped
+  // (extruded) parts stay flat for now.
+  const grainIds = useContext(GrainContext)
+  const grainOn = !wire && !shapeGeom && !!meta.materialId && grainIds.has(meta.materialId)
+  const grainMaps = useMemo(() => {
+    if (!grainOn) return null
+    const ext = extForAxes(meta.panelKind, meta.dxIsWidth)
+    return csgGeom
+      ? [singleGrainMap(core.w, core.h, core.d, ext.DY, ext.DZ)]
+      : boxGrainMaps(core.w, core.h, core.d, ext.DY, ext.DZ)
+  }, [grainOn, csgGeom, meta.panelKind, meta.dxIsWidth, core.w, core.h, core.d])
+  useEffect(() => () => { grainMaps?.forEach(t => t?.dispose()) }, [grainMaps])
+
   if (wire) {
     const ownGeom = csgGeom ?? shapeGeom
     return (
@@ -438,7 +454,7 @@ export function Part({
           // Real recesses cut into the panel (csgGeom above). Single material —
           // the CSG output collapses the 6 per-face colours, an accepted trade-off.
           <>
-            <meshStandardMaterial color={mats[0]} roughness={0.7} metalness={0.05} {...am} />
+            <meshStandardMaterial key={grainMaps?.[0] && !selected && !highlighted ? 'g' : 'p'} color={mats[0]} map={(!selected && !highlighted && grainMaps?.[0]) || null} roughness={0.7} metalness={0.05} {...am} />
             <Edges threshold={10} color={edgeLine} linewidth={lineWidth} transparent opacity={alpha} />
           </>
         ) : shapeGeom ? (
@@ -468,9 +484,11 @@ export function Part({
         ) : (
           <>
             <boxGeometry args={[core.w, core.h, core.d]} />
-            {mats.map((c, i) => (
-              <meshStandardMaterial key={i} attach={`material-${i}`} color={c} roughness={0.7} metalness={0.05} {...am} />
-            ))}
+            {mats.map((c, i) => {
+              // A material gaining / losing a map needs a fresh program: key it.
+              const map = (!selected && !highlighted && grainMaps?.[i]) || null
+              return <meshStandardMaterial key={`${i}${map ? 'g' : ''}`} attach={`material-${i}`} color={c} map={map} roughness={0.7} metalness={0.05} {...am} />
+            })}
             <Edges threshold={10} color={edgeLine} linewidth={lineWidth} transparent opacity={alpha} />
           </>
         )}

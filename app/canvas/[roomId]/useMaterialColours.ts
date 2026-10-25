@@ -7,7 +7,7 @@ import { dbLoadResolvedParts, dbResolveAndPersistCabinet } from './canvasDB'
 import { ebColour } from '@/src/lib/partPalette'
 import { ROOM_CUSTOM_PART_COLS, withLibraryKey } from '@/src/lib/displayLayers/customPartKinds'
 
-export type MatColours  = Record<string, { face?: string; back?: string; edge?: string }>
+export type MatColours  = Record<string, { face?: string; back?: string; edge?: string; grain?: boolean }>
 export type EbByMatId   = Record<string, { thickness: number; color: string | null }>
 
 const CUSTOM_PART_COLS = ROOM_CUSTOM_PART_COLS
@@ -86,7 +86,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       }
       if (matIds.size > 0) {
         const { data } = await supabase
-          .from('materials').select('id, face_colour, back_colour, edge_colour')
+          .from('materials').select('id, face_colour, back_colour, edge_colour, has_grain')
           .in('id', [...matIds])
         if (data) {
           const colours: MatColours = {}
@@ -95,6 +95,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
               face: m.face_colour ?? undefined,
               back: m.back_colour ?? undefined,
               edge: m.edge_colour ?? undefined,
+              grain: m.has_grain || undefined,
             }
           }
           setMatColours(colours)
@@ -143,6 +144,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
         face: m.face_colour  ?? undefined,
         back: m.back_colour  ?? undefined,
         edge: m.edge_colour  ?? undefined,
+        grain: m.has_grain   || undefined,
       }
     }
     if (Object.keys(colours).length > 0) setMatColours(prev => ({ ...prev, ...colours }))

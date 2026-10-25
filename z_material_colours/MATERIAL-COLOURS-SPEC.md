@@ -7,7 +7,7 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
-> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour done. Next: MC8 tutorial, then MC9 generic grain (MC7 CSV import waits on supplier files).
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour, MC9 generic grain done. Next: MC8 tutorial (MC7 CSV import waits on supplier files; MC10 supplier images optional).
 > Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
@@ -227,11 +227,10 @@ between two oaks).
 
 ### 8a. Generic grain (default)
 
-- **One shared image:** a seamless greyscale timber-grain tile from a licence-free
-  (CC0) source such as ambientCG or Poly Haven. Desaturated and levelled light
-  (mean around 0.85) so tinting keeps the colour true. It ships with the app as
-  `public/textures/grain_generic.jpg`, about 1024–2048 px, with its real tile
-  size in mm recorded next to it.
+- **One shared tile, drawn in code (changed at MC9):** instead of a downloaded
+  CC0 image, `woodGrain.ts` draws a seamless greyscale grain procedurally
+  (sums of integer-frequency sines, so it tiles), levelled light (mean ~0.9) so
+  tinting keeps the colour close. One tile = 300 mm across × 1200 mm along.
 - **Tint:** in 3D, a grained colour's face = generic grain map × `face_colour`.
   Boston Oak, Elegant Oak and Walnut each read as their own colour from the same
   image.
@@ -269,8 +268,7 @@ between two oaks).
 
 ### Phases
 
-- [ ] **MC9** Generic grain: source and level the CC0 tile, 3D tinted mapping at
-  true scale with grain rotation, on for every `has_grain` colour.
+- [x] **MC9** (2026-10-25) Generic grain in 3D: `src/components/three/woodGrain.ts` draws the tile procedurally (no image file); `GrainContext` set from `materialColours[*].grain` (has_grain) in `CabinetScene`; `Part` maps the two big faces at true scale (tile 300 across × 1200 along) with grain along DY via `extForAxes`; CSG-cut panels get one map for their big faces; shaped (extruded) parts stay flat. Room 3D, cabinet modal 3D and preview all go through CabinetScene. Checked in the room 3D on RHK1234 (Boston Oak doors grained vertically, Whiteboard flat).
 - [ ] **MC10** Supplier image override: storage bucket, library upload / thumbnail,
   untinted use when set.
 - [ ] **MC11** (optional) Elevation / print grain fills; second generic grain style.
