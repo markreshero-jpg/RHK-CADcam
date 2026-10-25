@@ -5,7 +5,7 @@
 // top-left, so it drops in at any annotation scale. Text may hold `{field}`
 // tokens that are filled from the job / room when drawn.
 
-import type { AnnotationKind, RoomAnnotation } from '../types'
+import type { AnnotationKind, RoomAnnotation, RoomFixture } from '../types'
 import type { AnnotationStyle } from './style'
 import { resolveStyle } from './style'
 import {
@@ -107,7 +107,53 @@ export const CAD_FIELDS: { key: string; label: string }[] = [
   { key: 'runners',    label: 'Runners + lengths' },
   { key: 'hinges',     label: 'Hinges' },
   { key: 'basins',     label: 'Basins / sinks' },
+  { key: 'sinks',       label: 'Sinks (make, model, size)' },
+  { key: 'taps',        label: 'Taps' },
+  { key: 'ovens',       label: 'Ovens + cookers' },
+  { key: 'cooktops',    label: 'Cooktops' },
+  { key: 'rangehoods',  label: 'Rangehoods' },
+  { key: 'dishwashers', label: 'Dishwashers' },
+  { key: 'appliances_other', label: 'Other appliances' },
+  { key: 'appliances',  label: 'All appliances' },
 ]
+
+// ── Appliance spec fields ──────────────────────────────────────────────────
+
+type SpecFixture = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'brand' | 'model_no' | 'width' | 'depth' | 'height'>
+
+/** Appliance kinds with their own field; anything else goes to {appliances_other}. */
+const APPLIANCE_FIELDS: Record<string, string> = {
+  oven: 'ovens', cooker: 'ovens', cooktop: 'cooktops', rangehood: 'rangehoods', dishwasher: 'dishwashers',
+}
+
+/** One spec line: brand (when the name doesn't already say it) + name + model + W x D x H. */
+export function fixtureSpecLine(f: SpecFixture): string {
+  const name = f.name.trim(), lower = name.toLowerCase()
+  const brand = f.brand?.trim() ?? '', model = f.model_no?.trim() ?? ''
+  const pre = brand && !lower.startsWith(brand.toLowerCase()) ? `${brand} ` : ''
+  const post = model && !lower.includes(model.toLowerCase()) ? ` - ${model}` : ''
+  return `${pre}${name}${post} (${Math.round(f.width)} x ${Math.round(f.depth)} x ${Math.round(f.height)})`
+}
+
+/** Spec lines for some fixtures, repeats folded into "2 x ...". */
+function specLines(xs: SpecFixture[]): string {
+  const n = new Map<string, number>()
+  for (const f of xs) { const l = fixtureSpecLine(f); n.set(l, (n.get(l) ?? 0) + 1) }
+  return [...n].map(([l, c]) => (c > 1 ? `${c} x ${l}` : l)).join('\n')
+}
+
+/** {sinks} / {taps} / {ovens} / ... for the fixtures placed in a room. */
+export function fixtureSpecFields(fixtures: SpecFixture[]): CadFieldValues {
+  const apps = fixtures.filter(f => f.category === 'appliance')
+  const field = (f: SpecFixture) => APPLIANCE_FIELDS[(f.kind ?? '').trim().toLowerCase()] ?? 'appliances_other'
+  const out: CadFieldValues = {
+    sinks:      specLines(fixtures.filter(f => f.category === 'sink')),
+    taps:       specLines(fixtures.filter(f => f.category === 'tap')),
+    appliances: specLines(apps),
+  }
+  for (const k of ['ovens', 'cooktops', 'rangehoods', 'dishwashers', 'appliances_other']) out[k] = specLines(apps.filter(f => field(f) === k))
+  return out
+}
 
 export type CadFieldValues = Record<string, string>
 

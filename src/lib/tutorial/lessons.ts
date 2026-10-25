@@ -852,6 +852,19 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Flip. The arrow shows which end of the wall you are looking toward: → has the wall on the left, ← has it on the right. The cut follows the 3D layer set, so backs and walls show even when the elevation hides them.',
       canvas: true, done: (c, s) => ev(c, 'xsec_flip') > ev(s, 'xsec_flip') },
   ]},
+  { id: 'cad_appliance_block', level: 'intermediate', topic: 'cad', title: 'Appliance + sink spec block',
+    blurb: 'List the sinks, taps and appliances placed in the room on the plan.',
+    keywords: 'cad block spec appliances sink sinks tap taps tapware oven cooktop rangehood dishwasher fixtures schedule model', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Open the Plan and press F7. The CAD panel opens on the right.',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'insert', title: 'Insert the Appliance spec block',
+      body: 'Under CAD blocks, click Appliance spec block. It drops in to the right of the walls, below the finishes Spec block if there is one.',
+      canvas: true, done: (c, s) => notes(c, true) > notes(s, true) },
+    { id: 'fields', title: 'It lists what you placed',
+      body: 'Each section fills from the fixtures in the room: name, brand, model no. and W x D x H, with "2 x" for repeats. Place or swap a fixture and the block follows. A section with nothing placed shows "-": double-click the block and delete that section.',
+      canvas: true, done: c => c.mode === 'cad' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

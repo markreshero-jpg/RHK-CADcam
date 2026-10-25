@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, RoomFixture } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import type { CadFieldValues } from '@/src/lib/annotations/blocks'
+import { type CadFieldValues, fixtureSpecFields } from '@/src/lib/annotations/blocks'
 
 type Row = Record<string, unknown>
 const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
@@ -116,6 +116,7 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
       runners: [names?.runnersName, runnerLens].filter(Boolean).join(' '),
       hinges: names?.hinges ?? '',
       basins: uniq(sinks.map(f => `${f.name} ${Math.round(f.width)} x ${Math.round(f.depth)} x ${Math.round(f.height)}`)).join('\n'),
+      ...fixtureSpecFields(fixtures),
     }
   }, [names, resolvedParts, fixtures, project, room.name])
 }

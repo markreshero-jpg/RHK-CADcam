@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { RoomAnnotation } from '../types'
-import { toBlockItems, placeBlockItems, blockInsertPoint, fillFields, annotationsBounds } from '../annotations/blocks'
+import { toBlockItems, placeBlockItems, blockInsertPoint, fillFields, annotationsBounds, fixtureSpecLine, fixtureSpecFields } from '../annotations/blocks'
 import type { LineGeom, TextGeom, CircleGeom } from '../annotations/geometry'
 
 const ann = (kind: RoomAnnotation['kind'], geom: RoomAnnotation['geom'], text: string | null = null, sort_order = 0): RoomAnnotation => ({
@@ -45,5 +45,28 @@ describe('live fields', () => {
     expect(fillFields('Runners: {runners}', v)).toBe('Runners: -')
     expect(fillFields('{not_a_field}', v)).toBe('{not_a_field}')
     expect(fillFields(null, v)).toBeNull()
+  })
+})
+
+describe('appliance spec fields', () => {
+  const fx = (o: Partial<Parameters<typeof fixtureSpecLine>[0]>) => ({
+    category: 'appliance' as const, kind: null, name: 'X', brand: null, model_no: null, width: 600, depth: 600, height: 600, ...o,
+  })
+  it('formats brand / model / size once, folds repeats, groups by kind', () => {
+    expect(fixtureSpecLine(fx({ name: 'Miele combi steam oven', brand: 'Miele', model_no: 'DGC 7840', height: 455 })))
+      .toBe('Miele combi steam oven - DGC 7840 (600 x 600 x 455)')
+    expect(fixtureSpecLine(fx({ category: 'tap', name: 'Pull-out mixer', brand: 'ABI', width: 117, depth: 268, height: 438 })))
+      .toBe('ABI Pull-out mixer (117 x 268 x 438)')
+    const v = fixtureSpecFields([
+      fx({ kind: 'Oven', name: 'Oven 600' }), fx({ kind: 'Oven', name: 'Oven 600' }),
+      fx({ kind: 'Cooktop', name: 'Induction 900', width: 900 }), fx({ kind: 'Microwave', name: 'MW' }),
+      fx({ category: 'sink', kind: 'Kitchen sink', name: 'Sink' }),
+    ])
+    expect(v.ovens).toBe('2 x Oven 600 (600 x 600 x 600)')
+    expect(v.cooktops).toBe('Induction 900 (900 x 600 x 600)')
+    expect(v.appliances_other).toBe('MW (600 x 600 x 600)')
+    expect(v.rangehoods).toBe('')
+    expect(v.sinks).toBe('Sink (600 x 600 x 600)')
+    expect(fillFields('RANGEHOOD\n{rangehoods}', v)).toBe('RANGEHOOD\n-')
   })
 })

@@ -305,7 +305,17 @@ feature. First use: the finishes **spec block** on the plan (RHK6570 vanities).
 | `{hinges}` | hinge schedule |
 | `{basins}` | sinks / basins placed in the room: name + W x D x H |
 
+| `{sinks}` / `{taps}` | sinks / taps placed in the room, one per line: brand (if not in the name) + name + model no. + (W x D x H); repeats as "2 x …" |
+| `{ovens}` / `{cooktops}` / `{rangehoods}` / `{dishwashers}` | appliances by fixture kind (Oven + Cooker → ovens), same line format |
+| `{appliances_other}` / `{appliances}` | appliances of any other kind (microwave, washer…) / every appliance |
+
 An unknown token stays as typed; a field with no value shows `-`.
+
+**Appliance spec block** (Mark, 2026-10-25, trial on RHK6581 J05): a second
+library block, placed under the finishes Spec block — APPLIANCES + SINKS /
+SINK / TAPWARE / OVENS / COOKTOP / RANGEHOOD / DISHWASHER / OTHER APPLIANCES.
+Lists only fixtures actually placed (cabinet gaps like a fridge space or an
+integrated DW slot need a fixture to show). Trim sections the room doesn't have.
 
 ### Phases
 
