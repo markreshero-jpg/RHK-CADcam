@@ -14,7 +14,7 @@ import type { Pt } from './geometry'
 import { cabinetToPlan, wallEnd } from './geometry'
 import type { CabinetInstance, Wall, BenchtopSegment } from './types'
 import { canonicalSegments, insetPolygonTagged, edgeFrame } from './cabinetShape/construct'
-import { withRoleOverrides, type FootprintSegment, type EdgeRole } from './cabinetShape/footprint'
+import { withEdgeOverrides, isWallEdge, type FootprintSegment, type EdgeRole } from './cabinetShape/footprint'
 import { sampleShapeOutline } from './shapePath'
 import type { HandleRole, HandleScheduleEntryInput } from './resolver/types'
 import { curvedEndFootprint, normaliseCurvedEnd } from './curvedEnd/settings'
@@ -41,7 +41,7 @@ export function cabinetSeedOutline(cab: CabinetInstance, wall: Wall, perp: Pt, o
   const crv = normaliseCurvedEnd(cab.curved_end)
   const fp = (crv ? curvedEndFootprint(crv, { w, d }) : null) ?? cab.footprint
   const segs: FootprintSegment[] = fp?.segments?.length
-    ? canonicalSegments(withRoleOverrides(fp), w, d)
+    ? canonicalSegments(withEdgeOverrides(fp), w, d)
     : [[0, 0, w, 0], [w, 0, w, d], [w, d, 0, d], [0, d, 0, 0]].map(([x0, y0, x1, y1], i) => ({
         type: 'line', p0: { x: x0, y: y0 }, p1: { x: x1, y: y1 }, edge: { id: `r${i}`, role: RECT_ROLES[i] },
       }) as FootprintSegment)
@@ -50,7 +50,8 @@ export function cabinetSeedOutline(cab: CabinetInstance, wall: Wall, perp: Pt, o
   const roles: EdgeRole[] = []
   for (const s of segs) {
     const n = s.type === 'arc' ? sampleShapeOutline([s, { type: 'line', p0: s.p1, p1: s.p0 }]).length - 1 : 1
-    for (let i = 0; i < n; i++) roles.push(s.edge.role)
+    // A gable scribed to the wall is a wall edge for the top, as a back is.
+    for (let i = 0; i < n; i++) roles.push(isWallEdge(s.edge) ? 'back' : s.edge.role)
   }
   const { pts, sub } = insetPolygonTagged(segs, s => (s.edge.role === 'front' ? -oh : 0))
   const toPlan = cabinetToPlan(cab, wall, perp)
@@ -153,7 +154,7 @@ export function unionOutlines(polys: RoleEdge[][]): RoleEdge[] {
 
 /** Merge consecutive collinear edges that share a wall flag. */
 export function simplifyLoop(loop: RoleEdge[]): RoleEdge[] {
-  const wallOf = (r: EdgeRole) => r === 'back' || r === 'scribe'
+  const wallOf = (r: EdgeRole) => r === 'back'
   const out = loop.slice()
   let changed = true
   while (changed && out.length > 3) {
@@ -190,6 +191,6 @@ export function benchtopSeedFromCabinets(
   if (loop.length < 3) return null
   return loop.map(e => ({
     type: 'line', p0: { ...e.a }, p1: { ...e.b },
-    edge: { wall: e.role === 'back' || e.role === 'scribe' },
+    edge: { wall: e.role === 'back' },
   }))
 }

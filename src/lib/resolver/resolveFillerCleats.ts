@@ -23,7 +23,7 @@ import { resolveFaceZ } from './mergeRules'
 
 const NEAR = 0.5
 
-const isSide = (s: FootprintSegment) => s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'scribe')
+const isSide = (s: FootprintSegment) => s.type === 'line' && s.edge.role === 'side'
 
 export function resolveFillerCleats(cab: CabinetInput, r: ConstructionRules, zones: ResolvedFaceZone[]): ResolvedCasePart[] {
   if (cab.has_carcass) return []

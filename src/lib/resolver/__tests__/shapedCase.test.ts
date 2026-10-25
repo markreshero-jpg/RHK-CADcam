@@ -84,7 +84,7 @@ describe('shaped case', () => {
   })
 
   it('radius end with the end set to open: shelf runs out flush with the end (no side to clear)', () => {
-    const fp = buildPresetFootprint('radius_end', { radius: 300 }, { w: 1000, d: 560 }, { end: 'open' })
+    const fp = buildPresetFootprint('radius_end', { radius: 300 }, { w: 1000, d: 560 }, { end: { role: 'open' } })
     const res = resolveCabinet(cab({ DX: 1000, DZ: 560, footprint: fp }))
     expect(res.case_parts.some(p => p.part_key === 'right_side')).toBe(false)
     const shelf = res.internal_parts.find(p => p.part_type === 'adj_shelf')!

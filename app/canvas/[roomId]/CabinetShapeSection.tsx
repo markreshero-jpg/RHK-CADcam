@@ -1,13 +1,16 @@
 'use client'
 
 // Shape section of the cabinet panel — z_cabinet_shape Phase 1. Picks a shape
-// preset, edits its params and per-edge roles. Writes `footprint` only; the
+// preset, edits its params and per-edge roles + sub-types (z_cabinet_shape_edit E1). Writes `footprint` only; the
 // plan outline re-evaluates it at the cabinet's live size.
 
 import { CabinetInstance, Wall } from '@/src/lib/types'
 import { cabT, wallDir } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
-import { EDGE_ROLES, edgeLabel, evaluateFootprint, type EdgeRole } from '@/src/lib/cabinetShape/footprint'
+import {
+  EDGE_ROLES, EDGE_SUBS, edgeLabel, edgeSub, evaluateFootprint, footprintOverrides, withEdgeOverrides,
+  type EdgeOverride, type EdgeRole, type EdgeSub,
+} from '@/src/lib/cabinetShape/footprint'
 import {
   SHAPE_PRESETS, getPreset, buildPresetFootprint, presetWarnings, presetBox,
 } from '@/src/lib/cabinetShape/presets'
@@ -59,18 +62,28 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
 
   function setParam(k: string, v: number | string) {
     if (!fp?.preset) return
-    setFootprint(keepFlush(buildPresetFootprint(fp.preset, { ...fp.params, [k]: v }, dims, fp.role_overrides)))
+    setFootprint(keepFlush(buildPresetFootprint(fp.preset, { ...fp.params, [k]: v }, dims, footprintOverrides(fp))))
   }
 
-  function setRole(edgeId: string, role: EdgeRole) {
+  // One edge's type / sub-type / scribe. A new type starts on its default sub-type.
+  function setEdge(edgeId: string, patch: Partial<EdgeOverride>) {
     if (!fp) return
-    const role_overrides = { ...(fp.role_overrides ?? {}), [edgeId]: role }
-    if (fp.preset) return setFootprint(keepFlush(buildPresetFootprint(fp.preset, fp.params, dims, role_overrides)))
-    setFootprint({
-      ...fp, role_overrides,
-      segments: fp.segments.map(s => s.edge.id === edgeId ? { ...s, edge: { ...s.edge, role } } : s),
-    })
+    const cur = edges.find(s => s.edge.id === edgeId)?.edge
+    if (!cur) return
+    const next: EdgeOverride = { role: cur.role, sub: cur.sub, scribe: cur.scribe, ...patch }
+    if (patch.role && patch.role !== cur.role) { delete next.sub; delete next.scribe }
+    if (next.sub !== 'scribe') delete next.scribe
+    if (next.sub == null) delete next.sub
+    if (next.scribe == null) delete next.scribe
+    const edge_overrides = { ...footprintOverrides(fp), [edgeId]: next }
+    const base = { ...fp, edge_overrides }
+    delete base.role_overrides
+    if (fp.preset) return setFootprint(keepFlush(buildPresetFootprint(fp.preset, fp.params, dims, edge_overrides)))
+    setFootprint(withEdgeOverrides(base))
   }
+
+  // Edges as the resolver reads them (legacy 'scribe' role, overrides applied).
+  const edges = fp ? evaluateFootprint(withEdgeOverrides(fp), dims) : []
 
   const warnings = fp?.preset ? presetWarnings(fp.preset, fp.params, dims) : []
 
@@ -114,15 +127,33 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
         <div>
           <label className={lbl}>Edges</label>
           <div className="space-y-1">
-            {fp.segments.map(s => (
-              <div key={s.edge.id} className="flex items-center gap-2">
-                <span className="text-[11px] text-gray-400 w-24 truncate">{edgeLabel(s.edge.id)}</span>
-                <select value={s.edge.role} onChange={e => setRole(s.edge.id, e.target.value as EdgeRole)}
-                  className={inp + ' flex-1'}>
-                  {EDGE_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
-                </select>
-              </div>
-            ))}
+            {edges.map(s => {
+              const subs = EDGE_SUBS[s.edge.role]
+              const sub = edgeSub(s.edge)
+              return (
+                <div key={s.edge.id} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-gray-400 w-24 truncate">{edgeLabel(s.edge.id)}</span>
+                    <select value={s.edge.role} onChange={e => setEdge(s.edge.id, { role: e.target.value as EdgeRole })}
+                      className={inp + ' flex-1'}>
+                      {EDGE_ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  </div>
+                  {subs.length > 0 && (
+                    <div className="flex items-center gap-2 pl-[6.5rem]">
+                      <select value={sub ?? ''} onChange={e => setEdge(s.edge.id, { sub: e.target.value as EdgeSub })}
+                        className={inp + ' flex-1'}>
+                        {subs.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                      </select>
+                      {sub === 'scribe' && (
+                        <CalcInput value={s.edge.scribe ?? 0} decimals={1} title="Scribe allowance (mm) — 0 = the room / job scribe"
+                          onCommit={v => setEdge(s.edge.id, { scribe: v > 0 ? v : undefined })} className={inp + ' w-16 text-right'} />
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

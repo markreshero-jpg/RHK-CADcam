@@ -13,16 +13,51 @@
 import { evaluateFormula } from '../formula'
 import { sampleShapeOutline, type ShapePt } from '../shapePath'
 
-export type EdgeRole = 'back' | 'side' | 'front' | 'open' | 'scribe'
-export type SideFinish = 'finished' | 'unfinished' | 'neighbour'
+// Stored footprints from before z_cabinet_shape_edit E1 may still say role
+// 'scribe' — evaluateFootprint / withEdgeOverrides read it as side / scribe.
+export type EdgeRole = 'back' | 'side' | 'front' | 'open'
 
 export const EDGE_ROLES: { value: EdgeRole; label: string }[] = [
   { value: 'back',   label: 'Back' },
   { value: 'side',   label: 'Side' },
   { value: 'front',  label: 'Front (face)' },
   { value: 'open',   label: 'Open' },
-  { value: 'scribe', label: 'Scribe' },
 ]
+
+/** What a side / back / front edge builds (z_cabinet_shape_edit decision 13).
+ *  The first of each role's list is its default (= the build before E1). */
+export type EdgeSub = 'faces' | 'open' | 'unfinished' | 'finished' | 'applied' | 'scribe' | 'standard'
+
+export const EDGE_SUBS: Record<EdgeRole, { value: EdgeSub; label: string }[]> = {
+  front: [{ value: 'faces', label: 'Doors / drawers' }, { value: 'open', label: 'Open (no doors)' }],
+  side: [
+    { value: 'unfinished', label: 'Unfinished gable' },
+    { value: 'finished',   label: 'Finished gable' },
+    { value: 'applied',    label: 'Applied end panel' },
+    { value: 'scribe',     label: 'Scribe gable' },
+  ],
+  back: [
+    { value: 'standard', label: 'Standard back' },
+    { value: 'finished', label: 'Finished back' },
+    { value: 'scribe',   label: 'Scribe back' },
+  ],
+  open: [],
+}
+
+/** The edge's sub-type: its role's default when unset or not valid for the role. */
+export function edgeSub(e: { role: EdgeRole; sub?: EdgeSub }): EdgeSub | null {
+  const list = EDGE_SUBS[e.role] ?? []
+  return list.find(o => o.value === e.sub)?.value ?? list[0]?.value ?? null
+}
+
+/** A user's choice for one edge. Survives regenerating from the preset. */
+export interface EdgeOverride { role: EdgeRole; sub?: EdgeSub; scribe?: number }
+export type EdgeOverrides = Record<string, EdgeOverride>
+
+/** Read an edge as stored: a legacy role 'scribe' becomes side / scribe. */
+export function normaliseEdge<E extends { role: string; sub?: EdgeSub }>(e: E): Omit<E, 'role'> & { role: EdgeRole } {
+  return (e.role === 'scribe' ? { ...e, role: 'side', sub: 'scribe' } : e) as Omit<E, 'role'> & { role: EdgeRole }
+}
 
 // Display names for the preset edge ids (presets.ts); anything else shows its id.
 const EDGE_LABELS: Record<string, string> = {
@@ -38,7 +73,11 @@ export interface FootprintEdge {
   /** Stable id. Faces and role overrides key off this, never the index. */
   id: string
   role: EdgeRole
-  finish?: SideFinish
+  /** Sub-type (EDGE_SUBS); unset = the role's default. */
+  sub?: EdgeSub
+  /** Scribe allowance (mm) for sub 'scribe': the panel stands this far in from
+   *  the outline. Unset = the rules' SCRL / SCRR / SCRBK on the box edges, 0 elsewhere. */
+  scribe?: number
   /** A face filler strip on this front edge (z_angled_filler): one false panel
    *  whose front face is exactly `width` wide, with a return cleat `cleat` deep
    *  at its end against a side edge when the cabinet has no carcass. */
@@ -72,8 +111,10 @@ export interface Footprint {
   /** History: the preset this shape started from (survives a hand edit). */
   from_preset?: string | null
   segments: FootprintSegment[]
-  /** User-chosen roles by edge id. Survives regenerating from the preset. */
-  role_overrides?: Record<string, EdgeRole>
+  /** Legacy (before E1): user-chosen roles by edge id. Read under edge_overrides. */
+  role_overrides?: Record<string, EdgeRole | 'scribe'>
+  /** User-chosen role / sub-type / scribe per edge id. Survives regenerating from the preset. */
+  edge_overrides?: EdgeOverrides
   /** Panel edges whose end is bevelled flush where it meets an angled front /
    *  open edge (z_cabinet_shape 4a). Default square; set per part by right-click. */
   flush_ends?: string[]
@@ -96,6 +137,7 @@ function evalExpr(src: string, dims: FootprintDims, params: PresetParams, fallba
 export function evaluateFootprint(fp: Footprint, dims: FootprintDims): FootprintSegment[] {
   const segs = fp.segments.map(s => ({
     ...s,
+    edge: normaliseEdge(s.edge),
     p0: s.p0_expr
       ? { x: evalExpr(s.p0_expr.x, dims, fp.params, s.p0.x), y: evalExpr(s.p0_expr.y, dims, fp.params, s.p0.y) }
       : { ...s.p0 },
@@ -139,9 +181,32 @@ export function footprintEdgesPlan(fp: Footprint, dims: FootprintDims, toPlan: T
     })
 }
 
-/** Apply role_overrides on top of the generated roles. */
-export function withRoleOverrides(fp: Footprint): Footprint {
-  const ov = fp.role_overrides
-  if (!ov || Object.keys(ov).length === 0) return fp
-  return { ...fp, segments: fp.segments.map(s => ov[s.edge.id] ? { ...s, edge: { ...s.edge, role: ov[s.edge.id] } } : s) }
+/** The footprint's per-edge choices: edge_overrides, with legacy role_overrides read in under them. */
+export function footprintOverrides(fp: Pick<Footprint, 'role_overrides' | 'edge_overrides'> | null | undefined): EdgeOverrides {
+  const out: EdgeOverrides = {}
+  for (const [id, role] of Object.entries(fp?.role_overrides ?? {})) out[id] = normaliseEdge({ role })
+  return { ...out, ...(fp?.edge_overrides ?? {}) }
+}
+
+/** Apply the per-edge overrides on top of the generated edges. */
+export function withEdgeOverrides(fp: Footprint): Footprint {
+  const ov = footprintOverrides(fp)
+  if (Object.keys(ov).length === 0) return fp
+  return {
+    ...fp,
+    segments: fp.segments.map(s => {
+      const o = ov[s.edge.id]
+      if (!o) return s
+      const edge: FootprintEdge = { ...s.edge, role: o.role }
+      delete edge.sub; delete edge.scribe
+      if (o.sub) edge.sub = o.sub
+      if (o.scribe != null) edge.scribe = o.scribe
+      return { ...s, edge }
+    }),
+  }
+}
+
+/** A wall-side edge for benchtops: a back, or a gable scribed to the wall. */
+export function isWallEdge(e: { role: EdgeRole; sub?: EdgeSub }): boolean {
+  return e.role === 'back' || (e.role === 'side' && e.sub === 'scribe')
 }

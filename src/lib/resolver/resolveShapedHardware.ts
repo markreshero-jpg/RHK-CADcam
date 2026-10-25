@@ -35,7 +35,7 @@ const NEAR = 0.5
 const D = Math.PI / 180
 
 const isPanel = (s: FootprintSegment) =>
-  s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'scribe' || s.edge.role === 'back')
+  s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'back')
 
 /** The face grid a zone belongs to: face_grid on the primary front, faces[edge] on a facet. */
 export function gridForFacet(cab: CabinetInput, facet: string | undefined): FaceGridInput | undefined {

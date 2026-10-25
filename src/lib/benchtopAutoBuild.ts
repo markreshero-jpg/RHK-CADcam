@@ -456,7 +456,7 @@ export function planAutoBuild(
     // Waterfall end lines (frame u).
     const wfU = ([0, 1] as const).filter(e => wfOn(k, e)).map(e => (e ? sh.u1 + oh[1] : sh.u0 - oh[0]))
     const segs: BenchtopSegment[] = loop.map(e => {
-      let wall = !run.island && (e.role === 'back' || e.role === 'scribe')
+      let wall = !run.island && e.role === 'back'
       // Any edge lying on a standard wall's face is a wall edge.
       if (!wall) wall = faces.some(f => [e.a, e.b].every(p => Math.abs(vOf(f, p)) < 5 && uOf(f, p) > -5 && uOf(f, p) < f.len + 5))
       const seg = { type: 'line', p0: { ...e.a }, p1: { ...e.b }, edge: { wall } } as BenchtopSegment

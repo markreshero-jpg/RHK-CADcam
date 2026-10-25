@@ -197,6 +197,10 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'annot_markup', group: 'annotations', label: 'Markup',            views: ['plan', 'elevation'], default: ON,
     hint: 'Lines, arrows, boxes, ellipses and clouds' },
   { id: 'annot_dims',   group: 'annotations', label: 'Manual dimensions', views: ['plan', 'elevation'], default: ON },
+  // Item CAD (z_item_cad): notes drawn on a cabinet in its edit window + library notes on
+  // bin fronts / cabinet codes. The text / markup / dims items above still apply inside.
+  { id: 'item_cad',     group: 'annotations', label: 'Item CAD',          views: ['elevation'], default: ON,
+    hint: 'Notes that come with a cabinet or front, e.g. PULLOUT BIN on bin fronts' },
 ]
 
 export const LAYER_ITEM_BY_ID: Record<string, LayerItemDef> =
@@ -266,6 +270,7 @@ export function casePartItem(partKey: string): string {
   if (partKey.startsWith('crv:')) return 'curved_ends'
   if (partKey.startsWith('fs:')) return 'floating_shelves'   // z_floating_shelf
   if (partKey.startsWith('ibp:')) return 'applied_panels'     // z_island_back_panel
+  if (partKey.startsWith('ap:')) return 'applied_panels'      // z_cabinet_shape_edit: applied end panel on an edge
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {

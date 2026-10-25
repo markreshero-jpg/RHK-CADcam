@@ -1392,7 +1392,7 @@ export interface ResolvedPart extends PartTransform {
 //   cleat:<edge>               return cleat behind a face filler on side edge <edge>
 //                              (z_angled_filler, carcass off) — same frame as side:<edge>
 // See src/lib/cabinetShape/partKeys.ts.
-export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}` | `crv:${string}` | `fs:${string}` | `ibp:${string}`
+export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}` | `crv:${string}` | `fs:${string}` | `ibp:${string}` | `ap:${string}`
 
 export interface ResolvedCasePart extends ResolvedPart {
   // Finger-pull rails (z_handles H6) + island back panels (vertical): sheet grain.

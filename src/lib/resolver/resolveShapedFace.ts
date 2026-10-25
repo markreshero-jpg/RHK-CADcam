@@ -29,13 +29,16 @@ import { resolveFace, type FaceResolution } from './resolveFace'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
 import { shapedInterior } from './resolveShapedCase'
 import { edgeFrame, type EdgeFrame } from '../cabinetShape/construct'
-import type { FootprintSegment } from '../cabinetShape/footprint'
+import { edgeSub, type FootprintSegment } from '../cabinetShape/footprint'
 
 const NEAR = 0.5
 
 const isPanel = (s: FootprintSegment) =>
-  s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'scribe' || s.edge.role === 'back')
+  s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'back')
 const isFrontLine = (s: FootprintSegment) => s.type === 'line' && s.edge.role === 'front'
+// A front set to Open (no doors, z_cabinet_shape_edit E1) builds no face; its
+// neighbours treat it as an open edge.
+const isDoorFront = (s: FootprintSegment) => isFrontLine(s) && edgeSub(s.edge) !== 'open'
 
 /** Edge id of the primary front facet, or null when the footprint has no straight front. */
 export function primaryFacetId(segs: FootprintSegment[], DZ: number): string | null {
@@ -128,7 +131,7 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
   const concaveRev = () => backOff < 0 ? r.GAPC / 4 : backOff + ft + PIE_CORNER_GAP
 
   segs.forEach((s, i) => {
-    if (!isFrontLine(s)) return
+    if (!isDoorFront(s)) return
     const isPrimary = s.edge.id === primary
     const f = edgeFrame(s)
     const prev = segs[(i - 1 + n) % n], next = segs[(i + 1) % n]
@@ -139,18 +142,18 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
         const g = edgeFrame(nb)
         return Math.acos(Math.max(-1, Math.min(1, f.u.x * g.u.x + f.u.y * g.u.y)))
       }
-      if (isFrontLine(nb) && convexCross > 1e-9) {
+      if (isDoorFront(nb) && convexCross > 1e-9) {
         const p = phi()
         return { rev: r.GAPC / 4 - Math.tan(p / 2) * midOff, bevel: (p / 2) * 180 / Math.PI }
       }
       // Two face fillers at an inside corner (z_angled_filler): a tight mitre.
       // The mid-thickness lines meet short of the vertex; negative bevel = the
       // front face is the shorter.
-      if (isFrontLine(nb) && s.edge.filler && nb.edge.filler) {
+      if (isDoorFront(nb) && s.edge.filler && nb.edge.filler) {
         const p = phi()
         return { rev: Math.tan(p / 2) * midOff, bevel: -(p / 2) * 180 / Math.PI }
       }
-      if (isFrontLine(nb)) return { rev: concaveRev(), bevel: 0 }
+      if (isDoorFront(nb)) return { rev: concaveRev(), bevel: 0 }
       const away = side === 'left' ? { x: -f.u.x, y: -f.u.y } : f.u
       return { rev: doorRun(endReveal(cab, r, nb, vertex, side), f, nb, away, backOff, ft), bevel: 0 }
     }

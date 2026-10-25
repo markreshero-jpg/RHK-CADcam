@@ -40,10 +40,10 @@ describe('L corner preset', () => {
   })
 
   it('placement seeds both legs from the class depth and keeps role overrides', () => {
-    const def = buildPresetFootprint('l_corner', {}, { w: 900, d: 900 }, { end: 'scribe' })!
+    const def = buildPresetFootprint('l_corner', {}, { w: 900, d: 900 }, { end: { role: 'side', sub: 'scribe' } })!
     const fp = seedClassDepthParams(def, 560, { w: 900, d: 900 })!
     expect(fp.params).toMatchObject({ leg_back: 560, leg_side: 560 })
-    expect(fp.segments.find(s => s.edge.id === 'end')!.edge.role).toBe('scribe')
+    expect(fp.segments.find(s => s.edge.id === 'end')!.edge).toMatchObject({ role: 'side', sub: 'scribe' })
     // Presets without class-depth params come back untouched.
     const clip = buildPresetFootprint('clipped_corner', {}, { w: 900, d: 580 })
     expect(seedClassDepthParams(clip, 560, { w: 900, d: 580 })).toBe(clip)

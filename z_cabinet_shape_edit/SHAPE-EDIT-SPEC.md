@@ -9,8 +9,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → spec drafted 2026-10-25; all questions answered the same day
-> (2 rounds, see Q&A log). Ready for **E1**.
+> **RESUME HERE** → **E1 built 2026-10-25** (sub-types in the resolver + the Shape
+> section dropdowns, migration applied), in-app check pending — see "E1 notes"
+> under Phases. Next **E2** (junctions).
 
 ---
 
@@ -231,13 +232,57 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
 | Phase | Scope | Status |
 |---|---|---|
 | E0 | Spec + Mark's Q&A | [x] 2026-10-25 |
-| E1 | **Types + sub-types in the resolver.** `sub` on edges, upgrade-on-read (scribe, role_overrides, flush_ends), per-edge material + thickness (decision 5) through the inset polygon + joins, applied end panel part, finished tape. Pickers added to the existing Shape section dropdowns so it's checkable before plan editing exists. Tests: rectangle footprint = box parts still; every preset × every sub-type stays inside the outline, no overlaps | [ ] |
+| E1 | **Types + sub-types in the resolver.** `sub` on edges, upgrade-on-read (scribe, role_overrides; flush_ends moved to E2), per-edge material + thickness (decision 5) through the inset polygon + joins, applied end panel part, finished tape. Pickers added to the existing Shape section dropdowns so it's checkable before plan editing exists. Tests: rectangle footprint = box parts still; every preset × every sub-type stays inside the outline, no overlaps | [x] built 2026-10-25, in-app check pending |
 | E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet + panel↔open square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [ ] |
 | E3 | **Plan edit mode — picking only.** Right-click Edit shape, dim + highlight, edges coloured by type, click edge / corner → panels in the sidebar, Done / Cancel / undo. No geometry editing yet | [ ] |
 | E4a | **CAD tool extraction** — target adapter in `useAnnotationTool`, annotation behaviour unchanged (headless check of the B-phase tools) | [ ] |
 | E4b | **CAD tools on the footprint** — grips, side drag, line / arc / box drawing from scratch, fillet / chamfer / join / offset, snaps (walls, neighbours, own points), typed entry; validity; ids + formula re-expression; pos / bbox update | [ ] |
 | E5 | **Library** — save shaped cabinets with their footprint (types, subs, joins, formulas) + the new preserve ticks; placement evaluates at the placed size, optional hand flip; `/CS` in the parser + skill | [ ] |
 | E6 | Tutorial lesson ("Editing a cabinet shape"), in-app check list | [ ] |
+
+### E1 notes (built 2026-10-25)
+
+- **Data:** `Edge.sub` + `Edge.scribe` (mm); `EDGE_SUBS`, `edgeSub`, `normaliseEdge`
+  (legacy role `scribe` → side / scribe, applied in `evaluateFootprint`),
+  `footprintOverrides` / `withEdgeOverrides` (replace `withRoleOverrides`; legacy
+  `role_overrides` are read under `edge_overrides`), `isWallEdge` (benchtops: a back
+  or a side / scribe is a wall edge, as the old scribe role was).
+  `buildPresetFootprint` takes `EdgeOverrides`. The unused `Edge.finish` is gone.
+- **Resolver** (`resolveShapedCase.ts`): `edgeBuild(cab, seg)` gives each panel edge
+  its thickness `t`, set-in `off`, board / tape and applied panel. `shapedInterior`'s
+  inner polygon uses `off + t` per edge, so faces, hardware, finger rails and filler
+  cleats see the same inside. Panels join on their **panel lines**
+  (`offsetPanelLines`, each edge moved in by `panelLineOff` — on a box edge that
+  includes the rules' SCRL / SCRR / SCRBK once the sub-type changes that panel).
+  `vertexTrim` / `angledEnd` take the neighbour's thickness (`tn`). Box parts (left /
+  right side, back) keep their rule-scribe outer face, moved by `off`, at the new
+  thickness. Horizontals + shelves whose box rect stopped at a moved / thickened box
+  panel move with it (`boxFaceShifts` / `shiftedGrow`).
+- **Applied end panel:** `ap:<edge>` — face-kind (`isShapedPanelKey`), layer
+  `applied_panels`, label "End Panel (edge)". Exposed board on the outline, ends flush
+  in the neighbours' outer planes; the gable is set in by its thickness. DB:
+  `migration_e1_applied_panel_key.sql` (part-key check widened, applied 2026-10-25).
+- **Scribe:** `edge.scribe` mm; unset = the rules (no change on box edges, 0
+  elsewhere). On a box edge only the amount past the rule moves the panel.
+- **Front / open:** no face on that facet (`resolveShapedFace` `isDoorFront`); its
+  neighbours treat it as an open edge (end reveal, no mitre); a square side next to
+  it no longer comes forward to a door.
+- **UI:** Shape section: type + sub-type dropdowns per edge, scribe mm box (0 = rules).
+- **Tests:** `edgeSubtypes.test.ts` (legacy read; defaults unchanged; finished /
+  applied / scribe on 5 shapes incl. box sides, angled sides, diagonal; × back /
+  angle / bottom / rail / scribe rules; finished back; bottom + shelf move with a
+  thicker gable) and `shapedFace.test.ts` (open facet).
+- **Known gaps / check in-app:**
+  - The applied end panel is the gable's height and depth only — it doesn't run to
+    the floor past the kick or forward past the doors (kick untouched, decision 9).
+    Ask Mark whether it should.
+  - A **thinner** board than the carcass on a box edge leaves the box parts at their
+    old size (small gap). Decision 5 only covers thicker boards.
+  - Drilling / seams on a moved or thickened box side / back still come from the box
+    seams — check hinge and shelf-pin holes land on the panel.
+  - The optimiser names `ap:` parts generically (`normalize.ts` was mid-edit in
+    another session; route it through `shapedPartLabel` later).
+  - Tutorial waits for E6 (the plan-view editor changes where these are picked).
 
 Later (not this module): rectangular cabinets on the same edge model (decision
 3); a `none` edge type (decision 4); kick / benchtop per edge (decision 9);

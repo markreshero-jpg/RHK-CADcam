@@ -165,16 +165,17 @@ export function isBoxLike(pts: ShapePt[]): boolean {
  * shares with neighbour `nb` (which runs AWAY from the vertex along `away`).
  *  - stops: the neighbour's panel runs through; clear its inner face.
  *  - always: keep the panel's inner face inside the outline (acute corners).
- * `away` is the panel's own direction pointing away from the vertex.
+ * `away` is the panel's own direction pointing away from the vertex. `t` is
+ * this panel's thickness, `tn` the neighbour panel's (default the same).
  */
 export function vertexTrim(
-  away: ShapePt, n: ShapePt, nbN: ShapePt, t: number, stops: boolean,
+  away: ShapePt, n: ShapePt, nbN: ShapePt, t: number, stops: boolean, tn = t,
 ): number {
   const k = dot(nbN, away)
   if (k <= EPS) return 0                       // reflex / parallel: nothing to clear
   const nn = dot(nbN, n)
   let s = Math.max(0, (-t * nn) / k)           // inner face meets the neighbour's outline
-  if (stops) s = Math.max(s, t / k, (t - t * nn) / k)
+  if (stops) s = Math.max(s, tn / k, (tn - t * nn) / k)
   return s
 }
 
@@ -209,9 +210,10 @@ export function interiorAngle(a: { p0: ShapePt; p1: ShapePt }, b: { p0: ShapePt;
  */
 export function angledEnd(
   kind: 'flush' | 'stop' | 'mitre',
-  V: ShapePt, away: ShapePt, n: ShapePt, nb: EdgeFrame, t: number,
+  V: ShapePt, away: ShapePt, n: ShapePt, nb: EdgeFrame, t: number, tn = t,
 ): { sOut: number; sIn: number } {
-  const inner = { x: V.x + nb.n.x * t, y: V.y + nb.n.y * t }
+  // The neighbour panel's inner face (`tn` = its thickness; this panel's is `t`).
+  const inner = { x: V.x + nb.n.x * tn, y: V.y + nb.n.y * tn }
   if (kind === 'flush') return { sOut: 0, sIn: faceHit(V, away, n, t, V, nb.u) }
   if (kind === 'stop') return { sOut: faceHit(V, away, n, 0, inner, nb.u), sIn: faceHit(V, away, n, t, inner, nb.u) }
   return { sOut: 0, sIn: faceHit(V, away, n, t, inner, nb.u) }

@@ -9,7 +9,7 @@
 
 import type { CabinetInstance, Wall } from '../types'
 import { wallDir, wallEnd, wallInwardNormal, dist, type Pt, type RoomRef } from '../geometry'
-import { evaluateFootprint } from './footprint'
+import { evaluateFootprint, footprintOverrides } from './footprint'
 import { buildPresetFootprint, presetBox } from './presets'
 
 const JSNAP = 5   // mm — wall ends this close are joined (as wallMitreCorners)
@@ -54,7 +54,7 @@ export function angledFillerSnap(
     const right = (corner.x - mid.x) * X.x + (corner.y - mid.y) * X.y > 0
     const theta = Math.round(Math.atan2(ly, right ? lx : -lx) * 1800 / Math.PI) / 10
     if (theta < 5 || theta > 90) continue
-    const next = buildPresetFootprint('angled_filler', { ...fp.params, angle: theta, side: right ? 'right' : 'left' }, { w: 0, d: 0 }, fp.role_overrides)
+    const next = buildPresetFootprint('angled_filler', { ...fp.params, angle: theta, side: right ? 'right' : 'left' }, { w: 0, d: 0 }, footprintOverrides(fp))
     const box = presetBox(next)
     if (!next || !box) continue
     const C = evaluateFootprint(next, { w: box.w, d: box.d }).find(s => s.edge.id === 'back2')?.p0

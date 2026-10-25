@@ -20,7 +20,7 @@ describe('shape presets', () => {
 
   it('edge ids are stable across param changes and keep role overrides', () => {
     const a = buildPresetFootprint('clipped_corner', {}, { w: 900, d: 580 })!
-    const b = buildPresetFootprint('clipped_corner', { clip_w: 150 }, { w: 900, d: 580 }, { facet: 'open' })!
+    const b = buildPresetFootprint('clipped_corner', { clip_w: 150 }, { w: 900, d: 580 }, { facet: { role: 'open' } })!
     expect(b.segments.map(s => s.edge.id)).toEqual(a.segments.map(s => s.edge.id))
     expect(b.segments.find(s => s.edge.id === 'facet')!.edge.role).toBe('open')
   })

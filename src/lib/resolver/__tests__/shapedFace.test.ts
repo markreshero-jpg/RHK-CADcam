@@ -84,3 +84,17 @@ describe('shaped fronts', () => {
     expect(res.face_cols.filter(c => c.facet === 'facet').length).toBe(2)
   })
 })
+
+describe('open front facet (z_cabinet_shape_edit E1)', () => {
+  it('a facet set to Open builds no doors; the primary door no longer mitres into it', () => {
+    const fp = buildPresetFootprint('clipped_corner', { clip_w: 300, clip_d: 300 }, { w: 900, d: 580 }, { facet: { role: 'front', sub: 'open' } })
+    const res = resolveCabinet(cab({ footprint: fp }))
+    expect(res.face_zones.some(z => z.facet === 'facet')).toBe(false)
+    expect(res.face_zones.length).toBe(2)
+    expect(res.face_zones.every(z => !z.bevel_l && !z.bevel_r)).toBe(true)
+    // With doors (default) the facet has its door and the primary mitres.
+    const doors = resolveCabinet(cab({ footprint: buildPresetFootprint('clipped_corner', { clip_w: 300, clip_d: 300 }, { w: 900, d: 580 }) }))
+    expect(doors.face_zones.some(z => z.facet === 'facet')).toBe(true)
+    expect(doors.face_zones.some(z => z.bevel_l || z.bevel_r)).toBe(true)
+  })
+})

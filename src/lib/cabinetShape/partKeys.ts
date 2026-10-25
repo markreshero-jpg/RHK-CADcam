@@ -17,6 +17,7 @@ export function isShapedPanelKey(k: string): boolean {
     || (isBulkheadKey(k) && !BH_HORIZONTAL.has(k))
     || isCurvedEndUprightKey(k)
     || k.startsWith('ibp:')   // island back panels (z_island_back_panel)
+    || k.startsWith('ap:')    // applied end panels on shaped edges (z_cabinet_shape_edit E1)
 }
 
 /** Bulkhead parts (z_bulkhead, resolveBulkhead). Fascia, side returns and the
@@ -76,6 +77,8 @@ export function shapedPartLabel(k: string): string | null {
   if (fp) return `Finger Rail ${Number(fp[1]) + 1}`
   const lh = /^lh:(\d+)$/.exec(k)
   if (lh) return `Linear Handle ${Number(lh[1]) + 1}`
+  const ap = /^ap:(.+)$/.exec(k)
+  if (ap) return `End Panel (${edgeLabel(ap[1])})`
   const m = /^(side|back|rail|cleat):(.+)$/.exec(k)
   if (!m) return null
   const kind = m[1] === 'side' ? 'Side' : m[1] === 'back' ? 'Back' : m[1] === 'cleat' ? 'Return Cleat' : 'Top Rail'

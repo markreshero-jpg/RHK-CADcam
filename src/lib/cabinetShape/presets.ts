@@ -9,8 +9,8 @@
 // list runs back → right side → front → left side. `side` mirrors in x.
 
 import {
-  evaluateFootprint, withRoleOverrides,
-  type EdgeRole, type Footprint, type FootprintDims, type FootprintSegment, type PresetParams,
+  evaluateFootprint, withEdgeOverrides, footprintOverrides,
+  type EdgeRole, type EdgeOverrides, type Footprint, type FootprintDims, type FootprintSegment, type PresetParams,
 } from './footprint'
 
 export type ShapeSide = 'left' | 'right'
@@ -232,7 +232,7 @@ export function buildPresetFootprint(
   presetKey: string,
   params: PresetParams,
   dims: FootprintDims,
-  roleOverrides?: Record<string, EdgeRole>,
+  overrides?: EdgeOverrides,
 ): Footprint | null {
   const preset = getPreset(presetKey)
   if (!preset) return null
@@ -253,10 +253,10 @@ export function buildPresetFootprint(
   }))
   const fp: Footprint = {
     preset: preset.key, params: full, from_preset: preset.key, segments,
-    ...(roleOverrides && Object.keys(roleOverrides).length ? { role_overrides: roleOverrides } : {}),
+    ...(overrides && Object.keys(overrides).length ? { edge_overrides: overrides } : {}),
   }
   // Fill the numeric cache so readers that skip evaluation still see sane numbers.
-  return withRoleOverrides({ ...fp, segments: evaluateFootprint(fp, dims) })
+  return withEdgeOverrides({ ...fp, segments: evaluateFootprint(fp, dims) })
 }
 
 /**
@@ -270,7 +270,7 @@ export function seedClassDepthParams(fp: Footprint | null, depth: number | null 
   const keys = preset.params.filter(d => d.classDepth).map(d => d.key)
   if (!keys.length) return fp
   const params = { ...fp.params, ...Object.fromEntries(keys.map(k => [k, depth])) }
-  const next = buildPresetFootprint(preset.key, params, dims, fp.role_overrides)
+  const next = buildPresetFootprint(preset.key, params, dims, footprintOverrides(fp))
   return next && fp.flush_ends?.length ? { ...next, flush_ends: fp.flush_ends } : next
 }
 
