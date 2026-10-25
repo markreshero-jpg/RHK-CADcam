@@ -1,6 +1,7 @@
 {
   "_source": "z_sample_plans/RHK6581 - Lee Smith - 38 Howard St, Grange/38 Howard SM - Markup 260927.pdf p1 (kitchen plan, elev A island + butler's section, elev B back run) + Mark Q&A 2026-10-24",
   "_notes": [
+    "2026-10-25 Mark: cupboards that hit the 2500 ceiling dropped 30 + a 30 bulkhead (rangehood left as is). Room wall_cabinet_top 2470; TC-01/TC-02 dy 2370, panels TC-03/04/10/12 + TC-13 2470, WC-01 670 + WC-03 760 (undersides unchanged 1800 / 1710). WC-04 BH 0-1268 + WC-05 BH 3863-4925 on Wall 6, auto_h 30, front doors, return 675 on the bench-side seen end. Butler's (J04) left at 2500.",
     "One room for J04 Butler's + J05 Kitchen (Mark). CH 2500. Frame: x from the butler's west wall, y from the north wall (grid C). Butler's 1685 wide, 90 partition (1685-1775), kitchen 4925 (1775-6700), south wall (grid A) at 3061.",
     "Butler's walls drawn square; the real north-east corner is a R500 curved wall (CAD arc). Kitchen east + south walls = their own chain. Island on a detached island line at y 665 (cabinet backs), 2818-5818, faces south.",
     "J05 back run (south wall, east->west = Elev B L->R): TFKW 32 | broom T2D 600 (1 door) | WOT-COMBI 636 (TEPK|600|TEPK) | 3 x D3-SLL 865 (cooktop on the middle) | TEPF 18 | fridge 994 + W2D 994 x 700 over (1800-2500) | TEPF 18 | TFKW 32 = 4925. Carcass 655 (700 bench), talls 2500 to the ceiling, bases 900 (20 slab straight on the carcass, no shadowline).",
