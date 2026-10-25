@@ -38,6 +38,7 @@ import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
 import AnnotationLayer from './AnnotationLayer'
 import { annotLayerItem, annotationFramePoints, mapPt } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
+import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
 import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
 
 /** Report-only page extras (not drawing layers). */
@@ -326,17 +327,13 @@ export default function ElevationPrintSVG({
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
               const pp = lp(it)
               const fsw = lw(it, partSW)
-              const hinge = fz.hinge_side === 'left'
-                ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={INK} strokeWidth={lw(it, boxSW)} />
-                : fz.hinge_side === 'right'
-                ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={INK} strokeWidth={lw(it, boxSW)} />
+              const hinge = fz.hinge_side
+                ? <line {...hingeEdgeLine(fz.hinge_side, { x, y, w, h })} stroke={INK} strokeWidth={lw(it, boxSW)} />
                 : null
               const chP = lp('door_chevrons')
               const chevron = layers.show('door_chevrons') && fz.face_type === 'door' && fz.hinge_side
                 ? <polyline
-                    points={fz.hinge_side === 'left'
-                      ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
-                      : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`}
+                    points={doorChevronPoints(fz.hinge_side, { x, y, w, h })}
                     fill="none" stroke={INK2} strokeWidth={lw('door_chevrons', thinSW)} opacity={chP.opacity}
                     strokeDasharray={chP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} />
                 : null

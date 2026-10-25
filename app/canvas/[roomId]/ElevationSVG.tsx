@@ -40,6 +40,7 @@ import { binOutlines } from '@/src/lib/binGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
+import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
 
 // A dragged split line snaps to a fixed-shelf suggestion this close (mm).
 const SPLIT_SNAP = 15
@@ -1519,16 +1520,12 @@ export default function ElevationSVG({
                         const fill = layers.colorOf(fit) ?? PART_COLORS[fz.face_type] ?? '#60a5fa'
                         const ldStroke = layers.colorOf(fit) ?? LINE_DRAW_COLORS[fz.face_type] ?? '#60a5fa'
                         const faceStroke = isLineDrawing ? ldStroke : (isSel ? '#e2e8f0' : fill)
-                        const hingeLine = fz.hinge_side === 'left'
-                          ? <line x1={x} y1={y} x2={x} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / lz} style={{ pointerEvents: 'none' }} />
-                          : fz.hinge_side === 'right'
-                          ? <line x1={x + w} y1={y} x2={x + w} y2={y + h} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / lz} style={{ pointerEvents: 'none' }} />
+                        const hingeLine = fz.hinge_side
+                          ? <line {...hingeEdgeLine(fz.hinge_side, { x, y, w, h })} stroke={faceStroke} strokeWidth={layers.w(fit, isLineDrawing ? 1.5 : 2) / lz} style={{ pointerEvents: 'none' }} />
                           : null
                         const chevron = layers.show('door_chevrons') && fz.face_type === 'door' && fz.hinge_side
                           ? (() => {
-                              const pts = fz.hinge_side === 'left'
-                                ? `${x},${y} ${x + w},${y + h / 2} ${x},${y + h}`
-                                : `${x + w},${y} ${x},${y + h / 2} ${x + w},${y + h}`
+                              const pts = doorChevronPoints(fz.hinge_side, { x, y, w, h })
                               return <polyline points={pts} fill="none" stroke={layers.color('door_chevrons', faceStroke)}
                                 strokeWidth={layers.w('door_chevrons', 0.5) / lz} strokeOpacity={0.7} opacity={layers.op('door_chevrons')}
                                 strokeDasharray={`${6 / z} ${3 / z}`}
