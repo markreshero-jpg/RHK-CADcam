@@ -73,6 +73,13 @@ export function fingerGap(cab: CabinetInput, zone: ZoneLike, fpgap: number): { e
   return { edge: g.edge, gap: g.zoneIn?.finger_gap ?? fpgap }
 }
 
+/** Cabinet-wide handle position (D18): hardware_overrides.handle_offset /
+ *  handle_inset, for every positioned handle on the cabinet. Null = not set. */
+export function cabHandlePosition(cab: CabinetInput): { offset: number | null; inset: number | null } {
+  const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v) ? v : null
+  return { offset: num(cab.hardware_overrides?.handle_offset), inset: num(cab.hardware_overrides?.handle_inset) }
+}
+
 export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): ResolvedHandle | null {
   const g = zoneGrip(cab, zone)
   if (!g) return null
@@ -80,8 +87,10 @@ export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): Resolv
   const override = g.override
   if (product.grip_kind === 'linear') return linearHandle(cab, zone, g)
   const orientation = entry?.orientation ?? (role === 'drawer' ? 'horizontal' : 'vertical')
-  const offset      = zoneIn?.handle_offset ?? entry?.offset_from_edge_mm ?? 50
-  const inset       = role === 'drawer' ? null : (zoneIn?.handle_inset ?? entry?.inset_from_side_mm ?? null)
+  // Front (D14) → cabinet (hardware_overrides, D18) → schedule row.
+  const cabPos      = cabHandlePosition(cab)
+  const offset      = zoneIn?.handle_offset ?? cabPos.offset ?? entry?.offset_from_edge_mm ?? 50
+  const inset       = role === 'drawer' ? null : (zoneIn?.handle_inset ?? cabPos.inset ?? entry?.inset_from_side_mm ?? null)
   const half        = (product.bore_centres ?? 0) / 2
 
   let x: number | null = null

@@ -905,6 +905,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Edit brings the library notes back onto this cabinet to change, then Move to library again. Remove takes them out of the library. Jobs already drawn keep the notes they had: library changes never change an old job by themselves.',
       canvas: true, done: (c, s) => ev(c, 'item_cad_moved') > ev(s, 'item_cad_moved') },
   ]},
+
+  // Appended 2026-10-25 (z_handles H5c / D18 — cabinet-wide handle position).
+  { id: 'cabinet_handle_position', level: 'intermediate', topic: 'cabinets', title: 'Move every handle on a cabinet',
+    blurb: 'Set how far the handles sit from the edge for one whole cabinet, without touching each door.',
+    keywords: 'handle position offset inset move down up from edge from side cabinet all doors drawers override schedule', steps: [
+    { id: 'set', title: 'Edit position',
+      body: 'Click a cabinet. In the right-hand panel, under Handle schedule, click ▸ Edit position. Type a From grip edge (e.g. 80) — every door and drawer handle on this cabinet moves to 80 from its grip edge (top on base and tall, bottom on wall). From side moves door handles in from the non-hinged edge; drawers stay centred. The box turns amber; ↺ goes back to the schedule.',
+      canvas: true, done: (c, s) => ev(c, 'cab_handle_pos_set') > ev(s, 'cab_handle_pos_set') },
+    { id: 'see', title: 'See it',
+      body: 'Double-click the cabinet → Face: the handles are drawn on the fronts. Click one door and set its own From grip edge in the Handle block to move just that door — a door’s own setting beats the cabinet’s.',
+      canvas: true, done: (c, s) => ev(c, 'cab_handle_pos_set') > ev(s, 'cab_handle_pos_set') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

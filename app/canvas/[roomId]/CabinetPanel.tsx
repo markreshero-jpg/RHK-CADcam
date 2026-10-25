@@ -6,6 +6,7 @@ import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
 import { cabT, findFreeSlot, cabsBlock, cabBottomZ, slideAlongWall, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
 import BulkheadSection from './BulkheadSection'
@@ -33,6 +34,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
 }) {
   const [local, setLocal] = useState<Partial<CabinetInstance>>({})
   const [saving, setSaving] = useState(false)
+  const [posOpen, setPosOpen] = useState(false)
   // Handle schedules for the per-cabinet override (z_handles D7) — stored in
   // hardware_overrides.handle_schedule_id, read by loadCabinetInput.
   const [handleSchedules, setHandleSchedules] = useState<{ id: string; name: string }[]>([])
@@ -330,6 +332,61 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
               <option value="">Inherit (room / job)</option>
               {handleSchedules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+            {/* Cabinet-wide handle position (z_handles D18) — hardware_overrides
+                handle_offset / handle_inset; a front's own override still wins. */}
+            {(() => {
+              const ho = cabinet.hardware_overrides ?? {}
+              const set = (key: 'handle_offset' | 'handle_inset') => typeof ho[key] === 'number'
+              const sched = getCachedInput(cabinet.id)?.handle_schedule
+              const door = sched?.door_base ?? sched?.door_wall ?? sched?.door_tall
+              const hint = {
+                handle_offset: String(door?.offset_from_edge_mm ?? sched?.drawer?.offset_from_edge_mm ?? 50),
+                handle_inset:  door?.inset_from_side_mm != null ? String(door.inset_from_side_mm) : 'centred',
+              }
+              const open = posOpen || set('handle_offset') || set('handle_inset')
+              const save = (key: 'handle_offset' | 'handle_inset', v: number | null) => {
+                const next = { ...ho }
+                if (v == null) delete next[key]; else next[key] = v
+                void onUpdate(cabinet.id, { hardware_overrides: next })
+                if (v != null) useTutorial.getState().emit('cab_handle_pos_set')   // tutorial cabinet_handle_position
+              }
+              const row = (key: 'handle_offset' | 'handle_inset', label: string, title: string) => (
+                <div className="flex items-center gap-1" title={title}>
+                  <span className="text-[10px] text-gray-500 w-24 shrink-0">{label}</span>
+                  <input
+                    key={`${cabinet.id}-${key}-${ho[key] ?? ''}`}
+                    type="number" step={1} defaultValue={set(key) ? String(ho[key]) : ''} placeholder={hint[key]}
+                    onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    onBlur={e => {
+                      const v = parseFloat(e.target.value)
+                      const next = isNaN(v) ? null : v
+                      if (next !== (set(key) ? ho[key] : null)) save(key, next)
+                    }}
+                    className={inp + (set(key) ? ' !border-amber-500 !text-amber-300' : '')}
+                  />
+                  <span className="text-[9px] text-gray-600 shrink-0">mm</span>
+                  {set(key) && (
+                    <button type="button" title="Clear — back to the schedule" onClick={() => save(key, null)}
+                      className="text-amber-400 hover:text-amber-200 text-[10px] shrink-0">↺</button>
+                  )}
+                </div>
+              )
+              return (
+                <div className="mt-1">
+                  <button type="button" onClick={() => setPosOpen(v => !v)}
+                    className="text-[10px] text-blue-400 hover:text-blue-300">
+                    {open ? '▾' : '▸'} Edit position
+                  </button>
+                  {open && (
+                    <div className="mt-1 flex flex-col gap-1">
+                      {row('handle_offset', 'From grip edge', 'Grip edge (top on base / tall, bottom on wall) to the nearest hole — every door and drawer on this cabinet')}
+                      {row('handle_inset', 'From side (doors)', 'Non-hinged edge of each door to the hole line. Drawers stay centred')}
+                      <p className="text-[9px] text-gray-600">Blank = schedule. A door&apos;s own setting (Face view) still wins.</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             {/* Handle holes (z_handles D13) — rule_overrides.HANDLE_DRILL */}
             {(() => {
               const cur = (cabinet.rule_overrides ?? {}).HANDLE_DRILL

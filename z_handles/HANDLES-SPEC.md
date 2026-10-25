@@ -173,10 +173,22 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H6a** | Backing rail parts + side notches (geometry), rules RAILH / RAILUP / FPRAIL, layer item, cut list | ✅ built 2026-10-13 — see H6 notes in §7 |
 | **H6b** | Notch routing on the sides → CNC; knock-in block holes; front rail push-back; rail grain | ✅ built 2026-10-14 — see §7 |
 | **H7** | Recessed aluminium channel (rare) | parked |
+| **H5c** | Cabinet-wide handle position: RHS panel → Handle schedule → Edit position (D18); face grid draws the resolved handles | built 2026-10-25, in-app check pending |
 | **H8a** | 3D models, schema + library: model columns on `hardware_handles` (D16), handle detail panel with upload / preview / hole markers / Auto-fit | built 2026-10-15, see D16 as-built. Migration `z_handles/migration_h8_models.sql` written, not applied yet |
 | **H8b** | 3D models in the views: `Handle3D` draws the model through `ModelAsset`, falls back to bar / knob; STL takes the `finish` colour | spec'd 2026-10-15 |
 | **H8c** | (optional) Elevation silhouette from the model, like `slideSilhouette.ts` | later |
 | **H9** | Linear applied strip handle (grip kind `linear`, D17): a strip of the front's own board on the face, full length, sharknose edge, screw holes, length override | ✅ built 2026-10-25 (7f03d61), applied to RHK6581 kitchen; in-app check pending. Sharknose bevel drawn on the strips (partSolids.linearStripShape → 3D, modal side / top views, cabinet sheets) 2026-10-25 — see D17 |
+
+**D18. Cabinet-wide handle position (Mark, 2026-10-25) — H5c.** The cabinet
+panel (RHS, cabinet clicked) has "Edit position" under Handle schedule: **From
+grip edge** (every positioned door + drawer handle) and **From side** (doors
+only; drawers stay centred). Stored as `hardware_overrides.handle_offset` /
+`handle_inset` (no migration). Chain: front (D14) → cabinet → schedule row.
+Linear strips ignore it (their inset is per front). Blank = schedule; ↺ clears.
+One value for all roles on the cabinet — split per role later if wanted. No
+room / job position override yet (use a schedule).
+- Face grid (Cabinet Edit → Face) now draws the resolved handles, holes and
+  sharknose line (645af7f), so the effect can be seen while editing.
 
 **D17. Linear applied strip handle — grip kind `linear`** (Mark, 2026-10-25, RHK6581 kitchen "Linear G").
 A 35-wide strip of the **front's own face material** (same board + colour, so it

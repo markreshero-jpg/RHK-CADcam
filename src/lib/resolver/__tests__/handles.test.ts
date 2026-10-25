@@ -347,6 +347,15 @@ describe('resolveHandles', () => {
     expect(right.handle!.x).toBeCloseTo(50)
   })
 
+  it('cabinet handle position overrides the schedule; a front still wins (D18)', () => {
+    const grid = { ...twoDoors, zones: [{ ...twoDoors.zones[0], handle_offset: 80 }, twoDoors.zones[1]] }
+    const [left, right] = resolveCabinet(cab({ face_grid: grid, hardware_overrides: { handle_offset: 100, handle_inset: 40 } })).face_zones
+    expect(left.handle!.y).toBeCloseTo(left.DY - 80 - 80)     // front's own 80
+    expect(right.handle!.y).toBeCloseTo(right.DY - 100 - 80)  // cabinet 100
+    expect(left.handle!.x).toBeCloseTo(left.DX - 40)          // cabinet inset
+    expect(right.handle!.x).toBeCloseTo(40)
+  })
+
   it('no schedule row → no handle', () => {
     const [left] = resolveCabinet(cab({ handle_schedule: {} })).face_zones
     expect(left.handle).toBeNull()
