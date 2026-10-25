@@ -330,6 +330,11 @@ Esc cancels; one undo step.
     - **LG washer** file re-exported (same geometry, some triangle windings flipped): replaces
       `public/fixture-models/LG_WX10-1412W_Front_Loader.glb` in place (same URL, no row change);
       folder copy renamed `Washing Machines/LG_WX10-1412W.glb`.
+  - 2026-10-25 (user): **Miele G 5210 SC** 60 cm freestanding dishwasher (CleanSteel) dropped in
+    `z_fixtures/models/Models for import…` (folder kept for future drops), filed to `Dishwasher/`.
+    Dishwasher group, **floor**, 598 × 598 × 845 from the bbox, scale 1000, no rotation (origin
+    back-left floor, +Z front), no benchtop cut, sort 20 (above the generic). Served from
+    `/fixture-models/Miele_G5210SC_Dishwasher.glb`, shapes traced headless. Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
