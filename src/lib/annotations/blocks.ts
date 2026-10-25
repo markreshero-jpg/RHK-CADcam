@@ -72,6 +72,37 @@ export function placeBlockItems(items: CadBlockItem[], at: Pt, k: number): CadBl
   return items.map(it => ({ ...it, geom: mapGeom(it.kind, it.geom, f, k) }))
 }
 
+/** Block items tagged with the block's name (style.block), so prints can tell them apart. */
+export function tagBlockItems(items: CadBlockItem[], name: string): CadBlockItem[] {
+  return items.map(it => ({ ...it, style: { ...it.style, block: name } }))
+}
+
+/** A spec block (Spec block, Appliance spec block, …): its own sheet when the plan doesn't fit. */
+export function isSpecBlock(a: Pick<RoomAnnotation, 'style'>): boolean {
+  return /spec/i.test(a.style?.block ?? '')
+}
+
+/**
+ * Spec blocks laid out for their own sheet: left to right in their plan order
+ * (left-to-right, then top-to-bottom), tops aligned, wrapping to a new row past
+ * `maxW` paper mm. `gap` is paper mm; `k` = frame mm per paper mm.
+ */
+export function layoutSpecSheet<T extends Pick<RoomAnnotation, 'kind' | 'geom' | 'text' | 'style'>>(xs: T[], k: number, maxW: number, gap = 10): T[] {
+  const boxed = xs.map(a => ({ a, b: annotationsBounds([a], k) })).filter((x): x is { a: T; b: Box } => !!x.b)
+    .sort((p, q) => p.b.minX - q.b.minX || p.b.minY - q.b.minY)
+  const out: T[] = []
+  let x = 0, y = 0, rowH = 0
+  for (const { a, b } of boxed) {
+    const w = b.maxX - b.minX, h = b.maxY - b.minY
+    if (x > 0 && x + w > maxW * k) { x = 0; y += rowH + gap * k; rowH = 0 }
+    const dx = x - b.minX, dy = y - b.minY
+    out.push({ ...a, geom: mapGeom(a.kind, a.geom, p => ({ x: p.x + dx, y: p.y + dy }), 1) })
+    x += w + gap * k
+    rowH = Math.max(rowH, h)
+  }
+  return out
+}
+
 /**
  * Where a block drops in (spec default): its top-left `gap` frame mm right of
  * `wallBox` (the walls' outer extents) at the walls' top, moved down below any
@@ -114,6 +145,7 @@ export const CAD_FIELDS: { key: string; label: string }[] = [
   { key: 'rangehoods',  label: 'Rangehoods' },
   { key: 'dishwashers', label: 'Dishwashers' },
   { key: 'appliances_other', label: 'Other appliances' },
+  { key: 'bins',        label: 'Pull-out bins' },
   { key: 'appliances',  label: 'All appliances' },
 ]
 

@@ -17,6 +17,7 @@ import { OpeningSymbol, FixturesPlanPrint } from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
 import { IDENTITY_FRAME, annotLayerItem, annotationFramePoints } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
+import { isSpecBlock } from '@/src/lib/annotations/blocks'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
@@ -79,7 +80,7 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [],
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false,
 }: {
   walls:       Wall[]
   /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
@@ -94,6 +95,8 @@ export default function PlanViewReportSVG({
   scale?:      number
   layers:      LayerView
   show:        PlanViewPageOptions
+  /** Shop drawings: spec blocks went to their own sheet — leave them off and out of the fit. */
+  hideSpecBlocks?: boolean
 }) {
   if (walls.length === 0) {
     return (
@@ -131,10 +134,15 @@ export default function PlanViewReportSVG({
     ]
   })
   // Annotations may sit outside the walls (notes off to the side) — fit them too.
+  // Spec blocks are kept apart: the full size (with them) decides whether they move
+  // to their own sheet, so it must not change when they're hidden.
+  const specPts: { x: number; y: number }[] = []
   for (const a of annotations) {
     if (!layers.show(annotLayerItem(a.kind))) continue
-    pts.push(...annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, P))
+    const into = isSpecBlock(a) ? specPts : pts
+    into.push(...annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, P))
   }
+  const drawnAnnots = hideSpecBlocks ? annotations.filter(a => !isSpecBlock(a)) : annotations
   // Benchtops overhang their cabinets (islands especially) — fit them too.
   if (layers.show('benchtops')) for (const bt of benchtops) pts.push(...outlinePoints(btSegments(bt), 4))
   // Cabinets past the wall faces (islands, back-side runs).
@@ -703,25 +711,26 @@ export default function PlanViewReportSVG({
       })}
 
       {/* ── CAD annotations (z_CAD_tool) — black unless "Annotation colours" is ticked ── */}
-      <AnnotationLayer annotations={annotations} frame={IDENTITY_FRAME} paper={P} layers={layers} printColours={show.annotColours} />
+      <AnnotationLayer annotations={drawnAnnots} frame={IDENTITY_FRAME} paper={P} layers={layers} printColours={show.annotColours} />
     </>
   )
 
   // ── ViewBox — fitted to what's drawn (not a worst-case border on every side), so
   // the sheet centres the real drawing (z_shop_drawings, Mark 2026-10-25).
-  const all = [...pts, ...dimPts]
   const pad = 4 * P
-  const vbX = Math.min(...all.map(p => p.x)) - pad
-  const vbY = Math.min(...all.map(p => p.y)) - pad
-  const vbW = Math.max(...all.map(p => p.x)) + pad - vbX
-  const vbH = Math.max(...all.map(p => p.y)) + pad - vbY
+  const extent = (xs: { x: number; y: number }[]) => {
+    const x = Math.min(...xs.map(p => p.x)) - pad, y = Math.min(...xs.map(p => p.y)) - pad
+    return { x, y, w: Math.max(...xs.map(p => p.x)) + pad - x, h: Math.max(...xs.map(p => p.y)) + pad - y }
+  }
+  const full = extent([...pts, ...dimPts, ...specPts])
+  const { x: vbX, y: vbY, w: vbW, h: vbH } = hideSpecBlocks ? extent([...pts, ...dimPts]) : full
 
   return (
     <svg
       ref={svgRef}
       viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
       xmlns="http://www.w3.org/2000/svg"
-      data-vb-w={vbW} data-vb-h={vbH}
+      data-vb-w={vbW} data-vb-h={vbH} data-full-w={full.w} data-full-h={full.h}
       fontFamily="Arial, Helvetica, sans-serif"
       shapeRendering="geometricPrecision"
       textRendering="geometricPrecision"

@@ -10,7 +10,7 @@ import type { RoomAnnotation, Wall } from '@/src/lib/types'
 import type { Box } from '@/src/lib/annotations/geometry'
 import {
   type CadBlock, type CadFieldValues, CAD_FIELDS,
-  toBlockItems, placeBlockItems, blockInsertPoint, annotationsBounds,
+  toBlockItems, placeBlockItems, tagBlockItems, blockInsertPoint, annotationsBounds,
 } from '@/src/lib/annotations/blocks'
 import type { AnnotationTool } from './useAnnotationTool'
 
@@ -60,7 +60,7 @@ export function CadBlocksSection({ cad, annotations, walls, paper, saveReq, Sect
     const wb = wallsBox(walls) ?? { minX: 0, minY: 0, maxX: 0, maxY: 0 }
     const existing = annotations.map(a => annotationsBounds([a], paper)).filter((x): x is Box => !!x)
     const at = blockInsertPoint(b.items, wb, existing, paper)
-    cad.insertItems(placeBlockItems(b.items, at, paper))
+    cad.insertItems(tagBlockItems(placeBlockItems(b.items, at, paper), b.name))
   }
 
   const remove = async (id: string) => {

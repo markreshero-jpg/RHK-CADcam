@@ -135,6 +135,15 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
   swings), benchtops, annotations and each dim row / depth dim as drawn (labels both sides, row names),
   plus 4mm paper. RHK6581 J05+J04 at 1:20: 587 x 337 → 479 x 233mm (still over A3's ~400mm; needs 1:25
   or a per-sheet scale, which decision 6 doesn't allow yet).
+- **Spec blocks to their own sheet (Mark, 2026-10-25):** when the plan doesn't fit *with* its spec
+  blocks, they come off the plan (which re-fits without them) and print on a **Specifications** sheet
+  placed *first*, before the plan. They're laid side by side at their paper size, tops aligned, wrapping
+  at the page width, and marked NTS. The sheet follows the plan's tick. A spec block is a note inserted
+  from a CAD block whose name contains "spec": `style.block` = the block's name, set on insert
+  (`tagBlockItems`). The 16 blocks already placed (SPECIFICATIONS / APPLIANCES + SINKS headings) were
+  tagged once in the DB. The decision uses the plan's size *with* the blocks (`data-full-w/h`), so it
+  can't flip back and forth. RHK6581 J05+J04 at 1:20: 479 → 392 x 233mm (fits A3 width; height fits
+  only without the signature / copyright lines). Test `specSheet.test.ts`.
 - **Fixtures on plan + elevation (Mark, 2026-10-21):** `FixturesPlanPrint` (FixturesPlan.tsx) and
   `FixturesElevationPrint` (FixturesElevation.tsx) draw the non-opening fixtures (appliances, sinks, taps,
   hobs, decorative) on Plan View, Elevation Views and the package, using the canvas's shapes / symbols /

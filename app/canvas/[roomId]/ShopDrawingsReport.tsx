@@ -23,6 +23,9 @@ import { useBatchDownload } from './useBatchDownload'
 import Room3DCapture, { Shot3DSVG, type Bt3DPrint } from './Room3DCapture'
 import { autoShots, shotsPerSheet, type Shot3D } from '@/src/lib/shopDrawings/shots3d'
 import type { HiddenLineResult } from '@/src/lib/shopDrawings/hiddenLine'
+import AnnotationLayer from './AnnotationLayer'
+import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
+import { isSpecBlock, layoutSpecSheet, annotationsBounds } from '@/src/lib/annotations/blocks'
 
 const PAPER: Record<string, { w: number; h: number; label: string }> = {
   A4L: { w: 297, h: 210, label: 'A4' }, A3L: { w: 420, h: 297, label: 'A3' },
@@ -55,6 +58,31 @@ function shotCells(n: number, x: number, y: number, w: number, h: number) {
   const cols = n === 1 ? 1 : 2, rows = Math.ceil(n / cols)
   const cw = (w - SHOT_GAP * (cols - 1)) / cols, ch = (h - SHOT_GAP * (rows - 1)) / rows
   return Array.from({ length: n }, (_, i) => ({ x: x + (i % cols) * (cw + SHOT_GAP), y: y + Math.floor(i / cols) * (ch + SHOT_GAP), w: cw, h: ch }))
+}
+
+/** The spec blocks' own sheet (Mark, 2026-10-25): first, when the plan only fits without them. */
+const KEY_SPECS = 'specs'
+
+/** Spec blocks side by side at their paper size; viewBox in frame mm like the plan. */
+function SpecSheetSVG({ annotations, scale, maxW, layers, printColours, svgRef }: {
+  annotations: RoomAnnotation[]
+  scale: number
+  maxW: number
+  layers: LayerView
+  printColours: boolean
+  svgRef: (el: SVGSVGElement | null) => void
+}) {
+  const laid = layoutSpecSheet(annotations, scale, maxW)
+  const b = annotationsBounds(laid, scale)
+  if (!b) return null
+  const pad = scale   // 1mm paper for the border pens
+  const x = b.minX - pad, y = b.minY - pad, w = b.maxX - b.minX + pad * 2, h = b.maxY - b.minY + pad * 2
+  return (
+    <svg ref={svgRef} viewBox={`${x} ${y} ${w} ${h}`} xmlns="http://www.w3.org/2000/svg" data-vb-w={w} data-vb-h={h}
+      fontFamily="Arial, Helvetica, sans-serif" style={{ width: '100%', height: 'auto', background: 'white', display: 'block' }}>
+      <AnnotationLayer annotations={laid} frame={IDENTITY_FRAME} paper={scale} layers={layers} printColours={printColours} />
+    </svg>
+  )
 }
 
 /** A layer view with some items always hidden. */
@@ -161,27 +189,37 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     if (next.has(key)) next.delete(key); else next.add(key)
     return next
   })
+  // Drawing sizes (paper mm) come from each SVG's data-vb-* once it has rendered
+  // ('plan:full' = the plan with its spec blocks, whether or not they're on it).
+  const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({})
+  // Spec blocks move to their own first sheet when the plan doesn't fit with them.
+  const specAnnots = planAnnots.filter(isSpecBlock)
+  const fullPlan = sizes['plan:full']
+  const moveSpecs = specAnnots.length > 0 && !!fullPlan
+    && (fullPlan.w > layout.usableW + 0.01 || fullPlan.h > layout.usableH + 0.01)
+
   // 3D pages: the switched-on views, perSheet at a time.
   const threeDPages: Sheet[] = []
   for (let i = 0; i < shots.length; i += perSheet) {
     threeDPages.push({ key: `${KEY_3D}:${i / perSheet}`, title: `${room.name} 3D`, shots: shots.slice(i, i + perSheet) })
   }
-  const sheets = [...baseSheets, ...threeDPages]
-  const printed = sheets.filter(s => (s.shots ? ticked.has(KEY_3D) : ticked.has(s.key)))
+  const specSheet: Sheet[] = moveSpecs ? [{ key: KEY_SPECS, title: `${room.name} Specifications` }] : []
+  const sheets = [...specSheet, ...baseSheets, ...threeDPages]
+  // The specs sheet goes with the plan's tick.
+  const printed = sheets.filter(s => (s.shots ? ticked.has(KEY_3D) : ticked.has(s.key === KEY_SPECS ? 'plan' : s.key)))
 
-  // Drawing sizes (model mm) come from each SVG's data-vb-* once it has rendered.
   const drawRefs = useRef<Map<string, SVGSVGElement>>(new Map())
   const pageRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const planRef = useRef<SVGSVGElement>(null)
-  const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({})
   useEffect(() => {
     const id = requestAnimationFrame(() => {
       const next: Record<string, { w: number; h: number }> = {}
-      const read = (key: string, el: SVGSVGElement | null | undefined) => {
-        const w = Number(el?.getAttribute('data-vb-w')), h = Number(el?.getAttribute('data-vb-h'))
+      const read = (key: string, el: SVGSVGElement | null | undefined, attr = 'vb') => {
+        const w = Number(el?.getAttribute(`data-${attr}-w`)), h = Number(el?.getAttribute(`data-${attr}-h`))
         if (w > 0 && h > 0) next[key] = { w: w / scale, h: h / scale }
       }
       read('plan', planRef.current)
+      read('plan:full', planRef.current, 'full')
       for (const [k, el] of drawRefs.current) read(k, el)
       const same = Object.keys(next).length === Object.keys(sizes).length
         && Object.entries(next).every(([k, v]) => sizes[k]?.w === v.w && sizes[k]?.h === v.h)
@@ -333,7 +371,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       {sheets.map(sheet => {
         const n = printed.indexOf(sheet)
         const box = place(sheet.key)
-        const sheetScale = sheet.shots ? 'NTS' : scale
+        const sheetScale = sheet.shots || sheet.key === KEY_SPECS ? 'NTS' : scale
         const cells = sheet.shots ? shotCells(sheet.shots.length, MARGIN, layout.top, layout.usableW, layout.usableH) : []
         return (
           <div key={sheet.key} ref={el => { if (el) pageRefs.current.set(sheet.key, el); else pageRefs.current.delete(sheet.key) }}
@@ -356,7 +394,11 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
               style={box
                 ? { left: pct(box.x, paper.w), top: pct(box.y, paper.h), width: pct(box.w, paper.w) }
                 : { left: pct(MARGIN, paper.w), top: pct(layout.top, paper.h), width: pct(layout.usableW, paper.w), visibility: 'hidden' }}>
-              {sheet.wall ? (
+              {sheet.key === KEY_SPECS ? (
+                <SpecSheetSVG annotations={specAnnots} scale={scale} maxW={layout.usableW} layers={planLayers}
+                  printColours={planShow.annotColours}
+                  svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }} />
+              ) : sheet.wall ? (
                 <ElevationPrintSVG
                   wall={sheet.wall} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} annotations={annotations} resolvedParts={elevResolved}
@@ -368,7 +410,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
               ) : (
                 <PlanViewReportSVG
                   walls={walls} cabinets={cabinets} fixtures={fixtures} annotations={planAnnots} benchtops={benchtops}
-                  resolvedParts={planResolved} svgRef={planRef}
+                  resolvedParts={planResolved} svgRef={planRef} hideSpecBlocks={moveSpecs}
                   scale={scale} layers={planLayers} show={planShow}
                 />
               )}

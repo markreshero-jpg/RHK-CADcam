@@ -19,6 +19,7 @@ interface Names {
   handles: string; hinges: string; runnersName: string; drawerSystem: string
   benchtop: string
   materials: Map<string, string>
+  bins: Map<string, string>   // bin product id → brand + name (z_bin_cabinet)
 }
 
 export function useCadFields({ project, room, resolvedParts, fixtures }: {
@@ -40,6 +41,10 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
     return [...ids].sort()
   }, [resolvedParts])
   const matKey = matIds.join(',')
+  // Bin products behind the room's bin fronts (a bin "slide" is the bin itself).
+  const binIds = useMemo(() => uniq([...resolvedParts.values()].flatMap(r =>
+    r.drawer_stacks.filter(s => s.drawer_type === 'bin').map(s => s.slides[0]?.slide_id))).sort(), [resolvedParts])
+  const binKey = binIds.join(',')
 
   useEffect(() => {
     let dead = false
@@ -50,7 +55,7 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
       const styleIds = classes.map(c => pick(`${c}_door_style_id`) ?? pick('door_style_override_id') ?? str(j.default_door_style_id))
       const colourIds = classes.map(c => pick(`${c}_door_colour_id`))
       const btSched = pick('benchtop_schedule_id')
-      const [styles, colours, handle, hinge, slide, dbm, mats, btRows, btOver] = await Promise.all([
+      const [styles, colours, handle, hinge, slide, dbm, mats, btRows, btOver, bins] = await Promise.all([
         supabase.from('door_styles').select('id,name').in('id', uniq(styleIds)),
         supabase.from('door_schedule_materials').select('id,colour_name').in('id', uniq(colourIds)),
         pick('handle_schedule_id') ? supabase.from('handle_schedules').select('name').eq('id', pick('handle_schedule_id')!).maybeSingle() : Promise.resolve({ data: null }),
@@ -60,6 +65,7 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
         matIds.length ? supabase.from('materials').select('id,name').in('id', matIds) : Promise.resolve({ data: [] }),
         btSched ? supabase.from('benchtop_schedule_rows').select('part_role,benchtop_materials(name,color)').eq('schedule_id', btSched) : Promise.resolve({ data: [] }),
         supabase.from('room_benchtop_materials').select('part_role,benchtop_materials(name,color)').eq('room_id', room.id),
+        binIds.length ? supabase.from('hardware_slides').select('id,name,brand').in('id', binIds) : Promise.resolve({ data: [] }),
       ])
       if (dead) return
       const styleName = new Map(((styles.data ?? []) as Row[]).map(s => [s.id as string, s.name as string]))
@@ -82,25 +88,37 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
         drawerSystem: str((dbm.data as Row | null)?.name) ?? '',
         benchtop: (over.length ? over : btName((btRows.data ?? []) as Row[])).join(', '),
         materials: new Map(((mats.data ?? []) as Row[]).map(m => [m.id as string, m.name as string])),
+        bins: new Map(((bins.data ?? []) as Row[]).map(b => {
+          const name = str(b.name) ?? '', brand = str(b.brand)
+          return [b.id as string, brand && !name.toLowerCase().startsWith(brand.toLowerCase()) ? `${brand} ${name}` : name]
+        })),
       })
     })()
     return () => { dead = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [project, room, matKey])
+  }, [project, room, matKey, binKey])
 
   return useMemo(() => {
     const mat = (id: string | null | undefined) => (id && names?.materials.get(id)) || null
     const carcass: string[] = [], panels: string[] = [], box: string[] = []
     const lengths = new Set<number>()
+    const binCount = new Map<string, number>()
     for (const r of resolvedParts.values()) {
       for (const p of r.case_parts) if (p.part_key === 'left_side' || p.part_key === 'right_side') carcass.push(mat(p.material_id) ?? '')
       for (const p of r.custom_parts ?? []) panels.push(mat(p.material_id) ?? '')
       for (const s of r.drawer_stacks) {
+        // A bin's "slide" is the bin frame — listed under {bins}, never as a runner length.
+        if (s.drawer_type === 'bin') {
+          const name = names?.bins.get(s.slides[0]?.slide_id ?? '') ?? 'Pull-out bin'
+          binCount.set(name, (binCount.get(name) ?? 0) + 1)
+          continue
+        }
         for (const p of s.box_parts) box.push(mat(p.material_id) ?? '')
         for (const sl of s.slides) if (sl.nominal_length) lengths.add(Math.round(sl.nominal_length))
       }
     }
     const runnerLens = [...lengths].sort((a, b) => a - b).map(n => `${n}mm`).join(' / ')
+    const bins = [...binCount].map(([n, c]) => (c > 1 ? `${c} x ${n}` : n)).join('\n')
     const jobNo = project?.job_number ?? '', client = project?.client_name ?? ''
     const sinks = fixtures.filter(f => f.category === 'sink')
     return {
@@ -117,6 +135,7 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
       hinges: names?.hinges ?? '',
       basins: uniq(sinks.map(f => `${f.name} ${Math.round(f.width)} x ${Math.round(f.depth)} x ${Math.round(f.height)}`)).join('\n'),
       ...fixtureSpecFields(fixtures),
+      bins,
     }
   }, [names, resolvedParts, fixtures, project, room.name])
 }

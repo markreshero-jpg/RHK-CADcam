@@ -37,9 +37,12 @@ export interface AnnotationStyle {
   arrowSize?:    number
   /** Cloud scallop length (paper mm). */
   cloudBump?:    number
+  /** Inserted from this CAD block (its name) — a tag, not a look. Shop drawings move
+   *  "spec" blocks to their own sheet when the plan doesn't fit (z_shop_drawings). */
+  block?:        string
 }
 
-export type ResolvedStyle = Required<AnnotationStyle>
+export type ResolvedStyle = Required<Omit<AnnotationStyle, 'block'>>
 
 export const ARROW_TYPES: { id: ArrowType; label: string }[] = [
   { id: 'none',        label: 'None' },
