@@ -1,0 +1,20 @@
+{
+  "_source": "z_sample_plans/RHK6590 - Carma V149 and V150/Laguna Villas 149 &150 - Architectural Drawings 261025.pdf WD-11 (V149 ensuite plan + Elev 9) + Mark Q&A 2026-10-25",
+  "_notes": [
+    "Ensuite 1780 x 3200. Vanity on the east wall from the north corner (Elev 9 L->R = N->S): D2-LL 1192 (2 drawers, sharknose top edge) | BEPF 18 seen end at the toilet = 1210 (plan VAN 1210).",
+    "Floating (FLOAT): 300 off the floor, carcass 480 + 20 Caesarstone = 800 (Mark). 500 deep top -> carcass 460 (480 to the face + 20 overhang). Prime Oak Woodmatt fronts + seen end (room-level style override). Kado Lux 460 round semi-inset basin ~600 from the north wall (scaled), Posh Solus basin mixer on the tap landing. Mirror shaving cabinet 900 x 1100 recessed above = by others (Highgrove)."
+  ],
+  "projectName": "RHK6590 Carma V149 and V150",
+  "roomName": "V149 Ensuite",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0, "y": 3200, "length": 3200, "angle": 270, "_": "1 west wall, S->N" },
+    { "x": 0, "y": 0, "length": 1780, "angle": 0, "_": "2 north wall, W->E" },
+    { "x": 1780, "y": 0, "length": 3200, "angle": 90, "_": "3 east wall (vanity, window, shower), N->S = Elev 9 L->R" },
+    { "x": 1780, "y": 3200, "length": 1780, "angle": 180, "_": "4 south wall, E->W" }
+  ],
+  "cabinets": [
+    { "def": "D2-LL", "wall": 3, "offset": 0, "dx": 1192, "dy": 480, "dz": 460, "rules": { "FLOAT": true, "RAIL_ORIENT": "vertical" }, "note": "Ensuite vanity, wall hung, 2 drawers (top drawer cut around the basin waste)" },
+    { "def": "BEPF", "wall": 3, "offset": 1192, "dx": 18, "dy": 480, "dz": 460, "rules": { "FLOAT": true }, "note": "Seen end at the toilet, Prime Oak, floating" }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "_source": "z_sample_plans/RHK6590 - Carma V149 and V150/Laguna Villas 149 &150 - Architectural Drawings 261025.pdf WD-10 (V149 kitchen plan, Elev 4 island, Elev 5 back run) + Mark Q&A 2026-10-25",
+  "_notes": [
+    "Frame: x east from the back wall (laundry partition), y south from the north (window) wall. Back run 4000 from the north wall to the 90 nib at the fridge end. North wall drawn 3200 (open plan beyond, placeholder).",
+    "Back run (Elev 5 L->R = S->N = wall start->end): 950 fridge recess + WOPN 950 x 370 x 450 open box (1830-2200) | WOT kit 636 (placed after draw-plan: 1 drawer 600, oven 600, 18 shelf, 332 clear microwave, W2D 650 from 1550, PTO) | D3-SLL 757 x 2 (cooktop centred on the join, 2343) | T2D+I3 870 pantry (doors split at bench, 3 inner drawers) | TFKW 30 at the window wall.",
+    "Bench 650 -> carcass 610. Talls to the 2200 plasterboard bulkhead (wall_cabinet_top 2200). Overheads 650 x 320: W2D 457 | W2D 600 rangehood (Westinghouse WRR614SB slideaway, false panel on the visor, PTO doors) | W2D 457, bottom overhang 18 (SCRBT) + 2-pac under panel set back 20.",
+    "Island: bench 900 x 2850 at x 1750-2650, y 800-3650 (1100 clear, 800 clear to the north wall). 20 stone waterfall each end -> cabinets y 820-3630 (2810). Island line = cabinet backs at x 2350, N->S so the face is west (Elev 4 L->R = N->S). 610 DW gap | B2D 800 sink (rails on edge) | BBIN 450 | D4 950 (4 equal drawers). Carcass 560 (600 to the line of cupboard incl 20 overhang) + IBPK 18 2-pac back -> 282 overhang on the seating side."
+  ],
+  "projectName": "RHK6590 Carma V149 and V150",
+  "roomName": "V149 Kitchen",
+  "roomHeight": 2400,
+  "wallCabinetTop": 2200,
+  "walls": [
+    { "x": 0, "y": 4000, "length": 4000, "angle": 270, "_": "1 back wall (laundry partition), S->N = Elev 5 L->R" },
+    { "x": 0, "y": 0, "length": 3200, "angle": 0, "_": "2 north wall (window), W->E" },
+    { "x": 650, "y": 4000, "length": 650, "angle": 180, "detached": true, "_": "3 nib at the fridge end, E->W" },
+    { "x": 2350, "y": 820, "length": 2810, "angle": 90, "type": "island", "detached": true, "height": 900, "_": "4 island line (cabinet backs), N->S, faces west = Elev 4 L->R" }
+  ],
+  "cabinets": [
+    { "def": "WOPN", "wall": 1, "offset": 0, "dx": 950, "dy": 370, "dz": 450, "note": "Open box over the fridge, 450 deep, 1830-2200. Fridge recess 950 clear x 1830, fridge plumbing at 1900" },
+    { "def": "D3-SLL", "wall": 1, "offset": 1586, "dx": 757, "dy": 880, "dz": 610, "note": "3 drawers" },
+    { "def": "D3-SLL", "wall": 1, "offset": 2343, "dx": 757, "dy": 880, "dz": 610, "note": "3 drawers, cooktop centred on the join" },
+    { "def": "T2D+I3", "wall": 1, "offset": 3100, "dx": 870, "dy": 2200, "dz": 610, "note": "Pantry: doors split at bench height, sharknose both sides of a 20 gap (60 rail), 3 inner drawers behind the lower doors" },
+    { "def": "TFKW", "wall": 1, "offset": 3970, "dx": 30, "dy": 2200, "dz": 610, "note": "30 filler at the window wall" },
+    { "def": "W2D", "wall": 1, "offset": 1586, "dx": 457, "dy": 650, "dz": 320, "note": "Overhead, bottom overhang" },
+    { "def": "W2D", "wall": 1, "offset": 2043, "dx": 600, "dy": 650, "dz": 320, "note": "Rangehood: Westinghouse WRR614SB 600 slideaway, 2-pac panel on the slide-out, PTO doors over" },
+    { "def": "W2D", "wall": 1, "offset": 2643, "dx": 457, "dy": 650, "dz": 320, "note": "Overhead, bottom overhang" },
+    { "def": "IBPK", "wall": 4, "offset": 0, "dx": 2810, "dy": 880, "dz": 18, "flip": true, "note": "Island back panel, 2-pac, on the kick (seating side)" },
+    { "def": "B2D", "wall": 4, "offset": 610, "dx": 800, "dy": 880, "dz": 560, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Island sink cupboard: Posh Solus Mk3 double bowl U/M, sink close to the DW" },
+    { "def": "BBIN", "wall": 4, "offset": 1410, "dx": 450, "dy": 880, "dz": 560, "note": "Island bin (spec: 2 x 36 L slide-out)" },
+    { "def": "D4-SSSL", "wall": 4, "offset": 1860, "dx": 950, "dy": 880, "dz": 560, "note": "Island 4 equal drawers" }
+  ]
+}

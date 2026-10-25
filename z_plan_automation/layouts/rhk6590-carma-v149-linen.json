@@ -1,0 +1,21 @@
+{
+  "_source": "z_sample_plans/RHK6590 - Carma V149 and V150/Laguna Villas 149 &150 - Architectural Drawings 261025.pdf WD-11 (V149 bathroom plan: L 1000 x 600 outside the bathroom) + WD-12 Elev 13 (seen beside the vanity) + Mark Q&A 2026-10-25",
+  "_notes": [
+    "1000 x 600 recess, walls both ends: TFKW 30 | T2D 940 2 doors, 5 adj | TFKW 30. 600 OA (carcass 580). 2370 incl 100 kick + 30 BH flush with carcase to the 2400 ceiling (Mark: full height like the laundry linen, drop 30 + 30 BH).",
+    "2-pac Resene White fronts, Matt Black kick, Handle House C79 S/S 544 vertical. Hinges 2170/1690/940/100 (clear of the adj shelf holes, as the laundry linen)."
+  ],
+  "projectName": "RHK6590 Carma V149 and V150",
+  "roomName": "V149 Linen",
+  "roomHeight": 2400,
+  "wallCabinetTop": 2370,
+  "walls": [
+    { "x": 0, "y": 600, "length": 600, "angle": 270, "_": "1 left side of the recess, S->N" },
+    { "x": 0, "y": 0, "length": 1000, "angle": 0, "_": "2 back wall of the recess, W->E" },
+    { "x": 1000, "y": 0, "length": 600, "angle": 90, "_": "3 right side (bathroom wall), N->S" }
+  ],
+  "cabinets": [
+    { "def": "TFKW", "wall": 2, "offset": 0, "dx": 30, "dy": 2370, "dz": 580, "note": "30 filler at the wall" },
+    { "def": "T2D", "wall": 2, "offset": 30, "dx": 940, "dy": 2370, "dz": 580, "note": "Linen: 2 doors, 5 adj. C79 S/S 544 vertical" },
+    { "def": "TFKW", "wall": 2, "offset": 970, "dx": 30, "dy": 2370, "dz": 580, "note": "30 filler at the wall" }
+  ]
+}

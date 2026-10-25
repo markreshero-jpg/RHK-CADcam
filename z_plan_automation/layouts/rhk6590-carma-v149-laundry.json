@@ -1,0 +1,31 @@
+{
+  "_source": "z_sample_plans/RHK6590 - Carma V149 and V150/Laguna Villas 149 &150 - Architectural Drawings 261025.pdf WD-10 (V149 laundry plan) + WD-11 Elev 6/7/8 + Mark Q&A 2026-10-25",
+  "_notes": [
+    "Frame: x east from the west (tub) wall, y south from the north (window) wall. 2370 N-S (WD-20); 3000 E-W scaled off the 1:50 plan (not dimensioned).",
+    "West wall (Elev 8 L->R = S->N): corner 600 (TBC with Mark - drawers in the corner clash with the return) | B2D 1002 tub cupboard (rails on edge) + BEPF 18 seen end at the WM | 750 WM space to the window wall. 600 OA bench (carcass 560 + 20 overhang), 880 + 20 stone.",
+    "South wall (Elev 7 L->R = E->W): broom 500 = TEPF 18 | T2D 464 one door, 5 adj (all removable) | TEPF 18, full height 2370 + 30 BH | return B2D 700 to the corner (TBC). Overheads 2 x W2D 650 x 600 x 300 over the return to the west wall, 1500-2100 (PL above), bottom overhang + 2-pac under panel 20 back.",
+    "East wall (Elev 6): linen 1050 = TFKW 30 at the window wall | T2D 1002 2 doors, 5 adj | TEPF 18 seen end, full height 2370 + 30 BH. Talls 600 OA (carcass 580). C79 S/S 544 vertical handles on the linen + broom."
+  ],
+  "projectName": "RHK6590 Carma V149 and V150",
+  "roomName": "V149 Laundry",
+  "roomHeight": 2400,
+  "wallCabinetTop": 2100,
+  "walls": [
+    { "x": 0, "y": 2370, "length": 2370, "angle": 270, "_": "1 west wall (tub run), S->N = Elev 8 L->R" },
+    { "x": 0, "y": 0, "length": 3000, "angle": 0, "_": "2 north wall (window), W->E" },
+    { "x": 3000, "y": 0, "length": 2370, "angle": 90, "_": "3 east wall (kitchen partition), N->S = Elev 6 L->R" },
+    { "x": 3000, "y": 2370, "length": 3000, "angle": 180, "_": "4 south wall, E->W = Elev 7 L->R; door east of the broom" }
+  ],
+  "cabinets": [
+    { "def": "B2D", "wall": 1, "offset": 600, "dx": 1002, "dy": 880, "dz": 560, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Tub cupboard: Posh Solus Mk2 45 L top-mount tub, mixer on the left. 1 adj" },
+    { "def": "BEPF", "wall": 1, "offset": 1602, "dx": 18, "dy": 880, "dz": 560, "note": "2-pac seen end at the WM space" },
+    { "def": "TEPF", "wall": 4, "offset": 1200, "dx": 18, "dy": 2370, "dz": 580, "note": "Broom seen end (door side)" },
+    { "def": "T2D", "wall": 4, "offset": 1218, "dx": 464, "dy": 2370, "dz": 580, "note": "Broom: one door, 5 adj shelves all removable (spec). C79 S/S 544 vertical" },
+    { "def": "TEPF", "wall": 4, "offset": 1682, "dx": 18, "dy": 2370, "dz": 580, "note": "Broom seen end (bench side)" },
+    { "def": "W2D", "wall": 4, "offset": 1700, "dx": 650, "dy": 600, "dz": 300, "note": "Overhead, bottom overhang" },
+    { "def": "W2D", "wall": 4, "offset": 2350, "dx": 650, "dy": 600, "dz": 300, "note": "Overhead to the west wall, bottom overhang" },
+    { "def": "TFKW", "wall": 3, "offset": 0, "dx": 30, "dy": 2370, "dz": 580, "note": "30 filler at the window wall" },
+    { "def": "T2D", "wall": 3, "offset": 30, "dx": 1002, "dy": 2370, "dz": 580, "note": "Linen: 2 doors, 5 adj. C79 S/S 544 vertical" },
+    { "def": "TEPF", "wall": 3, "offset": 1032, "dx": 18, "dy": 2370, "dz": 580, "note": "Linen seen end" }
+  ]
+}
