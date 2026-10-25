@@ -1,10 +1,11 @@
 'use client'
 
-// CAD in the Cabinet Edit modal (z_item_cad IC1). F7 / the CAD button on the Elevation
+// CAD in the Cabinet Edit modal (z_item_cad IC1–IC2). F7 / the CAD button on the Elevation
 // tab draws notes on the cabinet's front with the room's CAD tools. Notes drawn here are
 // "this cabinet only" (room_annotations, view cabinet_sheet / front) and show on the
 // room elevation with the cabinet. "Move to library" turns selected notes into item
 // CAD on a bin front or on the cabinet code, so every cabinet with one draws them.
+// Hide here / Detach (IC2) are per cabinet; {bin} {code} {w}… fill per cabinet / front.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CabinetInstance, Room, RoomAnnotation, Wall } from '@/src/lib/types'
@@ -14,7 +15,7 @@ import { mapPt, type AnnotFrame, type Box, type Pt } from '@/src/lib/annotations
 import { cadSnap, addOutline, type CadSnapSettings, type SnapGeometry } from '@/src/lib/annotations/cadSnap'
 import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import { withFieldsFilled, annotationsBounds, type CadFieldValues } from '@/src/lib/annotations/blocks'
-import { placeItemCad, asAnnotationRows, ownerId, type ItemCadTarget } from '@/src/lib/annotations/itemCad'
+import { placeItemCad, asAnnotationRows, ownerId, ITEM_CAD_FIELDS, type ItemCadTarget } from '@/src/lib/annotations/itemCad'
 import { SNAP_PX } from '@/src/lib/geometry'
 import { supabase } from '@/src/lib/supabase'
 import { useAnnotationTool } from './useAnnotationTool'
@@ -28,7 +29,7 @@ import CadPanel from './CadPanel'
 import { ELEV_PAD, type ModalCadHost } from './ResolvedViews'
 import { zoneElevRect } from './cabinetEditSvgHelpers'
 import { dbDeleteAnnotations } from './canvasDB'
-import { distinctTargets, type ItemCadApi } from './useItemCad'
+import { distinctTargets, hiddenOwners, type ItemCadApi } from './useItemCad'
 import { useTutorial } from '@/src/lib/tutorial/store'
 
 /** What the canvas hands the modal so its CAD shares the room's notes, undo and settings. */
@@ -45,6 +46,8 @@ export interface ModalCadContext {
   onSnap:          (s: CadSnapSettings) => void
   fields:          CadFieldValues
   itemCad:         ItemCadApi
+  /** Set the item CAD owners a cabinet hides (Hide / Detach, IC2). */
+  setItemCadHidden: (cabinetId: string, hidden: string[]) => void
 }
 
 const boxPts = (b: Box): Pt[] => [{ x: b.minX, y: b.minY }, { x: b.maxX, y: b.minY }, { x: b.maxX, y: b.maxY }, { x: b.minX, y: b.maxY }]
@@ -123,9 +126,19 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
   // Item CAD on this cabinet (read-only here; Edit pulls it back into the drawing).
   const targetsFor = ctx?.itemCad.targetsFor
   const targets = useMemo(() => targetsFor ? targetsFor(cabinet, rp) : [], [targetsFor, cabinet, rp])
-  const libraryNotes = useMemo(() => !ctx ? [] : targets.flatMap((t, i) =>
-    asAnnotationRows(placeItemCad(ctx.itemCad.targetItems(t), t.box, paper), `itemcad:${cabinet.id}:${i}`, ctx.room.id)),
-  [ctx, targets, paper, cabinet.id])
+  const hidden = useMemo(() => hiddenOwners(cabinet), [cabinet])
+  // Fields: this cabinet's ({code}, {w}, {bin}…) over the job's; a front's notes read its own bin.
+  const fieldsFor = ctx?.itemCad.fieldsFor
+  const cabFields = useMemo<CadFieldValues>(() => ({ ...ctx?.fields, ...fieldsFor?.(cabinet, undefined, rp) }), [ctx?.fields, fieldsFor, cabinet, rp])
+  const libraryNotes = useMemo(() => !ctx ? { shown: [], hidden: [] } : (() => {
+    const shown: RoomAnnotation[] = [], hid: RoomAnnotation[] = []
+    targets.forEach((t, i) => {
+      const rows = withFieldsFilled(withFieldsFilled(asAnnotationRows(placeItemCad(ctx.itemCad.targetItems(t), t.box, paper),
+        `itemcad:${cabinet.id}:${i}`, ctx.room.id), ctx.itemCad.fieldsFor(cabinet, t, rp)), ctx.fields)
+      ;(hidden.has(ownerId(t.kind, t.key)) ? hid : shown).push(...rows)
+    })
+    return { shown, hidden: hid }
+  })(), [ctx, targets, paper, cabinet, rp, hidden])
 
   const cursorStyle = cad.tool === 'select' ? 'default' : 'crosshair'
   const overlay = !ctx ? null : (
@@ -142,8 +155,10 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
         return <rect key={ownerId(t.kind, t.key)} x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} fill="none"
           stroke="#22d3ee" strokeOpacity={0.7} strokeWidth={unit} strokeDasharray={`${6 * unit} ${4 * unit}`} style={{ pointerEvents: 'none' }} />
       })}
-      <AnnotationLayer annotations={withFieldsFilled(libraryNotes, ctx.fields)} frame={frame} paper={paper} />
-      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(own), ctx.fields)} frame={frame} paper={paper}
+      <AnnotationLayer annotations={libraryNotes.shown} frame={frame} paper={paper} />
+      {/* Hidden on this cabinet: ghosted here so it can be shown again; the room doesn't draw it. */}
+      <g opacity={0.25}><AnnotationLayer annotations={libraryNotes.hidden} frame={frame} paper={paper} /></g>
+      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(own), cabFields)} frame={frame} paper={paper}
         edit={{ ...cad.editProps, hittable: cad.editProps.hittable && active }} />
       {cad.drawPreview && <AnnotationLayer annotations={[cad.drawPreview]} frame={frame} paper={paper} />}
       {active && <CadMeasureOverlay live={cad.liveMeasure} frame={frame} zoom={zoom}
@@ -195,29 +210,61 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
     setBusy(false)
   }
 
-  /** Library notes back into this cabinet's drawing to change, and cleared from the library. */
-  async function editFromLibrary(t: ItemCadTarget) {
-    if (!ctx || busy) return
-    const items = placeItemCad(ctx.itemCad.targetItems(t), t.box, paper)
-    if (!items.length) return
-    setBusy(true); setMsg(null)
+  /** Library notes on these targets → this cabinet's own notes (fields stay as tokens). */
+  async function copyToCabinet(ts: ItemCadTarget[]): Promise<RoomAnnotation[] | null> {
+    if (!ctx) return null
+    const items = ts.flatMap(t => placeItemCad(ctx.itemCad.targetItems(t), t.box, paper))
+    if (!items.length) return null
     const base = Math.max(0, ...own.map(a => a.sort_order)) + 1
     const rows = items.map((it, i) => ({
       id: crypto.randomUUID(), room_id: ctx.room.id, view: 'cabinet_sheet' as const, wall_id: null, wall_side: null,
       cabinet_id: cabinet.id, sheet_view: 'front' as const, kind: it.kind, geom: it.geom, text: it.text, style: it.style, sort_order: base + i,
     }))
     const { data, error } = await supabase.from('room_annotations').insert(rows).select('*')
-    if (error || !data) { console.error('[item cad edit]', error); setMsg('Couldn’t bring the notes back.'); setBusy(false); return }
+    if (error || !data) { console.error('[item cad copy]', error); return null }
+    return data as RoomAnnotation[]
+  }
+
+  /** Library notes back into this cabinet's drawing to change, and cleared from the library. */
+  async function editFromLibrary(t: ItemCadTarget) {
+    if (!ctx || busy || !ctx.itemCad.targetItems(t).length) return
+    setBusy(true); setMsg(null)
+    const data = await copyToCabinet([t])
+    if (!data) { setMsg('Couldn’t bring the notes back.'); setBusy(false); return }
     const err = await ctx.itemCad.clearOwner(t)
     if (err) {
-      void dbDeleteAnnotations(rows.map(r => r.id))
+      void dbDeleteAnnotations(data.map(r => r.id))
       setMsg(err); setBusy(false); return
     }
     ctx.captureSnapshot()
-    ctx.setAnnotations(prev => [...prev, ...(data as RoomAnnotation[])])
-    cad.setSelectedIds(new Set((data as RoomAnnotation[]).map(a => a.id)))
+    ctx.setAnnotations(prev => [...prev, ...data])
+    cad.setSelectedIds(new Set(data.map(a => a.id)))
     setOn(true)
     setMsg(`${t.label} notes are back on this cabinet to edit. Select them and Move to library again when done.`)
+    setBusy(false)
+  }
+
+  function setHidden(id: string, hide: boolean) {
+    if (!ctx) return
+    const next = new Set(hidden)
+    if (hide) next.add(id); else next.delete(id)
+    ctx.setItemCadHidden(cabinet.id, [...next])
+  }
+
+  /** Detach: the library notes become this cabinet's own (editable, this job only) and the
+   *  library ones are hidden here. Every front of that type on the cabinet gets its copy. */
+  async function detach(t: ItemCadTarget) {
+    if (!ctx || busy) return
+    setBusy(true); setMsg(null)
+    const data = await copyToCabinet(targets.filter(x => x.kind === t.kind && x.key === t.key))
+    if (!data) { setMsg('Couldn’t detach the notes.'); setBusy(false); return }
+    ctx.captureSnapshot()
+    ctx.setAnnotations(prev => [...prev, ...data])
+    setHidden(ownerId(t.kind, t.key), true)
+    cad.setSelectedIds(new Set(data.map(a => a.id)))
+    setOn(true)
+    useTutorial.getState().emit('item_cad_detached')
+    setMsg(`${t.label} notes detached: they're this cabinet's own now. Library changes won't reach them.`)
     setBusy(false)
   }
 
@@ -248,11 +295,16 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
         </span>
       ) : <span className="text-gray-500">F7 or CAD to draw on this cabinet.</span>}
       {distinctTargets(targets).filter(t => ctx.itemCad.targetItems(t).length).map(t => {
-        const id = ownerId(t.kind, t.key), n = ctx.itemCad.targetItems(t).length
+        const id = ownerId(t.kind, t.key), n = ctx.itemCad.targetItems(t).length, isHidden = hidden.has(id)
         return (
           <span key={id} className="flex items-center gap-1.5">
-            <span className="text-gray-300">{t.label}: {n} note{n > 1 ? 's' : ''}</span>
-            <button disabled={busy} onClick={() => void editFromLibrary(t)} className={`${btn} border-gray-600 text-gray-300 hover:bg-gray-800`}>Edit</button>
+            <span className="text-gray-300">{t.label}: {n} note{n > 1 ? 's' : ''}{isHidden ? ' (hidden here)' : ''}</span>
+            <button disabled={busy} onClick={() => setHidden(id, !isHidden)} title={isHidden ? 'Draw the library notes on this cabinet again' : 'Don’t draw the library notes on this cabinet (the library keeps them)'}
+              className={`${btn} border-gray-600 text-gray-300 hover:bg-gray-800`}>{isHidden ? 'Show here' : 'Hide here'}</button>
+            {!isHidden && <button disabled={busy} onClick={() => void detach(t)} title="Copy the notes onto this cabinet to change for this job only; the library ones are hidden here"
+              className={`${btn} border-gray-600 text-gray-300 hover:bg-gray-800`}>Detach</button>}
+            <button disabled={busy} onClick={() => void editFromLibrary(t)} title="Bring the library notes back onto this cabinet to change, then Move to library again"
+              className={`${btn} border-gray-600 text-gray-300 hover:bg-gray-800`}>Edit</button>
             {confirmRemove === id
               ? <button disabled={busy} onClick={() => void removeFromLibrary(t)} className={`${btn} border-red-700 text-red-300 hover:bg-red-900/50`}>Remove from library?</button>
               : <button disabled={busy} onClick={() => setConfirmRemove(id)} className={`${btn} border-gray-600 text-gray-400 hover:bg-gray-800`}>Remove</button>}
@@ -270,8 +322,8 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
   ) : null
 
   const panel = active && ctx ? (
-    <CadPanel cad={cad} annotations={own} paper={paper} walls={ctx.walls} fieldValues={ctx.fields} blockSaveReq={0}
-      onClose={() => setOn(false)} elevation={`${cabinet.label ?? 'Cabinet'} — Front`} />
+    <CadPanel cad={cad} annotations={own} paper={paper} walls={ctx.walls} fieldValues={cabFields} blockSaveReq={0}
+      onClose={() => setOn(false)} elevation={`${cabinet.label ?? 'Cabinet'} — Front`} itemFields={ITEM_CAD_FIELDS} />
   ) : null
 
   // Text editor + right-click menu (fixed-position, so they sit over the modal).

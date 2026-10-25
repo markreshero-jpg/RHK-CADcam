@@ -11,7 +11,9 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   type LibraryCad, type JobItemCad, type ItemCadTarget, type ItemCadView,
   FRONT_TYPE_LABELS, ownerId, itemsForOwner, missingJobCopies, toItemCadItems, placeItemCad, asAnnotationRows,
+  binProductName, itemFieldValues,
 } from '@/src/lib/annotations/itemCad'
+import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
 import { ownedBy, cabinetSheetOwner } from '@/src/lib/annotations/owner'
 import { zoneElevRect } from './cabinetEditSvgHelpers'
 
@@ -19,20 +21,26 @@ import { zoneElevRect } from './cabinetEditSvgHelpers'
  *  the left, y down from the bottom): each bin front, and the cabinet code. */
 export function cabinetItemCadTargets(cab: CabinetInstance, rp: ResolvedCabinet | undefined, defName?: string): ItemCadTarget[] {
   const out: ItemCadTarget[] = []
+  const allBins: string[] = []
   for (const ds of rp?.drawer_stacks ?? []) {
     if (ds.drawer_type !== 'bin') continue
+    const binId = ds.slides[0]?.slide_id
+    if (binId) allBins.push(binId)
     const z = rp!.face_zones.find(f => f.row_index === ds.face_zone_row && f.col_index === ds.face_zone_col)
     if (!z) continue
     const r = zoneElevRect(z)
-    out.push({ kind: 'front_type', key: 'bin', label: FRONT_TYPE_LABELS.bin,
+    out.push({ kind: 'front_type', key: 'bin', label: FRONT_TYPE_LABELS.bin, binIds: binId ? [binId] : [],
       box: { minX: r.ex, maxX: r.ex + r.ew, minY: -r.ey, maxY: -(r.ey - r.eh) } })
   }
   if (cab.cabinet_definition_id) {
-    out.push({ kind: 'cabinet_def', key: cab.cabinet_definition_id, label: defName ?? 'Cabinet code',
+    out.push({ kind: 'cabinet_def', key: cab.cabinet_definition_id, label: defName ?? 'Cabinet code', binIds: allBins,
       box: { minX: 0, maxX: cab.dx, minY: -cab.dy, maxY: 0 } })
   }
   return out
 }
+
+/** Owners hidden on this cabinet (Hide / Detach, IC2). */
+export const hiddenOwners = (cab: CabinetInstance) => new Set(cab.item_cad_hidden ?? [])
 
 /** Several of one owner on a cabinet (two bin fronts): the first is the one to edit. */
 export function distinctTargets(ts: ItemCadTarget[]): ItemCadTarget[] {
@@ -90,6 +98,32 @@ export function useItemCad({ projectId, projectCreatedAt, roomId, cabinets, reso
   const targetsFor = useCallback((c: CabinetInstance, rp: ResolvedCabinet | undefined) =>
     cabinetItemCadTargets(c, rp, c.cabinet_definition_id ? defNames[c.cabinet_definition_id] : undefined), [defNames])
 
+  // Bin product names for {bin} (a bin's "slide" is the bin itself, z_bin_cabinet).
+  const binIds = useMemo(() => [...new Set([...resolvedParts.values()].flatMap(r =>
+    r.drawer_stacks.filter(s => s.drawer_type === 'bin').map(s => s.slides[0]?.slide_id).filter((x): x is string => !!x)))].sort().join(','), [resolvedParts])
+  const [binNames, setBinNames] = useState<Record<string, string>>({})
+  useEffect(() => {
+    const ids = binIds ? binIds.split(',') : []
+    if (!ids.length) return
+    let off = false
+    void supabase.from('hardware_slides').select('id, name, brand').in('id', ids).then(({ data, error }) => {
+      if (error) console.error('[item cad bins]', error)
+      if (!off && data) setBinNames(Object.fromEntries((data as { id: string; name: string | null; brand: string | null }[])
+        .map(b => [b.id, binProductName(b.name, b.brand)])))
+    })
+    return () => { off = true }
+  }, [binIds])
+
+  /** Item field values for a cabinet, or one of its targets ({bin} = that front's bin). */
+  const fieldsFor = useCallback((c: CabinetInstance, t?: ItemCadTarget, rp?: ResolvedCabinet): CadFieldValues => {
+    const ids = t?.binIds ?? targetsFor(c, rp ?? resolvedParts.get(c.id)).find(x => x.kind === 'cabinet_def')?.binIds
+      ?? (rp ?? resolvedParts.get(c.id))?.drawer_stacks.filter(s => s.drawer_type === 'bin').map(s => s.slides[0]?.slide_id ?? '') ?? []
+    return itemFieldValues({
+      code: c.cabinet_definition_id ? defNames[c.cabinet_definition_id] : null, label: c.label,
+      w: c.dx, h: c.dy, d: c.dz, bins: ids.map(id => binNames[id] ?? 'Pull-out bin'),
+    })
+  }, [defNames, binNames, targetsFor, resolvedParts])
+
   const targetsByCab = useMemo(() => {
     const m = new Map<string, ItemCadTarget[]>()
     for (const c of cabinets) m.set(c.id, targetsFor(c, resolvedParts.get(c.id)))
@@ -116,14 +150,16 @@ export function useItemCad({ projectId, projectCreatedAt, roomId, cabinets, reso
     })()
   }, [loaded, projectId, projectCreatedAt, job, lib, targetsByCab])
 
-  /** Everything a cabinet's front draws, in its front frame: its own notes (Cabinet Edit
-   *  modal, "this cabinet only") then the item CAD of each target. */
+  /** Everything a cabinet's front draws, in its front frame, item fields filled: its own
+   *  notes (Cabinet Edit modal, "this cabinet only") then the item CAD of each target it
+   *  doesn't hide. */
   const frontNotes = useCallback((cab: CabinetInstance, view: ItemCadView = 'elevation'): RoomAnnotation[] => {
-    const own = annotations.filter(a => ownedBy(a, cabinetSheetOwner(cab.id, view === 'plan' ? 'top' : 'front')))
-    const placed = (targetsByCab.get(cab.id) ?? []).flatMap((t, i) =>
-      asAnnotationRows(placeItemCad(itemsForOwner(lib, job, t.kind, t.key, view), t.box, paper), `itemcad:${cab.id}:${i}`, roomId))
+    const own = withFieldsFilled(annotations.filter(a => ownedBy(a, cabinetSheetOwner(cab.id, view === 'plan' ? 'top' : 'front'))), fieldsFor(cab))
+    const hidden = hiddenOwners(cab)
+    const placed = (targetsByCab.get(cab.id) ?? []).flatMap((t, i) => hidden.has(ownerId(t.kind, t.key)) ? [] : withFieldsFilled(
+      asAnnotationRows(placeItemCad(itemsForOwner(lib, job, t.kind, t.key, view), t.box, paper), `itemcad:${cab.id}:${i}`, roomId), fieldsFor(cab, t)))
     return [...own, ...placed]
-  }, [annotations, targetsByCab, lib, job, paper, roomId])
+  }, [annotations, targetsByCab, lib, job, paper, roomId, fieldsFor])
 
   /** Library item CAD drawn on one target (what this job shows). */
   const targetItems = useCallback((t: ItemCadTarget, view: ItemCadView = 'elevation') =>
@@ -162,7 +198,7 @@ export function useItemCad({ projectId, projectCreatedAt, roomId, cabinets, reso
   /** Clear an owner's item CAD (jobs already drawn keep their copies). */
   const clearOwner = useCallback((t: ItemCadTarget, view: ItemCadView = 'elevation') => writeOwner(t, view, []), [writeOwner])
 
-  return { lib, job, loaded, targetsByCab, targetsFor, frontNotes, targetItems, saveToLibrary, clearOwner }
+  return { lib, job, loaded, targetsByCab, targetsFor, fieldsFor, frontNotes, targetItems, saveToLibrary, clearOwner }
 }
 
 export type ItemCadApi = ReturnType<typeof useItemCad>

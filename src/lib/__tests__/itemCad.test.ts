@@ -3,8 +3,10 @@ import type { RoomAnnotation } from '@/src/lib/types'
 import type { TextGeom, LineGeom } from '@/src/lib/annotations/geometry'
 import {
   anchorPoint, nearestAnchor, toItemCadItems, placeItemCad, itemsForOwner, missingJobCopies, ownerId,
+  itemFieldValues, binProductName,
   type LibraryCad, type JobItemCad,
 } from '@/src/lib/annotations/itemCad'
+import { withFieldsFilled } from '@/src/lib/annotations/blocks'
 import { ownedBy, cabinetSheetOwner, elevationOwner } from '@/src/lib/annotations/owner'
 
 const note = (id: string, kind: RoomAnnotation['kind'], geom: unknown, text: string | null = null): RoomAnnotation => ({
@@ -76,6 +78,23 @@ describe('item CAD pinning (decision 4)', () => {
     const used = new Set([ownerId('front_type', 'bin')])
     expect(missingJobCopies(lib, [], used, '2026-10-01T00:00:00Z')).toEqual([])
     expect(missingJobCopies(lib, [], used, '2026-11-01T00:00:00Z').map(l => l.id)).toEqual(['L1'])
+  })
+})
+
+describe('item fields (IC2)', () => {
+  it('cabinet values, bins counted like the room field', () => {
+    const v = itemFieldValues({ code: 'BBIN', label: 'BC-05', w: 450, h: 780.4, d: 580, bins: ['Nikpol Teramo 74L', 'Nikpol Teramo 74L', 'Hailo 2x30'] })
+    expect(v).toEqual({ bin: '2 x Nikpol Teramo 74L\nHailo 2x30', code: 'BBIN', label: 'BC-05', w: '450', h: '780', d: '580' })
+  })
+  it('a front reads its own bin; tokens fill through withFieldsFilled', () => {
+    const v = itemFieldValues({ code: 'BBIN', label: null, w: 450, h: 900, d: 580, bins: ['Nikpol Teramo 74L'] })
+    const [n] = withFieldsFilled([note('t', 'text', { at: { x: 0, y: 0 } }, 'PULLOUT BIN\n{bin}')], v)
+    expect(n.text).toBe('PULLOUT BIN\nNikpol Teramo 74L')
+  })
+  it('bin product name adds the brand once', () => {
+    expect(binProductName('Teramo 74L', 'Nikpol')).toBe('Nikpol Teramo 74L')
+    expect(binProductName('Nikpol Teramo 74L', 'Nikpol')).toBe('Nikpol Teramo 74L')
+    expect(binProductName('Teramo', null)).toBe('Teramo')
   })
 })
 

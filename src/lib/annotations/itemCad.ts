@@ -43,6 +43,40 @@ export interface ItemCadTarget {
   key:   string
   label: string
   box:   Box
+  /** Bin products on this target (a bin front: its bin; the cabinet: all its bins). */
+  binIds?: string[]
+}
+
+// ── Item fields (IC2) ────────────────────────────────────────────────────────
+// Filled per item: a note on a bin front reads that front's bin. Room / job fields
+// (blocks.ts CAD_FIELDS) work in item CAD too.
+
+export const ITEM_CAD_FIELDS: { key: string; label: string }[] = [
+  { key: 'bin',   label: 'Bin on this front' },
+  { key: 'code',  label: 'Cabinet code' },
+  { key: 'label', label: 'Cabinet label' },
+  { key: 'w',     label: 'Width' },
+  { key: 'h',     label: 'Height' },
+  { key: 'd',     label: 'Depth' },
+]
+
+/** A bin product's display name: brand + name, unless the name already starts with it. */
+export function binProductName(name: string | null | undefined, brand: string | null | undefined): string {
+  const n = (name ?? '').trim(), b = (brand ?? '').trim()
+  return b && !n.toLowerCase().startsWith(b.toLowerCase()) ? `${b} ${n}` : n
+}
+
+/** Item field values for one cabinet (and one of its targets). `bins` = product names,
+ *  repeats shown "2 x …" like the room's {bins}. */
+export function itemFieldValues(o: { code?: string | null; label?: string | null; w: number; h: number; d: number; bins: string[] }): Record<string, string> {
+  const count = new Map<string, number>()
+  for (const b of o.bins) count.set(b, (count.get(b) ?? 0) + 1)
+  return {
+    bin:   [...count].map(([n, c]) => (c > 1 ? `${c} x ${n}` : n)).join('\n'),
+    code:  o.code ?? '',
+    label: o.label ?? '',
+    w: String(Math.round(o.w)), h: String(Math.round(o.h)), d: String(Math.round(o.d)),
+  }
 }
 
 export const FRONT_TYPE_LABELS: Record<string, string> = { bin: 'Bin front' }

@@ -4036,6 +4036,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               room, walls, annotations, setAnnotations, captureSnapshot,
               scale: annotScale, onScale: setAnnotScale, snap: cadSnapSettings, onSnap: setCadSnapSettings,
               fields: cadFields, itemCad,
+              // Hide / Detach (z_item_cad IC2): straight to the row, no re-resolve (like label_offsets).
+              setItemCadHidden: (id, hidden) => {
+                captureSnapshot()
+                setCabinets(prev => prev.map(c => c.id === id ? { ...c, item_cad_hidden: hidden } : c))
+                void supabase.from('cabinet_instances').update({ item_cad_hidden: hidden }).eq('id', id)
+                  .then(({ error }) => { if (error) console.error('[item cad hidden]', error) })
+              },
             }}
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}

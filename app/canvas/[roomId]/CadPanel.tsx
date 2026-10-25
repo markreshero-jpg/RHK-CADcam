@@ -211,7 +211,7 @@ function summary(a: RoomAnnotation, k: number): string {
   }
 }
 
-export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose, elevation }: {
+export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose, elevation, itemFields }: {
   cad:         AnnotationTool
   /** The drawing's annotations (the list to pick from). */
   annotations: RoomAnnotation[]
@@ -227,6 +227,8 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
   /** Annotating an elevation (z_CAD_tool A6): its title, e.g. "Wall 2 — Face". Heights
    *  then show up (Z), though notes store y down from the floor. */
   elevation?:  string | null
+  /** Drawing on a cabinet (z_item_cad): its fields, listed above the job's. */
+  itemFields?: { key: string; label: string }[]
 }) {
   const ys = elevation ? -1 : 1
   const sel = cad.selected
@@ -240,7 +242,7 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
       <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-rose-300">CAD</div>
-          <div className="text-[11px] text-gray-500">{elevation ? `${elevation} · X along the wall · Z up from the floor` : 'Room mm · Y runs down the plan'}</div>
+          <div className="text-[11px] text-gray-500">{itemFields ? `${elevation} · X from the cabinet’s left · Z up from its bottom` : elevation ? `${elevation} · X along the wall · Z up from the floor` : 'Room mm · Y runs down the plan'}</div>
         </div>
         <button onClick={onClose} title="Close CAD (F7)" className="text-gray-500 hover:text-white text-lg leading-none px-1">×</button>
       </div>
@@ -296,12 +298,12 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
         {one && <SelectedInfo a={one} cad={cad} k={paper} />}
       </Section>
 
-      <CadFieldsSection cad={cad} values={fieldValues} Section={Section} />
+      <CadFieldsSection cad={cad} values={fieldValues} Section={Section} itemFields={itemFields} />
       {/* Blocks on elevations come with C4 (insert place is plan-only for now). */}
       {!elevation && <CadBlocksSection cad={cad} annotations={annotations} walls={walls} paper={paper} saveReq={blockSaveReq} Section={Section} />}
 
       <Section title={`Objects (${annotations.length})`}>
-        {!annotations.length && <div className="text-xs text-gray-500">{elevation ? 'No notes on this side of the wall yet.' : 'No notes or markup in this room yet.'}</div>}
+        {!annotations.length && <div className="text-xs text-gray-500">{itemFields ? 'No notes on this cabinet yet.' : elevation ? 'No notes on this side of the wall yet.' : 'No notes or markup in this room yet.'}</div>}
         <div className="flex flex-col">
           {[...annotations].sort((x, y) => y.sort_order - x.sort_order).map(a => (
             <button key={a.id} onClick={() => cad.setSelectedIds(new Set([a.id]))}

@@ -147,6 +147,8 @@ export interface CabinetInstance {
   label: string | null
   /** Label moved on the canvas (plan / elevation) — offsets from the centre, mm. */
   label_offsets?: import('./labelOffsets').LabelOffsets | null
+  /** Item CAD owners (kind:key) this cabinet doesn't draw: Hide / Detach (z_item_cad IC2). */
+  item_cad_hidden?: string[] | null
   assembly_class: AssemblyClass
   pos_x: number
   pos_y: number

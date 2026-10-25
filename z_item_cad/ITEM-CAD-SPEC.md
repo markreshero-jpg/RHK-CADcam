@@ -1,6 +1,6 @@
 # Item CAD — CAD attached to library items
 
-**Status:** IC1 built 2026-10-25 (checked headless, in-app check pending). Next: IC2.
+**Status:** IC1 + IC2 built 2026-10-25 (checked headless, in-app checks pending). Next: IC3 (prints + plan).
 
 CAD notes (the F7 tools) that belong to a library item, not a room: whenever
 the item comes out of the library, its CAD draws with it. First use: "PULLOUT BIN"
@@ -81,7 +81,7 @@ renderer (`AnnotationLayer`), with notes placed into each view's frame through t
 | Phase | Scope | Status |
 |---|---|---|
 | IC1 | `library_cad` + `job_item_cad` tables; F7 CAD in the Cabinet Edit modal Elevation tab; save target picker (cabinet only / front type / cabinet code); anchors; draw on the elevation canvas from the job copy | [x] built 2026-10-25, see IC1 notes; checked headless, in-app check pending |
-| IC2 | Item fields (`{bin}`, `{code}`…), Hide / Detach per placed item; seed "PULLOUT BIN" on the bin front (Mark to draw it — the test one was removed) | [ ] |
+| IC2 | Item fields (`{bin}`, `{code}`…), Hide / Detach per placed item; seed "PULLOUT BIN" on the bin front (Mark to draw it — the test one was removed) | [x] built 2026-10-25, see IC2 notes; checked headless, in-app check pending. PULLOUT BIN not seeded: Mark draws it |
 | IC3 | Top tab → plan attachments (canvas + Plan View PDF); prints: Elevation Views PDF, shop drawings, cabinet sheets | [ ] |
 | IC4 | Update job (item CAD part): newer-version list + refresh | [ ] |
 | IC5 | Library view of attachments (list / edit / remove without a room), optional stretch | [ ] |
@@ -111,3 +111,22 @@ renderer (`AnnotationLayer`), with notes placed into each view's frame through t
   text typed in the modal, moved to Bin front, drawn on the room elevation; Edit brought
   it back selected, Move again, Remove emptied the row. Not yet: prints (IC3), canvas
   undo of a Move, back-side elevations.
+
+## IC2 notes (2026-10-25)
+
+- **Item fields** (`ITEM_CAD_FIELDS` in `itemCad.ts`): `{bin}` (the bin product on that
+  front, brand + name; a note on the cabinet code / the cabinet's own notes list all its
+  bins, "2 x …" for repeats), `{code}` (definition name), `{label}` (e.g. BC-05), `{w}`
+  `{h}` `{d}`. Filled per cabinet + target in `useItemCad.frontNotes` / the modal; stored
+  as tokens (Edit / Detach bring tokens back). The CAD panel's Fields list shows them
+  under "This cabinet" above the job / room fields when drawing on a cabinet.
+- **Hide here / Show here** and **Detach** in the modal's Item CAD bar. Stored on the
+  cabinet: `cabinet_instances.item_cad_hidden text[]` of owner ids (`front_type:bin`,
+  `cabinet_def:<id>`), migration `item_cad_ic2_hidden` (`migration_ic2_hidden.sql`),
+  written straight to the row (no re-resolve) with an undo snapshot. Hidden notes are
+  ghosted in the modal, not drawn on the room elevation. Detach = copy every front of
+  that owner's notes onto the cabinet as its own + hide the owner.
+- Headless check `z_plan_automation/verify-item-cad-ic2.mjs` (RHK1234 test room, BC-09):
+  "PULLOUT BIN / {bin}" → "Nikpol Teramo 74L" on the room elevation; Hide → gone;
+  Show + Detach → drawn once (own copy); cleans up after itself.
+- The `item_cad` display layer was done in IC1.

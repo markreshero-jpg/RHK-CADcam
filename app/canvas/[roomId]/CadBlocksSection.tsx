@@ -103,10 +103,12 @@ export function CadBlocksSection({ cad, annotations, walls, paper, saveReq, Sect
 }
 
 /** Field tokens: click one while typing a text note to insert it at the caret. */
-export function CadFieldsSection({ cad, values, Section }: {
+export function CadFieldsSection({ cad, values, Section, itemFields }: {
   cad:     AnnotationTool
   values:  CadFieldValues
   Section: (p: { title: string; children: React.ReactNode }) => React.ReactNode
+  /** Drawing on a cabinet (z_item_cad): its own fields, listed first. */
+  itemFields?: { key: string; label: string }[]
 }) {
   const insertToken = (key: string) => {
     if (!cad.editing) return
@@ -122,7 +124,10 @@ export function CadFieldsSection({ cad, values, Section }: {
         ? 'Click a field to put it in the note. It always shows this job’s current value.'
         : 'Edit a text note, then click a field to put it in. Values follow the job.'}</div>
       <div className="flex flex-col">
-        {CAD_FIELDS.map(f => (
+        {itemFields?.length ? <div className="text-[10px] uppercase tracking-wider text-gray-500 px-1.5 pt-0.5">This cabinet</div> : null}
+        {[...(itemFields ?? []), ...(itemFields?.length ? [null] : []), ...CAD_FIELDS].map(f => !f
+          ? <div key="__job" className="text-[10px] uppercase tracking-wider text-gray-500 px-1.5 pt-1.5">Job / room</div>
+          : (
           <button key={f.key} disabled={!cad.editing}
             // Keep focus in the text box (a blur would finish the edit).
             onMouseDown={e => e.preventDefault()} onClick={() => insertToken(f.key)}
