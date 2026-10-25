@@ -2,7 +2,7 @@
 // Cross section view (z_section_view): a live side-on cut through the elevation
 // wall at the cut line, filling the main canvas (the elevation moves to the
 // right-hand column, where the line is dragged). Slices the 3D model; only the
-// cut faces are drawn, plus the wall (hatched, openings left out) and floor /
+// cut faces are drawn (fixtures + hardware via CrossSectionMeshes), plus the wall (hatched, openings left out) and floor /
 // ceiling lines. Colours, styles and visibility follow the elevation layer set,
 // painted like the elevation draws each part.
 
@@ -13,10 +13,11 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { LAYER_ITEM_BY_ID } from '@/src/lib/displayLayers/registry'
 import { centroid } from '@/src/lib/geometry'
 import { elevationFrame, openingOnWall } from '@/src/lib/fixtureGeometry'
-import { sliceFaces, alongRange, loopsPath, type CutPlane } from '@/src/lib/crossSection'
+import { sliceFaces, alongRange, loopsPath, sliceTriangles, chainPaths, chainPathD, trisAlongRange, type CutPlane } from '@/src/lib/crossSection'
 import { cabinetSectionSolids, benchtopSectionSolids, type SectionRole, type SectionSolid } from '@/src/lib/crossSectionRoom'
 import type { BtSolidInfo } from '@/src/lib/benchtopSolids'
 import { getPalette, paletteToPartColors } from '@/src/lib/partPalette'
+import CrossSectionMeshes, { type SectionMesh } from './CrossSectionMeshes'
 import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
 import { roundMm } from '@/src/lib/format'
 
@@ -100,12 +101,21 @@ export default function CrossSectionView({ walls, cabinets, room, wall, side, cu
     return { u0: u0 - 150, u1: u1 + 250, v0: -120, v1: roomH + 120 }
   }, [solids, wall, frame, roomH])
 
+  // Fixtures + hardware (X4): model meshes read back from a hidden 3D scene.
+  const [meshes, setMeshes] = useState<SectionMesh[]>([])
+  const meshRanges = useMemo(() => meshes.map(m => { const [lo, hi] = trisAlongRange(m.tris, frame.o, frame.d); return { m, lo, hi } }), [meshes, frame])
+
   const plane: CutPlane = { ...frame, at: cutX }
   const flip = look === -1
   const cut = solids.flatMap(s => {
     if (cutX < s.lo || cutX > s.hi || !layers.show(s.item)) return []
     const loops = sliceFaces(s.faces, plane)
     return loops.length ? [{ s, d: loopsPath(loops, flip) }] : []
+  })
+  const meshCut = meshRanges.flatMap(({ m, lo, hi }) => {
+    if (cutX < lo || cutX > hi || !layers.show(m.item)) return []
+    const paths = chainPaths(sliceTriangles(m.tris, plane))
+    return paths.length ? [{ m, fill: chainPathD(paths, true, flip), line: chainPathD(paths, false, flip) }] : []
   })
 
   // Paint a cut part the way the elevation draws it (palette colour by part key,
@@ -125,6 +135,22 @@ export default function CrossSectionView({ walls, cabinets, room, wall, side, cu
       strokeDasharray: p.strokeDasharray ? '6 3' : undefined, opacity: p.opacity,
     }
   }
+
+  // Hardware / fixtures, coloured like the elevation draws them.
+  const meshPaint = (m: SectionMesh) => {
+    const c = m.item === 'hinges' ? layers.color('hinges', ld ? '#475569' : '#a855f7')
+      : m.item === 'handles' ? layers.color('handles', ld ? '#334155' : '#94a3b8')
+      : m.item === 'bins' ? layers.color('bins', '#6b7280')
+      : m.item === 'drawer_runners' || m.item === 'inner_drawer_runners' ? layers.color(m.item, PART_COLORS.db_slide ?? '#94a3b8')
+      : layers.color(m.item, m.item === 'fixture_openings' ? '#94a3b8' : '#0ea5e9')
+    const p = layers.props(m.item, 1)
+    const sel = !!m.cabId && m.cabId === selectedCabId
+    return {
+      color: c, stroke: sel ? '#e2e8f0' : c, fillOpacity: ld ? 0 : (m.fixtureId ? 0.25 : 0.7) * p.fillOpacity,
+      strokeWidth: layers.w(m.item, 1), strokeDasharray: p.strokeDasharray ? '6 3' : undefined, opacity: p.opacity,
+    }
+  }
+  const fixtureName = new Map(fixtures.map(f => [f.id, f.name ?? '']))
 
   // The wall itself, less any door / window it's cut through.
   const wallRects = (() => {
@@ -259,7 +285,23 @@ export default function CrossSectionView({ walls, cabinets, room, wall, side, cu
             <title>{[s.cabId ? cabLabel.get(s.cabId) : 'Benchtop', LAYER_ITEM_BY_ID[s.item]?.label].filter(Boolean).join(' · ')}</title>
           </path>
         ))}
+        {meshCut.map(({ m, fill, line }) => {
+          const p = meshPaint(m)
+          const title = m.fixtureId ? fixtureName.get(m.fixtureId) || LAYER_ITEM_BY_ID[m.item]?.label
+            : [m.cabId ? cabLabel.get(m.cabId) : '', LAYER_ITEM_BY_ID[m.item]?.label].filter(Boolean).join(' · ')
+          return (
+            <g key={m.id} data-item={m.item} opacity={p.opacity}>
+              {fill && <path d={fill} data-cab={m.cabId} fillRule='evenodd' fill={ld ? 'none' : p.color} fillOpacity={p.fillOpacity}
+                stroke={p.stroke} strokeWidth={p.strokeWidth} strokeDasharray={p.strokeDasharray} strokeLinejoin='round' vectorEffect='non-scaling-stroke'
+                style={{ cursor: m.cabId ? 'pointer' : undefined }}><title>{title}</title></path>}
+              {line && <path d={line} data-cab={m.cabId} fill='none' stroke={p.stroke} strokeWidth={p.strokeWidth} strokeDasharray={p.strokeDasharray}
+                strokeLinejoin='round' vectorEffect='non-scaling-stroke'><title>{title}</title></path>}
+            </g>
+          )
+        })}
       </svg>
+      <CrossSectionMeshes walls={walls} cabinets={cabinets} room={room} rc={rc} resolvedParts={resolvedParts} details={details}
+        layers={layers} fixtures={fixtures} onMeshes={setMeshes} />
     </div>
   )
 }

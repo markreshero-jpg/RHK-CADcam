@@ -459,7 +459,7 @@ export function Part({
   if (wire) {
     const ownGeom = csgGeom ?? shapeGeom
     return (
-      <group position={[b.x, b.y, b.z]} rotation={rotation ?? NO_ROTATION}>
+      <group position={[b.x, b.y, b.z]} rotation={rotation ?? NO_ROTATION} userData={{ partId: meta?.id }}>
         <mesh
           key={meshKey}
           position={shapeGeom ? [0, 0, 0]
@@ -489,7 +489,7 @@ export function Part({
   const lineWidth = selected || highlighted ? 1.5 : hov ? 2.5 : hairline
 
   return (
-    <group position={[b.x, b.y, b.z]} rotation={rotation ?? NO_ROTATION}>
+    <group position={[b.x, b.y, b.z]} rotation={rotation ?? NO_ROTATION} userData={{ partId: meta?.id }}>
       <mesh
         key={meshKey}
         position={shapeGeom ? [0, 0, 0] : [core.x - b.x + core.w / 2, core.y - b.y + core.h / 2, core.z - b.z + core.d / 2]}

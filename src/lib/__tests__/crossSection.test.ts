@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { BoxGeometry } from 'three'
-import { sliceFaces, prismFaces, geometryFaces, cabToWorld, type CutPlane, type P2 } from '../crossSection'
+import { sliceFaces, prismFaces, geometryFaces, cabToWorld, sliceTriangles, chainPaths, trisAlongRange, type CutPlane, type P2 } from '../crossSection'
 import { partPrism } from '../partSolids'
 
 // Plane across x = at; depth u = world z (plan y), v = height.
@@ -64,6 +64,26 @@ describe('crossSection slicer', () => {
     const loops = sliceFaces(geometryFaces(g), plane(123))
     expect(loops).toHaveLength(1)
     expect(area(loops[0])).toBeCloseTo(600 * 40, 3)
+  })
+
+  it('slices a flat triangle list (model mesh path) into one closed loop', () => {
+    const g = new BoxGeometry(1000, 40, 600).toNonIndexed()
+    const tris = new Float32Array(g.getAttribute('position').array)
+    const paths = chainPaths(sliceTriangles(tris, plane(123)))
+    expect(paths).toHaveLength(1)
+    expect(paths[0].closed).toBe(true)
+    expect(area(paths[0].pts)).toBeCloseTo(600 * 40, 3)
+    expect(trisAlongRange(tris, { x: 0, y: 0 }, { x: 1, y: 0 })).toEqual([-500, 500])
+  })
+
+  it('an open mesh (one face of a box) cuts to an open chain', () => {
+    // Two triangles: a vertical 600 × 720 sheet in the x–y plane at z = 0, cut at x = 300.
+    const tris = new Float32Array([0, 0, 0, 600, 0, 0, 600, 720, 0, 0, 0, 0, 600, 720, 0, 0, 720, 0])
+    const paths = chainPaths(sliceTriangles(tris, plane(300)))
+    expect(paths).toHaveLength(1)
+    expect(paths[0].closed).toBe(false)
+    const ys = paths[0].pts.map(p => p.y).sort((a, b) => a - b)
+    expect(ys[0]).toBeCloseTo(0); expect(ys[ys.length - 1]).toBeCloseTo(720)
   })
 
   it('places cabinet coords like the 3D group (turned 180°)', () => {

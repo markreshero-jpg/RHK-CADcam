@@ -226,7 +226,7 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
 
 type MatColEntry = string | { face?: string; back?: string; edge?: string }
 
-function CabinetMesh({ cab, wall, rc, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId, layers, partOverrides, shapeOverrides, handMarkers, wire }: {
+export function CabinetMesh({ cab, wall, rc, room, selected, onSelect, onContextMenu, rp, materialColours, ebByMatId, layers, partOverrides, shapeOverrides, handMarkers, wire }: {
   cab: CabinetInstance
   wall: Wall
   rc: RoomRef

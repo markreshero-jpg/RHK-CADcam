@@ -67,6 +67,66 @@ export function sliceFace(face: Face, pl: CutPlane): [P2, P2][] {
 
 const key = (p: P2) => `${Math.round(p.x * 100)},${Math.round(p.y * 100)}`
 
+/** Segments of a flat triangle list (9 floats per triangle, world coords) on the
+ *  plane. For model meshes (fixtures, hardware): same half-open sign rule and
+ *  lexicographic edge order as sliceFace, so neighbouring triangles chain. */
+export function sliceTriangles(tris: Float32Array, pl: CutPlane): [P2, P2][] {
+  const out: [P2, P2][] = []
+  const s = [0, 0, 0]
+  const v = (i: number): V3 => [tris[i], tris[i + 1], tris[i + 2]]
+  for (let t = 0; t + 8 < tris.length; t += 9) {
+    for (let k = 0; k < 3; k++) s[k] = (tris[t + k * 3] - pl.o.x) * pl.d.x + (tris[t + k * 3 + 2] - pl.o.y) * pl.d.y - pl.at
+    const p0 = s[0] >= 0, p1 = s[1] >= 0, p2 = s[2] >= 0
+    if (p0 === p1 && p1 === p2) continue
+    const pts: P2[] = []
+    for (let k = 0; k < 3; k++) {
+      const k2 = (k + 1) % 3
+      if ((s[k] >= 0) === (s[k2] >= 0)) continue
+      let a = v(t + k * 3), b = v(t + k2 * 3), sa = s[k], sb = s[k2]
+      if (before(b, a)) { [a, b] = [b, a]; [sa, sb] = [sb, sa] }
+      const f = sa / (sa - sb)
+      pts.push(to2(pl, [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]))
+    }
+    if (pts.length === 2) out.push([pts[0], pts[1]])
+  }
+  return out
+}
+
+/** Chain segments into paths: closed loops, plus open chains (an open model mesh
+ *  cuts to lines, not areas). Open chains are grown from both ends. */
+export function chainPaths(segs: [P2, P2][]): { pts: P2[]; closed: boolean }[] {
+  const at = new Map<string, number[]>()
+  segs.forEach(([a, b], i) => {
+    if (key(a) === key(b)) return
+    for (const k of [key(a), key(b)]) { const l = at.get(k); if (l) l.push(i); else at.set(k, [i]) }
+  })
+  const used = new Set<number>()
+  const out: { pts: P2[]; closed: boolean }[] = []
+  const grow = (pts: P2[], endK: string, stopK: string) => {
+    while (endK !== stopK) {
+      const next = (at.get(endK) ?? []).find(j => !used.has(j))
+      if (next == null) return endK
+      used.add(next)
+      const [a, b] = segs[next]
+      const p = key(a) === endK ? b : a
+      pts.push(p); endK = key(p)
+    }
+    return endK
+  }
+  for (let i = 0; i < segs.length; i++) {
+    if (used.has(i) || key(segs[i][0]) === key(segs[i][1])) continue
+    used.add(i)
+    const fwd = [segs[i][0], segs[i][1]]
+    const startK = key(segs[i][0])
+    const endK = grow(fwd, key(segs[i][1]), startK)
+    if (endK === startK) { fwd.pop(); if (fwd.length >= 3) out.push({ pts: fwd, closed: true }); continue }
+    const back: P2[] = []
+    grow(back, startK, '\0')
+    out.push({ pts: [...back.reverse(), ...fwd], closed: false })
+  }
+  return out
+}
+
 /** Chain segments into loops (open chains are returned too, unclosed). */
 export function chainLoops(segs: [P2, P2][]): P2[][] {
   const at = new Map<string, number[]>()
@@ -150,4 +210,21 @@ export function cabToWorld(origin: { x: number; y: number; z: number }, rotY: nu
 /** SVG path for loops (even-odd fill); x mirrored when `flip`. */
 export function loopsPath(loops: P2[][], flip: boolean): string {
   return loops.map(l => 'M' + l.map(p => `${(flip ? -p.x : p.x).toFixed(1)},${(-p.y).toFixed(1)}`).join('L') + 'Z').join('')
+}
+
+/** SVG path for chainPaths output (closed only, or open only), x mirrored when `flip`. */
+export function chainPathD(paths: { pts: P2[]; closed: boolean }[], closed: boolean, flip: boolean): string {
+  return paths.filter(p => p.closed === closed)
+    .map(l => 'M' + l.pts.map(p => `${(flip ? -p.x : p.x).toFixed(1)},${(-p.y).toFixed(1)}`).join('L') + (closed ? 'Z' : '')).join('')
+}
+
+/** Along-plane extent of a flat triangle list. */
+export function trisAlongRange(tris: Float32Array, o: Pt, d: Pt): [number, number] {
+  let lo = Infinity, hi = -Infinity
+  for (let i = 0; i + 2 < tris.length; i += 3) {
+    const s = (tris[i] - o.x) * d.x + (tris[i + 2] - o.y) * d.y
+    if (s < lo) lo = s
+    if (s > hi) hi = s
+  }
+  return [lo, hi]
 }

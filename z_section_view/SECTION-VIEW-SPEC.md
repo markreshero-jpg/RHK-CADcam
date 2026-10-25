@@ -36,6 +36,20 @@ This feature is called **Cross section** in the UI.
 - Geometry: `buildPartSolids` (same solids as the 3D view and cabinet sheets),
   placed in the world exactly like `Room3DScene` `CabinetMesh`; benchtops from the
   same slab / leg / apron geometry as `BenchtopMesh` (`src/lib/benchtopSolids.ts`).
+- Fixtures + hardware (X4): rather than rebuild hinges / handles / runners / bins
+  / uploaded fixture models, `CrossSectionMeshes.tsx` mounts the room 3D's own
+  `CabinetMesh` (gated by the elevation layers) and the fixture models in a 2 px
+  off-screen R3F canvas with `frameloop="never"` (doors / drawers stay closed),
+  and reads the visible meshes back every 600 ms (only rebuilding when a mesh or
+  matrix changed, e.g. a GLB finished loading) as world triangles. Tags:
+  `userData.partId` on `PickableHardware` and `Part` (hw_hinge_ → hinges,
+  hw_handle_ → handles, hw_bin_ → bins, slide_ → drawer_runners, int_slide_ →
+  inner_drawer_runners; board parts are skipped — they're sliced as solids), and
+  each cabinet / fixture is wrapped in a group carrying its id. Triangles are cut
+  by `sliceTriangles` and chained by `chainPaths`: closed loops are filled, open
+  chains (single-skin model surfaces, e.g. a sink bowl) are drawn as lines.
+  Colours follow the elevation: hinges / handles / runners / bins by their item
+  colour, fixtures by the fixture item colour (sky blue default, 25 % fill).
 - Slicer: `src/lib/crossSection.ts` — planar-face slice (half-open sign rule so a
   vertex on the plane counts once), segments chained into loops, holes via
   even-odd fill. Section frame: u = depth off the elevation face (`elevationFrame`
@@ -55,7 +69,8 @@ This feature is called **Cross section** in the UI.
   solids), `src/lib/cabPlacement3d.ts` + `src/lib/benchtopSolids.ts` (shared with
   Room3DScene), `app/canvas/[roomId]/CrossSectionView.tsx`, cut line + toggle in
   `ElevationSVG.tsx`, state in `CanvasClient.tsx` (`crossCut`, `xsecSlot`).
-  Headless check: `z_plan_automation/verify-cross-section.mjs`.
+  `CrossSectionMeshes.tsx` (X4). Headless checks: `z_plan_automation/verify-cross-section.mjs`,
+  `z_plan_automation/sweep-cross-section.mjs` (steps the At box, logs hardware / fixtures cut).
 
 ## Phases
 
@@ -65,7 +80,7 @@ This feature is called **Cross section** in the UI.
 | X2 | Elevation cut line (drag, typed position) + section: cabinets, added parts, wall (with openings), floor/ceiling, flip, zoom/pan | built 2026-10-25, checked headless |
 | X2a | Swap: section fills the canvas, elevation in the right column; elevation layers + colours (D1, D8) | built 2026-10-25, checked headless (Line drawing + Design sets); Mark's in-app check pending |
 | X3 | Benchtops (slab, waterfall legs, aprons) | built 2026-10-25 (slab checked headless; legs / aprons unchecked) |
-| X4 | Fixtures (GLB meshes) + hardware (handles, runners, hinges) | not started |
+| X4 | Fixtures (GLB meshes) + hardware (handles, runners, hinges, bins) | built 2026-10-25, checked headless (RHK6581 Laundry J03: dryer, sink, hinges; RHK6539 kitchen: handles, runners); Mark's in-app check pending |
 | X5 | Save cuts per wall → shop drawings / elevation report (+ `section_marks` layer item) | not started |
 | X6 | Dimensions | not started |
 | X7 | Tutorial (Basics ▸ Room ▸ Cross section through a wall) | built 2026-10-25, updated for the swap; unreviewed |

@@ -18,7 +18,7 @@ try {
   const page = await browser.newPage()
   await page.setExtraHTTPHeaders({ 'x-dev-automation': '1' })
   page.on('pageerror', e => console.log('PAGE ERROR:', e.message))
-  page.on('console', m => { if (m.type() === 'error') console.log('console error:', m.text().slice(0, 200)) })
+  page.on('console', m => { if (m.type() === 'error' || m.type() === 'warn') console.log('console ' + m.type() + ':', m.text().slice(0, 300)) })
   await page.goto(`http://localhost:3001/canvas/${ROOM}`, { waitUntil: 'networkidle2', timeout: 120000 })
   await page.waitForFunction(() => window.__canvasApi, { timeout: 60000 })
   await sleep(5000)
@@ -56,7 +56,7 @@ try {
       await sleep(600)
       const at = await page.evaluate(() => [...document.querySelectorAll('input[type=number]')].find(e => e.className.includes('violet'))?.value)
       console.log(`drag ${i}: at`, at, 'cut paths', await paths())
-      console.log('  by item', JSON.stringify(await page.evaluate(() => { const m = {}; for (const e of document.querySelectorAll('path[data-item]')) m[e.dataset.item] = (m[e.dataset.item] ?? 0) + 1; return m })))
+      console.log('  by item', JSON.stringify(await page.evaluate(() => { const m = {}; for (const e of document.querySelectorAll('svg [data-item]')) m[e.dataset.item] = (m[e.dataset.item] ?? 0) + 1; return m })))
       await page.screenshot({ path: path.join(OUT, `xs-2-drag${i}.png`) })
     }
   }

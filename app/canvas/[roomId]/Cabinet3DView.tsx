@@ -110,6 +110,7 @@ const INT_LABELS: Record<string, string> = {
   pull_out_side:       'Pull-out Side',
   pull_out_back:       'Pull-out Back',
   accessory:           'Accessory',
+  rail_support:        'Rail support',
 }
 
 // Panel kind dispatch for ResolvedInternalPart — drives panelFaceColors + edgeStrips orientation.
@@ -269,10 +270,12 @@ function PickableHardware({ meta, selected, onSelect, dragRef, children }: {
     m.scale.set(_hwS.x + 2, _hwS.y + 2, _hwS.z + 2)
     m.visible = true
   })
-  if (passive) return <>{children}</>
+  // userData.partId tags the hardware's meshes for the cross section (z_section_view X4).
+  if (passive) return <group userData={{ partId: meta.id }}>{children}</group>
   return (
     <group
       ref={groupRef}
+      userData={{ partId: meta.id }}
       onPointerDown={e => {
         dragRef.current = false
         const ne = e.nativeEvent as PointerEvent

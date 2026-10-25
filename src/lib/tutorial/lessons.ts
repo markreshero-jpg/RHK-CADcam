@@ -843,7 +843,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Elevation and pick a wall with cabinets on it.',
       target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
     { id: 'on', title: 'Turn on Cross section',
-      body: 'Click Cross section in the elevation toolbar (next to Section). The side-on cut fills the canvas: the wall hatched, and every cabinet part, kick, front and benchtop the cut passes through in its true shape, coloured like the elevation. The elevation moves to the right-hand column with a purple dashed line across the wall where the cut is.',
+      body: 'Click Cross section in the elevation toolbar (next to Section). The side-on cut fills the canvas: the wall hatched, and every cabinet part, kick, front, benchtop, hinge, handle, runner and fixture (sinks, appliances) the cut passes through in its true shape, coloured like the elevation. The elevation moves to the right-hand column with a purple dashed line across the wall where the cut is.',
       canvas: true, done: (c, s) => ev(c, 'xsec_on') > ev(s, 'xsec_on') },
     { id: 'drag', title: 'Slide the line',
       body: 'Drag the purple line along the wall in the right-hand elevation (or type a distance in the At box) and watch the cut change. In the section, scroll to zoom in, drag to move around, double-click to fit it again. Hover a shape to see which cabinet and part it is; click it to select that cabinet.',
