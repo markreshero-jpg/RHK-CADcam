@@ -24,7 +24,8 @@ import SnapToolbar from './SnapToolbar'
 import { usePinchZoom } from './usePinchZoom'
 import { useRightDragPan } from './useRightDragPan'
 import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
-import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
+import { useSlideTriangles, triKey, modelSilhouettePath, modelSilhouetteOutline, type SlideModelFormat } from '@/src/lib/slideSilhouette'
+import { accessoryToCab } from '@/src/components/three/AccessoryModel'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
@@ -116,6 +117,31 @@ function drawerBoxPartElevRect(p: ResolvedDrawerBoxPart) {
       // Bottom panel, edge-on: DY = width, DZ = visible thickness
       return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
   }
+}
+
+// A hanging rail / rail support's true front outline from its library model
+// (z_accessories S1): filled silhouette + traced edge, like the runner models.
+function AccessoryElevShape({ part, tris, project, fill, stroke, strokeWidth, opacity }: {
+  part: ResolvedInternalPart; tris: Float32Array
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+  fill: string; stroke: string; strokeWidth: number; opacity: number
+}) {
+  // project is rebuilt every render; key the trace on where it puts the origin + scale.
+  const o = project(0, 0, 0), u = project(1, 1, 0)
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the projection's origin/scale instead of its identity
+  const paths = useMemo(() => {
+    const toCab = accessoryToCab(part, tris)
+    if (!toCab) return null
+    const f = modelSilhouettePath(tris, toCab, project)
+    return f ? { fill: f, outline: modelSilhouetteOutline(tris, toCab, project) } : null
+  }, [tris, part.X, part.Y, part.Z, part.DX, part.DY, part.DZ, part.accessory?.side, part.accessory?.model?.url, o.x, o.y, u.x, u.y])
+  if (!paths) return null
+  return (
+    <g opacity={opacity} style={{ pointerEvents: 'none' }}>
+      <path d={paths.fill} fill={fill} fillOpacity={fill === 'none' ? 0 : 0.6} stroke="none" />
+      <path d={paths.outline} fill="none" stroke={stroke} strokeWidth={strokeWidth} strokeLinecap="round" />
+    </g>
+  )
 }
 
 function slideElevRect(s: ResolvedDrawerSlide) {
@@ -347,7 +373,11 @@ export default function ElevationSVG({
     const rp = resolvedParts?.get(cab.id)
     if (rp) allWallSlides.push(...(rp.drawer_stacks ?? []).flatMap(s => s.slides), ...(rp.internal_slides ?? []))
   }
-  const triMap = useSlideTriangles(allWallSlides)
+  // Hanging rails + rail supports with a library model (z_accessories S1) draw
+  // their true outline too — same loader, keyed by model url.
+  const wallAccModels = wallCabs.flatMap(cab => (resolvedParts?.get(cab.id)?.internal_parts ?? [])
+    .flatMap(p => p.accessory?.model ? [{ model_url: p.accessory.model.url, model_format: p.accessory.model.format as SlideModelFormat }] : []))
+  const triMap = useSlideTriangles([...allWallSlides, ...wallAccModels])
 
   const roomH = wall?.height ?? room.room_dy ?? 2400
   const maxDz = wallCabs.length > 0 ? Math.max(300, ...wallCabs.map(c => c.dz)) : 600
@@ -1399,6 +1429,13 @@ export default function ElevationSVG({
                         const iit = internalPartItem(p.part_type)
                         const fill = layers.colorOf(iit) ?? PART_COLORS[p.part_type] ?? '#818cf8'
                         const ldStroke = layers.colorOf(iit) ?? LINE_DRAW_COLORS[p.part_type] ?? '#a78bfa'
+                        const am = p.accessory?.model
+                        const atris = am ? triMap.get(triKey({ model_url: am.url, model_format: am.format as SlideModelFormat }) ?? '') : undefined
+                        if (atris && atris.length > 0) {
+                          return <AccessoryElevShape key={`ip-${i}`} part={p} tris={atris} project={toSVGPt}
+                            fill={isLineDrawing ? 'none' : fill} stroke={isLineDrawing ? ldStroke : fill}
+                            strokeWidth={layers.w(iit, isLineDrawing ? 1 : 0.5) / lz} opacity={intEffP.opacity} />
+                        }
                         return (
                           <rect key={`ip-${i}`} x={x} y={y} width={w} height={h}
                             fill={isLineDrawing ? 'none' : fill}

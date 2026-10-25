@@ -16,6 +16,7 @@ import { ModelSource } from './ModelAsset'
 import { ModelErrorBoundary } from './FixtureModel'
 import { isModelFormat } from './HandleModel'
 import type { ResolvedInternalPart } from '@/src/lib/resolver/types'
+import type { ToCab } from '@/src/lib/slideSilhouette'
 
 function Fit({ obj, scale, length }: { obj: THREE.Object3D; scale: number; length?: number }) {
   const sx = useMemo(() => {
@@ -61,4 +62,21 @@ export default function AccessoryModel({ part, color, fallback }: {
       </Suspense>
     </ModelErrorBoundary>
   )
+}
+
+/** Model-local → cabinet coords for a 2D silhouette (same placement as the 3D
+ *  model above; a rail stretches along X to its cut length). */
+export function accessoryToCab(p: ResolvedInternalPart, tris: Float32Array): ToCab | null {
+  const m = p.accessory?.model
+  if (!m) return null
+  const { pos, turn, length } = accessoryAnchor(p)
+  const sc = m.scale || 1
+  let sx = 1
+  if (length) {
+    let lo = Infinity, hi = -Infinity
+    for (let i = 0; i < tris.length; i += 3) { lo = Math.min(lo, tris[i]); hi = Math.max(hi, tris[i]) }
+    if (hi > lo) sx = length / ((hi - lo) * sc)
+  }
+  const f = turn ? -1 : 1   // 180° about Y flips X and Z
+  return (x, y, z) => [pos[0] + f * sc * sx * x, pos[1] + sc * y, pos[2] + f * sc * z]
 }

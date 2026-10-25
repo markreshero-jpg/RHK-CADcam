@@ -153,13 +153,29 @@ export function slideSilhouettePath(
   s: SlidePlacement,
   project: (x: number, y: number, z: number) => P2,
 ): string {
+  return modelSilhouettePath(tris, slideToCab(s), project)
+}
+
+// Model-local point → cabinet coords for a slide rail (see the header).
+function slideToCab(s: SlidePlacement): ToCab {
   const { mirror, sc, oX, oY, oZ, ax, ay, az } = placement(s)
+  return (mx, my, mz) => [oX + ax + sc * mirror * mx, oY + ay + sc * my, oZ + az + sc * mz]
+}
+
+/** Maps a model-local point to cabinet coords (placement of one model instance). */
+export type ToCab = (mx: number, my: number, mz: number) => [number, number, number]
+
+// Any placed model (slides, rail accessories — z_accessories S1): filled silhouette.
+export function modelSilhouettePath(
+  tris: Float32Array,
+  toCab: ToCab,
+  project: (x: number, y: number, z: number) => P2,
+): string {
   let d = ''
   for (let i = 0; i < tris.length; i += 9) {
     const p: P2[] = []
     for (let k = 0; k < 3; k++) {
-      const mx = tris[i + k * 3], my = tris[i + k * 3 + 1], mz = tris[i + k * 3 + 2]
-      p.push(project(oX + ax + sc * mirror * mx, oY + ay + sc * my, oZ + az + sc * mz))
+      p.push(project(...toCab(tris[i + k * 3], tris[i + k * 3 + 1], tris[i + k * 3 + 2])))
     }
     const area = (p[1].x - p[0].x) * (p[2].y - p[0].y) - (p[2].x - p[0].x) * (p[1].y - p[0].y)
     if (Math.abs(area) < 1e-4) continue
@@ -180,9 +196,17 @@ export function slideSilhouetteOutline(
   project: (x: number, y: number, z: number) => P2,
   target = 170,
 ): string {
-  const { mirror, sc, oX, oY, oZ, ax, ay, az } = placement(s)
-  const P = (mx: number, my: number, mz: number) =>
-    project(oX + ax + sc * mirror * mx, oY + ay + sc * my, oZ + az + sc * mz)
+  return modelSilhouetteOutline(tris, slideToCab(s), project, target)
+}
+
+// Any placed model: traced outline (see slideSilhouetteOutline).
+export function modelSilhouetteOutline(
+  tris: Float32Array,
+  toCab: ToCab,
+  project: (x: number, y: number, z: number) => P2,
+  target = 170,
+): string {
+  const P = (mx: number, my: number, mz: number) => project(...toCab(mx, my, mz))
 
   // Project every (non-degenerate) triangle and track the screen-space bounds.
   const t2: number[] = []
