@@ -24,6 +24,29 @@ their supports now; wardrobe / pantry / misc items later on the same table.
   `accessory {product_id, name, colour}` (persisted on `internal_parts.accessory`)
   so saved-part views (room 3D) colour it too.
 
+- **A6 Supports belong to the rail** (Mark, 2026-10-25): no new kit or
+  interior item. The rail fitting places its own supports, which move with it:
+  - rail end against a gable → **end support** (screwed to the gable);
+  - rail end with no gable, or an open end where another rail runs the other
+    way → **end pillar** (hangs from the shelf above);
+  - rail longer than **1000** (`max_span_mm` = 1000) → centre pillars, evenly
+    spaced, hanging from the shelf above.
+  Per-rail override in the Interior editor (support type each end, centre
+  pillar count, drilling on / off).
+- **A7 Models**: each support row gets the fixture / handle model columns
+  (`model_url`, `model_format`, `model_scale`, `model_rot_x/y/z`,
+  `model_off_x/y/z`), uploaded on the Accessories row to storage bucket
+  `accessory-models` (same loader, `ModelAsset`). Anchor = rail centre at the
+  mounting face (gable face for an end support, shelf underside for a pillar),
+  rail along +X. Source files kept in `z_accessories/models/`.
+- **A8 End support drilling = a joint, not a hand master drill.** The hole
+  pattern lives once in Library → Joints ("Finista end support"); the end
+  support row links it (`joint_id`). The resolver makes a rail-end ↔ gable seam
+  at the rail's height, so the holes move with the rail and go through the
+  optimiser like shelf / carcase joints. Hand master drills are per cabinet and
+  keyed to the part number, so every rail in every job would need one added.
+  Pillars: no drilling for now.
+
 ## Phases
 
 | Phase | What | Status |
@@ -32,7 +55,10 @@ their supports now; wardrobe / pantry / misc items later on the same table.
 | A2 | Resolver: rail size / colour from the product, `accessory` persisted | built 2026-10-25 |
 | A3 | Interior editor Product select on the rail fitting | built 2026-10-25 |
 | A4 | Tutorial | built 2026-10-25 |
-| A6 | Hardware list / ordering: rail bars (cut lengths → 3.6 m stock), end supports ×2 per rail, centre supports per `max_span_mm` | not started |
+| S1 | Model columns + upload / preview on Accessories rows (A7) | not started |
+| S2 | Rail places its supports (A6) — 3D + elevation, Interior editor overrides | not started |
+| S3 | End support joint (A8) → gable drilling → optimiser | not started — needs the hole pattern |
+| A6 | Hardware list / ordering: rail bars (cut lengths → 3.6 m stock), end supports ×2 per rail, centre supports per `max_span_mm` (1000) | not started |
 | A7 | Other categories (wardrobe pull-downs, trouser racks, pantry baskets …) | not started |
 
 ## Seed (Lincoln Sentry, 2026-10-25)
