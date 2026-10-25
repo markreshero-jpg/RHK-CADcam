@@ -11,6 +11,8 @@ import { useViewBoxPinch } from './usePinchZoom'
 import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
 import { normalizeSection } from './InternalGridEditor'
+import { handleShapes } from '@/src/lib/handleGeometry'
+import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { addBinDivisions } from './binDivisionsAction'
 import { drawerBoundaries, planAutoDivider, AUTO_DIVIDER_NOTE, type SeamGeometry } from '@/src/lib/dividers/autoDivider'
 
@@ -845,6 +847,27 @@ export default function FaceGridEditor({
                 </g>
               )
             })}
+
+            {/* Handles (z_handles) — resolved grips, same geometry as the elevation.
+                A linear strip is a case part elsewhere, so its outline is drawn here. */}
+            {rp && (() => {
+              const project = (x: number, y: number) => ({ x: ox + x, y: svgY(y) })
+              const shapes = handleShapes(rp.face_zones)
+              return (
+                <g style={{ pointerEvents: 'none' }}>
+                  {shapes.map((s, i) => s.kind === 'strip' && s.handle.strip ? (
+                    <rect key={`hs-${i}`} x={ox + s.cx - s.w / 2} y={svgY(s.cy + s.h / 2)} width={s.w} height={s.h}
+                      fill="#475569" fillOpacity={0.6} stroke="#cbd5e1" strokeWidth={1} />
+                  ) : (
+                    <HandleElevSVG key={`hd-${i}`} s={s} project={project} stroke="#cbd5e1" fill="#475569" strokeWidth={1} />
+                  ))}
+                  <SharknoseLinesSVG zones={rp.face_zones} project={project} stroke="#94a3b8" strokeWidth={1} dash="6 4" fontSize={12} />
+                  {shapes.map((s, i) => (
+                    <HandleHolesSVG key={`hh-${i}`} s={s} project={project} color="#f97316" strokeWidth={0.8} />
+                  ))}
+                </g>
+              )
+            })()}
 
             {/* Cabinet outline */}
             <rect x={ox} y={oy} width={cabDX} height={cabDY}
