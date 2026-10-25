@@ -9,6 +9,7 @@ import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
 import { attachShape, cutoutsToOp, shapeFrameFor, type ShapesByCab } from './shapes'
+import { bandedLengthMM, tapeRuns, type EbSides } from './edgebandLength'
 import type { OutlinePt } from '@/src/lib/shapePath'
 import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
 import { removedIdsFrom, isAllViews } from '@/src/lib/resolver/filterHidden'
@@ -29,7 +30,9 @@ export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c =
 // deduction always matches what the views draw and where ops are measured from.
 
 type EdgeFlags = { top: boolean; bottom: boolean; left: boolean; right: boolean }
-type EbFields  = Pick<OptiPart, 'eb_w1' | 'eb_w2' | 'eb_h1' | 'eb_h2' | 'eb_missing'>
+// `on` = which footprint sides are banded, kept even when the tape thickness is
+// unknown (eb_* read 0 then) — the edgeband length report (O7).
+type EbFields  = Pick<OptiPart, 'eb_w1' | 'eb_w2' | 'eb_h1' | 'eb_h2' | 'eb_missing'> & { on?: EbSides }
 type EdgePair  = [keyof EdgeFlags, keyof EdgeFlags]
 
 const NO_EB: EbFields = { eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, eb_missing: false }
@@ -43,6 +46,7 @@ function ebFields(flags: EdgeFlags, t: number | undefined, wPair: EdgePair, hPai
     eb_h1: flags[hPair[0]] ? tt : 0,
     eb_h2: flags[hPair[1]] ? tt : 0,
     eb_missing: banded && t == null,
+    on: [flags[wPair[0]], flags[wPair[1]], flags[hPair[0]], flags[hPair[1]]],
   }
 }
 
@@ -156,6 +160,10 @@ export function normalizeProject(
       Array.isArray(row.outline) ? row.outline as OutlinePt[] : null, bandOf(table, row))
     // Inner cut-outs (curved end ribs, C4) ride on the resolver outline: dropped
     // with it when a drawn shape replaces it or a size override no longer fits.
+    // Edgeband metres (O7): the outline it's cut to (a stale shape isn't cut), else w × h.
+    const { on: ebOn, ...ebOut } = eb
+    const cutShape = shape && !stale && shape.op_polygon.length >= 3 ? shape : null
+    const bandMm = bandedLengthMM(effW, effH, ebOn ?? [false, false, false, false], cutShape?.op_polygon, cutShape?.op_band)
     const holes = shape?.source === 'resolver' && inPlane
       ? cutoutsToOp(row.cutouts as { pts: OutlinePt[]; skin?: number }[] | null, { frame, DX, DY, transpose }) : null
     parts.push({
@@ -169,8 +177,9 @@ export function normalizeProject(
       default_label: defaultLabel,
       part_type_key: naming.typeKey,
       w: dims?.w ?? Number(row.dx), h: dims?.h ?? Number(row.dy), thickness: dims?.thickness ?? Number(row.dz),
-      ...eb,
+      ...ebOut,
       ...(tapeMissing ? { eb_missing: true } : {}),
+      ...(bandMm > 0 ? { eb_tape: tapeRuns(tapeIdOf(table, row), bandMm) } : {}),
       material_id: (row.material_id as string) ?? null,
       grain_direction: grain, nest_priority: nestPriority,
       output_to_cnc: partCut && !cabNoCnc.has(cabId) && !partNoCnc.get(cabId)?.has(partKey),
@@ -205,9 +214,17 @@ export function normalizeProject(
     return id ? ebThickness.get(id) : undefined
   }
   const matEb = new Map<string, number>()
+  const matEbId = new Map<string, string>()
   for (const r of [...cp, ...ip, ...tp, ...fz, ...dbp]) {
     const t = tFor(r); const mat = r.material_id as string | null
     if (t != null && mat && !matEb.has(mat)) matEb.set(mat, t)
+    if (r.edge_band_id && mat && !matEbId.has(mat)) matEbId.set(mat, r.edge_band_id as string)
+  }
+  // The tape product a part's banded edges take — same fallback as bandOf.
+  const tapeIdOf = (table: SourceTable, r: Row): string | null => {
+    const mat = r.material_id as string | null
+    const own = table === 'custom_parts' ? null : (r.edge_band_id as string | null | undefined)
+    return own ?? (mat ? matEbId.get(mat) ?? null : null)
   }
   const flagsOf = (r: Row): EdgeFlags => ({
     top: !!r.edge_band_top, bottom: !!r.edge_band_bottom,
@@ -289,16 +306,17 @@ export function normalizeProject(
     const banded = flags.top || flags.bottom || flags.left || flags.right
     const tt = t ?? 0
     const trip = [
-      { v: Number(r.dx), d1: flags.bottom ? tt : 0, d2: flags.top ? tt : 0 },
-      { v: Number(r.dy), d1: flags.left ? tt : 0, d2: flags.right ? tt : 0 },
-      { v: Number(r.dz), d1: 0, d2: 0 },
+      { v: Number(r.dx), d1: flags.bottom ? tt : 0, d2: flags.top ? tt : 0, b1: flags.bottom, b2: flags.top },
+      { v: Number(r.dy), d1: flags.left ? tt : 0, d2: flags.right ? tt : 0, b1: flags.left, b2: flags.right },
+      { v: Number(r.dz), d1: 0, d2: 0, b1: false, b2: false },
     ].sort((a, b) => b.v - a.v)
     // Mitred kick boards of a shaped cabinet (z_cabinet_shape 4b): blank + note.
     const mitre = tkBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`,
       { typeKey: String(r.part_key), base: humanize(String(r.part_key)), ...(mitre ? { suffix: ` (${mitre})` } : {}) }, null, 0,
       { w: trip[0].v, h: trip[1].v, thickness: trip[2].v },
-      { eb_w1: trip[0].d1, eb_w2: trip[0].d2, eb_h1: trip[1].d1, eb_h2: trip[1].d2, eb_missing: banded && t == null },
+      { eb_w1: trip[0].d1, eb_w2: trip[0].d2, eb_h1: trip[1].d1, eb_h2: trip[1].d2, eb_missing: banded && t == null,
+        on: [trip[0].b1, trip[0].b2, trip[1].b1, trip[1].b2] },
       base)
   }
   for (const r0 of fz) {

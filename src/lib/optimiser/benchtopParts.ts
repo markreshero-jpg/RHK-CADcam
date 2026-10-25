@@ -86,6 +86,8 @@ export function normalizeBenchtopParts(
     // A shaped piece nests at its full outline (no contour deduction yet — O5).
     const eb = outline ? { eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, eb_missing: false } : ebFor(bands, lengthGrain, ebThickness)
     const tapeMm = bands?.mm ? Object.values(bands.mm).reduce((a, v) => a + v, 0) : null
+    // Edgeband metres (O7 report): `mm` per tape id — members under a shared strip carry none.
+    const ebTape = Object.entries(bands?.mm ?? {}).filter(([, mm]) => mm > 0).map(([id, mm]) => ({ id, mm }))
     const holes = Array.isArray(r.holes)
       ? (r.holes as { x: number; y: number }[][]).filter(h => Array.isArray(h) && h.length >= 3).map(h => toOp(h, L, lengthGrain))
       : []
@@ -102,6 +104,7 @@ export function normalizeBenchtopParts(
         label, default_label: label, part_type_key: '',
         w: lengthGrain ? W : L, h: lengthGrain ? L : W, thickness: Number(r.thickness_mm),
         ...eb,
+        ...(ebTape.length ? { eb_tape: ebTape } : {}),
         material_id: r.material_id as string,
         grain_direction: (r.grain_direction as string) ?? null,
         nest_priority: 0, output_to_cnc: true, comment: null,

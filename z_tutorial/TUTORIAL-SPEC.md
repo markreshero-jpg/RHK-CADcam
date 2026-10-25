@@ -112,6 +112,7 @@ orders by level / topic, not array position.
 | | Edge profiles | Have a top → right-click → Edit edges → paint an edge + save |
 | Intermediate › Reports | Print elevations | Reports → Room Reports… → Elevation Views → Download PDF (`elevation_pdf`) |
 | | Print the plan | Reports → Room Reports… → Plan View → Download PDF (`plan_pdf`) |
+| | Edgeband metres and cost | Reports → Room Reports… → Edgeband Length → set Waste % → Print / PDF (`edgeband_print`) |
 | Advanced › Benchtops | Reshape a benchtop | Have a top → right-click → Edit shape → change the outline + save (a top's segments differ from the start) |
 | Advanced › Production | Cut list and CNC | Production → Generate CNC… (path ends /optimiser) → back to the canvas |
 

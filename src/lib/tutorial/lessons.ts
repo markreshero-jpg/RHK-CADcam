@@ -917,6 +917,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double-click the cabinet → Face: the handles are drawn on the fronts. Click one door and set its own From grip edge in the Handle block to move just that door — a door’s own setting beats the cabinet’s.',
       canvas: true, done: (c, s) => ev(c, 'cab_handle_pos_set') > ev(s, 'cab_handle_pos_set') },
   ]},
+
+  // Appended 2026-10-25 (z_part_shape_editor OPTIMISER-PHASE-PLAN O7 — edgeband length report).
+  { id: 'edgeband_length', level: 'intermediate', topic: 'reports', title: 'Edgeband metres and cost',
+    blurb: 'How many metres of each tape a room or job takes, with waste and cost.',
+    keywords: 'edgeband edge band tape metres meters length cost price waste order report abs', steps: [
+    { id: 'open', title: 'Open Room Reports',
+      body: 'Click Reports in the menu bar and choose Room Reports… (Job Reports… adds up every room).',
+      target: 'menu-Reports', canvas: true, done: c => c.report !== null },
+    { id: 'pick', title: 'Choose Edgeband Length',
+      body: 'In the list on the left, click Edgeband Length. Each tape gets a line: parts, finished metres, metres with waste, $/m and cost, then a per-cabinet breakdown. It reads the saved parts the optimiser cuts, so save after changing cabinets. Shaped parts count their banded outline, arcs included.',
+      target: 'report-edgeband_length', canvas: true, done: c => c.report === 'edgeband_length' },
+    { id: 'print', title: 'Set waste and print',
+      body: 'Type the Waste % at the top (it is remembered on this computer, default 10). A tape with no price shows — : set its $/m in Library → Materials → Edge banding. "Tape not set" means a banded edge with no tape chosen. Click Print / PDF.',
+      target: 'edgeband-waste', canvas: true, done: (c, s) => ev(c, 'edgeband_print') > ev(s, 'edgeband_print') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

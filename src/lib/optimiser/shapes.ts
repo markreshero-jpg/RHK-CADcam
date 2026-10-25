@@ -62,6 +62,9 @@ export interface OptiShape {
    *  EdgeTag). null = untagged: the edge takes the tape of the rectangle side
    *  it lies on (none when it lies inside). */
   op_tape?: (number | null)[]
+  /** Banded? per op_polygon edge (same index as op_tape), kept even when the
+   *  tape thickness is unknown — the edgeband length report (O7). */
+  op_band?: (boolean | null)[]
   bbox: { w: number; h: number }
   tape_mm: number | null        // banded-segment length at save (meta.tapeLengthMM)
   revision: number              // 0 for resolver shapes
@@ -402,7 +405,8 @@ export function attachShape(
       })
     : resolverOutline!.map(p => (p.e ? !!eb?.flags[p.e] : null))
   const tapeMissing = eb?.t == null && segBand.some(b => b === true)
-  const opTape = edgeSeg.map(k => { const b = segBand[k]; return b == null ? null : b ? (eb?.t ?? 0) : 0 })
+  const opBand = edgeSeg.map(k => segBand[k])
+  const opTape = opBand.map(b => (b == null ? null : b ? (eb?.t ?? 0) : 0))
   let bw = 0, bh = 0
   for (const p of polygon) { if (p.x > bw) bw = p.x; if (p.y > bh) bh = p.y }
   const [s1, s2] = bw <= bh ? [bw, bh] : [bh, bw]
@@ -425,7 +429,7 @@ export function attachShape(
       segments,
       polygon,
       op_polygon: opPoly,
-      ...(opTape.some(t => t != null) ? { op_tape: opTape } : {}),
+      ...(opTape.some(t => t != null) ? { op_tape: opTape, op_band: opBand } : {}),
       bbox: { w: Math.round(bw * 100) / 100, h: Math.round(bh * 100) / 100 },
       tape_mm: drawn ? row!.meta?.tapeLengthMM ?? null : null,
       revision: drawn ? row!.revision : 0,

@@ -22,6 +22,8 @@
 > **2026-10-18: O5 built** (EB deduction on shaped contours — see O5). In-app check pending: a
 > deducting profile on RHK6581 — BC-09's L bottom should nest 1 tape smaller on its fronts / ends only.
 > **2026-10-20: O6 built** (paper cut lists read sizes like Stage 2 — see O6). Next: O7.
+> **2026-10-25: O7 built** (Edgeband Length report in Room / Job Reports — see O7). In-app check pending.
+> All O-milestones now built; open items = Mark's in-app checks (O2b, O3, O5, O6, O7).
 
 ---
 
@@ -317,7 +319,29 @@ that no longer fits is dropped) that normalize.ts uses; `shapeMark` → "⬠" / 
 - **Accept**: paper cut list matches Stage 2 effective sizes exactly for resized + shaped parts.
 
 ### O7 — Edgeband length report (metres + cost)
-**Status: [ ] not started**
+**Status: [x] built 2026-10-25 — in-app check pending.** Mark: "report can go in room/job reports for now.
+we'll work on a report centre later" — so the Stage 2 summary line is NOT built (revisit with the report centre).
+- **Data**: `OptiPart.eb_tape` = finished banded length (mm) per edgeband product, set at snapshot time —
+  `normalize.ts` push (one tape per part: `edge_band_id`, else the tape used with the same material,
+  as the thickness fallback; custom parts always by material) and `benchtopParts.ts` (the row's
+  `edgebands.mm` per tape id — members under a shared strip carry none). `ebFields` now also returns
+  `on` (which footprint sides are banded, kept when the thickness is unknown — eb_* read 0 then);
+  `OptiShape.op_band` = banded? per op edge alongside `op_tape`.
+- **Rule** (`src/lib/optimiser/edgebandLength.ts` `bandedLengthMM`): rectangle = banded sides at finished
+  length (w1/w2 run along h, h1/h2 along w). Shaped = the banded edges of the op outline it is cut to,
+  classified as `cutBlank` does (edge tag, else the rectangle side it lies on, inner edges none) — arcs
+  by the sampled polygon (≤0.2% short). A STALE drawn shape isn't cut → its rectangle. Recomputed from the
+  outline rather than `meta.tapeLengthMM`, so drawn and resolver shapes follow one rule.
+- **Report** (`app/canvas/[roomId]/EdgebandReport.tsx`, ReportsModal "Edgeband Length"): reads the SAVED
+  snapshot via `loadProjectParts` (what the optimiser nests — removed parts out, overrides + shapes in),
+  scoped to the rooms in view. Per room: tape lines (parts, metres, + waste, $/m, cost) and a per-cabinet
+  breakdown; job scope adds totals. Waste % input in the header (localStorage `rhk.edgebandWastePct`,
+  default 10). No price → "—" + an unpriced count; banded edge with no tape → "Tape not set" (amber).
+  Tape name = brand + name, + W×T only when the name carries no size.
+- Tests `__tests__/edgebandLength.test.ts` (rect / L / arc / custom fallback / unknown thickness / rollup /
+  benchtop). Verified headlessly (`z_plan_automation/verify-o7.mjs`) on RHK6581 Kitchen: BC-14 hand calc —
+  drawer fronts 2×2(265+235)+2(265+170) = 2.87 m Matching Col A; White = 2 notched gables × 570 (front
+  runs 145+210+215, finger-pull recesses not taped) + bottom 236 + rail 236 + 3 drawer backs × 155 = 2.077 m → 2.08 ✓.
 - Per-part banded length: rects = sum of banded edge finished lengths (stored dims are finished
   size — edgeband-size-conventions); shaped parts = `meta.tapeLengthMM` (recompute from
   segments if meta missing).
@@ -338,6 +362,7 @@ that no longer fits is dropped) that normalize.ts uses; `shapeMark` → "⬠" / 
 - Snapshot-uid instability / reload-a-saved-run / `output_to_cnc` reset on resolve (pre-existing).
 
 ## Session log
+- **2026-10-25** — O7 built (see its status block). Report lives in Room / Job Reports until the report centre.
 - **2026-10-18 (fixtures session)** — benchtop sink / cooktop cutouts reach the CNC: `OptiPart.cut_holes`,
   `shapes.placedHoles`, `GcodeInput.holes`, `routePerimeter(…, inside)` + `toolPathLoop(…, inside)`.
   Rect / outline output unchanged (all fixture tests pass). Detail in z_fixtures/FIXTURES-SPEC.md.

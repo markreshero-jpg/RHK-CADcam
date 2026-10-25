@@ -37,6 +37,9 @@ export interface OptiPart {
   // True when a banded edge's tape thickness couldn't be resolved — the optimiser
   // flags these parts when "deduct edgebanding" is on (deduction would be short).
   eb_missing: boolean
+  // Finished banded length (mm) per edgeband product — the edgeband length
+  // report (O7, edgebandLength.ts). Absent / empty = not banded.
+  eb_tape?: import('./edgebandLength').TapeRun[]
   material_id: string | null
   grain_direction: string | null
   nest_priority: number

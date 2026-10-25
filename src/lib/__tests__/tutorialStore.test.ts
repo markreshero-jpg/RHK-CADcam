@@ -199,4 +199,15 @@ describe('tutorial store', () => {
     st().emit('elevation_pdf')
     expect(st().step).toBe(3)
   })
+
+  it('edgeband length: open, pick the report, print', () => {
+    st().setCtx({ path: '/canvas/x', inCanvas: true })
+    st().setEnabled(true)
+    st().goTo(LESSONS.findIndex(l => l.id === 'edgeband_length'))
+    st().setCtx({ report: 'parts_list_summary' })
+    st().setCtx({ report: 'edgeband_length' })
+    expect(st().step).toBe(2)
+    st().emit('edgeband_print')
+    expect(st().step).toBe(3)
+  })
 })

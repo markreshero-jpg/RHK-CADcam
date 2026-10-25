@@ -26,14 +26,19 @@ import { buildSizeOvByCab, type SizeOv, type SizeOvByCab } from '@/src/lib/optim
 import { buildShapesByCab, SHAPE_SELECT, type ShapeRow, type ShapesByCab } from '@/src/lib/optimiser/shapes'
 import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank } from '@/src/lib/jointDrilling'
+import { EdgebandSheet, edgebandPrintHtml } from './EdgebandReport'
+import { buildEdgebandReport, type EdgebandProduct } from '@/src/lib/optimiser/edgebandLength'
+import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
+import type { OptiPart } from '@/src/lib/optimiser/types'
 
 export type ReportScope = 'job' | 'room'
-export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d'
+export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'shop_drawings',      label: 'Shop Drawings',       desc: 'One PDF per room: plan + elevations, one scale' },
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
   { id: 'benchtop_supply',    label: 'Benchtop Supply',     desc: 'Stone / laminate order · m² · edges' },
+  { id: 'edgeband_length',    label: 'Edgeband Length',     desc: 'Tape metres by product · waste · cost' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'opening_schedule',   label: 'Door & Window Schedule', desc: 'Doors, windows, openings · size · sill · head' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
@@ -408,13 +413,46 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
       .then(({ error }) => { if (error) console.error('[shop 3D views]', error) })
   }
 
+  // Edgeband length (O7): the saved part snapshot the optimiser nests, loaded
+  // when the report is first opened; scoped to the rooms in view.
+  const [ebParts, setEbParts] = useState<OptiPart[] | null>(null)
+  const [ebProducts, setEbProducts] = useState<Map<string, EdgebandProduct>>(new Map())
+  const [ebWaste, setEbWaste] = useState(() => {
+    try {
+      const raw = localStorage.getItem('rhk.edgebandWastePct')
+      return raw != null && Number(raw) >= 0 ? Number(raw) : 10
+    } catch { return 10 }
+  })
+  useEffect(() => { try { localStorage.setItem('rhk.edgebandWastePct', String(ebWaste)) } catch { /* private mode */ } }, [ebWaste])
+  useEffect(() => {
+    if (selectedReport !== 'edgeband_length' || !project || ebParts) return
+    let cancelled = false
+    void loadProjectParts(project.id).then(async ({ parts }) => {
+      const ids = [...new Set(parts.flatMap(p => (p.eb_tape ?? []).map(t => t.id).filter((id): id is string => !!id)))]
+      const { data } = ids.length
+        ? await supabase.from('edge_banding').select('id,name,brand,color,thickness,width,cost_per_metre').in('id', ids)
+        : { data: [] }
+      if (cancelled) return
+      setEbProducts(new Map(((data ?? []) as EdgebandProduct[]).map(p => [p.id, p])))
+      setEbParts(parts)
+    })
+    return () => { cancelled = true }
+  }, [selectedReport, project, ebParts])
+  const ebReport = useMemo(() => {
+    if (!ebParts) return null
+    const ids = rooms.map(r => r.id)
+    return buildEdgebandReport(ebParts.filter(p => ids.includes(p.room_id)), ebProducts, ebWaste / 100, ids)
+  }, [ebParts, ebProducts, ebWaste, rooms])
+
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
 
   function handlePrint() {
+    if (selectedReport === 'edgeband_length') useTutorial.getState().emit('edgeband_print')   // tutorial edgeband_length
     const reportTitle = REPORTS.find(r => r.id === selectedReport)?.label ?? 'Report'
     const scopeLabel  = scope === 'room' ? room.name : (project?.name ?? 'Job')
 
     const rows = selectedReport === 'benchtop_supply' ? [supplyPrintHtml(supplyData, supplyTotalsAll)]
+      : selectedReport === 'edgeband_length' ? [edgebandPrintHtml(ebReport, ebWaste / 100)]
       : selectedReport === 'appliance_schedule' ? [schedulePrintHtml(scheduleData)]
       : selectedReport === 'opening_schedule' ? [openingSchedulePrintHtml(openingData)] : reportData.flatMap(({ room: rm, materialGroups }) =>
       materialGroups.length === 0 ? [] : [`
@@ -463,7 +501,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
         <h1>${reportTitle}</h1>
         <p>${scopeLabel} &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString()}</p>
       </div>
-      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : selectedReport === 'appliance_schedule' ? 'No appliances placed.' : selectedReport === 'opening_schedule' ? 'No doors or windows placed.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
+      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : selectedReport === 'edgeband_length' ? 'No edgebanded parts.' : selectedReport === 'appliance_schedule' ? 'No appliances placed.' : selectedReport === 'opening_schedule' ? 'No doors or windows placed.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
     </body></html>`)
     win.document.close()
     win.focus()
@@ -537,6 +575,15 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                       <option key={k} value={k}>{PAPER[k].label}</option>
                     ))}
                   </select>
+                )}
+                {selectedReport === 'edgeband_length' && (
+                  <label data-tour="edgeband-waste" className="text-xs text-gray-400 flex items-center gap-1" title="Added on top of the finished metres">
+                    Waste
+                    <input type="number" min={0} max={100} step={1} value={ebWaste}
+                      onChange={e => setEbWaste(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-12 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1 text-right" />
+                    %
+                  </label>
                 )}
                 {/* The plan / elevation / cabinet reports have their own download button in their toolbar. */}
                 {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && (
@@ -680,6 +727,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   materialNames={materialNames}
                   paperKey={printPaper}
                 />
+              ) : selectedReport === 'edgeband_length' ? (
+                <EdgebandSheet report={ebReport} waste={ebWaste / 100} loading={!ebParts} />
               ) : selectedReport === 'benchtop_supply' ? (
                 <BenchtopSupplySheet data={supplyData} totals={supplyTotalsAll} />
               ) : selectedReport === 'appliance_schedule' ? (
