@@ -5,6 +5,7 @@ import { normaliseBulkhead, type BulkheadSettings } from '@/src/lib/bulkhead'
 import { normaliseFloatShelf, type FloatShelfSettings } from '@/src/lib/floatShelf'
 import type { AlignMode } from '@/src/lib/fixtureGroups'
 import { isRunCarcass } from '@/src/lib/underPanel'
+import { shapeEditable } from './useCabinetShapeEdit'
 
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
@@ -12,8 +13,10 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit, onSplitHeight,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
-  onUpdateBulkhead, onUpdateFloatShelf, onMoveLabel, onResetLabel, onAddUnderPanel,
+  onUpdateBulkhead, onUpdateFloatShelf, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape,
 }: {
+  /** Edit shape in plan (z_cabinet_shape_edit E3): edge types + corner joins. */
+  onEditShape?: (cabId: string) => void
   /** Under panel (z_floating F7/F8) under these base cabinets / overheads: a BUP / WUP + their bottom scribe. */
   onAddUnderPanel?: (ids: string[]) => void
   /** Put the right-clicked cabinet's / fixture's label into move mode (this view). */
@@ -198,7 +201,10 @@ export function buildContextMenuGroups({
     }
   }
 
-  groups.push([{ label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' }])
+  groups.push([
+    { label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' },
+    ...(onEditShape && shapeEditable(cab) ? [{ label: 'Edit shape', onClick: () => onEditShape(cabId), color: 'blue' as const }] : []),
+  ])
 
   // Bulkhead toggles — the same switches as the sidebar section.
   const bh = normaliseBulkhead(cab?.bulkhead)

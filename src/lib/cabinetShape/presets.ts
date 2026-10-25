@@ -59,6 +59,18 @@ const mx = (x: string, side: ShapeSide) => side === 'right' ? x : x === '0' ? 'c
 
 export const SHAPE_PRESETS: ShapePreset[] = [
   {
+    // The plain box as a footprint (z_cabinet_shape_edit E3): what Edit shape
+    // starts a rectangular cabinet from. Builds exactly the box parts.
+    key: 'rectangle', label: 'Rectangle', modifier: null, sided: false, internal: true,
+    params: [],
+    build: () => [
+      { id: 'back',  x: '0',     y: '0',     role: 'back' },
+      { id: 'right', x: 'cab.w', y: '0',     role: 'side' },
+      { id: 'front', x: 'cab.w', y: 'cab.d', role: 'front' },
+      { id: 'left',  x: '0',     y: 'cab.d', role: 'side' },
+    ],
+  },
+  {
     key: 'clipped_corner', label: 'Clipped corner', modifier: 'CC', sided: true,
     params: [
       { key: 'clip_w', label: 'Clip along width', default: 300 },

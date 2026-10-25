@@ -9,9 +9,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → **E1 + E2 built 2026-10-25** (sub-types + corner joins in the
-> resolver, picked from the Shape section dropdowns), in-app checks pending — see
-> "E1 notes" / "E2 notes" under Phases. Next **E3** (plan edit mode, picking).
+> **RESUME HERE** → **E1 + E2 + E3 built 2026-10-25** (sub-types, corner joins,
+> plan Edit shape mode with picking), in-app checks pending — see "E1 / E2 / E3
+> notes" under Phases. Next **E4a** (CAD tool target adapter).
 
 ---
 
@@ -236,7 +236,7 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
 | E0 | Spec + Mark's Q&A | [x] 2026-10-25 |
 | E1 | **Types + sub-types in the resolver.** `sub` on edges, upgrade-on-read (scribe, role_overrides; flush_ends moved to E2), per-edge material + thickness (decision 5) through the inset polygon + joins, applied end panel part, finished tape. Pickers added to the existing Shape section dropdowns so it's checkable before plan editing exists. Tests: rectangle footprint = box parts still; every preset × every sub-type stays inside the outline, no overlaps | [x] built 2026-10-25, in-app check pending |
 | E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet + panel↔open square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [x] built 2026-10-25, in-app check pending |
-| E3 | **Plan edit mode — picking only.** Right-click Edit shape, dim + highlight, edges coloured by type, click edge / corner → panels in the sidebar, Done / Cancel / undo. No geometry editing yet | [ ] |
+| E3 | **Plan edit mode — picking only.** Right-click Edit shape, dim + highlight, edges coloured by type, click edge / corner → panels in the sidebar, Done / Cancel / undo. No geometry editing yet | [x] built 2026-10-25, headless-checked, in-app check pending |
 | E4a | **CAD tool extraction** — target adapter in `useAnnotationTool`, annotation behaviour unchanged (headless check of the B-phase tools) | [ ] |
 | E4b | **CAD tools on the footprint** — grips, side drag, line / arc / box drawing from scratch, fillet / chamfer / join / offset, snaps (walls, neighbours, own points), typed entry; validity; ids + formula re-expression; pos / bbox update | [ ] |
 | E5 | **Library** — save shaped cabinets with their footprint (types, subs, joins, formulas) + the new preserve ticks; placement evaluates at the placed size, optional hand flip; `/CS` in the parser + skill | [ ] |
@@ -316,6 +316,40 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
   - Kick and benchtop ignore corner choices (decision 9).
   - Hinges on a facet door next to a reveal corner: no panel there — HINGE_NO_PANEL
     as with a mitre.
+
+### E3 notes (built 2026-10-25)
+
+- **Entry:** right-click a cabinet → **Edit shape** (next to Edit…), offered for
+  carcass cabinets that aren't kick assemblies, curved ends, bulkheads, floating
+  shelves or island back panels (`shapeEditable`). Switches to the plan. Bridge:
+  `__canvasApi.editShape(ref)`.
+- **Mode** `edit_cabinet_shape` (canvasTypes). `useCabinetShapeEdit` holds
+  `{ cabId, orig, fp, history, sel, hover }`. **Write-through** (decided at build,
+  replaces the draft-then-save idea): every change goes straight to the cabinet
+  via `handleUpdateCabinet`, so the parts re-resolve live; the first change takes
+  one `captureSnapshot` → the whole edit is one Ctrl+Z after Done. Inside the
+  edit, ↶ / Ctrl+Z steps back one change; **Cancel** writes the starting footprint
+  back. **Enter / Esc = Done** (nothing to save). Selection is cleared while
+  editing (no stretch / move handles) and comes back on Done.
+- A plain cabinet starts from the internal **`rectangle` preset** (edges back /
+  right / front / left) — it builds exactly the box parts (test) — and is only
+  written if something changes; Cancel puts it back to no footprint.
+- **Overlay** `CabinetShapeEditPlan` (CanvasSVG `shapeEditLayer`): the room dimmed
+  with the cabinet's outline cut out, edges in their type colour (back grey, side
+  amber, front blue, open green) with a label (sub-type when not the default),
+  corner dots (filled = hand-set). Hover / pick halos. `data-edge` / `data-corner`
+  for automation.
+- **Panel** `CabinetShapeEditPanel` (right sidebar, replaces the cabinet panel):
+  Done / Cancel / ↶; picked edge → type buttons + sub-type radios + scribe (inherited
+  shown greyed); picked corner → join radios; lists of all edges + corners.
+- Shared `src/lib/cabinetShape/edit.ts` (`withEdgeChoice`, `rectangleFootprint`)
+  — the Shape section uses the same edge write.
+- Blocked while editing: wall picks, cabinet right-click, other cabinets' clicks
+  (a press off the outline clears the pick).
+- Check: `z_plan_automation/verify-shape-edit-e3.mjs` (Test Kitchen BC-01: open,
+  pick left edge, Finished gable → left side in the exposed board, pick a corner,
+  Cancel → restored, footprint back to none; open + Esc writes nothing) — passed
+  2026-10-25.
 
 Later (not this module): rectangular cabinets on the same edge model (decision
 3); a `none` edge type (decision 4); kick / benchtop per edge (decision 9);

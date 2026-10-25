@@ -24,6 +24,8 @@ export interface Junction {
   kind: JunctionKind
   /** Interior angle, degrees. */
   angle: number
+  /** The corner, cabinet frame (x along the width, y = depth from the back). */
+  at: { x: number; y: number }
   /** The stored choice, if any (legacy flush_ends read in). */
   choice?: JoinChoice
 }
@@ -65,7 +67,7 @@ export function footprintJunctions(fp: Footprint, w: number, d: number): Junctio
     const kind = junctionKind(a, b, angle)
     if (!kind) continue
     const choice = storedJoin(fp, a, b)
-    out.push({ key: junctionKey(a.edge.id, b.edge.id), a: a.edge, b: b.edge, kind, angle, ...(choice ? { choice } : {}) })
+    out.push({ key: junctionKey(a.edge.id, b.edge.id), a: a.edge, b: b.edge, kind, angle, at: { ...a.p1 }, ...(choice ? { choice } : {}) })
   }
   return out
 }

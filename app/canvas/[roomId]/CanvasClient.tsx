@@ -120,6 +120,9 @@ import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPane
 import BenchtopJoinDialog from './BenchtopJoinDialog'
 import BenchtopAutoBuildDialog from './BenchtopAutoBuildDialog'
 import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
+import CabinetShapeEditPanel from './CabinetShapeEditPanel'
+import CabinetShapeEditPlan from './CabinetShapeEditPlan'
+import { useCabinetShapeEdit, shapeEditable } from './useCabinetShapeEdit'
 import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
 import dynamic from 'next/dynamic'
@@ -1045,6 +1048,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           return
         }
       }
+      // Edit shape (E3): Enter / Esc = Done (changes are already saved), Ctrl+Z steps back inside.
+      if (mode === 'edit_cabinet_shape' && !isInput(e.target)) {
+        if (e.key === 'Escape' || e.key === 'Enter') { e.preventDefault(); finishCabinetShapeEdit(); return }
+        if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !e.shiftKey) { e.preventDefault(); shp.undo(); return }
+        if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); return }
+      }
       // Edit edges (Phase 7b): Enter saves, Esc asks if anything changed, Ctrl+Z steps back inside.
       if (mode === 'edit_benchtop_edges' && !isInput(e.target)) {
         if (e.key === 'Escape') { e.preventDefault(); if (bt.edgeEdit?.history.length) setBtSavePrompt(true); else bt.cancelEdgeEdit(); return }
@@ -1291,6 +1300,26 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     // assembly only changes when you move/resize it directly, or when the run is
     // dissolved (explicit Separate, or a delete dropping it below 2 members).
   }, [])
+
+  // Edit shape (z_cabinet_shape_edit E3): right-click a cabinet → Edit shape.
+  const shp = useCabinetShapeEdit({ cabinets, onUpdate: handleUpdateCabinet, captureSnapshot })
+  function startCabinetShapeEdit(cabId: string) {
+    setContextMenu(null)
+    if (!shapeEditable(cabinets.find(c => c.id === cabId)) || !shp.start(cabId)) return
+    if (canvasView !== 'plan') switchView('plan')
+    setSelected(null); setMultiSelect([]); setCabResize(null)
+    setMode('edit_cabinet_shape')
+  }
+  function finishCabinetShapeEdit(cancel = false) {
+    const id = cancel ? shp.cancel() : shp.done()
+    setMode('select')
+    if (id && cabinets.some(c => c.id === id)) setSelected({ type: 'cabinet', id })
+  }
+  // Leave the edit if its cabinet goes away or the view leaves the plan.
+  useEffect(() => {
+    if (mode !== 'edit_cabinet_shape') return
+    if (!shp.edit || canvasView !== 'plan' || !cabinets.some(c => c.id === shp.edit!.cabId)) finishCabinetShapeEdit()
+  })
 
   // Bulkheads on "height to ceiling" (z_bulkhead) follow their wall's ceiling /
   // soffit / wall-cab top — room or wall edits, or a move to another wall.
@@ -1889,6 +1918,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           setEditCabId(cab.id)
           return { opened: cab.label, id: cab.id }
         },
+        // Plan Edit shape (z_cabinet_shape_edit E3), as right-click → Edit shape.
+        editShape(ref: string) {
+          const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
+          if (!cab) throw new Error(`Cabinet not found: ${ref}`)
+          startCabinetShapeEdit(cab.id)
+          return { editing: cab.label, id: cab.id, editable: shapeEditable(cab) }
+        },
         // Full resolved cabinet (parts, seams, hinges) for headless inspection.
         async getResolved(ref: string) {
           const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
@@ -1974,6 +2010,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!bt.shapeStretch) bt.setShapeSel(null)
       return
     }
+    // Edit shape: edges / corners take their own clicks; a press elsewhere clears the pick.
+    if (mode === 'edit_cabinet_shape') { e.preventDefault(); shp.setSel(null); return }
     // Edit edges: clicks land on the edges (plan overlay); a press elsewhere does nothing.
     if (mode === 'edit_benchtop_edges') { e.preventDefault(); return }
     if (mode === 'measure') { e.preventDefault(); return }
@@ -2484,7 +2522,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   function onWallPointerDown(e: React.PointerEvent, wallId: string) {
-    const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && !currentPlaceInfo()
+    const clickable = mode !== 'draw_wall' && mode !== 'draw_island' && mode !== 'paste' && mode !== 'edit_cabinet_shape' && !currentPlaceInfo()
     if (!clickable || e.button !== 0 || spaceRef.current) return
     e.stopPropagation()
     // Moving a cabinet → leave the click to onSVGClick, which drops it. An island's
@@ -2599,6 +2637,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   function onCabinetContextMenu(e: React.MouseEvent, cabId: string) {
     e.preventDefault(); e.stopPropagation()
+    if (mode === 'edit_cabinet_shape') return
     if (!multiSelect.includes(cabId)) setMultiSelect([])
     setSelected({ type: 'cabinet', id: cabId })
     setContextMenu({ x: e.clientX, y: e.clientY, cabId })
@@ -2888,6 +2927,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · Shift-click = pick several (then right-click = Join) · right-click = Edit shape / Edit edges · double-click = Shape Editor · cabinets are locked · F4 / Esc = back to cabinets'
     : mode === 'edit_benchtop_shape' ? (bt.shapeStretch ? 'Stretch: move the mouse (snaps) · click to place · or type the size in the panel · Esc = cancel the stretch'
       : 'Edit shape: click a line to stretch it · drag a line to move it · click a corner for X / Y · Shift-click a line = add corner · Enter = save · Esc = finish · Ctrl+Z = undo')
+    : mode === 'edit_cabinet_shape' ? 'Edit shape: click an edge to set its type, a corner dot to set how the pieces meet · changes save as you go · Enter / Esc = done · Ctrl+Z = undo'
     : mode === 'edit_benchtop_edges' ? 'Edit edges: pick a chip in the panel, then click edges on the plan · click again = take it off · Alt-click = default · Enter = save · Esc = finish · Ctrl+Z = undo'
     : mode === 'move_benchtop' ? (!bt.btMoveBase ? 'Move benchtop: click a base point (snaps) · Esc=cancel' : 'Click the point to move it to · Ctrl=ortho · Esc=cancel')
     : mode === 'draw_benchtop_join' ? (!bt.btJoinStart ? 'Join line: click a point on the benchtop edge · Esc=cancel' : 'Click the opposite edge to finish the join · Ctrl=ortho')
@@ -3252,6 +3292,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               wallOpenings={wallOpenings}
               wallFixtureSpans={wallFixtureSpans}
               annotationsLayer={cadLayer(planLayers)}
+              shapeEditLayer={mode === 'edit_cabinet_shape' && shp.edit ? (() => {
+                const c = cabinets.find(x => x.id === shp.edit!.cabId), w = c && walls.find(x => x.id === c.wall_id)
+                return c && w ? <CabinetShapeEditPlan edit={shp.edit} cab={c} wall={w} roomRef={centroid(walls)} zoom={view.zoom}
+                  onPick={shp.setSel} onHover={shp.setHover} /> : null
+              })() : undefined}
               tutorialLayer={tutorialOn && <TutorialHintsPlan zoom={view.zoom} layers={planLayers} />}
               fixturesLayer={
                 <FixturesPlan
@@ -3705,6 +3750,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onKeep={() => setBtSavePrompt(false)}
           />
         )}
+        {mode === 'edit_cabinet_shape' && shp.edit && (() => {
+          const c = cabinets.find(x => x.id === shp.edit!.cabId)
+          return c ? <CabinetShapeEditPanel edit={shp.edit} cab={c} onApply={shp.apply} onSelect={shp.setSel}
+            onDone={() => finishCabinetShapeEdit()} onCancel={() => finishCabinetShapeEdit(true)} onUndo={shp.undo} /> : null
+        })()}
         {mode === 'edit_benchtop_edges' && selectedBenchtop && bt.edgeEdit?.btId === selectedBenchtop.id && btEdgeAux && (
           <BenchtopEdgeEditPanel
             benchtop={selectedBenchtop}
@@ -3938,6 +3988,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               const at = sug.length ? sug.reduce((b, x) => (Math.abs(x.at - mid) < Math.abs(b.at - mid) ? x : b)).at : Math.round(mid)
               void handleUpdateCabinet(id, { split: { at: [at] } })
             },
+            onEditShape: canvasView === 'plan' || canvasView === '3d' || canvasView === 'elevation' ? startCabinetShapeEdit : undefined,
             onSaveToLibrary: isAdmin ? id => { setContextMenu(null); setSaveLibCabId(id) } : undefined,
             onReplace: id => { setContextMenu(null); setReplaceCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },

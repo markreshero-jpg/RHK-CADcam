@@ -15,6 +15,7 @@ import {
   type EdgeOverride, type EdgeRole, type EdgeSub, type JoinChoice,
 } from '@/src/lib/cabinetShape/footprint'
 import { footprintJunctions, joinOptions, withJoin } from '@/src/lib/cabinetShape/junctions'
+import { withEdgeChoice } from '@/src/lib/cabinetShape/edit'
 import {
   SHAPE_PRESETS, getPreset, buildPresetFootprint, presetWarnings, presetBox, withShapeChoices,
 } from '@/src/lib/cabinetShape/presets'
@@ -70,19 +71,7 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
 
   // One edge's type / sub-type / scribe. A new type starts on its default sub-type.
   function setEdge(edgeId: string, patch: Partial<EdgeOverride>) {
-    if (!fp) return
-    const cur = edges.find(s => s.edge.id === edgeId)?.edge
-    if (!cur) return
-    const next: EdgeOverride = { role: cur.role, sub: cur.sub, scribe: cur.scribe, ...patch }
-    if (patch.role && patch.role !== cur.role) { delete next.sub; delete next.scribe }
-    if (next.sub !== 'scribe') delete next.scribe
-    if (next.sub == null) delete next.sub
-    if (next.scribe == null) delete next.scribe
-    const edge_overrides = { ...footprintOverrides(fp), [edgeId]: next }
-    const base = { ...fp, edge_overrides }
-    delete base.role_overrides
-    if (fp.preset) return setFootprint(keepFlush(buildPresetFootprint(fp.preset, fp.params, dims, edge_overrides)))
-    setFootprint(withEdgeOverrides(base))
+    if (fp) setFootprint(withEdgeChoice(fp, dims, edgeId, patch))
   }
 
   // Edges as the resolver reads them (legacy 'scribe' role, overrides applied).
@@ -101,6 +90,7 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
       <select data-tour="cab-shape" value={fp?.preset ?? (fp ? '__custom' : '')} onChange={e => choosePreset(e.target.value)} className={inp}>
         <option value="">Rectangle</option>
         {SHAPE_PRESETS.filter(p => !p.internal).map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+        {preset?.internal && <option value={preset.key} disabled>{preset.key === 'rectangle' ? 'Rectangle (edges set)' : preset.label}</option>}
         {fp && !fp.preset && <option value="__custom" disabled>Custom (hand-edited)</option>}
       </select>
 

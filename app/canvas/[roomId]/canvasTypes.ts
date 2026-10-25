@@ -28,6 +28,8 @@ export type Mode =
   | 'paste'
   // z_CAD_tool A2: F7 CAD annotations — the ribbon is up and the drawing is click-through.
   | 'cad'
+  // z_cabinet_shape_edit E3: one cabinet's footprint on a dimmed plan — click edges / corners.
+  | 'edit_cabinet_shape'
 
 /** Smallest size (mm) a cabinet can be drag-stretched to — low enough for fillers / scribe strips. */
 export const MIN_STRETCH = 5
