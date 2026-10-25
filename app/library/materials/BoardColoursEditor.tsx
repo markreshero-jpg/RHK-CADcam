@@ -10,6 +10,7 @@
 
 import { useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 type Row = Record<string, unknown>
 
@@ -57,6 +58,7 @@ export default function BoardColoursEditor({ board, colours, edgebands, onColour
     if (error) { setError(error.message); return }
     setNewName('')
     onColours([data as Row])
+    useTutorial.getState().emit('board_colour_added')   // tutorial board_colours
   }
 
   // One default per board (unique index): clear the old one first.

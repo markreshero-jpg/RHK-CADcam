@@ -35,7 +35,7 @@ plan to show *where* to do it.
 9. **Levels ▸ topics tree + search** (Mark 2026-10-18, "the tutorials will get quite
    large"): top level Getting started / Basics / Intermediate / Advanced, each a
    collapsible branch; under Basics–Advanced a topic branch (Room, Cabinets, Benchtops,
-   Appliances & fixtures, CAD notes & markup, Reports & printing, Production). Branches show done/total.
+   Materials & colours, Appliances & fixtures, CAD notes & markup, Reports & printing, Production). Branches show done/total.
    A search box above the tree filters to a flat list (every word must match title,
    blurb, `keywords` or a step title), each hit with its "Level › Topic" crumb.
 8. **Steps count from the lesson's start** — `done(ctx, start)`: `start` is the canvas
@@ -100,6 +100,8 @@ orders by level / topic, not array position.
 | Basics › Room | Draw an island | Wall → Island → draw it → drop a base on the island line (hint) |
 | | Doors and windows | Fixtures → Doors & windows → drop in a wall (hint) → select it (size / sill) |
 | Basics › Cabinets | Copy and paste a cabinet | Select → Ctrl+C (paste mode) → drop the copy |
+| Basics › Materials & colours | Pick the job colours (z_material_colours) | Job → Cabinet Standards → Material Schedules (`job_materials_tab`) → pick a board (`mat_board_pick`) → pick its colour (`mat_colour_pick`) → Copy to wall & tall (`mat_copy_classes`) → Save (`props_saved`, job or room) + 3D |
+| Intermediate › Materials & colours | Add colours to a board | Library → Materials (path) → open a board, + Add colour (`board_colour_added`) → set swatches / grain / tape / default |
 | Basics › Benchtops | Sink or cooktop cutout | Have a top → pick a sink → drop it on the top → select it (Cut benchtop tick) → 3D |
 | Basics › CAD notes | Notes on the plan (F7 CAD) | F7 → Text (a point note) → Text box (a note with a width) → Select a note → change its style on the ribbon (`annot_style`) → leave CAD mode |
 | Intermediate › Cabinets | Make a shaped cabinet | Select a base → Shape preset (footprint set) → sizes + 3D |

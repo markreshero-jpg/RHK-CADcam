@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import BoardColourSelect, { type PickMat } from './BoardColourSelect'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 // ── Schedule type config ──────────────────────────────────────────────────────
 
@@ -391,7 +392,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
                   {/* One-colour jobs: copy the base pick across (z_material_colours MC4). */}
                   {cls === 'base' && cur && (matOvr[`wall|${role.key}`] !== cur || matOvr[`tall|${role.key}`] !== cur) && (
                     <button
-                      onClick={() => { saveMatOverride('wall', role.key, cur); saveMatOverride('tall', role.key, cur) }}
+                      onClick={() => { saveMatOverride('wall', role.key, cur); saveMatOverride('tall', role.key, cur); useTutorial.getState().emit('mat_copy_classes') }}
                       className="mt-1 text-[10px] text-blue-400 hover:text-blue-300"
                     >Copy to wall &amp; tall →</button>
                   )}

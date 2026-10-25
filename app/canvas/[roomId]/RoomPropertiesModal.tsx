@@ -235,6 +235,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
     }
     writeClassOverrides(newOverrides as Record<string, unknown>, classVals, jobClassRules)
     if ((newOverrides as Record<string, unknown>).BY_CLASS) useTutorial.getState().emit('class_reveals_saved')   // tutorial class_reveals
+    useTutorial.getState().emit('props_saved')   // tutorial job_colours
     if (handleDrill) (newOverrides as Record<string, unknown>).HANDLE_DRILL = handleDrill === 'on'
     if (fpRail) (newOverrides as Record<string, unknown>).FPRAIL = fpRail === 'on'
     if (railGrain) (newOverrides as Record<string, unknown>).RAILGRAIN = railGrain

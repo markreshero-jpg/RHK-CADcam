@@ -7,6 +7,14 @@
 // board's default colour and warns COLOUR_NOT_CHOSEN — so the colour select is
 // shown amber until a colour is picked. value '' = inherit (inheritLabel).
 
+import { useTutorial } from '@/src/lib/tutorial/store'
+
+// Tutorial job_colours: a board pick, then a colour pick.
+function pick(onChange: (id: string) => void, id: string, isColour: boolean) {
+  if (id) useTutorial.getState().emit(isColour ? 'mat_colour_pick' : 'mat_board_pick')
+  onChange(id)
+}
+
 export interface PickMat {
   id: string
   name: string
@@ -30,7 +38,7 @@ export default function BoardColourSelect({ value, mats, inheritLabel, onChange,
 
   return (
     <div className="flex flex-col gap-1">
-      <select value={boardId} onChange={e => onChange(e.target.value)} className={className(!!value)}>
+      <select value={boardId} onChange={e => pick(onChange, e.target.value, false)} className={className(!!value)}>
         <option value="">{inheritLabel}</option>
         {boards.map(b => (
           <option key={b.id} value={b.id}>{b.name} ({b.dz}mm)</option>
@@ -41,7 +49,7 @@ export default function BoardColourSelect({ value, mats, inheritLabel, onChange,
       {colours.length > 0 && (
         <select
           value={cur?.parent_id ? cur.id : boardId}
-          onChange={e => onChange(e.target.value)}
+          onChange={e => pick(onChange, e.target.value, e.target.value !== boardId)}
           className={noColour
             ? 'w-full bg-gray-800 border border-amber-600 rounded px-2 py-1 text-xs text-amber-300 focus:outline-none focus:border-amber-400'
             : className(true)}

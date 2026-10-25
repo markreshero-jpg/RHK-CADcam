@@ -7,7 +7,7 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
-> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour, MC9 generic grain done. Next: MC8 tutorial (MC7 CSV import waits on supplier files; MC10 supplier images optional).
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour, MC8 tutorials, MC9 grain done. Next: MC7 CSV import (waits on supplier files), MC10 supplier images (optional), MC11 elevation grain (optional).
 > Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
@@ -200,7 +200,7 @@ colours is left open.
 - [x] **MC5** (2026-10-25) Resolver warnings now persist inside `cabinet_instances.resolved_drawer_hw.warnings` (rides the existing persist RPC blob, no schema change) and load back in canvasDB, so warnings show on page load. Nest: cabinets carry `colour_warnings` (`warnings:resolved_drawer_hw->warnings`, filtered to COLOUR_NOT_CHOSEN); Stage 2 Materials chip gets ⚠, Stage 3 material group "⚠ colour not chosen", Stage 4 amber note naming the colour + cabinets. Colour names on cut lists / nest come from the trigger-built `name` ("Board – Colour"). Checked end-to-end on RHK1234 BC-02 (job base interior → bare PT Woodmatt board: persisted Boston Oak + warning, all three nest spots showed it), then restored. Note: a board-without-colour pick warns on every cabinet of that class, even ones with no parts in that role.
 - [x] **MC6** (2026-10-25) Fronts colour per class (§5): "Doors / drawers" grid row + resolver precedence; Doors-tab colours on a board-with-colours fall back + warn. Checked live on RHK1234 BC-02: job base fronts → Classic White Matt applied over the Doors tab; with it removed, the Doors-tab colour on bare PT Woodmatt fell back to Boston Oak + "Doors:" warning. Door colour "Elegant Oak" (Laminex Absolute Grain) relinked to the Elegant Oak colour row; the generic "Colour A" / "Colour TBC" door colours stay on their boards (they warn).
 - [ ] **MC7** CSV import of colour lists (when Mark has the files).
-- [ ] **MC8** Tutorial: "Job colours" (grid, room overrides, interior, colour-not-chosen warning).
+- [x] **MC8** (2026-10-25) Tutorials in a new "Materials & colours" topic: "Pick the job colours" (Basics) and "Add colours to a board" (Intermediate); events mat_board_pick / mat_colour_pick / mat_copy_classes / job_materials_tab / props_saved / board_colour_added; store test added. In-app review by Mark pending.
 
 ### MC1 seed (run after the migration)
 

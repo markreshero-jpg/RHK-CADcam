@@ -59,7 +59,7 @@ export interface TutorialStep {
 
 // Picker tree: level ▸ topic ▸ tutorial. Getting started is one flat course.
 export type TutorialLevel = 'start' | 'basics' | 'intermediate' | 'advanced'
-export type TutorialTopic = 'room' | 'cabinets' | 'benchtops' | 'appliances' | 'cad' | 'reports' | 'production'
+export type TutorialTopic = 'room' | 'cabinets' | 'materials' | 'benchtops' | 'appliances' | 'cad' | 'reports' | 'production'
 
 export const TUTORIAL_LEVELS: { id: TutorialLevel; label: string; blurb: string }[] = [
   { id: 'start',        label: 'Getting started', blurb: 'In order — a whole small kitchen, start to finish.' },
@@ -71,6 +71,7 @@ export const TUTORIAL_LEVELS: { id: TutorialLevel; label: string; blurb: string 
 export const TUTORIAL_TOPICS: { id: TutorialTopic; label: string }[] = [
   { id: 'room',       label: 'Room' },
   { id: 'cabinets',   label: 'Cabinets' },
+  { id: 'materials',  label: 'Materials & colours' },
   { id: 'benchtops',  label: 'Benchtops' },
   { id: 'appliances', label: 'Appliances & fixtures' },
   { id: 'cad',        label: 'CAD notes & markup' },
@@ -782,6 +783,41 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'joint', title: 'Pick the back joint (or leave it)',
       body: 'Left blank, the back edge uses the same joint as the sides, so fixed shelves get the same holes through the back as through the gables. Pick a different joint to drill the back another way. Holes only go in when the shelf sits hard against the back: a shelf with a back setback, or a cabinet with no back, gets none. To turn it off for one cabinet, select the back (or the shelf) in the cabinet edit modal and click ✕ on its Fixed Shelf row to suppress it.',
       done: c => c.path.startsWith('/library/construction-methods') },
+  ]},
+
+  // Appended 2026-10-25 (z_material_colours MC8 — job colours + board colours).
+  { id: 'job_colours', level: 'basics', topic: 'materials', title: 'Pick the job colours',
+    blurb: 'Board + colour for doors, exposed panels and interior, per base / wall / tall.',
+    keywords: 'colour color material board finish doors drawers exposed interior laminex polytec woodmatt grain job room', steps: [
+    { id: 'open', title: 'Open the job’s materials',
+      body: 'Click Job in the menu bar → Cabinet Standards, then the Material Schedules tab. The Materials grid at the top is the job’s main picks: Doors / drawers, Interior and Exposed, each for Base, Wall and Tall cabinets.',
+      target: 'menu-Job', canvas: true, done: (c, s) => ev(c, 'job_materials_tab') > ev(s, 'job_materials_tab') },
+    { id: 'board', title: 'Pick a board',
+      body: 'In the Base column, pick a board for Doors / drawers or Exposed — e.g. PT Woodmatt 16mm. A board with colours shows a second box in amber: "choose colour". Until you choose, the cabinets use the board’s default colour and show a "colour not chosen" warning (also in the CNC nest). A blank Doors / drawers cell keeps the Doors tab colour.',
+      canvas: true, done: (c, s) => ev(c, 'mat_board_pick') > ev(s, 'mat_board_pick') },
+    { id: 'colour', title: 'Pick its colour',
+      body: 'Choose the colour in the second box — e.g. Boston Oak Woodmatt. It turns blue: that exact colour is now the job’s pick, and it nests on its own sheets.',
+      canvas: true, done: (c, s) => ev(c, 'mat_colour_pick') > ev(s, 'mat_colour_pick') },
+    { id: 'copy', title: 'Same colour on wall and tall',
+      body: 'For a one-colour job, click "Copy to wall & tall →" under the base pick. Interior is its own row — usually Whiteboard, change it for a grey interior.',
+      canvas: true, done: (c, s) => ev(c, 'mat_copy_classes') > ev(s, 'mat_copy_classes') },
+    { id: 'save', title: 'Save, then look in 3D',
+      body: 'Click Save — every cabinet updates to the new colours. Then click 3D: grained colours show grain lines. One room different? Room → Properties → Materials overrides any cell for that room.',
+      target: 'view-3d', canvas: true, done: (c, s) => ev(c, 'props_saved') > ev(s, 'props_saved') && c.view === '3d' },
+  ]},
+
+  { id: 'board_colours', level: 'intermediate', topic: 'materials', title: 'Add colours to a board',
+    blurb: 'One board in the library, its colours listed under it.',
+    keywords: 'colour color library board stock materials laminex polytec default tape edgeband grain back face', steps: [
+    { id: 'open', title: 'Open Board Stock',
+      body: 'Go to Library → Materials. The Board Stock tab lists boards only; a chip shows how many colours each has.',
+      done: c => c.path.startsWith('/library/materials') },
+    { id: 'add', title: 'Add a colour',
+      body: 'Click a board (e.g. PT Woodmatt 16mm) — its Colours panel opens under the form. Type a colour name and click + Add colour. Thickness, CNC settings and sheet size come from the board; edit those on the board and every colour follows.',
+      done: (c, s) => ev(c, 'board_colour_added') > ev(s, 'board_colour_added') },
+    { id: 'set', title: 'Set it up',
+      body: 'Set the face colour swatch, tick Grain for a timber grain, pick its matching tape, and its $/sheet. Back blank = same as face. The Default radio is the colour used when a job picks the board without a colour. Changes save as you leave each field.',
+      done: (c, s) => ev(c, 'board_colour_added') > ev(s, 'board_colour_added') },
   ]},
 ]
 

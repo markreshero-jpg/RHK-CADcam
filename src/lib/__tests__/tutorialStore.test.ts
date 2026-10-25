@@ -170,6 +170,25 @@ describe('tutorial store', () => {
     expect(st().step).toBe(5)
   })
 
+  it('job colours: open, board, colour, copy, save + 3D', () => {
+    st().setCtx({ path: '/canvas/x', inCanvas: true })
+    st().setEnabled(true)
+    st().emit('mat_board_pick')                  // before the lesson: doesn't count
+    st().goTo(lessonIdx('job_colours'))
+    st().emit('job_materials_tab')
+    expect(st().step).toBe(1)
+    st().emit('mat_board_pick')
+    expect(st().step).toBe(2)
+    st().emit('mat_colour_pick')
+    expect(st().step).toBe(3)
+    st().emit('mat_copy_classes')
+    expect(st().step).toBe(4)
+    st().emit('props_saved')
+    expect(st().step).toBe(4)                    // saved, not yet in 3D
+    st().setCtx({ view: '3d' })
+    expect(st().step).toBe(5)
+  })
+
   it('a PDF download ticks the print step', () => {
     st().setCtx({ path: '/canvas/x', inCanvas: true })
     st().setEnabled(true)

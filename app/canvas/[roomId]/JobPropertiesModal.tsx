@@ -259,6 +259,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     }
     writeClassOverrides(newOverrides, classVals, builderRules)
     if (newOverrides.BY_CLASS) useTutorial.getState().emit('class_reveals_saved')   // tutorial class_reveals
+    useTutorial.getState().emit('props_saved')   // tutorial job_colours
     await onSave({
       name:          name.trim() || project.name,
       job_number:    jobNumber.trim() || null,
@@ -504,7 +505,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
               {/* Inner tabs */}
               <div className="flex border-b border-gray-800 mb-4 shrink-0">
                 {CS_TABS.map(t => (
-                  <button key={t.id} onClick={() => setCsTab(t.id)}
+                  <button key={t.id} onClick={() => { setCsTab(t.id); if (t.id === 'materials') useTutorial.getState().emit('job_materials_tab') }}
                     className={`px-4 py-1.5 text-xs transition-colors border-b-2 -mb-px whitespace-nowrap ${
                       csTab === t.id
                         ? 'border-blue-500 text-blue-400'
