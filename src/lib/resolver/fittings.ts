@@ -24,7 +24,7 @@
 
 import {
   ResolvedInternalPart, ConstructionRules, ResolverError,
-  InternalFitting, InternalFittingType, AccessoryProduct,
+  InternalFitting, InternalFittingType, AccessoryProduct, RailEndSupport,
   AdjShelfFitting, FixedShelfFitting, InnerDrawerFitting, PullOutFitting, AccessoryFitting,
   DrawerType, DrawerBoxRules, DrawerBoxPartType, Material,
   SlideProduct, SlideScheduleEntry, ResolvedDrawerSlide,
@@ -479,41 +479,74 @@ function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingC
     if (a.key !== HANGING_RAIL_OVAL.key) continue
     const prod = hangingRailProduct(ctx.accessoryProducts, a.product_id)
     const R = { ...HANGING_RAIL_OVAL, h: Number(prod?.height_mm) || HANGING_RAIL_OVAL.h, w: Number(prod?.width_mm) || HANGING_RAIL_OVAL.w }
-    const y = (a.y_locked && a.y_position !== undefined) ? a.y_position : box.y + box.h - R.belowTop - R.h
+    const plan = prod ? railSupportPlan(box, prod, a, ctx) : null
+    // With pillars the rail hangs where they hold it: its centre the pillar's
+    // drop below the top of the opening (Mark 2026-10-25), else 60 under the top.
+    const y = (a.y_locked && a.y_position !== undefined) ? a.y_position
+      : plan?.drop ? box.y + box.h - plan.drop - R.h / 2
+      : box.y + box.h - R.belowTop - R.h
+    // The rail stops short of its supports (end support: 5 off the panel; end
+    // pillar: 5 past its centre) — the part is the cut length.
+    const insL = plan?.inset.left ?? 0, insR = plan?.inset.right ?? 0
     out.push({
       part_type:   'accessory',
       sort_order:  ctx.sort.accessory++,
-      DX: R.w, DY: box.w, DZ: R.h,
-      X:  box.x, Y: y, Z: ctx.intBack + (ctx.intD - R.w) / 2,
+      DX: R.w, DY: box.w - insL - insR, DZ: R.h,
+      X:  box.x + insL, Y: y, Z: ctx.intBack + (ctx.intD - R.w) / 2,
       AX: 0, AY: 0, AZ: 0,
       material_id: ctx.shelfMatId,
       edge_band:   edgeSidesToBanding([]),
       y_locked:    !!a.y_locked,
-      ...(prod ? { accessory: { product_id: prod.id, name: prod.name, colour: prod.colour } } : {}),
+      ...(prod ? { accessory: { product_id: prod.id, name: prod.name, colour: prod.colour, ...accessoryModel(prod) } } : {}),
     })
-    if (prod) out.push(...railSupports(box, { y, h: R.h }, prod, a, ctx))
+    if (prod && plan) out.push(...railSupports(box, { y, h: R.h }, prod, a, plan, ctx))
   }
   return out
 }
 
-// Rail supports (z_accessories A6), shelf-like parts (DY along X, DZ up, DX
-// front-to-back), centred on the rail front-to-back:
-//   • end support — on the end gable / divider face, its centre 20 above the
-//     rail's bottom; its library joint drills the gable (A8, railSupportSeams);
-//   • end pillar  — at the rail end, rail centre up to the top of the opening
-//     (the shelf above); for an open end / another rail running across;
-//   • centre pillar — evenly spaced, one per max_span_mm of rail (default),
-//     rail centre up to the top of the opening.
-// Product size missing → 20 × 20 (pillars) / 50 × 25 × 12 (end support).
-export const RAIL_SUPPORT_CENTRE_UP = 20   // support centre above the rail's bottom
+const accessoryModel = (p: AccessoryProduct) =>
+  p.model_url && p.model_format ? { model: { url: p.model_url, format: p.model_format, scale: Number(p.model_scale) || 1 } } : {}
 
-function railSupports(box: Box, rail: { y: number; h: number }, prod: AccessoryProduct, a: AccessoryFitting, ctx: FittingCtx): ResolvedInternalPart[] {
+// Rail supports (z_accessories A6), shelf-like parts (DY along X, DZ up, DX
+// front-to-back), centred on the rail front-to-back. Sizes from the library
+// (Finista chrome, nominal): end support 42 round × 16 off the panel; pillars
+// 40 base, rail centre `height_mm` (50) below the shelf.
+//   • end support — on the end gable / divider face, centred on the rail; its
+//     library joint drills the gable (A8, railSupportSeams);
+//   • end pillar  — at the rail end, hung from the top of the opening (the
+//     shelf above); for an open end / another rail running across;
+//   • centre pillar — evenly spaced, one per max_span_mm of rail (default).
+// The pillar part is its drop: shelf underside down to the rail centre.
+export const RAIL_END_GAP = 5   // rail end short of an end support's panel / past an end pillar's centre
+
+interface RailSupportPlan {
+  sides:  { left: RailEndSupport; right: RailEndSupport }
+  centre: number
+  drop:   number | null           // pillar drop to the rail centre, when the rail has pillars
+  inset:  { left: number; right: number }
+  endSup?: AccessoryProduct; endPil?: AccessoryProduct; ctrPil?: AccessoryProduct
+}
+
+function railSupportPlan(box: Box, prod: AccessoryProduct, a: AccessoryFitting, ctx: FittingCtx): RailSupportPlan {
   const byId = (id?: string | null) => (id ? ctx.accessoryProducts?.find(p => p.id === id) : undefined)
   const endSup = byId(prod.end_support_id), endPil = byId(prod.end_pillar_id), ctrPil = byId(prod.centre_support_id)
   const set = a.supports ?? {}
-  const drill = set.drill !== false
+  const sides = { left: set.left ?? 'end_support', right: set.right ?? 'end_support' } as RailSupportPlan['sides']
+  const span = Number(prod.max_span_mm) || 0
+  const centre = ctrPil ? Math.max(0, Math.round(set.centre ?? (span > 0 && box.w > span ? Math.ceil(box.w / span) - 1 : 0))) : 0
+  const pillars = [...(['left', 'right'] as const).filter(s => sides[s] === 'end_pillar' && endPil).map(() => endPil!), ...(centre ? [ctrPil!] : [])]
+  const drop = pillars.length ? Number(pillars[0].height_mm) || 50 : null
+  const inset = (s: 'left' | 'right') =>
+    sides[s] === 'end_support' && endSup ? RAIL_END_GAP
+    : sides[s] === 'end_pillar' && endPil ? (Number(endPil.depth_mm) || 40) / 2 - RAIL_END_GAP
+    : 0
+  return { sides, centre, drop, inset: { left: inset('left'), right: inset('right') }, endSup, endPil, ctrPil }
+}
+
+function railSupports(box: Box, rail: { y: number; h: number }, prod: AccessoryProduct, a: AccessoryFitting, plan: RailSupportPlan, ctx: FittingCtx): ResolvedInternalPart[] {
+  const drill = a.supports?.drill !== false
   const zc = ctx.intBack + ctx.intD / 2
-  const pillarY = rail.y + rail.h / 2, top = box.y + box.h
+  const railC = rail.y + rail.h / 2, top = box.y + box.h
   const out: ResolvedInternalPart[] = []
   const add = (sup: AccessoryProduct, role: 'end_support' | 'centre_pillar' | 'end_pillar', x: number, y: number,
                along: number, up: number, across: number, side?: 'left' | 'right') => {
@@ -531,24 +564,28 @@ function railSupports(box: Box, rail: { y: number; h: number }, prod: AccessoryP
         product_id: sup.id, name: sup.name, colour: sup.colour ?? prod.colour, role,
         ...(side ? { side } : {}),
         ...(role === 'end_support' ? { joint_id: drill ? sup.joint_id ?? null : null } : {}),
+        ...accessoryModel(sup),
       },
     })
   }
+  // A pillar hangs its drop from the top of the opening, whatever the rail does.
+  const pillar = (sup: AccessoryProduct, role: 'centre_pillar' | 'end_pillar', x: number, side?: 'left' | 'right') => {
+    const t = Number(sup.depth_mm) || 40, W = Number(sup.width_mm) || 40, drop = Number(sup.height_mm) || top - railC
+    add(sup, role, x, top - drop, t, drop, W, side)
+  }
   for (const side of ['left', 'right'] as const) {
-    const kind = set[side] ?? 'end_support'
-    if (kind === 'end_support' && endSup) {
-      const t = Number(endSup.depth_mm) || 12, H = Number(endSup.height_mm) || 50, W = Number(endSup.width_mm) || 25
-      add(endSup, 'end_support', side === 'left' ? box.x : box.x + box.w - t, rail.y + RAIL_SUPPORT_CENTRE_UP - H / 2, t, H, W, side)
-    } else if (kind === 'end_pillar' && endPil) {
-      const t = Number(endPil.depth_mm) || 20, W = Number(endPil.width_mm) || 20
-      add(endPil, 'end_pillar', side === 'left' ? box.x : box.x + box.w - t, pillarY, t, top - pillarY, W, side)
+    const kind = plan.sides[side]
+    if (kind === 'end_support' && plan.endSup) {
+      const s = plan.endSup, t = Number(s.depth_mm) || 16, H = Number(s.height_mm) || 42, W = Number(s.width_mm) || 42
+      add(s, 'end_support', side === 'left' ? box.x : box.x + box.w - t, railC - H / 2, t, H, W, side)
+    } else if (kind === 'end_pillar' && plan.endPil) {
+      const t = Number(plan.endPil.depth_mm) || 40
+      pillar(plan.endPil, 'end_pillar', side === 'left' ? box.x : box.x + box.w - t, side)
     }
   }
-  const span = Number(prod.max_span_mm) || 0
-  const n = Math.max(0, Math.round(set.centre ?? (span > 0 && box.w > span ? Math.ceil(box.w / span) - 1 : 0)))
-  if (ctrPil) {
-    const t = Number(ctrPil.depth_mm) || 20, W = Number(ctrPil.width_mm) || 20
-    for (let i = 1; i <= n; i++) add(ctrPil, 'centre_pillar', box.x + (box.w * i) / (n + 1) - t / 2, pillarY, t, top - pillarY, W)
+  if (plan.ctrPil) {
+    const t = Number(plan.ctrPil.depth_mm) || 40
+    for (let i = 1; i <= plan.centre; i++) pillar(plan.ctrPil, 'centre_pillar', box.x + (box.w * i) / (plan.centre + 1) - t / 2)
   }
   return out
 }

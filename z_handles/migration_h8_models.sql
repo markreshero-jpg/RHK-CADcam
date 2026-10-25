@@ -29,12 +29,12 @@ create policy handle_models_public_read on storage.objects
 
 drop policy if exists models_admin_insert on storage.objects;
 create policy models_admin_insert on storage.objects for insert
-  with check (bucket_id = any (array['hinge-models', 'slide-models', 'fixture-models', 'handle-models']) and (select public.is_admin()));
+  with check (bucket_id = any (array['hinge-models', 'slide-models', 'fixture-models', 'handle-models', 'accessory-models']) and (select public.is_admin()));
 
 drop policy if exists models_admin_update on storage.objects;
 create policy models_admin_update on storage.objects for update
-  using (bucket_id = any (array['hinge-models', 'slide-models', 'fixture-models', 'handle-models']) and (select public.is_admin()));
+  using (bucket_id = any (array['hinge-models', 'slide-models', 'fixture-models', 'handle-models', 'accessory-models']) and (select public.is_admin()));
 
 drop policy if exists models_admin_delete on storage.objects;
 create policy models_admin_delete on storage.objects for delete
-  using (bucket_id = any (array['hinge-models', 'slide-models', 'fixture-models', 'handle-models']) and (select public.is_admin()));
+  using (bucket_id = any (array['hinge-models', 'slide-models', 'fixture-models', 'handle-models', 'accessory-models']) and (select public.is_admin()));

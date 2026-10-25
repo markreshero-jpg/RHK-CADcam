@@ -882,10 +882,10 @@ export const LESSONS: TutorialLesson[] = [
     blurb: 'Rails place their own end supports and centre pillars; end supports prick their screw holes in the gables.',
     keywords: 'hanging rail supports end support end pillar centre pillar drilling joint gable prick holes robe wardrobe', steps: [
     { id: 'supports', title: 'Set a rail’s supports',
-      body: 'Open a robe cupboard, go to the internals and click its hanging rail. Each end gets an End support (screwed to the gable) unless you pick End pillar — use that for an open end or where another rail runs the other way — or None. Centre pillars are added one per 1000 of rail; type a number to override. Move the rail up or down and the supports go with it.',
+      body: 'Open a robe cupboard, go to the internals and click its hanging rail. Each end gets an End support (screwed to the gable) unless you pick End pillar — use that for an open end or where another rail runs the other way — or None. Centre pillars are added one per 1000 of rail; type a number to override. A rail with pillars hangs with its centre 50 below the shelf so the pillars fit as sold. The rail is cut 5 short at each end support. Move the rail up or down and the supports go with it. The rail and supports draw from their library models (Finista chrome).',
       canvas: true, done: (c, s) => ev(c, 'rail_supports_set') > ev(s, 'rail_supports_set') },
     { id: 'drill', title: 'End support holes',
-      body: 'With “Drill end support holes” ticked, each end support pricks two holes 32 apart, one above the other, 1 deep into the gable — 10 up from the bottom of the support. Turn on Drilling in the 3D view to see them. The pattern is the “Finista end support” joint in Library → Joints; change it there and every rail follows.',
+      body: 'With “Drill end support holes” ticked, each end support pricks two holes 32 apart, one above the other, 1 deep into the gable — 10 up from the bottom of the 42 support (4 and 36 above the rail bottom). Turn on Drilling in the 3D view to see them. The pattern is the “Finista end support” joint in Library → Joints; change it there and every rail follows.',
       canvas: true, done: (c, s) => ev(c, 'rail_supports_set') > ev(s, 'rail_supports_set') },
   ]},
   // Appended 2026-10-25 (z_item_cad IC1 — CAD drawn on a cabinet, item CAD in the library).

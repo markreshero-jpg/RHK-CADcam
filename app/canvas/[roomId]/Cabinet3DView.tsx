@@ -53,6 +53,7 @@ import { handleShape, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
 import Runner3D from '@/src/components/three/Runner3D'
+import AccessoryModel, { hasAccessoryModel } from '@/src/components/three/AccessoryModel'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
 import { splitCaseParts, splitBaseKey, splitPieceRange } from '@/src/lib/cabinetSplit'
@@ -1461,6 +1462,20 @@ export function CabinetScene({
           const ac   = p.accessory?.colour
           const s    = ac ? { face: ac, back: ac, edge: ac } : matSpec(p.material_id, '#e8dece')
           const holes = holesByPartKey.get(id) ?? []
+          // Rail / rail supports with a library model draw the model (z_accessories S1).
+          if (hasAccessoryModel(pp)) {
+            const box = (
+              <mesh position={[b.x + b.w / 2, b.y + b.h / 2, b.z + b.d / 2]}>
+                <boxGeometry args={[b.w, b.h, b.d]} />
+                <meshStandardMaterial color={s.face} />
+              </mesh>
+            )
+            return (
+              <PartAlpha key={key} a={alpha(internalPartItem(p.part_type))}><PickableHardware meta={info} selected={selected?.id === info.id} onSelect={onSelect} dragRef={dragRef}>
+                <AccessoryModel part={pp} color={s.face} fallback={box} />
+              </PickableHardware></PartAlpha>
+            )
+          }
           if (holes.length > 0) {
             return (
               <PartAlpha key={key} a={alpha(internalPartItem(p.part_type))}><PartWithHoles

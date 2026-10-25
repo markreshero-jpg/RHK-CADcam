@@ -49,9 +49,14 @@ their supports now; wardrobe / pantry / misc items later on the same table.
   **Hole pattern** (Mark, 2026-10-25): 2 holes at 32 centres **one above the
   other**, centred front-to-back on the end support, the lower hole 10 up from
   the bottom of the end support; pricked 1 deep into the gable face (marking
-  only, screwed on site) with the 5 mm boring bit. The support's centre sits
-  20 above the rail's bottom. Open: the end support's height H (support bottom
-  = rail bottom + 20 − H/2) — from Mark or the model.
+  only, screwed on site) with the 5 mm boring bit. **Updated 2026-10-25**: the
+  chrome end support is 42 round, centred on the rail (its model), so the holes
+  are 4 and 36 above the rail bottom.
+- **A10 Chrome** (Mark, 2026-10-25): the Finista chrome range (7104016 rail,
+  7104018 end support, 7104019 centre pillar, 7104020 end pillar), sizes from the
+  models' notes (nominal). Pillars hold the rail centre 50 below the shelf: a
+  rail with pillars hangs there (unless locked). Rail stops 5 short of each end
+  support's panel / 5 past an end pillar's centre — the rail part is the cut length.
 - **A9 Rails are controlled in the Interior editor** (existing): add / drag /
   lock height, product. S2 adds the support controls to the same rail row.
 
@@ -63,7 +68,7 @@ their supports now; wardrobe / pantry / misc items later on the same table.
 | A2 | Resolver: rail size / colour from the product, `accessory` persisted | built 2026-10-25 |
 | A3 | Interior editor Product select on the rail fitting | built 2026-10-25 |
 | A4 | Tutorial | built 2026-10-25 |
-| S1 | Model columns + upload / preview on Accessories rows (A7) | not started |
+| S1 | Models (A7): `model_url/format/scale` on the rows, bucket `accessory-models`, Finista chrome GLBs uploaded + drawn in 3D (`AccessoryModel.tsx`) | built 2026-10-25 (`migration_s1_models.sql`). Upload button on the Accessories row still to do |
 | S2 | Rail places its supports (A6) — 3D + elevation, Interior editor overrides | built 2026-10-25 (`migration_s2_rail_supports.sql`): part type `rail_support` (hardware, not CNC), shelf-like box; drawn as blocks until models (S1). RHK6581 rails re-resolved. In-app check pending |
 | S3 | End support joint (A8) → gable drilling → optimiser | built 2026-10-25: `railSupportSeams` declares gable ↔ support seams (`rail:end_support`, joint from the support's `joint_id`); `declaredSeamDrillOps` takes internal parts too. Support sizes other than the 50 height are placeholders |
 | A6 | Hardware list / ordering: rail bars (cut lengths → 3.6 m stock), end supports ×2 per rail, centre supports per `max_span_mm` (1000) | not started |

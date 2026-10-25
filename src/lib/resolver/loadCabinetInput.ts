@@ -1206,7 +1206,7 @@ function loadHandleProducts() {
 function loadAccessoryProducts(): Promise<AccessoryProduct[]> {
   return cachedCascade('accessories:all', async () => {
     const { data } = await supabase.from('hardware_accessories')
-      .select('id, name, category, width_mm, height_mm, depth_mm, colour, is_default, end_support_id, centre_support_id, end_pillar_id, max_span_mm, joint_id')
+      .select('id, name, category, width_mm, height_mm, depth_mm, colour, is_default, end_support_id, centre_support_id, end_pillar_id, max_span_mm, joint_id, model_url, model_format, model_scale')
       .eq('active', true)
     const num = (v: unknown) => (v == null ? null : Number(v))
     return ((data ?? []) as Record<string, unknown>[]).map(a => ({
@@ -1218,6 +1218,9 @@ function loadAccessoryProducts(): Promise<AccessoryProduct[]> {
       end_pillar_id: (a.end_pillar_id as string | null) ?? null,
       max_span_mm: num(a.max_span_mm),
       joint_id: (a.joint_id as string | null) ?? null,
+      model_url: (a.model_url as string | null) ?? null,
+      model_format: (a.model_format as string | null) ?? null,
+      model_scale: num(a.model_scale),
     }))
   })
 }
