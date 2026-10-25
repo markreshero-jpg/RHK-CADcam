@@ -8,6 +8,8 @@
 import { CabinetInstance, Wall } from '@/src/lib/types'
 import { cabT, wallDir } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
+import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { edgeRuleScribe } from '@/src/lib/resolver/resolveShapedCase'
 import {
   EDGE_ROLES, EDGE_SUBS, edgeLabel, edgeSub, evaluateFootprint, footprintOverrides, withEdgeOverrides,
   type EdgeOverride, type EdgeRole, type EdgeSub, type JoinChoice,
@@ -151,10 +153,18 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
                         className={inp + ' flex-1'}>
                         {subs.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
-                      {sub === 'scribe' && (
-                        <CalcInput value={s.edge.scribe ?? 0} decimals={1} title="Scribe allowance (mm) — 0 = the room / job scribe"
-                          onCommit={v => setEdge(s.edge.id, { scribe: v > 0 ? v : undefined })} className={inp + ' w-16 text-right'} />
-                      )}
+                      {sub === 'scribe' && (() => {
+                        // Unset = the rules' scribe on that edge (schedule class row → … → cabinet), shown greyed.
+                        const rules = getCachedInput(cabinet.id)?.rules
+                        const inherited = rules ? edgeRuleScribe(rules, cabinet.dx, s) : 0
+                        return (
+                          <CalcInput value={s.edge.scribe ?? null} decimals={1} min={0} placeholder={String(inherited)}
+                            title={s.edge.scribe == null ? `Scribe allowance — inherited ${inherited} mm; type to override, clear to inherit` : 'Scribe allowance (mm) — clear to inherit'}
+                            onCommit={v => setEdge(s.edge.id, { scribe: v })}
+                            onClear={() => setEdge(s.edge.id, { scribe: undefined })}
+                            className={inp + ' w-16 text-right'} />
+                        )
+                      })()}
                     </div>
                   )}
                 </div>

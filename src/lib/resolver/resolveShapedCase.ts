@@ -62,6 +62,14 @@ function boxSlot(cab: CabinetInput, s: FootprintSegment): 'left' | 'right' | 'ba
   return null
 }
 
+/** The rules' scribe on edge `s` of a cabinet DX wide: SCRL / SCRR / SCRBK on
+ *  the box edges (as the box build applies them), 0 elsewhere. A scribe edge
+ *  with no allowance of its own stands this far in. */
+export function edgeRuleScribe(r: Pick<ConstructionRules, 'SCRL' | 'SCRR' | 'SCRBK'>, DX: number, s: FootprintSegment): number {
+  const slot = boxSlot({ DX } as CabinetInput, s)
+  return (slot === 'left' ? r.SCRL : slot === 'right' ? r.SCRR : slot === 'back' ? r.SCRBK : 0) ?? 0
+}
+
 export interface EdgeBuild {
   /** Panel thickness. */
   t: number
@@ -84,9 +92,8 @@ export function edgeBuild(cab: CabinetInput, s: FootprintSegment): EdgeBuild | n
   if (sub === 'applied' && s.edge.role === 'side')
     return { t, off: exp.DZ, applied: { t: exp.DZ, material_id: exp.id, tape: cab.exposed_edgeband_id } }
   if (sub === 'scribe') {
-    const slot = boxSlot(cab, s), r = cab.rules
-    const rule = slot === 'left' ? r.SCRL : slot === 'right' ? r.SCRR : slot === 'back' ? r.SCRBK : 0
-    return { t, off: Math.max(0, (s.edge.scribe ?? rule ?? 0) - (rule ?? 0)) }
+    const rule = edgeRuleScribe(cab.rules, cab.DX, s)
+    return { t, off: Math.max(0, (s.edge.scribe ?? rule) - rule) }
   }
   return { t, off: 0 }
 }

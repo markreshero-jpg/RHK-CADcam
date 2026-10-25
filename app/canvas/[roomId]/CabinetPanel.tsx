@@ -423,16 +423,25 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
             {(['SCRL', 'SCRR', 'SCRT', 'SCRBT', 'SCRBK'] as const).map((key, i) => {
               const label = ['Left', 'Right', 'Top', 'Bottom', 'Back'][i]
               const cur = typeof (cabinet.rule_overrides ?? {})[key] === 'number'
-                ? cabinet.rule_overrides[key] as number : 0
+                ? cabinet.rule_overrides[key] as number : null
+              // Unset = the cascaded value (schedule class row → method → job → room), shown greyed.
+              const inherited = getCachedInput(cabinet.id)?.rules_base?.[key] ?? 0
               return (
                 <div key={key}>
                   <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
                   <CalcInput
                     value={cur}
                     decimals={1}
+                    placeholder={String(inherited)}
+                    title={cur == null ? `Inherited: ${inherited} mm — type a value to override, clear to inherit` : 'Clear to inherit'}
                     onCommit={v => {
                       const next = { ...(cabinet.rule_overrides ?? {}) }
-                      if (v === 0) delete next[key]; else next[key] = v
+                      next[key] = v
+                      void onUpdate(cabinet.id, { rule_overrides: next })
+                    }}
+                    onClear={() => {
+                      const next = { ...(cabinet.rule_overrides ?? {}) }
+                      delete next[key]
                       void onUpdate(cabinet.id, { rule_overrides: next })
                     }}
                     className={inp + ' text-right'}
