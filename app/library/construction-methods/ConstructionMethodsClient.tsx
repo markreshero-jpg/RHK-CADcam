@@ -231,7 +231,8 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
       else d[key] = jointTypeId
       // Once a part-specific top key is touched, drop the legacy generic "top:…"
       // entry so it can't linger as stale data.
-      if (generic !== key) delete d[generic]
+      // (Shelf back keys fall back to the side key, which must stay.)
+      if (generic !== key && generic.startsWith('top:')) delete d[generic]
       return { ...prev, [cls]: d }
     })
     setDirty(true)

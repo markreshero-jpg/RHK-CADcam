@@ -141,6 +141,7 @@ export function internalSeamParts(): SeamPart[] {
       partKey: 'fixed_shelf', label: 'Fixed Shelf',
       edges: [
         { edgeLabel: 'Side supports', seamKey: 'fixed_shelf:side', joinsLabel: 'Gables / Divisions' },
+        { edgeLabel: 'Back edge',     seamKey: 'fixed_shelf:back', joinsLabel: 'Back Panel' },
       ],
     },
     {

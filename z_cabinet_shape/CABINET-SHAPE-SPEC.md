@@ -495,6 +495,11 @@ Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
         their own CM key `adj_shelf:back` (CM builder "Back supports"), falling back to
         `adj_shelf:side`; overridable per cabinet. Shop default = "Adjustable Shelf Holes x1 Row
         (centre)": one row at D / 2 of the shared edge (`migration_l3b_adj_shelf_back_joint.sql`).
+      - 2026-10-25 (Mark: "fixed shelves don't have construction holes into backs"): the same
+        loop now runs for every cabinet, plain box included. A FIXED shelf hard against a single
+        back (FIXSB_B = 0, within 1mm) gets `int_fixed_shelf_N|back` on CM key `fixed_shelf:back`
+        (CM builder Fixed Shelf → "Back edge"), falling back to `fixed_shelf:side`, so it is drilled
+        with the same joint as the gables. Adjustable shelves still only pin into multi-back (L) backs.
       - Through top rail: at the pie corner the earlier facet's rail now runs on across the other
         leg to the inset outline (other leg's back less back.t / scribe), not just past the corner
         by one rail depth (`resolveShapedCase` runOn). New seam rail → back (`rail:front|back:back2`

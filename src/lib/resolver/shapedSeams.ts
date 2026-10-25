@@ -76,14 +76,15 @@ export function enumerateShapedSeams(
   internalParts: ResolvedInternalPart[] = [],
   opts?: { adjFullBank?: boolean },
 ): ShapedSeamCandidate[] {
-  // Only shaped cabinets: plain boxes keep the legacy list untouched.
-  if (!caseParts.some(p => isShapedKey(p.part_key) && roleOf(p.part_key))) return []
+  // Plain boxes keep the legacy carcass list; only their fixed shelves on the
+  // back come through here (below).
+  const shaped = caseParts.some(p => isShapedKey(p.part_key) && roleOf(p.part_key))
   const out: ShapedSeamCandidate[] = []
   const plans = new Map<string, PlanPart>()
   for (const p of caseParts) if (roleOf(p.part_key)) plans.set(p.part_key, partPlan(p))
 
   // ── Carcass: part A's end on panel B's face ──
-  for (const pb of caseParts) {
+  for (const pb of shaped ? caseParts : []) {
     const rb = roleOf(pb.part_key)
     if (!rb || rb === 'bottom' || rb === 'top') continue
     const B = plans.get(pb.part_key)!
@@ -127,7 +128,7 @@ export function enumerateShapedSeams(
 
   // ── Per-edge backs on the bottom (the legacy back:bottom seam, turned) ──
   const bottom = caseParts.find(p => p.part_key === 'bottom')
-  if (bottom) {
+  if (shaped && bottom) {
     const Bt = plans.get('bottom')!
     for (const p of caseParts) {
       if (!p.part_key.startsWith('back:')) continue
@@ -151,7 +152,9 @@ export function enumerateShapedSeams(
 
   // ── Shelves on per-edge side panels, and on the backs of a multi-back
   // cabinet (L corner) — a shelf that long needs pins along its back edges
-  // too (Mark, 2026-10-15). Back pins inherit the shelf's side joint. ──
+  // too (Mark, 2026-10-15). Back pins inherit the shelf's side joint.
+  // A fixed shelf screws into any back it sits hard against, plain box
+  // included (Mark, 2026-10-25) — fixed_shelf:back, inheriting the side joint. ──
   const intKey = (p: ResolvedInternalPart) => `int_${p.part_type}_${p.sort_order}`
   const shelves = internalParts.filter(p => p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf')
   // Horizontal anchors bounding a full-bank compartment (as enumerateInternalSeams).
@@ -161,25 +164,29 @@ export function enumerateShapedSeams(
   ]
   const multiBack = caseParts.filter(p => roleOf(p.part_key) === 'back').length > 1
   for (const pb of caseParts) {
-    if (!pb.part_key.startsWith('side:') && !(multiBack && roleOf(pb.part_key) === 'back')) continue
+    const isBack = roleOf(pb.part_key) === 'back'
+    if (!(shaped && pb.part_key.startsWith('side:')) && !isBack) continue
+    // Single back: fixed shelves only, and only hard against it (no setback).
+    const loneBack = isBack && !multiBack
     const B = plans.get(pb.part_key)!
     const turn = panelTurn(B)
     if (turn == null) continue
     const bB = turnedBox(B, turn)
     const hits: { p: ResolvedInternalPart; side: 'left' | 'right' }[] = []
     for (const s of shelves) {
+      if (loneBack && s.part_type !== 'fixed_shelf') continue
       const S = partPlan(s)
       if (!squareIn(S, turn)) continue
       const bS = turnedBox(S, turn)
       const midY = s.Y + s.DZ / 2
       if (midY < bB.y || midY > bB.y + bB.h) continue
       if (overlap(bS.z, bS.z + bS.d, bB.z, bB.z + bB.d) < MIN_OVERLAP) continue
-      const side = touchSide(bS, bB, MAX_GAP)
+      const side = touchSide(bS, bB, loneBack ? TOUCH : MAX_GAP)
       if (side) hits.push({ p: s, side })
     }
     // Pins on a back use the method's back-support joint (one centred row, Mark
     // 2026-10-15), falling back to the side joint.
-    const fam = roleOf(pb.part_key) === 'back' ? 'back' : 'side'
+    const fam = isBack ? 'back' : 'side'
     const bankAdj = opts?.adjFullBank ? hits.filter(h => h.p.part_type === 'adj_shelf') : []
     for (const h of hits) {
       if (bankAdj.includes(h)) continue
