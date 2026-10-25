@@ -7,7 +7,7 @@ import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei
 import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3 } from 'three'
 import type { Wall, CabinetInstance, Room, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { btSegments, outlinePoints, outwardNormal, effectiveProfileId, waterfallJoin } from '@/src/lib/benchtopGeometry'
-import { loftSlab } from '@/src/lib/benchtopSlab3d'
+import { loftSlab, undersideOutline, apronStrip } from '@/src/lib/benchtopSlab3d'
 import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -185,7 +185,8 @@ function WallLabel({ wall, room, rc }: { wall: Wall; room: Room; rc: RoomRef }) 
 // Outline (curves sampled, cutouts as holes) extruded by the top's thickness so
 // its surface sits at topZ. Same plan → world mapping as WallMesh. Waterfall
 // edges (profile generates = 'waterfall') get a leg panel from the floor to
-// the underside, set in by the thickness under that edge.
+// the underside, set in by the thickness under that edge; mitred apron edges
+// (generates = 'apron') a strip down to apron_drop_mm below the top surface.
 
 function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wire = false }: {
   bt: BenchtopInstance
@@ -214,20 +215,35 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
     return [{ i, s, n: outwardNormal(segs, i), join: waterfallJoin(s) }]
   }), [segs, defaultProfileId, profiles, topZ, T])
 
+  // Mitred aprons (profile generates = 'apron'): a strip under the edge, its
+  // outer face from the top surface down to apron_drop_mm below it, mitred
+  // 45° to the slab like a mitred waterfall (curved edges follow the curve).
+  const aprons = useMemo(() => segs.flatMap((s, i) => {
+    if (s.edge?.wall) return []
+    const pid = effectiveProfileId(s, defaultProfileId)
+    const prof = pid ? profiles[pid] : undefined
+    const drop = Number(prof?.apron_drop_mm) || 0
+    return prof?.generates === 'apron' && drop > T && topZ - drop > 0 ? [{ i, drop }] : []
+  }), [segs, defaultProfileId, profiles, topZ, T])
+
+  const outline = useMemo(() => {
+    // Underside outline: mitred waterfall + apron edges set back by T (neighbours' ends follow).
+    const set = new Set([...waterfalls.filter(w => w.join === 'mitre').map(w => w.i), ...aprons.map(a => a.i)])
+    return undersideOutline(segs, i => (set.has(i) ? T : 0), 24)
+  }, [segs, waterfalls, aprons, T])
+
   const slab = useMemo(() => {
-    // Underside outline: mitred waterfall edges set back by T (neighbours' ends follow).
-    const cut = segs.map(q => ({ ...q, p0: { ...q.p0 }, p1: { ...q.p1 } }))
-    for (const w of waterfalls) {
-      if (w.join !== 'mitre') continue
-      const k = w.i, prev = (k - 1 + cut.length) % cut.length, next = (k + 1) % cut.length
-      const mv = (q: Pt) => ({ x: q.x - w.n.x * T, y: q.y - w.n.y * T })
-      cut[k].p0 = mv(cut[k].p0); cut[k].p1 = mv(cut[k].p1)
-      cut[prev].p1 = cut[k].p0; cut[next].p0 = cut[k].p1
-    }
-    const topPts = outlinePoints(segs, 24), botPts = outlinePoints(cut, 24)
+    const { top: topPts, bottom: botPts } = outline
     if (topPts.length < 3 || botPts.length !== topPts.length) return null
     return loftSlab(topPts, botPts, (bt.cutout_polygons ?? []).filter(c => c.length >= 3), topZ, topZ - T)
-  }, [segs, waterfalls, bt.cutout_polygons, T, topZ])
+  }, [outline, bt.cutout_polygons, T, topZ])
+
+  const apronGeos = useMemo(() => aprons.map(a => {
+    const { top, bottom, start } = outline
+    const k0 = start[a.i], k1 = a.i + 1 < start.length ? start[a.i + 1] : top.length
+    const idx = [...Array.from({ length: k1 - k0 }, (_, k) => k0 + k), k1 % top.length]
+    return { key: `a${a.i}`, geo: apronStrip(idx.map(k => top[k]), idx.map(k => bottom[k]), topZ, topZ - T, topZ - a.drop) }
+  }), [aprons, outline, topZ, T])
 
   // Leg / wedge prisms: a profile in (u = inward from the outer face, v = up),
   // extruded along the edge, placed by a basis matrix (u → −n, v → up, z → edge).
@@ -253,13 +269,14 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
 
   useEffect(() => () => { slab?.dispose() }, [slab])
   useEffect(() => () => { legGeos.forEach(l => l.geo.dispose()) }, [legGeos])
+  useEffect(() => () => { apronGeos.forEach(l => l.geo.dispose()) }, [apronGeos])
 
   if (!slab) return null
   const col = selected ? '#f59e0b' : color
   const click = onSelect ? (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect() } : undefined
   return (
     <group>
-      {[{ key: 'slab', geo: slab }, ...legGeos].map(m => (
+      {[{ key: 'slab', geo: slab }, ...legGeos, ...apronGeos].map(m => (
         <mesh key={m.key + (wire ? '-w' : '')} geometry={m.geo} onClick={click}>
           <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
           <Edges threshold={20} color={selected ? '#f59e0b' : wire ? WIRE_EDGE : '#64748b'} transparent opacity={wire ? Math.max(alpha, 0.8) : alpha} />

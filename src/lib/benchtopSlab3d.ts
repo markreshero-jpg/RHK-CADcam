@@ -12,8 +12,104 @@
 // Plan (x, y) maps to world (x, height, y), as everywhere in the room view.
 
 import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Vector2 } from 'three'
+import type { BenchtopSegment } from './types'
+import { segPoint, segSamples, signedArea, outlinePoints } from './benchtopGeometry'
 
 type P = { x: number; y: number }
+
+// ── Mitred edges: the underside outline ──────────────────────────────────────
+// A mitred waterfall or a mitred apron (profile generates = 'apron') sets the
+// slab's underside back by `d` (the thickness) on its edge, so that side of
+// the slab is the 45° bevel the leg / apron strip meets. Curved edges are
+// offset point by point along their normal; where two set-back edges meet, the
+// corner is the meeting point of the two offset edges (so a mitre runs into
+// the corner, and an apron round an R corner follows the curve).
+
+/** Outward unit normal of a segment at parameter t. */
+function normalAt(s: BenchtopSegment, t: number, cw: boolean): P {
+  const e = 1e-3
+  const a = segPoint(s, Math.max(0, t - e)), b = segPoint(s, Math.min(1, t + e))
+  const l = Math.hypot(b.x - a.x, b.y - a.y) || 1
+  const left = { x: (b.y - a.y) / l, y: -(b.x - a.x) / l }
+  return cw ? left : { x: -left.x, y: -left.y }
+}
+
+/** The point `d` in from p along n — or, at a corner, `da` in from edge a and `db` from edge b. */
+function insetCorner(p: P, na: P, da: number, nb: P, db: number): P {
+  const det = na.x * nb.y - na.y * nb.x
+  if (Math.abs(det) < 1e-3) {   // tangent (line into an arc) or straight on: the deeper set-back wins
+    const d = Math.max(da, db)
+    return { x: p.x - na.x * d, y: p.y - na.y * d }
+  }
+  const wx = (da * nb.y - na.y * db) / det, wy = (na.x * db - da * nb.x) / det
+  return { x: p.x - wx, y: p.y - wy }
+}
+
+/**
+ * The underside outline for `outlinePoints(segs, steps)` (same points, same
+ * order) with each segment i set back by `setback(i)` mm (0 = straight down).
+ * `start[i]` = the index of segment i's first point in both rings.
+ */
+export function undersideOutline(segs: BenchtopSegment[], setback: (i: number) => number, steps: number): { top: P[]; bottom: P[]; start: number[] } {
+  const top = outlinePoints(segs, steps)
+  const cw = signedArea(outlinePoints(segs, 8)) >= 0
+  const bottom: P[] = [], start: number[] = []
+  segs.forEach((s, i) => {
+    start.push(bottom.length)
+    const d = setback(i)
+    const prev = (i - 1 + segs.length) % segs.length
+    const pts = segSamples(s, steps)
+    pts.forEach((p, k) => {
+      if (k === 0) {
+        bottom.push(insetCorner(p, normalAt(segs[prev], 1, cw), setback(prev), normalAt(s, 0, cw), d))
+      } else {
+        const n = normalAt(s, k / steps, cw)
+        bottom.push({ x: p.x - n.x * d, y: p.y - n.y * d })
+      }
+    })
+  })
+  return { top, bottom, start }
+}
+
+/**
+ * A mitred apron strip under one edge: `outer` = the edge's top-face points
+ * (its samples + its end point), `inner` = the matching underside points (set
+ * back by the thickness). Its outer face runs from the top surface (topZ) down
+ * to `bottomZ`, its inner face from the underside (`under`) down, and its top
+ * is the 45° mitre against the slab. Plan (x, y) → world (x, height, y).
+ */
+export function apronStrip(outer: P[], inner: P[], topZ: number, under: number, bottomZ: number): BufferGeometry {
+  const pos: number[] = []
+  const w = (p: P, h: number) => [p.x, h, p.y]
+  const tri = (a: number[], b: number[], c: number[], dir: number[]) => {
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+    if (n[0] * dir[0] + n[1] * dir[1] + n[2] * dir[2] >= 0) pos.push(...a, ...b, ...c)
+    else pos.push(...a, ...c, ...b)
+  }
+  const quad = (a: number[], b: number[], c: number[], d: number[], dir: number[]) => { tri(a, b, c, dir); tri(a, c, d, dir) }
+  for (let k = 0; k < outer.length - 1; k++) {
+    const o0 = outer[k], o1 = outer[k + 1], i0 = inner[k], i1 = inner[k + 1]
+    const out = [(o0.x + o1.x - i0.x - i1.x) / 2, 0, (o0.y + o1.y - i0.y - i1.y) / 2]   // outward, horizontal
+    quad(w(o0, bottomZ), w(o1, bottomZ), w(o1, topZ), w(o0, topZ), out)                        // outer face
+    quad(w(i0, bottomZ), w(i1, bottomZ), w(i1, under), w(i0, under), out.map(v => -v))         // inner face
+    quad(w(o0, bottomZ), w(o1, bottomZ), w(i1, bottomZ), w(i0, bottomZ), [0, -1, 0])           // bottom
+    quad(w(o0, topZ), w(o1, topZ), w(i1, under), w(i0, under), [-out[0], 1, -out[2]])        // mitre (faces up + in, under the slab)
+  }
+  // End caps (where the apron stops short of a non-apron edge, or meets a wall).
+  const cap = (o: P, i: P, along: P) => {
+    const dir = [along.x, 0, along.y]
+    tri(w(o, bottomZ), w(o, topZ), w(i, under), dir)
+    tri(w(o, bottomZ), w(i, under), w(i, bottomZ), dir)
+  }
+  const n = outer.length - 1
+  cap(outer[0], inner[0], { x: outer[0].x - outer[1].x, y: outer[0].y - outer[1].y })
+  cap(outer[n], inner[n], { x: outer[n].x - outer[n - 1].x, y: outer[n].y - outer[n - 1].y })
+  const g = new BufferGeometry()
+  g.setAttribute('position', new Float32BufferAttribute(pos, 3))
+  g.computeVertexNormals()
+  return g
+}
 
 function inPoly(p: P, poly: P[]): boolean {
   let c = false

@@ -12,7 +12,7 @@
 // reads as its own short band); the build-up line for built-up
 // methods; waterfall legs down to the floor with the mitre;
 // join seams on the front face; profile codes under the front
-// edges. Gated by layer items benchtops / benchtop_edges /
+// edges; mitred aprons as one face down to the apron drop. Gated by layer items benchtops / benchtop_edges /
 // benchtop_joins.
 // ============================================================
 
@@ -131,11 +131,34 @@ export default function BenchtopElevation({
           })
         const mitreAt = (side: 'left' | 'right') => legs.find(l => l.atEnd === side && l.join === 'mitre')
         const mL = mitreAt('left'), mR = mitreAt('right')
+
+        // Mitred aprons: the edge reads as one face from the top surface down to
+        // apron_drop_mm (the mitre is the top arris, so no line at the slab's
+        // underside). Edges facing away are hidden behind the top. When the aprons
+        // cover the whole span the band itself is drawn that deep.
+        const aprons = segs.map((s, i) => ({ s, i, prof: profileOf(i) }))
+          .filter(({ prof }) => prof?.generates === 'apron' && Number(prof.apron_drop_mm) > thick.total)
+          .filter(({ i }) => dot(outwardNormal(segs, i), f.n) > -0.3)
+          .map(({ s, i, prof }) => {
+            const n = outwardNormal(segs, i)
+            const pts = segSamples(s, 16).concat([s.p1])
+            const ats = pts.flatMap(p => [p, { x: p.x - n.x * thick.total, y: p.y - n.y * thick.total }]).map(p => alongOf(f, p))
+            return { i, a: Math.min(...ats), b: Math.max(...ats), yLow: yTop + Number(prof!.apron_drop_mm) }
+          })
+        const apronCovers = (() => {
+          if (!aprons.length || mL || mR) return false
+          let reach = t0
+          for (const a of [...aprons].sort((p, q) => p.a - q.a)) { if (a.a > reach + 1) return false; reach = Math.max(reach, a.b) }
+          return reach >= t1 - 1
+        })()
+        const yBand = apronCovers ? Math.min(...aprons.map(a => a.yLow)) : yBot
+        const yEdge = Math.max(yBot, ...aprons.map(a => a.yLow))   // lowest drawn edge (profile codes go under it)
+
         // Band outline: a mitred end-on leg takes the triangle under the 45° joint.
         const bandPts = [
           [t0, yTop], [t1, yTop],
-          ...(mR ? [[mR.inner, yBot]] : [[t1, yBot]]),
-          ...(mL ? [[mL.inner, yBot]] : [[t0, yBot]]),
+          ...(mR ? [[mR.inner, yBot]] : [[t1, yBand]]),
+          ...(mL ? [[mL.inner, yBot]] : [[t0, yBand]]),
         ].map(q => q.join(',')).join(' ')
         const legPts = (l: typeof legs[number]) => {
           if (l.endOn && l.join === 'mitre') {
@@ -174,6 +197,18 @@ export default function BenchtopElevation({
               <title>{`${bt.label ?? 'Benchtop'} · top ${roundMm(topZ)} · ${thick.total} thick`}</title>
             </polygon>
             {legs.filter(faceMitre).map(legEl)}
+
+            {/* Apron strips under the band (when they don't cover the whole span) */}
+            {!apronCovers && aprons.map(a => (
+              <polygon key={`ap${a.i}`} points={[[a.a, yBot], [a.b, yBot], [a.b, a.yLow], [a.a, a.yLow]].map(q => q.join(',')).join(' ')}
+                fill={fill} fillOpacity={fillOp}
+                stroke={isSel ? '#f59e0b' : stroke} strokeWidth={bandW(false)}
+                strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}
+                style={{ cursor: 'pointer' }}
+                onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
+                <title>Mitred apron</title>
+              </polygon>
+            ))}
 
             {/* Hit area: a top is only 20–40 mm tall (a few px zoomed out), so pick
                 over at least 16 screen px centred on the band. */}
@@ -224,7 +259,7 @@ export default function BenchtopElevation({
                 const ets = segSamples(s, 8).concat([s.p1]).map(p => alongOf(f, p))
                 const mid = (Math.min(...ets) + Math.max(...ets)) / 2
                 return (
-                  <text key={`pc${i}`} x={mid} y={yBot + 10 / z} textAnchor="middle"
+                  <text key={`pc${i}`} x={mid} y={yEdge + 10 / z} textAnchor="middle"
                     fontSize={layers.w('benchtop_edges', 8) / z} fontWeight={600}
                     fill={layers.color('benchtop_edges', '#5eead4')} opacity={layers.op('benchtop_edges')}>
                     {prof.code ?? prof.name}{prof.generates === 'waterfall' ? (waterfallJoin(s) === 'mitre' ? ' ▼M' : ' ▼B') : ''}

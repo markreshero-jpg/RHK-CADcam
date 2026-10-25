@@ -14,6 +14,13 @@
 > auto panel splits → CNC cutouts / profiles → small items.
 > **2026-10-18: CNC cutouts done** (sink / cooktop holes on worktop + subtop, cross members move
 > clear) — see z_fixtures/FIXTURES-SPEC.md RESUME HERE. Edge profiles on the CNC still open.
+> **2026-10-25: mitred aprons drawn** (Mark, RHK6581 island "build the top as 80 apron"): a
+> `generates = 'apron'` edge now shows in 3D (slab underside set back T on that edge = the 45°
+> mitre; `apronStrip` down to `apron_drop_mm` below the top surface; curves followed point by
+> point — `undersideOutline`, which also replaces the mitred-waterfall set-back) and on
+> elevations via BenchtopElevation (the edge reads as one face from the top down to the apron
+> drop; when aprons cover the whole span the band itself is drawn that deep).
+> `apron_drop_mm` = the finished edge height (MA80 = 80). Section view not yet.
 > Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
 > **2026-10-19: Phase 8 auto-build tops** built (F4 → Auto-build tops…, click-through dialog) —
 > Mark trying it to see if he likes it; rules A-a…A-f below are Claude's defaults, not locked.
