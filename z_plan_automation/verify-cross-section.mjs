@@ -1,5 +1,6 @@
 // Cross section (z_section_view): open a room's elevation, turn on Cross section,
-// drag the cut line to a few spots and screenshot the pane each time.
+// drag the cut line (elevation, right-hand column) to a few spots and screenshot
+// the section (main canvas) each time.
 //   node z_plan_automation/verify-cross-section.mjs <outDir>   (ROOM_ID, WALL = wall-picker button text)
 import path from 'node:path'
 import puppeteer from 'puppeteer-core'
@@ -57,15 +58,14 @@ try {
       console.log(`drag ${i}: at`, at, 'cut paths', await paths())
       console.log('  by item', JSON.stringify(await page.evaluate(() => { const m = {}; for (const e of document.querySelectorAll('path[data-item]')) m[e.dataset.item] = (m[e.dataset.item] ?? 0) + 1; return m })))
       await page.screenshot({ path: path.join(OUT, `xs-2-drag${i}.png`) })
-      await page.screenshot({ path: path.join(OUT, `xs-pane${i}.png`), clip: { x: 1312, y: 64, width: 288, height: 460 } })
     }
   }
   console.log('bench', await page.evaluate(() => { const e = document.querySelector('path[data-item=benchtops]'); return e && [e.getAttribute('d').slice(0, 400), e.getAttribute('fill'), e.getAttribute('fill-opacity')] }))
-  // Zoom the pane in on the cabinet top / benchtop corner.
-  await page.mouse.move(1312 + Number(process.env.ZX ?? 150), 64 + Number(process.env.ZY ?? 300))
+  // Zoom the section in (page coords).
+  await page.mouse.move(Number(process.env.ZX ?? 640), Number(process.env.ZY ?? 420))
   for (let i = 0; i < Number(process.env.ZN ?? 3); i++) { await page.mouse.wheel({ deltaY: -300 }); await sleep(120) }
   await sleep(400)
-  await page.screenshot({ path: path.join(OUT, 'xs-zoom.png'), clip: { x: 1312, y: 64, width: 288, height: 460 } })
+  await page.screenshot({ path: path.join(OUT, 'xs-zoom.png') })
   console.log('flip', await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.trim().startsWith('Flip')); b?.click(); return !!b }))
   await sleep(800)
   await page.screenshot({ path: path.join(OUT, 'xs-3-flip.png') })

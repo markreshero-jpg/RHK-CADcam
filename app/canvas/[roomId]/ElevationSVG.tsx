@@ -415,7 +415,8 @@ export default function ElevationSVG({
     setMarquee(null)
     if (!svgRef.current || !wall) return
     const { width, height } = svgRef.current.getBoundingClientRect()
-    const pad = 100
+    // Smaller margin in a small pane (the cross-section column).
+    const pad = Math.min(100, Math.min(width, height) * 0.08)
     const zx = (width  - pad * 2) / wall.length
     const zy = (height - pad * 2) / roomH
     const z  = Math.min(3, Math.max(0.02, Math.min(zx, zy)))
@@ -931,7 +932,7 @@ export default function ElevationSVG({
             {onToggleCrossSection && (
               <button
                 onClick={onToggleCrossSection}
-                title="Cross section: a side-on cut through this wall at a line you drag along it (shows in the right-hand column)"
+                title="Cross section: a side-on cut through this wall at a line you drag along it (the section fills the canvas, this elevation moves to the right-hand column)"
                 className={`px-2.5 py-0.5 text-[10px] rounded whitespace-nowrap transition-colors ${
                   crossCutX != null ? 'bg-violet-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
                 }`}>
@@ -2481,13 +2482,14 @@ export default function ElevationSVG({
         )}
       </svg>
 
-      {/* Floating snap-settings toolbar (top-right of the elevation pane). */}
-      <SnapToolbar
+      {/* Floating snap-settings toolbar (top-right of the elevation pane) — not in the
+          narrow cross-section column. */}
+      {crossCutX == null && <SnapToolbar
         settings={elevSnapSettings}
         onChange={onElevSnapSettingsChange}
         kinds={ELEV_SNAP_KINDS}
         meta={ELEV_SNAP_KIND_META}
-      />
+      />}
     </div>
   )
 }

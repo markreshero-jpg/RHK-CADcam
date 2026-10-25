@@ -14,10 +14,11 @@ import { benchtopGeometries, type BtSolidInfo } from './benchtopSolids'
 import { customExtents, customPanelKind, type CustomOrient } from './customPartBox'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from './displayLayers/registry'
 import { customPartItem } from './displayLayers/customPartKinds'
-import { zonePartId } from './cabinetShape/partKeys'
+import { zonePartId, dbPartId } from './cabinetShape/partKeys'
 
 export type SectionRole = SolidRole | 'custom' | 'bench'
-export interface SectionSolid { id: string; cabId?: string; item: string; role: SectionRole; faces: Face[] }
+/** key = the part-palette key the elevation colours it by (part_key / part_type / face_type). */
+export interface SectionSolid { id: string; cabId?: string; item: string; role: SectionRole; key?: string; faces: Face[] }
 
 type PosOv = Record<string, { ox: number; oy: number; oz: number; oax?: number; oay?: number; oaz?: number; sw?: number; sh?: number; sd?: number }>
 
@@ -28,17 +29,19 @@ export function cabinetSectionSolids(cab: CabinetInstance, wall: Wall, rc: RoomR
   const toWorld = cabToWorld({ x: originX, y: floorY, z: originZ }, rotY)
   const faces = (fs: Face[]) => fs.map(f => f.map(l => l.map(toWorld)))
 
-  const item = new Map<string, string>()
-  for (const p of rp.case_parts) item.set(`case_${p.part_key}`, casePartItem(p.part_key))
-  for (const p of rp.toekick_parts) item.set(`tk_${p.part_key}_${p.sort_order}`, kickPartItem(p.part_key))
-  for (const z of rp.face_zones) { const it = faceZoneItem(z.face_type); if (it) item.set(zonePartId(z), it) }
-  for (const p of rp.internal_parts ?? []) item.set(`int_${p.part_type}_${p.sort_order}`, internalPartItem(p.part_type))
+  const item = new Map<string, string>(), key = new Map<string, string>()
+  const tag = (id: string, it: string, k: string) => { item.set(id, it); key.set(id, k) }
+  for (const p of rp.case_parts) tag(`case_${p.part_key}`, casePartItem(p.part_key), p.part_key)
+  for (const p of rp.toekick_parts) tag(`tk_${p.part_key}_${p.sort_order}`, kickPartItem(p.part_key), p.part_key)
+  for (const z of rp.face_zones) { const it = faceZoneItem(z.face_type); if (it) tag(zonePartId(z), it, z.face_type) }
+  for (const p of rp.internal_parts ?? []) tag(`int_${p.part_type}_${p.sort_order}`, internalPartItem(p.part_type), p.part_type)
+  for (const stk of rp.drawer_stacks ?? []) for (const p of stk.box_parts) key.set(dbPartId(stk, p.part_type), p.part_type)
 
   const out: SectionSolid[] = []
   for (const s of buildPartSolids(rp, posOv, shapeOv).values()) {
     const it = s.role === 'db' ? 'drawer_boxes' : item.get(s.id)
     if (!it) continue
-    out.push({ id: `${cab.id}:${s.id}`, cabId: cab.id, item: it, role: s.role, faces: faces(prismFaces(s.prism)) })
+    out.push({ id: `${cab.id}:${s.id}`, cabId: cab.id, item: it, role: s.role, key: key.get(s.id), faces: faces(prismFaces(s.prism)) })
   }
   for (const p of rp.custom_parts ?? []) {
     if (!p.visible || !p.show_in_room || !(Number(p.dz) > 0)) continue
