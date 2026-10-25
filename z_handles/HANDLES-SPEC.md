@@ -176,7 +176,7 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H8a** | 3D models, schema + library: model columns on `hardware_handles` (D16), handle detail panel with upload / preview / hole markers / Auto-fit | built 2026-10-15, see D16 as-built. Migration `z_handles/migration_h8_models.sql` written, not applied yet |
 | **H8b** | 3D models in the views: `Handle3D` draws the model through `ModelAsset`, falls back to bar / knob; STL takes the `finish` colour | spec'd 2026-10-15 |
 | **H8c** | (optional) Elevation silhouette from the model, like `slideSilhouette.ts` | later |
-| **H9** | Linear applied strip handle (grip kind `linear`, D17): a strip of the front's own board on the face, full length, sharknose edge, screw holes, length override | building 2026-10-25 — see D17 |
+| **H9** | Linear applied strip handle (grip kind `linear`, D17): a strip of the front's own board on the face, full length, sharknose edge, screw holes, length override | ✅ built 2026-10-25 (7f03d61), applied to RHK6581 kitchen; in-app check pending. Not yet: the strip's sharknose bevel drawn in 3D / section (boxes for now — cut-list note only) — see D17 |
 
 **D17. Linear applied strip handle — grip kind `linear`** (Mark, 2026-10-25, RHK6581 kitchen "Linear G").
 A 35-wide strip of the **front's own face material** (same board + colour, so it

@@ -819,6 +819,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Set the face colour swatch, tick Grain for a timber grain, pick its matching tape, and its $/sheet. Back blank = same as face. The Default radio is the colour used when a job picks the board without a colour. Changes save as you leave each field.',
       done: (c, s) => ev(c, 'board_colour_added') > ev(s, 'board_colour_added') },
   ]},
+
+  // Appended 2026-10-25 (z_handles H9 / D17 — linear strip handles).
+  { id: 'linear_handles', level: 'intermediate', topic: 'cabinets', title: 'Linear strip handles',
+    blurb: 'A 35 strip of the door colour along every front, sharknose underneath, screwed from the back.',
+    keywords: 'linear handle strip g handle sharknose finger pull door material full length length override shorten lengthen screws holes', steps: [
+    { id: 'schedule', title: 'Pick the strip handle schedule',
+      body: 'Job → Cabinet Standards → Material Schedules (or Room → Properties for one room): set Handles to "Linear sharknose strip 35". Base doors and drawers get a strip flush with their top edge, tall doors a full-height strip on the non-hinged edge, overheads stay push-to-open. Save.',
+      target: 'menu-Job', canvas: true, done: (c, s) => ev(c, 'props_saved') > ev(s, 'props_saved') },
+    { id: 'look', title: 'See the strips',
+      body: 'Click Elevation. Each strip is the door’s own colour, 35 wide, standing on the face, with its screw holes (from the back of the door, max 350 apart). The cut list names them Linear Handle 1, 2… with the sharknose edge to saw; tape is on the top edge and both ends.',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+    { id: 'length', title: 'Shorten or lengthen one',
+      body: 'Double-click a cabinet → Fronts, click a door or drawer front, and under Handle type a Length. It turns amber (an override) — ↺ puts it back to full length. A shorter strip keeps to the non-hinged side on doors, centres on drawers, and hangs from the top on tall doors; the second box moves it in. Handle holes → Don’t drill turns the screw holes off, like any handle.',
+      canvas: true, done: (c, s) => ev(c, 'handle_length_set') > ev(s, 'handle_length_set') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

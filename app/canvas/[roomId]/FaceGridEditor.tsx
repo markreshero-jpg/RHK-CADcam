@@ -6,6 +6,7 @@ import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { FaceGridInput, FaceZoneInput, DrawerType, DrawerFrontType } from '@/src/lib/resolver/types'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import { useViewBoxPinch } from './usePinchZoom'
 import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
@@ -401,6 +402,7 @@ export default function FaceGridEditor({
         return value === null ? rest : { ...rest, [key]: value }
       }),
     })
+    if (key === 'handle_length' && value !== null) useTutorial.getState().emit('handle_length_set')   // tutorial linear_handles
   }
 
   function setDrawerType(rowIdx: number, colIdx: number, type: DrawerFrontType | null) {
