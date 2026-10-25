@@ -1488,6 +1488,7 @@ export interface ResolvedInternalPart extends ResolvedPart {
     role?: 'end_support' | 'centre_pillar' | 'end_pillar'
     side?: 'left' | 'right'
     joint_id?: string | null
+    below_rail?: number   // end support: rail centre above the part's bottom (model anchor)
     // The product's 3D model (S1); anchors per role in AccessoryModel.tsx.
     model?: { url: string; format: string; scale: number }
   }
@@ -1510,6 +1511,10 @@ export interface AccessoryProduct {
   max_span_mm?:       number | null
   // Support → the joint that drills its fixing holes (A8).
   joint_id?:          string | null
+  // End support: rail centre down to its bottom (null = centred on the rail);
+  // rail end short of the panel / past a pillar's centre.
+  below_rail_mm?:     number | null
+  rail_gap_mm?:       number | null
   // 3D model (z_accessories S1), metres → model_scale 1000.
   model_url?:         string | null
   model_format?:      string | null

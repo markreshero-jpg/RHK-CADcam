@@ -33,7 +33,7 @@ export function accessoryAnchor(p: ResolvedInternalPart): { pos: [number, number
   const zc = p.Z + p.DX / 2
   if (p.part_type === 'accessory') return { pos: [p.X, p.Y + p.DZ / 2, zc], turn: false, length: p.DY }
   const right = a?.side === 'right'
-  if (a?.role === 'end_support') return { pos: [right ? p.X + p.DY : p.X, p.Y + p.DZ / 2, zc], turn: right }
+  if (a?.role === 'end_support') return { pos: [right ? p.X + p.DY : p.X, p.Y + (a.below_rail ?? p.DZ / 2), zc], turn: right }
   return { pos: [p.X + p.DY / 2, p.Y + p.DZ, zc], turn: right }
 }
 

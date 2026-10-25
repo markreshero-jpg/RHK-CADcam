@@ -58,14 +58,14 @@ describe('hanging rail supports', () => {
   const products = [
     { id: 'r', name: 'Oval', category: 'hanging_rail', width_mm: 15, height_mm: 30, colour: '#fff', is_default: true,
       end_support_id: 'es', centre_support_id: 'cp', end_pillar_id: 'ep', max_span_mm: 1000 },
-    { id: 'es', name: 'End support', category: 'rail_support', width_mm: 42, height_mm: 42, depth_mm: 16, colour: null, is_default: false, joint_id: 'j1',
+    { id: 'es', name: 'End support', category: 'rail_support', width_mm: 18.6, height_mm: 42.8, depth_mm: 13, below_rail_mm: 16.7, rail_gap_mm: 3, colour: null, is_default: false, joint_id: 'j1',
       model_url: 'es.glb', model_format: 'glb', model_scale: 1000 },
     { id: 'cp', name: 'Centre pillar', category: 'rail_support', width_mm: 40, height_mm: 50, depth_mm: 40, colour: null, is_default: false },
-    { id: 'ep', name: 'End pillar', category: 'rail_support', width_mm: 40, height_mm: 50, depth_mm: 40, colour: null, is_default: false },
+    { id: 'ep', name: 'End pillar', category: 'rail_support', width_mm: 40, height_mm: 50, depth_mm: 40, rail_gap_mm: 5, colour: null, is_default: false },
   ]
   const op = {
     id: 'o1', joint_type_id: 'j1', operation_order: 1, target_part: 'part_a', machine_operation: 'drill', face: 'normal',
-    tool_diameter_mm: 5, depth_mm: 1, offset_x_mm: 0, offset_y_mm: 0, offset_z_mm: 10, qty: 2, spacing_mm: 32,
+    tool_diameter_mm: 5, depth_mm: 1, offset_x_mm: 0, offset_y_mm: 0, offset_z_mm: 5.4, qty: 2, spacing_mm: 32,
     qty2: 1, spacing2_mm: null, router_tool_id: null, drill_id: null, auto_tool: true, notes: null, expressions: null,
   } as const
   const run = (f: InternalFitting, DX = 841) => resolveCabinet({
@@ -75,15 +75,17 @@ describe('hanging rail supports', () => {
   const RAIL = { type: 'accessory', key: HANGING_RAIL_OVAL.key, y_locked: true, y_position: 1700 } as const
   const sups = (rp: ReturnType<typeof run>) => rp.internal_parts.filter(p => p.part_type === 'rail_support')
 
-  it('an end support on each gable, centred on the rail, no centre pillar up to 1000; rail cut 5 short each end', () => {
+  it('an end support on each gable, its bottom 16.7 under the rail centre, no centre pillar up to 1000; rail cut 3 short each end', () => {
     const rp = run(RAIL)
     const s = sups(rp)
     expect(s.map(p => p.accessory?.role)).toEqual(['end_support', 'end_support'])
-    expect([s[0].X, s[0].Y, s[0].DZ, s[0].DY]).toEqual([16.5, 1715 - 21, 42, 16])
+    expect([s[0].X, s[0].DZ, s[0].DY]).toEqual([16.5, 42.8, 13])
+    expect(s[0].Y).toBeCloseTo(1715 - 16.7)
+    expect(s[0].accessory?.below_rail).toBe(16.7)
     expect(s[1].X + s[1].DY).toBeCloseTo(841 - 16.5)
     expect(s[0].accessory?.model).toEqual({ url: 'es.glb', format: 'glb', scale: 1000 })
     const r = rp.internal_parts.find(p => p.part_type === 'accessory')!
-    expect([r.X, r.DY]).toEqual([16.5 + 5, 841 - 33 - 10])
+    expect([r.X, r.DY]).toEqual([16.5 + 3, 841 - 33 - 6])
   })
   it('a centre pillar once the rail is over 1000, hanging its 50 drop from the shelf', () => {
     const c = sups(run(RAIL, 1100)).filter(p => p.accessory?.role === 'centre_pillar')
@@ -105,13 +107,13 @@ describe('hanging rail supports', () => {
     const s = sups(run({ ...RAIL, supports: { left: 'end_pillar', right: 'none', centre: 2 } }))
     expect(s.map(p => p.accessory?.role)).toEqual(['end_pillar', 'centre_pillar', 'centre_pillar'])
   })
-  it('end supports prick two holes 32 apart into each gable, 4 and 36 above the rail bottom, 1 deep', () => {
+  it('end supports prick two holes 32 apart into each gable, 11.3 below / 20.7 above the rail centre, 1 deep', () => {
     const rp = run(RAIL)
     const seams = rp.seam_joints.filter(j => j.part_b_key.startsWith('int_rail_support_'))
     expect(seams.map(j => j.part_a_key)).toEqual(['left_side', 'right_side'])
     const holes = cabinetSeamDrills(rp).filter(d => d.seamKey.includes('int_rail_support_'))
     const left = holes.filter(d => d.targetPartKey === 'left_side')
-    expect(left.map(d => d.y)).toEqual([1704, 1736])
+    expect(left.map(d => d.y)).toEqual([1703.7, 1735.7].map(v => expect.closeTo(v, 6)))
     expect(left.every(d => d.x === 16.5 && d.axis === 'x-' && d.depthLen === 1 && d.radius === 2.5)).toBe(true)
     expect(holes.filter(d => d.targetPartKey === 'right_side').every(d => d.axis === 'x+')).toBe(true)
   })

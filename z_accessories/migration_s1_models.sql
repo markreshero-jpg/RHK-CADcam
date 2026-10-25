@@ -46,3 +46,15 @@ update hardware_accessories set name = 'Finista oval end pillar, chrome', suppli
        height_mm = 50, width_mm = 40, depth_mm = 40, colour = '#cfd0d4', finish = 'Chrome',
        notes = 'Nominal 40 base; rail centre 50 below the shelf (height_mm); closed end. Was 1-490-118 (white).'
  where supplier_code = '1-490-118';
+
+-- S1b (2026-10-25): Mark's corrected end support GLB (from the manufacturer FBX).
+-- Plate 18.6 W x 42.8 H x 3 T, 13 projection, NOT centred on the rail: bottom 16.7
+-- below the rail centre. 3 x Ø4 holes centred on the plate at 5.4 / 14.9 / 37.4 up
+-- from its bottom — the joint pricks the outer two (32 apart). Rail end 3 off the panel.
+alter table hardware_accessories add column if not exists below_rail_mm numeric;
+alter table hardware_accessories add column if not exists rail_gap_mm numeric;
+update hardware_accessories set height_mm = 42.8, width_mm = 18.6, depth_mm = 13, below_rail_mm = 16.7, rail_gap_mm = 3
+ where supplier_code = '7104018';
+update hardware_accessories set rail_gap_mm = 5 where supplier_code = '7104020';
+update joint_type_operations set offset_z_mm = 5.4
+ where joint_type_id = (select id from joint_types where name = 'Finista end support');

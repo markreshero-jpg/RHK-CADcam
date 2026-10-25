@@ -51,7 +51,10 @@ their supports now; wardrobe / pantry / misc items later on the same table.
   the bottom of the end support; pricked 1 deep into the gable face (marking
   only, screwed on site) with the 5 mm boring bit. **Updated 2026-10-25**: the
   chrome end support is 42 round, centred on the rail (its model), so the holes
-  are 4 and 36 above the rail bottom.
+  are 4 and 36 above the rail bottom. **Superseded (S1b)**: the real plate
+  (manufacturer FBX) is 18.6 × 42.8, bottom 16.7 under the rail centre, three
+  Ø4 holes at 5.4 / 14.9 / 37.4 up; the joint pricks the outer two (5.4 up) =
+  11.3 below / 20.7 above the rail centre. Rail end 3 off the panel.
 - **A10 Chrome** (Mark, 2026-10-25): the Finista chrome range (7104016 rail,
   7104018 end support, 7104019 centre pillar, 7104020 end pillar), sizes from the
   models' notes (nominal). Pillars hold the rail centre 50 below the shelf: a
