@@ -587,6 +587,10 @@ Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
 - [ ] Reports
 
 ### Phase 6 — Free-form + recognition `[ ]`
+> Moved to its own module 2026-10-25: **`z_cabinet_shape_edit/SHAPE-EDIT-SPEC.md`** — edit
+> the footprint in plan with the F7 CAD tools (not the Shape Editor modal), edge types +
+> sub-types (+ `none`), per-corner junctions. Supersedes the two items below; recognition
+> (S-e) stays "later".
 - [ ] Shape Editor on cabinet footprint with role picker (`edgeOptions`), neighbours/walls as `referenceOutlines`
 - [ ] Classifier (S-e)
 
