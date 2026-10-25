@@ -20,7 +20,7 @@ import { resolveStyle } from '@/src/lib/annotations/style'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
-  cabinetPolygon, centroid, cabWallPerp, cabWallSide, cabT,
+  cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabT,
   cabinetToPlan, cabinetPlanFrame,
 } from '@/src/lib/geometry'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -137,10 +137,20 @@ export default function PlanViewReportSVG({
   }
   // Benchtops overhang their cabinets (islands especially) — fit them too.
   if (layers.show('benchtops')) for (const bt of benchtops) pts.push(...outlinePoints(btSegments(bt), 4))
-  const minX = Math.min(...pts.map(p => p.x))
-  const maxX = Math.max(...pts.map(p => p.x))
-  const minY = Math.min(...pts.map(p => p.y))
-  const maxY = Math.max(...pts.map(p => p.y))
+  // Cabinets past the wall faces (islands, back-side runs).
+  for (const c of cabinets) {
+    const w = walls.find(x => x.id === c.wall_id)
+    if (w && planShowsCabinet(c, layers, resolvedParts?.get(c.id))) pts.push(...cabinetCornerPts(c, w, cabWallPerp(c, w, wallInwardNormal(w, cx))))
+  }
+  // Fixtures (own frame: translate + rotate); a door's swing reaches its width past the jambs.
+  for (const f of fixtures) {
+    if (f.category === 'opening' ? !(showOpenings && f.wall_id) : !layers.show(fixtureLayer(f.category))) continue
+    const door = f.category === 'opening' && (f.kind ?? '').toLowerCase().includes('door') && !(f.kind ?? '').toLowerCase().includes('sliding')
+    const y0 = door && (f.swing ?? 'in') !== 'in' ? -f.width : 0
+    const y1 = door && (f.swing ?? 'in') === 'in' ? f.depth + f.width : f.depth
+    const a = toRad(f.rotation), ca = Math.cos(a), sa = Math.sin(a)
+    for (const [lx, ly] of [[0, y0], [f.width, y0], [f.width, y1], [0, y1]]) pts.push({ x: f.x + lx * ca - ly * sa, y: f.y + lx * sa + ly * ca })
+  }
 
   // ── Scale-aware sizes (physical mm × scale = model mm) ─────────────────────
   // Pens (z_shop_drawings S2): paper-mm widths from the shared pen table, all black.
@@ -166,34 +176,10 @@ export default function PlanViewReportSVG({
   const lw = (id: string, base: number) => atLeastMin(layers.w(id, base), P)
   const HATCH_ID = 'plan-report-wall-hatch'
 
-  // ── ViewBox padding — extend for dims when shown ──────────────────────────
-  const maxThick = Math.max(0, ...walls.filter(w => w.wall_type !== 'island').map(w => w.thickness))
-  // Chains stack beyond their cabinets, so the viewBox must reserve room for the
-  // deepest cabinet a chain must clear: any island cabinet, plus back-side cabinets
-  // on a perimeter wall (whose outer chain is pushed past them).
-  const wallById = new Map(walls.map(w => [w.id, w]))
-  const chainClearDepth = Math.max(0, ...chainCabs
-    .filter(c => {
-      const w = c.wall_id ? wallById.get(c.wall_id) : undefined
-      if (!w) return false
-      return w.wall_type === 'island' || cabWallSide(c, w) === 'back'
-    })
-    .map(c => c.dz))
-  const basePad  = 4 * P
-  // Bulkheads get their own row outside the overhead row; the rows past it step out.
-  const bhStep = layers.show('dim_wall_chain') && chainCabs.some(c => !!c.bulkhead || !!c.float_shelf) ? ROW_BH_STEP : 0
   const topsByWall = new Map(walls.map(w => [w.id, layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w, wallInwardNormal(w, cx)) : []]))
-  const topStep = [...topsByWall.values()].some(t => t.length) ? ROW_TOP_STEP : 0
-  const dimExtra = showDims ? maxThick + chainClearDepth + ROW_OVERALL + bhStep + topStep + (openingsByWall.size && layers.show('dim_openings') ? ROW_OPEN_STEP : 0) + dimFS * 2 + tickH : 0
-  const padL = basePad + dimExtra
-  const padR = basePad + dimExtra
-  const padT = basePad + dimExtra
-  const padB = basePad + dimExtra
-
-  const vbX = minX - padL
-  const vbY = minY - padT
-  const vbW = (maxX - minX) + padL + padR
-  const vbH = (maxY - minY) + padT + padB
+  // Off-line labels sit up to ~2.15 fs from their line (DimLabel); fit a little past that.
+  const labelReach = dimFS * 2.3
+  const dimPts: { x: number; y: number }[] = []   // filled by dimLine / depthDim as the body builds
 
   // ── One dimension-chain line (main line + boundary ticks + segment labels) ─
   function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string, name?: string) {
@@ -208,6 +194,14 @@ export default function PlanViewReportSVG({
     const boundaries = Array.from(new Set([0, ...segs.flatMap(s => [s.from, s.to])]))
     const p0 = pt(0), pL = pt(wall.length)
     const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), dimFS)
+    // Fit: the row both sides of the line, past each end for a short end segment's
+    // label, and back to the row name's far end.
+    const nameReach = name && layers.show('dim_row_labels')
+      ? returnWallThickness(wall, walls, 'start') + dimFS * 0.6 + name.length * dimFS * 0.85 * 0.6 : 0
+    for (const t of [-Math.max(nameReach, dimFS * 2), wall.length + dimFS * 2]) {
+      const p = pt(t)
+      for (const s of [-1, 1]) dimPts.push({ x: p.x + out.x * labelReach * s, y: p.y + out.y * labelReach * s })
+    }
     return (
       <g key={key} pointerEvents="none" opacity={layers.op(item)}>
         <line x1={p0.x} y1={p0.y} x2={pL.x} y2={pL.y} stroke={INK} strokeWidth={lineW} strokeDasharray={dash} />
@@ -261,6 +255,7 @@ export default function PlanViewReportSVG({
     const midX = (sx + ex) / 2, midY = (sy + ey) / 2
     const rawAngle = Math.atan2(inward.y, inward.x) * 180 / Math.PI
     const textAngle = Math.abs(rawAngle) > 90 ? rawAngle + 180 : rawAngle
+    for (const p of [{ x: sx, y: sy }, { x: ex, y: ey }]) for (const s of [-1, 1]) dimPts.push({ x: p.x + wd.x * labelReach * s, y: p.y + wd.y * labelReach * s })
     return (
       <g key={key} pointerEvents="none" opacity={layers.op(item)}>
         <line x1={sx} y1={sy} x2={ex} y2={ey} stroke={INK} strokeWidth={lineW} strokeDasharray={lp(item).strokeDasharray} />
@@ -274,17 +269,9 @@ export default function PlanViewReportSVG({
     )
   }
 
-  return (
-    <svg
-      ref={svgRef}
-      viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
-      xmlns="http://www.w3.org/2000/svg"
-      data-vb-w={vbW} data-vb-h={vbH}
-      fontFamily="Arial, Helvetica, sans-serif"
-      shapeRendering="geometricPrecision"
-      textRendering="geometricPrecision"
-      style={{ width: '100%', height: 'auto', background: 'white', display: 'block' }}
-    >
+  // Built before the viewBox: dimLine / depthDim record where each dimension reaches.
+  const body = (
+    <>
       <defs>
         <pattern id={HATCH_ID} patternUnits="userSpaceOnUse" width={6 * P} height={6 * P} patternTransform="rotate(45)">
           <line x1={0} y1={0} x2={0} y2={6 * P} stroke={INK} strokeWidth={pen('fine', P)} />
@@ -717,7 +704,30 @@ export default function PlanViewReportSVG({
 
       {/* ── CAD annotations (z_CAD_tool) — black unless "Annotation colours" is ticked ── */}
       <AnnotationLayer annotations={annotations} frame={IDENTITY_FRAME} paper={P} layers={layers} printColours={show.annotColours} />
+    </>
+  )
 
+  // ── ViewBox — fitted to what's drawn (not a worst-case border on every side), so
+  // the sheet centres the real drawing (z_shop_drawings, Mark 2026-10-25).
+  const all = [...pts, ...dimPts]
+  const pad = 4 * P
+  const vbX = Math.min(...all.map(p => p.x)) - pad
+  const vbY = Math.min(...all.map(p => p.y)) - pad
+  const vbW = Math.max(...all.map(p => p.x)) + pad - vbX
+  const vbH = Math.max(...all.map(p => p.y)) + pad - vbY
+
+  return (
+    <svg
+      ref={svgRef}
+      viewBox={`${vbX} ${vbY} ${vbW} ${vbH}`}
+      xmlns="http://www.w3.org/2000/svg"
+      data-vb-w={vbW} data-vb-h={vbH}
+      fontFamily="Arial, Helvetica, sans-serif"
+      shapeRendering="geometricPrecision"
+      textRendering="geometricPrecision"
+      style={{ width: '100%', height: 'auto', background: 'white', display: 'block' }}
+    >
+      {body}
     </svg>
   )
 }

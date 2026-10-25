@@ -129,6 +129,12 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
   `bt.joins` dashed thin. They follow the `benchtops` / `benchtop_joins` layer items and are included in
   the drawing's fit. Edge-profile codes aren't printed.
 - Tutorial `shop_drawings` (reports topic), emit `shop_pdf`, tour target `shop-download`.
+- **Plan fitted to what's drawn (Mark, 2026-10-25: "lots of room at top and left"):** PlanViewReportSVG used
+  to pad every side by a worst-case border (wall thickness + deepest island / back-side cabinet + every
+  dim row), even sides with no chains. The viewBox is now the extents of walls, cabinets, fixtures (door
+  swings), benchtops, annotations and each dim row / depth dim as drawn (labels both sides, row names),
+  plus 4mm paper. RHK6581 J05+J04 at 1:20: 587 x 337 → 479 x 233mm (still over A3's ~400mm; needs 1:25
+  or a per-sheet scale, which decision 6 doesn't allow yet).
 - **Fixtures on plan + elevation (Mark, 2026-10-21):** `FixturesPlanPrint` (FixturesPlan.tsx) and
   `FixturesElevationPrint` (FixturesElevation.tsx) draw the non-opening fixtures (appliances, sinks, taps,
   hobs, decorative) on Plan View, Elevation Views and the package, using the canvas's shapes / symbols /
