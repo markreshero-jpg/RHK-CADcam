@@ -1,13 +1,15 @@
 'use client'
 
 // Linked fixtures drawn inside the cabinet edit modal's ortho views (z_ubo U5):
-// the oven in a UBO, a sink on its base… Elevation uses the traced front shape
-// when the item has one, else its box; top / side draw the box. Clicking one
-// selects it (the modal shows its card); parts behind still show through.
+// the oven in a UBO, a sink on its base… Each view draws the outline traced
+// live from the fitted model (useFixtureViewShapes); while that loads, or with
+// no model, elevation falls back to the stored front shape, else the box.
+// Clicking one selects it (the modal shows its card); parts behind show through.
 
 import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedElevShape } from '@/src/lib/fixtureStretch'
+import { useFixtureViewShapes, fixtureTraceKey } from '@/src/lib/useFixtureViewShapes'
 
 const FX_STROKE = '#38bdf8'
 const FX_SEL    = '#facc15'
@@ -20,6 +22,7 @@ export default function CabinetFixturesOverlay({ view, fixtures, map, selectedId
   selectedId?: string | null
   onSelect?: (id: string) => void
 }) {
+  const traced = useFixtureViewShapes(fixtures)
   if (!fixtures.length) return null
   return (
     <g>
@@ -35,7 +38,10 @@ export default function CabinetFixturesOverlay({ view, fixtures, map, selectedId
         const w = Math.abs(c.x - a.x), h = Math.abs(c.y - a.y)
         const sel = selectedId === b.f.id
         const stroke = sel ? FX_SEL : FX_STROKE
-        const shape = view === 'elevation' && b.yaw === 0 && b.f.elev_shape?.lines.length ? b.f.elev_shape : null
+        const views = traced.get(fixtureTraceKey(b) ?? '')
+        const live = views ? (view === 'elevation' ? views.front : view === 'top' ? views.top : views.side) : null
+        const shape = live?.lines.length ? live
+          : view === 'elevation' && b.yaw === 0 && b.f.elev_shape?.lines.length ? stretchedElevShape(b.f.elev_shape, b.f) : null
         return (
           <g key={b.f.id} style={{ cursor: onSelect ? 'pointer' : undefined }}
             onClick={onSelect ? e => { e.stopPropagation(); onSelect(b.f.id) } : undefined}>
@@ -43,7 +49,7 @@ export default function CabinetFixturesOverlay({ view, fixtures, map, selectedId
               stroke={shape ? 'none' : stroke} strokeWidth={sel ? 2 : 1.2} strokeDasharray={shape ? undefined : '6 3'}
               vectorEffect="non-scaling-stroke" />
             {shape && (
-              <path d={planShapePath(stretchedElevShape(shape, b.f), w, h)} transform={`translate(${x},${y})`}
+              <path d={planShapePath(shape, w, h)} transform={`translate(${x},${y})`}
                 fill="none" stroke={stroke} strokeWidth={sel ? 2 : 1.2} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
             )}
             <text x={x + w / 2} y={y + 14} textAnchor="middle" fontSize={11} fill={stroke} style={{ pointerEvents: 'none' }}>

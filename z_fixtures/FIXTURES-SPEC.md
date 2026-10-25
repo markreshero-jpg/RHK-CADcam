@@ -403,6 +403,11 @@ Esc cancels; one undo step.
   (`fixturePlanShapeLoad.ts`) when the model / fit / size changes or an item without one is
   opened, shows a preview + Re-trace, and copies it to placed fixtures with the same model.
   Existing three models backfilled 2026-10-18. Openings and model-less items keep their symbols.
+  - 2026-10-25 (user: "side, top, front views in cabinet edit modal show proper outlines of
+    fixtures"): the modal's ortho views trace linked fixtures live from the fitted model —
+    top / front / side, at the placed size (stretch / resizable scale) and turn (yaw), via
+    `fixtureViewShapes.ts` (+ test) + `useFixtureViewShapes` (models + traces cached). Stored
+    `elev_shape` → box remain the fallbacks while loading / with no model.
 
 - 2026-10-18 (user): **clearance dims on the selected fixture** (cyan, dashed, value chip).
   Plan (`fixtureClearances` + FixturesPlan `ClearanceDims`): left / right / front / back to the

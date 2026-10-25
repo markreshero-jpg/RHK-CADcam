@@ -13,7 +13,7 @@ import type { FixtureBody } from './types'
 import { fittedTriangles, planShapeFromTriangles, elevShapeFromTriangles, type PlanShape } from './fixturePlanShape'
 import { readStretchSpec, activeStretch, nominalBox, type StretchSpec } from './fixtureStretch'
 
-async function loadModel(url: string, format: 'glb' | 'stl' | 'obj'): Promise<THREE.Object3D> {
+export async function loadModel(url: string, format: 'glb' | 'stl' | 'obj'): Promise<THREE.Object3D> {
   if (format === 'glb') return (await new GLTFLoader().loadAsync(url)).scene
   if (format === 'stl') return new THREE.Mesh(await new STLLoader().loadAsync(url))
   return new OBJLoader().loadAsync(url)
