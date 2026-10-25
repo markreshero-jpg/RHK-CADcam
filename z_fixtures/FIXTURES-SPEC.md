@@ -310,6 +310,26 @@ Esc cancels; one undo step.
     bbox (660 = closed door; body 615, door open 1135). Scale 1000, no rotation (GLB origin back-left
     floor, +Z front). Served from `/fixture-models/LG_WX10-1412W_Front_Loader.glb`. No benchtop cut.
     Shapes traced headless. Not checked in-app.
+  - 2026-10-25 (user): **batch of 8 + LG re-export** dropped in `z_fixtures/models/New for import…`,
+    sorted into Taps / Sinks / Basins + new folders Rangehoods, Cookers, Toilets. All GLBs carry
+    scene extras (maker, model, origin, dims) — sizes from the bbox, scale 1000, no rotation,
+    served from `/fixture-models/<file>.glb`, shapes traced headless. Not checked in-app.
+    - Taps (benchtop, Ø35 hole at the GLB origin = tap-hole centre): **Abey Lucia gooseneck**
+      109.1 × 249 × 376.8, hole off −24.6 / −94.5; **Phoenix Vivid slimline basin mixer** VS770
+      52 × 141 × 158.8, hole off 0 / −44.5.
+    - Sinks group: **Argent Tempo 450 round** (Kitchen sink, 450² × 260 incl. waste tail) and
+      **Caroma Liano II 440 round basin** (Vanity basin, 440² × 182) — undermount like the Abi
+      sinks: drop = height (rim at the top surface), round cutout = rim less 15 a side (Ø420 / Ø410).
+    - Rangehoods group: **Artusi AUM60 / AUM90** under-cupboard, **wall** mount, 600/900 × 292.5 ×
+      329 (box includes the 30 duct spigot), mount_height 1550 (650 above a 900 top).
+    - Ovens group: **Smeg CS9GMMBA2 90 cm freestanding cooker**, kind Cooker, **floor**,
+      900 × 676 × 898, no benchtop cut.
+    - New group **Toilets** (decorative, icon Toilet): **Caroma Urbane II wall-faced suite**
+      746250W, kind Toilet, **floor**, 384 × 652.9 × 834. Decorative (not sink) so it stays a solid
+      obstacle — cabinets stop at it.
+    - **LG washer** file re-exported (same geometry, some triangle windings flipped): replaces
+      `public/fixture-models/LG_WX10-1412W_Front_Loader.glb` in place (same URL, no row change);
+      folder copy renamed `Washing Machines/LG_WX10-1412W.glb`.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
