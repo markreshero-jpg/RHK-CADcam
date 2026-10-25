@@ -32,6 +32,7 @@ import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
 import { turnDrill } from '@/src/lib/resolver/hardwareTurn'
 import { panelFrontEnd } from '@/src/lib/resolver/resolveShapedCase'
+import { toggleFlushEnds } from '@/src/lib/cabinetShape/junctions'
 import { seatNudge, cupAcrossOffset } from '@/src/lib/hingeSilhouette'
 import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
@@ -1949,15 +1950,13 @@ export default function Cabinet3DView({
   }
 
   // Right-click option: bevel a shaped cabinet's side panel flush with the
-  // angled front it meets (footprint.flush_ends), or back to square.
+  // angled front it meets, or back to square (footprint.joins, z_cabinet_shape_edit E2).
   const frontEnd = onUpdate && selectedPart?.id.startsWith('case_')
     ? panelFrontEnd(cab.footprint, cab.dx, cab.dz, selectedPart.id.slice(5)) : null
   function toggleFlushEnd(edgeId: string) {
     const fp = cab.footprint
     if (!fp || !onUpdate) return
-    const cur = fp.flush_ends ?? []
-    const next = cur.includes(edgeId) ? cur.filter(e => e !== edgeId) : [...cur, edgeId]
-    void onUpdate(cab.id, { footprint: { ...fp, flush_ends: next } })
+    void onUpdate(cab.id, { footprint: toggleFlushEnds(fp, cab.dx, cab.dz, edgeId) })
   }
 
   function handleCanvasContextMenu(e: React.MouseEvent) {

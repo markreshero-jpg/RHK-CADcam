@@ -17,8 +17,9 @@
 // Square corners are butts (priority from BACK_JOIN). Angled corners (4a):
 // ANGLE_JOIN butt_bevel (the same priority; the stopping panel's end bevelled
 // against the through panel, whose end lies flush in the outline) or mitre;
-// a panel end at an angled front / open edge stays square unless its edge is
-// in footprint.flush_ends (then bevelled flush with it).
+// a panel end at an angled front / open edge stays square unless its corner is
+// set flush (footprint.joins; legacy flush_ends). Any corner's hand-set choice
+// (z_cabinet_shape_edit E2) overrides these rules.
 // Panels are listed at their blank length; bevel_lo / bevel_hi say how the
 // ends are cut (jointDrilling.caseBevelOutline).
 // ============================================================
@@ -32,6 +33,7 @@ import {
 } from '../cabinetShape/construct'
 import { facetDoorRun } from './resolveShapedFace'
 import { caseBackT } from './resolveCase'
+import { storedJoin } from '../cabinetShape/junctions'
 
 const NEAR = 0.5   // mm — "this edge sits on the box side"
 const ANGLE_TOL = 0.5   // degrees — corners this close to 90° keep the square butt
@@ -211,8 +213,9 @@ export function panelFrontEnd(
   const angledFront = (nb: FootprintSegment, alpha: number) => nb.type === 'line'
     && (nb.edge.role === 'front' || nb.edge.role === 'open')
     && Math.abs(alpha - 90) > ANGLE_TOL && alpha < 180 - ANGLE_TOL
-  if (!angledFront(prev, interiorAngle(prev, pick)) && !angledFront(next, interiorAngle(pick, next))) return null
-  return { edgeId: pick.edge.id, flush: (fp.flush_ends ?? []).includes(pick.edge.id) }
+  const ends = [prev, next].filter((nb, k) => angledFront(nb, k ? interiorAngle(pick, next) : interiorAngle(prev, pick)))
+  if (!ends.length) return null
+  return { edgeId: pick.edge.id, flush: ends.some(nb => storedJoin(fp, pick, nb) === 'flush') }
 }
 
 // Clip a horizontal part (plan rect X..X+DY × Z..Z+DX) to `poly`. Returns null
@@ -330,7 +333,7 @@ export function shapeCaseParts(
     return (Math.abs(e.p0.x) < NEAR && Math.abs(e.p1.x) < NEAR) || (Math.abs(e.p0.x - cab.DX) < NEAR && Math.abs(e.p1.x - cab.DX) < NEAR)
   }
 
-  const flush = new Set(cab.footprint?.flush_ends ?? [])
+  const fp = cab.footprint
 
   const out: ResolvedCasePart[] = []
   const used = new Set<string>()
@@ -348,16 +351,27 @@ export function shapeCaseParts(
     const stops = (nb: FootprintSegment, j: number) =>
       isPanelRole(nb) && (rank(nb) > rank(s) || (rank(nb) === rank(s) && j < i))
     // Each end: where the outer face (sOut) and inner face (sIn) stop, along the
-    // panel from its vertex. Square corners keep the butt trims; an angled
-    // corner to another panel follows ANGLE_JOIN, to a front / open edge the
-    // end is bevelled flush with it (decision 12).
+    // panel from its vertex. The corner's hand-set choice (footprint.joins,
+    // z_cabinet_shape_edit E2) wins; else square corners keep the butt trims
+    // (BACK_JOIN priority), an angled corner to another panel follows
+    // ANGLE_JOIN, and a panel end at an angled front / open edge is square.
     const endCut = (nb: FootprintSegment, j: number, V: ShapePt, away: ShapePt, alpha: number) => {
       const nf = edgeFrame(nb)
       const angled = nb.type === 'line' && Math.abs(alpha - 90) > ANGLE_TOL && alpha < 180 - ANGLE_TOL
-      if (angled && isPanelRole(nb))
-        return { ...angledEnd(r.ANGLE_JOIN === 'mitre' ? 'mitre' : stops(nb, j) ? 'stop' : 'flush', V, away, f.n, nf, t, tOf(j)), angled, boxed: false }
-      if (angled && (nb.edge.role === 'front' || nb.edge.role === 'open') && flush.has(s.edge.id))
-        return { ...angledEnd('flush', V, away, f.n, nf, t), angled, boxed: false }
+      const choice = fp ? storedJoin(fp, s, nb) : undefined
+      if (isPanelRole(nb) && alpha < 180 - ANGLE_TOL) {
+        const through = choice?.startsWith('through:') ? choice.slice(8) : null
+        const nbThrough = through === nb.edge.id ? true : through === s.edge.id ? false : stops(nb, j)
+        const set = choice === 'mitre' || through === nb.edge.id || through === s.edge.id
+        if (choice === 'mitre' || (!set && angled && r.ANGLE_JOIN === 'mitre'))
+          return { ...angledEnd('mitre', V, away, f.n, nf, t, tOf(j)), boxed: false }
+        if (angled) return { ...angledEnd(nbThrough ? 'stop' : 'flush', V, away, f.n, nf, t, tOf(j)), boxed: false }
+        const sq = vertexTrim(away, f.n, nf.n, t, nbThrough, tOf(j))
+        // A hand-set butt may turn the box build's priority round: no box clamp.
+        return { sOut: sq, sIn: sq, boxed: !set && legacySlot(segs[j]) }
+      }
+      if (angled && (nb.edge.role === 'front' || nb.edge.role === 'open') && choice === 'flush')
+        return { ...angledEnd('flush', V, away, f.n, nf, t), boxed: false }
       const sq = vertexTrim(away, f.n, nf.n, t, stops(nb, j), tOf(j))
       // A square end at an angled front with a door on it: come forward to the
       // door's end (less the face buffer) instead of stopping at the vertex,

@@ -118,6 +118,26 @@ export interface Footprint {
   /** Panel edges whose end is bevelled flush where it meets an angled front /
    *  open edge (z_cabinet_shape 4a). Default square; set per part by right-click. */
   flush_ends?: string[]
+  /** How the pieces meet at each corner, keyed `junctionKey(edgeA, edgeB)`
+   *  (z_cabinet_shape_edit E2). Absent = the rules' default. Replaces flush_ends
+   *  (still read where no entry is set). */
+  joins?: Record<string, JoinChoice>
+}
+
+/** A corner choice: `through:<edge id>` = a butt with that edge's panel running
+ *  through (the other stops — bevelled against it at an off-square corner);
+ *  `mitre` = both bevelled on the corner line; `square` / `flush` = a panel end
+ *  at an angled front / open edge; `mitre` / `reveal` between two door facets. */
+export type JoinChoice = 'mitre' | 'square' | 'flush' | 'reveal' | `through:${string}`
+
+/** The joins key for the corner between two consecutive edges (stored order). */
+export function junctionKey(a: string, b: string): string {
+  return `${a}|${b}`
+}
+
+/** The corner choice between edges a and b, whichever way round it was keyed. */
+export function getJoin(fp: Pick<Footprint, 'joins'> | null | undefined, a: string, b: string): JoinChoice | undefined {
+  return fp?.joins?.[junctionKey(a, b)] ?? fp?.joins?.[junctionKey(b, a)]
 }
 
 export interface FootprintDims { w: number; d: number }

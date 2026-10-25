@@ -259,6 +259,18 @@ export function buildPresetFootprint(
   return withEdgeOverrides({ ...fp, segments: evaluateFootprint(fp, dims) })
 }
 
+/** A rebuilt preset keeps the corner choices of the footprint it replaces
+ *  (flush_ends + joins key off stable edge ids). */
+export function withShapeChoices(from: Footprint | null | undefined, next: Footprint | null | undefined): Footprint | null {
+  if (!next) return null
+  if (!from) return next
+  return {
+    ...next,
+    ...(from.flush_ends?.length ? { flush_ends: from.flush_ends } : {}),
+    ...(from.joins && Object.keys(from.joins).length ? { joins: from.joins } : {}),
+  }
+}
+
 /**
  * At placement: set the preset's class-depth params (L corner legs) to the
  * cascaded class depth and rebuild. Faces, role overrides and flush ends key
@@ -271,7 +283,7 @@ export function seedClassDepthParams(fp: Footprint | null, depth: number | null 
   if (!keys.length) return fp
   const params = { ...fp.params, ...Object.fromEntries(keys.map(k => [k, depth])) }
   const next = buildPresetFootprint(preset.key, params, dims, footprintOverrides(fp))
-  return next && fp.flush_ends?.length ? { ...next, flush_ends: fp.flush_ends } : next
+  return withShapeChoices(fp, next)
 }
 
 /**

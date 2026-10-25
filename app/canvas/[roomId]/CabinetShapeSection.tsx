@@ -1,18 +1,20 @@
 'use client'
 
 // Shape section of the cabinet panel — z_cabinet_shape Phase 1. Picks a shape
-// preset, edits its params and per-edge roles + sub-types (z_cabinet_shape_edit E1). Writes `footprint` only; the
-// plan outline re-evaluates it at the cabinet's live size.
+// preset, edits its params, per-edge roles + sub-types (z_cabinet_shape_edit E1)
+// and corner joins (E2). Writes `footprint` only; the plan outline re-evaluates
+// it at the cabinet's live size.
 
 import { CabinetInstance, Wall } from '@/src/lib/types'
 import { cabT, wallDir } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
 import {
   EDGE_ROLES, EDGE_SUBS, edgeLabel, edgeSub, evaluateFootprint, footprintOverrides, withEdgeOverrides,
-  type EdgeOverride, type EdgeRole, type EdgeSub,
+  type EdgeOverride, type EdgeRole, type EdgeSub, type JoinChoice,
 } from '@/src/lib/cabinetShape/footprint'
+import { footprintJunctions, joinOptions, withJoin } from '@/src/lib/cabinetShape/junctions'
 import {
-  SHAPE_PRESETS, getPreset, buildPresetFootprint, presetWarnings, presetBox,
+  SHAPE_PRESETS, getPreset, buildPresetFootprint, presetWarnings, presetBox, withShapeChoices,
 } from '@/src/lib/cabinetShape/presets'
 
 export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl }: {
@@ -51,9 +53,8 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
     return { pos_x: cabinet.pos_x + shift * d.x, pos_y: cabinet.pos_y + shift * d.y }
   }
 
-  // Per-part bevelled ends (set from the 3D right-click) survive a rebuild.
-  const keepFlush = (next: CabinetInstance['footprint']) =>
-    next && fp?.flush_ends?.length ? { ...next, flush_ends: fp.flush_ends } : next
+  // Corner choices (joins, legacy flush_ends) survive a rebuild.
+  const keepFlush = (next: CabinetInstance['footprint']) => withShapeChoices(fp, next)
 
   function choosePreset(key: string) {
     if (!key) return setFootprint(null)
@@ -84,6 +85,11 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
 
   // Edges as the resolver reads them (legacy 'scribe' role, overrides applied).
   const edges = fp ? evaluateFootprint(withEdgeOverrides(fp), dims) : []
+  const corners = fp ? footprintJunctions(fp, dims.w, dims.d) : []
+
+  function setJoin(key: string, choice: JoinChoice | '') {
+    if (fp) setFootprint(withJoin(fp, dims.w, dims.d, key, choice))
+  }
 
   const warnings = fp?.preset ? presetWarnings(fp.preset, fp.params, dims) : []
 
@@ -154,6 +160,25 @@ export default function CabinetShapeSection({ cabinet, wall, onUpdate, inp, lbl 
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {corners.length > 0 && (
+        <div>
+          <label className={lbl}>Corners</label>
+          <div className="space-y-1">
+            {corners.map(j => (
+              <div key={j.key} className="flex items-center gap-2">
+                <span className="text-[11px] text-gray-400 w-24 truncate" title={`${Math.round(j.angle * 10) / 10}°`}>
+                  {edgeLabel(j.a.id)} / {edgeLabel(j.b.id)}
+                </span>
+                <select value={j.choice ?? ''} onChange={e => setJoin(j.key, e.target.value as JoinChoice | '')}
+                  className={inp + ' flex-1'}>
+                  {joinOptions(j).map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            ))}
           </div>
         </div>
       )}

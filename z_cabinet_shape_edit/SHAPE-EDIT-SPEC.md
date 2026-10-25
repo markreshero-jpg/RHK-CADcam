@@ -9,9 +9,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → **E1 built 2026-10-25** (sub-types in the resolver + the Shape
-> section dropdowns, migration applied), in-app check pending — see "E1 notes"
-> under Phases. Next **E2** (junctions).
+> **RESUME HERE** → **E1 + E2 built 2026-10-25** (sub-types + corner joins in the
+> resolver, picked from the Shape section dropdowns), in-app checks pending — see
+> "E1 notes" / "E2 notes" under Phases. Next **E3** (plan edit mode, picking).
 
 ---
 
@@ -128,14 +128,14 @@ dropped with a visible warning, never re-attached.
 
 | Edges meeting | Choices | Default |
 |---|---|---|
-| panel ↔ panel (side / back, any angle) | **butt, A runs through** · **butt, B runs through** · **butt-bevel** (off-square only: through panel flush, stopping panel bevelled) · **mitre** (both bevelled on the corner line, square corners too = 45° each) | BACK_JOIN priority at square corners; ANGLE_JOIN at off-square |
-| panel ↔ front facet | **square end** · **bevelled flush to facet** | square (shape decision 12) |
-| panel ↔ open | **square end** · **bevelled flush** (angled only) | square |
-| front facet ↔ front facet | **mitre** (doors bevelled) · **reveal** (square doors, gap) | mitre (shape decision 9) |
+| panel ↔ panel (side / back, any angle under 180°) | **butt, A runs through** · **butt, B runs through** (at an off-square corner the stopping panel is bevelled against the through one — butt-bevel is just this, not a separate choice) · **mitre** (both bevelled on the corner line, square corners too = 45° each) | BACK_JOIN priority at square corners; ANGLE_JOIN at off-square |
+| panel ↔ front facet (angled only) | **square end** · **bevelled flush to facet** | square (shape decision 12) |
+| panel ↔ open (angled only) | **square end** · **bevelled flush** | square |
+| front facet ↔ front facet (outside corner, doors on both) | **mitre** (doors bevelled) · **reveal** (square doors, gap) | mitre (shape decision 9) |
 
 - Stored as `footprint.joins: { [junctionKey]: JoinChoice }`; absent = rule
-  default. The panel shows the default as "(rule: butt, side through)" so it's
-  clear which corners are hand-set.
+  default, shown in the picker as "Rule default" / "Square end" / "Mitred doors".
+- Inside (pie) facet corners and face-filler pairs keep their own rules — no choice.
 - Fixed post between facets (S-c) is **not** in this module — later.
 - Mitre / bevel cut-list notes, 3D bevel outlines and plan corners reuse 4a's
   `bevel_lo / bevel_hi` path. No new DB columns.
@@ -149,13 +149,15 @@ dropped with a visible warning, never re-attached.
       "edge": { "id": "e3", "role": "side", "sub": "finished" } }
   ],
   "edge_overrides": { "e3": { "role": "side", "sub": "finished" } }, // replaces role_overrides; survives preset rebuild
-  "joins": { "e2|e3": "mitre", "e3|e4": "through_b" }               // replaces flush_ends
+  "joins": { "e2|e3": "mitre", "e3|e4": "through:e4" }              // replaces flush_ends
 }
 ```
 
 - `EdgeRole` loses `scribe` (upgrade on read). New `EdgeSub` per role. Types in
   `src/lib/cabinetShape/footprint.ts`.
-- `JoinChoice` = `through_a | through_b | butt_bevel | mitre | square | flush | reveal`.
+- `JoinChoice` = `through:<edge id> | mitre | square | flush | reveal`. The butt
+  names the through edge by id (not A / B), so it survives a winding flip or a
+  hand flip (E5); keys are looked up either way round (`getJoin`).
 - Every consumer keeps reading `segments` (shape decision 8).
 
 ## Plan edit mode
@@ -233,7 +235,7 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
 |---|---|---|
 | E0 | Spec + Mark's Q&A | [x] 2026-10-25 |
 | E1 | **Types + sub-types in the resolver.** `sub` on edges, upgrade-on-read (scribe, role_overrides; flush_ends moved to E2), per-edge material + thickness (decision 5) through the inset polygon + joins, applied end panel part, finished tape. Pickers added to the existing Shape section dropdowns so it's checkable before plan editing exists. Tests: rectangle footprint = box parts still; every preset × every sub-type stays inside the outline, no overlaps | [x] built 2026-10-25, in-app check pending |
-| E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet + panel↔open square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [ ] |
+| E2 | **Junctions in the resolver.** `joins` map; through A / B, butt-bevel, mitre at any angle incl. square; panel↔facet + panel↔open square / flush (flush_ends retired); facet↔facet mitre / reveal. Corner dropdowns in the Shape section. Tests as 4a's band-fill tests for every choice | [x] built 2026-10-25, in-app check pending |
 | E3 | **Plan edit mode — picking only.** Right-click Edit shape, dim + highlight, edges coloured by type, click edge / corner → panels in the sidebar, Done / Cancel / undo. No geometry editing yet | [ ] |
 | E4a | **CAD tool extraction** — target adapter in `useAnnotationTool`, annotation behaviour unchanged (headless check of the B-phase tools) | [ ] |
 | E4b | **CAD tools on the footprint** — grips, side drag, line / arc / box drawing from scratch, fillet / chamfer / join / offset, snaps (walls, neighbours, own points), typed entry; validity; ids + formula re-expression; pos / bbox update | [ ] |
@@ -283,6 +285,37 @@ for). The code gets `/CS` unless the shape is still a preset (decision 15).
   - The optimiser names `ap:` parts generically (`normalize.ts` was mid-edit in
     another session; route it through `shapedPartLabel` later).
   - Tutorial waits for E6 (the plan-view editor changes where these are picked).
+
+### E2 notes (built 2026-10-25)
+
+- **Model:** `footprint.joins`, `JoinChoice`, `junctionKey` / `getJoin`
+  (footprint.ts). `src/lib/cabinetShape/junctions.ts`: `footprintJunctions` (every
+  corner a choice applies to, with kind panels / panel_end / facets),
+  `joinOptions`, `storedJoin` (reads a legacy `flush_ends` entry where no join is
+  set), `withJoin` (folds `flush_ends` into joins on the first change),
+  `toggleFlushEnds` (the 3D right-click, now writing joins).
+  `presets.withShapeChoices` carries joins + flush_ends through preset rebuilds
+  and placement (`seedClassDepthParams`).
+- **Resolver:** `shapeCaseParts` `endCut` — a hand-set butt picks the through
+  panel (square: `vertexTrim`; angled: stop / flush bevel), a mitre uses
+  `angledEnd('mitre')` at any angle; a hand-set corner drops the box-extent clamp
+  (it may turn BACK_JOIN round). Panel ends at angled fronts: `flush` from joins.
+  `resolveShapedFace`: `reveal` → square doors, each stopping where its back face
+  meets the corner line, less GAPC/4. `panelFrontEnd` reads joins.
+- **UI:** Shape section → "Corners" list (edge / edge, angle on hover, dropdown).
+- **Tests:** `junctions.test.ts` — corner listing; through-back at a box corner;
+  square-corner mitre; angled butt flipped; every choice × 5 shapes × 3 rule
+  sets (inside, apart, band filled); flush via joins = legacy flush_ends + toggle;
+  reveal doors (no bevels, narrower, not overlapping); choices survive rebuilds.
+- **Known gaps / check in-app:**
+  - Back running through on a box corner with BOTTOM_BACK_JOIN back_on_bottom: the
+    back's ends past the bottom have nothing under them (bottom stays between the
+    sides).
+  - A mitre at a box corner with rule scribes (SCRL / SCRBK > 0) joins on the
+    outline, not the scribed panel lines.
+  - Kick and benchtop ignore corner choices (decision 9).
+  - Hinges on a facet door next to a reveal corner: no panel there — HINGE_NO_PANEL
+    as with a mitre.
 
 Later (not this module): rectangular cabinets on the same edge model (decision
 3); a `none` edge type (decision 4); kick / benchtop per edge (decision 9);

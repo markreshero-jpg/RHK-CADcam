@@ -29,7 +29,7 @@ import { resolveFace, type FaceResolution } from './resolveFace'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
 import { shapedInterior } from './resolveShapedCase'
 import { edgeFrame, type EdgeFrame } from '../cabinetShape/construct'
-import { edgeSub, type FootprintSegment } from '../cabinetShape/footprint'
+import { edgeSub, getJoin, type FootprintSegment } from '../cabinetShape/footprint'
 
 const NEAR = 0.5
 
@@ -142,6 +142,12 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
         const g = edgeFrame(nb)
         return Math.acos(Math.max(-1, Math.min(1, f.u.x * g.u.x + f.u.y * g.u.y)))
       }
+      // Square doors at an outside facet corner (joins 'reveal',
+      // z_cabinet_shape_edit E2): each door stops where its back face meets the
+      // corner line, less the gap — the doors' regions split on that line, so
+      // they can't touch; the corner shows a small open triangle.
+      if (isDoorFront(nb) && convexCross > 1e-9 && getJoin(cab.footprint, s.edge.id, nb.edge.id) === 'reveal')
+        return { rev: r.GAPC / 4 - Math.tan(phi() / 2) * backOff, bevel: 0 }
       if (isDoorFront(nb) && convexCross > 1e-9) {
         const p = phi()
         return { rev: r.GAPC / 4 - Math.tan(p / 2) * midOff, bevel: (p / 2) * 180 / Math.PI }
