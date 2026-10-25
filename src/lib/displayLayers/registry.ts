@@ -95,6 +95,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'door_swings',    group: 'fronts', label: 'Door swings',    views: ['plan'], default: ON },
   { id: 'drawer_lines',   group: 'fronts', label: 'Drawer lines',   views: ['plan'], default: ON },
   { id: 'door_chevrons',  group: 'fronts', label: 'Door chevrons',  views: ['elevation'], default: ON },
+  { id: 'grain',          group: 'fronts', label: 'Timber grain',   views: ['elevation', '3d'], default: ON,
+    hint: 'Grained colours (has_grain): a light ghost shade + grain lines in elevations and prints, grain lines in 3D. Colour / opacity restyle the elevation grain (z_material_colours)' },
   { id: 'drawer_labels',  group: 'fronts', label: 'Drawer labels',  views: ['elevation'], default: ON },
 
   // Internals

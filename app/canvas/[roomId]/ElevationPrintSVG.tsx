@@ -39,6 +39,7 @@ import AnnotationLayer from './AnnotationLayer'
 import { annotLayerItem, annotationFramePoints, mapPt } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
 import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
+import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
 import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
 
 /** Report-only page extras (not drawing layers). */
@@ -149,6 +150,8 @@ export default function ElevationPrintSVG({
   layers:        LayerView
   show:          ElevationPageOptions
 }) {
+  // Ghost grain on grained colours (z_material_colours MC11).
+  const grainedIds = useGrainedMaterialIds()
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
   const P = scale
@@ -190,6 +193,9 @@ export default function ElevationPrintSVG({
   const tk     = 1.4 * P
   const dashSW = pen('thin', P)                // thin internals (shelves / drawer boxes)
   const dash   = `${0.9 * P} ${0.7 * P}`   // clean dash pattern
+  // Ghost grain (layer 'grain'): faint lines + light shade on grained colours.
+  const grainOn = (m: string | null | undefined) => !!m && layers.show('grain') && grainedIds.has(m)
+  const grainProps = { color: layers.color('grain', GRAIN_INK), strokeWidth: layers.w('grain', thinSW * 0.5), opacity: layers.op('grain') }
 
   // Chain / annotation positions
   const overheadChainY = -7 * P
@@ -306,6 +312,14 @@ export default function ElevationPrintSVG({
                 strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })}
 
+            {/* Ghost grain on grained kick boards, along the kick. */}
+            {rp.toekick_parts.map((p, i) => {
+              if (!grainOn(p.material_id) || p.part_key.startsWith('spreader') || !layers.show(kickPartItem(p.part_key))) return null
+              const { ex, ey, ew, eh } = tkElevRect(p)
+              const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+              return <GrainSVG key={`tkg-${i}`} x={x} y={y} w={w} h={h} dir="h" {...grainProps} />
+            })}
+
             {/* Added parts (applied panels / fillers / other) */}
             {(rp.custom_parts ?? []).map((p, i) => {
               const it = customPartItem(p)
@@ -316,6 +330,15 @@ export default function ElevationPrintSVG({
               const pp = lp(it)
               return <rect key={`cu-${i}`} x={x} y={y} width={w} height={h} fill={faceFill} fillOpacity={pp.fillOpacity}
                 stroke={INK} opacity={pp.opacity} strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+            })}
+
+            {/* Ghost grain on grained added parts seen face-on. */}
+            {(rp.custom_parts ?? []).map((p, i) => {
+              if (!p.show_in_room || !grainOn(p.material_id) || !layers.show(customPartItem(p))) return null
+              const { ex, ey } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+              if (ex < 30 || ey < 30) return null
+              const { x, y, w, h } = toSVG(p.x, p.y + ey, ex, ey)
+              return <GrainSVG key={`cug-${i}`} x={x} y={y} w={w} h={h} dir="v" {...grainProps} />
             })}
 
             {/* Faces (doors / drawers / panels) — shaded so they read against open shelves.
@@ -353,6 +376,15 @@ export default function ElevationPrintSVG({
                   {chevron}{drawerLbl}
                 </g>
               )
+            })}
+
+            {/* Ghost grain on grained fronts, up the front. */}
+            {rp.face_zones.map((fz, i) => {
+              const it = faceZoneItem(fz.face_type)
+              if (!it || !layers.show(it) || !grainOn(fz.material_id)) return null
+              const { ex, ey, ew, eh } = zoneElevRect(fz)
+              const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+              return <GrainSVG key={`fzg-${i}`} x={x} y={y} w={w} h={h} dir="v" {...grainProps} />
             })}
 
             {/* Handles (z_handles H2) — on the fronts that are drawn */}

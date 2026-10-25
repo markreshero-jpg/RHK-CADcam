@@ -41,6 +41,7 @@ import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
+import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
 
 // A dragged split line snaps to a fixed-shelf suggestion this close (mm).
 const SPLIT_SNAP = 15
@@ -239,6 +240,8 @@ export default function ElevationSVG({
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
   annotationsLayer, onViewChange, svgElRef,
 }: ElevationSVGProps) {
+  // Ghost grain on grained colours (z_material_colours MC11).
+  const grainedIds = useGrainedMaterialIds()
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
   const svgRef = useRef<SVGSVGElement>(null)
@@ -831,6 +834,9 @@ export default function ElevationSVG({
   const z = view.zoom
   // Strokes divide by the line zoom (finer on phones); text and hit targets use z.
   const lz = z / lineScale
+  // Ghost grain (layer 'grain'): faint lines + light shade on grained colours.
+  const grainOn = (m: string | null | undefined) => !!m && layers.show('grain') && grainedIds.has(m)
+  const grainProps = { color: layers.color('grain', GRAIN_INK), strokeWidth: layers.w('grain', 0.6) / lz, opacity: layers.op('grain') }
   const labelFs = 11 / z
   const cabLabelMove = useLabelMove(labelMoving?.kind === 'cab' ? labelMoving.id : null, onCabLabelMove, onLabelMoveEnd)
   const dimFs   =  9 / z
@@ -1355,6 +1361,13 @@ export default function ElevationSVG({
                               stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 0.5) / lz}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                       })}
+                      {/* Ghost grain on grained kick boards, along the kick. */}
+                      {rp.toekick_parts.map((p, i) => {
+                        if (!grainOn(p.material_id) || p.part_key.startsWith('spreader') || !layers.show(kickPartItem(p.part_key))) return null
+                        const { ex, ey, ew, eh } = tkElevRect(p)
+                        const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+                        return <GrainSVG key={`tkg-${i}`} x={x} y={y} w={w} h={h} dir="h" {...grainProps} />
+                      })}
                       {rp.internal_parts.filter(p => showInt(internalPartItem(p.part_type))).map((p, i) => {
                         const intEffP = layers.props(internalPartItem(p.part_type), z)
                         const { ex, ey, ew, eh } = shelfElevRect(p)
@@ -1557,6 +1570,14 @@ export default function ElevationSVG({
                           </g>
                         )
                       })}
+                      {/* Ghost grain on grained fronts, up the front. */}
+                      {rp.face_zones.map((fz, i) => {
+                        const it = faceZoneItem(fz.face_type)
+                        if ((it && !layers.show(it)) || !grainOn(fz.material_id)) return null
+                        const { ex, ey, ew, eh } = zoneElevRect(fz)
+                        const { x, y, w, h } = toSVG(ex, ey, ew, eh)
+                        return <GrainSVG key={`fzg-${i}`} x={x} y={y} w={w} h={h} dir="v" {...grainProps} />
+                      })}
                       {/* Handles (z_handles H2) — on the fronts that are drawn. */}
                       {layers.show('handles') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
                         <HandleElevSVG key={`hd-${i}`} s={s} project={toSVGPt}
@@ -1596,6 +1617,14 @@ export default function ElevationSVG({
                         )
                       })}
 
+                      {/* Ghost grain on grained added parts seen face-on. */}
+                      {(rp.custom_parts ?? []).map((p, i) => {
+                        if (!p.show_in_room || !grainOn(p.material_id) || !layers.show(customPartItem(p))) return null
+                        const { ex, ey } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
+                        if (ex < 30 || ey < 30) return null
+                        const { x, y, w, h } = toSVG(p.x, p.y + ey, ex, ey)
+                        return <GrainSVG key={`cug-${i}`} x={x} y={y} w={w} h={h} dir="v" {...grainProps} />
+                      })}
                       {/* Hand-added part operations (Part Editor) — projected to this
                           cabinet's elevation. Generated holes are excluded (not drawn here). */}
                       {layers.show('machining') && (handMarkersByCab.get(cab.id)?.length ?? 0) > 0 && (

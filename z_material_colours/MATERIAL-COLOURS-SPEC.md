@@ -7,7 +7,7 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
-> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour, MC8 tutorials, MC9 grain done. Next: MC7 CSV import (waits on supplier files), MC10 supplier images (optional), MC11 elevation grain (optional).
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour, MC8 tutorials, MC9 grain, MC11 elevation / print grain done. Next: MC7 CSV import (waits on supplier files), MC10 supplier images (optional).
 > Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
@@ -272,4 +272,4 @@ between two oaks).
 - [x] **MC9b** (2026-10-25, Mark: "looks a bit funny", wrong direction on backs + curved panels) Restyled for the line-drawing 3D: white tile (= exact face colour) with thin dark grey grain lines that wander gently, some in close pairs (seeded random, wrapped so it tiles), no tonal shading. Direction rule `grainExtents` replaces DY: upright panels (sides, doors, fronts, backs, wrap / shaped panels, end panels) grain up the panel; kick boards (`tk_`) and horizontals along their length. Shaped / curved (extruded) parts now grained via `shapedGrainMaps` (ExtrudeGeometry uvs are mm): wrap panels up the extrusion, sharknose along the profile. Checked on RHK6581 Living J06 with grain forced in-page (curved end + backs + doors vertical, kick horizontal).
 - [ ] **MC10** Supplier image override: storage bucket, library upload / thumbnail,
   untinted use when set.
-- [ ] **MC11** (optional) Elevation / print grain fills; second generic grain style.
+- [x] **MC11** (2026-10-25) Ghost grain in elevations: new layer item `grain` (Fronts group, elevation + 3D, default on; the 3D grain is gated by it too). `GrainSVG.tsx` draws a 7% shade + the shared grain lines (`src/lib/grainLines.ts`, also used by the 3D texture) at 40% stroke opacity, clipped to the panel with plain path + clipPath (no SVG pattern, for svg2pdf), tiled on a fixed wall grid. Fronts + face-on added parts up the panel, kick boards along. On-screen elevation (`ElevationSVG`) + printed Elevation Views / shop drawings (`ElevationPrintSVG`). Layer colour / opacity / weight restyle it per layer set. Checked on RHK1234 (screen + Elevation Views preview); the downloaded PDF not inspected. Second generic grain style still open.

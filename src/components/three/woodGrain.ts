@@ -10,70 +10,40 @@
 import * as THREE from 'three'
 import { createContext } from 'react'
 import type { PanelKind } from './PartViewer'
+import { GRAIN_TILE, grainLines } from '@/src/lib/grainLines'
 
 // Material ids that render with the generic grain. Provided by the scene that
 // knows the material colours (CabinetScene); empty = no grain anywhere.
 export const GrainContext = createContext<ReadonlySet<string>>(new Set())
 
-// Real-world size of one tile: across the grain × along the grain (mm).
-export const GRAIN_TILE = { across: 300, along: 1200 }
-
-const PX_ACROSS = 512, PX_ALONG = 2048
-const MM_PER_PX = GRAIN_TILE.across / PX_ACROSS
+// The tile: white (= the exact face colour) with the shared grain lines
+// (src/lib/grainLines.ts) drawn in thin dark grey. Grain runs along v.
+const PX_PER_MM = 512 / GRAIN_TILE.across
 
 let shared: THREE.CanvasTexture | null = null
 
-// Small seeded PRNG (mulberry32) so the pattern is identical on every load.
-function rng(seed: number) {
-  return () => {
-    seed |= 0; seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-// Grain lines run along the texture's v (vertical) axis.
 function grainTexture(): THREE.CanvasTexture {
   if (shared) return shared
   const canvas = document.createElement('canvas')
-  canvas.width = PX_ACROSS
-  canvas.height = PX_ALONG
+  canvas.width = Math.round(GRAIN_TILE.across * PX_PER_MM)
+  canvas.height = Math.round(GRAIN_TILE.along * PX_PER_MM)
   const ctx = canvas.getContext('2d')!
   ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, PX_ACROSS, PX_ALONG)
+  ctx.fillRect(0, 0, canvas.width, canvas.height)
   ctx.lineCap = 'round'
-
-  const rand = rng(20261025)
-  const TAU = Math.PI * 2
-  // Lines roughly every 6–16 mm across the board, a few drawn as close pairs.
-  let x = 0
-  while (x < PX_ACROSS) {
-    x += (6 + rand() * 10) / MM_PER_PX
-    if (x >= PX_ACROSS) break
-    const x0 = x
-    // Wander: integer cycles per tile so each line meets itself top-to-bottom.
-    const a1 = (0.6 + rand() * 1.6) / MM_PER_PX, f1 = 1 + Math.floor(rand() * 2), p1 = rand() * TAU
-    const a2 = (0.2 + rand() * 0.6) / MM_PER_PX, f2 = 3 + Math.floor(rand() * 4), p2 = rand() * TAU
-    const shade = Math.round(70 + rand() * 60)               // dark to mid grey
-    const width = 0.9 + rand() * 0.9
-    const pair = rand() < 0.3 ? (1.2 + rand() * 1.5) / MM_PER_PX : 0
-    for (const off of pair ? [0, pair] : [0]) {
-      ctx.strokeStyle = `rgba(${shade},${shade},${shade},${0.55 + rand() * 0.35})`
-      ctx.lineWidth = off ? width * 0.7 : width
-      // Draw at x and wrapped copies so lines crossing the tile edge tile cleanly.
-      for (const wrap of [-PX_ACROSS, 0, PX_ACROSS]) {
-        ctx.beginPath()
-        for (let y = 0; y <= PX_ALONG; y += 8) {
-          const t = y / PX_ALONG
-          const px = x0 + off + wrap + a1 * Math.sin(TAU * f1 * t + p1) + a2 * Math.sin(TAU * f2 * t + p2)
-          if (y === 0) ctx.moveTo(px, y); else ctx.lineTo(px, y)
-        }
-        ctx.stroke()
-      }
+  for (const l of grainLines()) {
+    const g = Math.round(l.shade * 255)
+    ctx.strokeStyle = `rgba(${g},${g},${g},${l.alpha})`
+    ctx.lineWidth = l.width * PX_PER_MM
+    for (const wrap of [-GRAIN_TILE.across, 0, GRAIN_TILE.across]) {
+      ctx.beginPath()
+      l.pts.forEach(([x, y], i) => {
+        const px = (x + wrap) * PX_PER_MM, py = y * PX_PER_MM
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py)
+      })
+      ctx.stroke()
     }
   }
-
   shared = new THREE.CanvasTexture(canvas)
   shared.wrapS = shared.wrapT = THREE.RepeatWrapping
   shared.colorSpace = THREE.SRGBColorSpace

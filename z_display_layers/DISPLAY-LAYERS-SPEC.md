@@ -141,7 +141,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 |---|---|
 | Carcase | `carcass_outline` (P,E), `carcass_gables`, `carcass_top`, `carcass_bottom` (P,E,3D), `carcass_back` (P,3D) |
 | Kicks | `kick_faces`, `kick_spreaders` (P,E,3D; **plan default hidden**) |
-| Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E) |
+| Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E), `grain` (E,3D — timber grain on grained colours: ghost shade + grain lines in elevations / prints, lines in 3D; layer colour / opacity restyle it; z_material_colours MC11, 2026-10-25) |
 | Internals | `internal_outline` (P, default hidden), `adj_shelves`, `fixed_shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
 | Hardware | `drawer_boxes`, `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D), `drawer_front_drilling` (E — drawer_front slide bores; also in elevation reports) — **all default hidden in plan + 3D**; `bins` (E,3D — z_bin_cabinet bin + its outline in elevation / sheet / editor views, default shown; a bin's rails never draw as runners) |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |

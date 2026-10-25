@@ -1355,7 +1355,7 @@ export function CabinetScene({
   }, [handMarkers])
 
   // Grained colours render the generic wood grain (z_material_colours MC9).
-  const grainIds = new Set(Object.entries(materialColours ?? {})
+  const grainIds = layers && !layers.show('grain') ? new Set<string>() : new Set(Object.entries(materialColours ?? {})
     .filter(([, v]) => typeof v === 'object' && v.grain).map(([k]) => k))
   return (
     <GrainContext.Provider value={grainIds}>
