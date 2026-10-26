@@ -18,7 +18,7 @@ import {
   offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, OFFSETTABLE, type OffsetKind,
   filletAt, chamferAt, allCorners, joinPolys, cornerJoin, boxToPoly, nearestSegIndex, type Poly,
   bulgeArc, isSpecialDim, chainedDim, type SpecialDim,
-  arcFrom3, arcFromCentre, arcFromEndsRadius, arcPoint, angOf, arcStart, arcMid, arcEnd, sweepOf, setBoxCorner, rectPts, dimOffsetFor, dimAxisFor, type DimGeom,
+  arcFrom3, arcFromCentre, arcFromEndsRadius, arcPoint, angOf, arcStart, arcMid, arcEnd, sweepOf, setBoxCorner, rectPts, dimOffsetFor, dimLineAndTextFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
 import { ownShapeGeometry, type SnapGeometry } from '@/src/lib/annotations/cadSnap'
@@ -1081,7 +1081,7 @@ export function useAnnotationTool({
         setAnnotations(xs => xs.map(x => {
           if (x.id !== cur.id) return x
           if (isSpecialDim(x.geom) && x.geom.dt === 'arclen') return { ...x, geom: { ...x.geom, off: segLength(x.geom.c, p) - x.geom.r } }
-          return { ...x, geom: { ...(x.geom as DimGeom), offset: dimOffsetFor(x.geom as DimGeom, p) } }
+          return { ...x, geom: { ...(x.geom as DimGeom), ...dimLineAndTextFor(x.geom as DimGeom, p) } }
         }))
       } else if (cur.kind === 'dimAt') {
         if (!cur.moved && !far) return
@@ -1114,12 +1114,52 @@ export function useAnnotationTool({
         dragRef.current = next; setDrag(next)
       }
     }
+    // Click (no drag) on a manual dim's grip: its line + text follow the cursor — in / out,
+    // text along the line — until the next click places them (Mark, 2026-10-26). Esc /
+    // right-click puts it back. Window capture, so the placing click lands nowhere else.
+    const carryDim = (id: string, orig: DimGeom) => {
+      let moved = false
+      const follow = (ev: PointerEvent) => {
+        if (!moved) { captureSnapshot(); moved = true }
+        const p = toFrame(ev, !ev.shiftKey, null, new Set([id]))
+        setAnnotations(xs => xs.map(x => x.id === id ? { ...x, geom: { ...orig, ...dimLineAndTextFor(orig, p) } } : x))
+      }
+      const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault() }
+      const end = (keep: boolean) => {
+        window.removeEventListener('pointermove', follow)
+        window.removeEventListener('pointerdown', place, true)
+        window.removeEventListener('keydown', key, true)
+        setSnapHit(null)
+        if (!moved) return
+        if (!keep) { setAnnotations(xs => xs.map(x => x.id === id ? { ...x, geom: orig } : x)); return }
+        const a = annRef.current.find(x => x.id === id)
+        if (a) void storeRef.current.update(id, { geom: a.geom })
+      }
+      const place = (ev: PointerEvent) => {
+        swallow(ev)
+        // …and the click / context menu this press makes (walls and cabinets select on click).
+        const next = ev.button === 0 ? 'click' : 'contextmenu'
+        window.addEventListener(next, swallow, { capture: true, once: true })
+        setTimeout(() => window.removeEventListener(next, swallow, true), 600)
+        if (ev.button === 0 && moved) follow(ev)
+        end(ev.button === 0)
+      }
+      const key = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { swallow(ev); end(false) } }
+      window.addEventListener('pointermove', follow)
+      window.addEventListener('pointerdown', place, true)
+      window.addEventListener('keydown', key, true)
+    }
     const up = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       const cur = dragRef.current
       dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
+      if (cur.kind === 'offset' && !cur.moved) {
+        const a = annRef.current.find(x => x.id === cur.id)
+        if (a?.kind === 'dim' && !isSpecialDim(a.geom)) carryDim(cur.id, a.geom as DimGeom)
+        return
+      }
       if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size' || cur.kind === 'arcGrip' || cur.kind === 'edge' || cur.kind === 'dimAt') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {

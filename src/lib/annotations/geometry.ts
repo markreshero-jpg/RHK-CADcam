@@ -24,7 +24,9 @@ export interface CloudGeom { pts: Pt[] }
 /** Aligned (no axis): offset = signed distance (frame mm) of the dim line from p1→p2,
  *  + = left of p1→p2. Linear (A5): axis 'x' measures the horizontal span with the dim
  *  line at y = p1.y + offset; axis 'y' the vertical span at x = p1.x + offset. */
-export interface DimGeom   { p1: Pt; p2: Pt; offset: number; axis?: 'x' | 'y' }
+/** tx: where the text sits along the dim line, d1 → d2 as 0 → 1 (default 0.5, centred;
+ *  outside 0..1 = past an end). */
+export interface DimGeom   { p1: Pt; p2: Pt; offset: number; axis?: 'x' | 'y'; tx?: number }
 /** B3. Arc: centre, radius, and the angles it runs between — from a0 to a1 in degrees,
  *  svg orientation (increasing = clockwise on screen). Circle: centre + radius. */
 export interface ArcGeom    { c: Pt; r: number; a0: number; a1: number }
@@ -306,7 +308,7 @@ export function annotationFramePoints(kind: AnnotationKind, geom: AnnotationGeom
     case 'ellipse': { const g = geom as BoxGeom; return [g.a, g.b, { x: g.a.x, y: g.b.y }, { x: g.b.x, y: g.a.y }] }
     case 'dim':     {
       if (isSpecialDim(geom)) return specialDimPoints(geom)
-      const g = geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2]
+      const g = geom as DimGeom; const l = dimLayout(g); return [g.p1, g.p2, l.d1, l.d2, dimTextPt(g)]
     }
     case 'arc':     return arcSample(geom as ArcGeom, 16)
     case 'circle':  { const g = geom as CircleGeom; return [{ x: g.c.x - g.r, y: g.c.y - g.r }, { x: g.c.x + g.r, y: g.c.y + g.r }] }
@@ -937,4 +939,18 @@ export function chainedDim(mode: 'continue' | 'baseline', root: DimGeom, prev: D
     : add(base, mul(dimLayout(prev).n, sign * step))
   const g: DimGeom = { p1, p2: p, axis, offset: 0 }
   return { ...g, offset: dimOffsetFor(g, target) }
+}
+
+/** Where a manual dim's text sits on its line (frame mm) — see DimGeom.tx. */
+export function dimTextPt(g: DimGeom): Pt {
+  const l = dimLayout(g), t = g.tx ?? 0.5
+  return add(l.d1, mul(sub(l.d2, l.d1), t))
+}
+
+/** Offset + text position that put a dim's line, and its text, at `cur`. */
+export function dimLineAndTextFor(g: DimGeom, cur: Pt): { offset: number; tx: number } {
+  const offset = dimOffsetFor(g, cur)
+  const l = dimLayout({ ...g, offset }), v = sub(l.d2, l.d1), L2 = v.x * v.x + v.y * v.y
+  const tx = L2 < 1e-9 ? 0.5 : ((cur.x - l.d1.x) * v.x + (cur.y - l.d1.y) * v.y) / L2
+  return { offset, tx }
 }

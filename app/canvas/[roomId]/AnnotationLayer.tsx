@@ -13,7 +13,7 @@ import {
   type ArcGeom, type CircleGeom, arcSvgPath, bulgedPath, sampleBulged,
   type SpecialDim, isSpecialDim, specialDimText, specialDimPoints, angularSector, angOf, arcPoint, arcStart, arcEnd, arcMid, arcSample, sweepOf,
   mapPt, mapRot, arrowHead, trimEnd, layoutText, leaderAttachLocal, rotatePt, cloudPath,
-  dimLayout, readableAngle, dimText, annotLayerItem, boxCorners,
+  dimLayout, dimTextPt, readableAngle, dimText, annotLayerItem, boxCorners,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, printStyle, dashPattern, type ResolvedStyle, type ArrowType } from '@/src/lib/annotations/style'
 
@@ -268,12 +268,13 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
     }
     return dot(mapPt(f, g.at), 'dimAt', 'at')
   }
-  // Dim: its two measured points, and a bar grip on the dim line to slide it in / out.
+  // Dim: its two measured points, and a bar grip at the text: click (or drag) it and the
+  // line + text follow the cursor — in / out, text along the line — click to place.
   if (a.kind === 'dim' && single) {
     const g = a.geom as DimGeom
     if (!g?.p1 || !g?.p2) return null
     const l = dimLayout(g)
-    const d1 = mapPt(f, l.d1), d2 = mapPt(f, l.d2), m = { x: (d1.x + d2.x) / 2, y: (d1.y + d2.y) / 2 }
+    const d1 = mapPt(f, l.d1), d2 = mapPt(f, l.d2), m = mapPt(f, dimTextPt(g))
     const ang = Math.atan2(d2.y - d1.y, d2.x - d1.x) * 180 / Math.PI
     return <>
       {vertexGrips(a.id, [mapPt(f, g.p1), mapPt(f, g.p2)], edit, false, false)}
@@ -579,13 +580,17 @@ function ManualDim({ a, s, f, k }: { a: RoomAnnotation; s: ResolvedStyle; f: Ann
     return <line x1={p.x + u.x * gap} y1={p.y + u.y * gap} x2={d.x + u.x * over} y2={d.y + u.y * over}
       {...strokeProps(s, k, s.weight * 0.8, 'solid')} />
   }
-  const mid = { x: (d1.x + d2.x) / 2, y: (d1.y + d2.y) / 2 }
+  // Text at DimGeom.tx along the line (centred by default); moved past an end, the
+  // dim line runs on out under it.
+  const mid = mapPt(f, dimTextPt(g)), t = g.tx ?? 0.5
   const ang = readableAngle(d1, d2)
+  const tail = t < 0 ? d1 : t > 1 ? d2 : null
   return (
     <>
       {ext(p1, d1)}
       {ext(p2, d2)}
       <Arrowed pts={[d1, d2]} s={{ ...s, dash: 'solid' }} k={k} start={s.arrowStart} end={s.arrowEnd} />
+      {tail && <line x1={tail.x} y1={tail.y} x2={mid.x} y2={mid.y} {...strokeProps(s, k, s.weight, 'solid')} />}
       <text transform={`translate(${mid.x} ${mid.y}) rotate(${ang})`} y={-0.8 * k}
         fontFamily={FONT} fontSize={s.size * k} fill={s.color} textAnchor="middle"
         fontWeight={s.bold ? 700 : 400}>
