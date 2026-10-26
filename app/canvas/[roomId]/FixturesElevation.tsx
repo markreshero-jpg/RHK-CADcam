@@ -318,10 +318,10 @@ export default function FixturesElevation({
 // Shop drawings (z_shop_drawings): fixtures facing this wall on the printed
 // elevation — outline (or traced front shape), appliance inner panel, label;
 // black ink, pen-table widths. Doors / windows are drawn by the report itself.
-export function FixturesElevationPrint({ fixtures, wall, roomCx, roomH, layers, P }: {
-  fixtures: RoomFixture[]; wall: Wall; roomCx: Pt; roomH: number; layers: LayerView; P: number
+export function FixturesElevationPrint({ fixtures, wall, side = 'face', roomCx, roomH, layers, P }: {
+  fixtures: RoomFixture[]; wall: Wall; side?: 'face' | 'back'; roomCx: Pt; roomH: number; layers: LayerView; P: number
 }) {
-  const f = elevationFrame(wall, 'face', roomCx)
+  const f = elevationFrame(wall, side, roomCx)
   const fs = 2.5 * P
   const showLabels = layers.show('fixture_labels')
   return (

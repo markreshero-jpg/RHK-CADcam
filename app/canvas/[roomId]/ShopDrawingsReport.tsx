@@ -27,6 +27,7 @@ import type { HiddenLineResult } from '@/src/lib/shopDrawings/hiddenLine'
 import AnnotationLayer from './AnnotationLayer'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import { isSpecBlock, layoutSpecSheet, annotationsBounds } from '@/src/lib/annotations/blocks'
+import { elevationViews, type ElevSide } from '@/src/lib/shopDrawings/elevationViews'
 
 const PAPER: Record<string, { w: number; h: number; label: string }> = {
   A4L: { w: 297, h: 210, label: 'A4' }, A3L: { w: 420, h: 297, label: 'A3' },
@@ -48,7 +49,7 @@ function readPage<T extends object>(key: string, defaults: T): T {
   return defaults
 }
 
-type Sheet = { key: string; title: string; wall?: Wall; shots?: Shot3D[] }
+type Sheet = { key: string; title: string; wall?: Wall; side?: ElevSide; shots?: Shot3D[] }
 /** The 3D views (S8) — not to scale; one tick for all of them, laid out over as many sheets as they need. */
 const KEY_3D = '3d'
 const LS_3D_OFF = 'shop-drawings-3d-off'
@@ -150,13 +151,12 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   const [elevShow] = useState<ElevationPageOptions>(() => ({
     ...readPage('elevation-print-layers', { returnWalls: true, titleBlock: true, annotColours: false }), titleBlock: true }))
 
-  // Sheets: the plan, then each standard wall in wall order (the 3D views follow, below).
+  // Sheets: the plan, then each wall in wall order, back sides + islands too (the 3D views follow, below).
+  const elevViews = useMemo(() => elevationViews(walls, cabinets), [walls, cabinets])
   const baseSheets: Sheet[] = useMemo(() => [
     { key: 'plan', title: `${room.name} Plan` },
-    ...walls.filter(w => w.wall_type === 'standard')
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(w => ({ key: w.id, title: `${room.name} Elevation ${w.name}`, wall: w })),
-  ], [walls, room.name])
+    ...elevViews.map(v => ({ key: v.key, title: `${room.name} Elevation ${v.name}`, wall: v.wall, side: v.side })),
+  ], [elevViews, room.name])
   // Return cabinet sections (z_section_view R1): part overrides for every wall sheet, loaded once.
   const retCabs = useMemo(() => returnCabinetsOfWalls(walls.filter(w => w.wall_type === 'standard'), walls, cabinets), [walls, cabinets])
   const returnSec = useReturnSectionData(retCabs, elevResolved, elevLayers.show('return_sections'))
@@ -424,7 +424,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }} />
               ) : sheet.wall ? (
                 <ElevationPrintSVG
-                  wall={sheet.wall} walls={walls} room={room}
+                  wall={sheet.wall} side={sheet.side} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} annotations={annotations} resolvedParts={elevResolved}
                   benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles}
                   benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category)))) : []}

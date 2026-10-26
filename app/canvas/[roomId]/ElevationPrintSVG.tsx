@@ -562,6 +562,7 @@ export default function ElevationPrintSVG({
 
   // ── Reference lines (ceiling / soffit / wall-cab top) ─────────────────────
   function refs() {
+    if (wall.wall_type === 'island') return null   // no ceiling / soffit over an island (as the canvas)
     const soffitDrop = wall.soffit_height ?? room.soffit_height
     const showSoffit = layers.show('soffit_line')
     const soffitH = showSoffit && soffitDrop != null ? (wall.height ?? roomH) - soffitDrop : null

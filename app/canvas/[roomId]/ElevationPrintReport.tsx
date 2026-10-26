@@ -20,6 +20,7 @@ import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { useCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
 import ShopTitleBlock, { sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
+import { elevationViews } from '@/src/lib/shopDrawings/elevationViews'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 }, A3L: { w: 420, h: 297 }, A2L: { w: 594, h: 420 }, A1L: { w: 841, h: 594 },
@@ -76,14 +77,16 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
   })
   useEffect(() => { try { localStorage.setItem(LS_KEY, JSON.stringify(show)) } catch { /* ignore */ } }, [show])
 
-  const standardWalls = walls.filter(w => w.wall_type === 'standard')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(standardWalls.map(w => w.id)))
+  // Each wall's face, back sides with cabinets on them, and islands (elevationViews).
+  const views = useMemo(() => elevationViews(walls, cabinets), [walls, cabinets])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(elevationViews(walls, cabinets).map(v => v.key)))
   const toggleWall = (id: string) => setSelectedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
     return next
   })
-  const visibleWalls = standardWalls.filter(w => selectedIds.has(w.id))
+  const visibleViews = views.filter(v => selectedIds.has(v.key))
+  const visibleWalls = [...new Set(visibleViews.map(v => v.wall))]
   // Return cabinet sections (z_section_view R1): part overrides for every page, loaded once.
   const wallKey = visibleWalls.map(w => w.id).join(',')
   const retCabs = useMemo(() => returnCabinetsOfWalls(visibleWalls, walls, cabinets),
@@ -92,7 +95,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
   const returnSec = useReturnSectionData(retCabs, resolvedParts, layers.show('return_sections'))
 
   async function handleDownload() {
-    if (visibleWalls.length === 0) return
+    if (visibleViews.length === 0) return
     useTutorial.getState().emit('elevation_pdf')
     setBusy(true)
     try {
@@ -100,8 +103,8 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
       const { usableW, usableH, tb } = pageLayout(paper, MARGIN, show.titleBlock ? titleBlockHeight(company) : null)
       const doc = new jsPDF({ unit: 'mm', format: [paper.w, paper.h], orientation: paper.w >= paper.h ? 'landscape' : 'portrait' })
       let first = true
-      for (const w of visibleWalls) {
-        const svgEl = refs.current.get(w.id)
+      for (const v of visibleViews) {
+        const svgEl = refs.current.get(v.key)
         if (!svgEl) continue
         if (!first) doc.addPage([paper.w, paper.h], paper.w >= paper.h ? 'landscape' : 'portrait')
         first = false
@@ -111,7 +114,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
         const x = MARGIN + Math.max(0, (usableW - targetW) / 2)
         const y = MARGIN + Math.max(0, (usableH - targetH) / 2)
         await svg2pdf(svgEl, doc, { x, y, width: targetW, height: targetH })
-        const tbSvg = tbRefs.current.get(w.id)?.querySelector('svg')
+        const tbSvg = tbRefs.current.get(v.key)?.querySelector('svg')
         if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
       }
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
@@ -123,8 +126,8 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
 
   useBatchDownload(batch, true, handleDownload)
 
-  if (standardWalls.length === 0) {
-    return <div className="text-gray-500 text-center py-12 text-sm">No standard walls in this room.</div>
+  if (views.length === 0) {
+    return <div className="text-gray-500 text-center py-12 text-sm">No walls in this room.</div>
   }
 
   return (
@@ -142,7 +145,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             {show[t.key] ? '☑' : '☐'} {t.label}
           </button>
         ))}
-        <button data-tour="elev-download" onClick={handleDownload} disabled={busy || visibleWalls.length === 0}
+        <button data-tour="elev-download" onClick={handleDownload} disabled={busy || visibleViews.length === 0}
           className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium">
           {busy ? 'Generating…' : `Download PDF · 1:${scale}`}
         </button>
@@ -151,28 +154,29 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
       {/* Wall picker */}
       <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-800">
         <span className="text-[10px] text-gray-500 uppercase tracking-wider self-center mr-1">Walls:</span>
-        {standardWalls.map(w => (
-          <button key={w.id} onClick={() => toggleWall(w.id)}
+        {views.map(v => (
+          <button key={v.key} onClick={() => toggleWall(v.key)}
             className={`px-2 py-0.5 rounded text-xs border transition-colors ${
-              selectedIds.has(w.id) ? 'bg-blue-600/25 border-blue-600/50 text-blue-300'
+              selectedIds.has(v.key) ? 'bg-blue-600/25 border-blue-600/50 text-blue-300'
                                     : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'
             }`}>
-            {w.name}
+            {v.name}
           </button>
         ))}
-        <button onClick={() => standardWalls.forEach(w => toggleWall(w.id))}
+        <button onClick={() => views.forEach(v => toggleWall(v.key))}
           className="px-2 py-0.5 rounded text-xs border border-gray-700 text-gray-500 hover:text-gray-300 hover:border-gray-500 transition-colors ml-1">
           Toggle all
         </button>
       </div>
 
       {/* Previews — one per selected wall */}
-      {visibleWalls.length === 0 ? (
+      {visibleViews.length === 0 ? (
         <div className="text-gray-500 text-center py-8 text-sm">No walls selected.</div>
-      ) : visibleWalls.map((w, i) => (
-        <div key={w.id} className="bg-white rounded overflow-hidden shadow-inner">
+      ) : visibleViews.map(({ key, wall: w, side }, i) => (
+        <div key={key} className="bg-white rounded overflow-hidden shadow-inner">
           <ElevationPrintSVG
             wall={w}
+            side={side}
             walls={walls}
             cabinets={cabinets}
             fixtures={fixtures}
@@ -181,15 +185,15 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             benchHeights={benchTopZ ? benchDimHeights(w.id, benchtops ?? [], benchTopZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category)))) : []}
             room={room}
             resolvedParts={resolvedParts}
-            svgRef={el => { if (el) refs.current.set(w.id, el); else refs.current.delete(w.id) }}
+            svgRef={el => { if (el) refs.current.set(key, el); else refs.current.delete(key) }}
             scale={scale}
             layers={layers}
             show={show}
             returnSec={returnSec}
           />
           {show.titleBlock && (
-            <div ref={el => { if (el) tbRefs.current.set(w.id, el); else tbRefs.current.delete(w.id) }} className="px-2 pb-2">
-              <ShopTitleBlock company={company} sheet={sheetTitle(project, room, scale, i + 1, visibleWalls.length)}
+            <div ref={el => { if (el) tbRefs.current.set(key, el); else tbRefs.current.delete(key) }} className="px-2 pb-2">
+              <ShopTitleBlock company={company} sheet={sheetTitle(project, room, scale, i + 1, visibleViews.length)}
                 width={pageLayout(PAPER[paperKey] ?? PAPER.A3L, MARGIN, null).usableW} />
             </div>
           )}
