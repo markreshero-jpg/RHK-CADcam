@@ -2690,6 +2690,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   function onCabinetContextMenu(e: React.MouseEvent, cabId: string) {
     e.preventDefault(); e.stopPropagation()
     if (mode === 'edit_cabinet_shape') return
+    // Stacked cabinets: the selected (or a multi-selected) one under the pointer
+    // gets the menu, not just the top-drawn one.
+    const under = cabinetsAtPoint(e.clientX, e.clientY)
+    const selId = selected?.type === 'cabinet' ? selected.id : null
+    const keep = (selId && under.includes(selId) ? selId : null) ?? under.find(id => multiSelect.includes(id))
+    if (keep) cabId = keep
     if (!multiSelect.includes(cabId)) setMultiSelect([])
     setSelected({ type: 'cabinet', id: cabId })
     setContextMenu({ x: e.clientX, y: e.clientY, cabId })
