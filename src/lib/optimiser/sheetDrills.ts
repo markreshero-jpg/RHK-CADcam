@@ -12,8 +12,10 @@ import { supabase } from '@/src/lib/supabase'
 import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from './drills'
 import { buildSheetRoutes, groupRouteOps, expandToolSetMember, type RouteOpRaw, type RouteGeom, type ToolSetMember } from './routes'
 import { resolveDrillTool, type DrillLibItem, type RouterToolItem } from './resolveDrillTools'
-import { syncSeamDrillOperationsForCabinets } from './seamDrillSync'
-import { syncMasterSlavesForCabinets } from './masterSlaveSync'
+import { syncSeamDrillOperations } from './seamDrillSync'
+import { syncMasterSlaves } from './masterSlaveSync'
+import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { NestedSheet } from './nest'
 import type { SheetDrill, SheetRoute } from './gcode'
 import type { OptiPart } from './types'
@@ -43,32 +45,62 @@ export interface ResolvedDrillOps {
 export const drillCabinetIds = (parts: OptiPart[]): string[] =>
   [...new Set(parts.filter(p => p.source_table !== 'benchtop_parts').map(p => p.cabinet_instance_id))]
 
-// Cabinets with no drilling or routing rows at all — never generated (or never
-// had any). Stage 5 generates these in the background on entry.
-export function cabinetsWithoutOps(parts: OptiPart[], ops: ResolvedDrillOps): string[] {
-  const has = new Set<string>()
-  for (const k of [...ops.opsByKey.keys(), ...ops.routesByKey.keys()]) has.add(k.split('|')[1])
-  return drillCabinetIds(parts).filter(id => !has.has(id))
+// Regenerate ONE cabinet's generated part_operations against final geometry
+// (§6.2 — authoritative pass): seam/hinge/slide rows, then master/joint slaves.
+// One resolve feeds both passes — each used to load + resolve + re-persist the
+// cabinet itself, all DB round-trips (the resolve is ~1ms). Run in that order,
+// never concurrently, so the two delete+inserts don't race on the cabinet.
+async function syncCabinetDrilling(cabinetId: string): Promise<void> {
+  let rp: ResolvedCabinet
+  try {
+    rp = await resolveCabinetFromDB(cabinetId, { quiet: true })
+  } catch (e) {
+    // Deleted after the nest was built — it keeps whatever rows it has.
+    if (e instanceof Error && /not found/i.test(e.message)) return
+    throw e
+  }
+  await syncSeamDrillOperations(cabinetId, rp)
+  await syncMasterSlaves(cabinetId, rp)
+}
+
+const SYNC_CONCURRENCY = 12   // DB-latency bound (~240ms a call), not CPU
+// One drilling regeneration per set of cabinets (part comment / size edits make
+// a new parts array but don't change the drilling). Forced fresh when the
+// optimiser opens, in the background; Stage 5 and Stage 6 await the same run
+// instead of each re-syncing every cabinet on entry / Generate. Batching in
+// another job is a new cabinet set → a new run.
+const syncRuns = new Map<string, Promise<void>>()
+
+export function syncDrillingForParts(parts: OptiPart[], opts: { force?: boolean } = {}): Promise<void> {
+  const ids = drillCabinetIds(parts)
+  const key = [...ids].sort().join(',')
+  const cur = syncRuns.get(key)
+  if (cur && !opts.force) return cur
+  // A forced run waits out one in flight so their delete+inserts can't interleave.
+  const run = (cur ?? Promise.resolve()).catch(() => {}).then(async () => {
+    let next = 0
+    const worker = async () => {
+      while (next < ids.length) {
+        const id = ids[next++]
+        try { await syncCabinetDrilling(id) }
+        catch (e) { console.error('[drillSync] cabinet failed, continuing:', id, e) }
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(SYNC_CONCURRENCY, ids.length) }, worker))
+  })
+  syncRuns.set(key, run)
+  return run
 }
 
 export async function loadResolvedDrillOps(
   parts: OptiPart[],
-  // syncOnly: regenerate just these cabinets (the read still covers every part).
-  opts: { sync?: boolean; syncOnly?: string[]; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
+  // sync: wait for this snapshot's drilling regeneration (started if not yet);
+  // 'force' runs a fresh one (Stage 5 "Regenerate", after editing joints).
+  opts: { sync?: boolean | 'force'; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
 ): Promise<ResolvedDrillOps> {
   // Benchtop parts (Phase 5) have no part_operations — their "cabinet" id is a benchtop.
   const cabIds = drillCabinetIds(parts)
-  const syncIds = opts.syncOnly ? cabIds.filter(id => opts.syncOnly!.includes(id)) : cabIds
-  // Regenerate generated part_operations against FINAL geometry so the read below is
-  // current (§6.2 — authoritative pass). Two independent generators tagged with
-  // different parameters.generated markers ('seam_joint' vs 'master_slave'); neither
-  // reads the other's rows, so order is immaterial for correctness. Run sequentially
-  // (seam first, then master/joint slaves) to avoid concurrent delete+insert on the
-  // same cabinet's part_operations. Best-effort — each swallows per-cabinet errors.
-  if (opts.sync && syncIds.length) {
-    await syncSeamDrillOperationsForCabinets(syncIds)
-    await syncMasterSlavesForCabinets(syncIds)
-  }
+  if (opts.sync && cabIds.length) await syncDrillingForParts(parts, { force: opts.sync === 'force' })
 
   const { data: opRows } = cabIds.length
     ? await supabase.from('part_operations')
@@ -189,7 +221,7 @@ export function projectSheetRoutes(sheets: NestedSheet[], ops: ResolvedDrillOps)
 export async function loadSheetDrills(
   parts: OptiPart[],
   sheets: NestedSheet[],
-  opts: { sync?: boolean; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
+  opts: { sync?: boolean | 'force'; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
 ): Promise<SheetDrillsResult> {
   const ops = await loadResolvedDrillOps(parts, opts)
   return { bySheet: projectSheetDrills(sheets, ops), routesBySheet: projectSheetRoutes(sheets, ops), warnings: ops.warnings }

@@ -53,6 +53,12 @@
 - **Nester**: hand-written skyline rect packer, `src/lib/optimiser/nest.ts` (random-restart,
   offcut pool, grain lock, top-left mirror). "Arbitrary-polygon NFP packing is a future
   extension" — `nest.ts:11-13`.
+- **Drill sync timing (2026-10-26)**: the regeneration is DB-latency bound (~240ms a call;
+  the resolve itself is ~1ms). `sheetDrills.syncDrillingForParts` resolves each cabinet ONCE
+  for the seam + master/slave passes, seam does one delete + parallel inserts, 12 cabinets in
+  flight. Run forced fresh in the background when the optimiser opens, keyed on the cabinet
+  set; Stage 5 and Stage 6 await it (Stage 5 Regenerate = `sync: 'force'`). RHK6581 Lee Smith,
+  147 cabinets: 28s in the background, Generate then 0s for drilling.
 - **Grain (fixed 2026-10-26)**: parts carry h = along the grain (CV DY). Sheets keep the board
   length (`sheet_dx`) on W / machine X, and `SheetStock.grainAlong` (default `'w'`; `'h'` when the
   material's grain_direction = width; Stage 3 toggle) says which way the grain runs. Grain-locked

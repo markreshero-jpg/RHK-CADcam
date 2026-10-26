@@ -555,16 +555,18 @@ export interface SeamDrillSyncResult { written: number; skipped: number }
 const inFlight = new Map<string, Promise<SeamDrillSyncResult>>()
 
 // Regenerate ALL resolver-computed drilling rows for ONE cabinet.
-export function syncSeamDrillOperations(cabinetId: string): Promise<SeamDrillSyncResult> {
-  return coalesceByKey(inFlight, cabinetId, () => runSeamDrillSync(cabinetId))
+// `resolved`: the cabinet already resolved by the caller (one resolve shared with
+// the master/slave pass) — skips the DB load.
+export function syncSeamDrillOperations(cabinetId: string, resolved?: ResolvedCabinet): Promise<SeamDrillSyncResult> {
+  return coalesceByKey(inFlight, cabinetId, () => runSeamDrillSync(cabinetId, resolved))
 }
 
-async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult> {
+async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): Promise<SeamDrillSyncResult> {
   // Quiet: a project may contain a half-built cabinet; its resolver errors must
   // not surface as a hard error while we generate drilling for the whole nest.
   let rp: ResolvedCabinet
   try {
-    rp = await resolveCabinetFromDB(cabinetId, { quiet: true })
+    rp = resolved ?? await resolveCabinetFromDB(cabinetId, { quiet: true })
   } catch (e) {
     // The cabinet was deleted after this nest was built. Its parts keep whatever
     // part_operations they already have — there are no live joints to regenerate.
@@ -578,20 +580,6 @@ async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult>
   }
   const { rows, skipped } = collectDrillRows(rp, cabinetId)
 
-  // Replace this cabinet's generated drill rows wholesale. Hand-added rows
-  // (no parameters.generated marker) are left untouched.
-  const { error: delErr } = await supabase.from('part_operations')
-    .delete()
-    .eq('source_cabinet_id', cabinetId)
-    .eq('operation_type', 'drill')
-    .contains('parameters', { generated: GENERATED_MARK })
-  if (delErr) { console.error('[seamDrillSync] delete', delErr); throw delErr }
-
-  if (rows.length) {
-    const { error: insErr } = await supabase.from('part_operations').insert(rows)
-    if (insErr) { console.error('[seamDrillSync] insert', insErr); throw insErr }
-  }
-
   // Generated routes + grooves (finger-rail notches + reliefs) — same wholesale replace.
   const hasRails = rp.case_parts.some(p => p.part_key.startsWith('fprail:'))
   const hasBends = rp.case_parts.some(p => p.wrap?.bend)
@@ -604,16 +592,23 @@ async function runSeamDrillSync(cabinetId: string): Promise<SeamDrillSyncResult>
   notch.rows.push(...slots.rows)
   if (hasSlots && slots.skipped) console.warn(`[seamDrillSync] ${slots.skipped} floating shelf slot pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasBends && bends.skipped) console.warn(`[seamDrillSync] ${bends.skipped} curved end bend pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
-  const { error: delRErr } = await supabase.from('part_operations')
+
+  // Replace this cabinet's generated drill + route rows wholesale. Hand-added rows
+  // (no parameters.generated marker) are left untouched. One delete, then the
+  // two inserts side by side (their column sets differ, so they stay separate) —
+  // each call is a full DB round-trip, which is what made Stage 6 slow.
+  const { error: delErr } = await supabase.from('part_operations')
     .delete()
     .eq('source_cabinet_id', cabinetId)
-    .in('operation_type', ['route', 'groove'])
+    .in('operation_type', ['drill', 'route', 'groove'])
     .contains('parameters', { generated: GENERATED_MARK })
-  if (delRErr) { console.error('[seamDrillSync] delete routes', delRErr); throw delRErr }
-  if (notch.rows.length) {
-    const { error: insRErr } = await supabase.from('part_operations').insert(notch.rows)
-    if (insRErr) { console.error('[seamDrillSync] insert routes', insRErr); throw insRErr }
-  }
+  if (delErr) { console.error('[seamDrillSync] delete', delErr); throw delErr }
+  const [ins, insR] = await Promise.all([
+    rows.length ? supabase.from('part_operations').insert(rows) : null,
+    notch.rows.length ? supabase.from('part_operations').insert(notch.rows) : null,
+  ])
+  if (ins?.error) { console.error('[seamDrillSync] insert', ins.error); throw ins.error }
+  if (insR?.error) { console.error('[seamDrillSync] insert routes', insR.error); throw insR.error }
   if (hasRails && notch.skipped) console.warn(`[seamDrillSync] ${notch.skipped} finger-rail notch(es) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
 
   return { written: rows.length + notch.rows.length, skipped: skipped + notch.skipped + bends.skipped + slots.skipped }

@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
 import { buildMargins } from '@/src/lib/optimiser/types'
-import { loadResolvedDrillOps, projectSheetDrills, cabinetsWithoutOps, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
+import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { ShapePt } from '@/src/lib/shapePath'
@@ -70,25 +70,17 @@ export default function Stage5Edit() {
   const [showDrills, setShowDrills] = useState(true)
   const [drillOps, setDrillOps] = useState<ResolvedDrillOps | null>(null)
   const [drillsLoading, setDrillsLoading] = useState(false)
-  // Projects we've already auto-generated for this session, so a project with no
-  // joint drilling doesn't re-run the slow sync on every Stage 5 visit.
-  const autoSyncedRef = useRef<string | null>(null)
   useEffect(() => {
     if (!snap) return
     let cancelled = false
     setDrillsLoading(true)
-    // Fast path: read already-generated rows.
+    // Fast path: read already-generated rows, then re-read once this snapshot's
+    // background drilling regeneration (started when the optimiser opened) is done.
     loadResolvedDrillOps(snap.parts, { sync: false, deductEdgeband: deductEb })
       .then(r => {
         if (cancelled) return
         setDrillOps(r)
-        // Cabinets never generated (e.g. drawn since the job's last optimise) —
-        // generate just those once in the background (per project). Gating on
-        // "the whole job has none" left new cabinets blank in a job that had some.
-        const missing = cabinetsWithoutOps(snap.parts, r)
-        if (!missing.length || autoSyncedRef.current === snap.projectId) { setDrillsLoading(false); return }
-        autoSyncedRef.current = snap.projectId
-        loadResolvedDrillOps(snap.parts, { sync: true, syncOnly: missing, deductEdgeband: deductEb })
+        loadResolvedDrillOps(snap.parts, { sync: true, deductEdgeband: deductEb })
           .then(r2 => { if (!cancelled) setDrillOps(r2) })
           .catch(e => console.error('[Stage5] background drill sync', e))
           .finally(() => { if (!cancelled) setDrillsLoading(false) })
@@ -100,7 +92,7 @@ export default function Stage5Edit() {
   async function regenerateDrills() {
     if (!snap || drillsLoading) return
     setDrillsLoading(true)
-    try { setDrillOps(await loadResolvedDrillOps(snap.parts, { sync: true, deductEdgeband: deductEb })) }
+    try { setDrillOps(await loadResolvedDrillOps(snap.parts, { sync: 'force', deductEdgeband: deductEb })) }
     catch (e) { console.error('[Stage5] regenerate drills', e) }
     finally { setDrillsLoading(false) }
   }

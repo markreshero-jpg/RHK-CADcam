@@ -20,6 +20,7 @@ import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
 import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
+import { syncDrillingForParts } from '@/src/lib/optimiser/sheetDrills'
 import { cutBlank, placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
@@ -48,6 +49,10 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
   // Seed the store from the server snapshot (runs after first paint, and again
   // if we navigate to a different project's optimiser).
   useEffect(() => { init(snapshot) }, [init, snapshot])
+  // Regenerate the drilling for every cabinet in the background, fresh on each
+  // optimiser visit, while the user works Stages 1–5; Stage 5's holes and
+  // Stage 6's Generate await this run rather than starting their own.
+  useEffect(() => { syncDrillingForParts(snapshot.parts, { force: true }).catch(e => console.error('[optimiser] drill sync', e)) }, [snapshot])
 
   const canAdvance = useMemo(() => {
     if (stage === 1) return !!machineId

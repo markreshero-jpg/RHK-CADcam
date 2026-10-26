@@ -17,6 +17,7 @@ import { supabase } from '@/src/lib/supabase'
 import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { fireMasters, GENERATED_MARK, type FireOpRow } from './fireMasters'
 import { coalesceByKey } from './coalesce'
+import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 
 // Columns fireMasters reads. Kept explicit (not select('*')) so the shape matches
 // FireOpRow and the query is stable.
@@ -33,16 +34,16 @@ export interface MasterSlaveSyncResult { written: number; skipped: number; noTou
 const inFlight = new Map<string, Promise<MasterSlaveSyncResult>>()
 
 // Regenerate ALL master/joint slave rows for ONE cabinet.
-export function syncMasterSlaves(cabinetId: string): Promise<MasterSlaveSyncResult> {
-  return coalesceByKey(inFlight, cabinetId, () => runMasterSlaveSync(cabinetId))
+export function syncMasterSlaves(cabinetId: string, resolved?: ResolvedCabinet): Promise<MasterSlaveSyncResult> {
+  return coalesceByKey(inFlight, cabinetId, () => runMasterSlaveSync(cabinetId, resolved))
 }
 
-async function runMasterSlaveSync(cabinetId: string): Promise<MasterSlaveSyncResult> {
+async function runMasterSlaveSync(cabinetId: string, resolved?: ResolvedCabinet): Promise<MasterSlaveSyncResult> {
   // Quiet resolve — a half-built or just-deleted cabinet must not hard-error while
   // the whole nest regenerates (same policy as seamDrillSync).
   let rp
   try {
-    rp = await resolveCabinetFromDB(cabinetId, { quiet: true })
+    rp = resolved ?? await resolveCabinetFromDB(cabinetId, { quiet: true })
   } catch (e) {
     if (e instanceof Error && /not found/i.test(e.message)) {
       console.warn('[masterSlaveSync] cabinet missing (deleted after nesting), skipping:', cabinetId)
