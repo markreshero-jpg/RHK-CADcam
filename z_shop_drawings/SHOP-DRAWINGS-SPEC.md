@@ -154,6 +154,9 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
 - **Spec sheet fills the page (Mark, 2026-10-26: "hard to read, lots of blank space"):** being NTS, the
   Specifications sheet is enlarged to fit the drawing band, up to 2.5× (`SPEC_MAX_ZOOM`). The blocks
   wrap at whichever row width gives the biggest enlargement (narrower rows stack them to use the height).
+  Borders (2026-10-26, "lost its border"): the sheet was sized from the bare text, so each box's 2mm
+  padding + border pen fell outside the viewBox and clipped. Now laid out and fitted by `drawnBounds()`
+  (blocks.ts: bold / line spacing, bgPad, half the border pen) with a 2mm white margin (`SPEC_MARGIN`).
 - **Fixtures on plan + elevation (Mark, 2026-10-21):** `FixturesPlanPrint` (FixturesPlan.tsx) and
   `FixturesElevationPrint` (FixturesElevation.tsx) draw the non-opening fixtures (appliances, sinks, taps,
   hobs, decorative) on Plan View, Elevation Views and the package, using the canvas's shapes / symbols /

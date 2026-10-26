@@ -5,7 +5,7 @@ import PlanViewReportSVG from '@/app/canvas/[roomId]/PlanViewReportSVG'
 import { resolveLayerView } from '../displayLayers/resolve'
 import type { RoomAnnotation, Wall } from '../types'
 import type { TextGeom } from '../annotations/geometry'
-import { tagBlockItems, isSpecBlock, layoutSpecSheet, annotationsBounds } from '../annotations/blocks'
+import { tagBlockItems, isSpecBlock, layoutSpecSheet, annotationsBounds, drawnBounds } from '../annotations/blocks'
 
 // z_shop_drawings: spec blocks move to their own sheet when the plan only fits without them.
 const note = (id: string, x: number, y: number, text: string, block?: string): RoomAnnotation => ({
@@ -26,9 +26,10 @@ describe('spec blocks', () => {
   it('lays blocks out left to right, tops aligned, wrapping past the width', () => {
     const k = 20
     const xs = [note('b', 7400, 725, 'B\nB'), note('a', 7400, -640, 'A'), note('c', 0, 0, 'C')]
-    const laid = layoutSpecSheet(xs, k, 160)   // two 75mm blocks + 10mm gap fit, a third wraps
+    const laid = layoutSpecSheet(xs, k, 170)   // two boxed 75mm blocks + 10mm gap fit, a third wraps
     const at = (id: string) => (laid.find(a => a.id === id)!.geom as TextGeom).at
-    const box = (id: string) => annotationsBounds([laid.find(a => a.id === id)!], k)!
+    // Laid out by the drawn box (padding + border), so borders never touch or clip.
+    const box = (id: string) => drawnBounds([laid.find(a => a.id === id)!], k)!
     // Plan order: c (x 0), then a, b (same x, top first).
     expect(laid.map(a => a.id)).toEqual(['c', 'a', 'b'])
     expect(box('c').minX).toBeCloseTo(0); expect(box('c').minY).toBeCloseTo(0)
@@ -37,6 +38,9 @@ describe('spec blocks', () => {
     expect(box('b').minX).toBeCloseTo(0)
     expect(box('b').minY).toBeGreaterThan(box('a').maxY)
     expect(at('a')).not.toEqual({ x: 7400, y: -640 })
+    // The drawn box is bigger than the bare text by the padding on every side.
+    const bare = annotationsBounds([laid.find(a => a.id === 'c')!], k)!
+    expect(box('c').minX).toBeLessThan(bare.minX); expect(box('c').maxY).toBeGreaterThan(bare.maxY)
   })
 
   it('the plan leaves hidden spec blocks off but still reports its full size', () => {

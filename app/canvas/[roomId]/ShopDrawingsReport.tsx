@@ -26,7 +26,7 @@ import { autoShots, shotsPerSheet, type Shot3D } from '@/src/lib/shopDrawings/sh
 import type { HiddenLineResult } from '@/src/lib/shopDrawings/hiddenLine'
 import AnnotationLayer from './AnnotationLayer'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
-import { isSpecBlock, layoutSpecSheet, annotationsBounds } from '@/src/lib/annotations/blocks'
+import { isSpecBlock, layoutSpecSheet, drawnBounds } from '@/src/lib/annotations/blocks'
 import { elevationViews, type ElevSide } from '@/src/lib/shopDrawings/elevationViews'
 
 const PAPER: Record<string, { w: number; h: number; label: string }> = {
@@ -66,6 +66,8 @@ function shotCells(n: number, x: number, y: number, w: number, h: number) {
 const KEY_SPECS = 'specs'
 /** The spec sheet is NTS, so it's enlarged to fill the drawing area — up to this much (Mark, 2026-10-26). */
 const SPEC_MAX_ZOOM = 2.5
+/** Paper mm of white around the spec boxes on their sheet. */
+const SPEC_MARGIN = 2
 
 /** Zoom that fits a w × h paper-mm drawing into the area, capped at SPEC_MAX_ZOOM. */
 function specZoom(w: number, h: number, areaW: number, areaH: number): number {
@@ -84,17 +86,17 @@ function SpecSheetSVG({ annotations, scale, maxW, maxH, layers, printColours, sv
 }) {
   // Wrap the blocks at whichever row width lets the sheet be enlarged the most:
   // narrower rows stack the blocks so they can grow to fill a page's height.
-  let best: { laid: RoomAnnotation[]; b: NonNullable<ReturnType<typeof annotationsBounds>>; zoom: number } | null = null
+  let best: { laid: RoomAnnotation[]; b: NonNullable<ReturnType<typeof drawnBounds>>; zoom: number } | null = null
   for (let z = 1; z <= SPEC_MAX_ZOOM + 0.001; z += 0.125) {
     const laid = layoutSpecSheet(annotations, scale, maxW / z)
-    const b = annotationsBounds(laid, scale)
+    const b = drawnBounds(laid, scale)
     if (!b) continue
-    const zoom = specZoom((b.maxX - b.minX) / scale + 2, (b.maxY - b.minY) / scale + 2, maxW, maxH)
+    const zoom = specZoom((b.maxX - b.minX) / scale + 2 * SPEC_MARGIN, (b.maxY - b.minY) / scale + 2 * SPEC_MARGIN, maxW, maxH)
     if (!best || zoom > best.zoom + 0.001) best = { laid, b, zoom }
   }
   if (!best) return null
   const { laid, b } = best
-  const pad = scale   // 1mm paper for the border pens
+  const pad = SPEC_MARGIN * scale   // clear of the boxes' borders
   const x = b.minX - pad, y = b.minY - pad, w = b.maxX - b.minX + pad * 2, h = b.maxY - b.minY + pad * 2
   return (
     <svg ref={svgRef} viewBox={`${x} ${y} ${w} ${h}`} xmlns="http://www.w3.org/2000/svg" data-vb-w={w} data-vb-h={h}

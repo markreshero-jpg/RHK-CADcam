@@ -11,7 +11,7 @@ import { resolveStyle } from './style'
 import {
   type Pt, type AnnotationGeom, type TextGeom, type LineGeom, type BoxGeom, type DimGeom,
   type ArcGeom, type CircleGeom, type SpecialDim, type Box,
-  isSpecialDim, annotationFramePoints, boundsOf, boxesOverlap,
+  isSpecialDim, annotationFramePoints, boundsOf, boxesOverlap, layoutText, rotatePt,
 } from './geometry'
 
 export interface CadBlockItem {
@@ -77,6 +77,21 @@ export function tagBlockItems(items: CadBlockItem[], name: string): CadBlockItem
   return items.map(it => ({ ...it, style: { ...it.style, block: name } }))
 }
 
+/** Frame-mm bounds of what's drawn: text boxes include bold / line spacing, the
+ *  background / border padding and half the border pen (annotationsBounds is the
+ *  bare text, which clips a boxed note's border). */
+export function drawnBounds(xs: Pick<RoomAnnotation, 'kind' | 'geom' | 'text' | 'style'>[], k: number): Box | null {
+  return boundsOf(xs.flatMap(a => {
+    if (a.kind !== 'text') return annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k)
+    const g = a.geom as TextGeom, s = resolveStyle(a.kind, a.style)
+    const b = layoutText(a.text ?? '', s.size, { bold: s.bold, lineSpacing: s.lineSpacing, width: g.width, height: g.height })
+    const pad = (s.bg !== 'none' || s.border !== 'none' ? s.bgPad : 0) + (s.border !== 'none' ? s.borderWeight / 2 : 0)
+    return [{ x: -pad, y: -pad }, { x: b.w + pad, y: -pad }, { x: b.w + pad, y: b.h + pad }, { x: -pad, y: b.h + pad }]
+      .map(c => { const r = rotatePt({ x: c.x * k, y: c.y * k }, g.rot ?? 0); return { x: g.at.x + r.x, y: g.at.y + r.y } })
+      .concat(g.leader ?? [])
+  }))
+}
+
 /** A spec block (Spec block, Appliance spec block, …): its own sheet when the plan doesn't fit. */
 export function isSpecBlock(a: Pick<RoomAnnotation, 'style'>): boolean {
   return /spec/i.test(a.style?.block ?? '')
@@ -88,7 +103,7 @@ export function isSpecBlock(a: Pick<RoomAnnotation, 'style'>): boolean {
  * `maxW` paper mm. `gap` is paper mm; `k` = frame mm per paper mm.
  */
 export function layoutSpecSheet<T extends Pick<RoomAnnotation, 'kind' | 'geom' | 'text' | 'style'>>(xs: T[], k: number, maxW: number, gap = 10): T[] {
-  const boxed = xs.map(a => ({ a, b: annotationsBounds([a], k) })).filter((x): x is { a: T; b: Box } => !!x.b)
+  const boxed = xs.map(a => ({ a, b: drawnBounds([a], k) })).filter((x): x is { a: T; b: Box } => !!x.b)
     .sort((p, q) => p.b.minX - q.b.minX || p.b.minY - q.b.minY)
   const out: T[] = []
   let x = 0, y = 0, rowH = 0
