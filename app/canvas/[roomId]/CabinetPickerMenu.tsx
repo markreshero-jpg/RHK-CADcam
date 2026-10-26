@@ -2,10 +2,12 @@
 
 // Plan view: several cabinets under one click (overheads over bases, a kick under
 // its run, overlapping cabinets) → list them all, top-drawn first, like the
-// Cabinet Edit modal's PartPickerMenu.
+// Cabinet Edit modal's PartPickerMenu. Elevation also lists fixtures in front
+// (integrated dishwasher over its cabinet).
 
 import { useEffect } from 'react'
-import type { CabinetInstance } from '@/src/lib/types'
+import type { CabinetInstance, RoomFixture } from '@/src/lib/types'
+import { fixtureDisplayName } from '@/src/lib/fixtureDisplayName'
 
 const CLASS_DOT: Record<string, string> = {
   base: '#3b82f6', base_corner: '#3b82f6', tall: '#a855f7', tall_corner: '#a855f7', wall: '#22c55e', wall_corner: '#22c55e',
@@ -27,9 +29,9 @@ export function cabinetsAtPoint(clientX: number, clientY: number): string[] {
   return ids
 }
 
-export default function CabinetPickerMenu({ cabinets, clientX, clientY, selectedId, onPick, onHover, onClose }: {
-  cabinets: CabinetInstance[]; clientX: number; clientY: number; selectedId: string | null
-  onPick: (id: string) => void; onHover: (id: string | null) => void; onClose: () => void
+export default function CabinetPickerMenu({ cabinets, fixtures = [], clientX, clientY, selectedId, onPick, onHover, onClose }: {
+  cabinets: CabinetInstance[]; fixtures?: RoomFixture[]; clientX: number; clientY: number; selectedId: string | null
+  onPick: (id: string, kind: 'cabinet' | 'fixture') => void; onHover: (id: string | null) => void; onClose: () => void
 }) {
   useEffect(() => {
     const down = () => onClose()
@@ -39,7 +41,8 @@ export default function CabinetPickerMenu({ cabinets, clientX, clientY, selected
     return () => { clearTimeout(t); window.removeEventListener('pointerdown', down); window.removeEventListener('keydown', key) }
   }, [onClose])
 
-  const menuH = cabinets.length * 30 + 44
+  const count = cabinets.length + fixtures.length
+  const menuH = count * 30 + 44
   const top  = Math.max(8, Math.min(clientY + 6, window.innerHeight - menuH - 8))
   const left = Math.max(8, Math.min(clientX + 6, window.innerWidth - 228))
 
@@ -52,14 +55,26 @@ export default function CabinetPickerMenu({ cabinets, clientX, clientY, selected
       onPointerLeave={() => onHover(null)}
     >
       <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-700 bg-gray-900/60">
-        {cabinets.length} cabinets here — pick one
+        {count} {fixtures.length ? 'items' : 'cabinets'} here — pick one
       </div>
+      {fixtures.map(f => (
+        <button
+          key={f.id}
+          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 hover:text-white flex items-center gap-2 ${f.id === selectedId ? 'text-white bg-gray-700/50' : 'text-gray-300'}`}
+          onPointerEnter={() => onHover(f.id)}
+          onClick={() => onPick(f.id, 'fixture')}
+        >
+          <span className="w-2 h-2 rounded-sm flex-none bg-gray-400" />
+          <span className="flex-1 truncate">{fixtureDisplayName(f)}</span>
+          <span className="text-gray-500 text-[10px] shrink-0">{f.category} · {Math.round(f.width)}×{Math.round(f.height)}</span>
+        </button>
+      ))}
       {cabinets.map(c => (
         <button
           key={c.id}
           className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 hover:text-white flex items-center gap-2 ${c.id === selectedId ? 'text-white bg-gray-700/50' : 'text-gray-300'}`}
           onPointerEnter={() => onHover(c.id)}
-          onClick={() => onPick(c.id)}
+          onClick={() => onPick(c.id, 'cabinet')}
         >
           <span className="w-2 h-2 rounded-full flex-none" style={{ background: c.is_kick_assembly ? '#f59e0b' : CLASS_DOT[c.assembly_class] ?? '#6b7280' }} />
           <span className="flex-1 truncate">{c.label ?? '—'}</span>

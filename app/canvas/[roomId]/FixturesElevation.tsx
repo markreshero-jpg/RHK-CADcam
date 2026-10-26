@@ -164,12 +164,10 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
 
 export default function FixturesElevation({
   fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, highlightIds, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
-  obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu, labelMovingId, onLabelMove, onLabelMoveEnd, onPickUnder, onDoubleClickUnder,
+  obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu, labelMovingId, onLabelMove, onLabelMoveEnd, onPickStack,
 }: {
-  /** Click on the already-selected fixture: pick the cabinet behind it instead (true = picked). */
-  onPickUnder?: (e: React.PointerEvent) => boolean
-  /** Double-click: open the cabinet behind the fixture (integrated D/W panel etc). */
-  onDoubleClickUnder?: (e: React.MouseEvent) => void
+  /** Click with cabinets / fixtures stacked under it: the parent lists them to pick (true = list shown). */
+  onPickStack?: (e: React.PointerEvent) => boolean
   /** The fixture whose name is in move mode (right-click → Move label). */
   labelMovingId?: string | null
   /** A fixture's name placed (elevation offset from its box centre, mm). */
@@ -282,14 +280,12 @@ export default function FixturesElevation({
         const fs = 11 / z
         const lines = showLabels ? wrapLabel(fixtureDisplayName(fx), w * 0.9, fs) : []
         return (
-          <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
+          <g key={fx.id} data-fx-id={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
             onPointerDown={e => {
               e.stopPropagation()
-              // Second click on a selected fixture goes to the cabinet behind it (clicks alternate).
-              if (fx.id === selectedId && !e.shiftKey && onPickUnder?.(e)) return
+              if (!e.shiftKey && onPickStack?.(e)) return
               onSelect(fx.id, e.shiftKey)
             }}
-            onDoubleClick={onDoubleClickUnder}
             onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
             {/* P8: the model's true front shape when traced; else the box (+ inner panel for appliances). */}
             <rect x={x} y={y} width={w} height={h} fill={STROKE} fillOpacity={(fx.elev_shape?.lines.length ? 0.001 : 0.06) * (lp.fillOpacity ?? 1)}

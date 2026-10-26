@@ -49,6 +49,8 @@ import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
 const SPLIT_SNAP = 15
 import type { LabelOff } from '@/src/lib/labelOffsets'
 import AnnotationLayer from './AnnotationLayer'
+import CabinetPickerMenu from './CabinetPickerMenu'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import { FillPatternDef, fillPaint } from './FillPattern'
 import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
 
@@ -302,6 +304,11 @@ export default function ElevationSVG({
   const [elevCabFloat, setElevCabFloat] = useState<{ t: number; ht: number } | null>(null)
 
   const [hoveredCabId, setHoveredCabId] = useState<string | null>(null)
+  // Stacked cabinets / fixtures under one click → pick one (CabinetPickerMenu).
+  const [stackPick, setStackPick] = useState<{ cabIds: string[]; fxIds: string[]; x: number; y: number } | null>(null)
+  const [stackHover, setStackHover] = useState<string | null>(null)
+  const stackPickRef = useRef(false)
+  stackPickRef.current = !!stackPick
   const [sectionMode, setSectionMode] = useState(false)
   const [sectionDepth, setSectionDepth] = useState(0)
   const [placeGhost, setPlaceGhost] = useState<{ t: number; cls: string; dx: number; dy: number; cursorT: number; cursorSY: number } | null>(null)
@@ -825,13 +832,21 @@ export default function ElevationSVG({
     }
   }
 
-  /** The cabinet drawn under a screen point (behind a fixture), by its hit area. */
-  function cabIdUnder(clientX: number, clientY: number): string | null {
-    for (const el of document.elementsFromPoint(clientX, clientY)) {
-      const id = el.closest('[data-cab-id]')?.getAttribute('data-cab-id')
-      if (id && wallCabs.some(c => c.id === id)) return id
+  /** More than one cabinet / fixture under the click (integrated D/W over its cabinet,
+   *  stacked cabinets) → list them to pick, like plan. True = the list is showing. */
+  function pickStack(e: React.PointerEvent): boolean {
+    const cabIds: string[] = [], fxIds: string[] = []
+    for (const el of document.elementsFromPoint(e.clientX, e.clientY)) {
+      const cid = el.closest('[data-cab-id]')?.getAttribute('data-cab-id')
+      if (cid && !cabIds.includes(cid) && wallCabs.some(c => c.id === cid)) cabIds.push(cid)
+      const fid = el.closest('[data-fx-id]')?.getAttribute('data-fx-id')
+      if (fid && !fxIds.includes(fid)) fxIds.push(fid)
     }
-    return null
+    if (cabIds.length + fxIds.length < 2) return false
+    setStackHover(null)
+    stackPickRef.current = true
+    setStackPick({ cabIds, fxIds, x: e.clientX, y: e.clientY })
+    return true
   }
 
   function onCabPointerDown(e: React.PointerEvent, cab: CabinetInstance) {
@@ -850,6 +865,7 @@ export default function ElevationSVG({
       onShiftSelectCabinet(cab.id)
       return
     }
+    if (mode === 'select' && pickStack(e)) return
     onSelectCabinet(cab.id)
   }
 
@@ -1242,7 +1258,7 @@ export default function ElevationSVG({
                 : 0
 
               const baseColor = isSel ? layers.cabFillSel(cab.assembly_class) : layers.cabFill(cab.assembly_class)
-              const isHover = hoveredCabId === cab.id && !isSel && !isMultiSel
+              const isHover = (stackPick ? stackHover : hoveredCabId) === cab.id && !isSel && !isMultiSel
               const cabStroke = isSel ? '#e2e8f0' : isMultiSel ? '#f59e0b' : isHover ? '#f97316' : '#3b82f6'
               const cabStrokeW = isSel || isMultiSel || isHover ? 2 / lz : 1 / lz
 
@@ -1323,6 +1339,7 @@ export default function ElevationSVG({
                     if (elevResizeFollowing) { void confirmResize(); return }
                     if (justConfirmedRef.current) return
                     if (elevCabFollowing) { dropFollowingCab(); return }
+                    if (stackPickRef.current) return   // the pick list is choosing
                     if (!shiftRef.current) onSelectCabinet(cab.id)
                   }}
                   onContextMenu={e => onCabinetContextMenu(e, cab.id)}
@@ -1912,7 +1929,7 @@ export default function ElevationSVG({
                 fixtures={fixtures ?? []} wall={wall} side={elevWallSide}
                 roomCx={centroid(walls)} roomH={roomH} zoom={z} layers={layers}
                 selectedId={selected?.type === 'fixture' ? selected.id : null}
-                highlightIds={fixtureHighlight}
+                highlightIds={stackPick && stackHover && stackPick.fxIds.includes(stackHover) ? new Set([...(fixtureHighlight ?? []), stackHover]) : fixtureHighlight}
                 onSelect={(id, shift) => onSelectFixture?.(id, shift)}
                 stretching={fixtureStretching}
                 ghost={mode === 'place_fixture' ? fixtureGhost : null}
@@ -1929,16 +1946,7 @@ export default function ElevationSVG({
                 labelMovingId={labelMoving?.kind === 'fixture' ? labelMoving.id : null}
                 onLabelMove={onFixtureLabelMove}
                 onLabelMoveEnd={onLabelMoveEnd}
-                onPickUnder={e => {
-                  const cab = wallCabs.find(c => c.id === cabIdUnder(e.clientX, e.clientY))
-                  if (!cab) return false
-                  onCabPointerDown(e, cab)
-                  return true
-                }}
-                onDoubleClickUnder={e => {
-                  const id = cabIdUnder(e.clientX, e.clientY)
-                  if (id && mode === 'select' && !elevCabFollowing && !elevResizeFollowing) { e.stopPropagation(); onCabinetDoubleClick?.(e, id) }
-                }}
+                onPickStack={pickStack}
               />
             )}
 
@@ -2577,6 +2585,23 @@ export default function ElevationSVG({
         kinds={ELEV_SNAP_KINDS}
         meta={ELEV_SNAP_KIND_META}
       />}
+
+      {stackPick && (
+        <CabinetPickerMenu
+          cabinets={stackPick.cabIds.map(id => wallCabs.find(c => c.id === id)).filter((c): c is CabinetInstance => !!c)}
+          fixtures={stackPick.fxIds.map(id => fixtures?.find(f => f.id === id)).filter((f): f is RoomFixture => !!f)}
+          clientX={stackPick.x} clientY={stackPick.y}
+          selectedId={selected?.id ?? null}
+          onHover={setStackHover}
+          onPick={(id, kind) => {
+            setStackPick(null); setStackHover(null)
+            useTutorial.getState().emit('elev_stack_pick')
+            if (kind === 'fixture') onSelectFixture?.(id, false)
+            else onSelectCabinet(id)
+          }}
+          onClose={() => { setStackPick(null); setStackHover(null) }}
+        />
+      )}
     </div>
   )
 }

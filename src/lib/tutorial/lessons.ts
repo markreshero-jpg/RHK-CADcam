@@ -986,6 +986,15 @@ export const LESSONS: TutorialLesson[] = [
       body: 'On the Elevation tab the same three items drive the cut return walls at each end of an elevation (fill default hatch) and the wall’s outline. The Plan View and Elevation Views reports and shop drawings follow the layer set you pick in their toolbar, so a print set can hatch the walls while your working set keeps them solid.',
       canvas: true, done: c => c.view === 'elevation' },
   ]},
+
+  // Appended 2026-10-27 (elevation — pick a cabinet behind a fixture, or stacked cabinets).
+  { id: 'elev_stack_picker', level: 'basics', topic: 'cabinets', title: 'Pick the cabinet behind an appliance',
+    blurb: 'In elevation, an integrated dishwasher covers its cabinet — choose which one you meant from a list.',
+    keywords: 'select pick click integrated dishwasher appliance fixture panel behind under stacked elevation choose list', steps: [
+    { id: 'pick', title: 'Click the appliance in elevation',
+      body: 'In elevation, click an integrated dishwasher (or anywhere a fixture sits over a cabinet, or cabinets overlap). A list pops up with the fixtures first, then the cabinets under the pointer. Point at a row to light it up, click it to select. Pick the cabinet to edit its panel. Esc or a click elsewhere closes the list; shift-click still multi-selects without it.',
+      canvas: true, done: (c, s) => ev(c, 'elev_stack_pick') > ev(s, 'elev_stack_pick') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
