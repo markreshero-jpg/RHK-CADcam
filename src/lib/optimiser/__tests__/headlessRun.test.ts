@@ -8,7 +8,8 @@
 // Optional: "cabinets": ["BC-08"], "quality": "fast"|"balanced"|"best".
 // Mirrors OptimiserClient Stage 4 run() + Stage6Gcode generate() and signs in
 // as the automation account from .env.local. Writes one program per sheet,
-// sheets.pdf (one page per sheet + a parts list) and summary.json.
+// sheets.pdf (one page per sheet + a parts list), labels.pdf (102x48) and
+// summary.json into <out>/<yyyymmdd-hhmmss>/.
 // ============================================================
 
 import { describe, it, vi } from 'vitest'
@@ -232,11 +233,14 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     void post0
 
     // ── Write files ──
-    mkdirSync(cfg.out, { recursive: true })
+    // Each run gets its own folder: the nest differs run to run, so programs,
+    // sheets and labels must never mix across runs (or hit a PDF left open).
+    const outDir = join(cfg.out, `${ds}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`)
+    mkdirSync(outDir, { recursive: true })
     if (!blocking.length) for (const g of gen) {
       const bytes = new Uint8Array(g.gcode.length)
       for (let i = 0; i < g.gcode.length; i++) bytes[i] = g.gcode.charCodeAt(i) & 0x7f
-      writeFileSync(join(cfg.out, g.fileName), bytes)
+      writeFileSync(join(outDir, g.fileName), bytes)
     }
 
     // Holes per placement (a hole belongs to the part whose rect holds it).
@@ -345,12 +349,12 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       cells.forEach((c, i) => doc.text(doc.splitTextToSize(c, (colX[i + 1] ?? PW - M) - colX[i] - 2)[0] ?? '', colX[i], y))
       y += 5
     }
-    writeFileSync(join(cfg.out, 'sheets.pdf'), Buffer.from(doc.output('arraybuffer')))
+    writeFileSync(join(outDir, 'sheets.pdf'), Buffer.from(doc.output('arraybuffer')))
 
     // ── Part labels (Cabinet Vision layout, z_Part_label_example) ──
     // One label per page, part-number order. Sizes are CUT size (edgeband
     // conventions: labels default to cut size). Length = DY (grain), width = DX.
-    const LW = 100, LH = 50
+    const LW = 102, LH = 48
     const cabIds = [...new Set(nestableParts.map(p => p.cabinet_instance_id))]
     const { data: defRows } = await supabase.from('cabinet_instances').select('id,cabinet_definitions(name)').in('id', cabIds)
     const cabType = new Map((defRows ?? []).map(r => [r.id as string, ((r as { cabinet_definitions?: { name?: string } | null }).cabinet_definitions?.name) ?? '']))
@@ -372,37 +376,79 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       const no = noByUid.get(pl.uid)!
       if (no > 1) lab.addPage([LH, LW], 'landscape')
       const blank = cutBlank(p, deductEb)
-      const len = Math.round(blank.h * 10) / 10, wid = Math.round(blank.w * 10) / 10
-      lab.setTextColor(0)
+      const Wc = blank.w, Hc = blank.h
+      const len = Math.round(Hc * 10) / 10, wid = Math.round(Wc * 10) / 10
+      lab.setTextColor(0); lab.setDrawColor(0); lab.setLineWidth(0.2)
       // Left column
-      lab.setFont('helvetica', 'bold'); fitText(snap.projectName, 4, 7.5, 46, 12, 7)
-      lab.setFont('helvetica', 'normal'); fitText(p.room_name, 4, 12, 46, 9, 6)
-      fitText(cabType.get(p.cabinet_instance_id) ?? '', 4, 16.5, 46, 9, 6)
-      lab.setFont('helvetica', 'bold'); fitText(p.label, 12, 21.5, 46, 12, 6.5)
-      lab.setFont('helvetica', 'normal'); fitText(matName(p.material_id) ?? '', 4, 27, 50, 9, 6)
-      fitText(colourName.get(p.material_id ?? '') ?? '', 4, 31.5, 50, 9, 6)
+      lab.setFont('helvetica', 'bold'); fitText(snap.projectName, 3, 6.5, 48, 11, 7)
+      lab.setFont('helvetica', 'normal'); fitText(p.room_name, 3, 10.5, 48, 8.5, 6)
+      fitText(cabType.get(p.cabinet_instance_id) ?? '', 3, 14.5, 48, 8.5, 6)
+      lab.setFont('helvetica', 'bold'); fitText(p.label, 9, 19.5, 44, 11, 6.5)
+      lab.setFont('helvetica', 'normal'); fitText(matName(p.material_id) ?? '', 3, 24.5, 49, 8.5, 6)
+      fitText(colourName.get(p.material_id ?? '') ?? '', 3, 28.5, 49, 8.5, 6)
       const lEdges = (p.eb_w1 > 0 ? 1 : 0) + (p.eb_w2 > 0 ? 1 : 0)
       const wEdges = (p.eb_h1 > 0 ? 1 : 0) + (p.eb_h2 > 0 ? 1 : 0)
       const tapes = [...new Set((p.eb_tape ?? []).map(t => (t.id && tapeName.get(t.id)) || ''))].filter(Boolean).join(', ')
       const edging = lEdges + wEdges ? `${lEdges}L ${wEdges}W${tapes ? ` - ${tapes}` : ''}` : 'None'
-      lab.setFontSize(7.5); lab.text('Edging:', 3, 37); lab.line(3, 37.6, 3 + lab.getTextWidth('Edging:'), 37.6)
-      fitText(edging, 14, 37, 50, 7.5, 5)
-      lab.setFontSize(7.5); lab.text('Comment:', 3, 42); lab.line(3, 42.6, 3 + lab.getTextWidth('Comment:'), 42.6)
-      fitText(p.comment ?? '', 16, 42, 48, 7.5, 5)
+      lab.setFontSize(7.5); lab.text('Edging:', 3, 35); lab.line(3, 35.6, 3 + lab.getTextWidth('Edging:'), 35.6)
+      fitText(edging, 14, 35, 39, 7.5, 5)
+      lab.setFontSize(7.5); lab.text('Comment:', 3, 40.5); lab.line(3, 41.1, 3 + lab.getTextWidth('Comment:'), 41.1)
+      fitText(p.comment ?? '', 16, 40.5, 37, 7.5, 5)
       // Cab # + sheet / part numbers
-      lab.setFontSize(11); lab.text('Cab #', 50, 10); lab.line(50, 10.8, 50 + lab.getTextWidth('Cab #'), 10.8)
-      lab.setFont('helvetica', 'bold'); fitText(p.cabinet_label, 62, 11, 18, 20, 9)
-      lab.setFontSize(7.5)
-      lab.setFont('helvetica', 'normal'); lab.text('Sheet No:', 92, 6, { align: 'right' }); lab.text('Part No:', 92, 10, { align: 'right' })
-      lab.setFont('helvetica', 'bold'); lab.text(String(si + 1), 97, 6, { align: 'right' }); lab.text(String(no), 97, 10, { align: 'right' })
-      // Sizes: width up the left (across grain), length along the bottom (with grain)
-      lab.setFont('helvetica', 'bold'); lab.setFontSize(13)
-      lab.text(String(wid), 63, 27, { angle: 270, align: 'center' })
-      lab.setFont('helvetica', 'normal'); lab.setFontSize(6); lab.text('Across Grain', 60, 27, { angle: 270, align: 'center' })
-      lab.setFont('helvetica', 'bold'); lab.setFontSize(13); lab.text(String(len), 84, 37, { align: 'center' })
-      lab.setFont('helvetica', 'normal'); lab.setFontSize(6); lab.text('With Grain', 84, 40, { align: 'center' })
+      lab.setFontSize(10); lab.text('Cab #', 53, 8.5); lab.line(53, 9.2, 53 + lab.getTextWidth('Cab #'), 9.2)
+      lab.setFont('helvetica', 'bold'); fitText(p.cabinet_label, 64, 9.5, 18, 18, 9)
+      lab.setFontSize(7)
+      lab.setFont('helvetica', 'normal'); lab.text('Sheet No:', 95, 5, { align: 'right' }); lab.text('Part No:', 95, 9, { align: 'right' })
+      lab.setFont('helvetica', 'bold'); lab.text(String(si + 1), 99.5, 5, { align: 'right' }); lab.text(String(no), 99.5, 9, { align: 'right' })
+
+      // Part picture: length across, width up, seen from the machined (up) face —
+      // the sheet view turned, never mirrored. Footprint (x = width, y = length,
+      // cut-blank frame) → picture (u, v) = (y, Wc − x), so the taped sides are
+      // w1 (x=0) top, w2 (x=Wc) bottom, h1 (y=0) left, h2 (y=Hc) right.
+      const AX = 61, AY = 14, AW = 37, AH = 21
+      const s = Math.min(AW / Hc, AH / Wc)
+      const pw = Hc * s, ph = Math.max(Wc * s, 2.5)
+      const vs = ph / Wc
+      const px = AX + (AW - pw) / 2, py = AY + (AH - ph) / 2
+      const P = (x: number, y: number): [number, number] => [px + y * s, py + ph - (Wc - x) * vs]
+      const edge = (a: [number, number], b: [number, number], taped: boolean) => {
+        lab.setLineWidth(taped ? 1.1 : 0.2); lab.line(a[0], a[1], b[0], b[1])
+      }
+      const poly = p.shape?.op_polygon && p.shape.op_polygon.length >= 3 ? p.shape.op_polygon : null
+      if (poly) {
+        // Shaped part: the finished outline shifted onto the cut blank, each
+        // edge taped per its op_tape tag or the rectangle side it lies on (shapes.makeBlank).
+        const T = 0.05
+        const on = (a: number, b: number, v: number) => Math.abs(a - v) < T && Math.abs(b - v) < T
+        poly.forEach((a, i) => {
+          const b = poly[(i + 1) % poly.length]
+          const tag = p.shape!.op_tape?.[i]
+          const tape = tag != null ? tag : on(a.x, b.x, 0) ? p.eb_w1 : on(a.x, b.x, p.w) ? p.eb_w2 : on(a.y, b.y, 0) ? p.eb_h1 : on(a.y, b.y, p.h) ? p.eb_h2 : 0
+          edge(P(a.x - blank.sx, a.y - blank.sy), P(b.x - blank.sx, b.y - blank.sy), tape > 0)
+        })
+      } else {
+        edge(P(0, 0), P(0, Hc), p.eb_w1 > 0)
+        edge(P(Wc, 0), P(Wc, Hc), p.eb_w2 > 0)
+        edge(P(0, 0), P(Wc, 0), p.eb_h1 > 0)
+        edge(P(0, Hc), P(Wc, Hc), p.eb_h2 > 0)
+      }
+      // Holes: sheet → placement-local → footprint (undo the placement turn).
+      lab.setFillColor(0)
+      for (const hd of holesIn(pl, g.drills)) {
+        const dx = hd.x - pl.x, dy = hd.y - pl.y
+        const [x, y] = pl.rotated ? [dy, pl.w - dx] : [dx, dy]
+        const [cx, cy] = P(x, y)
+        lab.circle(cx, cy, Math.max(0.3, (hd as { diameter: number }).diameter / 2 * s), 'F')
+      }
+      lab.setLineWidth(0.2)
+      // Sizes: width up the left (across grain), length under (with grain).
+      lab.setFont('helvetica', 'bold'); lab.setFontSize(11)
+      lab.text(String(wid), 58.5, AY + AH / 2, { angle: 270, align: 'center' })
+      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text('Across Grain', 55, AY + AH / 2, { angle: 270, align: 'center' })
+      lab.setFont('helvetica', 'bold'); lab.setFontSize(11); lab.text(String(len), AX + AW / 2, 40.5, { align: 'center' })
+      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text('With Grain', AX + AW / 2, 43.5, { align: 'center' })
     }))
-    writeFileSync(join(cfg.out, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
+    writeFileSync(join(outDir, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
 
     const summary = {
       job: snap.jobNumber, rooms: cfg.rooms, materials: cfg.materials, profile: prof?.name, deductEdgeband: deductEb,
@@ -410,10 +456,10 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       unplaced: nestResult.unplaced.map(u => u.label), notes, drillWarnings, gcodeErrors: blocking, gcodeWarnings: warned,
       zeroHoleParts: rows.filter(r => r.holes === 0).map(r => `${r.cab} ${r.part}`), rowsList: rows,
     }
-    writeFileSync(join(cfg.out, 'summary.json'), JSON.stringify(summary, null, 2))
+    writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2))
     const { rowsList: _r, ...brief } = summary
     void _r
     console.log(JSON.stringify(brief, null, 2))
-    lap('done')
+    lap(`done → ${outDir}`)
   }, 600_000)
 })
