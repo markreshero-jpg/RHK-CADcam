@@ -5,8 +5,8 @@
 // never rescaled. Previews are true page layouts (WYSIWYG with the PDF).
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
+import { reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -276,7 +276,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     setBusy(true)
     try {
       const orientation = paper.w >= paper.h ? 'landscape' : 'portrait'
-      const doc = new jsPDF({ unit: 'mm', format: [paper.w, paper.h], orientation })
+      const doc = reportDoc(paper.w, paper.h)
       for (let i = 0; i < printed.length; i++) {
         const sheet = printed[i]
         const page = pageRefs.current.get(sheet.key)
@@ -308,7 +308,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
         if (tb && layout.tb) await svg2pdf(tb, doc, { x: layout.tb.x, y: layout.tb.y, width: layout.tb.w, height: layout.tb.h })
       }
       const safe = (s: string) => s.replace(/[^\w-]+/g, '_')
-      doc.save(`shop-drawings-${safe(project?.job_number || project?.name || 'job')}-${safe(room.name)}.pdf`)
+      saveReport(doc, `shop-drawings-${safe(project?.job_number || project?.name || 'job')}-${safe(room.name)}.pdf`)
     } finally {
       setBusy(false)
     }

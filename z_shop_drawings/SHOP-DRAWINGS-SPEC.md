@@ -281,13 +281,18 @@ How it's built (plan):
 ### Job Reports — any room (fix, 2026-10-21)
 - The drawing reports (shop drawings, plan, elevations, cabinet sheets) used to draw only the open room in
   Job Reports, with no benchtops (so no tops in the 3D views either). Job Reports now shows a **Room:** picker;
-  each room still makes its own PDF (locked: one PDF per room). The open room draws from the live canvas;
+  each room still makes its own PDF (one PDF per room — unless "One PDF" below). The open room draws from the live canvas;
   other rooms from the job load, with their own walls / cabinets / fixtures / tops, CAD (`{fields}` filled
   for that room) and benchtop thickness (`useBenchtopCatalog.forRoom` + that room's base height).
 - **Several rooms at once (Mark, 2026-10-21):** the Rooms row ticks rooms (All / None; click a name to preview).
   **Download N rooms** queues them: each room's report remounts with `batch`, downloads its own PDF once ready
-  (useBatchDownload: drawings measured, 3D rendered, data loaded; 90s give-up), then hands on. Still one PDF
-  per room. Works for shop drawings, plan, elevations and cabinet sheets.
+  (useBatchDownload: drawings measured, 3D rendered, data loaded; 90s give-up), then hands on. Works for shop
+  drawings, plan, elevations, cabinet sheets and the 3D render.
+- **One PDF (Mark, 2026-10-26: "download all rooms in one PDF"):** a "One PDF" tick beside Download N rooms
+  (default on, localStorage `reports-one-pdf`). `pdfCombine.ts`: while a combined run is on, each report's
+  `reportDoc()` returns the shared jsPDF with a fresh page at its paper size and `saveReport()` waits; when
+  the last room hands on, ReportsModal saves `<Report>-<job>-<N>-rooms.pdf`. Stop drops it unsaved. Off =
+  one file per room as before.
 
 ## Answered (Mark, 2026-10-21)
 

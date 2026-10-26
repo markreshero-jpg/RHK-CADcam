@@ -1,5 +1,6 @@
 'use client'
-import { useState, useEffect, useMemo, useCallback, type ComponentProps } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef, type ComponentProps } from 'react'
+import { startCombined, finishCombined, cancelCombined } from './pdfCombine'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -355,18 +356,35 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   // time — each report downloads its own PDF once ready, then hands on (useBatchDownload).
   const [roomsOff, setRoomsOff] = useState<Set<string>>(new Set())
   const tickedRooms = jobRooms.filter(r => !roomsOff.has(r.id))
-  const [queue, setQueue] = useState<{ ids: string[]; total: number } | null>(null)
+  const [queue, setQueue] = useState<{ ids: string[]; total: number; one: boolean } | null>(null)
+  // "One PDF": every ticked room's pages in a single file (pdfCombine), remembered.
+  const [onePdf, setOnePdf] = useState(() => { try { return localStorage.getItem('reports-one-pdf') !== '0' } catch { return true } })
+  useEffect(() => { try { localStorage.setItem('reports-one-pdf', onePdf ? '1' : '0') } catch { /* ignore */ } }, [onePdf])
+  const batchDone = useRef(false)
   const startBatch = () => {
     if (!tickedRooms.length) return
-    setQueue({ ids: tickedRooms.map(r => r.id), total: tickedRooms.length })
+    batchDone.current = false
+    if (onePdf) startCombined()
+    setQueue({ ids: tickedRooms.map(r => r.id), total: tickedRooms.length, one: onePdf })
     setDrawRoomId(tickedRooms[0].id)
   }
   const batchNext = useCallback(() => setQueue(q => {
     const rest = q ? q.ids.slice(1) : []
-    if (!q || !rest.length) return null
+    if (!q || !rest.length) { batchDone.current = true; return null }
     setDrawRoomId(rest[0])
     return { ...q, ids: rest }
   }), [])
+  // Queue over: save the combined file if every room ran, drop it if stopped part-way.
+  const prevQueue = useRef(queue)
+  useEffect(() => {
+    const was = prevQueue.current
+    prevQueue.current = queue
+    if (!was?.one || queue) return
+    if (!batchDone.current) { cancelCombined(); return }
+    const safe = (x: string) => x.replace(/[^\w-]+/g, '_')
+    const label = REPORTS.find(r => r.id === selectedReport)?.label ?? 'report'
+    finishCombined(`${safe(label)}-${safe(project?.job_number || project?.name || 'job')}-${was.total}-rooms.pdf`)
+  }, [queue, selectedReport, project])
   const batch = queue ? batchNext : undefined
   const drawRoom = scope === 'room' ? room : (jobRooms.find(r => r.id === drawRoomId) ?? room)
   const isHere = drawRoom.id === room.id
@@ -635,13 +653,18 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                     <button className="px-2 py-0.5 border border-gray-700 rounded text-gray-300 hover:border-gray-500"
                       onClick={() => setQueue(null)}>Stop</button>
                   </span>
-                ) : (
+                ) : (<>
+                  <label className="ml-auto flex items-center gap-1 text-xs text-gray-400 cursor-pointer select-none"
+                    title="Put every ticked room in a single PDF (off = one file per room)">
+                    <input type="checkbox" checked={onePdf} onChange={e => setOnePdf(e.target.checked)} />
+                    One PDF
+                  </label>
                   <button onClick={startBatch} disabled={!tickedRooms.length}
-                    title="One PDF per room, downloaded one after another"
-                    className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded font-medium">
+                    title={onePdf ? 'All ticked rooms in one PDF' : 'One PDF per room, downloaded one after another'}
+                    className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded font-medium">
                     Download {tickedRooms.length} room{tickedRooms.length === 1 ? '' : 's'}
                   </button>
-                )}
+                </>)}
               </div>
             )}
 

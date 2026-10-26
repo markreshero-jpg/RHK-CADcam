@@ -4,8 +4,8 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useBatchDownload } from './useBatchDownload'
-import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
+import { reportDoc, saveReport } from './pdfCombine'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, SlideProduct, SlideScheduleEntry } from '@/src/lib/resolver/types'
@@ -127,7 +127,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
     setBusy(true)
     try {
       const paper = PAPER[paperKey] ?? PAPER.A3L
-      const doc = new jsPDF({ unit: 'mm', format: [paper.w, paper.h], orientation: paper.w >= paper.h ? 'landscape' : 'portrait' })
+      const doc = reportDoc(paper.w, paper.h)
       let first = true
       for (const c of visible) {
         const svgEl = refs.current.get(c.id)
@@ -137,7 +137,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
         await svg2pdf(svgEl, doc, { x: 0, y: 0, width: paper.w, height: paper.h })
       }
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
-      doc.save(`cabinet-sheets-${safeRoom}.pdf`)
+      saveReport(doc, `cabinet-sheets-${safeRoom}.pdf`)
     } finally {
       setBusy(false)
     }

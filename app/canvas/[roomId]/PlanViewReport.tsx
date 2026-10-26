@@ -5,8 +5,8 @@
 // into a paper-mm box of size vbW/scale × vbH/scale, giving a true 1:scale plot.
 'use client'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
+import { reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -155,17 +155,13 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
       pdfSvg.setAttribute('height', `${targetH}mm`)
       pdfSvg.setAttribute('preserveAspectRatio', 'xMinYMin meet')
 
-      const doc = new jsPDF({
-        unit: 'mm',
-        format: [paper.w, paper.h],
-        orientation: paper.w >= paper.h ? 'landscape' : 'portrait',
-      })
+      const doc = reportDoc(paper.w, paper.h)
       await svg2pdf(pdfSvg, doc, { x, y, width: targetW, height: targetH })
       const tbSvg = tbRef.current?.querySelector('svg')
       if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
 
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
-      doc.save(`plan-${safeRoom}-1-${scale}.pdf`)
+      saveReport(doc, `plan-${safeRoom}-1-${scale}.pdf`)
     } finally {
       setBusy(false)
     }

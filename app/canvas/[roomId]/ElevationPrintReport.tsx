@@ -5,8 +5,8 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useBatchDownload } from './useBatchDownload'
-import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
+import { reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile, RoomAnnotation } from '@/src/lib/types'
 import type { BtElevInfo } from './BenchtopElevation'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
@@ -101,7 +101,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
     try {
       const paper = PAPER[paperKey] ?? PAPER.A3L
       const { usableW, usableH, tb } = pageLayout(paper, MARGIN, show.titleBlock ? titleBlockHeight(company) : null)
-      const doc = new jsPDF({ unit: 'mm', format: [paper.w, paper.h], orientation: paper.w >= paper.h ? 'landscape' : 'portrait' })
+      const doc = reportDoc(paper.w, paper.h)
       let first = true
       for (const v of visibleViews) {
         const svgEl = refs.current.get(v.key)
@@ -118,7 +118,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
         if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
       }
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
-      doc.save(`elevations-${safeRoom}-1-${scale}.pdf`)
+      saveReport(doc, `elevations-${safeRoom}-1-${scale}.pdf`)
     } finally {
       setBusy(false)
     }

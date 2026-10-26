@@ -4,8 +4,8 @@
 // move into the other reports.
 'use client'
 import { useState, useEffect, useRef, useMemo, type ComponentProps } from 'react'
-import { jsPDF } from 'jspdf'
 import { svg2pdf } from 'svg2pdf.js'
+import { reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -88,7 +88,7 @@ export default function Render3DReport({ project, room, walls, cabinets, resolve
     setBusy(true)
     try {
       const orientation = paper.w >= paper.h ? 'landscape' : 'portrait'
-      const doc = new jsPDF({ unit: 'mm', format: [paper.w, paper.h], orientation })
+      const doc = reportDoc(paper.w, paper.h)
       for (let i = 0; i < shots.length; i++) {
         const s = shots[i]
         const page = pageRefs.current.get(s.id)
@@ -101,7 +101,7 @@ export default function Render3DReport({ project, room, walls, cabinets, resolve
         if (tb && layout.tb) await svg2pdf(tb, doc, { x: layout.tb.x, y: layout.tb.y, width: layout.tb.w, height: layout.tb.h })
       }
       const safe = (t: string) => t.replace(/[^\w-]+/g, '_')
-      doc.save(`3d-render-${safe(project?.job_number || project?.name || 'job')}-${safe(room.name)}.pdf`)
+      saveReport(doc, `3d-render-${safe(project?.job_number || project?.name || 'job')}-${safe(room.name)}.pdf`)
     } finally {
       setBusy(false)
     }
