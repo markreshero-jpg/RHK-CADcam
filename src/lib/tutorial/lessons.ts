@@ -956,6 +956,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In the Layers drop-down pick Manage layers…, open the Elevation view’s Room group and untick Return cabinet sections to hide them (on screen and in prints that use that layer set). Their parts also follow their own items: untick Doors and the door edges go too.',
       canvas: true, done: c => c.view === 'elevation' },
   ]},
+
+  // Appended 2026-10-26 (z_edgeband_edit EB1 + EB2 — edge banding on the 3D parts).
+  { id: 'edgeband_edit', level: 'basics', topic: 'cabinets', title: 'Edge band the parts in 3D',
+    blurb: 'See which edges are taped on the cabinet’s parts and change them by clicking the edges.',
+    keywords: 'edge banding edgeband tape taped untaped edges paint brush part 3D cabinet edit modal finished edge', steps: [
+    { id: 'one', title: 'One part: right-click it',
+      body: 'Double-click a cabinet to open it, go to 3D (turn Wire off), and right-click a part. Its four edges show on the part: cyan = taped, rose = no tape (white under the mouse). Click the part menu away, then click an edge to tape or untape it; the Top / Bottom / Left / Right ticks in the part panel follow.',
+      canvas: true, done: (c, s) => ev(c, 'edgeband_part_edge') > ev(s, 'edgeband_part_edge') },
+    { id: 'paint', title: 'Every part at once',
+      body: 'Press Edge banding (bottom right of the 3D view), or right-click a part → Edit edge banding (all parts). Every board part shows its edges. The bar at the top picks what a click does: Toggle flips the edge, Edge tapes it, No edge removes the tape.',
+      canvas: true, done: (c, s) => ev(c, 'edgeband_paint') > ev(s, 'edgeband_paint') },
+    { id: 'brush', title: 'Paint edges',
+      body: 'Click edges to paint them; Shift+click does all four edges of that part. Each click saves straight away and survives rebuilds. Drag to turn the cabinet as usual. Done (or Esc) finishes; hardware and parts with a drawn shape have no edges to click.',
+      canvas: true, done: (c, s) => ev(c, 'edgeband_paint_edge') > ev(s, 'edgeband_paint_edge') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

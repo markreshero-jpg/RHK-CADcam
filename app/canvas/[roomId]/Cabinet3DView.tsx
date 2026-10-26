@@ -8,6 +8,7 @@ import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
 import { saveSVGEdge } from './cabinetEditSvgHelpers'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import type { CabinetInstance } from '@/src/lib/types'
 import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
 import { customExtents, customFieldForExtent, customPanelKind, type CustomOrient } from '@/src/lib/customPartBox'
@@ -1925,10 +1926,11 @@ export default function Cabinet3DView({
   // Saved on every click — waiting for the selection to move lost the edit when
   // the modal was closed with the part still selected.
   function handleEdgeChange(edge: PartEdge) {
-    const part = selectedPart
-    if (!part) return
+    if (selectedPart) saveEdge(selectedPart, edge)
+  }
+  function saveEdge(part: PartMeta, edge: PartEdge) {
     setEdgeOverrides(m => new Map(m).set(part.id, edge))
-    setSelectedPart({ ...part, edge })
+    setSelectedPart(s => (s && s.id === part.id ? { ...s, edge } : s))
     if (part.id.startsWith('custom_')) {
       const cid = part.id.slice(7)
       setCustomParts?.(prev => prev.map(p => p.id === cid
@@ -1943,11 +1945,32 @@ export default function Cabinet3DView({
   // show on the 3D part — taped cyan, bare rose — and a click toggles one. Board
   // parts only (case, kick, internal, fronts, added parts), the same set the
   // properties panel's edge ticks save.
-  const edgeEdit = useMemo(() => selectedPart && !selectedPart.hardware && /^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id)
-    ? { partId: selectedPart.id, onToggle: (side: keyof PartEdge) => handleEdgeChange({ ...selectedPart.edge, [side]: !selectedPart.edge[side] }) }
-    : null,
+  // Paint mode (EB2): every board part shows its edges at once and a click applies
+  // the brush — toggle, tape or bare; Shift+click does all four edges of the part.
+  const [ebPaint, setEbPaint] = useState<null | 'toggle' | 'tape' | 'bare'>(null)
+  const edgeEdit = useMemo(() => {
+    const bandable = (p: PartMeta) => !p.hardware && /^(case_|tk_|int_|zone_|custom_)/.test(p.id)
+    const onToggle = (p: PartMeta, side: keyof PartEdge, whole: boolean) => {
+      const v = ebPaint === 'tape' ? true : ebPaint === 'bare' ? false : !p.edge[side]
+      const edge = whole ? { top: v, bottom: v, left: v, right: v } : { ...p.edge, [side]: v }
+      if ((['top', 'bottom', 'left', 'right'] as const).some(k => edge[k] !== p.edge[k])) saveEdge(p, edge)
+      useTutorial.getState().emit(ebPaint ? 'edgeband_paint_edge' : 'edgeband_part_edge')
+    }
+    if (ebPaint) return { partId: null, all: bandable, onToggle }
+    return selectedPart && bandable(selectedPart) ? { partId: selectedPart.id, onToggle } : null
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [selectedPart])
+  }, [selectedPart, ebPaint])
+  // Escape leaves the paint mode before it closes the modal.
+  useEffect(() => {
+    if (!ebPaint) return
+    useTutorial.getState().emit('edgeband_paint')
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      e.preventDefault(); e.stopImmediatePropagation(); setEbPaint(null)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [ebPaint])
 
   // Resize the selected part from the inspector. The panel edits the visible 3D
   // box (w/h/d). Custom parts are authoritative (real dims → cut list); resolved
@@ -2104,9 +2127,26 @@ export default function Cabinet3DView({
       enablePan
       onDeselect={() => setSelectedPart(null)}
       onContextMenu={handleCanvasContextMenu}
-      hint={selectedPart && edgeEdit ? "Click the picked part's edges to tape (cyan) or untape (rose) · right-click another part to pick it · Left-drag rotate" : "Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"}
+      hint={ebPaint ? 'Edge banding: click an edge to paint it (cyan = taped, rose = bare) · Shift+click = all four edges of that part · Esc or Done to finish · Left-drag rotate'
+        : selectedPart && edgeEdit ? "Click the picked part's edges to tape (cyan) or untape (rose) · right-click another part to pick it · Left-drag rotate" : "Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"}
       overlay={
         <>
+          {ebPaint && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded px-2 py-1 text-[11px] pointer-events-auto select-none"
+              data-eb-paint>
+              <span className="text-gray-400 mr-1">Edge banding</span>
+              {([['toggle', 'Toggle'], ['tape', 'Edge'], ['bare', 'No edge']] as const).map(([k, l]) => (
+                <button key={k} onClick={() => setEbPaint(k)}
+                  className={`px-2 py-0.5 rounded border transition-colors ${ebPaint === k
+                    ? k === 'bare' ? 'bg-rose-600 border-rose-500 text-white' : k === 'tape' ? 'bg-cyan-600 border-cyan-500 text-white' : 'bg-gray-600 border-gray-500 text-white'
+                    : 'border-gray-600 text-gray-300 hover:text-white hover:border-gray-400'}`}>
+                  {l}
+                </button>
+              ))}
+              <button onClick={() => setEbPaint(null)}
+                className="ml-1 px-2 py-0.5 rounded border border-orange-500 text-orange-300 hover:bg-orange-600 hover:text-white">Done</button>
+            </div>
+          )}
           {selectedPart && !showFullPanel && (
             <PartInfoCard part={selectedPart}
               ebThickness={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId]?.thickness : undefined}
@@ -2165,11 +2205,24 @@ export default function Cabinet3DView({
                     {frontEnd.flush ? '▭ Square front edge' : '◢ Bevel front edge to facet'}
                   </button>
                 )}
+                <button
+                  className="w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-200 transition-colors whitespace-nowrap"
+                  onClick={() => { setEbPaint('toggle'); setEditMenu(null) }}>
+                  ▤ Edit edge banding (all parts)
+                </button>
                 <PartHideTicks partId={selectedPart.id} className="px-3 pt-1.5 pb-1 mt-1 border-t border-gray-700" />
               </div>
             </>
           )}
           <div className="absolute bottom-8 right-3 flex flex-col gap-1 items-end pointer-events-none">
+            <button
+              onClick={() => setEbPaint(m => (m ? null : 'toggle'))}
+              className={`text-[11px] font-mono rounded px-2 py-1 transition-colors pointer-events-auto select-none border ${ebPaint
+                ? 'text-white bg-cyan-600 border-cyan-500 hover:bg-cyan-500'
+                : 'text-cyan-800 hover:text-cyan-700 bg-white/70 hover:bg-white/90 border-cyan-400 hover:border-cyan-500'}`}
+            >
+              {ebPaint ? 'Done edge banding' : 'Edge banding'}
+            </button>
             {hasDoors && (
               <button
                 onClick={() => setDoorsOpen(o => !o)}

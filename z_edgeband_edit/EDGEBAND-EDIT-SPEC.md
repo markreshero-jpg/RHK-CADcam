@@ -6,8 +6,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → EB1 built 2026-10-26, headless-checked, in-app check pending.
-> EB2 (paint across parts) only if Mark asks for it after using EB1.
+> **RESUME HERE** → EB1 + EB2 built 2026-10-26, headless-checked, in-app checks pending.
+> Possible later: bulk picks ("all front edges", "all visible edges").
 
 ## Asked for (Mark, 2026-10-26)
 
@@ -32,6 +32,14 @@ have to be a different colour."
    the set the panel's ticks save. Hardware (runners, hinges, handles, bins) and
    shaped parts (their tape is cut from the outline) show no edge targets.
 5. Works in solid and wire.
+6. **Paint mode (EB2, Mark 2026-10-26 "lets try")**: an **Edge banding** button
+   (bottom right of the 3D view) or right-click a part → **Edit edge banding (all
+   parts)** turns it on. Every board part shows its edges at once. A bar at the top
+   picks the brush: **Toggle** (flip), **Edge** (tape), **No edge** (bare);
+   **Shift+click** applies it to all four edges of that part. Done / Esc leaves the
+   mode (Esc no longer closes the modal while painting). Each click saves at once
+   through the same path as decision 3 (edge_overrides saves are chained per cabinet,
+   so fast clicks don't lose each other).
 
 ## Build
 
@@ -46,13 +54,21 @@ have to be a different colour."
   modal, 3D, Wire off, right-click the left door → four cyan edges; click its left
   edge → Left tick clears, edge turns rose; click again → back). Passed 2026-10-26;
   BC-01 left as it was.
+- EB2: `EdgeEditContext` grew `all(meta)` (paint mode: which parts show targets) and
+  `onToggle(meta, side, whole)`; `Cabinet3DView` holds `ebPaint` (brush) and
+  `saveEdge(part, edge)` for any part. Tutorial lesson `edgeband_edit` (events
+  `edgeband_part_edge`, `edgeband_paint`, `edgeband_paint_edge`).
+  Check: `z_plan_automation/verify-edgeband-paint.mjs` (BRUSH=tape SHIFT=1 CLICKS=867,396
+  ESC=1 → BC-01 right side all four edges taped in the DB, Esc leaves the mode with
+  the modal open). Passed 2026-10-26; BC-01 restored.
 
 ## Phases
 
 | Phase | Scope | Status |
 |---|---|---|
 | EB1 | Edges on the picked part, click to toggle (decisions 1–5) | [x] built 2026-10-26, in-app check pending |
-| EB2 | Optional: right-click → "Edit edge banding" paint mode across every part (all parts show their edges; Edge / No edge chips; bulk "all front edges") | [ ] only if asked |
+| EB2 | Paint mode across every part (decision 6): Toggle / Edge / No edge brush, Shift+click = whole part | [x] built 2026-10-26, in-app check pending |
+| EB3 | Optional: bulk picks ("all front edges", "all visible edges") | [ ] only if asked |
 
 ## Known gaps
 

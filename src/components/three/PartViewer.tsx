@@ -291,10 +291,15 @@ export const PassivePartsContext = createContext(false)
 // (z_display_layers spec, Phase 3c). Models (hinges, runners) read it too.
 export const PartAlphaContext = createContext(1)
 
-/** Edge banding on the selected part (Cabinet Edit modal): that part draws its four
- *  edges as click targets — taped in cyan, bare in rose — and a click toggles
- *  the edge (z_edgeband_edit). null = off. */
-export const EdgeEditContext = createContext<{ partId: string; onToggle: (side: keyof PartEdge) => void } | null>(null)
+/** Edge banding in the Cabinet Edit modal (z_edgeband_edit): the selected part
+ *  (partId) — or, in the paint mode, every part `all` accepts — draws its four
+ *  edges as click targets, taped in cyan, bare in rose. A click hands the part,
+ *  the edge and Shift (= all four edges) to onToggle. null = off. */
+export const EdgeEditContext = createContext<{
+  partId: string | null
+  all?:   (meta: PartMeta) => boolean
+  onToggle: (meta: PartMeta, side: keyof PartEdge, whole: boolean) => void
+} | null>(null)
 const EDGE_TAPED = '#06b6d4', EDGE_BARE = '#f43f5e', EDGE_HOVER = '#ffffff'
 const SIDES = ['top', 'bottom', 'left', 'right'] as const
 export function PartAlpha({ a, children }: { a: number; children: React.ReactNode }) {
@@ -386,10 +391,11 @@ export function Part({
   const strips = ebSpec && !shapeGeom ? edgeStrips(b, meta.edge, meta.panelKind, tapeT) : []
   const core = ebSpec && !shapeGeom ? edgeCoreBox(b, meta.edge, meta.panelKind, tapeT) : b
 
-  // Edge-banding targets on the selected part: each edge as a band 4 mm into the
-  // panel, standing 1 mm proud of every face so it reads (and takes the click) over it.
+  // Edge-banding targets on the selected part (every part in paint mode): each edge
+  // as a band 4 mm into the panel, standing 1 mm proud of every face so it reads
+  // (and takes the click) over it.
   const NO_EDGE: PartEdge = { top: false, bottom: false, left: false, right: false }
-  const edgeTargets = edgeEdit && edgeEdit.partId === meta.id && !passive && !shapeGeom
+  const edgeTargets = edgeEdit && (edgeEdit.partId === meta.id || edgeEdit.all?.(meta)) && !passive && !shapeGeom
     ? SIDES.map(side => {
         const st = edgeStrips(b, { ...NO_EDGE, [side]: true }, meta.panelKind, Math.min(4, Math.max(1, Math.min(b.w, b.h, b.d) / 3)))[0]
         return st ? { side, pos: st.pos, args: st.args.map(v => v + 2) as [number, number, number] } : null
@@ -480,7 +486,7 @@ export function Part({
     <mesh key={`ee-${t.side}`} position={[t.pos[0] - b.x, t.pos[1] - b.y, t.pos[2] - b.z]} renderOrder={2}
       onPointerDown={e => { e.stopPropagation(); dragRef.current = false }}
       onPointerMove={e => { if (e.buttons) dragRef.current = true }}
-      onClick={e => { e.stopPropagation(); if (!dragRef.current) edgeEdit!.onToggle(t.side) }}
+      onClick={e => { e.stopPropagation(); if (!dragRef.current) edgeEdit!.onToggle(meta, t.side, e.nativeEvent.shiftKey) }}
       onPointerOver={e => { e.stopPropagation(); setEdgeHover(t.side); document.body.style.cursor = 'pointer' }}
       onPointerOut={() => { setEdgeHover(h => (h === t.side ? null : h)); document.body.style.cursor = '' }}>
       <boxGeometry args={t.args} />
