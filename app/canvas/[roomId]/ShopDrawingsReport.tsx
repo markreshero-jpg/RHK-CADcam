@@ -63,19 +63,36 @@ function shotCells(n: number, x: number, y: number, w: number, h: number) {
 
 /** The spec blocks' own sheet (Mark, 2026-10-25): first, when the plan only fits without them. */
 const KEY_SPECS = 'specs'
+/** The spec sheet is NTS, so it's enlarged to fill the drawing area — up to this much (Mark, 2026-10-26). */
+const SPEC_MAX_ZOOM = 2.5
+
+/** Zoom that fits a w × h paper-mm drawing into the area, capped at SPEC_MAX_ZOOM. */
+function specZoom(w: number, h: number, areaW: number, areaH: number): number {
+  return Math.max(1, Math.min(SPEC_MAX_ZOOM, areaW / w, areaH / h))
+}
 
 /** Spec blocks side by side at their paper size; viewBox in frame mm like the plan. */
-function SpecSheetSVG({ annotations, scale, maxW, layers, printColours, svgRef }: {
+function SpecSheetSVG({ annotations, scale, maxW, maxH, layers, printColours, svgRef }: {
   annotations: RoomAnnotation[]
   scale: number
   maxW: number
+  maxH: number
   layers: LayerView
   printColours: boolean
   svgRef: (el: SVGSVGElement | null) => void
 }) {
-  const laid = layoutSpecSheet(annotations, scale, maxW)
-  const b = annotationsBounds(laid, scale)
-  if (!b) return null
+  // Wrap the blocks at whichever row width lets the sheet be enlarged the most:
+  // narrower rows stack the blocks so they can grow to fill a page's height.
+  let best: { laid: RoomAnnotation[]; b: NonNullable<ReturnType<typeof annotationsBounds>>; zoom: number } | null = null
+  for (let z = 1; z <= SPEC_MAX_ZOOM + 0.001; z += 0.125) {
+    const laid = layoutSpecSheet(annotations, scale, maxW / z)
+    const b = annotationsBounds(laid, scale)
+    if (!b) continue
+    const zoom = specZoom((b.maxX - b.minX) / scale + 2, (b.maxY - b.minY) / scale + 2, maxW, maxH)
+    if (!best || zoom > best.zoom + 0.001) best = { laid, b, zoom }
+  }
+  if (!best) return null
+  const { laid, b } = best
   const pad = scale   // 1mm paper for the border pens
   const x = b.minX - pad, y = b.minY - pad, w = b.maxX - b.minX + pad * 2, h = b.maxY - b.minY + pad * 2
   return (
@@ -129,7 +146,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   const elevLayers = useMemo(() => without(resolveLayerView(elevSet, 'elevation'), 'cabinet_sizes'), [elevSet])
   const planAnnots = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   const [planShow] = useState<PlanViewPageOptions>(() => ({
-    ...readPage('plan-view-layers', { wallNames: true, hatch: true, titleBlock: true, annotColours: false }), titleBlock: true }))
+    ...readPage('plan-view-layers', { titleBlock: true, annotColours: false }), titleBlock: true }))
   const [elevShow] = useState<ElevationPageOptions>(() => ({
     ...readPage('elevation-print-layers', { returnWalls: true, titleBlock: true, annotColours: false }), titleBlock: true }))
 
@@ -236,8 +253,11 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   const place = (key: string) => {
     // 3D views aren't to scale: they fill the band.
     if (key.startsWith(KEY_3D)) return { x: MARGIN, y: layout.top, w: layout.usableW, h: layout.usableH, fits: true }
-    const s = sizes[key]
-    if (!s) return null
+    const s0 = sizes[key]
+    if (!s0) return null
+    // NTS spec sheet: enlarged to fill the band (the PDF scales the vector with the box).
+    const z = key === KEY_SPECS ? specZoom(s0.w, s0.h, layout.usableW, layout.usableH) : 1
+    const s = { w: s0.w * z, h: s0.h * z }
     return {
       x: MARGIN + Math.max(0, (layout.usableW - s.w) / 2),
       y: layout.top + Math.max(0, (layout.usableH - s.h) / 2),
@@ -399,7 +419,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                 ? { left: pct(box.x, paper.w), top: pct(box.y, paper.h), width: pct(box.w, paper.w) }
                 : { left: pct(MARGIN, paper.w), top: pct(layout.top, paper.h), width: pct(layout.usableW, paper.w), visibility: 'hidden' }}>
               {sheet.key === KEY_SPECS ? (
-                <SpecSheetSVG annotations={specAnnots} scale={scale} maxW={layout.usableW} layers={planLayers}
+                <SpecSheetSVG annotations={specAnnots} scale={scale} maxW={layout.usableW} maxH={layout.usableH} layers={planLayers}
                   printColours={planShow.annotColours}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }} />
               ) : sheet.wall ? (

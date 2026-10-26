@@ -145,6 +145,9 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
   tagged once in the DB. The decision uses the plan's size *with* the blocks (`data-full-w/h`), so it
   can't flip back and forth. RHK6581 J05+J04 at 1:20: 479 → 392 x 233mm (fits A3 width; height fits
   only without the signature / copyright lines). Test `specSheet.test.ts`.
+- **Spec sheet fills the page (Mark, 2026-10-26: "hard to read, lots of blank space"):** being NTS, the
+  Specifications sheet is enlarged to fit the drawing band, up to 2.5× (`SPEC_MAX_ZOOM`). The blocks
+  wrap at whichever row width gives the biggest enlargement (narrower rows stack them to use the height).
 - **Fixtures on plan + elevation (Mark, 2026-10-21):** `FixturesPlanPrint` (FixturesPlan.tsx) and
   `FixturesElevationPrint` (FixturesElevation.tsx) draw the non-opening fixtures (appliances, sinks, taps,
   hobs, decorative) on Plan View, Elevation Views and the package, using the canvas's shapes / symbols /
