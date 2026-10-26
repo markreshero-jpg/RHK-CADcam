@@ -3,22 +3,23 @@
 // (P = scale). Every line prints solid black: weight and dash carry the
 // hierarchy, not grey ink (thin grey lines are what make a PDF look soft).
 // Layer-set weight multipliers still apply on top (layers.w(id, base)).
+// Thinned about one step 2026-10-26 (Mark: prints looked heavy) — was 0.7 / 0.5 / 0.35 / 0.25 / 0.18 / 0.13.
 
 export const PRINT_INK = '#000'
 
 export const PEN = {
   /** Floor / ground line in elevations. */
-  ground: 0.7,
+  ground: 0.5,
   /** Walls (cut), island lines. */
-  heavy:  0.5,
+  heavy:  0.35,
   /** Carcase outlines, openings. */
-  medium: 0.35,
+  medium: 0.25,
   /** Door / drawer fronts, kick faces. */
-  front:  0.25,
+  front:  0.18,
   /** Dimensions, internals (shelves, drawer boxes, runners), swings, handles, chevrons. */
-  thin:   0.18,
+  thin:   0.13,
   /** Wall hatch and other fill-like linework. Also the floor for every pen. */
-  fine:   0.13,
+  fine:   0.09,
 } as const
 
 export type PenName = keyof typeof PEN

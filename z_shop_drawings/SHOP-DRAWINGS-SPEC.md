@@ -86,8 +86,9 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
 
 ### S2 notes (as built)
 
-- `src/lib/shopDrawings/pens.ts`: `PEN` = ground 0.7 / heavy 0.5 / medium 0.35 / front 0.25 /
-  thin 0.18 / fine 0.13 (paper mm), `PRINT_INK` = #000, `pen(name, P)`, `atLeastMin()`.
+- `src/lib/shopDrawings/pens.ts`: `PEN` = ground 0.5 / heavy 0.35 / medium 0.25 / front 0.18 /
+  thin 0.13 / fine 0.09 (paper mm; thinned one step 2026-10-26, Mark: "line weights look very heavy" —
+  was 0.7 / 0.5 / 0.35 / 0.25 / 0.18 / 0.13), `PRINT_INK` = #000, `pen(name, P)`, `atLeastMin()`.
 - PlanViewReportSVG: walls heavy; carcase outline medium; case parts / kicks / bins / drawer boxes /
   runners / internals / swings / drawer lines / dims thin; drawer fronts front; hatch fine.
   The greys (#222 / #333 / #777) are now black; vertical case parts keep a grey *fill*. The 0.75-opacity

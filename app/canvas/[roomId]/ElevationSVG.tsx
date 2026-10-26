@@ -7,7 +7,7 @@ import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlo
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
-import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
+import { casePartItem, kickPartItem, internalPartItem, faceZoneItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, type DimSide } from './dimLabel'
@@ -1266,7 +1266,7 @@ export default function ElevationSVG({
                   for (const p of rpHit.internal_parts) if (showInt(internalPartItem(p.part_type))) hitRects.push(shelfElevRect(p))
                   if (showInt('inner_drawer_runners')) for (const sl of rpHit.internal_slides ?? []) hitRects.push(slideElevRect(sl))
                   for (const ds of rpHit.drawer_stacks) {
-                    if (effectiveShowDrawerBox) for (const p of ds.box_parts) hitRects.push(drawerBoxPartElevRect(p))
+                    for (const p of ds.box_parts) if (showBoxPart(p.part_type)) hitRects.push(drawerBoxPartElevRect(p))
                     if (effectiveShowDrawerRunners && ds.drawer_type !== 'bin') for (const sl of ds.slides) hitRects.push(slideElevRect(sl))
                   }
                   if (faceOpacity > 0) for (const fz of rpHit.face_zones) {
@@ -1521,7 +1521,6 @@ export default function ElevationSVG({
                         }),
                       )}
                       {(effectiveShowDrawerBox || effectiveShowDrawerRunners || layers.show('bins')) && rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => {
-                        const boxP    = layers.props('drawer_boxes', z)
                         const intEffP = layers.props('drawer_runners', z)
                         // Pull-out bin (z_bin_cabinet): its outline replaces the rails.
                         if (ds.drawer_type === 'bin') {
@@ -1540,17 +1539,19 @@ export default function ElevationSVG({
                           ))
                         }
                         return [
-                        ...(effectiveShowDrawerBox ? ds.box_parts : []).map((p: ResolvedDrawerBoxPart, j: number) => {
+                        ...(effectiveShowDrawerBox ? ds.box_parts.filter(p => showBoxPart(p.part_type)) : []).map((p: ResolvedDrawerBoxPart, j: number) => {
                           const { ex, ey, ew, eh } = drawerBoxPartElevRect(p)
                           const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                          const fill = layers.colorOf('drawer_boxes') ?? PART_COLORS[p.part_type] ?? '#34d399'
-                          const ldStroke = layers.colorOf('drawer_boxes') ?? LINE_DRAW_COLORS[p.part_type] ?? '#6ee7b7'
+                          const it = drawerBoxPartItem(p.part_type)
+                          const boxP = layers.props(it, z)
+                          const fill = layers.colorOf(it) ?? PART_COLORS[p.part_type] ?? '#34d399'
+                          const ldStroke = layers.colorOf(it) ?? LINE_DRAW_COLORS[p.part_type] ?? '#6ee7b7'
                           return (
                             <rect key={`ds-${i}-bp-${j}`} x={x} y={y} width={w} height={h}
                               fill={isLineDrawing ? 'none' : fill}
                               fillOpacity={isLineDrawing ? 0 : 0.6}
                               stroke={isLineDrawing ? ldStroke : fill}
-                              strokeWidth={layers.w('drawer_boxes', isLineDrawing ? 1 : 0.5) / lz}
+                              strokeWidth={layers.w(it, isLineDrawing ? 1 : 0.5) / lz}
                               opacity={boxP.opacity} style={{ pointerEvents: 'none' }} />
                           )
                         }),

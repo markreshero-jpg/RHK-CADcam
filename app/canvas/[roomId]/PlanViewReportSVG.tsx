@@ -25,7 +25,7 @@ import {
   cabinetToPlan, cabinetPlanFrame,
 } from '@/src/lib/geometry'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
-import { casePartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
+import { casePartItem, kickPartItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { caseBox, casePlanCorners, isSide, tkPlanBox, tkPlanCorners } from '@/src/lib/jointDrilling'
@@ -290,11 +290,12 @@ export default function PlanViewReportSVG({
       {/* ── Walls (always on) — hatch fill toggles ── */}
       {walls.map(w => {
         if (w.wall_type === 'island') {
+          if (!layers.show('island_line')) return null
           const e = wallEnd(w)
           return (
             <line key={w.id}
               x1={w.pos_x} y1={w.pos_y} x2={e.x} y2={e.y}
-              stroke={INK} strokeWidth={sw * 4} strokeLinecap="round"
+              stroke={INK} strokeWidth={lw('island_line', sw)} strokeLinecap="round"
             />
           )
         }
@@ -413,11 +414,12 @@ export default function PlanViewReportSVG({
               return <polygon key={`bin-${si}-${i}`} points={o.pts.map(([x, z]) => at(x, z)).join(' ')} opacity={pp.opacity} fill="none"
                 stroke={INK} strokeWidth={lw('bins', pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
             }))}
-            {layers.show('drawer_boxes') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.box_parts.map((p, i) => {
-              const b = dbBox(p), pp = lp('drawer_boxes')
-              if (b.w <= 0 || b.d <= 0) return null
+            {(rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.box_parts.map((p, i) => {
+              const it = drawerBoxPartItem(p.part_type)
+              const b = dbBox(p), pp = lp(it)
+              if (!layers.show(it) || b.w <= 0 || b.d <= 0) return null
               return <polygon key={`db-${si}-${i}`} points={boxPoly(b)} opacity={pp.opacity} fill="none"
-                stroke={INK} strokeWidth={lw('drawer_boxes', pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
+                stroke={INK} strokeWidth={lw(it, pen('thin', P))} strokeDasharray={pp.strokeDasharray} />
             }))}
             {layers.show('drawer_runners') && (rpParts?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.slides.map((s, i) => {
               const b = slideBox(s), pp = lp('drawer_runners')

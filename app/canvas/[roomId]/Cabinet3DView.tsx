@@ -44,7 +44,7 @@ import { getPalette } from '@/src/lib/partPalette'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { tkBox, intBox, zoneBox, INT_PANEL_KIND, partShapes } from '@/src/lib/partSolids'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
-import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
+import { casePartItem, kickPartItem, internalPartItem, faceZoneItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { PartAlpha, NO_ROTATION, EdgeEditContext } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
@@ -680,7 +680,8 @@ function DrawerAssembly({
           <Handle3D s={handle} opacity={alpha('handles')} showBar={!layers || layers.show('handles')} showHoles={!layers || layers.show('handle_holes')} />
         </PickableHardware>
       )})()}
-      {(showBox ? stack.box_parts : []).map((p, pi) => {
+      {(showBox ? stack.box_parts.filter(p => !layers || layers.show(drawerBoxPartItem(p.part_type))) : []).map((p, pi) => {
+        const it   = drawerBoxPartItem(p.part_type)
         const id   = dbPartId(stack, p.part_type)
         const pp   = applyPosOv(p, id, partOverrides)
         const b    = dbBox(pp)
@@ -688,10 +689,10 @@ function DrawerAssembly({
         const s    = matSpec(p.material_id, '#d4c8a8')
         const fc   = panelFaceColors(info.panelKind as PanelKind, p.part_type, s.face, s.back, s.edge)
         return (
-          <PartAlpha key={`db_${pi}`} a={alpha('drawer_boxes')}><Part
+          <PartAlpha key={`db_${pi}`} a={alpha(it)}><Part
             b={b}
             faceColors={fc}
-            edgeLineColor={outline('drawer_box', 'drawer_boxes')}
+            edgeLineColor={outline('drawer_box', it)}
             meta={info}
             selected={selected?.id === info.id}
             highlighted={false}
@@ -1600,11 +1601,11 @@ export function CabinetScene({
         if (z.face_type === 'drawer_face') {
           const stack = drawerStackByKey.get(zoneKey(z))
           if (stack) {
-            if (!show('drawer_fronts') && !show('drawer_boxes') && !show('drawer_runners') && !show('bins')) return null
+            if (!show('drawer_fronts') && !show('drawer_boxes') && !show('drawer_box_backs') && !show('drawer_runners') && !show('bins')) return null
             return (
               <DrawerAssembly
                 showFace={show('drawer_fronts')}
-                showBox={show('drawer_boxes')}
+                showBox={show('drawer_boxes') || show('drawer_box_backs')}
                 showSlides={show('drawer_runners')}
                 handle={show('drawer_fronts') && (show('handles') || show('handle_holes')) ? handleShape(z) : null}
                 roomOutlines={roomOutlines}

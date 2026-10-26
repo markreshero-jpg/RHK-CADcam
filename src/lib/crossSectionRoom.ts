@@ -12,7 +12,7 @@ import { prismFaces, geometryFaces, cabToWorld, type Face } from './crossSection
 import { cabPlacement3d } from './cabPlacement3d'
 import { benchtopGeometries, type BtSolidInfo } from './benchtopSolids'
 import { customExtents, customPanelKind, type CustomOrient } from './customPartBox'
-import { casePartItem, kickPartItem, internalPartItem, faceZoneItem } from './displayLayers/registry'
+import { casePartItem, kickPartItem, internalPartItem, faceZoneItem, drawerBoxPartItem } from './displayLayers/registry'
 import { customPartItem } from './displayLayers/customPartKinds'
 import { zonePartId, dbPartId } from './cabinetShape/partKeys'
 
@@ -35,11 +35,11 @@ export function cabinetSectionSolids(cab: CabinetInstance, wall: Wall, rc: RoomR
   for (const p of rp.toekick_parts) tag(`tk_${p.part_key}_${p.sort_order}`, kickPartItem(p.part_key), p.part_key)
   for (const z of rp.face_zones) { const it = faceZoneItem(z.face_type); if (it) tag(zonePartId(z), it, z.face_type) }
   for (const p of rp.internal_parts ?? []) tag(`int_${p.part_type}_${p.sort_order}`, internalPartItem(p.part_type), p.part_type)
-  for (const stk of rp.drawer_stacks ?? []) for (const p of stk.box_parts) key.set(dbPartId(stk, p.part_type), p.part_type)
+  for (const stk of rp.drawer_stacks ?? []) for (const p of stk.box_parts) tag(dbPartId(stk, p.part_type), drawerBoxPartItem(p.part_type), p.part_type)
 
   const out: SectionSolid[] = []
   for (const s of buildPartSolids(rp, posOv, shapeOv).values()) {
-    const it = s.role === 'db' ? 'drawer_boxes' : item.get(s.id)
+    const it = item.get(s.id)
     if (!it) continue
     out.push({ id: `${cab.id}:${s.id}`, cabId: cab.id, item: it, role: s.role, key: key.get(s.id), faces: faces(prismFaces(s.prism)) })
   }

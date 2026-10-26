@@ -28,7 +28,7 @@ import { kickPlanSpans } from '@/src/lib/kickDims'
 import { benchtopWallSpans } from '@/src/lib/benchtopDims'
 import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode, type BtShapeEdit, btLocal } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
-import { casePartItem, kickPartItem, faceZoneItem } from '@/src/lib/displayLayers/registry'
+import { casePartItem, kickPartItem, faceZoneItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { handleShape } from '@/src/lib/handleGeometry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
@@ -1192,7 +1192,7 @@ export default function CanvasSVG({
           if (showOutline) drawnRects.push({ x: 0, z: 0, w: displayCab.dx, d: displayCab.dz })
           for (const p of casePartsR) drawnRects.push(caseBoxAABB(p))
           for (const p of kickPartsR) { const b = tkBoxAABB(p); drawnRects.push({ x: b.x, z: b.z, w: b.w, d: b.d }) }
-          if (layers.show('drawer_boxes'))   for (const ds of rpPlan?.drawer_stacks ?? []) if (ds.drawer_type !== 'bin') for (const p of ds.box_parts) drawnRects.push(hwRect(dbBox(p), ds.turn))
+          for (const ds of rpPlan?.drawer_stacks ?? []) if (ds.drawer_type !== 'bin') for (const p of ds.box_parts) if (layers.show(drawerBoxPartItem(p.part_type))) drawnRects.push(hwRect(dbBox(p), ds.turn))
           if (layers.show('drawer_runners')) for (const ds of rpPlan?.drawer_stacks ?? []) if (ds.drawer_type !== 'bin') for (const sl of ds.slides) drawnRects.push(hwRect(slideBox(sl), ds.turn))
           if (layers.show('bins')) for (const ds of rpPlan?.drawer_stacks ?? []) if (ds.drawer_type === 'bin') for (const o of binOutlines(ds, 'top')) {
             const xs = o.pts.map(([x]) => x), zs = o.pts.map(([, z]) => z)
@@ -1348,13 +1348,15 @@ export default function CanvasSVG({
                     strokeDasharray={lp.strokeDasharray ?? '3 2'} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               }))}
-              {layers.show('drawer_boxes') && (rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.box_parts.map((p, i) => {
+              {(rpPlan?.drawer_stacks ?? []).flatMap((ds, si) => ds.drawer_type === 'bin' ? [] : ds.box_parts.map((p, i) => {
+                const it = drawerBoxPartItem(p.part_type)
+                if (!layers.show(it)) return null
                 const b = dbBox(p)
                 if (b.w <= 0 || b.d <= 0) return null
-                const lp = layers.props('drawer_boxes', view.zoom)
+                const lp = layers.props(it, view.zoom)
                 return (
                   <polygon key={`db-${si}-${i}`} points={hwPoly(b, ds.turn)} data-part={p.part_type}
-                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color('drawer_boxes', palette.drawer_box)} strokeWidth={layers.w('drawer_boxes', 0.6) / lz}
+                    fill="none" stroke={isSel ? '#e2e8f0' : layers.color(it, palette.drawer_box)} strokeWidth={layers.w(it, 0.6) / lz}
                     strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }} />
                 )
               }))}

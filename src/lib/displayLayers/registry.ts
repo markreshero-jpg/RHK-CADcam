@@ -83,8 +83,11 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'carcass_back',   group: 'carcase', label: 'Backs',        views: ['plan', '3d'], default: ON },
 
   // Kicks
-  { id: 'kick_faces',     group: 'kicks', label: 'Kick boards',        views: ALL, default: ON,
+  { id: 'kick_faces',     group: 'kicks', label: 'Kick faces',         views: ALL, default: ON,
     viewDefaults: { plan: { visible: false } } },
+  // Split out of kick_faces 2026-10-26; existing sets were seeded with their kick_faces setting.
+  { id: 'kick_backs',     group: 'kicks', label: 'Kick sub fronts / backs', views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false } }, hint: 'The boards behind the kick face (sub front + back)' },
   { id: 'kick_spreaders', group: 'kicks', label: 'Spreaders / ladder', views: ALL, default: ON,
     viewDefaults: { plan: { visible: false } } },
 
@@ -114,7 +117,10 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   // Hardware — hidden by default in plan + 3D (3D models only load when shown).
   // ('hardware' was a Phase-1 item id — retired, split into the items below.)
   { id: 'drawer_boxes',   group: 'hardware', label: 'Drawer boxes',        views: ALL, default: ON,
-    viewDefaults: { plan: { visible: false }, '3d': { visible: false } } },
+    viewDefaults: { plan: { visible: false }, '3d': { visible: false } }, hint: 'Sides, bottom and front — the back is its own item' },
+  // Split out of drawer_boxes 2026-10-26; existing sets were seeded with their drawer_boxes setting.
+  { id: 'drawer_box_backs', group: 'hardware', label: 'Drawer box backs',  views: ALL, default: ON,
+    viewDefaults: { plan: { visible: false }, '3d': { visible: false } }, hint: 'On its own it gives a rough outline of each drawer in elevation' },
   { id: 'drawer_runners', group: 'hardware', label: 'Drawer runners',      views: ALL, default: ON,
     viewDefaults: { plan: { visible: false }, '3d': { visible: false } } },
   { id: 'bins',           group: 'hardware', label: 'Bins',                views: ALL, default: ON,
@@ -165,6 +171,10 @@ export const LAYER_ITEMS: LayerItemDef[] = [
 
   // Room
   { id: 'walls',          group: 'room', label: 'Walls', views: ['3d'], default: ON },
+  { id: 'island_line',    group: 'room', label: 'Island line', views: ['plan'], default: ON,
+    hint: 'The island\'s reference line on plan prints (the canvas always draws it — it\'s how you pick the island)' },
+  { id: 'soffit_line',    group: 'room', label: 'Soffit / wall-cab top line', views: ['elevation'], default: ON,
+    hint: 'Dashed reference line at the soffit (or the room\'s wall-cabinet top when there is no soffit)' },
   { id: 'return_sections', group: 'room', label: 'Return cabinet sections', views: ['elevation'], default: ON,
     hint: 'Cabinets on the return walls, cut side-on at this wall\'s cabinet depth (z_section_view R1)' },
 
@@ -268,6 +278,7 @@ export function casePartItem(partKey: string): string {
   if (partKey.startsWith('bh:')) return 'bulkheads'      // z_bulkhead
   // z_curved_end: its curved kick (C5) shows with the kicks.
   if (partKey.startsWith('crv:kick_spr_')) return 'kick_spreaders'
+  if (partKey === 'crv:kick_back') return 'kick_backs'
   if (partKey.startsWith('crv:kick')) return 'kick_faces'
   if (partKey.startsWith('crv:')) return 'curved_ends'
   if (partKey.startsWith('fs:')) return 'floating_shelves'   // z_floating_shelf
@@ -276,7 +287,11 @@ export function casePartItem(partKey: string): string {
   return 'carcass_top'            // full_top, front_rail, back_rail, rail:<edge>
 }
 export function kickPartItem(partKey: string): string {
-  return partKey === 'spreader_vertical' || partKey === 'spreader_horizontal' ? 'kick_spreaders' : 'kick_faces'
+  if (partKey === 'spreader_vertical' || partKey === 'spreader_horizontal') return 'kick_spreaders'
+  return partKey === 'kick_sub_front' || partKey === 'kick_back' ? 'kick_backs' : 'kick_faces'
+}
+export function drawerBoxPartItem(partType: string): string {
+  return partType === 'db_back' ? 'drawer_box_backs' : 'drawer_boxes'
 }
 export function internalPartItem(partType: string): string {
   if (partType === 'adj_shelf') return 'adj_shelves'

@@ -6,7 +6,7 @@
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from './resolve'
-import { casePartItem, faceZoneItem, internalPartItem, kickPartItem } from './registry'
+import { casePartItem, drawerBoxPartItem, faceZoneItem, internalPartItem, kickPartItem } from './registry'
 import { customPartItem } from './customPartKinds'
 
 type Layers = Pick<LayerView, 'show' | 'any'>
@@ -18,7 +18,7 @@ export function planShowsCabinet(cab: CabinetInstance, layers: Layers, rp: Resol
   if (!cab.is_kick_assembly && layers.show('carcass_outline')) return true
   if (rp?.case_parts.some(p => layers.show(casePartItem(p.part_key)))) return true
   if (rp?.toekick_parts.some(p => layers.show(kickPartItem(p.part_key)))) return true
-  if (layers.show('drawer_boxes') && rp?.drawer_stacks.some(ds => ds.box_parts.length)) return true
+  if (rp?.drawer_stacks.some(ds => ds.box_parts.some(p => layers.show(drawerBoxPartItem(p.part_type))))) return true
   if (layers.show('drawer_runners') && rp?.drawer_stacks.some(ds => ds.slides.length)) return true
   if (shownCustom(layers, rp)) return true
   if (cab.has_face && layers.any('doors', 'drawer_fronts')) return true
@@ -36,7 +36,7 @@ export function elevationShowsCabinet(cab: CabinetInstance, layers: Layers, rp: 
   if (rp.toekick_parts.some(p => layers.show(kickPartItem(p.part_key)))) return true
   if (rp.internal_parts.some(p => layers.show(internalPartItem(p.part_type)))) return true
   if (layers.show('inner_drawer_runners') && (rp.internal_slides ?? []).length) return true
-  if (layers.show('drawer_boxes') && rp.drawer_stacks.some(ds => ds.box_parts.length)) return true
+  if (rp.drawer_stacks.some(ds => ds.box_parts.some(p => layers.show(drawerBoxPartItem(p.part_type))))) return true
   if (layers.show('drawer_runners') && rp.drawer_stacks.some(ds => ds.slides.length)) return true
   if (rp.face_zones.some(fz => { const it = faceZoneItem(fz.face_type); return !!it && layers.show(it) })) return true
   return shownCustom(layers, rp)
