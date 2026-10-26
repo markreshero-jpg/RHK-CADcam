@@ -1,3 +1,5 @@
+// Return cabinet sections (z_section_view R1): open an elevation, report what the return sections draw, screenshot.
+//   node z_plan_automation/verify-return-sections.mjs <outDir>   (ROOM_ID, WALL, LAYER_SET)
 import path from 'node:path'
 import puppeteer from 'puppeteer-core'
 const OUT = process.argv[2], ROOM = process.env.ROOM_ID, WALL = process.env.WALL ?? 'Wall 1'
@@ -19,6 +21,15 @@ try {
   await sleep(2500)
   console.log('wall', await clickText(page, WALL))
   await sleep(6000)
+  if (process.env.LAYER_SET) {
+    console.log('layer set', await page.evaluate(n => {
+      const sel = [...document.querySelectorAll('select')].find(e => e.title === 'Layers')
+      const o = sel && [...sel.options].find(o => o.text === n); if (!o) return null
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, o.value)
+      sel.dispatchEvent(new Event('change', { bubbles: true })); return n
+    }, process.env.LAYER_SET))
+    await sleep(3000)
+  }
   const info = await page.evaluate(() => {
     const g = document.querySelector('g[data-role="return-sections"]')
     if (!g) return null

@@ -21,6 +21,11 @@ import { PRINT_INK } from '@/src/lib/shopDrawings/pens'
 import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
 
 /** Part position overrides + drawn shapes for the return cabinets. */
+/** Side-on, gables, tops and bottoms are what make a cabinet read, so they always draw
+ *  (solid) here, even where the layer set hides or ghosts them for face-on
+ *  elevations (Mark, 2026-10-26). */
+const ALWAYS = new Set(['carcass_gables', 'carcass_top', 'carcass_bottom'])
+
 export type ReturnSectionData = { posById: Map<string, PartPosOverrides>; shapesById: Map<string, ShapeOverrides> } | null
 
 /** The cabinets sitting on a return wall of `wall`. */
@@ -98,7 +103,7 @@ export default function ReturnSectionSVG({ wall, side, walls, cabinets, room, ro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cabinets, walls, rc, room, resolvedParts, data, benchtops, profiles, retKey])
 
-  const drawn = useMemo(() => returnProjectionLoops(solids.filter(s => layers.show(s.item)), plane, wall.length),
+  const drawn = useMemo(() => returnProjectionLoops(solids.filter(s => ALWAYS.has(s.item) || layers.show(s.item)), plane, wall.length),
     [solids, plane, wall.length, layers])
 
   if (!drawn.length) return null
@@ -108,6 +113,7 @@ export default function ReturnSectionSVG({ wall, side, walls, cabinets, room, ro
     <g data-role="return-sections" data-cut-at={depth} pointerEvents="none" opacity={grp.opacity} fill="none" strokeLinejoin="round">
       {drawn.map(({ s, loops }) => {
         const p = sectionPaint(layers, PART_COLORS, s, false, lw)
+        if (ALWAYS.has(s.item)) { p.opacity = 1; p.strokeDasharray = undefined }
         return <path key={s.id} d={elevLoopsPath(loops, roomH)} data-item={s.item}
           stroke={print ? PRINT_INK : p.stroke} strokeWidth={p.strokeWidth} opacity={p.opacity}
           strokeDasharray={p.strokeDasharray ? `${6 * lw} ${3 * lw}` : undefined} />
