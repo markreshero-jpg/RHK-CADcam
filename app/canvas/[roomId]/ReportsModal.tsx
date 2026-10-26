@@ -6,6 +6,7 @@ import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixtur
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
+import { withFixtureCutouts } from '@/src/lib/fixtureGeometry'
 import { filterHiddenMap, filterRemovedParts } from '@/src/lib/resolver/filterHidden'
 import PlanViewReport from './PlanViewReport'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -393,7 +394,9 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   const drawWalls = useMemo(() => isHere ? walls : jobWalls.filter(w => w.room_id === drawRoom.id), [isHere, walls, jobWalls, drawRoom.id])
   const drawCabinets = useMemo(() => isHere ? cabinets : jobCabinets.filter(c => c.room_id === drawRoom.id), [isHere, cabinets, jobCabinets, drawRoom.id])
   const drawFixtures = useMemo(() => isHere ? fixtures : jobFixtures.filter(f => f.room_id === drawRoom.id), [isHere, fixtures, jobFixtures, drawRoom.id])
-  const drawBenchtops = useMemo(() => isHere ? benchtops : jobBtInstances.filter(b => b.room_id === drawRoom.id), [isHere, benchtops, jobBtInstances, drawRoom.id])
+  // Sink / cooktop cutouts come from the fixtures at draw time (as on the canvas), never saved.
+  const drawBenchtops = useMemo(() => (isHere ? benchtops : jobBtInstances.filter(b => b.room_id === drawRoom.id))
+    .map(b => withFixtureCutouts(b, drawFixtures)), [isHere, benchtops, jobBtInstances, drawRoom.id, drawFixtures])
   const drawResolved = useMemo(() => {
     const src = isHere ? resolvedParts : jobResolved
     const m = new Map<string, ResolvedCabinet>()
