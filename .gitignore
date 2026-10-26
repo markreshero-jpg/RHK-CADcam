@@ -49,3 +49,6 @@ next-env.d.ts
 
 # project-specific
 Error_Pics/
+
+# Headless optimiser runs (G-code + sheet PDFs) — local output only
+z_nc_output/
