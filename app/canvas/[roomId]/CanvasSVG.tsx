@@ -92,6 +92,8 @@ interface CanvasSVGProps {
   setContextMenu: (m: ContextMenuState | null) => void
   onWallPointerDown: (e: React.PointerEvent, wallId: string) => void
   onCabinetPointerDown: (e: React.PointerEvent, cab: CabinetInstance) => void
+  /** Row hovered in the stacked-cabinet picker — highlights that cabinet. */
+  pickHoverId?: string | null
   onCabinetCrosshairClick: (e: React.MouseEvent, cab: CabinetInstance) => void
   onCabinetContextMenu: (e: React.MouseEvent, cabId: string) => void
   /** The cabinet whose name is in move mode (right-click → Move label); placed via onCabLabelMove. */
@@ -189,7 +191,7 @@ export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, layers, planGrid,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, multiWalls = [], marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
-  setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
+  setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, pickHoverId, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick, onCabLabelMove, cabLabelMoving, onLabelMoveEnd,
   benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
   onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBtUndoVertex,
@@ -1120,7 +1122,7 @@ export default function CanvasSVG({
           const isKickAsm = !!cab.is_kick_assembly
           const isSel = selected?.type === 'cabinet' && selected.id === cab.id
           const isMultiSel = multiSelect.includes(cab.id)
-          const isHover = hoveredId === cab.id && !isSel && !isMultiSel
+          const isHover = (pickHoverId ?? hoveredId) === cab.id && !isSel && !isMultiSel
 
           // Apply position drag and resize live values
           let displayCab = cabDrag?.id === cab.id ? { ...cab, pos_x: cabDrag.pos_x, pos_y: cabDrag.pos_y } : cab
@@ -1277,7 +1279,7 @@ export default function CanvasSVG({
           return (
             <g key={cab.id} opacity={isBeingMoved ? 0.4 : 1}>
               {/* Invisible hit polygon — the extent of what's drawn (see hitRect) */}
-              {hitRect && <polygon points={showOutline ? pts : partPoly(hitRect)} fill="transparent" stroke="none"
+              {hitRect && <polygon data-cab-id={cab.id} points={showOutline ? pts : partPoly(hitRect)} fill="transparent" stroke="none"
                 style={{ cursor: mode === 'select' ? 'default' : undefined }}
                 onPointerDown={ev => onCabinetPointerDown(ev, displayCab)}
                 onPointerEnter={() => setHoveredId(cab.id)}

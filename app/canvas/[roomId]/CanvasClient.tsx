@@ -88,6 +88,7 @@ import ElevationSVG from './ElevationSVG'
 import SectionSVG from './SectionSVG'
 import CrossSectionView from './CrossSectionView'
 import CanvasContextMenu from './CanvasContextMenu'
+import CabinetPickerMenu, { cabinetsAtPoint } from './CabinetPickerMenu'
 import { buildContextMenuGroups } from './canvasContextItems'
 import ConfirmDeleteModal from '@/src/components/ConfirmDeleteModal'
 import SplitCabinetModal from './SplitCabinetModal'
@@ -228,6 +229,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (multiWalls.length && !(selected?.type === 'wall' && multiWalls.includes(selected.id))) setMultiWalls([])
   }, [selected, multiWalls])
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  // Stacked cabinets under one plan click → pick one (CabinetPickerMenu).
+  const [cabPicker, setCabPicker] = useState<{ ids: string[]; x: number; y: number } | null>(null)
+  const [cabPickHover, setCabPickHover] = useState<string | null>(null)
   const [deleteWallPending, setDeleteWallPending] = useState<string[] | null>(null)
   const [deleteCabsPending, setDeleteCabsPending] = useState<string[] | null>(null)
   const [splitCabId, setSplitCabId] = useState<string | null>(null)
@@ -2616,6 +2620,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     svgPointerDownRef.current = true
     setContextMenu(null); setOpenMenu(null)
     commitResize()
+    // More than one cabinet under the pointer → list them, select on pick.
+    if (!shiftRef.current) {
+      const ids = cabinetsAtPoint(e.clientX, e.clientY)
+      if (ids.length > 1) { setCabPickHover(null); setCabPicker({ ids, x: e.clientX, y: e.clientY }); return }
+    }
     setSelected({ type: 'cabinet', id: cab.id })
 
     if (shiftRef.current) {
@@ -3264,6 +3273,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               setContextMenu={setContextMenu}
               onWallPointerDown={onWallPointerDown}
               onCabinetPointerDown={onCabinetPointerDown}
+              pickHoverId={cabPicker ? cabPickHover : null}
               onCabinetCrosshairClick={onCabinetCrosshairClick}
               onCabinetContextMenu={onCabinetContextMenu}
               onCabLabelMove={(id, off) => saveCabLabel(id, 'plan', off)}
@@ -3933,6 +3943,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           <button onClick={fitToWalls} title="Fit to screen" className="ml-1 hover:text-gray-300">⊡</button>
         </div>
       </footer>
+
+      {cabPicker && (
+        <CabinetPickerMenu
+          cabinets={cabPicker.ids.map(id => cabinets.find(c => c.id === id)).filter((c): c is CabinetInstance => !!c)}
+          clientX={cabPicker.x} clientY={cabPicker.y}
+          selectedId={selected?.type === 'cabinet' ? selected.id : null}
+          onHover={setCabPickHover}
+          onPick={id => {
+            setCabPicker(null); setCabPickHover(null)
+            setSelected({ type: 'cabinet', id }); setMultiSelect([])
+            useTutorial.getState().emit('plan_cab_pick')
+          }}
+          onClose={() => { setCabPicker(null); setCabPickHover(null) }}
+        />
+      )}
 
       {contextMenu && (
         <CanvasContextMenu

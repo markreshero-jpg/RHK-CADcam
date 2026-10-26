@@ -932,6 +932,15 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Type the Waste % at the top (it is remembered on this computer, default 10). A tape with no price shows — : set its $/m in Library → Materials → Edge banding. "Tape not set" means a banded edge with no tape chosen. Click Print / PDF.',
       target: 'edgeband-waste', canvas: true, done: (c, s) => ev(c, 'edgeband_print') > ev(s, 'edgeband_print') },
   ]},
+
+  // Appended 2026-10-26 (plan view — pick one of several stacked cabinets).
+  { id: 'plan_cabinet_picker', level: 'basics', topic: 'cabinets', title: 'Pick a cabinet that’s under another',
+    blurb: 'Where cabinets overlap in plan, choose which one you meant from a list.',
+    keywords: 'select pick click overlap stacked under below overhead wall base kick choose list plan', steps: [
+    { id: 'pick', title: 'Click where cabinets overlap',
+      body: 'In the plan, click a spot where an overhead sits over a base (or a kick under its run). A list pops up with every cabinet under the pointer, top-drawn first: its name, kind and width × depth. Point at a row to see that cabinet light up orange, then click the row to select it. Esc or a click elsewhere closes the list. Shift-click still adds the top cabinet to a multi-select without the list.',
+      canvas: true, done: (c, s) => ev(c, 'plan_cab_pick') > ev(s, 'plan_cab_pick') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
