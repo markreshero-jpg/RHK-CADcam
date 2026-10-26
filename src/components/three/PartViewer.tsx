@@ -9,7 +9,7 @@
 import { Suspense, useState, useEffect, useMemo, useRef, createContext, useContext } from 'react'
 import { GrainContext, boxGrainMaps, singleGrainMap, grainExtents, shapedGrainMaps } from './woodGrain'
 import * as THREE from 'three'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
@@ -267,6 +267,82 @@ export function shapePieceGeometry(shape: PartShape, piece: ShapePiece, b: Box, 
   return g
 }
 
+// Tape on a shaped part's tagged edges (shape.edges / caps — resolver outlines of
+// a shaped cabinet's horizontals, bevelled panel ends). Each banded outline edge
+// gets a band `inward` mm into the outline and `outward` mm proud of it, run
+// through the panel `grow` mm past both faces (so it never z-fights the part);
+// a banded cap is the whole outline, the cap's tape thick, the core shortened
+// to suit (as shapedTapePieces). The angled back of a clipped shelf takes the
+// shelf's back flag, as the optimiser tapes it.
+export const hasShapeEdges = (shape: PartShape | null | undefined): shape is PartShape =>
+  !!shape?.edges && shape.pts.length > 2 && shape.extrude !== 'across'
+
+function edgeBands(shape: PartShape, side: keyof PartEdge, inward: number, outward: number): ShapePt[][] {
+  let area = 0
+  shape.pts.forEach((a, i) => { const c = shape.pts[(i + 1) % shape.pts.length]; area += a.x * c.y - c.x * a.y })
+  const out: ShapePt[][] = []
+  for (const ed of shape.edges ?? []) {
+    if (ed.e !== side) continue
+    for (let i = 0; i + 1 < ed.pts.length; i++) {
+      const a = ed.pts[i], c = ed.pts[i + 1]
+      const len = Math.hypot(c.x - a.x, c.y - a.y)
+      if (len < 1e-6) continue
+      const u = { x: (c.x - a.x) / len, y: (c.y - a.y) / len }
+      const n = area > 0 ? { x: -u.y, y: u.x } : { x: u.y, y: -u.x }   // inward
+      const at = (p: ShapePt, k: number) => ({ x: p.x + n.x * k, y: p.y + n.y * k })
+      out.push([at(a, -outward), at(c, -outward), at(c, inward), at(a, inward)])
+    }
+  }
+  return out
+}
+
+// A band extruded through the panel like the shape, `grow` mm past both faces.
+function bandGeometry(shape: PartShape, pts: ShapePt[], b: Box, panelKind: PanelKind, grow: number): THREE.ExtrudeGeometry {
+  const kind: PanelKind = shape.extrude === 'up' ? 'horizontal' : panelKind
+  const bb = kind === 'side' ? { ...b, w: b.w + 2 * grow } : kind === 'horizontal' ? { ...b, h: b.h + 2 * grow } : { ...b, d: b.d + 2 * grow }
+  const g = buildShapedGeometry({ ...shape, pts, holes: undefined }, bb, panelKind)
+  if (kind === 'side') g.translate(-grow, 0, 0)
+  else if (kind === 'horizontal') g.translate(0, -grow, 0)
+  else g.translate(0, 0, -grow)
+  return g
+}
+
+// Cap span along the extrusion (shape 'up'): the core between the banded caps.
+function capCore(shape: PartShape, b: Box, edge: PartEdge, t: number): ShapePiece | null {
+  if (shape.extrude !== 'up' || !shape.caps) return null
+  const lt = edge[shape.caps.lo] ? t : 0, ht = edge[shape.caps.hi] ? t : 0
+  return lt || ht ? { pts: shape.pts, from: lt, len: Math.max(0, b.h - lt - ht) } : null
+}
+
+/** Tape pieces for a shape with tagged edges, in buildShapedGeometry's frame. */
+export function shapedEdgeTape(shape: PartShape, b: Box, panelKind: PanelKind, edge: PartEdge, t: number): THREE.ExtrudeGeometry[] {
+  const out: THREE.ExtrudeGeometry[] = []
+  for (const side of SIDES) {
+    if (!edge[side]) continue
+    for (const pts of edgeBands(shape, side, t, 0.2)) out.push(bandGeometry(shape, pts, b, panelKind, 0.2))
+  }
+  if (shape.extrude === 'up' && shape.caps) {
+    if (edge[shape.caps.lo]) out.push(shapePieceGeometry(shape, { pts: shape.pts, from: 0, len: t }, b, panelKind))
+    if (edge[shape.caps.hi]) out.push(shapePieceGeometry(shape, { pts: shape.pts, from: b.h - t, len: t }, b, panelKind))
+  }
+  return out
+}
+
+/** Edge-banding click targets for a shape with tagged edges: per flag, the
+ *  bands along its edges (4 mm in, 1 mm proud, 1 mm past the faces), or for a
+ *  cap a slab of the outline 1 mm proud of the end. */
+export function shapedEdgeTargets(shape: PartShape, b: Box, panelKind: PanelKind): { side: keyof PartEdge; geoms: THREE.ExtrudeGeometry[] }[] {
+  const t = Math.min(4, Math.max(1, Math.min(b.w, b.h, b.d) / 3))
+  return SIDES.map(side => {
+    const geoms = edgeBands(shape, side, t, 1).map(pts => bandGeometry(shape, pts, b, panelKind, 1))
+    if (shape.extrude === 'up' && shape.caps && (shape.caps.lo === side || shape.caps.hi === side)) {
+      const lo = shape.caps.lo === side
+      geoms.push(shapePieceGeometry(shape, { pts: shape.pts, from: lo ? -1 : b.h - t, len: t + 1 }, b, panelKind))
+    }
+    return { side, geoms }
+  }).filter(s => s.geoms.length > 0)
+}
+
 // ── Camera ─────────────────────────────────────────────────────────────────────
 
 const FOV = 32
@@ -348,7 +424,8 @@ export function Part({
   // Shape Editor override: sampled outline → the panel renders as an extruded
   // silhouette instead of a box. Edge-band tape strips are suppressed on shaped
   // parts (rectangle-based tape would float over cut-away regions), unless the
-  // shape carries `tape` — then the tape is cut from the outline (shapedTapePieces).
+  // shape carries `tape` — then the tape is cut from the outline (shapedTapePieces) —
+  // or tagged `edges` — then it runs along those edges (shapedEdgeTape).
   shape?:             PartShape | null
 }) {
   const [hovered, setHovered] = useState(false)
@@ -373,11 +450,15 @@ export function Part({
     () => (shape?.tape && tapeT > 0 && !wire && shape.pts.length > 2 ? shapedTapePieces(shape, b, pe, tapeT) : null),
     [shape, b.w, b.h, b.d, tapeT, wire, pe.top, pe.bottom, pe.left, pe.right],  // eslint-disable-line react-hooks/exhaustive-deps
   )
+  // A shape with tagged edges (shapedEdgeTape): banded caps shorten the core.
+  const tagged = hasShapeEdges(shape)
+  const capPiece = tagged && tapeT > 0 && !wire ? capCore(shape, b, pe, tapeT) : null
   const shapeGeom = useMemo(
     () => (!shape || shape.pts.length <= 2 ? null
          : shapedTape ? shapePieceGeometry(shape, shapedTape.core, b, meta.panelKind)
+         : capPiece ? shapePieceGeometry(shape, capPiece, b, meta.panelKind)
          : buildShapedGeometry(shape, b, meta.panelKind)),
-    [shape, shapedTape, b.w, b.h, b.d, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
+    [shape, shapedTape, capPiece?.from, capPiece?.len, b.w, b.h, b.d, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
   )
   useEffect(() => () => { shapeGeom?.dispose() }, [shapeGeom])
   const shapedTapeGeoms = useMemo(
@@ -385,6 +466,11 @@ export function Part({
     [shape, shapedTape, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
   )
   useEffect(() => () => { shapedTapeGeoms.forEach(g => g.dispose()) }, [shapedTapeGeoms])
+  const edgeTapeGeoms = useMemo(
+    () => (tagged && tapeT > 0 && !wire ? shapedEdgeTape(shape, b, meta.panelKind, pe, tapeT) : []),
+    [shape, tagged, tapeT, wire, b.w, b.h, b.d, meta.panelKind, pe.top, pe.bottom, pe.left, pe.right],  // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  useEffect(() => () => { edgeTapeGeoms.forEach(g => g.dispose()) }, [edgeTapeGeoms])
 
   // Edge-band tape shrinks the panel core; the tape strips render separately.
   // Computed before the wire early-return because the CSG memo below needs it.
@@ -395,7 +481,14 @@ export function Part({
   // as a band 4 mm into the panel, standing 1 mm proud of every face so it reads
   // (and takes the click) over it.
   const NO_EDGE: PartEdge = { top: false, bottom: false, left: false, right: false }
-  const edgeTargets = edgeEdit && (edgeEdit.partId === meta.id || edgeEdit.all?.(meta)) && !passive && !shapeGeom
+  const showTargets = !!edgeEdit && (edgeEdit.partId === meta.id || !!edgeEdit.all?.(meta)) && !passive
+  // A shape with tagged edges takes its targets along the real outline edges.
+  const shapeTargets = useMemo(
+    () => (showTargets && tagged ? shapedEdgeTargets(shape, b, meta.panelKind) : []),
+    [showTargets, tagged, shape, b.w, b.h, b.d, meta.panelKind],  // eslint-disable-line react-hooks/exhaustive-deps
+  )
+  useEffect(() => () => { shapeTargets.forEach(s => s.geoms.forEach(g => g.dispose())) }, [shapeTargets])
+  const edgeTargets = showTargets && !shapeGeom
     ? SIDES.map(side => {
         const st = edgeStrips(b, { ...NO_EDGE, [side]: true }, meta.panelKind, Math.min(4, Math.max(1, Math.min(b.w, b.h, b.d) / 3)))[0]
         return st ? { side, pos: st.pos, args: st.args.map(v => v + 2) as [number, number, number] } : null
@@ -482,18 +575,31 @@ export function Part({
   useEffect(() => () => { grainMaps?.forEach(t => t?.dispose()) }, [grainMaps])
 
   // The edge targets (selected part, edge-banding on) — in solid and wire alike.
-  const edgeTargetMeshes = edgeTargets.map(t => (
-    <mesh key={`ee-${t.side}`} position={[t.pos[0] - b.x, t.pos[1] - b.y, t.pos[2] - b.z]} renderOrder={2}
-      onPointerDown={e => { e.stopPropagation(); dragRef.current = false }}
-      onPointerMove={e => { if (e.buttons) dragRef.current = true }}
-      onClick={e => { e.stopPropagation(); if (!dragRef.current) edgeEdit!.onToggle(meta, t.side, e.nativeEvent.shiftKey) }}
-      onPointerOver={e => { e.stopPropagation(); setEdgeHover(t.side); document.body.style.cursor = 'pointer' }}
-      onPointerOut={() => { setEdgeHover(h => (h === t.side ? null : h)); document.body.style.cursor = '' }}>
-      <boxGeometry args={t.args} />
-      <meshStandardMaterial color={edgeHover === t.side ? EDGE_HOVER : meta.edge[t.side] ? EDGE_TAPED : EDGE_BARE}
-        transparent opacity={meta.edge[t.side] || edgeHover === t.side ? 0.95 : 0.7} depthWrite={false} roughness={0.5} />
-    </mesh>
-  ))
+  const targetProps = (side: keyof PartEdge) => ({
+    renderOrder: 2,
+    onPointerDown: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); dragRef.current = false },
+    onPointerMove: (e: ThreeEvent<PointerEvent>) => { if (e.buttons) dragRef.current = true },
+    onClick: (e: ThreeEvent<MouseEvent>) => { e.stopPropagation(); if (!dragRef.current) edgeEdit!.onToggle(meta, side, e.nativeEvent.shiftKey) },
+    onPointerOver: (e: ThreeEvent<PointerEvent>) => { e.stopPropagation(); setEdgeHover(side); document.body.style.cursor = 'pointer' },
+    onPointerOut: () => { setEdgeHover(h => (h === side ? null : h)); document.body.style.cursor = '' },
+  })
+  const targetMat = (side: keyof PartEdge) => (
+    <meshStandardMaterial color={edgeHover === side ? EDGE_HOVER : meta.edge[side] ? EDGE_TAPED : EDGE_BARE}
+      transparent opacity={meta.edge[side] || edgeHover === side ? 0.95 : 0.7} depthWrite={false} roughness={0.5} />
+  )
+  const edgeTargetMeshes = [
+    ...edgeTargets.map(t => (
+      <mesh key={`ee-${t.side}`} position={[t.pos[0] - b.x, t.pos[1] - b.y, t.pos[2] - b.z]} {...targetProps(t.side)}>
+        <boxGeometry args={t.args} />
+        {targetMat(t.side)}
+      </mesh>
+    )),
+    ...shapeTargets.flatMap(s => s.geoms.map((g, i) => (
+      <mesh key={`es-${s.side}-${i}`} geometry={g} {...targetProps(s.side)}>
+        {targetMat(s.side)}
+      </mesh>
+    ))),
+  ]
 
   if (wire) {
     const ownGeom = csgGeom ?? shapeGeom
@@ -618,7 +724,7 @@ export function Part({
         </mesh>
       ))}
       {edgeTargetMeshes}
-      {shapedTapeGeoms.map((g, i) => (
+      {[...shapedTapeGeoms, ...edgeTapeGeoms].map((g, i) => (
         <mesh key={`st${i}${alpha < 1 ? '-t' : ''}`} geometry={g}>
           <meshStandardMaterial color={ebSpec!.color} roughness={0.35} metalness={0.0} {...am} />
           {!passive && <Edges threshold={10} color="#1a1a1a" linewidth={hairline} />}

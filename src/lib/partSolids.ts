@@ -9,8 +9,8 @@
 // the same mapping for the mesh — keep the two in step).
 
 import type { ResolvedCabinet, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone } from './resolver/types'
-import type { ShapePt, ShapeSegmentLike } from './shapePath'
-import { sampleOutline, sampleShapeOutline } from './shapePath'
+import type { ShapePt, ShapeSegmentLike, EdgeTag } from './shapePath'
+import { sampleOutline, sampleShapeOutline, outlineEdges } from './shapePath'
 import { caseBox, zoneBevelOutline, caseBevelOutline, tkBevelOutline, rotEulerXYZ } from './jointDrilling'
 import { sharknoseProfile } from './handleGeometry'
 import { isShapedPanelKey, zonePartId, dbPartId } from './cabinetShape/partKeys'
@@ -26,7 +26,15 @@ export type PanelKind = 'side' | 'horizontal' | 'face'
 // `extrude: 'across'` = a side profile (x = depth from the back face, y = up from the
 // bottom) extruded across the part's width. `holes` = inner loops, same frame.
 // `tape` = draw its edge tape in 3D, cut to the outline (linear strip handles).
-export type PartShape = { pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across'; holes?: ShapePt[][]; tape?: boolean }
+// `edges` = which outline edges carry which edge-band flag (resolver outlines of a
+// shaped cabinet's horizontals, bevelled panel ends): the 3D view draws tape and
+// edge-banding targets along them. `caps` (extrude 'up' only) = the flags on the
+// extrusion's two ends (a bevelled panel's bottom / top edges).
+export type ShapeEdge = { pts: ShapePt[]; e: EdgeTag }
+export type PartShape = {
+  pts: ShapePt[]; mirror?: boolean; extrude?: 'up' | 'across'; holes?: ShapePt[][]; tape?: boolean
+  edges?: ShapeEdge[]; caps?: { lo: EdgeTag; hi: EdgeTag }
+}
 
 // ── Boxes (same as the cabinet 3D view) ──────────────────────────────────────
 
@@ -77,6 +85,7 @@ export function partShapes(rp: ResolvedCabinet, overrides?: Record<string, { seg
   // panels carry theirs in their own face frame.
   for (const p of rp.case_parts) if (p.outline && (!p.AY || isShapedPanelKey(p.part_key))) m.set(`case_${p.part_key}`, {
     pts: sampleOutline(p.outline, 2),
+    edges: outlineEdges(p.outline, 2),
     ...(p.cutouts?.length ? { holes: p.cutouts.map(c => sampleOutline(c.pts, 2)) } : {}),   // rib cut-outs (z_curved_end C4)
   })
   // Curved end face board (z_curved_end): its bent plan shape extruded up.
@@ -88,14 +97,20 @@ export function partShapes(rp: ResolvedCabinet, overrides?: Record<string, { seg
   // Angled panel ends (4a): top-view outline extruded up.
   for (const p of rp.case_parts) {
     const o = caseBevelOutline(p)
-    if (o) m.set(`case_${p.part_key}`, { pts: o, extrude: 'up' })
+    // Its ends (o[1]→o[2] the far end, o[3]→o[0] the near one) are the right /
+    // left edges; bottom / top are the extrusion's ends.
+    if (o) m.set(`case_${p.part_key}`, {
+      pts: o, extrude: 'up',
+      edges: [{ pts: [o[1], o[2]], e: 'right' }, { pts: [o[3], o[0]], e: 'left' }],
+      caps: { lo: 'bottom', hi: 'top' },
+    })
   }
   // Mitred kick boards on shaped cabinets (4b).
   for (const p of rp.toekick_parts) {
     const o = tkBevelOutline(p)
     if (o) m.set(`tk_${p.part_key}_${p.sort_order}`, { pts: o, extrude: 'up' })
   }
-  for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: sampleOutline(p.outline, 2) })
+  for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: sampleOutline(p.outline, 2), edges: outlineEdges(p.outline, 2) })
   for (const z of rp.face_zones) {
     // Mitred doors where two facets meet: top-view outline extruded up.
     const o = zoneBevelOutline(z)

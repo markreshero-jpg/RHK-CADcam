@@ -136,6 +136,26 @@ export function bulgeArc(p: ShapePt, q: ShapePt, b: number): { c: ShapePt; r: nu
   }
 }
 
+/** Each edge-tagged edge of an outline as a polyline (arcs sampled every
+ *  `stepDeg`), with its tag — where the 3D view draws a shaped part's tape. */
+export function outlineEdges(pts: OutlinePt[], stepDeg = 5): { pts: ShapePt[]; e: EdgeTag }[] {
+  const out: { pts: ShapePt[]; e: EdgeTag }[] = []
+  pts.forEach((a, i) => {
+    if (!a.e) return
+    const q = pts[(i + 1) % pts.length]
+    if (!hasBulge(a)) { out.push({ pts: [{ x: a.x, y: a.y }, { x: q.x, y: q.y }], e: a.e }); return }
+    const { c, r } = bulgeArc(a, q, a.b!)
+    const a0 = Math.atan2(a.y - c.y, a.x - c.x), sweep = 4 * Math.atan(a.b!)
+    const n = Math.max(1, Math.ceil(Math.abs(sweep) * 180 / Math.PI / stepDeg))
+    out.push({
+      pts: Array.from({ length: n + 1 }, (_, k) => k === 0 ? { x: a.x, y: a.y } : k === n ? { x: q.x, y: q.y }
+        : { x: c.x + r * Math.cos(a0 + sweep * k / n), y: c.y + r * Math.sin(a0 + sweep * k / n) }),
+      e: a.e,
+    })
+  })
+  return out
+}
+
 /** Outline → Shape Editor segments (bulged edges become arcs). */
 export function outlineSegments(pts: OutlinePt[]): ShapeSegmentLike[] {
   return pts.map((p, i) => {

@@ -6,7 +6,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → EB1 + EB2 built 2026-10-26, headless-checked, in-app checks pending.
+> **RESUME HERE** → EB1 + EB2 built 2026-10-26, headless-checked, in-app checks pending. EB2a (shaped parts) built 2026-10-26, check pending.
 > Possible later: bulk picks ("all front edges", "all visible edges").
 
 ## Asked for (Mark, 2026-10-26)
@@ -30,7 +30,8 @@ have to be a different colour."
    added parts keep their edges on their own row. No schema change.
 4. **Board parts only**: case, kick, internal, fronts (zones) and added parts —
    the set the panel's ticks save. Hardware (runners, hinges, handles, bins) and
-   shaped parts (their tape is cut from the outline) show no edge targets.
+   Shape Editor-drawn parts (no edge tags) still show no edge targets; shaped-cabinet
+   parts with tagged edges do (EB2a).
 5. Works in solid and wire.
 6. **Paint mode (EB2, Mark 2026-10-26 "lets try")**: an **Edge banding** button
    (bottom right of the 3D view) or right-click a part → **Edit edge banding (all
@@ -68,6 +69,7 @@ have to be a different colour."
 |---|---|---|
 | EB1 | Edges on the picked part, click to toggle (decisions 1–5) | [x] built 2026-10-26, in-app check pending |
 | EB2 | Paint mode across every part (decision 6): Toggle / Edge / No edge brush, Shift+click = whole part | [x] built 2026-10-26, in-app check pending |
+| EB2a | Shaped-cabinet parts (Mark 2026-10-26, TC-08 J05): tape + targets along the real outline edges. Clipped tops / bottoms / shelves use the resolver outline's edge tags (an angled back = the back flag, as the optimiser tapes it); bevelled side / back panels tag their two ends left / right and the extrusion ends bottom / top. `PartShape.edges` / `caps` (partSolids.partShapes), `shapedEdgeTape` / `shapedEdgeTargets` (PartViewer). Display only — no resolver / DB change | [x] built 2026-10-26, headless-checked on TC-08, in-app check pending |
 | EB3 | Optional: bulk picks ("all front edges", "all visible edges") | [ ] only if asked |
 
 ## Known gaps
