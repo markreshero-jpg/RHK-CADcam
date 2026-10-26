@@ -1114,15 +1114,16 @@ export function useAnnotationTool({
         dragRef.current = next; setDrag(next)
       }
     }
-    // Click (no drag) on a manual dim's grip: its line + text follow the cursor — in / out,
-    // text along the line — until the next click places them (Mark, 2026-10-26). Esc /
-    // right-click puts it back. Window capture, so the placing click lands nowhere else.
-    const carryDim = (id: string, orig: DimGeom) => {
+    // Click (no drag) on a manual dim's grip: its line + text (offset grip) or one measured
+    // point (vertex grip) follow the cursor until the next click places them (Mark,
+    // 2026-10-26). Esc / right-click puts it back. Window capture, so the placing click
+    // lands nowhere else. `at` builds the geom for a cursor point; `prev` anchors the snap.
+    const carryDim = (id: string, orig: DimGeom, at: (p: Pt) => DimGeom, prev: Pt | null = null) => {
       let moved = false
       const follow = (ev: PointerEvent) => {
         if (!moved) { captureSnapshot(); moved = true }
-        const p = toFrame(ev, !ev.shiftKey, null, new Set([id]))
-        setAnnotations(xs => xs.map(x => x.id === id ? { ...x, geom: { ...orig, ...dimLineAndTextFor(orig, p) } } : x))
+        const p = toFrame(ev, !ev.shiftKey, prev, new Set([id]))
+        setAnnotations(xs => xs.map(x => x.id === id ? { ...x, geom: at(p) } : x))
       }
       const swallow = (ev: Event) => { ev.stopPropagation(); ev.preventDefault() }
       const end = (keep: boolean) => {
@@ -1157,7 +1158,18 @@ export function useAnnotationTool({
       if (!cur) return
       if (cur.kind === 'offset' && !cur.moved) {
         const a = annRef.current.find(x => x.id === cur.id)
-        if (a?.kind === 'dim' && !isSpecialDim(a.geom)) carryDim(cur.id, a.geom as DimGeom)
+        if (a?.kind === 'dim' && !isSpecialDim(a.geom)) {
+          const g = a.geom as DimGeom
+          carryDim(cur.id, g, p => ({ ...g, ...dimLineAndTextFor(g, p) }))
+        }
+        return
+      }
+      if (cur.kind === 'vertex' && !cur.moved && cur.insertAfter == null) {
+        const a = annRef.current.find(x => x.id === cur.id)
+        if (a?.kind === 'dim' && !isSpecialDim(a.geom)) {
+          const g = a.geom as DimGeom, i = cur.i
+          carryDim(cur.id, g, p => i === 0 ? { ...g, p1: p } : { ...g, p2: p }, i === 0 ? g.p2 : g.p1)
+        }
         return
       }
       if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size' || cur.kind === 'arcGrip' || cur.kind === 'edge' || cur.kind === 'dimAt') && cur.moved) {
