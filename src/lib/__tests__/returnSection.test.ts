@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import type { Wall, CabinetInstance } from '../types'
 import { prismFaces } from '../crossSection'
 import { partPrism } from '../partSolids'
-import { returnWallsOf, returnCutDepth, returnCutPlane, returnSectionLoops, RETURN_CUT_DEFAULT } from '../returnSection'
+import { returnWallsOf, returnCutDepth, returnCutPlane, returnProjectionLoops, RETURN_CUT_DEFAULT } from '../returnSection'
 
 const wall = (id: string, x: number, y: number, angle: number, length: number, wall_type = 'standard') =>
   ({ id, pos_x: x, pos_y: y, angle, length, thickness: 90, wall_type }) as unknown as Wall
@@ -34,20 +34,25 @@ describe('returnSection', () => {
     expect(returnCutDepth(w1, 'back', cabs)).toBe(RETURN_CUT_DEFAULT)
   })
 
-  it('slices along the wall: u = elevation x, kept within the wall length', () => {
+  it('projects every part up to the cut: u = elevation x, kept within the wall length', () => {
     // A face frame on a wall along +x from the origin, room toward +y.
     const frame = { o: { x: 0, y: 0 }, d: { x: 1, y: 0 }, n: { x: 0, y: 1 }, len: 3000 }
     const pl = returnCutPlane(frame, 580)
     // A 400-deep return box at the right end (x 2600..3000), 0..1000 out from the face.
     const box = { id: 'b', item: 'carcass_gables', role: 'case' as const,
       faces: prismFaces(partPrism({ x: 2600, y: 0, z: 0, w: 400, h: 2000, d: 1000 }, 'face')) }
-    const out = returnSectionLoops([box], pl, 3000)
+    const out = returnProjectionLoops([box], pl, 3000)
     expect(out).toHaveLength(1)
     const xs = out[0].loops[0].map(p => p.x), ys = out[0].loops[0].map(p => p.y)
     expect([Math.min(...xs), Math.max(...xs)]).toEqual([2600, 3000])
     expect([Math.min(...ys), Math.max(...ys)]).toEqual([0, 2000])
     // Past the wall end (a return's outside cabinets) → dropped.
     const outside = { ...box, faces: prismFaces(partPrism({ x: 3100, y: 0, z: 0, w: 400, h: 2000, d: 1000 }, 'face')) }
-    expect(returnSectionLoops([outside], pl, 3000)).toHaveLength(0)
+    expect(returnProjectionLoops([outside], pl, 3000)).toHaveLength(0)
+    // A part wholly behind the cut (a shelf 100..500 out) draws; one starting at the cut doesn't.
+    const shelf = { ...box, faces: prismFaces(partPrism({ x: 2600, y: 900, z: 100, w: 400, h: 18, d: 400 }, 'face')) }
+    expect(returnProjectionLoops([shelf], pl, 3000)).toHaveLength(1)
+    const next = { ...box, faces: prismFaces(partPrism({ x: 2600, y: 0, z: 580, w: 400, h: 2000, d: 18 }, 'face')) }
+    expect(returnProjectionLoops([next], pl, 3000)).toHaveLength(0)
   })
 })

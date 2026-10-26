@@ -84,12 +84,12 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
     return next
   })
   const visibleWalls = standardWalls.filter(w => selectedIds.has(w.id))
-  // Return cabinet sections (z_section_view R1): one hidden hardware scene for every page.
+  // Return cabinet sections (z_section_view R1): part overrides for every page, loaded once.
   const wallKey = visibleWalls.map(w => w.id).join(',')
   const retCabs = useMemo(() => returnCabinetsOfWalls(visibleWalls, walls, cabinets),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [wallKey, walls, cabinets])
-  const returnSec = useReturnSectionData({ walls, cabinets: retCabs, room, resolvedParts, layers, enabled: layers.show('return_sections') })
+  const returnSec = useReturnSectionData(retCabs, resolvedParts, layers.show('return_sections'))
 
   async function handleDownload() {
     if (visibleWalls.length === 0) return
@@ -129,7 +129,6 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
 
   return (
     <div className="space-y-3">
-      {returnSec.host}
       {/* Layer toggles */}
       <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-800">
         <ReportLayerSetSelect sets={layerSets} value={layerSet} onChange={setLayerSetId} />
@@ -186,7 +185,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             scale={scale}
             layers={layers}
             show={show}
-            returnSec={returnSec.data}
+            returnSec={returnSec}
           />
           {show.titleBlock && (
             <div ref={el => { if (el) tbRefs.current.set(w.id, el); else tbRefs.current.delete(w.id) }} className="px-2 pb-2">

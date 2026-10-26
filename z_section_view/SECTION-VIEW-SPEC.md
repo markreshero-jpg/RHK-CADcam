@@ -93,15 +93,15 @@ into the corner — "can Wall 1 show Wall 2's cabinets on end?").
 | # | Decision |
 |---|----------|
 | R-D1 | Cut, not a silhouette: the return walls' cabinets are sliced by a vertical plane parallel to this elevation's face, at the depth of this wall's cabinets (Mark: "if wall 1's cabinets are 600 deep, draw the returns cut at 600"). Depth = deepest cabinet on this wall + side, skipping end panels / fillers / scribes (< 100 wide), kick runs, bulkheads, floating shelves, back panels; 600 when the wall has none. |
-| R-D2 | Everything the cut passes through draws: carcase, doors / fronts, internals, kick, hardware (hinges, handles, runners, bins), benchtops — same solids + hidden-3D-scene meshes as the cross section, painted the same way (`src/lib/sectionPaint.ts`). Fixtures are not cut (not asked). |
-| R-D3 | On by default, screen and prints: layer item `return_sections` (Room group, elevation only), then each part's own item. Prints: black ink, white fill. |
+| R-D2 | ~~Everything the cut passes through, hardware included~~ → **changed (Mark, 2026-10-26, R1a):** a simple outline of each part, everything *up to* the cut — every part between the wall face and the cut depth, projected flat (parts facing the viewer at true shape, benchtops as their hull), no fill. A part starting at or past the cut isn't drawn, so a cut on a joint shows the cabinet behind it whole. No hardware (hinges, runners, handles, bins) — no hidden 3D scene. Fixtures not drawn. Line colour = the elevation's part colour (`src/lib/sectionPaint.ts`). |
+| R-D3 | On by default, screen and prints: layer item `return_sections` (Room group, elevation only), then each part's own item. Prints: black ink. |
 | R-D4 | Return walls = the walls joined to this wall's ends (same 50 mm rule as the return-wall slabs, islands never). Only loops within the wall's length draw (a return's back-side cabinets sit outside). Not clickable. |
 
 How it works: `src/lib/returnSection.ts` (return walls, cut depth, plane = the
-cross-section slicer with d/n swapped so u = elevation x), `app/canvas/[roomId]/ReturnSectionSVG.tsx`
-(`<g data-role="return-sections">`, plus `useReturnSectionData`: part overrides +
-one hidden `CrossSectionMeshes` scene per view / report — reports draw every wall
-at once and each scene is a WebGL context). Drawn in `ElevationSVG` (after the
+cross-section plane with d/n swapped so u = elevation x, `returnProjectionLoops`),
+`app/canvas/[roomId]/ReturnSectionSVG.tsx` (`<g data-role="return-sections">`, plus
+`useReturnSectionData`: the return cabinets' part overrides, loaded once per view /
+report). Drawn in `ElevationSVG` (after the
 benchtops) and `ElevationPrintSVG` (`returnSec` prop, from `ElevationPrintReport` /
 `ShopDrawingsReport`). Headless checks: `z_plan_automation/verify-return-sections.mjs`
 (ROOM_ID, WALL) and `verify-return-sections-print.mjs` (ROOM_ID).
@@ -109,4 +109,5 @@ benchtops) and `ElevationPrintSVG` (`returnSec` prop, from `ElevationPrintReport
 | Phase | What | Status |
 |---|---|---|
 | R1 | Cut at the wall's cabinet depth, screen + elevation report + shop drawings, layer item, tutorial (Basics ▸ Room ▸ See the corner cabinets side-on) | built 2026-10-26, checked headless (RHK6581 J05 Wall 1: TC-07 cut at 580 — open unit, so shelves / top / bottom / back / kick; RHK6539 kitchen Wall 3: Wall 2's wall cabinet with door + hinges, screen and print); Mark's in-app check pending |
-| R2 | Ideas, not asked: a per-wall cut-depth override; dims on the cut; a job-report batch download can run before hinge / handle models load, so their cut may be missing from that PDF | — |
+| R1a | Outlines up to the cut, no hardware (R-D2 change) | built 2026-10-26, checked headless (J05 Wall 1: TC-06 filler + TC-07 gable / shelves / kick; test kitchen Wall 3 + its print); Mark's in-app check pending |
+| R2 | Ideas, not asked: a per-wall cut-depth override; dims; hidden-line removal (parts behind others still show through) | — |

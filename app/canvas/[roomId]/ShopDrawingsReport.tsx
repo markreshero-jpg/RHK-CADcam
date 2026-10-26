@@ -140,10 +140,9 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(w => ({ key: w.id, title: `${room.name} Elevation ${w.name}`, wall: w })),
   ], [walls, room.name])
-  // Return cabinet sections (z_section_view R1): one hidden hardware scene for every wall sheet.
+  // Return cabinet sections (z_section_view R1): part overrides for every wall sheet, loaded once.
   const retCabs = useMemo(() => returnCabinetsOfWalls(walls.filter(w => w.wall_type === 'standard'), walls, cabinets), [walls, cabinets])
-  const returnSec = useReturnSectionData({ walls, cabinets: retCabs, room, resolvedParts: elevResolved, layers: elevLayers,
-    enabled: elevLayers.show('return_sections') })
+  const returnSec = useReturnSectionData(retCabs, elevResolved, elevLayers.show('return_sections'))
 
   // 3D views: auto shots, captured off-screen once per open (or on Re-render).
   // Own layer set for the 3D views — the elevation set's 3D settings often hide
@@ -302,7 +301,6 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
 
   return (
     <div className="space-y-3">
-      {returnSec.host}
       <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-800">
         <span className="text-[10px] text-gray-500 uppercase tracking-wider">Plan</span>
         <ReportLayerSetSelect sets={layerSets} value={planSet} onChange={setPlanSetId} />
@@ -411,7 +409,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                   benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles}
                   benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category)))) : []}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }}
-                  scale={scale} layers={elevLayers} show={elevShow} returnSec={returnSec.data}
+                  scale={scale} layers={elevLayers} show={elevShow} returnSec={returnSec}
                 />
               ) : (
                 <PlanViewReportSVG

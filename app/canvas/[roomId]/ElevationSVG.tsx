@@ -382,10 +382,10 @@ export default function ElevationSVG({
 
   const roomH = wall?.height ?? room.room_dy ?? 2400
   // Return cabinet sections (z_section_view R1): the return walls' cabinets cut
-  // side-on at this wall's cabinet depth; hardware from one hidden 3D scene.
+  // side-on as part outlines, up to this wall's cabinet depth.
   const showReturns = !!wall && layers.show('return_sections')
   const retCabs = returnCabinets(wall, walls, cabinets)
-  const returnSec = useReturnSectionData({ walls, cabinets: retCabs, room, resolvedParts: resolvedPartsRaw, layers, enabled: showReturns })
+  const returnSec = useReturnSectionData(retCabs, resolvedPartsRaw, showReturns)
   const maxDz = wallCabs.length > 0 ? Math.max(300, ...wallCabs.map(c => c.dz)) : 600
   const FACE_THICK = 20
 
@@ -1101,10 +1101,11 @@ export default function ElevationSVG({
             {wall.wall_type !== 'island' && (() => {
               // soffitH = height from floor; soffit_height (wall/room) stored as depth-from-top
               const soffitDrop = wall.soffit_height ?? room.soffit_height
-              const soffitH = soffitDrop != null
+              const showSoffit = layers.show('soffit_line')
+              const soffitH = showSoffit && soffitDrop != null
                 ? (wall.height ?? roomH) - soffitDrop
                 : null
-              const wcTop   = soffitDrop == null ? room.wall_cabinet_top ?? null : null  // a soffit overrides it
+              const wcTop   = showSoffit && soffitDrop == null ? room.wall_cabinet_top ?? null : null  // a soffit overrides it
               return (<>
                 <line x1={0} y1={0} x2={wall.length} y2={0}
                   stroke="#374151" strokeWidth={1 / lz}
@@ -1244,7 +1245,8 @@ export default function ElevationSVG({
               const faceOpacity = sectionMode ? Math.max(0, 1 - sectionDepth / FACE_THICK) : 1
               // Section cut past the face reveals internals regardless of the layer set.
               const showInt = (id: string) => layers.show(id) || pastFace
-              const effectiveShowDrawerBox     = layers.show('drawer_boxes')   || (pastFace && !!cab.has_internal)
+              const showBoxPart = (partType: string) => layers.show(drawerBoxPartItem(partType)) || (pastFace && !!cab.has_internal)
+              const effectiveShowDrawerBox     = layers.any('drawer_boxes', 'drawer_box_backs') || (pastFace && !!cab.has_internal)
               const effectiveShowDrawerRunners = layers.show('drawer_runners') || (pastFace && !!cab.has_internal)
 
               // Click area + labels follow the layer set: the extent of everything this
@@ -1929,11 +1931,11 @@ export default function ElevationSVG({
               />
             )}
 
-            {/* Return cabinet sections — in front of this wall's cabinets (nearer the viewer) */}
+            {/* Return cabinet sections — over this wall's cabinets */}
             {showReturns && (
               <ReturnSectionSVG wall={wall} side={elevWallSide} walls={walls} cabinets={cabinets} room={room} roomH={roomH}
                 resolvedParts={resolvedPartsRaw} layers={layers} benchtops={benchtops} btInfo={benchtopInfo} profiles={edgeProfiles}
-                data={returnSec.data} lw={1 / lz} />
+                data={returnSec} lw={1 / lz} />
             )}
 
             {/* Placement ghost — floating at cursor + snap landing */}
@@ -2543,7 +2545,6 @@ export default function ElevationSVG({
           </g>
         )}
       </svg>
-      {returnSec.host}
 
       {/* Floating snap-settings toolbar (top-right of the elevation pane) — not in the
           narrow cross-section column. */}

@@ -25,7 +25,7 @@ import type {
 } from '@/src/lib/resolver/types'
 import { doorProfileSvg } from './cabinetEditSvgHelpers'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
-import { casePartItem, faceZoneItem, internalPartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
+import { casePartItem, drawerBoxPartItem, faceZoneItem, internalPartItem, kickPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { customExtents } from '@/src/lib/customPartBox'
@@ -131,7 +131,7 @@ const FACE_SHADE = '#ededed'   // light shade so faced zones read differently fr
 export default function ElevationPrintSVG({
   wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [], returnSec,
 }: {
-  /** Return cabinet sections (z_section_view R1) — the report's one useReturnSectionData. */
+  /** Return cabinet sections (z_section_view R1) — the report's useReturnSectionData (undefined = not drawn). */
   returnSec?:    ReturnSectionData
   /** CAD notes (z_CAD_tool A6c) — only this wall's face-side elevation notes are drawn. */
   annotations?:  RoomAnnotation[]
@@ -442,8 +442,10 @@ export default function ElevationPrintSVG({
 
             {/* Drawer boxes + runners (drawer_stacks) */}
             {rp.drawer_stacks.flatMap((ds: ResolvedDrawerStack, i: number) => [
-              ...(layers.show('drawer_boxes') ? ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) =>
-                fineRect(`db-${i}-${j}`, 'drawer_boxes', drawerBoxPartElevRect(p))) : []),
+              ...ds.box_parts.map((p: ResolvedDrawerBoxPart, j: number) => {
+                const it = drawerBoxPartItem(p.part_type)
+                return layers.show(it) ? fineRect(`db-${i}-${j}`, it, drawerBoxPartElevRect(p)) : null
+              }),
               ...(layers.show('drawer_runners') && ds.drawer_type !== 'bin' ? ds.slides.map((s: ResolvedDrawerSlide, j: number) =>
                 fineRect(`sl-${i}-${j}`, 'drawer_runners', slideElevRect(s))) : []),
               ...(ds.drawer_type === 'bin' && layers.show('bins') ? binPolys(`bin-${i}`, ds) : []),
@@ -548,9 +550,10 @@ export default function ElevationPrintSVG({
   // ── Reference lines (ceiling / soffit / wall-cab top) ─────────────────────
   function refs() {
     const soffitDrop = wall.soffit_height ?? room.soffit_height
-    const soffitH = soffitDrop != null ? (wall.height ?? roomH) - soffitDrop : null
+    const showSoffit = layers.show('soffit_line')
+    const soffitH = showSoffit && soffitDrop != null ? (wall.height ?? roomH) - soffitDrop : null
     // A soffit overrides the room's wall-cab top, so that line only shows without one.
-    const wcTop = soffitDrop == null ? room.wall_cabinet_top ?? null : null
+    const wcTop = showSoffit && soffitDrop == null ? room.wall_cabinet_top ?? null : null
     return (
       <g pointerEvents="none">
         {/* Ceiling */}
@@ -714,8 +717,8 @@ export default function ElevationPrintSVG({
           onSelect={NO_SELECT} interactive={false} print={{ P }} />
       )}
 
-      {/* Return cabinet sections (z_section_view R1) — cut at this wall's cabinet depth */}
-      {returnSec && layers.show('return_sections') && (
+      {/* Return cabinet sections (z_section_view R1) — outlines up to this wall's cabinet depth */}
+      {returnSec !== undefined && layers.show('return_sections') && (
         <ReturnSectionSVG wall={wall} side="face" walls={walls} cabinets={cabinets} room={room} roomH={roomH}
           resolvedParts={resolvedPartsRaw} layers={layers} benchtops={benchtops} btInfo={btInfo} profiles={btProfiles}
           data={returnSec} lw={thinSW} print />
