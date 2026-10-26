@@ -715,6 +715,24 @@ function sequenceDrills(drills: SheetDrill[], p: PostProfile): SheetDrill[] {
   return out
 }
 
+// Hole pockets feed down to this far above the board before helixing in (mm).
+const HELIX_START_ABOVE = 1
+
+// One full G3 circle about (cx, cy) from (sx, sy), machine coords, written as
+// TWO half-circle arcs with explicit end points. A single 360° arc ends where it
+// starts, so the modal compressor strips its X/Y and many controls read an arc
+// with no axis words as no move at all (hinge cups came out as bare plunges).
+// zFrom → zTo (machine Z strings) helixes down half per half-turn; null = flat.
+function fullCircle(
+  emit: (l: string) => void, f: (v: number) => string,
+  sx: number, sy: number, cx: number, cy: number, feed: string,
+  zMid: string | null = null, zEnd: string | null = null,
+) {
+  const ox = 2 * cx - sx, oy = 2 * cy - sy
+  emit(`G3 X${f(ox)} Y${f(oy)}${zMid != null ? ` Z${zMid}` : ''} I${f(cx - sx)} J${f(cy - sy)} F${feed}`)
+  emit(`G3 X${f(sx)} Y${f(sy)}${zEnd != null ? ` Z${zEnd}` : ''} I${f(cx - ox)} J${f(cy - oy)} F${feed}`)
+}
+
 // Circular pockets for holes no drill bit can make. Grouped by router tool;
 // each hole is helically ramped from the clearance plane down to depth (the
 // "slow ram-in" instead of a straight plunge), then concentric finishing
@@ -748,15 +766,20 @@ function emitCircularPockets(
 
       const off = (r: number) => ({ sx: mapX(h.x + r), sy: mapY(h.y) })  // orbit point at radius r
       const cmx = mapX(h.x), cmy = mapY(h.y)
-      const arc = (sx: number, sy: number, z: number | null, feed: string) =>
-        emit(`G3 X${f(sx)} Y${f(sy)}${z != null ? ` Z${fz(z)}` : ''} I${f(cmx - sx)} J${f(cmy - sy)} F${feed}`)
+      const arc = (sx: number, sy: number, feed: string, z0?: number, z1?: number) => z0 != null && z1 != null
+        ? fullCircle(emit, f, sx, sy, cmx, cmy, feed, fz((z0 + z1) / 2), fz(z1))
+        : fullCircle(emit, f, sx, sy, cmx, cmy, feed)
 
-      // Helical ram-in at entryR down to depth.
+      // Helical ram-in at entryR down to depth. The helix starts just above the
+      // board (fed down from clearance), so every turn is in material — from the
+      // clearance plane the first turn's air ate most of it and it plunged.
       const e = off(entryR)
+      const startZ = Math.min(clearZ, HELIX_START_ABOVE)
       emit(`G0 X${f(e.sx)} Y${f(e.sy)} Z${fz(clearZ)}`)
+      if (startZ < clearZ) emit(`G1 Z${fz(startZ)} F${helicalFeed}`)
       const passes = Math.max(1, Math.ceil(depth / Math.max(0.5, stepDown)))
-      for (let i = 1; i <= passes; i++) arc(e.sx, e.sy, -Math.min(depth, i * stepDown), helicalFeed)
-      arc(e.sx, e.sy, null, cutFeed)                     // flat finishing circle at entryR
+      for (let i = 1; i <= passes; i++) arc(e.sx, e.sy, helicalFeed, i === 1 ? startZ : -Math.min(depth, (i - 1) * stepDown), -Math.min(depth, i * stepDown))
+      arc(e.sx, e.sy, cutFeed)                           // flat finishing circle at entryR
 
       // Spiral outward to the wall with concentric circles at depth.
       let r = entryR
@@ -764,7 +787,7 @@ function emitCircularPockets(
         r = Math.min(sweep, r + stepover)
         const o = off(r)
         emit(`G1 X${f(o.sx)} Y${f(o.sy)} F${cutFeed}`)
-        arc(o.sx, o.sy, null, cutFeed)
+        arc(o.sx, o.sy, cutFeed)
       }
       emit(`G0 Z${fz(safeZ)}`)
     }
@@ -817,8 +840,9 @@ function emitRoutes(
       const sx = mapX(cx + rr), sy = mapY(cy)
       emit(`G0 X${f(sx)} Y${f(sy)} Z${fz(clearZ)}`)
       const arcs = Math.max(1, Math.ceil((clearZ - zTarget) / Math.max(0.5, step)))
-      for (let a = 1; a <= arcs; a++) emit(`G3 X${f(sx)} Y${f(sy)} Z${fz(clearZ + (zTarget - clearZ) * (a / arcs))} I${f(cmx - sx)} J${f(cmy - sy)} F${helicalFeed}`)
-      for (let k = 0; k < Math.max(1, p.helical_passes); k++) emit(`G3 X${f(sx)} Y${f(sy)} I${f(cmx - sx)} J${f(cmy - sy)} F${cutFeed}`)   // flat finishing turn(s)
+      const zAt = (t: number) => fz(clearZ + (zTarget - clearZ) * t)
+      for (let a = 1; a <= arcs; a++) fullCircle(emit, f, sx, sy, cmx, cmy, helicalFeed, zAt((a - 0.5) / arcs), zAt(a / arcs))
+      for (let k = 0; k < Math.max(1, p.helical_passes); k++) fullCircle(emit, f, sx, sy, cmx, cmy, cutFeed)   // flat finishing turn(s)
       return { x: cx + rr, y: cy }
     }
     if (strat === 'ramp' && roomR >= 0.6) {
