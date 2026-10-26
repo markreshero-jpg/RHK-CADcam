@@ -426,6 +426,17 @@ export function generateSheetGcode(input: GcodeInput): string {
   // True once a routing section is open, so the next tool change knows to close
   // it first (G80 / home Z / M22, as the reference does between router tools).
   let routerOpen = false
+  // The router bit in the spindle once a section is open. A following section on
+  // the SAME bit (hinge pockets → perimeters on T102) carries straight on: no
+  // close, tool call or spindle stop/start between them.
+  let routerTool: number | null = null
+  // Remember where a section leaves the head, for the next tool change.
+  const leaveAt = (buf: string[]) => {
+    for (let i = buf.length - 1; i >= 0; i--) {
+      const m = /X(-?[\d.]+) Y(-?[\d.]+)/.exec(buf[i])
+      if (m) { headAt = { x: m[1], y: m[2] }; break }
+    }
+  }
 
   const safeZ = p.safe_z_clearance
   // Z datum transform. Internally every Z is computed in the "top-of-material,
@@ -497,6 +508,13 @@ export function generateSheetGcode(input: GcodeInput): string {
     const cc = (s: string) => e(sanitiseComment(s, p.max_comment_length))
     body(e, cc)
     if (!buf.length) return
+    if (routerOpen && routerTool === toolNumber) {
+      blank()
+      emit(`G0 Z${fz(safeZ)}`)                           // every section leaves at safe Z; be sure
+      buf.forEach(l => emit(l))
+      leaveAt(buf)
+      return
+    }
 
     let head = 0
     while (head < buf.length && buf[head].startsWith('(')) head++
@@ -539,11 +557,8 @@ export function generateSheetGcode(input: GcodeInput): string {
     buf.slice(head + eaten).forEach(l => emit(l))     // everything after the approach
 
     routerOpen = true
-    // Remember where this section leaves the head, for the next tool change.
-    for (let i = buf.length - 1; i >= 0; i--) {
-      const m = /X(-?[\d.]+) Y(-?[\d.]+)/.exec(buf[i])
-      if (m) { headAt = { x: m[1], y: m[2] }; break }
-    }
+    routerTool = toolNumber
+    leaveAt(buf)
   }
   // (The routing plunge feed is derived where it is used — routePerimeter and
   // emitRoutes each compute it from the routing tool. Drilling no longer shares
