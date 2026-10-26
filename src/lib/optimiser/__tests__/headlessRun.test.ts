@@ -347,6 +347,63 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     }
     writeFileSync(join(cfg.out, 'sheets.pdf'), Buffer.from(doc.output('arraybuffer')))
 
+    // ── Part labels (Cabinet Vision layout, z_Part_label_example) ──
+    // One label per page, part-number order. Sizes are CUT size (edgeband
+    // conventions: labels default to cut size). Length = DY (grain), width = DX.
+    const LW = 100, LH = 50
+    const cabIds = [...new Set(nestableParts.map(p => p.cabinet_instance_id))]
+    const { data: defRows } = await supabase.from('cabinet_instances').select('id,cabinet_definitions(name)').in('id', cabIds)
+    const cabType = new Map((defRows ?? []).map(r => [r.id as string, ((r as { cabinet_definitions?: { name?: string } | null }).cabinet_definitions?.name) ?? '']))
+    const tapeIds = [...new Set(nestableParts.flatMap(p => (p.eb_tape ?? []).map(t => t.id).filter((x): x is string => !!x)))]
+    const { data: tapeRows } = tapeIds.length ? await supabase.from('edge_banding').select('id,name').in('id', tapeIds) : { data: [] }
+    const tapeName = new Map((tapeRows ?? []).map(t => [t.id as string, t.name as string]))
+    const { data: colRows } = await supabase.from('materials').select('id,colour_name').in('id', [...new Set(nestableParts.map(p => p.material_id).filter((x): x is string => !!x))])
+    const colourName = new Map((colRows ?? []).map(r => [r.id as string, (r.colour_name as string | null) ?? '']))
+
+    const lab = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [LH, LW] })
+    const fitText = (txt: string, x: number, y: number, maxW: number, fs: number, minFs: number, opts?: { align?: 'right' | 'center' }) => {
+      let f = fs
+      lab.setFontSize(f)
+      while (f > minFs && lab.getTextWidth(txt) > maxW) { f -= 0.5; lab.setFontSize(f) }
+      lab.text(txt, x, y, opts)
+    }
+    gen.forEach((g, si) => g.sheet.placements.forEach(pl => {
+      const p = partByUid.get(pl.baseUid)!
+      const no = noByUid.get(pl.uid)!
+      if (no > 1) lab.addPage([LH, LW], 'landscape')
+      const blank = cutBlank(p, deductEb)
+      const len = Math.round(blank.h * 10) / 10, wid = Math.round(blank.w * 10) / 10
+      lab.setTextColor(0)
+      // Left column
+      lab.setFont('helvetica', 'bold'); fitText(snap.projectName, 4, 7.5, 46, 12, 7)
+      lab.setFont('helvetica', 'normal'); fitText(p.room_name, 4, 12, 46, 9, 6)
+      fitText(cabType.get(p.cabinet_instance_id) ?? '', 4, 16.5, 46, 9, 6)
+      lab.setFont('helvetica', 'bold'); fitText(p.label, 12, 21.5, 46, 12, 6.5)
+      lab.setFont('helvetica', 'normal'); fitText(matName(p.material_id) ?? '', 4, 27, 50, 9, 6)
+      fitText(colourName.get(p.material_id ?? '') ?? '', 4, 31.5, 50, 9, 6)
+      const lEdges = (p.eb_w1 > 0 ? 1 : 0) + (p.eb_w2 > 0 ? 1 : 0)
+      const wEdges = (p.eb_h1 > 0 ? 1 : 0) + (p.eb_h2 > 0 ? 1 : 0)
+      const tapes = [...new Set((p.eb_tape ?? []).map(t => (t.id && tapeName.get(t.id)) || ''))].filter(Boolean).join(', ')
+      const edging = lEdges + wEdges ? `${lEdges}L ${wEdges}W${tapes ? ` - ${tapes}` : ''}` : 'None'
+      lab.setFontSize(7.5); lab.text('Edging:', 3, 37); lab.line(3, 37.6, 3 + lab.getTextWidth('Edging:'), 37.6)
+      fitText(edging, 14, 37, 50, 7.5, 5)
+      lab.setFontSize(7.5); lab.text('Comment:', 3, 42); lab.line(3, 42.6, 3 + lab.getTextWidth('Comment:'), 42.6)
+      fitText(p.comment ?? '', 16, 42, 48, 7.5, 5)
+      // Cab # + sheet / part numbers
+      lab.setFontSize(11); lab.text('Cab #', 50, 10); lab.line(50, 10.8, 50 + lab.getTextWidth('Cab #'), 10.8)
+      lab.setFont('helvetica', 'bold'); fitText(p.cabinet_label, 62, 11, 18, 20, 9)
+      lab.setFontSize(7.5)
+      lab.setFont('helvetica', 'normal'); lab.text('Sheet No:', 92, 6, { align: 'right' }); lab.text('Part No:', 92, 10, { align: 'right' })
+      lab.setFont('helvetica', 'bold'); lab.text(String(si + 1), 97, 6, { align: 'right' }); lab.text(String(no), 97, 10, { align: 'right' })
+      // Sizes: width up the left (across grain), length along the bottom (with grain)
+      lab.setFont('helvetica', 'bold'); lab.setFontSize(13)
+      lab.text(String(wid), 63, 27, { angle: 270, align: 'center' })
+      lab.setFont('helvetica', 'normal'); lab.setFontSize(6); lab.text('Across Grain', 60, 27, { angle: 270, align: 'center' })
+      lab.setFont('helvetica', 'bold'); lab.setFontSize(13); lab.text(String(len), 84, 37, { align: 'center' })
+      lab.setFont('helvetica', 'normal'); lab.setFontSize(6); lab.text('With Grain', 84, 40, { align: 'center' })
+    }))
+    writeFileSync(join(cfg.out, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
+
     const summary = {
       job: snap.jobNumber, rooms: cfg.rooms, materials: cfg.materials, profile: prof?.name, deductEdgeband: deductEb,
       parts: rows.length, sheets: gen.map((g, i) => ({ n: i + 1, file: g.fileName, parts: g.sheet.placements.length, holes: g.drills.length, routes: g.routes.length, efficiency: Math.round(g.sheet.efficiency * 100) })),
