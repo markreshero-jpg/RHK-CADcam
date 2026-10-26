@@ -941,6 +941,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In the plan, click a spot where an overhead sits over a base (or a kick under its run). A list pops up with every cabinet under the pointer, top-drawn first: its name, kind and width × depth. Point at a row to see that cabinet light up orange, then click the row to select it. Esc or a click elsewhere closes the list. Shift-click still adds the top cabinet to a multi-select without the list.',
       canvas: true, done: (c, s) => ev(c, 'plan_cab_pick') > ev(s, 'plan_cab_pick') },
   ]},
+
+  // Appended 2026-10-26 (z_section_view R1 — return cabinets cut side-on in the elevation).
+  { id: 'return_sections', level: 'basics', topic: 'room', title: 'See the corner cabinets side-on',
+    blurb: 'An elevation shows the cabinets on the walls at each end, cut through at this wall’s cabinet depth.',
+    keywords: 'return wall corner side on end view section cut tall pantry elevation adjoining next wall', steps: [
+    { id: 'elev', title: 'Open an elevation with a corner',
+      body: 'Click Elevation and pick a wall that has cabinets on the wall joined to its end (e.g. bases on this wall, talls running into the corner on the next).',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+    { id: 'look', title: 'The return cabinets, cut',
+      body: 'In the corner, beside the hatched return wall, the next wall’s cabinets show side-on: cut through where this wall’s cabinets come out to (their depth: 600-deep bases cut the return at 600). You see whatever that cut passes through: the back, top, bottom, shelves, door and drawer edges, kick, hinges, handles, runners and benchtop, coloured like the rest of the elevation. They can’t be clicked; select those cabinets on their own wall. They print on the elevation report and the shop drawings too.',
+      canvas: true, done: c => c.view === 'elevation' },
+    { id: 'layer', title: 'Turn them off',
+      body: 'In the Layers drop-down pick Manage layers…, open the Elevation view’s Room group and untick Return cabinet sections to hide them (on screen and in prints that use that layer set). Their parts also follow their own items: untick Doors and the door edges go from the cut too.',
+      canvas: true, done: c => c.view === 'elevation' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

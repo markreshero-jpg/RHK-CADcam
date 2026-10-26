@@ -14,18 +14,13 @@ import { LAYER_ITEM_BY_ID } from '@/src/lib/displayLayers/registry'
 import { centroid } from '@/src/lib/geometry'
 import { elevationFrame, openingOnWall } from '@/src/lib/fixtureGeometry'
 import { sliceFaces, alongRange, loopsPath, sliceTriangles, chainPaths, chainPathD, trisAlongRange, type CutPlane } from '@/src/lib/crossSection'
-import { cabinetSectionSolids, benchtopSectionSolids, type SectionRole, type SectionSolid } from '@/src/lib/crossSectionRoom'
+import { cabinetSectionSolids, benchtopSectionSolids, type SectionSolid } from '@/src/lib/crossSectionRoom'
+import { sectionPaint, sectionMeshPaint } from '@/src/lib/sectionPaint'
 import type { BtSolidInfo } from '@/src/lib/benchtopSolids'
 import { getPalette, paletteToPartColors } from '@/src/lib/partPalette'
 import CrossSectionMeshes, { type SectionMesh } from './CrossSectionMeshes'
 import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
 import { roundMm } from '@/src/lib/format'
-
-/** The elevation's fallback colour per role when the palette has no entry. */
-const FALLBACK: Record<SectionRole, string> = {
-  case: '#b8c8dc', kick: '#f59e0b', spreader: '#f59e0b', face: '#60a5fa', int: '#818cf8',
-  db: '#34d399', custom: '#a78bfa', bench: '#134e4a',
-}
 
 export default function CrossSectionView({ walls, cabinets, room, wall, side, cutX, look, onCutX, onFlip, onClose,
   resolvedParts, layers, benchtops, btInfo, profiles, fixtures, selectedCabId, onSelectCabinet }: {
@@ -118,38 +113,10 @@ export default function CrossSectionView({ walls, cabinets, room, wall, side, cu
     return paths.length ? [{ m, fill: chainPathD(paths, true, flip), line: chainPathD(paths, false, flip) }] : []
   })
 
-  // Paint a cut part the way the elevation draws it (palette colour by part key,
-  // layer colour override, line-drawing mode, layer style + weight).
+  // Paint a cut part / mesh the way the elevation draws it (src/lib/sectionPaint).
   const ld = layers.lineDrawing
-  const paint = (s: SectionSolid) => {
-    const c = s.role === 'bench' ? layers.color('benchtops', FALLBACK.bench)
-      : s.role === 'custom' ? layers.color(s.item, FALLBACK.custom)
-      : layers.colorOf(s.item) ?? (s.key ? PART_COLORS[s.key] : undefined) ?? FALLBACK[s.role]
-    const line = s.role === 'bench' ? layers.color('benchtops', '#14b8a6') : s.role === 'custom' && !ld ? layers.color(s.item, '#7c3aed') : c
-    const fo = s.role === 'bench' ? 0.85 : s.role === 'custom' ? 0.4 : 0.6
-    const p = layers.props(s.item, 1)
-    const sel = !!s.cabId && s.cabId === selectedCabId
-    return {
-      fill: ld ? 'none' : c, fillOpacity: ld ? 0 : fo * p.fillOpacity,
-      stroke: sel ? '#e2e8f0' : line, strokeWidth: layers.w(s.item, sel ? 1.75 : 1),
-      strokeDasharray: p.strokeDasharray ? '6 3' : undefined, opacity: p.opacity,
-    }
-  }
-
-  // Hardware / fixtures, coloured like the elevation draws them.
-  const meshPaint = (m: SectionMesh) => {
-    const c = m.item === 'hinges' ? layers.color('hinges', ld ? '#475569' : '#a855f7')
-      : m.item === 'handles' ? layers.color('handles', ld ? '#334155' : '#94a3b8')
-      : m.item === 'bins' ? layers.color('bins', '#6b7280')
-      : m.item === 'drawer_runners' || m.item === 'inner_drawer_runners' ? layers.color(m.item, PART_COLORS.db_slide ?? '#94a3b8')
-      : layers.color(m.item, m.item === 'fixture_openings' ? '#94a3b8' : '#0ea5e9')
-    const p = layers.props(m.item, 1)
-    const sel = !!m.cabId && m.cabId === selectedCabId
-    return {
-      color: c, stroke: sel ? '#e2e8f0' : c, fillOpacity: ld ? 0 : (m.fixtureId ? 0.25 : 0.7) * p.fillOpacity,
-      strokeWidth: layers.w(m.item, 1), strokeDasharray: p.strokeDasharray ? '6 3' : undefined, opacity: p.opacity,
-    }
-  }
+  const paint = (s: SectionSolid) => sectionPaint(layers, PART_COLORS, s, !!s.cabId && s.cabId === selectedCabId)
+  const meshPaint = (m: SectionMesh) => sectionMeshPaint(layers, PART_COLORS, m, !!m.cabId && m.cabId === selectedCabId)
   const fixtureName = new Map(fixtures.map(f => [f.id, f.name ?? '']))
 
   // The wall itself, less any door / window it's cut through.

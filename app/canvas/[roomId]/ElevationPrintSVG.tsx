@@ -14,6 +14,7 @@ import type { Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, Bencht
 import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
+import ReturnSectionSVG, { type ReturnSectionData } from './ReturnSectionSVG'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
 import { stackShelfSegs } from '@/src/lib/floatShelf'
@@ -128,8 +129,10 @@ const PRINT_DRILLING = false
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [],
+  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [], returnSec,
 }: {
+  /** Return cabinet sections (z_section_view R1) — the report's one useReturnSectionData. */
+  returnSec?:    ReturnSectionData
   /** CAD notes (z_CAD_tool A6c) — only this wall's face-side elevation notes are drawn. */
   annotations?:  RoomAnnotation[]
   /** Benchtops (z_benchtop_builder) — the canvas's band / waterfall drawing in print mode. Needs btInfo. */
@@ -709,6 +712,13 @@ export default function ElevationPrintSVG({
         <BenchtopElevation benchtops={benchtops} walls={walls} wall={wall} side="face" roomCx={centroid(walls)} roomH={roomH}
           zoom={2 / P} layers={layers} selectedId={null} info={btInfo} profiles={btProfiles ?? {}}
           onSelect={NO_SELECT} interactive={false} print={{ P }} />
+      )}
+
+      {/* Return cabinet sections (z_section_view R1) — cut at this wall's cabinet depth */}
+      {returnSec && layers.show('return_sections') && (
+        <ReturnSectionSVG wall={wall} side="face" walls={walls} cabinets={cabinets} room={room} roomH={roomH}
+          resolvedParts={resolvedPartsRaw} layers={layers} benchtops={benchtops} btInfo={btInfo} profiles={btProfiles}
+          data={returnSec} lw={thinSW} print />
       )}
 
       {/* Fixtures & appliances facing this wall (sinks, ovens, rangehoods …) — over the cabinets */}

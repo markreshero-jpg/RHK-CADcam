@@ -165,6 +165,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
 
   // Room
   { id: 'walls',          group: 'room', label: 'Walls', views: ['3d'], default: ON },
+  { id: 'return_sections', group: 'room', label: 'Return cabinet sections', views: ['elevation'], default: ON,
+    hint: 'Cabinets on the return walls, cut side-on at this wall\'s cabinet depth (z_section_view R1)' },
 
   // Labels
   { id: 'cabinet_labels', group: 'labels', label: 'Cabinet names', views: ['plan', 'elevation'], default: ON },

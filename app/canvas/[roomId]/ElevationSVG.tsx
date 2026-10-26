@@ -32,6 +32,7 @@ import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import { benchDimHeights } from './benchDims'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
+import ReturnSectionSVG, { useReturnSectionData, returnCabinets } from './ReturnSectionSVG'
 import { openingOnWall, elevationFrame, fixtureChainSpans, fixtureLayer, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
@@ -380,6 +381,11 @@ export default function ElevationSVG({
   const triMap = useSlideTriangles([...allWallSlides, ...wallAccModels])
 
   const roomH = wall?.height ?? room.room_dy ?? 2400
+  // Return cabinet sections (z_section_view R1): the return walls' cabinets cut
+  // side-on at this wall's cabinet depth; hardware from one hidden 3D scene.
+  const showReturns = !!wall && layers.show('return_sections')
+  const retCabs = returnCabinets(wall, walls, cabinets)
+  const returnSec = useReturnSectionData({ walls, cabinets: retCabs, room, resolvedParts: resolvedPartsRaw, layers, enabled: showReturns })
   const maxDz = wallCabs.length > 0 ? Math.max(300, ...wallCabs.map(c => c.dz)) : 600
   const FACE_THICK = 20
 
@@ -1923,6 +1929,13 @@ export default function ElevationSVG({
               />
             )}
 
+            {/* Return cabinet sections — in front of this wall's cabinets (nearer the viewer) */}
+            {showReturns && (
+              <ReturnSectionSVG wall={wall} side={elevWallSide} walls={walls} cabinets={cabinets} room={room} roomH={roomH}
+                resolvedParts={resolvedPartsRaw} layers={layers} benchtops={benchtops} btInfo={benchtopInfo} profiles={edgeProfiles}
+                data={returnSec.data} lw={1 / lz} />
+            )}
+
             {/* Placement ghost — floating at cursor + snap landing */}
             {placeGhost && (() => {
               const isWallCls = placeGhost.cls === 'wall' || placeGhost.cls === 'wall_corner'
@@ -2530,6 +2543,7 @@ export default function ElevationSVG({
           </g>
         )}
       </svg>
+      {returnSec.host}
 
       {/* Floating snap-settings toolbar (top-right of the elevation pane) — not in the
           narrow cross-section column. */}
