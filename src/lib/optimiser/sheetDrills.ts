@@ -30,6 +30,31 @@ export interface SheetDrillsResult {
 // Parse a cnc_tools.tool_number (text, may be 'T101') to its integer register.
 const toolNum = (tn: unknown): number => { const d = String(tn ?? '').replace(/\D/g, ''); return d ? Number(d) : NaN }
 
+// Every part_operations row of the given types on these cabinets. PostgREST caps
+// a response at 1000 rows and a whole job runs to thousands of holes (RHK6581:
+// 3–5k), so one .in() read silently dropped every cabinet past the cap — their
+// parts nested with no drilling. Cabinets go in chunks (short URLs, parallel),
+// each paged by id until a short page.
+const OPS_CABS_PER_READ = 25
+const OPS_PAGE = 1000
+async function selectCabinetOps(select: string, cabIds: string[], types: string[]): Promise<Record<string, unknown>[]> {
+  const chunks: string[][] = []
+  for (let i = 0; i < cabIds.length; i += OPS_CABS_PER_READ) chunks.push(cabIds.slice(i, i + OPS_CABS_PER_READ))
+  const pages = await Promise.all(chunks.map(async ids => {
+    const rows: Record<string, unknown>[] = []
+    for (let from = 0; ; from += OPS_PAGE) {
+      const { data, error } = await supabase.from('part_operations').select(select)
+        .in('source_cabinet_id', ids).in('operation_type', types)
+        .order('id').range(from, from + OPS_PAGE - 1)
+      if (error) throw error
+      const page = (data ?? []) as unknown as Record<string, unknown>[]
+      rows.push(...page)
+      if (page.length < OPS_PAGE) return rows
+    }
+  }))
+  return pages.flat()
+}
+
 // The expensive half: sync joint holes, read part_operations, resolve tools.
 // Returns part-local ops grouped by stable key — independent of where parts sit
 // on sheets, so it only needs re-running when the cabinet data changes, NOT on
@@ -102,12 +127,10 @@ export async function loadResolvedDrillOps(
   const cabIds = drillCabinetIds(parts)
   if (opts.sync && cabIds.length) await syncDrillingForParts(parts, { force: opts.sync === 'force' })
 
-  const { data: opRows } = cabIds.length
-    ? await supabase.from('part_operations')
-        .select('source_table,source_cabinet_id,source_part_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool,output_face')
-        .in('source_cabinet_id', cabIds).eq('operation_type', 'drill')
-    : { data: [] }
-  const drillOps = ((opRows ?? []) as (DrillOpRaw & { output_to_cnc: boolean | null })[]).filter(o => o.output_to_cnc !== false)
+  const opRows = cabIds.length
+    ? await selectCabinetOps('source_table,source_cabinet_id,source_part_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool,output_face', cabIds, ['drill'])
+    : []
+  const drillOps = (opRows as unknown as (DrillOpRaw & { output_to_cnc: boolean | null })[]).filter(o => o.output_to_cnc !== false)
 
   // Resolve auto_tool / drill_id → a concrete bit (mutates diameter/depth in place).
   const { data: drillLibRows } = await supabase.from('cnc_drills')
@@ -137,11 +160,10 @@ export async function loadResolvedDrillOps(
   // material-up pass for now — plane_kind is loaded but not yet acted on.
   const routesByKey = new Map<string, RouteOpRaw[]>()
   if (cabIds.length) {
-    const { data: rRows } = await supabase.from('part_operations')
-      .select('source_table,source_cabinet_id,source_part_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,output_to_cnc')
-      .in('source_cabinet_id', cabIds).in('operation_type', ['route', 'groove'])
+    const rRows = await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,output_to_cnc',
+      cabIds, ['route', 'groove'])
     type RouteRow = RouteGeom & { router_tool_id: string | null; tool_set_id: string | null; output_to_cnc: boolean | null }
-    const rawRoutes = ((rRows ?? []) as RouteRow[]).filter(o => o.output_to_cnc !== false)
+    const rawRoutes = (rRows as unknown as RouteRow[]).filter(o => o.output_to_cnc !== false)
     if (rawRoutes.length) {
       const { data: toolRows } = await supabase.from('cnc_tools')
         .select('id,tool_number,diameter,max_depth_per_pass').eq('active', true)
