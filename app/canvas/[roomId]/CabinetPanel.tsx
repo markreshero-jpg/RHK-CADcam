@@ -523,7 +523,6 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                       <CalcInput
                         value={ov[key] ?? null}
                         decimals={1}
-                        min={0}
                         placeholder={rules ? String(Math.round(rules[key] * 10) / 10) : ''}
                         onCommit={v => {
                           const next = { ...(cabinet.rule_overrides ?? {}) }
@@ -541,7 +540,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                   )
                 })}
               </div>
-              <p className="text-[10px] text-gray-600 mt-1">Blank = inherited from the construction method.</p>
+              <p className="text-[10px] text-gray-600 mt-1">Blank = inherited from the construction method. Negative pushes the kick out past the cabinet.</p>
             </div>
           )
         })()}
