@@ -235,6 +235,11 @@ How it's built (plan):
 - Package: a **3D views** sheet (heading "Room 3D NTS", title block "Scale: NTS"), ticked by default.
   Captured once per open; **Re-render 3D** recaptures. Download waits for the capture. Uses the elevation
   layer set's 3D view.
+- **Hidden lines vs thin skins (Mark, 2026-10-26: curved cabinets showed formers through the face):**
+  the curved face board is pocketed to a 2mm skin, inside the old 3–4mm visibility tolerance. The depth
+  pass now also writes a mesh id: an edge keeps the generous tolerance only against its own faces, and
+  needs to be within ~1mm of any other part (`tolOther`), so parts behind a thin skin stay hidden.
+
 ### S8 stage 2 (built 2026-10-21, in-app check pending)
 
 - **Auto views** (`autoShots`): one per cabinet run (face-side run ≥ 400mm, longest first, max 4, swings

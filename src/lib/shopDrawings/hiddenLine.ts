@@ -1,5 +1,5 @@
 // Vector hidden-line capture of a three.js scene (z_shop_drawings S8).
-// 1. Render eye-space depth of every solid mesh into a float target.
+// 1. Render eye-space depth + an id of every solid mesh into a float target.
 // 2. Pick each mesh's FEATURE edges, the way an illustrator would draw it:
 //    boundaries, sharp creases, and silhouettes (where the surface turns away
 //    from the camera). Smooth / curved models (appliances, taps, handles) then
@@ -39,9 +39,11 @@ void main() {
   vViewZ = -mv.z;
   gl_Position = projectionMatrix * mv;
 }`
+// G = which mesh (index + 1), so an edge can tell its own faces from another part's.
 const DEPTH_FS = `
+uniform float uId;
 varying float vViewZ;
-void main() { gl_FragColor = vec4(vViewZ, 0.0, 0.0, 1.0); }`
+void main() { gl_FragColor = vec4(vViewZ, uId, 0.0, 1.0); }`
 
 /** Mesh-based line objects (drei <Edges> / Line2 "fat lines") — not surfaces. */
 function isLineMesh(m: Mesh): boolean {
@@ -166,9 +168,13 @@ export function captureHiddenLines(gl: WebGLRenderer, scene: Scene, camera: Pers
   camera.far = Math.max(camera.near + 1, zMax * 1.1)
   camera.updateProjectionMatrix()
 
-  // ── 1. Depth pass (only the solid meshes) ──────────────────────────────────
+  // ── 1. Depth + id pass (only the solid meshes) ─────────────────────────────
   const rt = new WebGLRenderTarget(W, H, { type: FloatType, format: RGBAFormat, minFilter: NearestFilter, magFilter: NearestFilter })
-  const depthMat = new ShaderMaterial({ vertexShader: DEPTH_VS, fragmentShader: DEPTH_FS, side: DoubleSide })
+  const depthMat = new ShaderMaterial({ vertexShader: DEPTH_VS, fragmentShader: DEPTH_FS, side: DoubleSide, uniforms: { uId: { value: 0 } } })
+  // One material per mesh carrying its id (same shader → same program); swapped back after.
+  const idMats = meshes.map((_, i) => { const mm = depthMat.clone(); mm.uniforms.uId.value = i + 1; return mm })
+  const prevMats = meshes.map(m => m.material)
+  meshes.forEach((m, i) => { m.material = idMats[i] })
   const keep = new Set<Object3D>(meshes)
   const hidden: Object3D[] = []
   // Hide every other drawable leaf (ghosted meshes, text, edge lines) — never groups.
@@ -179,7 +185,6 @@ export function captureHiddenLines(gl: WebGLRenderer, scene: Scene, camera: Pers
   const prevOverride = scene.overrideMaterial, prevBg = scene.background
   const prevTarget = gl.getRenderTarget()
   const prevClear = gl.getClearColor(new Color()), prevAlpha = gl.getClearAlpha()
-  scene.overrideMaterial = depthMat
   scene.background = null
   gl.setRenderTarget(rt)
   gl.setClearColor(0x000000, 0)
@@ -192,8 +197,10 @@ export function captureHiddenLines(gl: WebGLRenderer, scene: Scene, camera: Pers
   scene.overrideMaterial = prevOverride
   scene.background = prevBg
   for (const o of hidden) o.visible = true
+  meshes.forEach((m, i) => { m.material = prevMats[i] })
   rt.dispose()
   depthMat.dispose()
+  for (const mm of idMats) mm.dispose()
 
   // Eye depth at a pixel (row 0 = top). 0 in the buffer = nothing there.
   const depthAt = (px: number, py: number) => {
@@ -201,6 +208,7 @@ export function captureHiddenLines(gl: WebGLRenderer, scene: Scene, camera: Pers
     const d = buf[((H - 1 - py) * W + px) * 4]
     return d > 0 ? d : Infinity
   }
+  const idAt = (px: number, py: number) => buf[((H - 1 - py) * W + px) * 4 + 1]
 
   // ── 2 + 3. Feature edges, sampled against the depth buffer ──────────────────
   const proj = new Matrix4().multiplyMatrices(camera.projectionMatrix, view)
@@ -215,7 +223,8 @@ export function captureHiddenLines(gl: WebGLRenderer, scene: Scene, camera: Pers
   }
   const eyeDepth = (w: Vector3) => -(p.copy(w).applyMatrix4(view).z)
 
-  for (const m of meshes) {
+  for (let mi = 0; mi < meshes.length; mi++) {
+    const m = meshes[mi], ownId = mi + 1
     const t = topology(m.geometry)
     const heavy = t.tris > heavyTris
     const cosC = heavy ? cosCreaseHeavy : cosCrease
@@ -253,15 +262,19 @@ export function captureHiddenLines(gl: WebGLRenderer, scene: Scene, camera: Pers
         const x = sp.x, y = sp.y
         const ix = Math.floor(x), iy = Math.floor(y)
         // Visible if any pixel around the sample is at (or behind) the edge: the edge
-        // sits on its own faces; an occluder covers the whole neighbourhood. The
-        // tolerance is a few mm, so parts just behind a front (drawer boxes, carcase
-        // edges behind an 18mm front) stay hidden.
-        const tol = 1 + z * 0.0004
+        // sits on its own faces; an occluder covers the whole neighbourhood. Its own
+        // faces get a few mm of slack (grazing angles); another part only ~1mm, so
+        // parts just behind a thin skin stay hidden — curved-end formers behind the
+        // 2mm pocketed face board (Mark, 2026-10-26), drawer boxes behind a front.
+        const tolOwn = 1 + z * 0.0004
+        const tolOther = 0.5 + z * 0.00005
         let vis = ix >= 0 && iy >= 0 && ix < W && iy < H
         if (vis) {
           vis = false
           for (let dy = -1; dy <= 1 && !vis; dy++) for (let dx = -1; dx <= 1 && !vis; dx++) {
-            if (depthAt(ix + dx, iy + dy) >= z - tol) vis = true
+            const d = depthAt(ix + dx, iy + dy)
+            if (d >= z - tolOther) vis = true
+            else if (d >= z - tolOwn && ix + dx >= 0 && iy + dy >= 0 && ix + dx < W && iy + dy < H && idAt(ix + dx, iy + dy) === ownId) vis = true
           }
         }
         if (vis) {
