@@ -332,8 +332,8 @@ export default function WallDimensionChain({
         {/* Perpendicular depth dimensions at wall ends */}
         {showTop && (
           <>
-            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={top0.depth} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} sign={-1} backOffset={backOffset} extra={oT} endClear={clear0} bg={labelBg} />
-            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={topL.depth} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} sign={1} backOffset={backOffset} extra={oT} endClear={clearL} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={0}           dz={top0.depth} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} sign={-1} backOffset={top0.from} extra={oT} endClear={clear0} bg={labelBg} />
+            <DepthDim wall={wall} inward={depthDir} tPos={wall.length} dz={topL.depth} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} sign={1} backOffset={topL.from} extra={oT} endClear={clearL} bg={labelBg} />
           </>
         )}
         {layerWallCab.visible && wallDz > 0 && (

@@ -667,8 +667,8 @@ export default function PlanViewReportSVG({
               {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'WALL')}
               {topSegs.length > 0 && (
                 <>
-                  {depthDim(w, depthDir, 0,        tops[0].depth,               -1, `dd0-${key}`, 'dim_benchtop', backOffset)}
-                  {depthDim(w, depthDir, w.length, tops[tops.length - 1].depth,  1, `dd1-${key}`, 'dim_benchtop', backOffset)}
+                  {depthDim(w, depthDir, 0,        tops[0].depth,               -1, `dd0-${key}`, 'dim_benchtop', tops[0].from)}
+                  {depthDim(w, depthDir, w.length, tops[tops.length - 1].depth,  1, `dd1-${key}`, 'dim_benchtop', tops[tops.length - 1].from)}
                 </>
               )}
               {layers.show('dim_wall_chain') && wallDz > 0 && (
