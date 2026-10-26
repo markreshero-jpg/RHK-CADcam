@@ -19,10 +19,46 @@ export interface LocalDrawerLine { key: string; a: LocalPt; b: LocalPt; out: Loc
 const OPEN = 15 * Math.PI / 180
 
 /** Drawer line spacing in real mm, so the marks stay fixed on the cabinet at any zoom
- *  or print scale: `step` × 40 out from the front, `step` × 30 in from each end,
- *  never shorter than 40% of the front (deep stacks on narrow fronts). */
-export function drawerLineOffset(step: number, width: number): { off: number; ins: number } {
-  return { off: step * 40, ins: Math.max(0, Math.min(step * 30, width * 0.3)) }
+ *  or print scale: `step` × 40 out past `clear` (the benchtop overhang, see benchReach),
+ *  `step` × 30 in from each end, never shorter than 40% of the front (deep stacks on
+ *  narrow fronts). */
+export function drawerLineOffset(step: number, width: number, clear = 0): { off: number; ins: number } {
+  return { off: clear + step * 40, ins: Math.max(0, Math.min(step * 30, width * 0.3)) }
+}
+
+export type PlanPt = { x: number; y: number }
+
+function inside(poly: PlanPt[], p: PlanPt): boolean {
+  let hit = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j]
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) hit = !hit
+  }
+  return hit
+}
+
+/** How far benchtop outlines (plan rings) reach past a front a→b along unit `out` —
+ *  0 when no top sits over it. Sampled across the front so a top over part of it counts. */
+export function benchReach(tops: PlanPt[][], a: PlanPt, b: PlanPt, out: PlanPt): number {
+  let best = 0
+  for (const t of [0.1, 0.5, 0.9]) {
+    // 1mm back inside the front, so a top flush with the face still counts
+    const o = { x: a.x + (b.x - a.x) * t - out.x, y: a.y + (b.y - a.y) * t - out.y }
+    for (const poly of tops) {
+      if (poly.length < 3 || !inside(poly, o)) continue
+      let s = Infinity
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const e = { x: poly[i].x - poly[j].x, y: poly[i].y - poly[j].y }
+        const den = out.x * e.y - out.y * e.x
+        if (Math.abs(den) < 1e-9) continue
+        const w = { x: poly[j].x - o.x, y: poly[j].y - o.y }
+        const r = (w.x * e.y - w.y * e.x) / den, u = (w.x * out.y - w.y * out.x) / den
+        if (r > 0 && u >= 0 && u <= 1) s = Math.min(s, r)
+      }
+      if (s < Infinity) best = Math.max(best, s - 1)
+    }
+  }
+  return best
 }
 
 function frontEdge(z: ResolvedFaceZone): { l: LocalPt; r: LocalPt; out: LocalPt } {

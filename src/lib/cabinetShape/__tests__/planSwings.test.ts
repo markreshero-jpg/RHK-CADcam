@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { shapedFrontMarks } from '../planSwings'
+import { shapedFrontMarks, benchReach, drawerLineOffset } from '../planSwings'
 import type { ResolvedFaceZone } from '../../resolver/types'
 
 const zone = (o: Partial<ResolvedFaceZone>): ResolvedFaceZone => ({
@@ -36,5 +36,21 @@ describe('shaped plan swings', () => {
     const m = shapedFrontMarks(z)
     expect(m.drawers.map(d => d.step)).toEqual([1, 2])
     expect(m.swings.length).toBe(1)
+  })
+})
+
+describe('benchReach', () => {
+  // Top 0..1200 along the wall, 0..640 deep (y down = toward the room); cabinet front at y 580.
+  const top = [{ x: 0, y: 0 }, { x: 1200, y: 0 }, { x: 1200, y: 640 }, { x: 0, y: 640 }]
+  const out = { x: 0, y: 1 }
+  it('measures the overhang past the front', () => {
+    expect(benchReach([top], { x: 100, y: 580 }, { x: 700, y: 580 }, out)).toBeCloseTo(60)
+  })
+  it('is 0 with no top over the front', () => {
+    expect(benchReach([top], { x: 1300, y: 580 }, { x: 1900, y: 580 }, out)).toBe(0)
+    expect(benchReach([], { x: 100, y: 580 }, { x: 700, y: 580 }, out)).toBe(0)
+  })
+  it('pushes the drawer lines out past it', () => {
+    expect(drawerLineOffset(1, 600, 60).off).toBe(100)
   })
 })

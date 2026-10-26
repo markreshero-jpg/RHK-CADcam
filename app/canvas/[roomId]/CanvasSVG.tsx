@@ -3,7 +3,7 @@ import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
 import {
-  btSegments, outlinePath, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin,
+  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
 import { edgeTape, tapeable, tapeOverridden, tapeColour } from '@/src/lib/benchtopEdgeband'
@@ -41,7 +41,7 @@ import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
-import { shapedFrontMarks, sweepFlag, drawerLineOffset, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
+import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { toFrame, type LabelOff } from '@/src/lib/labelOffsets'
 
@@ -221,6 +221,9 @@ export default function CanvasSVG({
 
   // Strokes divide by the line zoom (finer on phones); text and hit targets use view.zoom.
   const lz = view.zoom / useLineScale()
+  // Drawer lines start past any benchtop over the front, so the top's edge doesn't cover them.
+  const showTops = layers.show('benchtops')
+  const topRings = useMemo(() => showTops ? benchtops.map(bt => outlinePoints(btSegments(bt), 4)) : [], [showTops, benchtops])
   const cx = centroid(walls)
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = cabinets.filter(c => !c.rule_overrides?.UNDER_PANEL && planShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // an under panel lies under its run
@@ -1578,8 +1581,8 @@ export default function CanvasSVG({
             if (layers.show('drawer_lines')) {
               for (const d of marks.drawers) {
                 const o = vec(d.out), al = vec(d.along)
-                const { off, ins } = drawerLineOffset(d.step, Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z))
                 const a = toP(d.a), b = toP(d.b)
+                const { off, ins } = drawerLineOffset(d.step, Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z), benchReach(topRings, a, b, o))
                 out.push(<line key={`drawer-${cab.id}-${d.key}`}
                   x1={a.x + off * o.x + ins * al.x} y1={a.y + off * o.y + ins * al.y}
                   x2={b.x + off * o.x - ins * al.x} y2={b.y + off * o.y - ins * al.y}
@@ -1663,8 +1666,9 @@ export default function CanvasSVG({
               rowIndices.sort((a, b) => a - b)
               const colLeft  = { x: frontLeft.x + col * colW * wd.x, y: frontLeft.y + col * colW * wd.y }
               const colRight = { x: colLeft.x + colW * wd.x, y: colLeft.y + colW * wd.y }
+              const clear = benchReach(topRings, colLeft, colRight, perp)   // start past the benchtop front
               for (let i = 0; i < rowIndices.length; i++) {
-                const { off: perpOff, ins: widthInset } = drawerLineOffset(i + 1, colW)  // real mm, fixed at any zoom
+                const { off: perpOff, ins: widthInset } = drawerLineOffset(i + 1, colW, clear)  // real mm, fixed at any zoom
                 nodes.push(<line key={`drawer-${cab.id}-${col}-${rowIndices[i]}`}
                   x1={colLeft.x  + perpOff * perp.x + widthInset * wd.x}
                   y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
