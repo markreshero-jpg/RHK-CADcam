@@ -825,6 +825,15 @@ export default function ElevationSVG({
     }
   }
 
+  /** The cabinet drawn under a screen point (behind a fixture), by its hit area. */
+  function cabIdUnder(clientX: number, clientY: number): string | null {
+    for (const el of document.elementsFromPoint(clientX, clientY)) {
+      const id = el.closest('[data-cab-id]')?.getAttribute('data-cab-id')
+      if (id && wallCabs.some(c => c.id === id)) return id
+    }
+    return null
+  }
+
   function onCabPointerDown(e: React.PointerEvent, cab: CabinetInstance) {
     if (e.button !== 0 || !wall || spaceRef.current) return
     if (mode === 'measure') return  // let measure clicks pass through to the svg
@@ -1303,7 +1312,7 @@ export default function ElevationSVG({
               }
 
               return (
-                <g key={cab.id}
+                <g key={cab.id} data-cab-id={cab.id}
                   style={{ cursor: 'default' }}
                   opacity={isFollowing ? 0.4 : 1}
                   onPointerDown={e => onCabPointerDown(e, cab)}
@@ -1920,6 +1929,16 @@ export default function ElevationSVG({
                 labelMovingId={labelMoving?.kind === 'fixture' ? labelMoving.id : null}
                 onLabelMove={onFixtureLabelMove}
                 onLabelMoveEnd={onLabelMoveEnd}
+                onPickUnder={e => {
+                  const cab = wallCabs.find(c => c.id === cabIdUnder(e.clientX, e.clientY))
+                  if (!cab) return false
+                  onCabPointerDown(e, cab)
+                  return true
+                }}
+                onDoubleClickUnder={e => {
+                  const id = cabIdUnder(e.clientX, e.clientY)
+                  if (id && mode === 'select' && !elevCabFollowing && !elevResizeFollowing) { e.stopPropagation(); onCabinetDoubleClick?.(e, id) }
+                }}
               />
             )}
 

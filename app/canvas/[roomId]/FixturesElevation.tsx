@@ -164,8 +164,12 @@ function ElevClearance({ box, others, len, roomH, z, bg }: {
 
 export default function FixturesElevation({
   fixtures, wall, side, roomCx, roomH, zoom, layers, selectedId, highlightIds, onSelect, stretching, onStretchHandle, ghost, onMoveHandle,
-  obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu, labelMovingId, onLabelMove, onLabelMoveEnd,
+  obstacles = [], showClearance = false, interactive = true, clashIds, onContextMenu, labelMovingId, onLabelMove, onLabelMoveEnd, onPickUnder, onDoubleClickUnder,
 }: {
+  /** Click on the already-selected fixture: pick the cabinet behind it instead (true = picked). */
+  onPickUnder?: (e: React.PointerEvent) => boolean
+  /** Double-click: open the cabinet behind the fixture (integrated D/W panel etc). */
+  onDoubleClickUnder?: (e: React.MouseEvent) => void
   /** The fixture whose name is in move mode (right-click → Move label). */
   labelMovingId?: string | null
   /** A fixture's name placed (elevation offset from its box centre, mm). */
@@ -279,7 +283,13 @@ export default function FixturesElevation({
         const lines = showLabels ? wrapLabel(fixtureDisplayName(fx), w * 0.9, fs) : []
         return (
           <g key={fx.id} opacity={lp.opacity} style={{ cursor: 'pointer' }}
-            onPointerDown={e => { e.stopPropagation(); onSelect(fx.id, e.shiftKey) }}
+            onPointerDown={e => {
+              e.stopPropagation()
+              // Second click on a selected fixture goes to the cabinet behind it (clicks alternate).
+              if (fx.id === selectedId && !e.shiftKey && onPickUnder?.(e)) return
+              onSelect(fx.id, e.shiftKey)
+            }}
+            onDoubleClick={onDoubleClickUnder}
             onContextMenu={onContextMenu ? e => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, fx.id) } : undefined}>
             {/* P8: the model's true front shape when traced; else the box (+ inner panel for appliances). */}
             <rect x={x} y={y} width={w} height={h} fill={STROKE} fillOpacity={(fx.elev_shape?.lines.length ? 0.001 : 0.06) * (lp.fillOpacity ?? 1)}
