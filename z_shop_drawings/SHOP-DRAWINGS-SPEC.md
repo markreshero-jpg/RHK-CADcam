@@ -239,6 +239,9 @@ How it's built (plan):
   the curved face board is pocketed to a 2mm skin, inside the old 3–4mm visibility tolerance. The depth
   pass now also writes a mesh id: an edge keeps the generous tolerance only against its own faces, and
   needs to be within ~1mm of any other part (`tolOther`), so parts behind a thin skin stay hidden.
+  Round 2 (still patchy): the 3×3 neighbourhood let a deeper pixel of the curving face count. Now only the
+  edge's own pixel is tested against other parts; the neighbourhood only counts the edge's own part (or
+  empty background, for silhouettes).
 
 ### S8 stage 2 (built 2026-10-21, in-app check pending)
 

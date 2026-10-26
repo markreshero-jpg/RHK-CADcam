@@ -261,20 +261,24 @@ export function captureHiddenLines(gl: WebGLRenderer, scene: Scene, camera: Pers
         const sp = toScreen(w, p)
         const x = sp.x, y = sp.y
         const ix = Math.floor(x), iy = Math.floor(y)
-        // Visible if any pixel around the sample is at (or behind) the edge: the edge
-        // sits on its own faces; an occluder covers the whole neighbourhood. Its own
-        // faces get a few mm of slack (grazing angles); another part only ~1mm, so
-        // parts just behind a thin skin stay hidden — curved-end formers behind the
-        // 2mm pocketed face board (Mark, 2026-10-26), drawer boxes behind a front.
+        // Visible if the edge's own part shows anywhere around the sample (a few mm of
+        // slack for grazing angles; the edge sits on its own faces), or nothing is in
+        // front of it at its own pixel (~1mm). Another part's pixels never count from
+        // the neighbourhood: on a surface turning away from the camera the next pixel
+        // is deeper, which let curved-end formers 2mm under the pocketed face board's
+        // skin show through in patches (Mark, 2026-10-26).
         const tolOwn = 1 + z * 0.0004
         const tolOther = 0.5 + z * 0.00005
         let vis = ix >= 0 && iy >= 0 && ix < W && iy < H
         if (vis) {
-          vis = false
+          vis = depthAt(ix, iy) >= z - tolOther
           for (let dy = -1; dy <= 1 && !vis; dy++) for (let dx = -1; dx <= 1 && !vis; dx++) {
-            const d = depthAt(ix + dx, iy + dy)
-            if (d >= z - tolOther) vis = true
-            else if (d >= z - tolOwn && ix + dx >= 0 && iy + dy >= 0 && ix + dx < W && iy + dy < H && idAt(ix + dx, iy + dy) === ownId) vis = true
+            const px = ix + dx, py = iy + dy
+            if (px < 0 || py < 0 || px >= W || py >= H) continue
+            const d = depthAt(px, py)
+            if (idAt(px, py) === ownId && d >= z - tolOwn) vis = true
+            // Background (nothing drawn) beside a silhouette edge.
+            else if (d === Infinity) vis = true
           }
         }
         if (vis) {
