@@ -536,8 +536,8 @@ function seedStock(snap: OptiSnapshot, materialId: string | null): SheetStock {
   const m = materialId ? snap.materials.find(x => x.id === materialId) : null
   return {
     w: m?.sheet_dx ?? 2400, h: m?.sheet_dy ?? 1200,
-    trimTop: m?.trim_top ?? 0, trimBottom: m?.trim_bottom ?? 0,
-    trimLeft: m?.trim_left ?? 0, trimRight: m?.trim_right ?? 0,
+    trimTop: m?.trim_top ?? 5, trimBottom: m?.trim_bottom ?? 5,
+    trimLeft: m?.trim_left ?? 5, trimRight: m?.trim_right ?? 5,
     isOffcut: false, label: null,
     // Board grain runs with its length (sheet_dx → W) unless the material says width.
     grainAlong: m?.grain_direction === 'width' ? 'h' : 'w',
