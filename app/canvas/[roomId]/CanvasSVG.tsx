@@ -43,6 +43,7 @@ import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
 import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { useLabelMove, LabelBox } from './useLabelMove'
+import { FillPatternDef, fillPaint } from './FillPattern'
 import { toFrame, type LabelOff } from '@/src/lib/labelOffsets'
 
 // Union of cabinet-local plan rects (X along wall, Z = depth) → the cabinet's
@@ -223,6 +224,7 @@ export default function CanvasSVG({
 
   // Strokes divide by the line zoom (finer on phones); text and hit targets use view.zoom.
   const lz = view.zoom / useLineScale()
+  const wallFillPat = layers.pattern('wall_fill', 'solid')
   // Drawer lines start past any benchtop over the front, so the top's edge doesn't cover them.
   const showTops = layers.show('benchtops')
   const topRings = useMemo(() => showTops ? benchtops.map(bt => outlinePoints(btSegments(bt), 4)) : [], [showTops, benchtops])
@@ -1007,7 +1009,14 @@ export default function CanvasSVG({
 
         {/* Walls + cabinets go click-through in F4 Benchtop mode — only tops pick. */}
         <g style={{ pointerEvents: isBenchtopMode(mode) ? 'none' : undefined }}>
-        {/* ── Walls ── */}
+        {/* ── Walls ── outline = 'walls', infill = 'wall_fill', names = 'wall_names'. A wall
+            with both hidden keeps a transparent hit area, so it can still be picked. */}
+        {layers.show('wall_fill') && wallFillPat !== 'solid' && (
+          <defs>
+            <FillPatternDef id="plan-wall-fill" pattern={wallFillPat} step={8 / view.zoom}
+              color={layers.color('wall_fill', '#6b7280')} width={layers.w('wall_fill', 1) / lz} />
+          </defs>
+        )}
         {walls.map(w => {
           const isSel = (selected?.type === 'wall' && selected.id === w.id) || multiWalls.includes(w.id)
           const wd = wallDir(w)
@@ -1031,12 +1040,12 @@ export default function CanvasSVG({
                   strokeWidth={(isSel ? 2.5 : 1.5) / lz}
                   strokeDasharray={`${10 / view.zoom} ${5 / view.zoom}`}
                   style={{ pointerEvents: 'none' }} />
-                <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
-                  fontSize={wallNameFs} fill={isSel ? '#fcd34d' : '#78350f'}
+                {layers.show('wall_names') && <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
+                  fontSize={layers.w('wall_names', wallNameFs)} fill={isSel ? '#fcd34d' : layers.color('wall_names', '#78350f')} opacity={layers.op('wall_names')}
                   transform={`rotate(${Math.cos(toRad(w.angle)) < -0.001 ? w.angle + 180 : w.angle}, ${midX}, ${midY})`}
                   style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {w.name}
-                </text>
+                </text>}
                 <WallDimensionChain
                   wall={w} walls={walls} cabinets={chainCabs}
                   rc={cx} zoom={view.zoom} selected={isSel}
@@ -1063,21 +1072,25 @@ export default function CanvasSVG({
               ).map((points, i) => (
                 <polygon key={i}
                   points={points}
-                  fill={isSel ? '#1d3557' : '#1f2937'}
-                  stroke={isSel ? '#3b82f6' : '#374151'}
-                  strokeWidth={isSel ? 2 / lz : 1 / lz}
+                  fill={layers.show('wall_fill') ? fillPaint(wallFillPat, 'plan-wall-fill', isSel ? '#1d3557' : layers.color('wall_fill', '#1f2937')) : 'transparent'}
+                  fillOpacity={layers.show('wall_fill') ? layers.props('wall_fill', view.zoom).opacity : 1}
+                  stroke={isSel ? '#3b82f6' : layers.show('walls') ? layers.color('walls', '#374151') : 'none'}
+                  strokeWidth={isSel ? 2 / lz : layers.w('walls', 1) / lz}
+                  strokeOpacity={isSel ? 1 : layers.props('walls', view.zoom).opacity}
+                  strokeDasharray={isSel ? undefined : layers.props('walls', view.zoom).strokeDasharray}
                   style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
                   onPointerDown={ev => onWallPointerDown(ev, w.id)}
                   onClick={onClick} onContextMenu={onCtx}
                 />
               ))}
               {(() => {
+                if (!layers.show('wall_names')) return null
                 const inorm = wallInwardNormal(w, cx)
                 const tx = midX - inorm.x * w.thickness / 2
                 const ty = midY - inorm.y * w.thickness / 2
                 return (
                   <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle"
-                    fontSize={wallNameFs} fill={isSel ? '#93c5fd' : '#4b5563'}
+                    fontSize={layers.w('wall_names', wallNameFs)} fill={isSel ? '#93c5fd' : layers.color('wall_names', '#4b5563')} opacity={layers.op('wall_names')}
                     transform={`rotate(${Math.cos(toRad(w.angle)) < -0.001 ? w.angle + 180 : w.angle}, ${tx}, ${ty})`}
                     style={{ userSelect: 'none', pointerEvents: 'none' }}>
                     {w.name}

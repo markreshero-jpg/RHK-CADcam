@@ -971,6 +971,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click edges to paint them; Shift+click does all four edges of that part. Each click saves straight away and survives rebuilds. Drag to turn the cabinet as usual. Done (or Esc) finishes; hardware and parts with a drawn shape have no edges to click.',
       canvas: true, done: (c, s) => ev(c, 'edgeband_paint_edge') > ev(s, 'edgeband_paint_edge') },
   ]},
+
+  // Appended 2026-10-26 (z_display_layers — wall layers: walls / wall_fill / wall_names).
+  { id: 'wall_layers', level: 'basics', topic: 'room', title: 'Wall lines, hatching and names',
+    blurb: 'Choose how walls draw in each view: hatch, cross-hatch or solid fill, line colour and weight, or hide them.',
+    keywords: 'wall hatch hatching cross-hatch crosshatch solid fill infill poche wall lines outline wall names layer set plan elevation', steps: [
+    { id: 'open', title: 'Open the Room group',
+      body: 'In the Layers drop-down pick Manage layers…, choose the Plan tab and scroll to the Room group. Walls is the outline of each wall, Wall fill is the infill, Wall names is the name in the wall.',
+      target: 'menu-Layers', canvas: true, done: c => c.view === 'plan' },
+    { id: 'fill', title: 'Pick the fill',
+      body: 'On the Wall fill row, the last drop-down picks Solid, Hatch or Cross-hatch (Default = solid on screen, hatch on the Plan View report). The colour swatch colours it on screen; prints stay black. Untick Wall fill for empty walls, or untick Walls to drop the outline (you can still click the wall to select it). Save the set.',
+      canvas: true, done: c => c.view === 'plan' },
+    { id: 'elev', title: 'Elevation and reports',
+      body: 'On the Elevation tab the same three items drive the cut return walls at each end of an elevation (fill default hatch) and the wall’s outline. The Plan View and Elevation Views reports and shop drawings follow the layer set you pick in their toolbar, so a print set can hatch the walls while your working set keeps them solid.',
+      canvas: true, done: c => c.view === 'elevation' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

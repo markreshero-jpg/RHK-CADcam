@@ -48,7 +48,7 @@ describe('spec blocks', () => {
     const annotations = [note('s', 5000, 0, 'SPECIFICATIONS', 'Spec block'), note('n', 500, 500, 'SITE NOTE')]
     const render = (hideSpecBlocks: boolean) => renderToStaticMarkup(createElement(PlanViewReportSVG, {
       walls, cabinets: [], annotations, svgRef: { current: null }, scale: 20, hideSpecBlocks,
-      layers: resolveLayerView(undefined, 'plan'), show: { wallNames: false, hatch: false, titleBlock: true, annotColours: false },
+      layers: resolveLayerView(undefined, 'plan'), show: { titleBlock: true, annotColours: false },
     }))
     const attr = (s: string, a: string) => Number(s.match(new RegExp(`${a}="([^"]+)"`))![1])
     const shown = render(false), hidden = render(true)

@@ -5,7 +5,7 @@
 import {
   LAYER_ITEM_BY_ID, SPLIT_FROM, itemDefault,
   type ItemSetting, type LayerSet, type LayerStyle, type LayerViewId, type ViewLayerSettings,
-  type CabinetFillClass,
+  type CabinetFillClass, type FillPattern,
 } from './registry'
 import { CAB_FILL, CAB_FILL_SEL } from '../geometry'
 
@@ -47,6 +47,8 @@ export interface LayerView {
   op(id: string): number
   /** Dimension item extra offset in mm (0 = default position). */
   offset(id: string): number
+  /** Fill item pattern, else `fallback` (the renderer's default). */
+  pattern(id: string, fallback: FillPattern): FillPattern
   /** 3D material alpha: ghost style × opacity (1 = fully opaque). */
   alpha(id: string): number
   /** View background override or undefined. */
@@ -122,6 +124,7 @@ export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId): 
     w:       (id, base) => base * (setting(id).weight ?? 1),
     op:      id => setting(id).opacity ?? 1,
     offset:  id => setting(id).offset ?? 0,
+    pattern: (id, fallback) => setting(id).pattern ?? fallback,
     // 3D has no line style: ghost = see-through material, dashed = solid.
     alpha:   id => (setting(id).style === 'ghost' ? GHOST_ALPHA : 1) * (setting(id).opacity ?? 1),
     background: vs?.background,
@@ -156,6 +159,7 @@ export function sparseViewSettings(vs: ViewLayerSettings, view: LayerViewId): Vi
     if (s.weight !== undefined && s.weight !== 1) diff.weight = s.weight
     if (s.opacity !== undefined && s.opacity !== 1) diff.opacity = s.opacity
     if (s.offset) diff.offset = s.offset
+    if (s.pattern) diff.pattern = s.pattern
     if (Object.keys(diff).length) items[id] = diff
   }
   const out: ViewLayerSettings = { items }

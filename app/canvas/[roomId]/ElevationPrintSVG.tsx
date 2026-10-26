@@ -42,6 +42,7 @@ import { resolveStyle } from '@/src/lib/annotations/style'
 import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
 import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
 import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
+import { FillPatternDef, fillPaint } from './FillPattern'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
@@ -106,8 +107,9 @@ function slideElevRect(s: ResolvedDrawerSlide) {
 
 type Seg = { from: number; to: number; label: number }
 // `extra` = appliances in the row, as along-wall { t, dx }.
-function computeElevChain(cabs: CabinetInstance[], wall: Wall, extra: { t: number; dx: number }[] = []): Seg[] {
-  const sorted = [...cabs.map(c => ({ t: cabT(c, wall), dx: c.dx })), ...extra].sort((a, b) => a.t - b.t)
+// `tOf` = the cabinet's left edge in this view (mirrored on the back side).
+function computeElevChain(cabs: CabinetInstance[], wall: Wall, extra: { t: number; dx: number }[] = [], tOf = (c: CabinetInstance) => cabT(c, wall)): Seg[] {
+  const sorted = [...cabs.map(c => ({ t: tOf(c), dx: c.dx })), ...extra].sort((a, b) => a.t - b.t)
   const segs: Seg[] = []
   let cursor = 0
   for (const { t, dx } of sorted) {
@@ -129,11 +131,14 @@ const PRINT_DRILLING = false
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [], returnSec,
+  wall, side = 'face', walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [], returnSec,
 }: {
+  /** Which side of the wall is drawn. The back is seen from outside, so it runs right-to-left
+   *  (x = length − t − dx), the same as the canvas elevation. Islands print both. */
+  side?:         'face' | 'back'
   /** Return cabinet sections (z_section_view R1) — the report's useReturnSectionData (undefined = not drawn). */
   returnSec?:    ReturnSectionData
-  /** CAD notes (z_CAD_tool A6c) — only this wall's face-side elevation notes are drawn. */
+  /** CAD notes (z_CAD_tool A6c) — only the notes on the side drawn. */
   annotations?:  RoomAnnotation[]
   /** Benchtops (z_benchtop_builder) — the canvas's band / waterfall drawing in print mode. Needs btInfo. */
   benchtops?:    BenchtopInstance[]
@@ -159,9 +164,12 @@ export default function ElevationPrintSVG({
   const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
   const P = scale
   const roomH = wall.height ?? room.room_dy ?? 2400
-  // Doors / windows in this wall, face side (z_fixtures P5).
+  const isBack = side === 'back'
+  const mirrorX = (t: number, dx: number) => (isBack ? wall.length - t - dx : t)
+  const elevX = (c: CabinetInstance) => mirrorX(cabT(c, wall), c.dx)
+  // Doors / windows in this wall, on the side drawn (z_fixtures P5).
   const openings = !layers.show('fixture_openings') ? [] : fixtures.flatMap(fx => {
-    const o = openingOnWall(fx, wall, 'face', centroid(walls))
+    const o = openingOnWall(fx, wall, side, centroid(walls))
     return o ? [{ fx, t0: Math.max(0, o.t0), t1: Math.min(wall.length, o.t1), hingeT: o.hingeT, sill: Number(fx.z) || 0, h: Number(fx.height) }] : []
   }).sort((a, b) => a.t0 - b.t0)
   const openingSegs: Seg[] = []
@@ -175,7 +183,7 @@ export default function ElevationPrintSVG({
     if (openings.length && cur < wall.length - 0.5) openingSegs.push({ from: cur, to: wall.length, label: roundMm(wall.length - cur) })
   }
   // Only cabinets the layer set draws — they also drive the dimension chains.
-  const wallCabs = cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === 'face'
+  const wallCabs = cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === side
     && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
   // Layer props at a "zoom" that makes the layer dash pattern 1.6 / 0.8 paper mm.
   const lp = (id: string) => layers.props(id, 5 / P)
@@ -215,8 +223,8 @@ export default function ElevationPrintSVG({
   const padR = 11 * P
   const padT = 16 * P
   const padB = 18 * P
-  // CAD notes on this wall's face (the side printed), in the canvas elevation frame.
-  const notes = annotations.filter(a => ownedBy(a, elevationOwner(wall.id, 'face')) && layers.show(annotLayerItem(a.kind)))
+  // CAD notes on the side printed, in the canvas elevation frame.
+  const notes = annotations.filter(a => ownedBy(a, elevationOwner(wall.id, side)) && layers.show(annotLayerItem(a.kind)))
   const noteFrame = elevationAnnotFrame(roomH)
   // Notes may sit outside the drawing (off to the side / above) — grow the viewBox to fit them.
   let x0 = -padL, y0 = -padT, x1 = wall.length + padR, y1 = roomH + padB
@@ -252,7 +260,7 @@ export default function ElevationPrintSVG({
 
   // ── Cabinet renderer ──────────────────────────────────────────────────────
   function renderCab(cab: CabinetInstance) {
-    const rx = cabT(cab, wall)
+    const rx = elevX(cab)
     const bottomZ = cabBottomZ(cab, room, wall)
     const ry = roomH - bottomZ - cab.dy
     const isBase = cab.assembly_class === 'base' || cab.assembly_class === 'base_corner'
@@ -515,8 +523,9 @@ export default function ElevationPrintSVG({
   // ── Return walls (adjacent perpendicular walls at each end) ────────────────
   function returnWalls() {
     const TOL = 50
-    const wS = { x: wall.pos_x, y: wall.pos_y }
-    const wE = wallEnd(wall)
+    // The back runs right-to-left, so its left end is the wall's end.
+    const wS = isBack ? wallEnd(wall) : { x: wall.pos_x, y: wall.pos_y }
+    const wE = isBack ? { x: wall.pos_x, y: wall.pos_y } : wallEnd(wall)
     let left: Wall | null = null, right: Wall | null = null
     for (const w of walls) {
       if (w.id === wall.id || w.wall_type === 'island') continue
@@ -530,17 +539,21 @@ export default function ElevationPrintSVG({
       const x0 = isLeft ? -t : wall.length
       const slabY = roomH - rwH
       const midX = x0 + t / 2, midY = slabY + rwH / 2
-      const nLines = Math.floor(rwH / (t * 1.5)) + 2
+      // Cut wall: infill = 'wall_fill' (default hatch), outline = 'walls', name = 'wall_names'.
+      const patId = `print-return-fill-${wall.id}-${rw.id}`
+      const pat = layers.pattern('wall_fill', 'hatch')
       return (
         <g key={rw.id} pointerEvents="none">
-          <rect x={x0} y={slabY} width={t} height={rwH} fill="white" stroke={INK} strokeWidth={thinSW} />
-          {Array.from({ length: nLines }, (_, i) => {
-            const y1 = slabY + i * t * 1.5 - t
-            return <line key={i} x1={x0} y1={y1} x2={x0 + t} y2={y1 + t} stroke={INK3} strokeWidth={thinSW} />
-          })}
-          <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
-            fontSize={dimFs} fill={INK} transform={`rotate(-90,${midX},${midY})`}
-            fontFamily="Arial, Helvetica, sans-serif">{rw.name}</text>
+          {layers.show('wall_fill') && (
+            <defs><FillPatternDef id={patId} pattern={pat} step={t * 1.06} color={INK3} width={atLeastMin(layers.w('wall_fill', thinSW), P)} bg="white" /></defs>
+          )}
+          <rect x={x0} y={slabY} width={t} height={rwH}
+            fill={layers.show('wall_fill') ? fillPaint(pat, patId, INK) : 'white'} fillOpacity={layers.show('wall_fill') ? lp('wall_fill').opacity : 1}
+            stroke={layers.show('walls') ? INK : 'none'} strokeWidth={atLeastMin(layers.w('walls', thinSW), P)}
+            strokeOpacity={lp('walls').opacity} strokeDasharray={lp('walls').strokeDasharray} />
+          {layers.show('wall_names') && <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
+            fontSize={layers.w('wall_names', dimFs)} fill={INK} opacity={layers.op('wall_names')} transform={`rotate(-90,${midX},${midY})`}
+            fontFamily="Arial, Helvetica, sans-serif">{rw.name}</text>}
         </g>
       )
     }
@@ -672,7 +685,7 @@ export default function ElevationPrintSVG({
     c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
     c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'))
   // Free-standing appliances on this face take their place in the rows.
-  const chainFx = fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls)).filter(s => s.side === 'face')
+  const chainFx = fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls)).filter(s => s.side === side).map(s => ({ ...s, t: mirrorX(s.t, s.dx) }))
   const fxWall = chainFx.filter(s => s.row === 'wall'), fxFloor = chainFx.filter(s => s.row === 'floor')
 
   return (
@@ -687,7 +700,7 @@ export default function ElevationPrintSVG({
       {/* Title */}
       <text x={wall.length / 2} y={titleY} textAnchor="middle" dominantBaseline="middle"
         fontSize={labelFs * 1.2} fontWeight="bold" fill={INK} fontFamily="Arial, Helvetica, sans-serif">
-        {wall.name}
+        {isBack ? `${wall.name} — back` : wall.name}
       </text>
 
       {/* Reference lines */}
@@ -712,26 +725,26 @@ export default function ElevationPrintSVG({
 
       {/* Benchtops on this face — over the cabinets, under the sinks / taps */}
       {btInfo && benchtops.length > 0 && (
-        <BenchtopElevation benchtops={benchtops} walls={walls} wall={wall} side="face" roomCx={centroid(walls)} roomH={roomH}
+        <BenchtopElevation benchtops={benchtops} walls={walls} wall={wall} side={side} roomCx={centroid(walls)} roomH={roomH}
           zoom={2 / P} layers={layers} selectedId={null} info={btInfo} profiles={btProfiles ?? {}}
           onSelect={NO_SELECT} interactive={false} print={{ P }} />
       )}
 
       {/* Return cabinet sections (z_section_view R1) — outlines up to this wall's cabinet depth */}
       {returnSec !== undefined && layers.show('return_sections') && (
-        <ReturnSectionSVG wall={wall} side="face" walls={walls} cabinets={cabinets} room={room} roomH={roomH}
+        <ReturnSectionSVG wall={wall} side={side} walls={walls} cabinets={cabinets} room={room} roomH={roomH}
           resolvedParts={resolvedPartsRaw} layers={layers} benchtops={benchtops} btInfo={btInfo} profiles={btProfiles}
           data={returnSec} lw={thinSW} print />
       )}
 
       {/* Fixtures & appliances facing this wall (sinks, ovens, rangehoods …) — over the cabinets */}
-      <FixturesElevationPrint fixtures={fixtures} wall={wall} roomCx={centroid(walls)} roomH={roomH} layers={layers} P={P} />
+      <FixturesElevationPrint fixtures={fixtures} wall={wall} side={side} roomCx={centroid(walls)} roomH={roomH} layers={layers} P={P} />
 
       {/* Dimensions (layer items; the overall wall length goes with the floor chain) */}
       <>
-          {layers.show('dim_elev_wall_chain') && (overheadCabs.length > 0 || fxWall.length > 0) && hChain(computeElevChain(overheadCabs, wall, fxWall), overheadChainY, 'oh', 'dim_elev_wall_chain')}
-          {layers.show('dim_elev_wall_chain') && bulkheadCabs.length > 0 && hChain(computeElevChain(bulkheadCabs, wall), bulkheadChainY, 'bh', 'dim_elev_wall_chain')}
-          {layers.show('dim_elev_floor_chain') && (floorCabs.length > 0 || fxFloor.length > 0) && hChain(computeElevChain(floorCabs, wall, fxFloor), floorChainY, 'fl', 'dim_elev_floor_chain')}
+          {layers.show('dim_elev_wall_chain') && (overheadCabs.length > 0 || fxWall.length > 0) && hChain(computeElevChain(overheadCabs, wall, fxWall, elevX), overheadChainY, 'oh', 'dim_elev_wall_chain')}
+          {layers.show('dim_elev_wall_chain') && bulkheadCabs.length > 0 && hChain(computeElevChain(bulkheadCabs, wall, [], elevX), bulkheadChainY, 'bh', 'dim_elev_wall_chain')}
+          {layers.show('dim_elev_floor_chain') && (floorCabs.length > 0 || fxFloor.length > 0) && hChain(computeElevChain(floorCabs, wall, fxFloor, elevX), floorChainY, 'fl', 'dim_elev_floor_chain')}
           {layers.show('dim_elev_height') && heightChain()}
           {layers.show('dim_elev_bench') && benchDims()}
           {layers.show('dim_openings') && openings.length > 0 && hChain(openingSegs, openingChainY, 'op', 'dim_openings')}

@@ -49,6 +49,7 @@ import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
 const SPLIT_SNAP = 15
 import type { LabelOff } from '@/src/lib/labelOffsets'
 import AnnotationLayer from './AnnotationLayer'
+import { FillPatternDef, fillPaint } from './FillPattern'
 import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
 
 // Part line/fill colours come from the editable part palette (src/lib/partPalette.ts),
@@ -1079,8 +1080,10 @@ export default function ElevationSVG({
               ) : (
                 <rect x={0} y={0} width={wall.length} height={roomH}
                   fill={isLineDrawing ? 'none' : '#1f2937'}
-                  stroke={isWallSel ? '#3b82f6' : '#374151'}
-                  strokeWidth={isWallSel ? 2 / lz : 1 / lz}
+                  stroke={isWallSel ? '#3b82f6' : layers.show('walls') ? layers.color('walls', '#374151') : 'none'}
+                  strokeWidth={isWallSel ? 2 / lz : layers.w('walls', 1) / lz}
+                  strokeOpacity={isWallSel ? 1 : layers.props('walls', z).opacity}
+                  strokeDasharray={isWallSel ? undefined : layers.props('walls', z).strokeDasharray}
                   style={{ cursor: 'pointer' }}
                   onClick={wallClick}
                   onContextMenu={cmHandler} />
@@ -1145,35 +1148,35 @@ export default function ElevationSVG({
                 const slabY = roomH - rwH
                 const midY  = slabY + rwH / 2
                 const midX  = x0 + t / 2
-                const clipId = `return-clip-${rw.id}`
+                // Cut wall: infill = 'wall_fill' (default hatch), outline = 'walls', name = 'wall_names'.
+                const patId = `return-fill-${rw.id}`
+                const showFill = layers.show('wall_fill'), showLine = layers.show('walls')
+                const pat = layers.pattern('wall_fill', 'hatch')
                 return (
                   <g key={rw.id} style={{ pointerEvents: 'none' }}>
-                    <defs>
-                      <clipPath id={clipId}>
-                        <rect x={x0} y={slabY} width={t} height={rwH} />
-                      </clipPath>
-                    </defs>
+                    {showFill && (
+                      <defs>
+                        <FillPatternDef id={patId} pattern={pat} step={t * 1.06} bg="#111827"
+                          color={layers.color('wall_fill', '#1f2937')} width={layers.w('wall_fill', 1.5) / lz} />
+                      </defs>
+                    )}
                     <rect x={x0} y={slabY} width={t} height={rwH}
-                      fill="#111827" stroke="#4b5563" strokeWidth={1 / lz} />
-                    <g clipPath={`url(#${clipId})`}>
-                      {Array.from({ length: Math.floor(rwH / (t * 1.5)) + 2 }, (_, i) => {
-                        const y1 = slabY + i * t * 1.5 - t
-                        return <line key={i} x1={x0} y1={y1} x2={x0 + t} y2={y1 + t}
-                          stroke="#1f2937" strokeWidth={1.5 / lz} />
-                      })}
-                    </g>
-                    {slabY > 1 && (
+                      fill={showFill ? fillPaint(pat, patId, layers.color('wall_fill', '#111827')) : 'none'}
+                      fillOpacity={layers.props('wall_fill', z).opacity}
+                      stroke={showLine ? layers.color('walls', '#4b5563') : 'none'} strokeWidth={layers.w('walls', 1) / lz}
+                      strokeOpacity={layers.props('walls', z).opacity} strokeDasharray={layers.props('walls', z).strokeDasharray} />
+                    {showLine && slabY > 1 && (
                       <line x1={x0} y1={slabY} x2={x0 + t} y2={slabY}
                         stroke="#6b7280" strokeWidth={1.5 / lz}
                         strokeDasharray={`${4 / z} ${3 / z}`} />
                     )}
-                    <text x={midX} y={midY}
+                    {layers.show('wall_names') && <text x={midX} y={midY}
                       textAnchor="middle" dominantBaseline="middle"
-                      fontSize={dimFs2} fill="#ffffff"
+                      fontSize={layers.w('wall_names', dimFs2)} fill={layers.color('wall_names', '#ffffff')} opacity={layers.op('wall_names')}
                       transform={`rotate(-90,${midX},${midY})`}
                       style={{ userSelect: 'none' }}>
                       {rw.name}
-                    </text>
+                    </text>}
                     <line x1={x0} y1={slabY - tickH * 0.7} x2={x0 + t} y2={slabY - tickH * 0.7}
                       stroke="#6b7280" strokeWidth={1 / lz} />
                     <line x1={x0}     y1={slabY - tickH * 0.3} x2={x0}     y2={slabY - tickH * 1.1} stroke="#6b7280" strokeWidth={1 / lz} />

@@ -59,7 +59,7 @@ for (const scale of [20, 50]) {
       const svg = renderToStaticMarkup(createElement(PlanViewReportSVG, {
         walls: ROOM, cabinets: CABS, benchtops: [BT], fixtures: FX, resolvedParts: new Map(), svgRef: { current: null }, scale,
         layers: resolveLayerView(undefined, 'plan'),
-        show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
+        show: { titleBlock: true, annotColours: false },
       }))
       const s = strokes(svg)
       expect(s.length).toBeGreaterThan(10)
@@ -94,7 +94,7 @@ describe('plan benchtops', () => {
     const svg = renderToStaticMarkup(createElement(PlanViewReportSVG, {
       walls: ROOM, cabinets: CABS, benchtops: [BT], resolvedParts: new Map(), svgRef: { current: null }, scale: 20,
       layers: resolveLayerView(undefined, 'plan'),
-      show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
+      show: { titleBlock: true, annotColours: false },
     }))
     const top = /<path d="([^"]*)" fill-rule="evenodd" fill="none"/.exec(svg)
     expect(top).not.toBeNull()
@@ -106,7 +106,7 @@ describe('plan benchtops', () => {
 describe('fixtures on the printed sheets', () => {
   const plan = () => renderToStaticMarkup(createElement(PlanViewReportSVG, {
     walls: ROOM, cabinets: CABS, fixtures: FX, resolvedParts: new Map(), svgRef: { current: null }, scale: 20,
-    layers: resolveLayerView(undefined, 'plan'), show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
+    layers: resolveLayerView(undefined, 'plan'), show: { titleBlock: true, annotColours: false },
   }))
   const elev = () => renderToStaticMarkup(createElement(ElevationPrintSVG, {
     wall: ROOM[0], walls: ROOM, cabinets: CABS, fixtures: FX, room, resolvedParts: new Map(), svgRef: () => {}, scale: 20,
@@ -129,7 +129,7 @@ describe('plan cabinet labels', () => {
   it('name only (no size text), just inside the front edge', () => {
     const svg = renderToStaticMarkup(createElement(PlanViewReportSVG, {
       walls: ROOM, cabinets: CABS, resolvedParts: new Map(), svgRef: { current: null }, scale: 20,
-      layers: resolveLayerView(undefined, 'plan'), show: { wallNames: true, hatch: true, titleBlock: true, annotColours: false },
+      layers: resolveLayerView(undefined, 'plan'), show: { titleBlock: true, annotColours: false },
     }))
     expect(svg).not.toMatch(/\d+×\d+/)
     // Cabinet "1" on W1 (front at y = 580): label 3.5mm × 20 = 70 → y = 580 - 63 = 517, centred on x = 300.

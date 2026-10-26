@@ -38,11 +38,11 @@ import { returnWallThickness } from '@/src/lib/wallJoints'
 import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
+import { FillPatternDef, fillPaint } from './FillPattern'
 
-/** Report-only page extras (not drawing layers). */
+/** Report-only page extras (not drawing layers). Wall names + wall hatch moved to
+ *  the layer set (wall_names / wall_fill, 2026-10-26). */
 export interface PlanViewPageOptions {
-  wallNames:  boolean
-  hatch:      boolean
   /** Page-level (ShopTitleBlock, drawn by the report export) — not drawn in this SVG. */
   titleBlock: boolean
   /** z_CAD_tool decision 6: print annotations in their own colours (off = black). */
@@ -183,6 +183,7 @@ export default function PlanViewReportSVG({
   // Layer-weighted line width, never below the minimum pen.
   const lw = (id: string, base: number) => atLeastMin(layers.w(id, base), P)
   const HATCH_ID = 'plan-report-wall-hatch'
+  const wallPat = layers.pattern('wall_fill', 'hatch')
   // Drawer lines start past any benchtop over the front, so the top's edge doesn't cover them.
   const topRings = layers.show('benchtops') ? benchtops.map(bt => outlinePoints(btSegments(bt), 4)) : []
 
@@ -283,11 +284,9 @@ export default function PlanViewReportSVG({
   const body = (
     <>
       <defs>
-        <pattern id={HATCH_ID} patternUnits="userSpaceOnUse" width={6 * P} height={6 * P} patternTransform="rotate(45)">
-          <line x1={0} y1={0} x2={0} y2={6 * P} stroke={INK} strokeWidth={pen('fine', P)} />
-        </pattern>
+        <FillPatternDef id={HATCH_ID} pattern={wallPat} step={6 * P} color={INK} width={lw('wall_fill', pen('fine', P))} />
       </defs>
-      {/* ── Walls (always on) — hatch fill toggles ── */}
+      {/* ── Walls — outline = 'walls', infill = 'wall_fill' (default hatch) ── */}
       {walls.map(w => {
         if (w.wall_type === 'island') {
           if (!layers.show('island_line')) return null
@@ -306,8 +305,10 @@ export default function PlanViewReportSVG({
         return polys.filter(Boolean).map((poly, i) => (
           <polygon key={`${w.id}_${i}`}
             points={poly}
-            fill={show.hatch ? `url(#${HATCH_ID})` : 'white'}
-            stroke={INK} strokeWidth={sw} strokeLinejoin="miter"
+            fill={layers.show('wall_fill') ? fillPaint(wallPat, HATCH_ID, INK) : 'white'}
+            fillOpacity={layers.show('wall_fill') ? lp('wall_fill').opacity : 1}
+            stroke={layers.show('walls') ? INK : 'none'} strokeWidth={lw('walls', sw)} strokeLinejoin="miter"
+            strokeOpacity={lp('walls').opacity} strokeDasharray={lp('walls').strokeDasharray}
           />
         ))
       })}
@@ -319,15 +320,15 @@ export default function PlanViewReportSVG({
         </g>
       ))}
 
-      {/* ── Wall names (toggle) — centred over each wall, capped at thickness ── */}
+      {/* ── Wall names ('wall_names') — centred over each wall, capped at thickness ── */}
       {/* Matches the 3D room view WallLabel: wall midpoint shifted out by ½ thickness. */}
-      {show.wallNames && walls.map(w => {
+      {layers.show('wall_names') && walls.map(w => {
         if (w.wall_type === 'island' || !w.name) return null
         const inward = wallInwardNormal(w, cx)
         const e = wallEnd(w)
         const mx = (w.pos_x + e.x) / 2 - inward.x * w.thickness / 2
         const my = (w.pos_y + e.y) / 2 - inward.y * w.thickness / 2
-        const fs = Math.min(w.thickness * 0.7, 5 * P)   // never larger than the wall band
+        const fs = Math.min(w.thickness * 0.7, layers.w('wall_names', 5 * P))   // never larger than the wall band
         if (fs < 1) return null
         const textAngle = Math.cos(toRad(w.angle)) < -0.001 ? w.angle + 180 : w.angle
         return (
@@ -335,7 +336,7 @@ export default function PlanViewReportSVG({
             x={mx} y={my}
             transform={`rotate(${textAngle}, ${mx}, ${my})`}
             textAnchor="middle" dominantBaseline="central"
-            fontSize={fs} fill={INK} fontFamily="Arial, Helvetica, sans-serif"
+            fontSize={fs} fill={INK} fontFamily="Arial, Helvetica, sans-serif" opacity={layers.op('wall_names')}
             style={{ pointerEvents: 'none' }}
           >
             {w.name}

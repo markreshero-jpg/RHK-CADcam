@@ -16,6 +16,15 @@ export const LAYER_VIEWS: { id: LayerViewId; label: string }[] = [
 
 export type LayerStyle = 'solid' | 'dashed' | 'ghost'
 
+/** Infill for fill items (`fills: true`, e.g. wall_fill). Unset = the renderer's
+ *  own default (plan canvas: solid; prints + cut return walls: hatch). */
+export type FillPattern = 'solid' | 'hatch' | 'cross'
+export const FILL_PATTERNS: { id: FillPattern; label: string }[] = [
+  { id: 'solid', label: 'Solid' },
+  { id: 'hatch', label: 'Hatch' },
+  { id: 'cross', label: 'Cross-hatch' },
+]
+
 export interface ItemSetting {
   visible: boolean
   style:   LayerStyle
@@ -28,6 +37,8 @@ export interface ItemSetting {
   /** Dimension items: extra distance (mm) out from the measured object. Rows
    *  outside this one move out with it. Unset = 0. */
   offset?: number
+  /** Fill items: infill pattern. Unset = the renderer's default. */
+  pattern?: FillPattern
 }
 
 export const WEIGHT_OPTIONS = [0.5, 1, 1.5, 2, 3] as const
@@ -62,6 +73,8 @@ export interface LayerItemDef {
   /** Per-view default overrides (e.g. kicks hidden in plan by default). */
   viewDefaults?: Partial<Record<LayerViewId, Partial<ItemSetting>>>
   hint?:  string
+  /** Fill item: the manager offers a pattern pick (FillPattern). */
+  fills?: boolean
 }
 
 const ON:  ItemSetting = { visible: true,  style: 'solid' }
@@ -170,7 +183,12 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'fixture_labels',     group: 'fixtures', label: 'Fixture names', views: ['plan', 'elevation'], default: ON },
 
   // Room
-  { id: 'walls',          group: 'room', label: 'Walls', views: ['3d'], default: ON },
+  { id: 'walls',          group: 'room', label: 'Walls', views: ALL, default: ON,
+    hint: 'Plan + elevation: wall outline lines (a hidden wall can still be clicked on the canvas); 3D: the wall meshes' },
+  { id: 'wall_fill',      group: 'room', label: 'Wall fill', views: ['plan', 'elevation'], default: ON, fills: true,
+    hint: 'Wall infill: solid, hatch or cross-hatch. Default = solid on the plan canvas, hatch on prints and on the cut return walls in elevation' },
+  { id: 'wall_names',     group: 'room', label: 'Wall names', views: ['plan', 'elevation'], default: ON,
+    hint: 'Plan: the name in each wall (canvas + Plan View report); elevation: the names on the return walls' },
   { id: 'island_line',    group: 'room', label: 'Island line', views: ['plan'], default: ON,
     hint: 'The island\'s reference line on plan prints (the canvas always draws it — it\'s how you pick the island)' },
   { id: 'soffit_line',    group: 'room', label: 'Soffit / wall-cab top line', views: ['elevation'], default: ON,

@@ -21,6 +21,7 @@ import { getPalette, paletteToPartColors } from '@/src/lib/partPalette'
 import CrossSectionMeshes, { type SectionMesh } from './CrossSectionMeshes'
 import { dbLoadRoomPartDetails, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
 import { roundMm } from '@/src/lib/format'
+import { FillPatternDef, fillPaint } from './FillPattern'
 
 export default function CrossSectionView({ walls, cabinets, room, wall, side, cutX, look, onCutX, onFlip, onClose,
   resolvedParts, layers, benchtops, btInfo, profiles, fixtures, selectedCabId, onSelectCabinet }: {
@@ -137,6 +138,7 @@ export default function CrossSectionView({ walls, cabinets, room, wall, side, cu
     return spans.filter(([a, b]) => b - a > 0.5).map(([a, b]) => ({ x: flip ? 0 : -thk, y: -b, w: thk, h: b - a }))
   })()
   const wallInk = layers.color('walls', '#9ca3af')
+  const wallPat = layers.pattern('wall_fill', 'hatch')
 
   // Fit box (mm, y down) and the canvas size → a viewBox with the canvas's aspect,
   // so the whole canvas is drawing (no letterbox) and the floor runs edge to edge.
@@ -235,16 +237,17 @@ export default function CrossSectionView({ walls, cabinets, room, wall, side, cu
         }}
         onDoubleClick={() => setZoom(null)}>
         <defs>
-          <pattern id="xsec-hatch" patternUnits="userSpaceOnUse" width="40" height="40">
-            <line x1="0" y1="40" x2="40" y2="0" stroke={wallInk} strokeOpacity={0.7} strokeWidth="3" />
-          </pattern>
+          <FillPatternDef id="xsec-hatch" pattern={wallPat} step={28} color={layers.color('wall_fill', wallInk)} width={layers.w('wall_fill', 3)} />
         </defs>
         {/* Floor + ceiling */}
         <line x1={x0} y1={0} x2={x1} y2={0} stroke="#6b7280" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
         <line x1={x0} y1={-roomH} x2={x1} y2={-roomH} stroke="#4b5563" strokeWidth={1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
         {wallRects.map((r, i) => (
-          <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h} fill="url(#xsec-hatch)" stroke={wallInk} strokeWidth={layers.w('walls', 1)}
-            opacity={layers.op('walls')} vectorEffect="non-scaling-stroke" />
+          <rect key={i} x={r.x} y={r.y} width={r.w} height={r.h}
+            fill={layers.show('wall_fill') ? fillPaint(wallPat, 'xsec-hatch', layers.color('wall_fill', wallInk)) : 'none'}
+            fillOpacity={0.7 * layers.op('wall_fill')}
+            stroke={layers.show('walls') ? wallInk : 'none'} strokeWidth={layers.w('walls', 1)}
+            strokeOpacity={layers.op('walls')} vectorEffect="non-scaling-stroke" />
         ))}
         {cut.map(({ s, d }) => (
           <path key={s.id} d={d} data-item={s.item} data-cab={s.cabId} fillRule="evenodd" {...paint(s)}

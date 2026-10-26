@@ -146,7 +146,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Hardware | `drawer_boxes` (sides / bottom / front), `drawer_box_backs` (db_back only — split out 2026-10-26 so a set can show just the back as a rough drawer outline in elevation; `drawerBoxPartItem()`), `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D), `drawer_front_drilling` (E — drawer_front slide bores; also in elevation reports) — **all default hidden in plan + 3D**; `bins` (E,3D — z_bin_cabinet bin + its outline in elevation / sheet / editor views, default shown; a bin's rails never draw as runners) |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |
 | Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
-| Room | `walls` (3D), `island_line` (P — plan prints only; the canvas always draws it to pick the island; was 4× the wall pen, now the wall pen; 2026-10-26), `soffit_line` (E — soffit / wall-cab top dashed line, canvas + prints; 2026-10-26) |
+| Room | `walls` (P,E,3D — plan + elevation: wall outline lines; 3D: wall meshes), `wall_fill` (P,E — infill with a **pattern** pick, see "Wall layers"), `wall_names` (P,E), `island_line` (P — plan prints only; the canvas always draws it to pick the island; was 4× the wall pen, now the wall pen; 2026-10-26), `soffit_line` (E — soffit / wall-cab top dashed line, canvas + prints; 2026-10-26) |
 | Labels | `cabinet_labels`, `cabinet_sizes` (P,E) |
 | Dimensions | `dim_wall_overall` (row name WALL — the wall length), `dim_base_chain`, `dim_benchtop` (P, default on — BENCHTOP row just outside the base row, each top anchored to the wall projected onto it, plus the benchtop depth at the wall ends in place of the base carcass depth (overhead depth stays on `dim_wall_chain`), canvas + Plan View report, `src/lib/benchtopDims.ts`; 2026-10-21), `dim_wall_chain`, `dim_row_labels` (P; row names at each chain's wall-start end), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E), `dim_elev_bench` (E, default on — floor to benchtop top + vessel basin rim, canvas + Elevation Views report, `benchDims.ts`; 2026-10-21), `dim_kicks` (P,E; default off — plan: kick board chain between the base row and the overall + kick depth at the wall ends on lane 2; elevation: kick height per kick, `src/lib/kickDims.ts`; not in reports yet) — chain items to be replaced by user-defined rows (`settings.<view>.dimRows`), see `z_dimension_rows/DIMENSION-ROWS-SPEC.md` |
 | Annotations | `annot_text`, `annot_markup`, `annot_dims` (P,E — z_CAD_tool notes), `item_cad` (E, default on — z_item_cad: notes drawn on a cabinet in its edit window + library notes on bin fronts / cabinet codes, drawn in each cabinet's elevation group; the three annot items still apply inside; 2026-10-25) |
@@ -163,7 +163,19 @@ Elevation's placeholder shelf lines (cabinet not yet resolved) follow `adj_shelv
 Notes:
 - Plan draws toe-kick parts (outline, toekick colour), including kick assemblies
   (which behave like cabinets; see below).
-- Plan walls are not layer-controlled (walls carry the drawing/selection UI).
+- **Wall layers (2026-10-26, user request) — built, headless-checked, in-app check pending:**
+  `walls` = outline, `wall_fill` = infill, `wall_names` = names; colour / weight / opacity /
+  style as usual. New `ItemSetting.pattern` (`FillPattern` = solid / hatch / cross, sparse-saved)
+  for items flagged `fills: true` (only `wall_fill` so far); `LayerView.pattern(id, fallback)`;
+  unset = the renderer's default: **plan canvas solid** (#1f2937), **plan report hatch**,
+  **elevation = the cut return walls, default hatch** (canvas + report), cross-section wall
+  hatch. The elevation wall face rect keeps its fill (backdrop + click target); only its
+  outline follows `walls`. Shared `<FillPatternDef>` / `fillPaint` in
+  `app/canvas/[roomId]/FillPattern.tsx`. Plan walls stay clickable when both items are hidden
+  (transparent fill); the selected wall's blue outline always draws. Prints ignore colour
+  (hatch / solid in black ink). Island reference line on the canvas still always draws
+  (`island_line` = prints); island name follows `wall_names`.
+  Test: `displayLayers/__tests__/wallLayers.test.ts`; headless: `z_plan_automation/verify-wall-layers.mjs`.
 - **Only what's shown is selectable, and only what's shown gets labels** (user
   decision, 2026-09-16; replaces the Phase 1 "hit targets always stay" rule):
   - Plan / elevation: a cabinet's hit area is the extent (union bbox) of everything
@@ -341,8 +353,9 @@ Decisions (2026-09-17, user):
    stay black on white. With style `solid`, internals / hardware / door swings /
    drawer lines / chevrons keep the report's own print dash; `dashed` uses a
    1.6 / 0.8 paper-mm dash (`props(id, 5 / scale)`).
-3. **Page extras stay report toggles, not layer items:** plan = wall names, wall
-   hatch, title block; elevation = return walls, title block. Walls, ceiling /
+3. **Page extras stay report toggles, not layer items:** plan = title block;
+   elevation = return walls, title block. (Wall names + wall hatch moved to the layer
+   items `wall_names` / `wall_fill`, 2026-10-26 — the plan report toggles are gone.) Walls, ceiling /
    soffit reference lines and the wall title always draw.
 4. **Chains measure only drawn cabinets** (also on the canvas — see Notes).
 

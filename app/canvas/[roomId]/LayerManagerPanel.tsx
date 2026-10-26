@@ -6,8 +6,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  LAYER_GROUPS, LAYER_VIEWS, WEIGHT_OPTIONS, OPACITY_OPTIONS, CABINET_FILL_CLASSES, itemsForView,
-  type LayerSet, type LayerSetSettings, type LayerStyle, type LayerViewId, type ViewLayerSettings,
+  LAYER_GROUPS, LAYER_VIEWS, WEIGHT_OPTIONS, OPACITY_OPTIONS, CABINET_FILL_CLASSES, FILL_PATTERNS, itemsForView,
+  type FillPattern, type LayerSet, type LayerSetSettings, type LayerStyle, type LayerViewId, type ViewLayerSettings,
 } from '@/src/lib/displayLayers/registry'
 import { effectiveSetting, sparseViewSettings } from '@/src/lib/displayLayers/resolve'
 import type { LayerSetsApi } from '@/src/lib/displayLayers/useLayerSets'
@@ -122,7 +122,7 @@ export default function LayerManagerPanel({ api, initialView, activeSetId, onPre
     if (!effDraft.id) return
     setDraft({ ...effDraft, settings: { ...effDraft.settings, [view]: fn(effDraft.settings[view] ?? {}) } })
   }
-  function setItem(ids: string[], patch: { visible?: boolean; style?: LayerStyle; color?: string; weight?: number; opacity?: number; offset?: number }) {
+  function setItem(ids: string[], patch: { visible?: boolean; style?: LayerStyle; color?: string; weight?: number; opacity?: number; offset?: number; pattern?: FillPattern }) {
     patchView(v => {
       const next = { ...(v.items ?? {}) }
       for (const id of ids) next[id] = { ...effectiveSetting(v, id, view), ...patch }
@@ -317,6 +317,14 @@ export default function LayerManagerPanel({ api, initialView, activeSetId, onPre
                         {item.group === 'dimensions' && (
                           <OffsetInput value={st.offset ?? 0} disabled={!st.visible}
                             onCommit={n => setItem([item.id], { offset: n })} />
+                        )}
+                        {item.fills && (
+                          <select value={st.pattern ?? ''} disabled={!st.visible} title="Fill pattern (Default: solid on the plan canvas, hatch on prints and cut return walls)"
+                            onChange={e => setItem([item.id], { pattern: (e.target.value || undefined) as FillPattern | undefined })}
+                            className="bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[11px] text-gray-300 disabled:opacity-40">
+                            <option value="">Default</option>
+                            {FILL_PATTERNS.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                          </select>
                         )}
                         {(
                           <select value={st.style} disabled={!st.visible} title={view === '3d' ? 'Ghost = see-through' : 'Line style'}
