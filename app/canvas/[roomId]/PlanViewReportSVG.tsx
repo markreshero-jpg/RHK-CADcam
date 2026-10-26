@@ -35,7 +35,7 @@ import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { customExtents } from '@/src/lib/customPartBox'
 import { returnWallThickness } from '@/src/lib/wallJoints'
-import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
+import { shapedFrontMarks, sweepFlag, drawerLineOffset, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 
@@ -487,13 +487,13 @@ export default function PlanViewReportSVG({
             const drP = lp('drawer_lines')
             for (const d of marks.drawers) {
               const o = vec(d.out), al = vec(d.along)
-              const off = d.step * 2 * P, ins = d.step * 4 * P
+              const { off, ins } = drawerLineOffset(d.step, Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z))
               const a = toP(d.a), b = toP(d.b)
               out.push(<line key={`drawer-${cab.id}-${d.key}`}
                 x1={a.x + off * o.x + ins * al.x} y1={a.y + off * o.y + ins * al.y}
                 x2={b.x + off * o.x - ins * al.x} y2={b.y + off * o.y - ins * al.y}
                 stroke={INK} strokeWidth={lw('drawer_lines', drawSW)} opacity={drP.opacity}
-                strokeDasharray={drP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} strokeLinecap="round"
+                strokeDasharray={drP.strokeDasharray ?? `${2 * P} ${1 * P}`} strokeLinecap="butt"
                 style={{ pointerEvents: 'none' }} />)
             }
           }
@@ -565,15 +565,14 @@ export default function PlanViewReportSVG({
             const colLeft  = { x: frontLeft.x + col * colW * wd.x, y: frontLeft.y + col * colW * wd.y }
             const colRight = { x: colLeft.x + colW * wd.x, y: colLeft.y + colW * wd.y }
             for (let i = 0; i < rowIndices.length; i++) {
-              const perpOff    = (i + 1) * 2 * P
-              const widthInset = (i + 1) * 4 * P
+              const { off: perpOff, ins: widthInset } = drawerLineOffset(i + 1, colW)
               nodes.push(<line key={`drawer-${cab.id}-${col}-${rowIndices[i]}`}
                 x1={colLeft.x  + perpOff * perp.x + widthInset * wd.x}
                 y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
                 x2={colRight.x + perpOff * perp.x - widthInset * wd.x}
                 y2={colRight.y + perpOff * perp.y - widthInset * wd.y}
                 stroke={INK} strokeWidth={lw('drawer_lines', drawSW)} opacity={drP.opacity}
-                strokeDasharray={drP.strokeDasharray ?? `${1.5 * P} ${0.8 * P}`} strokeLinecap="round"
+                strokeDasharray={drP.strokeDasharray ?? `${2 * P} ${1 * P}`} strokeLinecap="butt"
                 style={{ pointerEvents: 'none' }} />)
             }
           }

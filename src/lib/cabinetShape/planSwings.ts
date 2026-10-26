@@ -13,10 +13,17 @@ export type LocalPt = { x: number; z: number }
 /** A door swing: closed leaf hinge → free, arc to `end` (15° open). */
 export interface LocalSwing { key: string; hinge: LocalPt; free: LocalPt; end: LocalPt; r: number }
 
-/** A drawer line along a front: offset by `step` × (caller units) along `out`, inset along `along`. */
+/** A drawer line along a front: stepped out along `out` and inset along `along` per `step` (see drawerLineOffset). */
 export interface LocalDrawerLine { key: string; a: LocalPt; b: LocalPt; out: LocalPt; along: LocalPt; step: number }
 
 const OPEN = 15 * Math.PI / 180
+
+/** Drawer line spacing in real mm, so the marks stay fixed on the cabinet at any zoom
+ *  or print scale: `step` × 40 out from the front, `step` × 30 in from each end,
+ *  never shorter than 40% of the front (deep stacks on narrow fronts). */
+export function drawerLineOffset(step: number, width: number): { off: number; ins: number } {
+  return { off: step * 40, ins: Math.max(0, Math.min(step * 30, width * 0.3)) }
+}
 
 function frontEdge(z: ResolvedFaceZone): { l: LocalPt; r: LocalPt; out: LocalPt } {
   const t = z.AY ? { AY: z.AY, X: z.X, Y: z.Y, Z: z.Z } : undefined

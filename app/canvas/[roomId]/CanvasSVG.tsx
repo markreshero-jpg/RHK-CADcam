@@ -41,7 +41,7 @@ import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
-import { shapedFrontMarks, sweepFlag, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
+import { shapedFrontMarks, sweepFlag, drawerLineOffset, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { toFrame, type LabelOff } from '@/src/lib/labelOffsets'
 
@@ -1578,7 +1578,7 @@ export default function CanvasSVG({
             if (layers.show('drawer_lines')) {
               for (const d of marks.drawers) {
                 const o = vec(d.out), al = vec(d.along)
-                const off = d.step * 10 / view.zoom, ins = d.step * 20 / view.zoom
+                const { off, ins } = drawerLineOffset(d.step, Math.hypot(d.b.x - d.a.x, d.b.z - d.a.z))
                 const a = toP(d.a), b = toP(d.b)
                 out.push(<line key={`drawer-${cab.id}-${d.key}`}
                   x1={a.x + off * o.x + ins * al.x} y1={a.y + off * o.y + ins * al.y}
@@ -1649,7 +1649,7 @@ export default function CanvasSVG({
           }
 
           // Drawer lines — one dashed line per drawer zone, offset progressively from front
-          // Stacked drawers (same col, different rows) each get their own line at +10px per step.
+          // Stacked drawers (same col, different rows) each step out 40mm (drawerLineOffset).
           if (layers.show('drawer_lines')) {
             // Group rows per column so each column tracks its own step count
             const colRowsSeen = new Map<number, number[]>()
@@ -1664,8 +1664,7 @@ export default function CanvasSVG({
               const colLeft  = { x: frontLeft.x + col * colW * wd.x, y: frontLeft.y + col * colW * wd.y }
               const colRight = { x: colLeft.x + colW * wd.x, y: colLeft.y + colW * wd.y }
               for (let i = 0; i < rowIndices.length; i++) {
-                const perpOff   = (i + 1) * 10 / view.zoom  // 10 screen-px out per step
-                const widthInset = (i + 1) * 20 / view.zoom  // 20 screen-px inset per end per step
+                const { off: perpOff, ins: widthInset } = drawerLineOffset(i + 1, colW)  // real mm, fixed at any zoom
                 nodes.push(<line key={`drawer-${cab.id}-${col}-${rowIndices[i]}`}
                   x1={colLeft.x  + perpOff * perp.x + widthInset * wd.x}
                   y1={colLeft.y  + perpOff * perp.y + widthInset * wd.y}
