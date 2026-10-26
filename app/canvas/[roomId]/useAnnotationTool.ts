@@ -1114,58 +1114,12 @@ export function useAnnotationTool({
         dragRef.current = next; setDrag(next)
       }
     }
-    // Click-to-move: the next click anywhere places (window capture, so it doesn't
-    // also land on the dim or the canvas underneath).
-    const carry = (id: string, orig: RoomAnnotation['geom'], start: Pt) => {
-      let moved = false
-      const follow = (ev: PointerEvent) => {
-        if (!moved) { captureSnapshot(); moved = true }
-        const p = toFrame(ev, !ev.shiftKey, null, new Set([id]))
-        setAnnotations(xs => xs.map(a => a.id === id ? { ...a, geom: translateGeom(a.kind, orig, p.x - start.x, p.y - start.y) } : a))
-      }
-      const end = (keep: boolean) => {
-        window.removeEventListener('pointermove', follow)
-        window.removeEventListener('pointerdown', place, true)
-        window.removeEventListener('keydown', key, true)
-        window.removeEventListener('contextmenu', menu, true)
-        document.body.style.cursor = ''
-        setSnapHit(null)
-        if (!moved) return
-        if (!keep) { setAnnotations(xs => xs.map(a => a.id === id ? { ...a, geom: orig } : a)); return }
-        const a = annRef.current.find(x => x.id === id)
-        if (a) void storeRef.current.update(id, { geom: a.geom })
-      }
-      const place = (ev: PointerEvent) => {
-        ev.stopPropagation(); ev.preventDefault()
-        // The click / context menu this press makes is swallowed too (walls and
-        // cabinets select on click).
-        const swallow = ev.button === 0 ? 'click' : 'contextmenu'
-        window.addEventListener(swallow, menu, { capture: true, once: true })
-        setTimeout(() => window.removeEventListener(swallow, menu, true), 600)
-        if (ev.button === 0 && moved) follow(ev)
-        end(ev.button === 0)
-      }
-      const key = (ev: KeyboardEvent) => { if (ev.key === 'Escape') { ev.stopPropagation(); ev.preventDefault(); end(false) } }
-      const menu = (ev: MouseEvent) => { ev.stopPropagation(); ev.preventDefault() }
-      window.addEventListener('pointermove', follow)
-      window.addEventListener('pointerdown', place, true)
-      window.addEventListener('keydown', key, true)
-      window.addEventListener('contextmenu', menu, true)
-      document.body.style.cursor = 'move'
-    }
     const up = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
       const cur = dragRef.current
       dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
-      // A click (no drag) on one dimension picks it up: it follows the cursor and the
-      // next click places it (Mark, 2026-10-26). Esc / right-click puts it back.
-      if (cur.kind === 'move' && !cur.moved && !ev.shiftKey && cur.orig.size === 1) {
-        const [id, orig] = [...cur.orig][0]
-        if (annRef.current.find(a => a.id === id)?.kind === 'dim') carry(id, orig, cur.start)
-        return
-      }
       if ((cur.kind === 'move' || cur.kind === 'rotate' || cur.kind === 'width' || cur.kind === 'vertex' || cur.kind === 'corner' || cur.kind === 'offset' || cur.kind === 'size' || cur.kind === 'arcGrip' || cur.kind === 'edge' || cur.kind === 'dimAt') && cur.moved) {
         const ids = cur.kind === 'move' ? [...cur.orig.keys()] : [cur.id]
         for (const id of ids) {
