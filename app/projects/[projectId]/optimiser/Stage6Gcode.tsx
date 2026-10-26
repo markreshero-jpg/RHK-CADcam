@@ -13,7 +13,7 @@ import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
-import { loadSheetDrills } from '@/src/lib/optimiser/sheetDrills'
+import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
@@ -41,6 +41,7 @@ function download(name: string, text: string) {
 export default function Stage6Gcode() {
   const snap = useOptiStore(s => s.snapshot)!
   const nestResult = useOptiStore(s => s.nestResult)
+  const partIndex = useOptiStore(s => s.partIndex)
   const machineId = useOptiStore(s => s.machineId)
   const profileId = useOptiStore(s => s.profileId)
   const settings = useOptiStore(s => s.settings)
@@ -150,7 +151,7 @@ export default function Stage6Gcode() {
       // holes must shift onto the deducted blanks to match.
       const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
       const { bySheet: sheetDrills, routesBySheet: sheetRoutes, warnings: drillWarnings } =
-        await loadSheetDrills(snap.parts, nestResult.sheets, { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
+        await loadSheetDrills(nestedParts(snap.parts, partIndex), nestResult.sheets, { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
       setDrillNotes(drillWarnings)
 
       // Program number (O-word) derived from the job number, unique per sheet.

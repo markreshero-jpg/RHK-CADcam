@@ -12,7 +12,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
 import { buildMargins } from '@/src/lib/optimiser/types'
-import { loadResolvedDrillOps, projectSheetDrills, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
+import { loadResolvedDrillOps, projectSheetDrills, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { ShapePt } from '@/src/lib/shapePath'
@@ -58,6 +58,12 @@ export default function Stage5Edit() {
   // drill overlay must shift holes onto the deducted blanks the same way Stage 6 does.
   const deductEb = snap?.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
   const partByUid = useMemo(() => new Map((snap?.parts ?? []).map(p => [p.uid, p])), [snap])
+  // Drilling is read for the nested cabinets only — not the whole job. Keyed on
+  // the nested part set so paste / re-place edits don't re-read it.
+  const partIndex = useOptiStore(s => s.partIndex)
+  const nestKey = useMemo(() => [...new Set(Object.values(partIndex).map(p => p.baseUid))].sort().join(','), [partIndex])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const drillParts = useMemo(() => nestedParts(snap?.parts ?? [], partIndex), [snap, nestKey])
 
   const [ctxMenu, setCtxMenu] = useState<{ uid: string; x: number; y: number } | null>(null)
   // Accordion: one material group open at a time. null = follow current sheet's
@@ -75,24 +81,24 @@ export default function Stage5Edit() {
     let cancelled = false
     setDrillsLoading(true)
     // Fast path: read already-generated rows, then re-read once this snapshot's
-    // background drilling regeneration (started when the optimiser opened) is done.
-    loadResolvedDrillOps(snap.parts, { sync: false, deductEdgeband: deductEb })
+    // nested cabinets' background drilling regeneration (started by the nest run) is done.
+    loadResolvedDrillOps(drillParts, { sync: false, deductEdgeband: deductEb })
       .then(r => {
         if (cancelled) return
         setDrillOps(r)
-        loadResolvedDrillOps(snap.parts, { sync: true, deductEdgeband: deductEb })
+        loadResolvedDrillOps(drillParts, { sync: true, deductEdgeband: deductEb })
           .then(r2 => { if (!cancelled) setDrillOps(r2) })
           .catch(e => console.error('[Stage5] background drill sync', e))
           .finally(() => { if (!cancelled) setDrillsLoading(false) })
       })
       .catch(e => { console.error('[Stage5] loadResolvedDrillOps', e); if (!cancelled) setDrillsLoading(false) })
     return () => { cancelled = true }
-  }, [snap, deductEb])
+  }, [snap, drillParts, deductEb])
   // Manual regenerate (after editing joints) — runs the slow sync on demand.
   async function regenerateDrills() {
     if (!snap || drillsLoading) return
     setDrillsLoading(true)
-    try { setDrillOps(await loadResolvedDrillOps(snap.parts, { sync: 'force', deductEdgeband: deductEb })) }
+    try { setDrillOps(await loadResolvedDrillOps(drillParts, { sync: 'force', deductEdgeband: deductEb })) }
     catch (e) { console.error('[Stage5] regenerate drills', e) }
     finally { setDrillsLoading(false) }
   }

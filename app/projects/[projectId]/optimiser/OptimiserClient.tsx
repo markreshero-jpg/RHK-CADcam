@@ -20,7 +20,7 @@ import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
 import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
-import { syncDrillingForParts } from '@/src/lib/optimiser/sheetDrills'
+import { syncDrillingForParts, resetDrillSync } from '@/src/lib/optimiser/sheetDrills'
 import { cutBlank, placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
@@ -49,10 +49,9 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
   // Seed the store from the server snapshot (runs after first paint, and again
   // if we navigate to a different project's optimiser).
   useEffect(() => { init(snapshot) }, [init, snapshot])
-  // Regenerate the drilling for every cabinet in the background, fresh on each
-  // optimiser visit, while the user works Stages 1–5; Stage 5's holes and
-  // Stage 6's Generate await this run rather than starting their own.
-  useEffect(() => { syncDrillingForParts(snapshot.parts, { force: true }).catch(e => console.error('[optimiser] drill sync', e)) }, [snapshot])
+  // Each optimiser visit re-syncs drilling fresh — for the nested cabinets
+  // only, started when the nest runs (Stage 4).
+  useEffect(() => { resetDrillSync() }, [snapshot])
 
   const canAdvance = useMemo(() => {
     if (stage === 1) return !!machineId
@@ -728,6 +727,9 @@ function Stage4Nesting() {
         }
       }
       setPartIndex(index)
+      // Regenerate the nested cabinets' drilling in the background while the
+      // user edits in Stage 5; its holes and Stage 6's Generate await this run.
+      syncDrillingForParts(nestableParts).catch(e => console.error('[optimiser] drill sync', e))
       // Per-material margin = routing tool Ø + nest pad + tool-entry offset (machine profile).
       const margins = buildMargins(snap, profileId)
       setNestResult(nest(parts, stockForRun, {

@@ -88,38 +88,51 @@ async function syncCabinetDrilling(cabinetId: string): Promise<void> {
   await syncMasterSlaves(cabinetId, rp)
 }
 
+// At most this many cabinets syncing at once, across every caller.
 const SYNC_CONCURRENCY = 12   // DB-latency bound (~240ms a call), not CPU
-// One drilling regeneration per set of cabinets (part comment / size edits make
-// a new parts array but don't change the drilling). Forced fresh when the
-// optimiser opens, in the background; Stage 5 and Stage 6 await the same run
-// instead of each re-syncing every cabinet on entry / Generate. Batching in
-// another job is a new cabinet set → a new run.
-const syncRuns = new Map<string, Promise<void>>()
+let syncRunning = 0
+const syncWaiting: (() => void)[] = []
+async function limited<T>(fn: () => Promise<T>): Promise<T> {
+  if (syncRunning < SYNC_CONCURRENCY) syncRunning++
+  else await new Promise<void>(r => syncWaiting.push(r))   // slot handed over on release
+  try { return await fn() }
+  finally { const next = syncWaiting.shift(); if (next) next(); else syncRunning-- }
+}
+
+// One drilling regeneration per cabinet per optimiser session. Started in the
+// background for the nested cabinets when the nest runs (Stage 4); Stage 5 and
+// Stage 6 await the same runs instead of re-syncing on entry / Generate. Kept
+// per cabinet so a re-nest with an overlapping set reuses what's done, and a
+// cabinet never has two delete+inserts in flight (a new run chains after one).
+const cabRuns = new Map<string, Promise<void>>()
+const freshCabs = new Set<string>()   // synced since the optimiser opened
+
+// Optimiser opened (fresh snapshot): cabinets may have been edited since their
+// last sync, so the next request re-syncs each one (after any still in flight).
+export function resetDrillSync(): void { freshCabs.clear() }
 
 export function syncDrillingForParts(parts: OptiPart[], opts: { force?: boolean } = {}): Promise<void> {
-  const ids = drillCabinetIds(parts)
-  const key = [...ids].sort().join(',')
-  const cur = syncRuns.get(key)
-  if (cur && !opts.force) return cur
-  // A forced run waits out one in flight so their delete+inserts can't interleave.
-  const run = (cur ?? Promise.resolve()).catch(() => {}).then(async () => {
-    let next = 0
-    const worker = async () => {
-      while (next < ids.length) {
-        const id = ids[next++]
-        try { await syncCabinetDrilling(id) }
-        catch (e) { console.error('[drillSync] cabinet failed, continuing:', id, e) }
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(SYNC_CONCURRENCY, ids.length) }, worker))
-  })
-  syncRuns.set(key, run)
-  return run
+  return Promise.all(drillCabinetIds(parts).map(id => {
+    const cur = cabRuns.get(id)
+    if (cur && freshCabs.has(id) && !opts.force) return cur
+    const run = (cur ?? Promise.resolve())
+      .then(() => limited(() => syncCabinetDrilling(id)))
+      .catch(e => console.error('[drillSync] cabinet failed, continuing:', id, e))
+    cabRuns.set(id, run); freshCabs.add(id)
+    return run
+  })).then(() => {})
+}
+
+// The snapshot parts actually in the nest (placed or unplaced) — drilling is
+// synced and read for these cabinets only, not the whole job.
+export function nestedParts(parts: OptiPart[], partIndex: Record<string, { baseUid: string }>): OptiPart[] {
+  const base = new Set(Object.values(partIndex).map(p => p.baseUid))
+  return parts.filter(p => base.has(p.uid))
 }
 
 export async function loadResolvedDrillOps(
   parts: OptiPart[],
-  // sync: wait for this snapshot's drilling regeneration (started if not yet);
+  // sync: wait for these cabinets' drilling regeneration (started if not yet);
   // 'force' runs a fresh one (Stage 5 "Regenerate", after editing joints).
   opts: { sync?: boolean | 'force'; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
 ): Promise<ResolvedDrillOps> {

@@ -56,9 +56,14 @@
 - **Drill sync timing (2026-10-26)**: the regeneration is DB-latency bound (~240ms a call;
   the resolve itself is ~1ms). `sheetDrills.syncDrillingForParts` resolves each cabinet ONCE
   for the seam + master/slave passes, seam does one delete + parallel inserts, 12 cabinets in
-  flight. Run forced fresh in the background when the optimiser opens, keyed on the cabinet
-  set; Stage 5 and Stage 6 await it (Stage 5 Regenerate = `sync: 'force'`). RHK6581 Lee Smith,
-  147 cabinets: 28s in the background, Generate then 0s for drilling.
+  flight. RHK6581 Lee Smith, 147 cabinets: 28s in the background, Generate then 0s for drilling.
+- **Drill scope (2026-10-26)**: drilling is synced and read for the NESTED cabinets only
+  (`nestedParts(snap.parts, partIndex)`), not the whole job. The sync starts in the background
+  when the nest runs (Stage 4), tracked per cabinet (`cabRuns`; a re-nest reuses what's done,
+  a cabinet never has two syncs in flight); opening the optimiser marks every cabinet stale
+  (`resetDrillSync`). Stage 5 and Stage 6 await it (Stage 5 Regenerate = `sync: 'force'`).
+  part_operations reads page past PostgREST's 1000-row cap (`selectCabinetOps`) — a whole-job
+  read used to drop cabinets silently ("Drilling (0)").
 - **Grain (fixed 2026-10-26)**: parts carry h = along the grain (CV DY). Sheets keep the board
   length (`sheet_dx`) on W / machine X, and `SheetStock.grainAlong` (default `'w'`; `'h'` when the
   material's grain_direction = width; Stage 3 toggle) says which way the grain runs. Grain-locked
