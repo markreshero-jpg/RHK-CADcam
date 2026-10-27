@@ -5,6 +5,8 @@ import { normalizeProject, collectEbIds, PART_SELECTS, type RawRoom, type RawCab
 import { buildSizeOvByCab, type SizeOv } from '@/src/lib/optimiser/sizeOverrides'
 import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from '@/src/lib/optimiser/shapes'
 import { normalizeBenchtopParts, benchtopEbIds, BENCHTOP_PART_SELECT, type RawBenchtop } from '@/src/lib/optimiser/benchtopParts'
+import { loadFrontWallRects } from '@/src/lib/frontWallRects'
+import { attachWallRects } from '@/src/lib/optimiser/grainBlocks'
 import OptimiserClient from './OptimiserClient'
 
 export const dynamic = 'force-dynamic'
@@ -71,6 +73,8 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
     (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab)
+  // Where grain-matched fronts hang, for their nest blocks (z_grain_match G4).
+  attachWallRects(norm.parts, await loadFrontWallRects(supabase, cabs.filter(c => c.grain_match).map(c => c.id)))
 
   // In-house benchtop parts (built-up / board tops) — benchtop Phase 5.
   const { data: btRaw } = roomIds.length

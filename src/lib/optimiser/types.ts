@@ -48,6 +48,9 @@ export interface OptiPart {
   grain_direction: string | null
   // Grain runs along w, not h (a front in a horizontal grain match group, z_grain_match G3).
   grain_across?: boolean
+  // Grain-matched front: where it hangs (elevation coords, y up) + which wall / side (G4).
+  wall_rect?: import('../frontWallRects').WallRect
+  wall_key?: string
   nest_priority: number
   output_to_cnc: boolean
   comment: string | null      // from cabinet_instances.part_comments[part_key]

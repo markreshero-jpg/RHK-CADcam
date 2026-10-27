@@ -11,6 +11,7 @@ import { materialGroupKey, buildMargins, type OptiSnapshot } from './types'
 import type { NormalizedProject } from './normalize'
 import { grainOrient, type GroupStock, type SheetStock, type NestResult, type NestPartInput, type Placement } from './nest'
 import { findBestPlacement, findNearestValid, sheetEfficiency } from './edit'
+import { blockOfUid, blockRectOn, detachFromBlock } from './grainBlocks'
 import { getUserPrefs, setUserPrefs } from '../userPrefs'
 
 export type Stage = 1 | 2 | 3 | 4 | 5 | 6
@@ -113,6 +114,8 @@ interface OptiState {
   selectPlacement: (uid: string | null) => void
   setEditError: (m: string | null) => void
   movePartWithin: (uid: string, x: number, y: number) => void
+  /** Move a grain match block's fronts together (z_grain_match G4). */
+  moveBlockBy: (uids: string[], dx: number, dy: number) => void
   rotatePart: (uid: string) => void
   relocatePart: (uid: string, targetSheetIndex: number, x: number, y: number) => void
   removeToUnplaced: (uid: string) => void
@@ -270,8 +273,17 @@ export const useOptiStore = create<OptiState>((set) => ({
     return commit(st, next)
   }),
 
+  moveBlockBy: (uids, dx, dy) => set(st => {
+    if (!st.nestResult) return {}
+    const next = clone(st.nestResult)
+    for (const s of next.sheets) for (const p of s.placements) if (uids.includes(p.uid)) { p.x += dx; p.y += dy }
+    return commit(st, next)
+  }),
+
   rotatePart: (uid) => set(st => {
     if (!st.nestResult) return {}
+    const blk = blockOfUid(st.nestResult, uid)
+    if (blk) return { editError: `Grain-matched front — it turns with its ${blk.name} block, never on its own.` }
     if (st.partIndex[uid]?.grainLock) return { editError: 'Grained part — it stays with the sheet grain.' }
     const next = clone(st.nestResult)
     const margins = st.snapshot ? buildMargins(st.snapshot, st.profileId) : { byMaterial: {}, fallback: 4 }
@@ -291,6 +303,21 @@ export const useOptiStore = create<OptiState>((set) => ({
   relocatePart: (uid, targetIndex, x, y) => set(st => {
     if (!st.nestResult) return {}
     const next = clone(st.nestResult)
+    // A grain-matched front takes its whole block to the other sheet.
+    const blk = blockOfUid(next, uid)
+    const from = blk && next.sheets.find(s => s.placements.some(p => p.uid === uid))
+    const target0 = next.sheets.find(s => s.index === targetIndex)
+    if (blk && from && target0) {
+      const r = blockRectOn(from, blk)!
+      const margins = st.snapshot ? buildMargins(st.snapshot, st.profileId) : { byMaterial: {}, fallback: 4 }
+      const gap = (target0.materialId != null ? margins.byMaterial[target0.materialId] : undefined) ?? margins.fallback
+      const pos = findBestPlacement(target0, r.w, r.h, gap)
+      if (!pos) return { editError: `No room on that sheet for the whole ${blk.name} block.` }
+      const moving = from.placements.filter(p => blk.memberUids.includes(p.uid))
+      from.placements = from.placements.filter(p => !blk.memberUids.includes(p.uid))
+      for (const p of moving) { p.x += pos.x - r.x; p.y += pos.y - r.y; target0.placements.push(p) }
+      return commit(st, next)
+    }
     let moved: Placement | undefined
     for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { moved = s.placements.splice(i, 1)[0]; break } }
     const target = next.sheets.find(s => s.index === targetIndex)
@@ -304,7 +331,8 @@ export const useOptiStore = create<OptiState>((set) => ({
     for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { s.placements.splice(i, 1); break } }
     const def = st.partIndex[uid]
     if (def) next.unplaced.push(clone(def))
-    return { ...commit(st, next), selectedUid: null }
+    const broke = detachFromBlock(next, uid, def?.label ?? 'a front')
+    return { ...commit(st, next), selectedUid: null, ...(broke ? { editError: broke } : {}) }
   }),
 
   placeFromUnplaced: (uid, sheetIndex, x, y) => set(st => {
@@ -333,7 +361,8 @@ export const useOptiStore = create<OptiState>((set) => ({
     const next = clone(st.nestResult)
     for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { s.placements.splice(i, 1); break } }
     if (def && !next.unplaced.some(u => u.uid === uid)) next.unplaced.push(clone(def))
-    return { ...commit(st, next), clipboard: def ? [clone(def)] : [], clipboardMode: 'cut', selectedUid: null }
+    const broke = detachFromBlock(next, uid, def?.label ?? 'a front')
+    return { ...commit(st, next), clipboard: def ? [clone(def)] : [], clipboardMode: 'cut', selectedUid: null, ...(broke ? { editError: broke } : {}) }
   }),
 
   pasteClipboard: (sheetIndex) => set(st => {

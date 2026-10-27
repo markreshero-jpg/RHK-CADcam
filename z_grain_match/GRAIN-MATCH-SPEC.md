@@ -1,6 +1,6 @@
 # Grain match — spec
 
-**Status:** G1–G3 built 2026-10-27 (data, right-click, layer, horizontal grain), G2/G3 in-app checks pending. Next: G4.
+**Status:** G1–G4 built 2026-10-27 (data, right-click, layer, horizontal grain, optimiser blocks), G2–G4 in-app checks pending. Next: G5.
 
 ## Why
 
@@ -14,7 +14,9 @@ matched as a quick visual check."
 ## Locked decisions (Mark, 2026-10-27)
 
 1. **Fronts only.** A group holds the FRONTS (face_zones: doors, drawer fronts,
-   false fronts) of its cabinets. Not end panels, fillers or kicks.
+   false fronts) of its cabinets. Not end panels, fillers or kicks. Finger-pull
+   rails and linear (35) handles NEVER join a block — "it will never work" (Mark,
+   2026-10-27).
 2. **Laid out as in elevation.** On the sheet the group's fronts keep their
    wall layout (rows / columns / order); each reveal becomes the cutter gap. The
    group nests as one block.
@@ -130,6 +132,25 @@ GrainSVG fronts hardcode `'v'`; 3D `grainExtents` goes by part kind). With a gro
   unplaced breaks the block with a warning.
 - Stage 6: unchanged (parts are still cut one by one).
 
+**Built (G4):**
+- `src/lib/frontWallRects.ts` — `frontWallRect` / `loadFrontWallRects` (elevX + zone x,
+  cabBottomZ + zone y; facet / AY fronts left out). Both snapshot loaders attach
+  `OptiPart.wall_rect` + `wall_key` (wall|side) via `attachWallRects`.
+- `src/lib/optimiser/grainBlocks.ts` — `buildGrainBlocks` (one block per group × wall/side
+  × board; only each front's first cut joins), `layoutBlock` / `compactAxis` (empty bands
+  > gap shrink to the gap; facing fronts pushed to ≥ gap; every pair keeps its offset so
+  rows / columns stay lined up; cut size centred on the finished rect), greedy split at
+  cabinet boundaries (a cabinet whose own fronts don't fit → singles + warning),
+  `expandGrainBlocks` (member placements; turned block = CCW quarter turn, the same
+  convention drilling uses). Blocks nest first (priority 1e6 − piece).
+- `NestResult.blocks` / `.warnings` (Stage 4 shows warnings). Stage 5: dragging a member
+  drags the block bbox (`findNearestValid` takes an ignore set, store `moveBlockBy`);
+  rotate refused; Move to sheet moves the whole block; Delete / Cut breaks it with a notice.
+- Headless run uses the same path; summary.json lists `grainBlocks`.
+- Checked headless on RHK1234 Kitchen Test Room (BC-03/04/05): horizontal → one block,
+  as in elevation; vertical → 3 blocks (too long to turn), warning. Note: a run's drill
+  sync can re-resolve the cabinets (fronts got their real colour) — normal.
+
 ## Outputs (G5)
 
 - Sheet PDF + Stage 4/5 sheet view: block outline + `GM1` tag.
@@ -151,6 +172,6 @@ make a vertical drawer bank + a horizontal run, check elevation layer, nest, PDF
   `z_plan_automation/verify-grain-match-g2.mjs` (screens OK). Mark's check pending.
 - [x] G3 Horizontal grain in elevation, 3D, nest — `verify-grain-match-g3.mjs`,
   `grain-match-set.cjs` (test helper), nestGrain tests. Mark's check pending.
-- [ ] G4 Optimiser blocks + split
+- [x] G4 Optimiser blocks + split — tests `grainBlocks.test.ts`; Stage 5 drag check by Mark.
 - [ ] G5 Sheet / label outputs
 - [ ] G6 Tutorial + in-app check

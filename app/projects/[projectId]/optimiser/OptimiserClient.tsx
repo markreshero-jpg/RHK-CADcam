@@ -19,6 +19,7 @@ import { useOptiStore, type Stage } from '@/src/lib/optimiser/store'
 import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
 import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
+import { buildGrainBlocks, expandGrainBlocks } from '@/src/lib/optimiser/grainBlocks'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import { syncDrillingForParts, resetDrillSync } from '@/src/lib/optimiser/sheetDrills'
 import { cutBlank, placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
@@ -732,12 +733,25 @@ function Stage4Nesting() {
       syncDrillingForParts(nestableParts).catch(e => console.error('[optimiser] drill sync', e))
       // Per-material margin = routing tool Ø + nest pad + tool-entry offset (machine profile).
       const margins = buildMargins(snap, profileId)
-      setNestResult(nest(parts, stockForRun, {
+      // Grain match groups (z_grain_match G4): each group's fronts nest as one block.
+      const groupFrontCount = new Map<string, number>()
+      for (const p of snap.parts) {
+        const gid = p.wall_rect && p.output_to_cnc ? cabById.get(p.cabinet_instance_id)?.grain_match?.id : undefined
+        if (gid) groupFrontCount.set(gid, (groupFrontCount.get(gid) ?? 0) + 1)
+      }
+      const gm = buildGrainBlocks({
+        instances: parts, partByUid, cabById, groupFrontCount,
+        stockFor: (m, t) => stockForRun[materialGroupKey(m, t)]?.standard,
+        gapFor: m => (m != null ? margins.byMaterial[m] : undefined) ?? margins.fallback,
+        allowRotation: settings.allowRotation,
+      })
+      const raw = nest(gm.parts, stockForRun, {
         quality: settings.quality,
         allowRotation: settings.allowRotation,
         marginByMaterial: margins.byMaterial,
         defaultMargin: margins.fallback,
-      }))
+      })
+      setNestResult(expandGrainBlocks(raw, gm.blocks, index, gm.warnings))
       setNesting(false)
     }, 20)
   }
@@ -807,6 +821,9 @@ function Stage4Nesting() {
           <p className="text-xs text-ink-subtle text-center py-12">Run nesting to lay parts out on sheets.</p>
         ) : (
           <>
+            {(nestResult.warnings ?? []).map((w, i) => (
+              <p key={i} className="text-[11px] text-amber-500 mb-2">⚠ Grain match — {w}</p>
+            ))}
             {nestResult.unplaced.length > 0 && (
               <p className="text-[11px] text-amber-500 mb-4">
                 {nestResult.unplaced.length} part(s) too large for any configured sheet/offcut: {[...new Set(nestResult.unplaced.map(u => u.label))].slice(0, 6).join(', ')}{nestResult.unplaced.length > 6 ? '…' : ''}

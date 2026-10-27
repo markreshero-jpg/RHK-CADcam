@@ -39,14 +39,15 @@ function freeAt(x: number, y: number, w: number, h: number, others: Rect[], stoc
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)) }
 
 // Nearest collision-free spot to (desiredX, desiredY) for a w×h part, ignoring
-// the part with id `ignoreUid`. Candidate positions are the cross product of
+// the part(s) `ignore` (one uid, or a grain match block's members). Candidate positions are the cross product of
 // existing part edges + the clamped desired position (grid-free). Returns null
 // when the sheet has no valid spot.
 export function findNearestValid(
-  sheet: NestedSheet, ignoreUid: string | null, w: number, h: number,
+  sheet: NestedSheet, ignore: string | null | ReadonlySet<string>, w: number, h: number,
   desiredX: number, desiredY: number, gap: number,
 ): { x: number; y: number } | null {
-  const others: Rect[] = sheet.placements.filter(p => p.uid !== ignoreUid).map(p => ({ x: p.x, y: p.y, w: p.w, h: p.h }))
+  const skip = (uid: string) => (typeof ignore === 'string' || ignore == null ? uid === ignore : ignore.has(uid))
+  const others: Rect[] = sheet.placements.filter(p => !skip(p.uid)).map(p => ({ x: p.x, y: p.y, w: p.w, h: p.h }))
   const u = usableBounds(sheet.stock)
   const maxX = u.x1 - w, maxY = u.y1 - h
   if (maxX < u.x0 - EPS || maxY < u.y0 - EPS) return null   // too big for the sheet

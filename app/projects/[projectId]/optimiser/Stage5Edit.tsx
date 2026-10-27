@@ -11,6 +11,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
+import { blockOfUid, blockRectOn, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
@@ -40,6 +41,7 @@ export default function Stage5Edit() {
   const selectPlacement = useOptiStore(s => s.selectPlacement)
   const setEditError = useOptiStore(s => s.setEditError)
   const movePartWithin = useOptiStore(s => s.movePartWithin)
+  const moveBlockBy = useOptiStore(s => s.moveBlockBy)
   const removeToUnplaced = useOptiStore(s => s.removeToUnplaced)
   const placeFromUnplaced = useOptiStore(s => s.placeFromUnplaced)
   const relocatePart = useOptiStore(s => s.relocatePart)
@@ -272,6 +274,8 @@ export default function Stage5Edit() {
               scrollRef={scrollRef}
               onSelect={selectPlacement}
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
+              blockFor={uid => blockOfUid(nestResult, uid)}
+              onMoveBlock={moveBlockBy}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
               outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }}
               holesFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedHoles(p, pl, deductEb) : [] }}
@@ -409,7 +413,10 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor }: {
+function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock }: {
+  /** Grain match block holding a front (z_grain_match G4): it drags as one. */
+  blockFor: (uid: string) => GrainBlockInfo | undefined
+  onMoveBlock: (uids: string[], dx: number, dy: number) => void
   outlineFor: (pl: NestedSheet['placements'][number]) => ShapePt[] | null
   holesFor: (pl: NestedSheet['placements'][number]) => ShapePt[][]
   sheet: NestedSheet
@@ -426,7 +433,10 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
   const scale = Math.min(MAX_W / W, MAX_H / H) * zoom
   const pxW = W * scale, pxH = H * scale
   const svgRef = useRef<SVGSVGElement>(null)
-  const [drag, setDrag] = useState<{ uid: string; offX: number; offY: number; gx: number; gy: number } | null>(null)
+  // gx / gy = the dragged rect's live spot: the part, or a grain match block's
+  // bounding rect (block = its members + where that rect started).
+  const [drag, setDrag] = useState<{ uid: string; offX: number; offY: number; gx: number; gy: number
+    block?: { uids: Set<string>; x0: number; y0: number; w: number; h: number } } | null>(null)
   // Cursor anchor captured on wheel, consumed after the zoom re-renders to keep
   // the point under the cursor fixed (zoom-to-cursor). Fraction within the SVG +
   // the client point it must stay at.
@@ -474,7 +484,10 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
     onSelect(uid)
     const p = sheet.placements.find(p => p.uid === uid)!
     const { mx, my } = toMm(e.clientX, e.clientY)
-    setDrag({ uid, offX: mx - p.x, offY: my - p.y, gx: p.x, gy: p.y })
+    const b = blockFor(uid)
+    const r = b ? blockRectOn(sheet, b) : null
+    if (b && r) setDrag({ uid, offX: mx - r.x, offY: my - r.y, gx: r.x, gy: r.y, block: { uids: new Set(b.memberUids), x0: r.x, y0: r.y, w: r.w, h: r.h } })
+    else setDrag({ uid, offX: mx - p.x, offY: my - p.y, gx: p.x, gy: p.y })
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
   }
   function onPointerMove(e: React.PointerEvent) {
@@ -482,11 +495,14 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
     const { mx, my } = toMm(e.clientX, e.clientY)
     const part = sheet.placements.find(p => p.uid === drag.uid)!
     const gap = gapForSheet(sheet)
-    const pos = findNearestValid(sheet, drag.uid, part.w, part.h, mx - drag.offX, my - drag.offY, gap)
+    const pos = drag.block
+      ? findNearestValid(sheet, drag.block.uids, drag.block.w, drag.block.h, mx - drag.offX, my - drag.offY, gap)
+      : findNearestValid(sheet, drag.uid, part.w, part.h, mx - drag.offX, my - drag.offY, gap)
     if (pos) setDrag({ ...drag, gx: pos.x, gy: pos.y })
   }
   function onPointerUp() {
-    if (drag) { onMove(drag.uid, drag.gx, drag.gy); setDrag(null) }
+    if (drag?.block) { onMoveBlock([...drag.block.uids], drag.gx - drag.block.x0, drag.gy - drag.block.y0); setDrag(null) }
+    else if (drag) { onMove(drag.uid, drag.gx, drag.gy); setDrag(null) }
   }
 
   const fy = (y: number, h: number) => (H - y - h) * scale
@@ -501,9 +517,10 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
           fill="none" stroke="#334155" strokeWidth={1} strokeDasharray="3 3" />
       ) })()}
       {sheet.placements.map((p, idx) => {
-        const isDrag = drag?.uid === p.uid
-        const x = isDrag ? drag!.gx : p.x
-        const y = isDrag ? drag!.gy : p.y
+        const inBlock = !!drag?.block?.uids.has(p.uid)
+        const isDrag = drag?.uid === p.uid && !drag.block
+        const x = inBlock ? p.x + drag!.gx - drag!.block!.x0 : isDrag ? drag!.gx : p.x
+        const y = inBlock ? p.y + drag!.gy - drag!.block!.y0 : isDrag ? drag!.gy : p.y
         const on = selectedUid === p.uid
         const num = idx + 1   // per-sheet part number
         const outline = outlineFor(p)

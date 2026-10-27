@@ -36,6 +36,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { loadProjectParts } = await import('../loadClient')
     const { materialGroupKey, buildMargins } = await import('../types')
     const { nest } = await import('../nest')
+    const { buildGrainBlocks, expandGrainBlocks } = await import('../grainBlocks')
     const { cutBlank, placedOutline, placedHoles } = await import('../shapes')
     const { loadSheetDrills, nestedParts } = await import('../sheetDrills')
     const { generateSheetGcode, postFromProfile, gcodeFileName } = await import('../gcode')
@@ -120,10 +121,23 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       parts.push(inst); index[inst.uid] = inst
     }
     const margins = buildMargins(snap, profileId)
-    const nestResult = nest(parts, stockForRun, {
+    // Grain match blocks (z_grain_match G4) — same path as Stage 4 run().
+    const groupFrontCount = new Map<string, number>()
+    for (const p of snap.parts) {
+      const gid = p.wall_rect && p.output_to_cnc ? cabById.get(p.cabinet_instance_id)?.grain_match?.id : undefined
+      if (gid) groupFrontCount.set(gid, (groupFrontCount.get(gid) ?? 0) + 1)
+    }
+    const gm = buildGrainBlocks({
+      instances: parts, partByUid: new Map(snap.parts.map(p => [p.uid, p])), cabById, groupFrontCount,
+      stockFor: (m, t) => stockForRun[materialGroupKey(m, t)]?.standard,
+      gapFor: m => (m != null ? margins.byMaterial[m] : undefined) ?? margins.fallback,
+      allowRotation: true,
+    })
+    const nestResult = expandGrainBlocks(nest(gm.parts, stockForRun, {
       quality: cfg.quality ?? 'balanced', allowRotation: true,
       marginByMaterial: margins.byMaterial, defaultMargin: margins.fallback,
-    })
+    }), gm.blocks, index, gm.warnings)
+    for (const w of nestResult.warnings ?? []) notes.push(`grain match: ${w}`)
     for (const u of nestResult.unplaced) notes.push(`UNPLACED (too big): ${u.label} ${u.w}x${u.h}`)
     lap(`nested ${parts.length} parts → ${nestResult.sheets.length} sheet(s)`)
 
@@ -457,6 +471,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       parts: rows.length, sheets: gen.map((g, i) => ({ n: i + 1, file: g.fileName, parts: g.sheet.placements.length, holes: g.drills.length, routes: g.routes.length, efficiency: Math.round(g.sheet.efficiency * 100) })),
       unplaced: nestResult.unplaced.map(u => u.label), notes, drillWarnings, gcodeErrors: blocking, gcodeWarnings: warned,
       zeroHoleParts: rows.filter(r => r.holes === 0).map(r => `${r.cab} ${r.part}`), rowsList: rows,
+      grainBlocks: (nestResult.blocks ?? []).map(b => ({ name: b.name, piece: `${b.piece}/${b.pieces}`, fronts: b.memberUids.length, sheet: gen.findIndex(g => g.sheet.placements.some(p => b.memberUids.includes(p.uid))) + 1 })),
     }
     writeFileSync(join(outDir, 'summary.json'), JSON.stringify(summary, null, 2))
     const { rowsList: _r, ...brief } = summary

@@ -56,6 +56,9 @@ export interface NestedSheet {
 export interface NestResult {
   sheets: NestedSheet[]
   unplaced: NestPartInput[]      // parts too big for any available sheet
+  // Grain match blocks placed in this layout (z_grain_match G4) + their run warnings.
+  blocks?: import('./grainBlocks').GrainBlockInfo[]
+  warnings?: string[]
 }
 
 export interface NestSettings {
