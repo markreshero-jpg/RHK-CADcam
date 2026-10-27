@@ -244,6 +244,24 @@ line and mirrors the island elevation.
   cabinet rule `REVT` = (apron − 20) + the normal REVT (80 apron, REVT 4 → 64),
   so the top drawer fronts / doors hang below the apron. A 20 top keeps the
   normal REVT. Applies to most of our benches over 20.
+  **With finger pulls** (sharknose) the top gap is FPGAP, not REVT — REVT only
+  moves non-grip fronts (UBO panels, false panels). Set room rules
+  `{ BY_CLASS: { base: { REVT: (apron − 20) + 4 } } }` AND `finger_gap: (apron −
+  20) + FPGAP` (50 apron → 50) on each TOP-ROW grip zone of every base face_grid
+  (never class-wide FPGAP — that widens the gaps between drawers too). Tops get
+  edge profile `MA50` / `MA80` on the front + seen-end segments (RHK6555).
+- **Overheads with a finger grab = bottom overhang + under panel set back 20**
+  (Mark, standard, 2026-10-27): `SCRBT` 18 on the overheads, carcass dy =
+  overall − 18, then `addUnderPanel([...overheads])` and `updateCabinet(WUP,
+  { dz: carcass dz − 20 })` so the panel sits 20 back from the carcass front
+  (fingers grab the door backs). "720 high incl under panel" = 702 carcass + 18.
+  An overhead filler at a wall = a `WEP` at the filler width with its Applied
+  Panel turned into a front filler (`orientation 'front'`, expressions
+  `{z: 'cab.d + 2', dx: 'cab.w', dy: 'cab.h', dz: 't.exposed'}`), dy = overall.
+- **joinKicks on a mixed-depth run opens an in-app confirm modal** (not a
+  window dialog) and the bridge call never returns. Don't join a run whose
+  members differ in dz (e.g. a BCNP leg + 575 bases) — leave those kicks
+  unjoined, or match the depths first (RHK6555).
 - **Kits (WOT / WOT-COMBI) place several members** — draw-plan can't match them
   (it dies "cannot find placed cabinet"). Leave them out of the layout, set
   `rooms.class_dimension_defaults` ({ tall: {dy, dz}, base: {…}, wall: {…} })

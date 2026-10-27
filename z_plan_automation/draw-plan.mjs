@@ -136,10 +136,14 @@ const browser = await puppeteer.launch({
   executablePath: CHROME,
   headless: 'new',
   args: ['--no-first-run', '--disable-gpu'],
+  // getIssues re-resolves every cabinet — big rooms run past the 180s default.
+  protocolTimeout: 900000,
 })
 let state, issues
 try {
   const page = await browser.newPage()
+  // A window.alert (e.g. joinKicks on a one-cabinet run) would hang the bridge.
+  page.on('dialog', d => { console.log('dialog dismissed:', d.message()); d.dismiss() })
   await page.setExtraHTTPHeaders({ 'x-dev-automation': '1' })
   const openCanvas = async () => {
     await page.goto(`http://localhost:${PORT}/canvas/${room.id}`, { waitUntil: 'networkidle2', timeout: 60000 })
