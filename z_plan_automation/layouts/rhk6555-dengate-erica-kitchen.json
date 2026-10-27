@@ -8,6 +8,7 @@
     "W2 L->R: [blind corner 0-595] | BFK 251 | BBIN 450 (Teramo 56L + drawer over) | BSK 900 centred on the wall (1296-2196) | integrated DW 600 | BCNP return leg 696.",
     "W3 L->R: BCNP 774 x 696 (TBC - corner too small for 900) | UBO 600 | M/W 600 (open box 380 clear over a drawer) | TEPF | pantry 744 x 680 | TEPF | fridge 1005 | TFFW 31 at the 700 wall.",
     "W3 overheads 720 overall = 702 carcass + 18 under panel (set back 20), 350 deep incl doors (330 carcass), SCRBT 18: WEP->filler 30 | W2D 744 | W2D 600 rangehood (undermount, drawn W2D) | W1D 600 to the pantry panel. Fridge overhead W2D 1005 x 500 x 380 (400 incl doors), PTO.",
+    "2026-10-27 Mark: BC-06 door hinged off the blind panel, blind panel 635 (40+ past the sink-wall fronts); 40 BFK at the blind corner (placed last as BC-14, joined into KICK 2) + BC-07 211. Notes = text boxes inside their cabinets. Pantry dims: bottom drawer box base -> underside of the next front = 497.",
     "W5: TEPF | pantry 764 x 430 (450 o/a) x 2065 | TEPF."
   ],
   "projectName": "RHK6555 Mick Dengate - Erica",
@@ -32,10 +33,10 @@
       "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false},{"row_index":1,"height_locked":false},{"height":170,"row_index":2,"height_locked":true}],"zones":[{"col_index":0,"face_type":"drawer_face","row_index":0,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":1,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":2,"hinge_side":"left","finger_gap":50}]} } },
     { "def": "B1D", "wall": 1, "offset": 2390, "dx": 450, "dy": 885, "dz": 575, "note": "1 door",
       "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false}],"zones":[{"col_index":0,"face_type":"door","row_index":0,"hinge_side":"left","finger_gap":50}]} } },
-    { "def": "B1D", "wall": 1, "offset": 2840, "dx": 1050, "dy": 885, "dz": 575, "note": "Blind corner 1050: door 450 + blind false panel 600 into the corner (sink-wall run butts the blind panel). Trial - save to the library if Mark likes it",
-      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false},{"col_index":1,"width":600,"width_locked":true}],"rows":[{"row_index":0,"height_locked":false}],"zones":[{"col_index":0,"face_type":"door","row_index":0,"hinge_side":"left","finger_gap":50},{"col_index":1,"face_type":"false_panel","row_index":0}]} } },
+    { "def": "B1D", "wall": 1, "offset": 2840, "dx": 1050, "dy": 885, "dz": 575, "note": "Blind corner 1050: door + blind false panel 635 (42 past the sink-wall fronts), door hinged off the blind panel. Save to the library if Mark likes it",
+      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false},{"col_index":1,"width":635,"width_locked":true}],"rows":[{"row_index":0,"height_locked":false}],"zones":[{"col_index":0,"face_type":"door","row_index":0,"hinge_side":"right","finger_gap":50},{"col_index":1,"face_type":"false_panel","row_index":0}]} } },
 
-    { "def": "BFK", "wall": 2, "offset": 595, "dx": 251, "dy": 885, "dz": 575, "note": "Filler between the blind corner face and the bin (sink centred on the wall)" },
+    { "def": "BFK", "wall": 2, "offset": 635, "dx": 211, "dy": 885, "dz": 575, "note": "Filler to the bin (sink centred on the wall)" },
     { "def": "BBIN", "wall": 2, "offset": 846, "dx": 450, "dy": 885, "dz": 575, "note": "Teramo 56L pull-out bin with a drawer over",
       "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false},{"height":170,"row_index":1,"height_locked":true}],"zones":[{"col_index":0,"face_type":"drawer_face","row_index":0,"hinge_side":"left","drawer_type_config":{"type":"bin","slide_product_id":"73489428-752b-4223-af23-e90cb8729521"}},{"col_index":0,"face_type":"drawer_face","row_index":1,"hinge_side":"left","finger_gap":50}]} } },
     { "def": "BSK", "wall": 2, "offset": 1296, "dx": 900, "dy": 885, "dz": 575, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink 900 centred on the wall, double bowl undermount",
@@ -66,6 +67,7 @@
     { "def": "W2D", "wall": 3, "offset": 2754, "dx": 1005, "dy": 500, "dz": 380, "note": "Fridge overhead 1800-2300, 400 deep incl doors, PTO" },
     { "def": "BH", "wall": 3, "offset": 0, "dx": 1974, "dy": 500, "dz": 330, "note": "Bulkhead 2300-2800 over the overheads, flush with the carcass" },
     { "def": "BH", "wall": 3, "offset": 1974, "dx": 1816, "dy": 500, "dz": 680, "note": "Bulkhead 2300-2800 over the pantry + fridge" },
+    { "def": "BFK", "wall": 2, "offset": 595, "dx": 40, "dy": 885, "dz": 575, "note": "40 filler at the blind corner (door clears the blind panel)" },
     { "def": "BH", "wall": 5, "offset": 18, "dx": 764, "dy": 735, "dz": 430, "note": "Bulkhead 2065-2800 over the W5 pantry, returns both seen ends" }
   ]
 }

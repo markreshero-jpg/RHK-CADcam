@@ -106,6 +106,15 @@ line and mirrors the island elevation.
   (base) — with the kick joined through underneath
   (`__canvasApi.joinKicks(label)` after placement). Only end panels run to the
   floor; use `TFF` / `TFFW` only when the user says so (Mark, 2026-10-21).
+- **Blind corners → always a filler on the adjacent wall's run, next to the
+  blind cabinet, default 40 wide** (Mark, RHK6555 2026-10-27). The blind false
+  panel runs at least 40 past that run's fronts (adjacent carcass dz + door + 2
+  + 40 from the corner wall), and the door is **hinged off the blind panel**.
+  No blind-corner def yet: a `B1D` at the blind width with face_grid col 0
+  `door` (`hinge_side` toward the blind side) + col 1 `false_panel`,
+  `width` locked (e.g. 635 for a 575 carcass), plus a `BFK` 40 at the start of
+  the adjacent run (same kick_run_id / has_toekick / pos_z / dy as the run's
+  members if the kick is already joined).
 - **Inner drawers next to a wall → 50 filler** (not 30), so the door opens far
   enough to clear the drawers. If a cupboard with inner drawers / pull-outs sits
   against a wall, either use a 50 TFKW/BFK there or ASK before drawing
@@ -165,6 +174,13 @@ line and mirrors the island elevation.
   a seen end panel (open end, not a wall), turn on that side's bulkhead return
   — `bulkhead.left/right = { on: true, depth: <carcass dz>, joint: 'mitre' }`
   on the BH row. Wall ends stay off.
+- **CAD notes about a cabinet = TEXT BOXES inside that cabinet** (Mark,
+  RHK6555 2026-10-27): never a point-text line that runs past the cabinet.
+  `geom.width` (paper mm) = (cabinet width − 60) / `rooms.annotation_scale`
+  (default 20), `at.x` = cabinet left + 30, `style { size: 2.5, align:
+  'center' }` — long notes wrap (a 600 rangehood note goes to 3 lines). Keep the
+  box off the cabinet's mid-height size label and off drawer fronts it isn't
+  about. Short corner tags (PTO) can stay point text, still inside the door.
 - **Hanging rails get a CAD note** (Mark, 2026-10-23): every `HANGING_RAIL_OVAL`
   gets a "HANGING RAIL" text note in that wall's elevation just below the rail —
   `room_annotations` row `view: 'elevation'`, `wall_id`, `wall_side: 'face'`,

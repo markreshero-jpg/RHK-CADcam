@@ -18,10 +18,10 @@ Spec text wins over the sketch (3890 run layout, D/W on the sink wall).
 - Bench 905 → carcass 885 incl kick + 20 slab; fronts hang below the apron (base REVT 34, top-row finger_gap 50).
   Finger pull 600 bench → 575 carcass. Seen end panel 30 lower (855), top 5 past it.
 - 3890 wall: Panel | 3 x D3-SLL 791/791/790 | B1D 450 | blind corner 1050 (into the sink-wall corner).
-- Blind corner: built from a B1D 1050 — 445 door + 600 blind false panel. **Trial: if Mark likes it, save it to the
-  library as a new cabinet.**
-- Sink wall: sink 900 centred (1296–2196), Teramo 56L bin 450 + drawer over to the left, integrated DW 600 to the right.
-  251 filler between the blind corner and the bin.
+- Blind corner (BC-06): built from a B1D 1050 — 410 door **hinged off the blind panel** + 635 blind false panel
+  (42 past the sink-wall fronts at 595). **If Mark likes it, save it to the library as a new cabinet.**
+- Sink wall: 40 filler at the blind corner (BC-14, in KICK 2) | 211 filler (BC-07) | Teramo 56L bin 450 + drawer over |
+  sink 900 centred (1296–2196) | integrated DW 600.
 - Right corner: **TBC — too small for a 900 corner**. Drawn as a BCNP 774 (oven wall) x 696 (sink wall).
 - M/W: open box 380 clear over a drawer.
 - Overheads 720 incl under panel (702 carcass + 18 panel set back 20), 350 deep incl doors (330 carcass):
@@ -44,6 +44,11 @@ Spec text wins over the sketch (3890 run layout, D/W on the sink wall).
 - Tops: Benchtop 1 sink wall (owns both corners), 2 oven wall to the pantry panel, 3 the 3890 wall to 5 past the seen end;
   butt joints at the corners, MA50 on the fronts + seen end.
 - Fixtures: Abi Zalo double bowl + pull-out mixer (with the BSK), generic oven, induction cooktop 600 over the UBO.
+
+## Revisions
+- 2026-10-27 (Mark): BC-06 hinged off the blind panel, blind panel 40+ past BC-07's front, 40 filler between BC-07 and the
+  blind corner; "(TRIAL)" dropped from the note. CAD notes redone as text boxes inside their cabinets. Pantry dims added
+  (TC-02 + TC-06): bottom drawer box base → underside of the next drawer front = **497**.
 
 ## Open
 - Right corner cabinet (TBC). Rangehood model. Microwave model. Fridge overhead height. Door colour. Benchtop product.
