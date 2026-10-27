@@ -80,7 +80,7 @@ import { dbPlaceKit } from './kitPlacement'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
 import { resolveLayerView, type LayerView } from '@/src/lib/displayLayers/resolve'
 import { findLayerSet } from '@/src/lib/displayLayers/legacy'
-import type { LayerSet } from '@/src/lib/displayLayers/registry'
+import type { ItemSetting, LayerSet } from '@/src/lib/displayLayers/registry'
 import LayerManagerPanel from './LayerManagerPanel'
 import CanvasMenubar from './CanvasMenubar'
 import CanvasSidebar from './CanvasSidebar'
@@ -304,8 +304,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Set being edited in the Layer Manager — previewed live on the canvas.
   const [layerPreview, setLayerPreview] = useState<LayerSet | null>(null)
   const shownLayerSet = layerPreview ?? activeLayerSet
-  const planLayers = useMemo(() => resolveLayerView(shownLayerSet, 'plan'),      [shownLayerSet])
-  const elevLayers = useMemo(() => resolveLayerView(shownLayerSet, 'elevation'), [shownLayerSet])
+  // Session layer overrides, never saved to the set (Layers ▸ Show grain match).
+  const [layerOverrides, setLayerOverrides] = useState<Record<string, Partial<ItemSetting>>>({})
+  const planLayers = useMemo(() => resolveLayerView(shownLayerSet, 'plan', layerOverrides),      [shownLayerSet, layerOverrides])
+  const elevLayers = useMemo(() => resolveLayerView(shownLayerSet, 'elevation', layerOverrides), [shownLayerSet, layerOverrides])
   const layers3D   = useMemo(() => resolveLayerView(shownLayerSet, '3d'),        [shownLayerSet])
   const [jobModalTab, setJobModalTab]   = useState<JobPropertiesTab | null>(null)
   const [roomModalTab, setRoomModalTab] = useState<RoomPropertiesTab | null>(null)
@@ -3033,6 +3035,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     handleDeleteCabinet, handleDeleteWall,
     dispatchView, svgSize, fitToWalls, centreRoom, switchView,
     openLayerManager: () => setShowLayerManager(true),
+    grainMatchShown: (canvasView === 'plan' ? planLayers : elevLayers).show('grain_match'),
+    toggleGrainMatch: () => {
+      const on = (canvasView === 'plan' ? planLayers : elevLayers).show('grain_match')
+      setLayerOverrides(o => ({ ...o, grain_match: { visible: !on } }))
+    },
     planGrid, setPlanGrid,
     setJobModalTab, setRoomModalTab,
     openReportModal: (s: ReportScope) => { setReportInitial(undefined); setReportScope(s) },

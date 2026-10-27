@@ -24,6 +24,9 @@ import {
   cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabT,
   cabinetToPlan, cabinetPlanFrame,
 } from '@/src/lib/geometry'
+import { GrainMatchPlanSVG } from './GrainMatchSVG'
+import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
+import { grainMatchColour } from '@/src/lib/grainMatch'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
@@ -98,6 +101,7 @@ export default function PlanViewReportSVG({
   /** Shop drawings: spec blocks went to their own sheet — leave them off and out of the fit. */
   hideSpecBlocks?: boolean
 }) {
+  const gmGroups = useGrainMatchGroups(cabinets[0]?.room_id)
   if (walls.length === 0) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 text-sm py-12">
@@ -456,6 +460,13 @@ export default function PlanViewReportSVG({
           </g>
         )
       })}
+
+      {/* ── Grain match (z_grain_match G2): bar along matched fronts + group tag ── */}
+      {layers.show('grain_match') && (
+        <GrainMatchPlanSVG cabinets={cabinets} walls={walls} groups={gmGroups}
+          colour={g => layers.color('grain_match', grainMatchColour(g))}
+          sw={lw('grain_match', pen('front', P) * 2)} fs={layers.w('grain_match', 2.4 * P)} opacity={layers.op('grain_match')} />
+      )}
 
       {/* ── Door swings + drawer indicators ── */}
       {layers.any('door_swings', 'drawer_lines') && cabinets.flatMap(cab => {

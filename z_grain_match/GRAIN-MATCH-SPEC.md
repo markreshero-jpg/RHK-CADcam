@@ -1,6 +1,6 @@
 # Grain match — spec
 
-**Status:** G1 built 2026-10-27 (data + right-click), in-app check pending. Next: G2.
+**Status:** G1 + G2 built 2026-10-27 (data, right-click, layer), in-app check pending. Next: G3.
 
 ## Why
 
@@ -85,7 +85,12 @@ panel"):
 - Quick toggle: **Layers ▸ Show grain match** flips the item in the active layer
   set view (if the layer API has no per-session override, add one there — check
   in G2, don't add a canvas boolean).
-- Printed elevations follow the layer like everything else.
+- Printed elevations + plan follow the layer like everything else (the shop layer
+  set — the session toggle is canvas-only).
+- Built: `resolveLayerView(set, view, overrides)` takes per-session item overrides
+  (CanvasClient `layerOverrides`); groups shared via `src/lib/grainMatchStore.ts`;
+  marks in `GrainMatchSVG.tsx` (front tint, tag pill, plan bar) used by ElevationSVG,
+  ElevationPrintSVG, CanvasSVG, PlanViewReportSVG. Tag sits on the group's leftmost member.
 
 ## Horizontal grain honoured (G3)
 
@@ -134,7 +139,8 @@ make a vertical drawer bank + a horizontal run, check elevation layer, nest, PDF
 - [x] G1 Data + right-click menu — migration applied, `src/lib/grainMatch.ts`,
   `useGrainMatch.ts`, menu in plan + elevation (not 3D). Headless check
   `z_plan_automation/verify-grain-match-g1.mjs` (create / switch / remove OK). Mark's check pending.
-- [ ] G2 Elevation / plan layer + quick toggle
+- [x] G2 Elevation / plan layer + quick toggle — headless check
+  `z_plan_automation/verify-grain-match-g2.mjs` (screens OK). Mark's check pending.
 - [ ] G3 Horizontal grain in elevation, 3D, nest
 - [ ] G4 Optimiser blocks + split
 - [ ] G5 Sheet / label outputs

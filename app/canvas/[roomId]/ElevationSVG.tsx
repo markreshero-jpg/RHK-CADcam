@@ -44,6 +44,9 @@ import { useLabelMove, LabelBox } from './useLabelMove'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
 import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
+import { GrainMatchFrontSVG, GrainMatchTagSVG, unionRect } from './GrainMatchSVG'
+import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
+import { grainMatchColour, grainMatchTag, grainMatchTagCabs } from '@/src/lib/grainMatch'
 
 // A dragged split line snaps to a fixed-shelf suggestion this close (mm).
 const SPLIT_SNAP = 15
@@ -285,6 +288,7 @@ export default function ElevationSVG({
 }: ElevationSVGProps) {
   // Ghost grain on grained colours (z_material_colours MC11).
   const grainedIds = useGrainedMaterialIds()
+  const gmGroups = useGrainMatchGroups(room.id)
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
   const svgRef = useRef<SVGSVGElement>(null)
@@ -1922,6 +1926,31 @@ export default function ElevationSVG({
                 </g>
               )
             })}
+
+            {/* Grain match (z_grain_match G2): each matched cabinet's fronts tinted in its
+                group colour; the group tag on its leftmost member here. */}
+            {layers.show('grain_match') && gmGroups.length > 0 && (() => {
+              const tagCabs = grainMatchTagCabs(wallCabs, elevX)
+              return wallCabs.map(cab => {
+                const g = cab.grain_match_group_id ? gmGroups.find(x => x.id === cab.grain_match_group_id) : undefined
+                const rp = resolvedParts?.get(cab.id)
+                if (!g || !rp) return null
+                const x0 = elevX(cab), top = roomH - cabBottomZ(cab, room, wall) - cab.dy
+                const rects = rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return it && layers.show(it) }).map(fz => {
+                  const { ex, ey, ew, eh } = zoneElevRect(fz)
+                  return { x: x0 + ex, y: top + cab.dy - ey, w: ew, h: eh }
+                })
+                const col = layers.color('grain_match', grainMatchColour(g))
+                const box = tagCabs.get(g.id) === cab.id ? unionRect(rects) : null
+                const fs = layers.w('grain_match', 12) / z
+                return (
+                  <g key={'gm_' + cab.id}>
+                    {rects.map((r, i) => <GrainMatchFrontSVG key={i} r={r} colour={col} sw={layers.w('grain_match', 2) / lz} opacity={layers.op('grain_match')} />)}
+                    {box && <GrainMatchTagSVG x={box.x + 4 / z} y={box.y + 4 / z} text={grainMatchTag(g)} colour={col} fs={fs} opacity={layers.op('grain_match')} />}
+                  </g>
+                )
+              })
+            })()}
 
             {/* Fixtures & appliances (z_fixtures) — also while placing the first one */}
             {((fixtures && fixtures.length > 0) || (mode === 'place_fixture' && fixtureGhost)) && (

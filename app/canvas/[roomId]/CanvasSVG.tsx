@@ -19,6 +19,9 @@ import {
   cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan, cabinetPlanFrame,
   gridDots,
 } from '@/src/lib/geometry'
+import { GrainMatchPlanSVG } from './GrainMatchSVG'
+import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
+import { grainMatchColour } from '@/src/lib/grainMatch'
 import type { WallSpan } from '@/src/lib/geometry'
 import { fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { footprintEdgesPlan } from '@/src/lib/cabinetShape/footprint'
@@ -229,6 +232,7 @@ export default function CanvasSVG({
   const showTops = layers.show('benchtops')
   const topRings = useMemo(() => showTops ? benchtops.map(bt => outlinePoints(btSegments(bt), 4)) : [], [showTops, benchtops])
   const cx = centroid(walls)
+  const gmGroups = useGrainMatchGroups(cabinets[0]?.room_id)
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = cabinets.filter(c => !c.rule_overrides?.UNDER_PANEL && planShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // an under panel lies under its run
   const dots = planGrid.visible
@@ -1702,6 +1706,13 @@ export default function CanvasSVG({
 
           return nodes
         })}
+
+        {/* ── Grain match (z_grain_match G2): bar along matched fronts + group tag ── */}
+        {layers.show('grain_match') && (
+          <GrainMatchPlanSVG cabinets={cabinets} walls={walls} groups={gmGroups}
+            colour={g => layers.color('grain_match', grainMatchColour(g))}
+            sw={layers.w('grain_match', 4) / lz} fs={layers.w('grain_match', 12) / view.zoom} opacity={layers.op('grain_match')} />
+        )}
 
         {fixturesLayer}
 

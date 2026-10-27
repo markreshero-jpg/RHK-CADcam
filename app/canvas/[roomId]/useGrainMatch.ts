@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, Wall } from '@/src/lib/types'
 import {
   grainArrow, grainMatchBlocker, nextGrainMatchName,
   type GrainMatchDirection, type GrainMatchGroup,
 } from '@/src/lib/grainMatch'
+import { useGrainMatchStore } from '@/src/lib/grainMatchStore'
 import type { ContextMenuItem, ContextMenuSubItem } from './canvasTypes'
 
 // Grain match groups (z_grain_match G1): load the room's groups and build the
@@ -22,7 +23,8 @@ interface GrainMatchParams {
 }
 
 export function useGrainMatch({ roomId, walls, cabinets, setCabinets, setContextMenu, setToast }: GrainMatchParams) {
-  const [groups, setGroups] = useState<GrainMatchGroup[]>([])
+  const groups = useGrainMatchStore(s => s.byRoom[roomId]) ?? []
+  const setGroups = (gs: GrainMatchGroup[] | ((gs: GrainMatchGroup[]) => GrainMatchGroup[])) => useGrainMatchStore.getState().setRoom(roomId, gs)
 
   useEffect(() => {
     let live = true
@@ -35,7 +37,7 @@ export function useGrainMatch({ roomId, walls, cabinets, setCabinets, setContext
       const all = (gs ?? []) as GrainMatchGroup[]
       const empty = all.filter(g => !usedIds.has(g.id)).map(g => g.id)
       if (empty.length) await supabase.from('grain_match_groups').delete().in('id', empty)
-      if (live) setGroups(all.filter(g => usedIds.has(g.id)))
+      if (live) useGrainMatchStore.getState().setRoom(roomId, all.filter(g => usedIds.has(g.id)))
     })()
     return () => { live = false }
   }, [roomId])

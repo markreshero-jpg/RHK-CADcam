@@ -99,12 +99,16 @@ export function effectiveSetting(vs: ViewLayerSettings | undefined, id: string, 
   return { ...base, ...(vs?.items?.[id] ?? (legacyId ? vs?.items?.[legacyId] : undefined) ?? {}) }
 }
 
-export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId): LayerView {
+/**
+ * `overrides`: per-session item settings on top of the set (e.g. Layers ▸ Show grain
+ * match) — never saved to the set.
+ */
+export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId, overrides?: Record<string, Partial<ItemSetting>>): LayerView {
   const vs = set?.settings[view]
   const cache = new Map<string, ItemSetting>()
   const setting = (id: string) => {
     let s = cache.get(id)
-    if (!s) { s = effectiveSetting(vs, id, view); cache.set(id, s) }
+    if (!s) { s = { ...effectiveSetting(vs, id, view), ...overrides?.[id] }; cache.set(id, s) }
     return s
   }
   return {

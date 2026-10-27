@@ -41,6 +41,9 @@ import { annotLayerItem, annotationFramePoints, mapPt } from '@/src/lib/annotati
 import { resolveStyle } from '@/src/lib/annotations/style'
 import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
 import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
+import { GrainMatchFrontSVG, GrainMatchTagSVG, unionRect } from './GrainMatchSVG'
+import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
+import { grainMatchColour, grainMatchTag, grainMatchTagCabs } from '@/src/lib/grainMatch'
 import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
 import { FillPatternDef, fillPaint } from './FillPattern'
 
@@ -160,6 +163,7 @@ export default function ElevationPrintSVG({
 }) {
   // Ghost grain on grained colours (z_material_colours MC11).
   const grainedIds = useGrainedMaterialIds()
+  const gmGroups = useGrainMatchGroups(room.id)
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
   const P = scale
@@ -726,6 +730,29 @@ export default function ElevationPrintSVG({
 
       {/* Cabinets */}
       {wallCabs.map(renderCab)}
+
+      {/* Grain match (z_grain_match G2): matched fronts tinted, group tag on the leftmost member. */}
+      {layers.show('grain_match') && gmGroups.length > 0 && (() => {
+        const tagCabs = grainMatchTagCabs(wallCabs, elevX)
+        return wallCabs.map(cab => {
+          const g = cab.grain_match_group_id ? gmGroups.find(x => x.id === cab.grain_match_group_id) : undefined
+          const rp = resolvedParts?.get(cab.id)
+          if (!g || !rp) return null
+          const x0 = elevX(cab), top = roomH - cabBottomZ(cab, room, wall) - cab.dy
+          const rects = rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return it && layers.show(it) }).map(fz => {
+            const { ex, ey, ew, eh } = zoneElevRect(fz)
+            return { x: x0 + ex, y: top + cab.dy - ey, w: ew, h: eh }
+          })
+          const col = layers.color('grain_match', grainMatchColour(g))
+          const box = tagCabs.get(g.id) === cab.id ? unionRect(rects) : null
+          return (
+            <g key={'gm_' + cab.id}>
+              {rects.map((r, i) => <GrainMatchFrontSVG key={i} r={r} colour={col} sw={lw('grain_match', partSW)} opacity={layers.op('grain_match')} />)}
+              {box && <GrainMatchTagSVG x={box.x + P} y={box.y + P} text={grainMatchTag(g)} colour={col} fs={layers.w('grain_match', dimFs)} opacity={layers.op('grain_match')} />}
+            </g>
+          )
+        })
+      })()}
 
       {/* Benchtops on this face — over the cabinets, under the sinks / taps */}
       {btInfo && benchtops.length > 0 && (

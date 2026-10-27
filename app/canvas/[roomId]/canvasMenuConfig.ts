@@ -33,6 +33,9 @@ export interface MenuActions {
   switchView:   (v: CanvasView) => void
   // Display layers
   openLayerManager: () => void
+  /** Layers ▸ Show grain match (z_grain_match G2): session toggle of the grain_match item. */
+  grainMatchShown:  boolean
+  toggleGrainMatch: () => void
   // Plan reference grid (per-user, localStorage)
   planGrid:       PlanGridPrefs
   setPlanGrid:    (next: PlanGridPrefs) => void
@@ -91,6 +94,8 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
     ]},
     { label: 'Layers', items: [
       { label: 'Manage Layers…', action: () => a.openLayerManager() },
+      null,
+      { label: 'Show grain match', checked: a.grainMatchShown, action: a.toggleGrainMatch },
       null,
       { label: 'Show Grid', checked: a.planGrid.visible,
         action: () => a.setPlanGrid({ ...a.planGrid, visible: !a.planGrid.visible }) },

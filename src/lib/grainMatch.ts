@@ -38,3 +38,26 @@ export function grainMatchBlocker(cabs: CabinetInstance[], walls: Wall[]): strin
   if (new Set(cabs.map(c => cabWallSide(c, wall))).size > 1) return 'one wall side only'
   return null
 }
+
+// Group colours for the grain_match layer (z_grain_match G2), by GM number.
+const GM_COLOURS = ['#f59e0b', '#ec4899', '#14b8a6', '#8b5cf6', '#ef4444', '#22c55e', '#3b82f6', '#eab308']
+
+export function grainMatchColour(g: Pick<GrainMatchGroup, 'name'>): string {
+  const n = Number(/^GM(\d+)$/.exec(g.name)?.[1] ?? 1)
+  return GM_COLOURS[(Math.max(1, n) - 1) % GM_COLOURS.length]
+}
+
+/** `GM1 ↕` */
+export const grainMatchTag = (g: GrainMatchGroup) => `${g.name} ${grainArrow(g.direction)}`
+
+/** Group → the member that carries its tag in a view: the leftmost by `x` (cabinets in view order). */
+export function grainMatchTagCabs(cabs: CabinetInstance[], x: (c: CabinetInstance) => number): Map<string, string> {
+  const best = new Map<string, { id: string; x: number }>()
+  for (const c of cabs) {
+    const gid = c.grain_match_group_id
+    if (!gid) continue
+    const cx = x(c), b = best.get(gid)
+    if (!b || cx < b.x) best.set(gid, { id: c.id, x: cx })
+  }
+  return new Map([...best].map(([gid, b]) => [gid, b.id]))
+}
