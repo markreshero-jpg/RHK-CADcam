@@ -1000,7 +1000,7 @@ export const LESSONS: TutorialLesson[] = [
     blurb: 'A plan of just the walls, tops, edges and appliances, plus a schedule — for a stone quote.',
     keywords: 'benchtop stone mason stonemason quote report plan edge profile cutout schedule layer set', steps: [
     { id: 'layer', title: 'Look at it on the canvas',
-      body: 'In Plan, pick the Benchtops layer set from the layer set dropdown in the header. You see the walls, each top with its name and edge lengths, the edge profile codes, sinks / hobs / appliances and your CAD notes; cabinets are faint outlines. Fix anything that looks wrong before you print.',
+      body: 'In Plan, pick the Benchtops layer set from the layer set dropdown in the header. You see the walls, each top with its name and edge lengths, the edge profile codes, sinks / hobs / appliances and your CAD notes, with no cabinets. Fix anything that looks wrong before you print.',
       canvas: true, done: () => true },
     { id: 'open', title: 'Open Room Reports',
       body: 'Click Reports in the menu bar and choose Room Reports…',
