@@ -178,6 +178,7 @@ export function normalizeProject(
       part_type_key: naming.typeKey,
       w: dims?.w ?? Number(row.dx), h: dims?.h ?? Number(row.dy), thickness: dims?.thickness ?? Number(row.dz),
       ...ebOut,
+      ...(ebOn ? { eb_on: ebOn } : {}),
       ...(tapeMissing ? { eb_missing: true } : {}),
       ...(bandMm > 0 ? { eb_tape: tapeRuns(tapeIdOf(table, row), bandMm) } : {}),
       material_id: (row.material_id as string) ?? null,

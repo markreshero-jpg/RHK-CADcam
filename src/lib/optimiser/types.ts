@@ -37,6 +37,10 @@ export interface OptiPart {
   // True when a banded edge's tape thickness couldn't be resolved — the optimiser
   // flags these parts when "deduct edgebanding" is on (deduction would be short).
   eb_missing: boolean
+  // Which sides are banded (w1, w2, h1, h2), kept when the tape is 0 mm (a
+  // sprayed round-over, no tape) or unknown — labels draw the edges from this.
+  // Absent = fall back to eb_* > 0.
+  eb_on?: import('./edgebandLength').EbSides
   // Finished banded length (mm) per edgeband product — the edgeband length
   // report (O7, edgebandLength.ts). Absent / empty = not banded.
   eb_tape?: import('./edgebandLength').TapeRun[]

@@ -386,8 +386,10 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       lab.setFont('helvetica', 'bold'); fitText(p.label, 9, 19.5, 44, 11, 6.5)
       lab.setFont('helvetica', 'normal'); fitText(matName(p.material_id) ?? '', 3, 24.5, 49, 8.5, 6)
       fitText(colourName.get(p.material_id ?? '') ?? '', 3, 28.5, 49, 8.5, 6)
-      const lEdges = (p.eb_w1 > 0 ? 1 : 0) + (p.eb_w2 > 0 ? 1 : 0)
-      const wEdges = (p.eb_h1 > 0 ? 1 : 0) + (p.eb_h2 > 0 ? 1 : 0)
+      // Banded sides from eb_on, so a 0 mm "no tape" band (sprayed round-over) still shows.
+      const [onW1, onW2, onH1, onH2] = p.eb_on ?? [p.eb_w1 > 0, p.eb_w2 > 0, p.eb_h1 > 0, p.eb_h2 > 0]
+      const lEdges = (onW1 ? 1 : 0) + (onW2 ? 1 : 0)
+      const wEdges = (onH1 ? 1 : 0) + (onH2 ? 1 : 0)
       const tapes = [...new Set((p.eb_tape ?? []).map(t => (t.id && tapeName.get(t.id)) || ''))].filter(Boolean).join(', ')
       const edging = lEdges + wEdges ? `${lEdges}L ${wEdges}W${tapes ? ` - ${tapes}` : ''}` : 'None'
       lab.setFontSize(7.5); lab.text('Edging:', 3, 35); lab.line(3, 35.6, 3 + lab.getTextWidth('Edging:'), 35.6)
@@ -422,15 +424,15 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         const on = (a: number, b: number, v: number) => Math.abs(a - v) < T && Math.abs(b - v) < T
         poly.forEach((a, i) => {
           const b = poly[(i + 1) % poly.length]
-          const tag = p.shape!.op_tape?.[i]
-          const tape = tag != null ? tag : on(a.x, b.x, 0) ? p.eb_w1 : on(a.x, b.x, p.w) ? p.eb_w2 : on(a.y, b.y, 0) ? p.eb_h1 : on(a.y, b.y, p.h) ? p.eb_h2 : 0
-          edge(P(a.x - blank.sx, a.y - blank.sy), P(b.x - blank.sx, b.y - blank.sy), tape > 0)
+          const tag = p.shape!.op_band?.[i] ?? (p.shape!.op_tape?.[i] != null ? p.shape!.op_tape![i]! > 0 : null)
+          const taped = tag != null ? tag : on(a.x, b.x, 0) ? onW1 : on(a.x, b.x, p.w) ? onW2 : on(a.y, b.y, 0) ? onH1 : on(a.y, b.y, p.h) ? onH2 : false
+          edge(P(a.x - blank.sx, a.y - blank.sy), P(b.x - blank.sx, b.y - blank.sy), taped)
         })
       } else {
-        edge(P(0, 0), P(0, Hc), p.eb_w1 > 0)
-        edge(P(Wc, 0), P(Wc, Hc), p.eb_w2 > 0)
-        edge(P(0, 0), P(Wc, 0), p.eb_h1 > 0)
-        edge(P(0, Hc), P(Wc, Hc), p.eb_h2 > 0)
+        edge(P(0, 0), P(0, Hc), onW1)
+        edge(P(Wc, 0), P(Wc, Hc), onW2)
+        edge(P(0, 0), P(Wc, 0), onH1)
+        edge(P(0, Hc), P(Wc, Hc), onH2)
       }
       // Holes: sheet → placement-local → footprint (undo the placement turn).
       lab.setFillColor(0)
