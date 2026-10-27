@@ -116,7 +116,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       const gk = materialGroupKey(p.material_id, p.thickness)
       if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(p.material_id), offcuts: [] }
       const dims = cutBlank(p, deductEb)
-      const inst: NestPartInput = { uid: `${p.uid}#0`, baseUid: p.uid, label: p.label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
+      const inst: NestPartInput = { uid: `${p.uid}#0`, baseUid: p.uid, label: p.label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, grainAcross: p.grain_across, priority: p.nest_priority }
       parts.push(inst); index[inst.uid] = inst
     }
     const margins = buildMargins(snap, profileId)
@@ -306,7 +306,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         const bw = pl.w * s - 1.5, bh = pl.h * s
         const no = String(noByUid.get(pl.uid))
         const cutW = pl.rotated ? pl.h : pl.w, cutH = pl.rotated ? pl.w : pl.h
-        const lines = [`${p.cabinet_label}  ${p.label}`, `${Math.round(cutH * 10) / 10} × ${Math.round(cutW * 10) / 10}${pl.rotated ? '  ⟲' : ''}`]
+        const lines = [`${p.cabinet_label}  ${p.label}`, `${Math.round(cutH * 10) / 10} × ${Math.round(cutW * 10) / 10}${pl.rotated ? '  ⟲' : ''}${p.grain_across ? ' grain across' : ''}`]
         const fit = (txt: string, max: number, min: number) => {
           let fs = max
           doc.setFontSize(fs)
@@ -328,7 +328,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         })
       }
       doc.setFontSize(7); doc.setTextColor(110)
-      doc.text('Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  Red circles = drilling.', M, PH - M + 3)
+      doc.text('Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  "grain across" = grain runs along the width (horizontal grain match).  Red circles = drilling.', M, PH - M + 3)
       doc.setTextColor(0)
     })
 
@@ -446,9 +446,9 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       // Sizes: width up the left (across grain), length under (with grain).
       lab.setFont('helvetica', 'bold'); lab.setFontSize(11)
       lab.text(String(wid), 58.5, AY + AH / 2, { angle: 270, align: 'center' })
-      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text('Across Grain', 55, AY + AH / 2, { angle: 270, align: 'center' })
+      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text(p.grain_across ? 'With Grain' : 'Across Grain', 55, AY + AH / 2, { angle: 270, align: 'center' })
       lab.setFont('helvetica', 'bold'); lab.setFontSize(11); lab.text(String(len), AX + AW / 2, 40.5, { align: 'center' })
-      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text('With Grain', AX + AW / 2, 43.5, { align: 'center' })
+      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text(p.grain_across ? 'Across Grain' : 'With Grain', AX + AW / 2, 43.5, { align: 'center' })
     }))
     writeFileSync(join(outDir, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
 

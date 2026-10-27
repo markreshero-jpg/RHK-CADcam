@@ -7,7 +7,7 @@
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
 import { Suspense, useState, useEffect, useMemo, useRef, createContext, useContext } from 'react'
-import { GrainContext, boxGrainMaps, singleGrainMap, grainExtents, shapedGrainMaps } from './woodGrain'
+import { GrainContext, FrontGrainAcrossContext, boxGrainMaps, singleGrainMap, grainExtents, shapedGrainMaps } from './woodGrain'
 import * as THREE from 'three'
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
@@ -563,15 +563,16 @@ export function Part({
   // grainExtents; shaped parts per shapedGrainMaps).
   const grainIds = useContext(GrainContext)
   const grainOn = !wire && !!meta.materialId && grainIds.has(meta.materialId)
+  const grainAcross = useContext(FrontGrainAcrossContext) && meta.id.startsWith('zone_')
   const grainMaps = useMemo(() => {
     if (!grainOn) return null
     if (shapeGeom && !csgGeom) return shapedGrainMaps(shape?.extrude, meta.panelKind, meta.id)
     if (shapeGeom) return null   // shaped + pocket cuts: single flat material
-    const ext = grainExtents(meta.panelKind, meta.id)
+    const ext = grainAcross ? { grain: 'w' as const, thick: 'd' as const } : grainExtents(meta.panelKind, meta.id)
     return csgGeom
       ? [singleGrainMap(core.w, core.h, core.d, ext.grain, ext.thick)]
       : boxGrainMaps(core.w, core.h, core.d, ext.grain, ext.thick)
-  }, [grainOn, csgGeom, shapeGeom, shape?.extrude, meta.panelKind, meta.id, core.w, core.h, core.d])
+  }, [grainOn, grainAcross, csgGeom, shapeGeom, shape?.extrude, meta.panelKind, meta.id, core.w, core.h, core.d])
   useEffect(() => () => { grainMaps?.forEach(t => t?.dispose()) }, [grainMaps])
 
   // The edge targets (selected part, edge-banding on) — in solid and wire alike.

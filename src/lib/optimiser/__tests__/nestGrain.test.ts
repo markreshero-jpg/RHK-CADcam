@@ -32,4 +32,14 @@ describe('nest grain', () => {
     const r = run({ ...door(false), w: 300, h: 500 }, sheet(), true)
     expect(r.sheets[0].placements[0].rotated).toBe(false)
   })
+  // Horizontal grain match fronts (z_grain_match G3): grain along w, so the
+  // nest takes the other orientation — a wide drawer front runs along a W-grain sheet as-is.
+  it('a grainAcross front keeps its width along a W-grain sheet', () => {
+    const r = run({ ...door(true), w: 900, h: 300, grainAcross: true }, sheet(), true)
+    expect(r.sheets[0].placements[0]).toMatchObject({ w: 900, h: 300, rotated: false })
+  })
+  it('a grainAcross front is turned on an H-grain sheet', () => {
+    const r = run({ ...door(true), w: 900, h: 300, grainAcross: true }, sheet('h'), true)
+    expect(r.sheets[0].placements[0]).toMatchObject({ w: 300, h: 900, rotated: true })
+  })
 })

@@ -15,6 +15,9 @@ import { GRAIN_TILE, grainLines } from '@/src/lib/grainLines'
 // Material ids that render with the generic grain. Provided by the scene that
 // knows the material colours (CabinetScene); empty = no grain anywhere.
 export const GrainContext = createContext<ReadonlySet<string>>(new Set())
+// The cabinet's fronts run their grain across (a horizontal grain match group,
+// z_grain_match G3): face-zone parts turn their grain to the box width.
+export const FrontGrainAcrossContext = createContext(false)
 
 // The tile: white (= the exact face colour) with the shared grain lines
 // (src/lib/grainLines.ts) drawn in thin dark grey. Grain runs along v.

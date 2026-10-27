@@ -64,7 +64,9 @@ export interface RawProject { id: string; name: string; job_number: string | nul
 export interface RawRoom { id: string; name: string }
 export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null
   // resolved_drawer_hw->warnings (saved resolver warnings, z_material_colours MC5)
-  warnings?: { code?: string; message?: string; material_id?: string }[] | null }
+  warnings?: { code?: string; message?: string; material_id?: string }[] | null
+  // Grain match group (z_grain_match), embedded via grain_match_group_id.
+  grain_match?: { id: string; name: string; direction: string } | null }
 type Row = Record<string, unknown>
 
 export interface NormalizedProject {
@@ -96,8 +98,10 @@ export function normalizeProject(
     // Angled panel-to-panel joints left for hand fixing (HAND_FIX_JOINT).
     const hand_fix = (Array.isArray(c.warnings) ? c.warnings : [])
       .filter(w => w.code === 'HAND_FIX_JOINT' && w.message).map(w => w.message!)
+    const gm = c.grain_match
     return { id: c.id, label: c.label ?? humanize(c.assembly_class), room_id: c.room_id,
-      ...(colour_warnings.length ? { colour_warnings } : {}), ...(hand_fix.length ? { hand_fix } : {}) }
+      ...(colour_warnings.length ? { colour_warnings } : {}), ...(hand_fix.length ? { hand_fix } : {}),
+      ...(gm ? { grain_match: { id: gm.id, name: gm.name, direction: gm.direction === 'horizontal' ? 'horizontal' as const : 'vertical' as const } } : {}) }
   })
   const cabById = new Map(cabinets.map(c => [c.id, c]))
   // Assembly-level no_cnc cascades to ALL of a cabinet's parts (standard + custom).
@@ -334,6 +338,11 @@ export function normalizeProject(
       { typeKey: String(r.face_type), base: humanize(String(r.face_type)),
         suffix: ` (${zoneRef(zref)}${mitre ? `, ${mitre}` : ''})` },
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
+    // A front in a horizontal grain match group (z_grain_match G3) runs its grain
+    // across its width: the nest turns it (a true quarter turn, so its drilling
+    // turns with it) rather than swapping w/h here.
+    const last = parts[parts.length - 1]
+    if (last?.source_part_id === r.id && cabById.get(String(r.cabinet_instance_id))?.grain_match?.direction === 'horizontal') last.grain_across = true
   }
   // Drawer box panels — key mirrors svgDbMeta / Cabinet3DView (db_<row>_<col>_<part_type>),
   // the same identity the PartEditor writes to part_operations.source_part_key and that

@@ -1,6 +1,6 @@
 # Grain match — spec
 
-**Status:** G1 + G2 built 2026-10-27 (data, right-click, layer), in-app check pending. Next: G3.
+**Status:** G1–G3 built 2026-10-27 (data, right-click, layer, horizontal grain), G2/G3 in-app checks pending. Next: G4.
 
 ## Why
 
@@ -99,9 +99,17 @@ GrainSVG fronts hardcode `'v'`; 3D `grainExtents` goes by part kind). With a gro
 
 - Elevation `GrainSVG` + print: `dir = group.direction === 'horizontal' ? 'h' : 'v'`.
 - 3D `woodGrain`: matched fronts in a horizontal group run along their width.
-- Optimiser: horizontal-group fronts nest **turned** (h = along the grain = the
-  front's width), same mechanism as `fprail:`/`ibp:` in `normalize.ts`, so drilling
-  / handle holes project correctly.
+- Optimiser: horizontal-group fronts nest **turned**. NOT the `fprail:`/`ibp:` w↔h swap
+  in normalize (that transposes — mirrors — the op frame; fine for rails with no
+  machining, wrong for drilled fronts). Built instead: `OptiPart.grain_across` (set in
+  normalize from `OptiCabinet.grain_match`, embedded in the snapshot cabinet query) →
+  `NestPartInput.grainAcross` → `grainOrient` takes the other orientation. That is the
+  placement's true quarter turn, which drills / outlines / labels already follow.
+  Checked headless on Test Kitchen BC-01: unturned on a W-grain sheet, hinge cups on
+  the hinge edges, no G-code errors.
+- Built (elevation / print / 3D): `frontGrainDir(cab)` in ElevationSVG +
+  ElevationPrintSVG; `FrontGrainAcrossContext` (woodGrain.ts) provided per cabinet by
+  CabinetScene, PartViewer turns zone_* grain to the box width.
 
 ## Optimiser (G4)
 
@@ -141,7 +149,8 @@ make a vertical drawer bank + a horizontal run, check elevation layer, nest, PDF
   `z_plan_automation/verify-grain-match-g1.mjs` (create / switch / remove OK). Mark's check pending.
 - [x] G2 Elevation / plan layer + quick toggle — headless check
   `z_plan_automation/verify-grain-match-g2.mjs` (screens OK). Mark's check pending.
-- [ ] G3 Horizontal grain in elevation, 3D, nest
+- [x] G3 Horizontal grain in elevation, 3D, nest — `verify-grain-match-g3.mjs`,
+  `grain-match-set.cjs` (test helper), nestGrain tests. Mark's check pending.
 - [ ] G4 Optimiser blocks + split
 - [ ] G5 Sheet / label outputs
 - [ ] G6 Tutorial + in-app check

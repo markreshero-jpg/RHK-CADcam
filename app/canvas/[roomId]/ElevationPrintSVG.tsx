@@ -164,6 +164,8 @@ export default function ElevationPrintSVG({
   // Ghost grain on grained colours (z_material_colours MC11).
   const grainedIds = useGrainedMaterialIds()
   const gmGroups = useGrainMatchGroups(room.id)
+  // Fronts in a horizontal grain match group run their grain across (z_grain_match G3).
+  const frontGrainDir = (c: CabinetInstance): 'h' | 'v' => gmGroups.find(g => g.id === c.grain_match_group_id)?.direction === 'horizontal' ? 'h' : 'v'
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
   const P = scale
@@ -399,7 +401,7 @@ export default function ElevationPrintSVG({
               if (!it || !layers.show(it) || !grainOn(fz.material_id)) return null
               const { ex, ey, ew, eh } = zoneElevRect(fz)
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-              return <GrainSVG key={`fzg-${i}`} x={x} y={y} w={w} h={h} dir="v" {...grainProps} />
+              return <GrainSVG key={`fzg-${i}`} x={x} y={y} w={w} h={h} dir={frontGrainDir(cab)} {...grainProps} />
             })}
 
             {/* Handles (z_handles H2) — on the fronts that are drawn */}

@@ -23,6 +23,7 @@ export interface NestPartInput {
   thickness: number
   materialId: string | null
   grainLock: boolean     // true → orientation fixed to the sheet's grain (h = along the grain)
+  grainAcross?: boolean  // grain runs along w instead (horizontal grain match fronts, z_grain_match G3)
   priority: number       // higher places earlier within its group
 }
 
@@ -79,10 +80,11 @@ const EPS = 1e-6
 
 // The one orientation a grain-locked part may take on this sheet: parts carry
 // h = along the grain, so on a sheet whose grain runs along W they're turned a
-// quarter (w ↔ h, rotated). Free parts → null (either orientation is fine).
-export function grainOrient(part: { w: number; h: number; grainLock: boolean }, stock: SheetStock): { w: number; h: number; rotated: boolean } | null {
+// quarter (w ↔ h, rotated). grainAcross parts carry the grain along w, so they
+// take the other orientation. Free parts → null (either orientation is fine).
+export function grainOrient(part: { w: number; h: number; grainLock: boolean; grainAcross?: boolean }, stock: SheetStock): { w: number; h: number; rotated: boolean } | null {
   if (!part.grainLock) return null
-  return (stock.grainAlong ?? 'w') === 'h'
+  return ((stock.grainAlong ?? 'w') === 'h') !== !!part.grainAcross
     ? { w: part.w, h: part.h, rotated: false }
     : { w: part.h, h: part.w, rotated: true }
 }

@@ -722,7 +722,7 @@ function Stage4Nesting() {
         if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(snap, p.material_id), offcuts: [] }
         const dims = cutBlank(p, deductEb)
         for (let i = 0; i < qty; i++) {
-          const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, priority: p.nest_priority }
+          const inst: NestPartInput = { uid: `${p.uid}#${i}`, baseUid: p.uid, label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, grainAcross: p.grain_across, priority: p.nest_priority }
           parts.push(inst); index[inst.uid] = inst
         }
       }

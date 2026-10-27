@@ -21,9 +21,9 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   const roomIds = rooms.map(r => r.id)
 
   const { data: cabsRaw } = roomIds.length
-    ? await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc,part_no_cnc,part_hide_views,part_pos_overrides,warnings:resolved_drawer_hw->warnings').in('room_id', roomIds)
+    ? await supabase.from('cabinet_instances').select('id,label,assembly_class,room_id,part_comments,part_names,no_cnc,part_no_cnc,part_hide_views,part_pos_overrides,warnings:resolved_drawer_hw->warnings,grain_match:grain_match_groups(id,name,direction)').in('room_id', roomIds)
     : { data: [] }
-  const cabs = (cabsRaw ?? []) as (RawCabinet & { part_comments?: PartKeyMap | null; part_names?: PartKeyMap | null; part_pos_overrides?: Record<string, SizeOv> | null })[]
+  const cabs = (cabsRaw ?? []) as unknown as (RawCabinet & { part_comments?: PartKeyMap | null; part_names?: PartKeyMap | null; part_pos_overrides?: Record<string, SizeOv> | null })[]
   const cabIds = cabs.map(c => c.id)
   const commentsByCab = new Map<string, PartKeyMap>(cabs.map(c => [c.id, c.part_comments ?? {}]))
   const namesByCab = new Map<string, PartKeyMap>(cabs.map(c => [c.id, c.part_names ?? {}]))

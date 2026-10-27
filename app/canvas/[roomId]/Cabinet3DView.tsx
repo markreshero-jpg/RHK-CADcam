@@ -1,7 +1,8 @@
 'use client'
 
 import PartInfoCard from './PartInfoCard'
-import { GrainContext } from '@/src/components/three/woodGrain'
+import { GrainContext, FrontGrainAcrossContext } from '@/src/components/three/woodGrain'
+import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
 import { useRef, useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import * as THREE from 'three'
@@ -1209,6 +1210,8 @@ export function CabinetScene({
   // "Ghost" style / opacity in 3D (Phase 3c): material alpha per display item.
   const alpha = (id: string) => layers ? layers.alpha(id) : 1
   const showDrilling = showDrillingProp && show('machining')
+  const gmGroups = useGrainMatchGroups(cab.room_id)
+  const frontsAcross = gmGroups.find(g => g.id === cab.grain_match_group_id)?.direction === 'horizontal'
   const { dx, dy, dz } = cab
   const dragRef = useRef(false)
   const hlSet   = highlightPartKeys ? new Set(highlightPartKeys) : null
@@ -1366,6 +1369,7 @@ export function CabinetScene({
     .filter(([, v]) => typeof v === 'object' && v.grain).map(([k]) => k))
   return (
     <GrainContext.Provider value={grainIds}>
+    <FrontGrainAcrossContext.Provider value={frontsAcross}>
     <group position={[-dx / 2, -dy / 2, -dz / 2]}>
       {showDrilling && handMarkers.length > 0 && (
         <HandOpMarkers3D markers={handMarkers} csgPartKeys={new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_')))} />
@@ -1802,6 +1806,7 @@ export function CabinetScene({
         <SlideDrillMarkers drills={hingeDrills} wire={wire} color={palette.hinges} />
       )}
     </group>
+    </FrontGrainAcrossContext.Provider>
     </GrainContext.Provider>
   )
 }

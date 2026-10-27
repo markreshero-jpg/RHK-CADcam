@@ -46,6 +46,8 @@ export interface OptiPart {
   eb_tape?: import('./edgebandLength').TapeRun[]
   material_id: string | null
   grain_direction: string | null
+  // Grain runs along w, not h (a front in a horizontal grain match group, z_grain_match G3).
+  grain_across?: boolean
   nest_priority: number
   output_to_cnc: boolean
   comment: string | null      // from cabinet_instances.part_comments[part_key]
@@ -133,6 +135,8 @@ export interface OptiCabinet {
   colour_warnings?: { material_id: string; message: string }[]
   // Saved HAND_FIX_JOINT warnings: angled panel-to-panel joints with no CNC holes.
   hand_fix?: string[]
+  // Grain match group its fronts belong to (z_grain_match).
+  grain_match?: { id: string; name: string; direction: 'vertical' | 'horizontal' }
 }
 
 // Everything the server hands the client at load.
