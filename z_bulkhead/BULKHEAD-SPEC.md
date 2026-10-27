@@ -11,7 +11,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
+> **RESUME HERE** → B8 angled ends built 2026-10-27 (no schema change), check pending.
+> B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
 > migration_c7; no schema change) — in-app check pending, with B5. B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
 ---
@@ -147,6 +148,18 @@ underside when the bulkhead isn't sitting on cabinets.
       width (not round the returns yet). Curved bulkhead (BHCRVFIXP,
       z_curved_end C7): the rail follows the front, the curve and the side.
       Not for `kind: 'shadowline'`.
+- [~] **B8 — angled ends** (built 2026-10-27, in-app check pending) (Mark, 2026-10-27,
+      RHK6586 Bed 1 robe: "I just want the outline to not overlap the wall" where
+      the robe bulkhead ends on a 45° wall). `bulkhead.left/right.angle` (deg, 0 =
+      square, max 75): the end line runs through the fascia's front corner at that
+      angle (+ = the wall closes in behind the end). Fascia end bevelled to it
+      (bevel_lo / bevel_hi = angle, end not taped — scribed); that end gets no
+      return; cleat legs, bottom return and split rail stop at the line at their
+      deepest point (cut square, hand-fixed). Plan outline = trapezoid via
+      `bulkheadOutline` in `cabinetCornerPts` (canvas plan, printed plan, marquee);
+      it assumes a 20 front (18 door + 2) for "flush with doors", so it errs off
+      the wall. Sidebar: Left / Right end angle °. Not automatic from the wall
+      yet; not for shadowlines or curved bulkheads. Tutorial `bulkhead_angled_end`.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 

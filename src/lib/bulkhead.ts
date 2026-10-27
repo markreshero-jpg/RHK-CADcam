@@ -19,7 +19,11 @@ import { wallCabTop } from './geometry'
 
 export type BulkheadKind = 'bulkhead' | 'shadowline'
 export type BulkheadJoint = 'mitre' | 'butt'
-export interface BulkheadReturn { on: boolean; depth: number; joint: BulkheadJoint }
+/** `angle` (left / right ends only, degrees, 0 = square): the end meets a wall
+ *  that isn't square to the run. The fascia end is cut to it, nothing behind
+ *  the fascia runs past the wall line, and that end gets no return. + = the
+ *  wall closes in behind the end (the back is shorter than the front). */
+export interface BulkheadReturn { on: boolean; depth: number; joint: BulkheadJoint; angle?: number }
 /** Shadowline split (B7): a flat rail of its own board under the bulkhead, its
  *  front edge `setback` behind the bulkhead face, `width` deep. The bulkhead
  *  builds above it, so a rail-thickness × setback recess shows. */
@@ -38,6 +42,7 @@ export interface BulkheadSettings {
 }
 
 export const BH_RETURN_DEPTH = 600
+export const BH_MAX_END_ANGLE = 75
 // Two 100 mm legs; a bulkhead lower than this has no room for one.
 export const BH_CLEAT_LEG = 100
 export const SL_WIDTH = 60
@@ -69,6 +74,7 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
     on: x?.on ?? d.on,
     depth: x?.depth != null && x.depth > 0 ? x.depth : d.depth,
     joint: x?.joint === 'butt' ? 'butt' : 'mitre',
+    ...(x?.angle != null && x.angle > 0 ? { angle: Math.min(x.angle, BH_MAX_END_ANGLE) } : {}),
   })
   return {
     kind:   sl ? 'shadowline' : 'bulkhead',

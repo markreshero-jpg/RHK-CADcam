@@ -1051,6 +1051,15 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In Nesting and Editing each block has a dashed outline in its group colour and a GM1 tag. In Editing, dragging any matched front drags the whole block, and Move to sheet takes the whole block. A matched front can\'t be rotated on its own. Deleting or cutting one out breaks it from the block (a notice says so). Click a front to see "Grain match GM1 · 3 of 6", its place in the group, left to right then top to bottom.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
+
+  // Appended 2026-10-27 (z_bulkhead B8 — angled bulkhead ends).
+  { id: 'bulkhead_angled_end', level: 'intermediate', topic: 'cabinets', title: 'End a bulkhead at an angled wall',
+    blurb: 'Where a run ends against a wall that isn\'t square (e.g. 45°), cut the bulkhead\'s end to the wall so it doesn\'t cross it.',
+    keywords: 'bulkhead angled end 45 degree wall angle scribe fascia outline overlap BH', steps: [
+    { id: 'angle', title: 'Type the end angle',
+      body: 'Select the bulkhead (BH). Size its width to where its front face meets the angled wall. In the bulkhead section, type the wall\'s angle (e.g. 45) in Left end angle ° or Right end angle °. The plan outline now runs along the wall, the fascia end is cut to the wall, and the cleat behind stops at the wall. An angled end has no return. Type 0 to put it back square.',
+      canvas: true, done: c => c.cabinets.some(cab => !!(cab.bulkhead?.left?.angle || cab.bulkhead?.right?.angle)) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

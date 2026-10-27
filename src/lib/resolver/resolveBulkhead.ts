@@ -52,7 +52,16 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   // The doors actually made: the room / job style's blank, not the schedule board.
   const ft = cab.resolved_doors?.['*']?.thickness_mm ?? cab.door_thickness ?? cab.door_material.DZ
   const Zf = b.front === 'doors' ? resolveFaceZ(cab.DZ, ft, r) + ft : cab.DZ
-  const { left: L, right: R, bottom: B } = b
+  // Angled ends (B8): the end meets a wall at `angle`; its line runs through the
+  // fascia's front corner. That end has no return, and every part behind the
+  // fascia stops at the line at its deepest point (hand-fixed, cut square).
+  const aL = b.left.angle ?? 0, aR = b.right.angle ?? 0
+  const tanL = Math.tan(aL * Math.PI / 180), tanR = Math.tan(aR * Math.PI / 180)
+  const xLo = (z: number) => aL > 0 ? Math.max(0, (Zf - z) * tanL) : 0
+  const xHi = (z: number) => aR > 0 ? Math.min(W, W - (Zf - z) * tanR) : W
+  const L = aL > 0 ? { ...b.left, on: false } : b.left
+  const R = aR > 0 ? { ...b.right, on: false } : b.right
+  const B = b.bottom
   const mL = L.on && L.joint === 'mitre', mR = R.on && R.joint === 'mitre', mB = B.on && B.joint === 'mitre'
   // Return length from the front face, never through the wall.
   const len = (depth: number) => Math.min(depth, Zf)
@@ -68,10 +77,12 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     part_key: 'bh:fascia',
     DX: H, DY: W, DZ: t,
     X: W, Y: 0, Z: Zf, AY: 180,
-    ...(mR ? { bevel_lo: MITRE } : {}), ...(mL ? { bevel_hi: MITRE } : {}),
+    ...(mR ? { bevel_lo: MITRE } : aR > 0 ? { bevel_lo: aR } : {}),
+    ...(mL ? { bevel_hi: MITRE } : aL > 0 ? { bevel_hi: aL } : {}),
     material_id: exp,
-    // Ends show unless mitred; the bottom edge shows unless mitred to the bottom return.
-    edge_band: band({ bottom: !mB, left: !mR, right: !mL }),
+    // Ends show unless mitred or scribed to a wall; the bottom edge shows
+    // unless mitred to the bottom return.
+    edge_band: band({ bottom: !mB, left: !mR && !(aR > 0), right: !mL && !(aL > 0) }),
   })
 
   // Side returns, full height. Mitred: from the front corner; butt: behind the fascia.
@@ -109,8 +120,8 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     const front = mB ? Zf : Zf - t
     push({
       part_key: 'bh:ret_b',
-      DX: d, DY: x1 - x0, DZ: t,
-      X: x0, Y: 0, Z: front - d, AY: 0,
+      DX: d, DY: Math.min(x1, xHi(front - d)) - Math.max(x0, xLo(front - d)), DZ: t,
+      X: Math.max(x0, xLo(front - d)), Y: 0, Z: front - d, AY: 0,
       material_id: exp,
       edge_band: band({ bottom: full < Zf - 0.5, left: !L.on, right: !R.on }),
     })
@@ -120,17 +131,19 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   const y0 = B.on ? t : 0
   if (b.cleat && H >= y0 + BH_CLEAT_LEG) {
     const back = Zf - t           // fascia back face
+    const hx0 = Math.max(x0, xLo(back - BH_CLEAT_LEG)), hx1 = Math.min(x1, xHi(back - BH_CLEAT_LEG))
+    const vx0 = Math.max(x0, xLo(back - tc)), vx1 = Math.min(x1, xHi(back - tc))
     push({
       part_key: 'bh:cleat_h',
-      DX: BH_CLEAT_LEG, DY: x1 - x0, DZ: tc,
-      X: x0, Y: y0, Z: back - BH_CLEAT_LEG, AY: 0,
+      DX: BH_CLEAT_LEG, DY: hx1 - hx0, DZ: tc,
+      X: hx0, Y: y0, Z: back - BH_CLEAT_LEG, AY: 0,
       material_id: cab.material.id,
       edge_band: band({}),
     })
     push({
       part_key: 'bh:cleat_v',
-      DX: BH_CLEAT_LEG - tc, DY: x1 - x0, DZ: tc,
-      X: x1, Y: y0 + tc, Z: back, AY: 180,
+      DX: BH_CLEAT_LEG - tc, DY: vx1 - vx0, DZ: tc,
+      X: vx1, Y: y0 + tc, Z: back, AY: 180,
       material_id: cab.material.id,
       edge_band: band({}),
     })
@@ -138,10 +151,11 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   if (ts > 0) {
     // Full width under the fascia (not round the returns yet), front edge set back.
     const s = b.split, d = Math.min(s.width, Zf - s.setback)
-    if (d > 0) out.push({
+    const sz = Zf - s.setback - d, sx0 = xLo(sz), sx1 = xHi(sz)
+    if (d > 0 && sx1 > sx0) out.push({
       part_key: 'bh:split',
-      DX: d, DY: W, DZ: ts,
-      X: 0, Y: 0, Z: Zf - s.setback - d, AX: 0, AY: 0, AZ: 0,
+      DX: d, DY: sx1 - sx0, DZ: ts,
+      X: sx0, Y: 0, Z: Zf - s.setback - d, AX: 0, AY: 0, AZ: 0,
       material_id: cab.split_material!.id,
       edge_band: band({}),
     })

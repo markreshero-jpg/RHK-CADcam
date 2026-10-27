@@ -569,7 +569,32 @@ export function cabinetCornerPts(cab: CabinetInstance, wall: Wall, perp: Pt): Pt
     const outline = footprintOutline(cab.footprint, { w: cab.dx, d: cab.dz })
     if (outline.length >= 3) return outline.map(p => toPlan(p.x, p.y))
   }
+  const bh = bulkheadOutline(cab.bulkhead, cab.dx, cab.dz)
+  if (bh) return bh.map(p => toPlan(p.x, p.y))
   return [toPlan(0, 0), toPlan(cab.dx, 0), toPlan(cab.dx, cab.dz), toPlan(0, cab.dz)]
+}
+
+// Front depth assumed for a bulkhead flush with the doors when only the
+// instance is at hand (18 door + 2): the outline then errs off the wall.
+const BH_OUTLINE_DOOR_FRONT = 20
+
+// A bulkhead with an angled end (z_bulkhead B8): the outline (cabinet frame,
+// x along the width, y from the wall) as a trapezoid whose angled side runs
+// through the fascia's front corner, so it follows the wall instead of
+// crossing it. null when both ends are square.
+export function bulkheadOutline(
+  b: { kind?: string; front?: string; left?: { angle?: number }; right?: { angle?: number } } | null | undefined,
+  w: number, d: number,
+): Pt[] | null {
+  if (!b || b.kind === 'shadowline') return null
+  const tl = Math.tan(((b.left?.angle ?? 0) * Math.PI) / 180)
+  const tr = Math.tan(((b.right?.angle ?? 0) * Math.PI) / 180)
+  if (tl <= 0 && tr <= 0) return null
+  const zf = b.front === 'carcase' ? d : d + BH_OUTLINE_DOOR_FRONT
+  const lo = (z: number) => Math.max(0, (zf - z) * tl)
+  const hi = (z: number) => Math.min(w, w - (zf - z) * tr)
+  if (hi(0) - lo(0) < 1) return null   // ends meet behind the front: leave the box
+  return [{ x: lo(0), y: 0 }, { x: hi(0), y: 0 }, { x: hi(d), y: d }, { x: lo(d), y: d }]
 }
 
 // The stretch of the wall a cabinet stands on, as offsets from cabT(cab, wall):

@@ -4,7 +4,7 @@ import { mergeRules } from '../mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material, type ResolvedCasePart } from '../types'
 import { casePlanCorners, caseBox } from '../../jointDrilling'
 import { DEFAULT_BULKHEAD, DEFAULT_SHADOWLINE, normaliseBulkhead, type BulkheadSettings } from '../../bulkhead'
-import { cabVExtent } from '../../geometry'
+import { cabVExtent, bulkheadOutline } from '../../geometry'
 import type { Room } from '../../types'
 import { isShapedPanelKey } from '../../cabinetShape/partKeys'
 
@@ -148,5 +148,31 @@ describe('bulkhead parts', () => {
 
   it('not a bulkhead → no bh parts', () => {
     expect(parts(cab({}, { bulkhead: null })).length).toBe(0)
+  })
+
+  it('angled end (B8): fascia cut to the wall, no return there, nothing behind crosses the wall line', () => {
+    const ps = parts(cab({ right: { ...on(), angle: 45 }, cleat: true }))
+    expect(get(ps, 'bh:ret_r')).toBeUndefined()
+    const f = get(ps, 'bh:fascia')!
+    expect(f.bevel_lo).toBe(45)
+    expect(f.edge_band.left).toBe(false)              // scribed to the wall, not taped
+    expect(plan(f)).toEqual({ x0: 0, x1: W, z0: D - T, z1: D })
+    // Wall line through the fascia's front corner (W, D) at 45°: x ≤ W − (D − z).
+    for (const p of ps) for (const q of casePlanCorners(p))
+      expect(q.x).toBeLessThanOrEqual(W - (D - q.z) + 1e-6)
+    expect(plan(get(ps, 'bh:cleat_h')!).x1).toBeCloseTo(W - (T + 100))
+    expect(plan(get(ps, 'bh:cleat_v')!).x1).toBeCloseTo(W - (T + TC))
+  })
+
+  it('angled end outline: a trapezoid through the front corner; square ends keep the box', () => {
+    const near = (ps: { x: number; y: number }[] | null) => ps?.map(p => ({ x: Math.round(p.x * 1e6) / 1e6, y: Math.round(p.y * 1e6) / 1e6 }))
+    expect(near(bulkheadOutline({ front: 'carcase', right: { angle: 45 } }, 1200, 330)))
+      .toEqual([{ x: 0, y: 0 }, { x: 870, y: 0 }, { x: 1200, y: 330 }, { x: 0, y: 330 }])
+    // Flush with doors: assumed 20 front, so the angled side stays off the wall.
+    expect(near(bulkheadOutline({ front: 'doors', left: { angle: 45 } }, 1200, 330)))
+      .toEqual([{ x: 350, y: 0 }, { x: 1200, y: 0 }, { x: 1200, y: 330 }, { x: 20, y: 330 }])
+    expect(bulkheadOutline({ front: 'doors' }, 1200, 330)).toBeNull()
+    expect(bulkheadOutline({ kind: 'shadowline', right: { angle: 45 } }, 1200, 330)).toBeNull()
+    expect(normaliseBulkhead({ ...DEFAULT_BULKHEAD, right: { on: false, depth: 600, joint: 'mitre', angle: 89 } })!.right.angle).toBe(75)
   })
 })

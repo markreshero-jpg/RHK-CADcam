@@ -1,12 +1,12 @@
 'use client'
 
 // Bulkhead section of the cabinet panel (z_bulkhead B3): front line, auto
-// height, left / right / bottom returns (depth + joint), the fixing cleat and
+// height, left / right / bottom returns (depth + joint), angled ends (B8), the fixing cleat and
 // the shadowline split rail (B7). A curved bulkhead (BHCRVFIXP, z_curved_end
 // C7) shows only the height + split; its shape lives in the curved end section.
 // Writes `bulkhead` (and `dy` when auto height is switched back on).
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { CabinetInstance, Room, Wall } from '@/src/lib/types'
 import { supabase } from '@/src/lib/supabase'
 import CalcInput from '@/src/components/CalcInput'
@@ -108,6 +108,17 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
           </div>
         ))}
         <p className="text-[10px] text-gray-600">Depth = how far the return runs back from the front (stops at the wall).</p>
+        <div className="grid grid-cols-[1fr_4.5rem] gap-1 items-center"
+          title="0 = square. Where an end meets a wall that isn't square to the run (e.g. 45), type its angle: the fascia end is cut to it, the outline follows the wall and that end has no return.">
+          {(['left', 'right'] as const).map(k => (
+            <Fragment key={k}>
+              <label className="text-xs text-gray-300">{k === 'left' ? 'Left' : 'Right'} end angle °</label>
+              <CalcInput value={b[k].angle ?? 0} decimals={1}
+                onCommit={v => { if (v >= 0) putRet(k, { angle: v > 0 ? v : undefined }) }}
+                className={inp + ' text-right'} />
+            </Fragment>
+          ))}
+        </div>
         <label className="flex items-center gap-2 text-xs text-gray-300"
           title="L cleat (two 100 mm legs, carcass board) behind the fascia's bottom edge. None when the bulkhead is too low for it.">
           <input type="checkbox" checked={b.cleat} onChange={e => put({ cleat: e.target.checked })} />
