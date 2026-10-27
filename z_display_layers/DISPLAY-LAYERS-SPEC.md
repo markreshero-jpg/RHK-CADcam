@@ -132,7 +132,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 - Saving from the manager stores **sparse** settings: only differences from
   the registry default. Missing items resolve to the default.
 - Unknown item ids are kept on save (they may come from a newer build).
-- Shop set **Benchtops** (2026-10-27, for the Benchtop Quote report): plan shows walls, tops + edges + joins + sizes, fixtures, CAD, benchtop / overall / openings dims; cabinets + applied panels + curved ends ghost 50%; everything else hidden. Elevation / 3D at defaults.
+- Shop set **Benchtops** (2026-10-27, for the Benchtop Quote report): plan shows walls, tops + edges + joins + sizes, fixtures, CAD, benchtop / overall / openings dims; no cabinets at all (Mark 2026-10-27: no cabinet outlines); everything else hidden. Elevation / 3D at defaults.
 - Seeded rows: the six former presets + **Kicks** (every item hidden except
   `kick_faces` + `kick_spreaders`, all views).
 
