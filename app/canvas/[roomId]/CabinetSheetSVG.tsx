@@ -439,7 +439,20 @@ export default function CabinetSheetSVG({
     rp.case_parts.forEach(p => { const b = caseBox(applyOv(p, `case_${p.part_key}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white', sp: special(`case_${p.part_key}`) }) })
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => { const b = tkBox3(applyOv(p, `tk_${p.part_key}_${p.sort_order}`)); ext.push({ b, z: b.z + b.d / 2, faceFill: 'white', sp: special(`tk_${p.part_key}_${p.sort_order}`) }) })
     rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const b = zoneBox3(applyOv(z, zonePartId(z))); ext.push({ b, z: b.z + b.d / 2, faceFill: FACE_FILL, sp: special(zonePartId(z)) }) })
-    ext.sort((a, b) => a.z - b.z)
+    // Viewer looks from front, right and above: a part clear of another to its left,
+    // below or behind is drawn first. Depth centre alone ties an open box's bottom
+    // with its gables (same Z span) and painted the bottom over the right gable.
+    const E = 0.5
+    const behind = (a: Box3, b: Box3) => a.x + a.w <= b.x + E || a.y + a.h <= b.y + E || a.z + a.d <= b.z + E
+    const before = (a: Ext, b: Ext) => behind(a.b, b.b) && !behind(b.b, a.b)
+    {
+      const left = ext.slice().sort((a, b) => a.z - b.z), sorted: Ext[] = []
+      while (left.length) {
+        const k = left.findIndex(a => !left.some(b => b !== a && before(b, a)))
+        sorted.push(...left.splice(k < 0 ? 0 : k, 1))
+      }
+      ext.splice(0, ext.length, ...sorted)
+    }
     ext.forEach((e, i) => {
       if (e.sp) { els.push(...prismIso(`xp${i}`, e.sp.prism, e.faceFill, false)); return }
       const fc = faces(e.b)
