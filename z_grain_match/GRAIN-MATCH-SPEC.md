@@ -1,6 +1,6 @@
 # Grain match — spec
 
-**Status:** G1–G5 built 2026-10-27 (data, right-click, layer, horizontal grain, optimiser blocks, outputs), G2–G5 in-app checks pending. Next: G6.
+**Status:** G1–G6 built 2026-10-27 (incl. tutorial). Left: Mark's in-app check of G2–G5 (G1 checked OK).
 
 ## Why
 
@@ -182,4 +182,6 @@ make a vertical drawer bank + a horizontal run, check elevation layer, nest, PDF
   `grain-match-set.cjs` (test helper), nestGrain tests. Mark's check pending.
 - [x] G4 Optimiser blocks + split — tests `grainBlocks.test.ts`; Stage 5 drag check by Mark.
 - [x] G5 Sheet / label outputs — checked headless (RHK1234 test room: Stage 4/5 + PDFs).
-- [ ] G6 Tutorial + in-app check
+- [~] G6 Tutorial built — lesson `grain_match` (Intermediate ▸ Production, src/lib/tutorial/lessons.ts),
+  ticks on `grain_match_create` / `grain_match_direction` events (useGrainMatch) and the
+  optimiser path. In-app check by Mark pending.

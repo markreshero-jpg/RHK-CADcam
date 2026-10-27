@@ -6,6 +6,7 @@ import {
   type GrainMatchDirection, type GrainMatchGroup,
 } from '@/src/lib/grainMatch'
 import { useGrainMatchStore } from '@/src/lib/grainMatchStore'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import type { ContextMenuItem, ContextMenuSubItem } from './canvasTypes'
 
 // Grain match groups (z_grain_match G1): load the room's groups and build the
@@ -56,7 +57,10 @@ export function useGrainMatch({ roomId, walls, cabinets, setCabinets, setContext
       .insert({ room_id: roomId, name, direction }).select().single()
     if (error || !data) { console.error('grain match', error); setToast('Grain match failed — see console'); return }
     setGroups(gs => [...gs, data as GrainMatchGroup])
-    if (await setMembers(ids, data.id)) setToast(`${name} ${grainArrow(direction)} — ${ids.length} cabinet${ids.length > 1 ? 's' : ''} grain matched`)
+    if (await setMembers(ids, data.id)) {
+      setToast(`${name} ${grainArrow(direction)} — ${ids.length} cabinet${ids.length > 1 ? 's' : ''} grain matched`)
+      useTutorial.getState().emit('grain_match_create')   // tutorial grain_match
+    }
   }
 
   async function setDirection(group: GrainMatchGroup, direction: GrainMatchDirection) {
@@ -65,6 +69,7 @@ export function useGrainMatch({ roomId, walls, cabinets, setCabinets, setContext
     if (error) { console.error('grain match', error); setToast('Grain match failed — see console'); return }
     setGroups(gs => gs.map(g => g.id === group.id ? { ...g, direction } : g))
     setToast(`${group.name} ${grainArrow(direction)} ${direction}`)
+    useTutorial.getState().emit('grain_match_direction')   // tutorial grain_match
   }
 
   async function removeMembers(group: GrainMatchGroup, ids: string[]) {

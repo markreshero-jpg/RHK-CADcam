@@ -1030,6 +1030,27 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Print / PDF and key the numbers into the quoting system.',
       canvas: true, done: (c, s) => ev(c, 'takeoff_print') > ev(s, 'takeoff_print') },
   ]},
+
+  // Appended 2026-10-27 (z_grain_match G1–G5 — grain-matched fronts).
+  { id: 'grain_match', level: 'intermediate', topic: 'production', title: 'Grain match a bank of fronts',
+    blurb: 'Cut a run of drawer fronts or doors so the timber grain runs on from one to the next, vertical or horizontal.',
+    keywords: 'grain match matched matching woodgrain timber veneer drawer bank fronts doors horizontal vertical grain direction GM1 nest block optimiser sheet label', steps: [
+    { id: 'make', title: 'Pick the cabinets and right-click',
+      body: 'Grained fronts only make sense on a woodgrain colour. In plan or elevation, Shift-click the cabinets whose fronts should match: a drawer bank, or a run of doors. All of them must be on one wall, on the same side. Right-click one of them → Grain match → Vertical ↕ or Horizontal ↔. The group is named GM1 (then GM2…) and the direction is the grain for all its fronts. Finger-pull rails and linear handles never join.',
+      canvas: true, done: (c, s) => ev(c, 'grain_match_create') > ev(s, 'grain_match_create') },
+    { id: 'look', title: 'Check it in elevation',
+      body: 'Go to Elevation and choose Layers → Show grain match. Each group\'s fronts are tinted in its own colour with a GM1 ↕ / GM2 ↔ tag; plan shows a coloured bar along the matched fronts. Horizontal groups draw their grain across the fronts here, in prints and in 3D. The menu item only changes what you see now; to print the marks, tick Grain match (Fronts group) in Manage layers….',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+    { id: 'edit', title: 'Change the direction, add or remove',
+      body: 'Right-click a matched cabinet: the Grain match GM1 item lets you Switch to horizontal / vertical, Add the other Shift-picked cabinets to GM1, Remove this cabinet, or Remove GM1. A copy you paste is never in a group; Replace keeps the group.',
+      canvas: true, done: (c, s) => ev(c, 'grain_match_direction') > ev(s, 'grain_match_direction') || ev(c, 'grain_match_create') > ev(s, 'grain_match_create') + 1 },
+    { id: 'nest', title: 'Nest it',
+      body: 'Production → Generate CNC…, then go to Nesting and run it. Each group nests as one block, laid out as the fronts hang on the wall (rows, columns and order kept) with the cutter gap between them, so the grain runs on across the block. A block too big for one sheet is split at cabinet boundaries and Nesting says so in an amber line.',
+      target: 'menu-Production', done: c => c.path.endsWith('/optimiser') },
+    { id: 'sheet', title: 'On the sheets',
+      body: 'In Nesting and Editing each block has a dashed outline in its group colour and a GM1 tag. In Editing, dragging any matched front drags the whole block, and Move to sheet takes the whole block. A matched front can\'t be rotated on its own. Deleting or cutting one out breaks it from the block (a notice says so). Click a front to see "Grain match GM1 · 3 of 6", its place in the group, left to right then top to bottom.',
+      done: c => c.path.endsWith('/optimiser') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
