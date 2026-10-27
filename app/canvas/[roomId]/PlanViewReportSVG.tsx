@@ -620,7 +620,7 @@ export default function PlanViewReportSVG({
                 codes={btProfiles && layers.show('benchtop_edges') ? i => {
                   const pid = effectiveProfileId(segs[i], btDefaultProfile?.(bt))
                   const prof = pid ? btProfiles[pid] : undefined
-                  return prof ? `${prof.code ?? prof.name}${prof.generates === 'waterfall' ? ' WF' : ''}` : null
+                  return prof ? (prof.code ?? prof.name) : null
                 } : undefined}
                 fs={layers.w('benchtop_sizes', 2.2 * P)} gap={2.2 * P} fill={INK} opacity={layers.op('benchtop_sizes')} />
             )}
