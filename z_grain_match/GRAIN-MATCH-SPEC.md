@@ -1,6 +1,6 @@
 # Grain match — spec
 
-**Status:** spec'd 2026-10-27, not started. Next: G1.
+**Status:** G1 built 2026-10-27 (data + right-click), in-app check pending. Next: G2.
 
 ## Why
 
@@ -56,7 +56,12 @@ alter table cabinet_instances
   add column grain_match_group_id uuid references grain_match_groups(id) on delete set null;
 ```
 
-A group with no cabinets left is deleted by the app (same pattern as kick runs).
+Removing cabinets / a group only clears `grain_match_group_id`; the group row stays
+(undo rewrites whole cabinet rows, so a restored member must still point at a real
+group). Groups with no members are swept when the room loads (`useGrainMatch`).
+Names number over all the room's groups, so an emptied GM1 isn't reused in that session.
+
+Paste / copy never carries the group (the copy is a new cabinet); Replace keeps it.
 
 ## UI — plan + elevation right-click (G1)
 
@@ -126,7 +131,9 @@ make a vertical drawer bank + a horizontal run, check elevation layer, nest, PDF
 
 ## Progress
 
-- [ ] G1 Data + right-click menu
+- [x] G1 Data + right-click menu — migration applied, `src/lib/grainMatch.ts`,
+  `useGrainMatch.ts`, menu in plan + elevation (not 3D). Headless check
+  `z_plan_automation/verify-grain-match-g1.mjs` (create / switch / remove OK). Mark's check pending.
 - [ ] G2 Elevation / plan layer + quick toggle
 - [ ] G3 Horizontal grain in elevation, 3D, nest
 - [ ] G4 Optimiser blocks + split

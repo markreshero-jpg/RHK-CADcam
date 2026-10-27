@@ -181,6 +181,8 @@ export interface CabinetInstance {
   // assembly (is_kick_assembly = true). See z_kick_join/.
   kick_run_id?: string | null
   is_kick_assembly?: boolean
+  // Grain match group this cabinet's fronts belong to (z_grain_match); null = none.
+  grain_match_group_id?: string | null
   // Shaped-cabinet plan outline + edge roles; null/absent = plain rectangle.
   // See z_cabinet_shape/CABINET-SHAPE-SPEC.md.
   footprint?: import('./cabinetShape/footprint').Footprint | null

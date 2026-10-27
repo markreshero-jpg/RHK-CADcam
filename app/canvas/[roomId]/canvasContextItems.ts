@@ -13,8 +13,10 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit, onSplitHeight,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
-  onUpdateBulkhead, onUpdateFloatShelf, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape,
+  onUpdateBulkhead, onUpdateFloatShelf, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape, grainMatchItems,
 }: {
+  /** Grain match (z_grain_match G1): items for the cabinet, acting on the selection holding it. */
+  grainMatchItems?: (cabId: string, ids: string[]) => ContextMenuItem[]
   /** Edit shape in plan (z_cabinet_shape_edit E3): edge types + corner joins. */
   onEditShape?: (cabId: string) => void
   /** Under panel (z_floating F7/F8) under these base cabinets / overheads: a BUP / WUP + their bottom scribe. */
@@ -242,6 +244,12 @@ export function buildContextMenuGroups({
   if (onAddUnderPanel && cab && isRunCarcass(cab)) {
     const ids = multiSelect && multiSelect.length > 1 && multiSelect.includes(cabId) ? multiSelect : [cabId]
     groups.push([{ label: ids.length > 1 ? `Add under panel (${ids.length})` : 'Add under panel', onClick: () => onAddUnderPanel(ids) }])
+  }
+
+  if (grainMatchItems) {
+    const ids = multiSelect && multiSelect.length > 1 && multiSelect.includes(cabId) ? multiSelect : [cabId]
+    const items = grainMatchItems(cabId, ids)
+    if (items.length) groups.push(items)
   }
 
   // Detach toe kick(s) into a standalone kick assembly. A cabinet already in a run

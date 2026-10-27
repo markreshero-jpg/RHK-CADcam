@@ -42,6 +42,7 @@ import { useMaterialColours } from './useMaterialColours'
 import { useCabinetOps } from './useCabinetOps'
 import { useMultiSelectOps } from './useMultiSelectOps'
 import { useKickRunOps } from './useKickRunOps'
+import { useGrainMatch } from './useGrainMatch'
 import { buildMenus } from './canvasMenuConfig'
 import {
   Mode, ArmedDefinition, Selected, CanvasView, ViewState, ViewAction, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, SectionCut,
@@ -1221,6 +1222,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const { handleJoinKicks, handleDetachKickSingle, handleSeparateKicks } = useKickRunOps({
     cabinets, walls, room, setCabinets, applyKickMutation, setContextMenu,
   })
+  const { grainMatchMenuItems } = useGrainMatch({ roomId: room.id, walls, cabinets, setCabinets, setContextMenu, setToast })
 
   // Library, shop and job settings can be edited on other routes while these
   // module-level caches stay warm (client-side nav never reloads the module), so
@@ -1603,6 +1605,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     })
     data.wall_id = old.wall_id
     data.notes = old.notes
+    data.grain_match_group_id = old.grain_match_group_id ?? null
     if (keepHeight) data.dy = old.dy
     if (sameClass) data.pos_z = old.pos_z
     const floorKick = (def.assembly_class === 'base' || def.assembly_class === 'tall')
@@ -1718,7 +1721,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     captureSnapshot()
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { id, created_at, updated_at, ...rest } = clipboard
-    const cabinet = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(cabinets, clipboard.assembly_class), pos_x, pos_y, rotation: sideFlip ? wall.angle + 180 : wall.angle })
+    const cabinet = await dbInsertCabinet({ ...rest, grain_match_group_id: null, room_id: room.id, wall_id: wall.id, label: nextLabel(cabinets, clipboard.assembly_class), pos_x, pos_y, rotation: sideFlip ? wall.angle + 180 : wall.angle })
     if (cabinet) {
       setCabinets(cs => [...cs, cabinet])
       setSelected({ type: 'cabinet', id: cabinet.id })
@@ -1804,7 +1807,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, flip, cxp, cabGap(src))
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { id, created_at, updated_at, ...rest } = src
-      const cab = await dbInsertCabinet({ ...rest, room_id: room.id, wall_id: wall.id, label: nextLabel(working, src.assembly_class), pos_x, pos_y, rotation: flip ? wall.angle + 180 : wall.angle })
+      const cab = await dbInsertCabinet({ ...rest, grain_match_group_id: null, room_id: room.id, wall_id: wall.id, label: nextLabel(working, src.assembly_class), pos_x, pos_y, rotation: flip ? wall.angle + 180 : wall.angle })
       if (cab) {
         working = [...working, cab]
         added.push(cab)
@@ -4063,6 +4066,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onReplace: id => { setContextMenu(null); setReplaceCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },
             onAddUnderPanel: ids => { void handleAddUnderPanel(ids) },
+            grainMatchItems: canvasView === 'plan' || canvasView === 'elevation' ? grainMatchMenuItems : undefined,
             onDetachKick: id => { void handleDetachKickSingle(id) },
             onSeparateKicks: id => { void handleSeparateKicks(id) },
             onKickSettings: id => {

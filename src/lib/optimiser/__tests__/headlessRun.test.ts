@@ -299,7 +299,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         } else doc.rect(X(pl.x), Y(pl.y + pl.h), pl.w * s, pl.h * s, 'FD')
         // Holes as small circles (true size, min 0.35 mm so 5 mm pins show).
         doc.setDrawColor(200, 40, 40); doc.setLineWidth(0.12)
-        for (const hd of holesIn(pl, g.drills)) doc.circle(X(hd.x), Y(hd.y), Math.max(0.35, (hd as { diameter: number }).diameter / 2 * s), 'S')
+        for (const hd of holesIn(pl, g.drills)) doc.circle(X(hd.x), Y(hd.y), Math.max(0.35, (hd as unknown as { diameter: number }).diameter / 2 * s), 'S')
         doc.setDrawColor(20)
         // Label: number big, then cabinet + part + cut size when it fits.
         const cx = X(pl.x + pl.w / 2), cy = Y(pl.y + pl.h / 2)
@@ -435,12 +435,12 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         edge(P(0, Hc), P(Wc, Hc), onH2)
       }
       // Holes: sheet → placement-local → footprint (undo the placement turn).
-      lab.setFillColor(0)
+      lab.setFillColor(0, 0, 0)
       for (const hd of holesIn(pl, g.drills)) {
         const dx = hd.x - pl.x, dy = hd.y - pl.y
         const [x, y] = pl.rotated ? [dy, pl.w - dx] : [dx, dy]
         const [cx, cy] = P(x, y)
-        lab.circle(cx, cy, Math.max(0.3, (hd as { diameter: number }).diameter / 2 * s), 'F')
+        lab.circle(cx, cy, Math.max(0.3, (hd as unknown as { diameter: number }).diameter / 2 * s), 'F')
       }
       lab.setLineWidth(0.2)
       // Sizes: width up the left (across grain), length under (with grain).
