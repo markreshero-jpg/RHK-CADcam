@@ -9,7 +9,9 @@
 // Layout schema: see layouts/*.json and the .claude/skills/draw-plan skill.
 //   room:     roomHeight [,roomRules {TOEH..}, wallCabinetTop]
 //   walls:    x,y,length,angle [,thickness,height,soffit,type:'island',detached]
-//   cabinets: def,wall,offset,dx [,dy,dz,flip,note]
+//   cabinets: def,wall,offset,dx [,dy,dz,flip,note,rules,set]
+//     set: cabinet_instances columns written before the re-resolve
+//     (has_face, has_toekick, top_type, internal_grid, …).
 //     flip: place on the wall's BACK side (island far side) — rotation +180.
 //     Flipped cabinets are placed in a first pass, flipped in the DB, then the
 //     page reloads before the face-side pass so overlap logic sees them as
@@ -191,6 +193,13 @@ try {
       const { data: row } = await sb.from('cabinet_instances').select('rule_overrides').eq('id', p.id).single()
       await sb.from('cabinet_instances').update({ rule_overrides: { ...(row?.rule_overrides ?? {}), ...extra } }).eq('id', p.id)
       c._touch = true   // force a re-resolve even if no dim change
+    }
+    // Per-cabinet instance columns (e.g. { has_face: false, top_type: 'full_top',
+    // internal_grid: {...} }) — written before the re-resolve picks them up.
+    if (c.set && Object.keys(c.set).length) {
+      const { error } = await sb.from('cabinet_instances').update(c.set).eq('id', p.id)
+      if (error) die(`instance set failed for ${p.label}: ${error.message}`)
+      c._touch = true
     }
   }
 

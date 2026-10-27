@@ -1,0 +1,781 @@
+{
+  "_source": "z_sample_plans/RHK6550 - Dustyn Brown/Black Melamine 16mm Open shelving.jpg (photo, 600W x 650H x 350D)",
+  "projectName": "RHK6550 Dustyn Brown",
+  "createProject": true,
+  "jobNumber": "RHK6550",
+  "clientName": "Dustyn Brown",
+  "roomName": "Open Shelving",
+  "roomHeight": 2400,
+  "walls": [
+    {
+      "x": 0,
+      "y": 0,
+      "length": 8400,
+      "angle": 0,
+      "_": "boxes wall W->E"
+    },
+    {
+      "x": 8400,
+      "y": 0,
+      "length": 2000,
+      "angle": 90
+    },
+    {
+      "x": 8400,
+      "y": 2000,
+      "length": 8400,
+      "angle": 180
+    },
+    {
+      "x": 0,
+      "y": 2000,
+      "length": 2000,
+      "angle": 270
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 0,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 1/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 600,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 2/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 1200,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 3/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 1800,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 4/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 2400,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 5/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 3000,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 6/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 3600,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 7/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 4200,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 8/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 4800,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 9/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 5400,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 10/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 6000,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 11/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 6600,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 12/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 7200,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 13/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    },
+    {
+      "def": "B1D",
+      "wall": 1,
+      "offset": 7800,
+      "dx": 600,
+      "dy": 650,
+      "dz": 350,
+      "rules": {
+        "TOP_TYPE": "full_top",
+        "RAIL_JOIN": "on_top_of_sides",
+        "TOP_BACK_JOIN": "sits_over_back",
+        "BACK_TYPE": "panel",
+        "SCRBK": 0,
+        "SCRT": 0,
+        "SCRBT": 0,
+        "EDGING": {
+          "bottom": [
+            "top"
+          ],
+          "full_top": [
+            "top",
+            "left",
+            "right"
+          ],
+          "left_side": [
+            "right"
+          ],
+          "right_side": [
+            "right"
+          ],
+          "kick_sub_front": [],
+          "kick_front_face": []
+        }
+      },
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "fixed_shelf",
+                "y_locked": false
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      },
+      "note": "Box 14/14 open shelving 600x650x350 OA, 16 black melamine, top over gables + back, edged 3 sides"
+    }
+  ],
+  "_notes": "Project assembly_schedule_id -> \"16.5mm PT Black Matt\" (9eb520cf, PT Colour Matt 16mm Black Matt + Matching Col A 21x1), set by hand after the first run. EDGING is the construction schedule set (shallow merge!) with full_top 3 sides."
+}
