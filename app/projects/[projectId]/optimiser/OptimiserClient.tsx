@@ -276,6 +276,11 @@ function Stage2Parts() {
   }
 
   const matName = useMemo(() => new Map(snap.materials.map(m => [m.id, m.name])), [snap.materials])
+  // Material chips: only boards the job's (and batch's) parts use, plus any still ticked.
+  const jobMaterials = useMemo(() => {
+    const used = new Set(snap.parts.map(p => p.material_id).filter((id): id is string => !!id))
+    return snap.materials.filter(m => used.has(m.id) || filterMaterialIds.includes(m.id))
+  }, [snap.parts, snap.materials, filterMaterialIds])
   const noColour = useMemo(() => colourNotChosen(snap), [snap])
   // Cabinet filter options reflect the room filter.
   const cabOptions = useMemo(
@@ -352,7 +357,7 @@ function Stage2Parts() {
       <div className="flex-none px-8 pt-3 pb-3 space-y-3 border-b border-edge">
         <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
         <ChipFilter label="Cabinets" options={cabOptions.map(c => ({ id: c.id, label: c.label }))} selected={filterCabinetIds} onChange={setFilterCabinets} />
-        <ChipFilter label="Materials" options={snap.materials.map(m => ({ id: m.id, label: noColour.has(m.id) ? `${m.name} ⚠` : m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
+        <ChipFilter label="Materials" options={jobMaterials.map(m => ({ id: m.id, label: noColour.has(m.id) ? `${m.name} ⚠` : m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
       </div>
 
       {/* Actions + summary */}
