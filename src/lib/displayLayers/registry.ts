@@ -179,7 +179,11 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     hint: 'Top name in the middle and every edge length just inside the edge (Benchtop Quote report)' },
 
   // Fixtures & appliances (z_fixtures) — one item per catalogue category
-  { id: 'fixture_appliances', group: 'fixtures', label: 'Appliances', views: ALL, default: ON },
+  { id: 'fixture_appliances', group: 'fixtures', label: 'Appliances', views: ALL, default: ON,
+    hint: 'Every appliance except cooktops and ovens (dishwasher, fridge, rangehood, microwave, laundry…)' },
+  { id: 'fixture_cooktops',   group: 'fixtures', label: 'Cooktops',   views: ALL, default: ON },
+  { id: 'fixture_ovens',      group: 'fixtures', label: 'Ovens',      views: ALL, default: ON,
+    hint: 'Built-in ovens and freestanding cookers' },
   { id: 'fixture_sinks',      group: 'fixtures', label: 'Sinks',      views: ALL, default: ON },
   { id: 'fixture_taps',       group: 'fixtures', label: 'Taps',       views: ALL, default: ON },
   { id: 'fixture_decorative', group: 'fixtures', label: 'Decorative', views: ALL, default: ON },

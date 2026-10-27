@@ -445,7 +445,7 @@ export function fixtureOnFace(fx: FixtureFootprint, f: WallFrame, reach = 1200):
 }
 
 /** A free-standing fixture in a wall's dimension rows: along-wall span from the wall start (plan t, not mirrored). */
-export interface FixtureChainSpan { side: WallSide; row: 'floor' | 'wall'; t: number; dx: number; category: string }
+export interface FixtureChainSpan { side: WallSide; row: 'floor' | 'wall'; t: number; dx: number; category: string; kind: string | null }
 
 /**
  * Fixtures that take a place in a wall's cabinet dimension rows (dishwasher,
@@ -462,7 +462,7 @@ export function fixtureChainSpans(fixtures: RoomFixture[], wall: Wall, roomRef: 
       const on = fixtureOnFace(fx, wallFrame(wall, side, roomRef), 300)
       if (!on) continue
       const t0 = Math.max(0, on.t0), t1 = Math.min(wall.length, on.t1)
-      out.push({ side, row: fx.mount === 'wall' ? 'wall' : 'floor', t: t0, dx: t1 - t0, category: fx.category })
+      out.push({ side, row: fx.mount === 'wall' ? 'wall' : 'floor', t: t0, dx: t1 - t0, category: fx.category, kind: fx.kind })
       break
     }
   }
@@ -477,7 +477,15 @@ export const FIXTURE_LAYER: Record<string, string> = {
   decorative: 'fixture_decorative',
   opening:    'fixture_openings',
 }
-export const fixtureLayer = (category: string) => FIXTURE_LAYER[category] ?? 'fixture_appliances'
+/** Appliances split by kind: cooktops and ovens have their own items (so a benchtop
+ *  drawing can show the hob without the oven under it); the rest stay Appliances. */
+const APPLIANCE_KIND_LAYER: Record<string, string> = {
+  cooktop: 'fixture_cooktops',
+  oven:    'fixture_ovens',
+  cooker:  'fixture_ovens',
+}
+export const fixtureLayer = (category: string, kind?: string | null) =>
+  (category === 'appliance' && kind ? APPLIANCE_KIND_LAYER[kind.toLowerCase()] : undefined) ?? FIXTURE_LAYER[category] ?? 'fixture_appliances'
 
 // ── Benchtop cutouts (P3) ─────────────────────────────────────────────────────
 // A fixture with a cutout template cuts a hole in the benchtop holding the

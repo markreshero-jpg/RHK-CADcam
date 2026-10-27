@@ -247,7 +247,7 @@ export default function FixturesElevation({
       {ghostEl}
       {clearanceEl}
       {fixtures.map(fx => {
-        const id = fixtureLayer(fx.category)
+        const id = fixtureLayer(fx.category, fx.kind)
         if (!layers.show(id)) return null
         if (fx.category === 'opening') {
           // Holes are cut under the cabinets by OpeningHoles; this is the frame + symbol.
@@ -333,7 +333,7 @@ export function FixturesElevationPrint({ fixtures, wall, side = 'face', roomCx, 
   return (
     <g fontFamily="Arial, Helvetica, sans-serif">
       {fixtures.map(fx => {
-        const id = fixtureLayer(fx.category)
+        const id = fixtureLayer(fx.category, fx.kind)
         if (fx.category === 'opening' || !layers.show(id)) return null
         const on = fixtureOnFace(fx, f)
         if (!on) return null

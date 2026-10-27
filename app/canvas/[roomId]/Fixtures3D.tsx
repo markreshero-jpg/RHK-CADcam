@@ -63,7 +63,7 @@ export default function Fixtures3D({ fixtures, selectedId, onSelect, clashIds, o
   return (
     <>
       {fixtures.map(f => {
-        const id = fixtureLayer(f.category)
+        const id = fixtureLayer(f.category, f.kind)
         if (!layers.show(id)) return null
         if (f.wall_id && hiddenWallIds.has(f.wall_id)) return null
         const colour = layers.colorOf(id) ?? f.colour

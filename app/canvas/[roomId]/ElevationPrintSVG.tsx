@@ -713,7 +713,7 @@ export default function ElevationPrintSVG({
     c.assembly_class === 'base' || c.assembly_class === 'base_corner' ||
     c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'))
   // Free-standing appliances on this face take their place in the rows.
-  const chainFx = fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls)).filter(s => s.side === side).map(s => ({ ...s, t: mirrorX(s.t, s.dx) }))
+  const chainFx = fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category, f.kind))), wall, centroid(walls)).filter(s => s.side === side).map(s => ({ ...s, t: mirrorX(s.t, s.dx) }))
   const fxWall = chainFx.filter(s => s.row === 'wall'), fxFloor = chainFx.filter(s => s.row === 'floor')
 
   return (

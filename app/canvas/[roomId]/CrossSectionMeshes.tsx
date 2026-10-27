@@ -144,7 +144,7 @@ export default function CrossSectionMeshes({ walls, cabinets, room, rc, resolved
           )
         })}
         {fixtures.map(f => {
-          const item = fixtureLayer(f.category)
+          const item = fixtureLayer(f.category, f.kind)
           if (!layers.show(item)) return null
           return (
             <group key={f.id} userData={{ xsecFixture: f.id, xsecItem: item }}

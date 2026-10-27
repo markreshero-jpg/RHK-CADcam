@@ -429,7 +429,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                   wall={sheet.wall} side={sheet.side} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} annotations={annotations} resolvedParts={elevResolved}
                   benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles}
-                  benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category)))) : []}
+                  benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category, f.kind)))) : []}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }}
                   scale={scale} layers={elevLayers} show={elevShow} returnSec={returnSec}
                 />

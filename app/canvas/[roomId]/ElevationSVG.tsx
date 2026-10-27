@@ -372,7 +372,7 @@ export default function ElevationSVG({
   const chainCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // an under panel lies under its run
   // Free-standing appliances on this face, in elevation x, for the floor / wall rows.
   const chainFx = wall && fixtures
-    ? fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category))), wall, centroid(walls))
+    ? fixtureChainSpans(fixtures.filter(f => layers.show(fixtureLayer(f.category, f.kind))), wall, centroid(walls))
       .filter(s => s.side === elevWallSide).map(s => ({ row: s.row, t: mirrorX(s.t, s.dx), dx: s.dx }))
     : []
   const chainFxWall = chainFx.filter(s => s.row === 'wall'), chainFxFloor = chainFx.filter(s => s.row === 'floor')
@@ -2462,7 +2462,7 @@ export default function ElevationSVG({
             {/* Bench + basin heights — overall dims from the floor, outside the height chain */}
             {layers.show('dim_elev_bench') && (() => {
               const dims = benchtops && benchtopInfo
-                ? benchDimHeights(wall.id, benchtops, bt => benchtopInfo(bt).topZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category))))
+                ? benchDimHeights(wall.id, benchtops, bt => benchtopInfo(bt).topZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category, f.kind))))
                 : []
               if (dims.length === 0) return null
               const col = layers.color('dim_elev_bench', '#ffffff')

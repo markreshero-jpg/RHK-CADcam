@@ -1068,7 +1068,7 @@ export default function CanvasSVG({
                   benchtopSpans={layers.show('dim_benchtop') ? benchtopWallSpans(benchtops, w, wallInwardNormal(w, cx)) : undefined}
                   layerKick={layers.setting('dim_kicks')}
                   kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
-                  fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category)))}
+                  fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category, s.kind)))}
                   showRowNames={layers.show('dim_row_labels')}
                   labelBg={layers.background}
                 />
@@ -1121,7 +1121,7 @@ export default function CanvasSVG({
                 kickSpans={layers.show('dim_kicks') ? kickPlanSpans(cabinets, w, resolvedParts, cx) : undefined}
                 layerOpenings={layers.setting('dim_openings')}
                 openingSpans={wallOpenings?.get(w.id)}
-                fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category)))}
+                fixtureSpans={wallFixtureSpans?.get(w.id)?.filter(s => layers.show(fixtureLayer(s.category, s.kind)))}
                   showRowNames={layers.show('dim_row_labels')}
                   labelBg={layers.background}
               />

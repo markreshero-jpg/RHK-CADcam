@@ -108,7 +108,7 @@ function FixtureShape({ f, x, y, rotation, z, layers, selected, ghost, label, cl
   /** P4: overlaps a cabinet — drawn red. */
   clash?: boolean
 }) {
-  const id = fixtureLayer(f.category)
+  const id = fixtureLayer(f.category, f.kind)
   const lp = layers.props(id, z)
   const color = clash ? CLASH : selected ? '#f59e0b' : layers.color(id, STROKE)
   const lw = layers.w(id, (selected ? 2 : 1.4) / z)
@@ -276,7 +276,7 @@ export default function FixturesPlan({
   return (
     <g>
       {fixtures.map(f => {
-        if (f.id === hiddenId || !layers.show(fixtureLayer(f.category))) return null
+        if (f.id === hiddenId || !layers.show(fixtureLayer(f.category, f.kind))) return null
         return (
           <g key={f.id}
             style={{ pointerEvents: interactive ? undefined : 'none', cursor: interactive ? 'pointer' : undefined }}
@@ -325,7 +325,7 @@ export function FixturesPlanPrint({ fixtures, layers, P }: { fixtures: RoomFixtu
   return (
     <g fontFamily="Arial, Helvetica, sans-serif">
       {fixtures.map(f => {
-        const id = fixtureLayer(f.category)
+        const id = fixtureLayer(f.category, f.kind)
         if (f.category === 'opening' || !layers.show(id)) return null
         const lp = layers.props(id, z)
         // Symbols draw at 0.6 × lw — keep those above the minimum pen too.

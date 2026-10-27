@@ -126,7 +126,7 @@ export default function PlanViewReportSVG({
   const openings = showOpenings ? fixtures.filter(f => f.category === 'opening' && f.wall_id) : []
   const openingsByWall = openingSpans(openings, walls, cx)
   // Free-standing appliances take their place in the base / wall-cabinet rows.
-  const chainFixtures = fixtures.filter(f => layers.show(fixtureLayer(f.category)))
+  const chainFixtures = fixtures.filter(f => layers.show(fixtureLayer(f.category, f.kind)))
 
   // ── Content bounds (includes wall thickness corners) ──────────────────────
   const pts = walls.flatMap(w => {
@@ -160,7 +160,7 @@ export default function PlanViewReportSVG({
   }
   // Fixtures (own frame: translate + rotate); a door's swing reaches its width past the jambs.
   for (const f of fixtures) {
-    if (f.category === 'opening' ? !(showOpenings && f.wall_id) : !layers.show(fixtureLayer(f.category))) continue
+    if (f.category === 'opening' ? !(showOpenings && f.wall_id) : !layers.show(fixtureLayer(f.category, f.kind))) continue
     const door = f.category === 'opening' && (f.kind ?? '').toLowerCase().includes('door') && !(f.kind ?? '').toLowerCase().includes('sliding')
     const y0 = door && (f.swing ?? 'in') !== 'in' ? -f.width : 0
     const y1 = door && (f.swing ?? 'in') === 'in' ? f.depth + f.width : f.depth

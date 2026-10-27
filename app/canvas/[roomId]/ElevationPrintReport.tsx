@@ -182,7 +182,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             fixtures={fixtures}
             annotations={annotations}
             benchtops={benchtops} btInfo={btInfo} btProfiles={btProfiles}
-            benchHeights={benchTopZ ? benchDimHeights(w.id, benchtops ?? [], benchTopZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category)))) : []}
+            benchHeights={benchTopZ ? benchDimHeights(w.id, benchtops ?? [], benchTopZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category, f.kind)))) : []}
             room={room}
             resolvedParts={resolvedParts}
             svgRef={el => { if (el) refs.current.set(key, el); else refs.current.delete(key) }}
