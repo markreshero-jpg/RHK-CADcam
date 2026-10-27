@@ -36,7 +36,8 @@
     { "def": "B1D", "wall": 1, "offset": 2840, "dx": 1050, "dy": 885, "dz": 575, "note": "Blind corner 1050: door + blind false panel 635 (42 past the sink-wall fronts), door hinged off the blind panel. Save to the library if Mark likes it",
       "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false},{"col_index":1,"width":635,"width_locked":true}],"rows":[{"row_index":0,"height_locked":false}],"zones":[{"col_index":0,"face_type":"door","row_index":0,"hinge_side":"right","finger_gap":50},{"col_index":1,"face_type":"false_panel","row_index":0}]} } },
 
-    { "def": "BFK", "wall": 2, "offset": 635, "dx": 211, "dy": 885, "dz": 575, "note": "Filler to the bin (sink centred on the wall)" },
+    { "def": "B1D", "wall": 2, "offset": 635, "dx": 211, "dy": 885, "dz": 575, "note": "1 door 211 (was a filler), between the 40 blind-corner filler and the bin",
+      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false}],"zones":[{"col_index":0,"face_type":"door","row_index":0,"hinge_side":"left","finger_gap":50}]} } },
     { "def": "BBIN", "wall": 2, "offset": 846, "dx": 450, "dy": 885, "dz": 575, "note": "Teramo 56L pull-out bin with a drawer over",
       "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false},{"height":170,"row_index":1,"height_locked":true}],"zones":[{"col_index":0,"face_type":"drawer_face","row_index":0,"hinge_side":"left","drawer_type_config":{"type":"bin","slide_product_id":"73489428-752b-4223-af23-e90cb8729521"}},{"col_index":0,"face_type":"drawer_face","row_index":1,"hinge_side":"left","finger_gap":50}]} } },
     { "def": "BSK", "wall": 2, "offset": 1296, "dx": 900, "dy": 885, "dz": 575, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink 900 centred on the wall, double bowl undermount",
