@@ -407,7 +407,7 @@ export default function ElevationPrintSVG({
             {layers.show('handles') && (
               <SharknoseLinesSVG zones={rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })}
                 project={(px, py) => toSVG(px, py, 0, 0)} stroke={layers.color('handles', INK2)}
-                strokeWidth={lw('handles', thinSW)} dash={`${1.5 * P} ${0.8 * P}`} opacity={layers.op('handles')} fontSize={dimFs * 0.8} />
+                strokeWidth={lw('handles', thinSW)} dash={`${1.5 * P} ${0.8 * P}`} opacity={layers.op('handles')} fontSize={dimFs * 0.8} line={false} />
             )}
             {layers.show('handle_holes') && handleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })).map((s, i) => (
               <HandleHolesSVG key={`hh-${i}`} s={s} project={(px, py) => toSVG(px, py, 0, 0)}

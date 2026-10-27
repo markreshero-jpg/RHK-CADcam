@@ -63,7 +63,7 @@ export function HandleHolesSVG({ s, project, color, strokeWidth, opacity }: {
 /** Sharknose (z_handles H3): dashed hidden line where the bevel meets the back
  *  face, labelled "SN 38°" between it and the grip edge when there's room
  *  (no shading — user, 2026-10-14). Fronts without a bevel draw nothing. */
-export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, opacity, fontSize }: {
+export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, opacity, fontSize, line = true }: {
   zones: ResolvedFaceZone[]
   project: Project
   stroke: string
@@ -72,6 +72,8 @@ export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, o
   opacity?: number
   /** SVG units; omit for no label */
   fontSize?: number
+  /** false = label only, no dashed line (elevation — user, 2026-10-27) */
+  line?: boolean
 }) {
   const lines = zones.map(sharknoseLine).filter(l => l != null)
   if (!lines.length) return null
@@ -84,7 +86,7 @@ export function SharknoseLinesSVG({ zones, project, stroke, strokeWidth, dash, o
         const showLabel = fontSize != null && h >= fontSize * 0.9 && w >= fontSize * label.length * 0.7
         return (
           <g key={i}>
-            <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dash} />
+            {line && <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dash} />}
             {showLabel && (
               <text x={(a.x + b.x) / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="central"
                 fontSize={fontSize} fill={stroke} fontFamily="Arial, Helvetica, sans-serif">{label}</text>

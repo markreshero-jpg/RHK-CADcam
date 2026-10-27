@@ -1684,11 +1684,11 @@ export default function ElevationSVG({
                           fill={isLineDrawing ? 'none' : layers.color('handles', '#475569')}
                           strokeWidth={layers.w('handles', 0.8) / lz} opacity={layers.op('handles')} />
                       ))}
-                      {/* Sharknose bevels — hidden line where the bevel meets the back face */}
+                      {/* Sharknose bevels — "SN" label only, no hidden line in elevation */}
                       {layers.show('handles') && (
                         <SharknoseLinesSVG zones={rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) })}
                           project={toSVGPt} stroke={layers.color('handles', isLineDrawing ? '#334155' : '#94a3b8')}
-                          strokeWidth={layers.w('handles', 0.8) / lz} dash={`${4 / z} ${3 / z}`} opacity={layers.op('handles')} fontSize={9 / z} />
+                          strokeWidth={layers.w('handles', 0.8) / lz} dash={`${4 / z} ${3 / z}`} opacity={layers.op('handles')} fontSize={9 / z} line={false} />
                       )}
                       {/* Handle through-holes — drawn over the handle so you can see
                           what gets drilled; empty when the handle isn't drilled. */}
