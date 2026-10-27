@@ -248,6 +248,16 @@ line and mirrors the island elevation.
   → 1000 off the floor, moved to the nearest fixed shelf if there is one (no
   fixed shelf → stays at 1000). Text `PTO`, size 2.5, about 75 in from the
   corner. Don't write "PUSH TO OPEN" across the door.
+- **Under-bench microwave = one-drawer base + an open box on it** (Mark, RHK6555
+  2026-10-27). Drawer base: `B1D` with one `drawer_face` zone, `top_type
+  full_top`, no shelf, carcass = bench carcass − box height. Open box: a second
+  `B1D` at the same offset/width — `has_face` / `has_toekick` off, `full_top`,
+  no shelf, `exposed_interior: true` (all exposed, material from the exposed
+  role), `pos_z` = drawer base top incl kick, dy = 380 clear + 2 × t.exposed
+  (416 at 18), dz = base carcass + door + 2 (front flush with the drawer front).
+- **Filler beside a fridge overhead = a WALL filler at the overhead's height**
+  (Mark, RHK6555), not a floor-to-top tall filler: `WEP` → front filler, dy /
+  dz = the fridge overhead's.
 - **Integrated DW** (Mark, 2026-10-24): door only for now — a `B1D` with
   has_carcass / has_internal / has_toekick off, `pos_z` = kick, dy = carcass − kick,
   face zone `hinge_side: 'bottom'`, `hinges: []` (shows the swing, no hinges) + CAD

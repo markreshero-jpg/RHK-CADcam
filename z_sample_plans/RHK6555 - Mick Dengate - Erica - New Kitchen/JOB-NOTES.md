@@ -23,12 +23,13 @@ Spec text wins over the sketch (3890 run layout, D/W on the sink wall).
 - Sink wall: 40 filler at the blind corner (BC-14, in KICK 2) | 211 filler (BC-07) | Teramo 56L bin 450 + drawer over |
   sink 900 centred (1296–2196) | integrated DW 600.
 - Right corner: **TBC — too small for a 900 corner**. Drawn as a BCNP 774 (oven wall) x 696 (sink wall).
-- M/W: open box 380 clear over a drawer.
+- M/W: BC-13 one-drawer base (100 kick + 369 carcass) + BC-15 open box 600 x 416 x 595 sitting on it — all exposed
+  (material from the exposed role), own bottom / gables / back / full top, 380 clear, front flush with the drawer front.
 - Overheads 720 incl under panel (702 carcass + 18 panel set back 20), 350 deep incl doors (330 carcass):
   30 filler | W2D 744 | rangehood W2D 600 | W1D 600 to the pantry panel.
 - Pantry 744 x 680 x 2300, two doors, 5 inner drawers (bottom one 400 clear), shelves above. Panels both sides.
-- Fridge: 1005 space + 31 filler at the 700 wall (= 1036; the chain gave 1 mm spare). Overhead 400 deep incl doors,
-  1800–2300 (height not given — assumed 1800 clear), PTO.
+- Fridge: 1005 space + 31 wall filler at the 700 wall (WC-10, overhead height 1800–2300, flush with WC-05; the chain
+  gave 1 mm spare). Overhead 400 deep incl doors, 1800–2300 (height not given — assumed 1800 clear), PTO.
 - 2957 wall: panel | pantry 764 x 430 (450 o/a) x 2065, same layout | panel. Bulkhead 2065–2800 over, returns both ends.
 
 ## App
@@ -49,6 +50,9 @@ Spec text wins over the sketch (3890 run layout, D/W on the sink wall).
 - 2026-10-27 (Mark): BC-06 hinged off the blind panel, blind panel 40+ past BC-07's front, 40 filler between BC-07 and the
   blind corner; "(TRIAL)" dropped from the note. CAD notes redone as text boxes inside their cabinets. Pantry dims added
   (TC-02 + TC-06): bottom drawer box base → underside of the next drawer front = **497**.
+
+- 2026-10-27 (Mark): BC-07 → B1D 211 (1 door). BC-13 microwave rebuilt as drawer base + open box (BC-15). TC-04 tall
+  filler → WC-10 wall filler at the fridge overhead height. Tops + sink / mixer / cooktop cut-outs checked from the fixtures.
 
 ## Open
 - Right corner cabinet (TBC). Rangehood model. Microwave model. Fridge overhead height. Door colour. Benchtop product.
