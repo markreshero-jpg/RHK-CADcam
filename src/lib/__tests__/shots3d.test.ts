@@ -22,12 +22,23 @@ const [W1, W2] = ROOM
 describe('auto 3D shots', () => {
   it('one shot per run, the longest run first, opposite walls hidden', () => {
     const shots = autoShots(ROOM, [cab(W2, 0, 600), cab(W1, 0, 900), cab(W1, 900, 900)], 2400)
-    expect(shots.map(s => s.label)).toEqual(['W1', 'W2'])
-    const [s1] = shots
+    expect(shots.map(s => s.label)).toEqual(["Bird's eye", 'W1', 'W2'])
+    const s1 = shots[1]
     expect(s1.eye[2]).toBeGreaterThan(3000)        // out past W3
-    expect(s1.eye[1]).toBeGreaterThan(s1.target[1]) // raised
+    expect(s1.eye[1]).toBeGreaterThan(s1.target[1]) // raised, but only a little
+    const pitch = Math.atan2(s1.eye[1] - s1.target[1], Math.hypot(s1.eye[0] - s1.target[0], s1.eye[2] - s1.target[2])) * 180 / Math.PI
+    expect(pitch).toBeLessThan(15)
     expect(s1.hiddenWallIds).toContain('W3')
     expect(s1.hiddenWallIds).not.toContain('W1')
+  })
+
+  it("bird's eye: high over the whole room, near walls hidden, the main run's wall kept", () => {
+    const [b] = autoShots(ROOM, [cab(W1, 0, 1800)], 2400)
+    expect(b.id).toBe('birdseye')
+    expect(b.target[0]).toBeCloseTo(2000); expect(b.target[2]).toBeCloseTo(1500)
+    expect(b.eye[1]).toBeGreaterThan(4000)
+    expect(b.hiddenWallIds).toContain('W3')
+    expect(b.hiddenWallIds).not.toContain('W1')
   })
 
   it('an island gets a shot from each side', () => {

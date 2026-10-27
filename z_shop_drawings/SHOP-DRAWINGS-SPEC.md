@@ -256,6 +256,9 @@ How it's built (plan):
   camera + the walls hidden right now in `rooms.shop_3d_shots` (jsonb, migration_s8_saved_3d_shots.sql,
   applied). The live view now records its camera from the start, so saving works before any orbit. The
   package lists the saved views with a ✕ to remove them.
+- **Bird's eye + lower camera (Mark, 2026-10-27: "facing down too much"):** a `birdseye` shot of the
+  whole room comes first (high corner, 50° down, swung 35° off the main run, near walls hidden, no blockers).
+  Run / island shots now look down ~11° (was ~21°, eye raised dist × 0.38).
 - **Per-view ticks:** a "3D views" row under the sheet ticks, remembered per room
   (`shop-drawings-3d-off`).
 - **Layout** (`shotsPerSheet`): a room whose longest side is < 2000mm puts 4 per sheet (2 × 2); else 2 per

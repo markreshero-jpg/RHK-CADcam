@@ -1,7 +1,7 @@
 // 3D camera shots for the shop drawings (z_shop_drawings S8).
 // World frame = Room3DScene's: x = plan x, z = plan y, y = up (mm).
-// Auto shots: one raised 3/4 view per cabinet run (biggest first), and each
-// island from both sides. For every shot:
+// Auto shots: a bird's eye of the whole room, one low 3/4 view per cabinet run
+// (biggest first), and each island from both sides. For every shot:
 //  - perimeter walls the camera stands behind are hidden (dollhouse cut-away),
 //    which also drops that wall's cabinets and tops;
 //  - anything standing between the camera and the subject out on the floor
@@ -29,6 +29,10 @@ const ASPECT = 4 / 3
 const MAX_RUN_SHOTS = 4
 /** A blocker must stand at least this far in front of the subject — the corner units beside a run aren't. */
 const BLOCKER_CLEAR = 700
+/** Run / island shots look down this much (Mark, 2026-10-27: 21° looked too steep). */
+const RUN_PITCH_DEG = 11
+/** Bird's eye: looking down at the whole room from a high corner. */
+const BIRDSEYE_PITCH_DEG = 50
 
 /** Cabinet run length on a wall's face side. */
 function runLength(w: Wall, cabinets: CabinetInstance[]): number {
@@ -82,14 +86,36 @@ function shotOf(subject: Wall, n: Pt, walls: Wall[], cabinets: CabinetInstance[]
   const b = blockers(walls, cabinets, subject, eye, { x: subject.pos_x, y: subject.pos_y }, e, n, new Set(behind))
   return {
     id, label,
-    eye: [eye.x, ty + dist * 0.38, eye.y],
+    eye: [eye.x, ty + dist * Math.tan(RUN_PITCH_DEG * Math.PI / 180), eye.y],
     target: [tx, ty, tz],
     hiddenWallIds: [...behind, ...b.wallIds],
     hiddenCabinetIds: b.cabIds,
   }
 }
 
-/** Automatic shots: each cabinet run (most cabinet length first), then each island from both sides. */
+/** The whole room from high up, standing opposite the main run (looking along -n) swung 35°.
+ *  Near walls are hidden (dollhouse); nothing out on the floor is, since the view is over the top. */
+function birdsEyeShot(walls: Wall[], n: Pt, roomH: number): Shot3D {
+  const pts = walls.flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)])
+  const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
+  const minZ = Math.min(...pts.map(p => p.y)), maxZ = Math.max(...pts.map(p => p.y))
+  const tx = (minX + maxX) / 2, tz = (minZ + maxZ) / 2, ty = roomH * 0.3
+  const r = Math.hypot(maxX - minX, maxZ - minZ, roomH) / 2
+  const dist = (r * 1.1) / Math.tan((FOV_V / 2) * Math.PI / 180)
+  const sw = 35 * Math.PI / 180, pitch = BIRDSEYE_PITCH_DEG * Math.PI / 180
+  const dx = n.x * Math.cos(sw) - n.y * Math.sin(sw), dz = n.x * Math.sin(sw) + n.y * Math.cos(sw)
+  const h = dist * Math.cos(pitch)
+  const eye = { x: tx + dx * h, y: tz + dz * h }
+  return {
+    id: 'birdseye', label: "Bird's eye",
+    eye: [eye.x, ty + dist * Math.sin(pitch), eye.y],
+    target: [tx, ty, tz],
+    hiddenWallIds: wallsBehindEye(walls, eye.x, eye.y),
+    hiddenCabinetIds: [],
+  }
+}
+
+/** Automatic shots: a bird's eye of the room, then each cabinet run (most cabinet length first), then each island from both sides. */
 export function autoShots(walls: Wall[], cabinets: CabinetInstance[], roomH: number): Shot3D[] {
   const rc = centroid(walls)
   const runs = walls.filter(w => w.wall_type === 'standard' && runLength(w, cabinets) >= 400)
@@ -106,6 +132,9 @@ export function autoShots(walls: Wall[], cabinets: CabinetInstance[], roomH: num
     const std = walls.filter(w => w.wall_type === 'standard').sort((a, b) => b.length - a.length)[0]
     if (std) shots.push(shotOf(std, wallInwardNormal(std, rc), walls, cabinets, roomH, 28, `run-${std.id}`, std.name, true))
   }
+  // Bird's eye of the whole room first, once there's something in it.
+  const main = runs[0] ?? walls.find(w => w.wall_type === 'standard')
+  if (main && cabinets.length) shots.unshift(birdsEyeShot(walls, wallInwardNormal(main, rc), roomH))
   return shots
 }
 
