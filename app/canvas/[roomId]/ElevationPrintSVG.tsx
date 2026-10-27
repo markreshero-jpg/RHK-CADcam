@@ -570,8 +570,11 @@ export default function ElevationPrintSVG({
     const wcTop = showSoffit && soffitDrop == null ? room.wall_cabinet_top ?? null : null
     return (
       <g pointerEvents="none">
-        {/* Ceiling */}
-        <line x1={0} y1={0} x2={wall.length} y2={0} stroke={INK2} strokeWidth={thinSW} strokeDasharray={`${2 * P} ${1 * P}`} />
+        {/* Wall outline: ceiling + both wall ends, solid at the 'walls' pen (Mark, 2026-10-27) */}
+        {layers.show('walls') && (
+          <path d={`M 0 ${roomH} V 0 H ${wall.length} V ${roomH}`} fill="none" stroke={INK}
+            strokeWidth={atLeastMin(layers.w('walls', thinSW), P)} strokeOpacity={lp('walls').opacity} />
+        )}
         <text x={wall.length + 1 * P} y={0} textAnchor="start" dominantBaseline="middle"
           fontSize={dimFs * 0.85} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">C {roundMm(roomH)}</text>
         {soffitH != null && soffitH < roomH - 20 && (
