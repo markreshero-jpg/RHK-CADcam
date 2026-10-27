@@ -132,6 +132,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 - Saving from the manager stores **sparse** settings: only differences from
   the registry default. Missing items resolve to the default.
 - Unknown item ids are kept on save (they may come from a newer build).
+- Shop set **Benchtops** (2026-10-27, for the Benchtop Quote report): plan shows walls, tops + edges + joins + sizes, fixtures, CAD, benchtop / overall / openings dims; cabinets + applied panels + curved ends ghost 50%; everything else hidden. Elevation / 3D at defaults.
 - Seeded rows: the six former presets + **Kicks** (every item hidden except
   `kick_faces` + `kick_spreaders`, all views).
 
@@ -145,7 +146,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 | Internals | `internal_outline` (P, default hidden), `adj_shelves`, `fixed_shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
 | Hardware | `drawer_boxes` (sides / bottom / front), `drawer_box_backs` (db_back only — split out 2026-10-26 so a set can show just the back as a rough drawer outline in elevation; `drawerBoxPartItem()`), `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D), `drawer_front_drilling` (E — drawer_front slide bores; also in elevation reports) — **all default hidden in plan + 3D**; `bins` (E,3D — z_bin_cabinet bin + its outline in elevation / sheet / editor views, default shown; a bin's rails never draw as runners) |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |
-| Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b |
+| Benchtops | `benchtops` (P / E / 3D), `benchtop_edges` (P: profile colour + code, wall edges; E: code on the front edge), `benchtop_joins` (P / E) — edges + joins added by benchtop Phase 3; elevation + 3D views by Phase 3b; `benchtop_sizes` (P, default off — top name + every edge length inside the edge, canvas + plan prints; Benchtop Quote, 2026-10-27). Plan prints now also print profile codes on exposed edges under `benchtop_edges` (when the report passes the profiles: Plan View + Benchtop Quote) |
 | Room | `walls` (P,E,3D — plan + elevation: wall outline lines; 3D: wall meshes), `wall_fill` (P,E — infill with a **pattern** pick, see "Wall layers"), `wall_names` (P,E), `island_line` (P — plan prints only; the canvas always draws it to pick the island; was 4× the wall pen, now the wall pen; 2026-10-26), `soffit_line` (E — soffit / wall-cab top dashed line, canvas + prints; 2026-10-26) |
 | Labels | `cabinet_labels`, `cabinet_sizes` (P,E) |
 | Dimensions | `dim_wall_overall` (row name WALL — the wall length), `dim_base_chain`, `dim_benchtop` (P, default on — BENCHTOP row just outside the base row, each top anchored to the wall projected onto it, plus the benchtop depth at the wall ends in place of the base carcass depth (overhead depth stays on `dim_wall_chain`), canvas + Plan View report, `src/lib/benchtopDims.ts`; 2026-10-21), `dim_wall_chain`, `dim_row_labels` (P; row names at each chain's wall-start end), `dim_elev_height`, `dim_elev_floor_chain`, `dim_elev_wall_chain` (E), `dim_elev_bench` (E, default on — floor to benchtop top + vessel basin rim, canvas + Elevation Views report, `benchDims.ts`; 2026-10-21), `dim_kicks` (P,E; default off — plan: kick board chain between the base row and the overall + kick depth at the wall ends on lane 2; elevation: kick height per kick, `src/lib/kickDims.ts`; not in reports yet) — chain items to be replaced by user-defined rows (`settings.<view>.dimRows`), see `z_dimension_rows/DIMENSION-ROWS-SPEC.md` |
@@ -372,7 +373,7 @@ Built:
   SVG download) and "Elevation Views" (`ElevationReportSVG` + `generateElevationPDF`)
   were deleted; the layer-aware reports took their names (ids stay `plan_view_v2` /
   `elevation_view_v2`).
-- Not done: benchtops in the plan report (not passed to it).
+- Benchtops in the plan report: done (outline, joins; edge codes + sizes 2026-10-27).
 - Verification: `z_plan_automation/verify-layers-p3c.mjs`.
 
 #### 3c part 2 — ghost + opacity in 3D ✅ built (2026-09-18)

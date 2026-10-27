@@ -407,6 +407,12 @@ Started on Mark's go ("start phase 4"). Rules Q-a…Q-h are Claude's defaults �
   leg / join counts (a join is on both its pieces — counted once). Print / PDF
   via the modal button. Builder: `benchtop-resolver/supply.ts`; view:
   `BenchtopSupplyReport.tsx`.
+- **R-e Benchtop Quote (2026-10-27, Mark: "report I can send our stone masons")** — Reports → "Benchtop Quote", a
+  drawing report (one room per PDF): page 1 = the Plan View drawing on the **Benchtops** layer set (walls,
+  tops with name + edge lengths, profile codes, joins, fixtures, CAD), page 2 = schedule per top (material from
+  supply rows if resolved, thickness, m² less cutouts, exposed edge lm per profile, wall / joint lm, cutouts,
+  waterfalls) + totals + code legend. Built from the drawing, no Resolve needed. `src/lib/benchtopQuote.ts`,
+  `BenchtopQuoteSchedule.tsx`, `BenchtopEdgeLabels.tsx`; PlanViewReport `quote` prop. In-app check pending.
 - **R-b Parts List Summary** — supply items removed (the interim "— supply"
   tag is gone); it lists only cut parts.
 - **R-c Optimiser** — in-house parts (rows with a board `material_id`, not

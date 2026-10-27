@@ -175,6 +175,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'benchtop_edges', group: 'benchtops', label: 'Benchtop edge profiles', views: ['plan', 'elevation'], default: ON,
     hint: 'Plan: profile colour + code on exposed edges, wall edges dashed grey. Elevation: code on the front edge' },
   { id: 'benchtop_joins', group: 'benchtops', label: 'Benchtop join lines', views: ['plan', 'elevation'], default: ON },
+  { id: 'benchtop_sizes', group: 'benchtops', label: 'Benchtop names + edge lengths', views: ['plan'], default: OFF,
+    hint: 'Top name in the middle and every edge length just inside the edge (Benchtop Quote report)' },
 
   // Fixtures & appliances (z_fixtures) — one item per catalogue category
   { id: 'fixture_appliances', group: 'fixtures', label: 'Appliances', views: ALL, default: ON },

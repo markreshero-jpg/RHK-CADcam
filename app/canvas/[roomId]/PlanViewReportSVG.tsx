@@ -9,8 +9,9 @@
 // mm and the drawing prints at the correct physical size at 1:scale.
 'use client'
 import type { ReactNode, RefObject } from 'react'
-import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
-import { btSegments, outlinePath, outlinePoints } from '@/src/lib/benchtopGeometry'
+import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import { btSegments, outlinePath, outlinePoints, effectiveProfileId } from '@/src/lib/benchtopGeometry'
+import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { OpeningSymbol, FixturesPlanPrint } from './FixturesPlan'
@@ -83,7 +84,7 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false,
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false, btProfiles, btDefaultProfile,
 }: {
   walls:       Wall[]
   /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
@@ -92,6 +93,9 @@ export default function PlanViewReportSVG({
   annotations?: RoomAnnotation[]
   /** Benchtops (z_benchtop_builder) — outline, cutouts and join lines. */
   benchtops?:  BenchtopInstance[]
+  /** Edge profiles + each top's default — prints the profile code on exposed edges (benchtop_edges). */
+  btProfiles?: Record<string, BenchtopEdgeProfile>
+  btDefaultProfile?: (bt: BenchtopInstance) => string | null
   cabinets:    CabinetInstance[]
   resolvedParts?: Map<string, ResolvedCabinet>
   svgRef:      RefObject<SVGSVGElement | null>
@@ -611,6 +615,15 @@ export default function PlanViewReportSVG({
               <line key={i} x1={j.p0.x} y1={j.p0.y} x2={j.p1.x} y2={j.p1.y} opacity={layers.op('benchtop_joins')}
                 stroke={INK} strokeWidth={lw('benchtop_joins', pen('thin', P))} strokeDasharray={`${1.5 * P} ${0.8 * P}`} />
             ))}
+            {(layers.show('benchtop_sizes') || (btProfiles && layers.show('benchtop_edges'))) && (
+              <BenchtopEdgeLabels segs={segs} name={bt.label} sizes={layers.show('benchtop_sizes')}
+                codes={btProfiles && layers.show('benchtop_edges') ? i => {
+                  const pid = effectiveProfileId(segs[i], btDefaultProfile?.(bt))
+                  const prof = pid ? btProfiles[pid] : undefined
+                  return prof ? `${prof.code ?? prof.name}${prof.generates === 'waterfall' ? ' WF' : ''}` : null
+                } : undefined}
+                fs={layers.w('benchtop_sizes', 2.2 * P)} gap={2.2 * P} fill={INK} opacity={layers.op('benchtop_sizes')} />
+            )}
           </g>
         )
       })}

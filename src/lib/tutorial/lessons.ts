@@ -995,6 +995,23 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In elevation, click an integrated dishwasher (or anywhere a fixture sits over a cabinet, or cabinets overlap). A list pops up with the fixtures first, then the cabinets under the pointer. Point at a row to light it up, click it to select. Pick the cabinet to edit its panel. Esc or a click elsewhere closes the list; shift-click still multi-selects without it.',
       canvas: true, done: (c, s) => ev(c, 'elev_stack_pick') > ev(s, 'elev_stack_pick') },
   ]},
+
+  { id: 'benchtop_quote', level: 'intermediate', topic: 'reports', title: 'Send benchtops to the stonemason',
+    blurb: 'A plan of just the walls, tops, edges and appliances, plus a schedule — for a stone quote.',
+    keywords: 'benchtop stone mason stonemason quote report plan edge profile cutout schedule layer set', steps: [
+    { id: 'layer', title: 'Look at it on the canvas',
+      body: 'In Plan, pick the Benchtops layer set from the layer set dropdown in the header. You see the walls, each top with its name and edge lengths, the edge profile codes, sinks / hobs / appliances and your CAD notes; cabinets are faint outlines. Fix anything that looks wrong before you print.',
+      canvas: true, done: () => true },
+    { id: 'open', title: 'Open Room Reports',
+      body: 'Click Reports in the menu bar and choose Room Reports…',
+      target: 'menu-Reports', canvas: true, done: c => c.report !== null },
+    { id: 'pick', title: 'Choose Benchtop Quote',
+      body: 'In the list on the left, click Benchtop Quote. It starts on the Benchtops layer set; the schedule (area, edges per profile, cutouts) is under the drawing.',
+      target: 'report-benchtop_quote', canvas: true, done: c => c.report === 'benchtop_quote' },
+    { id: 'download', title: 'Download and send',
+      body: 'Set the paper and scale, then Download PDF. Page 1 is the plan, page 2 the schedule. Email it to the stonemason.',
+      target: 'plan-download', canvas: true, done: (c, s) => ev(c, 'plan_pdf') > ev(s, 'plan_pdf') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

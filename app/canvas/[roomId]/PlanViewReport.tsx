@@ -7,7 +7,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
 import { reportDoc, saveReport } from './pdfCombine'
-import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import type { QuoteTop, QuoteTotals } from '@/src/lib/benchtopQuote'
+import { BenchtopQuoteSchedule, drawBenchtopQuoteSchedule } from './BenchtopQuoteSchedule'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
 import { resolveLayerView } from '@/src/lib/displayLayers/resolve'
@@ -36,7 +38,12 @@ const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'annotColours', label: 'Annotation colours' },
 ]
 
-export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops, batch }: {
+export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops, btProfiles, btDefaultProfile, quote, batch }: {
+  /** Edge profiles + each top's default — profile codes on exposed edges. */
+  btProfiles?: Record<string, BenchtopEdgeProfile>
+  btDefaultProfile?: (bt: BenchtopInstance) => string | null
+  /** Benchtop Quote report (for stonemasons): own layer-set memory, plus a schedule page. */
+  quote?: { tops: QuoteTop[]; totals: QuoteTotals }
   /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
   batch?: () => void
   /** Benchtops — drawn on the plan (outline, cutouts, join lines). */
@@ -58,7 +65,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
   const svgRef = useRef<SVGSVGElement>(null)
   const tbRef = useRef<HTMLDivElement>(null)
   const company = useCompanyTitle()
-  const [layerSet, setLayerSetId] = useReportLayerSet(LS_SET_KEY, layerSets, activeLayerSetId)
+  const [layerSet, setLayerSetId] = useReportLayerSet(quote ? 'benchtop-quote-layer-set' : LS_SET_KEY, layerSets, activeLayerSetId)
   const layers = useMemo(() => resolveLayerView(layerSet, 'plan'), [layerSet])
   // Modal only mounts on user action (never SSR'd), so reading localStorage in the
   // initializer is safe — no hydration mismatch. Older storage also held drawing
@@ -159,9 +166,15 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
       await svg2pdf(pdfSvg, doc, { x, y, width: targetW, height: targetH })
       const tbSvg = tbRef.current?.querySelector('svg')
       if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
+      if (quote) {
+        doc.addPage([paper.w, paper.h], paper.w >= paper.h ? 'landscape' : 'portrait')
+        drawBenchtopQuoteSchedule(doc, { x: MARGIN, y: MARGIN, w: usableW }, quote.tops, quote.totals, btProfiles ?? {},
+          `Benchtop schedule — ${[project?.name, room.name].filter(Boolean).join(' · ')}`)
+        if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
+      }
 
       const safeRoom = room.name.replace(/[^\w-]/g, '_')
-      saveReport(doc, `plan-${safeRoom}-1-${scale}.pdf`)
+      saveReport(doc, `${quote ? 'benchtops' : 'plan'}-${safeRoom}-1-${scale}.pdf`)
     } finally {
       setBusy(false)
     }
@@ -205,6 +218,8 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
           fixtures={fixtures}
           annotations={annotations}
           benchtops={benchtops}
+          btProfiles={btProfiles}
+          btDefaultProfile={btDefaultProfile}
           resolvedParts={resolvedParts}
           svgRef={svgRef}
           scale={scale}
@@ -218,6 +233,11 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
           </div>
         )}
       </div>
+      {quote && (
+        <div className="bg-white rounded overflow-hidden shadow-inner">
+          <BenchtopQuoteSchedule tops={quote.tops} totals={quote.totals} profiles={btProfiles ?? {}} />
+        </div>
+      )}
     </div>
   )
 }

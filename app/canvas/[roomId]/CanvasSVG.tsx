@@ -48,6 +48,7 @@ import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, type LocalPt
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { FillPatternDef, fillPaint } from './FillPattern'
 import { toFrame, type LabelOff } from '@/src/lib/labelOffsets'
+import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 
 // Union of cabinet-local plan rects (X along wall, Z = depth) → the cabinet's
 // click area. null = nothing of the cabinet is drawn (not selectable, no labels).
@@ -384,6 +385,13 @@ export default function CanvasSVG({
                   </g>
                 )
               })}
+
+              {/* Name + edge lengths (Benchtop Quote) */}
+              {layers.show('benchtop_sizes') && !edging && !shaping && (
+                <BenchtopEdgeLabels segs={segs} name={bt.label} sizes
+                  fs={9 * layers.w('benchtop_sizes', 1) / view.zoom} gap={10 / view.zoom}
+                  fill={layers.color('benchtop_sizes', '#e5e7eb')} opacity={layers.op('benchtop_sizes')} />
+              )}
 
               {/* Edit edges (Phase 7b): the working copy's edges in the active tab's
                   colours, clickable. Mode feedback like the shape-edit handles —

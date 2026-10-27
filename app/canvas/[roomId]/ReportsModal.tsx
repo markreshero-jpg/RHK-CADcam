@@ -21,6 +21,7 @@ import CabinetSheetReport from './CabinetSheetReport'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
 import { buildSupplyLines, supplyTotals } from '@/src/lib/benchtop-resolver/supply'
+import { quoteTops, quoteTotals } from '@/src/lib/benchtopQuote'
 import { ApplianceScheduleSheet, buildSchedule, schedulePrintHtml, type CatalogRef } from './ApplianceScheduleReport'
 import { OpeningScheduleSheet, buildOpeningSchedule, openingSchedulePrintHtml } from './OpeningScheduleReport'
 import { cutListDims, shapeMark, type CutListPart, type CutListTable } from '@/src/lib/optimiser/cutListDims'
@@ -34,12 +35,13 @@ import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { OptiPart } from '@/src/lib/optimiser/types'
 
 export type ReportScope = 'job' | 'room'
-export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length'
+export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length' | 'benchtop_quote'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'shop_drawings',      label: 'Shop Drawings',       desc: 'One PDF per room: plan + elevations, one scale' },
   { id: 'parts_list_summary', label: 'Parts List Summary',  desc: 'Parts by room · material · cabinet' },
   { id: 'benchtop_supply',    label: 'Benchtop Supply',     desc: 'Stone / laminate order · m² · edges' },
+  { id: 'benchtop_quote',     label: 'Benchtop Quote',      desc: 'For stonemasons: plan with walls, tops, edges + schedule' },
   { id: 'edgeband_length',    label: 'Edgeband Length',     desc: 'Tape metres by product · waste · cost' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'opening_schedule',   label: 'Door & Window Schedule', desc: 'Doors, windows, openings · size · sill · head' },
@@ -149,7 +151,7 @@ function collectBtParts(
 }
 
 /** Reports that draw one room at a time (one PDF per room); Job Reports picks the room. */
-const DRAWING_REPORTS: ReportId[] = ['shop_drawings', 'plan_view_v2', 'elevation_view_v2', 'cabinet_sheets', 'render_3d']
+const DRAWING_REPORTS: ReportId[] = ['shop_drawings', 'plan_view_v2', 'benchtop_quote', 'elevation_view_v2', 'cabinet_sheets', 'render_3d']
 
 const PAPER = {
   A4L: { w: 297, h: 210, label: 'A4 Landscape' },
@@ -411,6 +413,19 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   const drawBtInfo = useMemo(() => isHere ? bt3d?.info : btInfoFor?.(drawRoom), [isHere, drawRoom.id, bt3d, btInfoFor])
   const drawBenchTopZ = isHere ? benchTopZ : drawBtInfo && ((b: BenchtopInstance) => drawBtInfo(b).topZ)
   const drawBt3d = drawBtInfo && bt3d ? { info: drawBtInfo, profiles: bt3d.profiles } : undefined
+  const drawBtDefaultProfile = useMemo(() => drawBtInfo && ((b: BenchtopInstance) => drawBtInfo(b).defaultProfileId), [drawBtInfo])
+  // Benchtop Quote: per-top schedule from the drawing; material from the supply rows when resolved.
+  const drawQuote = useMemo(() => {
+    if (selectedReport !== 'benchtop_quote') return undefined
+    const lines = buildSupplyLines(drawBenchtops.map(b => ({ id: b.id, label: b.label, room_id: b.room_id })), allBtParts)
+    const tops = quoteTops(drawBenchtops, {
+      profiles: bt3d?.profiles,
+      defaultProfileId: drawBtDefaultProfile,
+      thickness: b => drawBtInfo?.(b).thick.total ?? lines.find(l => l.benchtopId === b.id)?.thickness ?? null,
+      material: b => [...new Set(lines.filter(l => l.benchtopId === b.id).map(l => l.material))].join(', ') || null,
+    })
+    return { tops, totals: quoteTotals(tops) }
+  }, [selectedReport, drawBenchtops, allBtParts, bt3d, drawBtDefaultProfile, drawBtInfo])
   // CAD (spec block etc.) of another room, with that room's {fields} filled.
   const [otherAnnots, setOtherAnnots] = useState<{ roomId: string; rows: RoomAnnotation[] } | null>(null)
   useEffect(() => {
@@ -593,14 +608,14 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'shop_drawings') && (
+                {(selectedReport === 'plan_view_v2' || selectedReport === 'benchtop_quote' || selectedReport === 'elevation_view_v2' || selectedReport === 'shop_drawings') && (
                   <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
                     title="Drawing scale — 1:N">
                     {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
                   </select>
                 )}
-                {(selectedReport === 'plan_view_v2' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets' || selectedReport === 'shop_drawings' || selectedReport === 'render_3d') && (
+                {(selectedReport === 'plan_view_v2' || selectedReport === 'benchtop_quote' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets' || selectedReport === 'shop_drawings' || selectedReport === 'render_3d') && (
                   <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
                     {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
@@ -618,7 +633,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   </label>
                 )}
                 {/* The plan / elevation / cabinet reports have their own download button in their toolbar. */}
-                {selectedReport !== 'plan_view_v2' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && (
+                {selectedReport !== 'plan_view_v2' && selectedReport !== 'benchtop_quote' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && (
                   <button onClick={handlePrint}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
                     Print / PDF
@@ -697,6 +712,26 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   scale={printScale}
                   paperKey={printPaper}
                 />
+              ) : selectedReport === 'benchtop_quote' ? (
+                <PlanViewReport
+                  key={`bq-${reportKey}`}
+                  batch={batch}
+                  project={project}
+                  room={drawRoom}
+                  walls={drawWalls}
+                  fixtures={drawFixtures}
+                  benchtops={drawBenchtops}
+                  btProfiles={bt3d?.profiles}
+                  btDefaultProfile={drawBtDefaultProfile}
+                  quote={drawQuote}
+                  annotations={drawPlanAnnots}
+                  cabinets={drawCabinets}
+                  resolvedParts={drawPlanResolved}
+                  layerSets={layerSets}
+                  activeLayerSetId={layerSets.find(s => s.name === 'Benchtops')?.id ?? activeLayerSetId}
+                  scale={printScale}
+                  paperKey={printPaper}
+                />
               ) : selectedReport === 'plan_view_v2' ? (
                 <PlanViewReport
                   key={reportKey}
@@ -706,6 +741,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   walls={drawWalls}
                   fixtures={drawFixtures}
                   benchtops={drawBenchtops}
+                  btProfiles={bt3d?.profiles}
+                  btDefaultProfile={drawBtDefaultProfile}
                   annotations={drawPlanAnnots}
                   cabinets={drawCabinets}
                   resolvedParts={drawPlanResolved}
