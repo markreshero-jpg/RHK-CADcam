@@ -1,0 +1,21 @@
+{
+  "_source": "Mark's spec text 2026-10-27 (no plan): bench 2600 x 700 x 900, Panel | Sink 550 | Bin 300 | BBQ cupboard 846 | B1D 300 | Panel | wine fridge 550 | Panel. 140 kick, fingerpull 675 carcass, Stylelex 18mm.",
+  "projectName": "RHK6593 Mick Dengate - Dino BBQ Flatpack",
+  "roomName": "Alfresco Kitchen",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0, "y": 0, "length": 3600, "angle": 0, "_": "back wall W->E, run at 500 so both ends are open" },
+    { "x": 3600, "y": 0, "length": 3000, "angle": 90 },
+    { "x": 3600, "y": 3000, "length": 3600, "angle": 180 },
+    { "x": 0, "y": 3000, "length": 3000, "angle": 270 }
+  ],
+  "cabinets": [
+    { "def": "BEPF", "wall": 1, "offset": 500,  "dx": 18,  "dy": 880, "dz": 675, "note": "Seen end, to the floor" },
+    { "def": "BSK",  "wall": 1, "offset": 518,  "dx": 550, "dy": 880, "dz": 675, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink cabinet" },
+    { "def": "BBIN", "wall": 1, "offset": 1068, "dx": 300, "dy": 880, "dz": 675, "note": "Bin 300" },
+    { "def": "B2D",  "wall": 1, "offset": 1368, "dx": 846, "dy": 880, "dz": 675, "note": "Cupboard under 900 BBQ (BBQ specs TBC, GLB to come)" },
+    { "def": "B1D",  "wall": 1, "offset": 2214, "dx": 300, "dy": 880, "dz": 675 },
+    { "def": "BEPF", "wall": 1, "offset": 2514, "dx": 18,  "dy": 880, "dz": 675, "note": "Panel beside wine fridge space" },
+    { "def": "BEPF", "wall": 1, "offset": 3082, "dx": 18,  "dy": 880, "dz": 675, "note": "Seen end beside wine fridge space, to the floor. Wine fridge space 550 between panels." }
+  ]
+}
