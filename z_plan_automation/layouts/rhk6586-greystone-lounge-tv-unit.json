@@ -1,0 +1,276 @@
+{
+  "_source": "z_sample_plans/RHK6586 - Greystone Apt 109 Netanya/RHK6586 - Greystone Site Measure.pdf p1 (TV unit) + A109 Milross - Drawings-11.pdf p3-4 (lounge) + Mark Q&A 2026-10-27/28",
+  "_notes": [
+    "Wall 3040 F/P from the curtain pelmet line (left, no wall) to a 55 step at the right that goes BACK (away from the unit) - walls 2/3 (step + wall on) added in the DB after placement (left turn, the script refuses it). CH 2320.",
+    "Unit 3000 L, 40 short of the pelmet end, flush with the step on the right. 450 H = 100 kick + 330 carcass + 20 stone. 350 D overall = top; top overhangs 5 past doors + panels -> fronts at 345, carcass 327, BEPF dz 327 (panel 345).",
+    "BEPF 16.5 both ends (both fully seen), 5 bays between (2967): drawers 593 | drawers 594 | data store 593 flap down (GPO x2 inside) | drawers 594 | drawers 593. Drawers + data store lockable (note). Kick joined between the panels.",
+    "Stone top 3010 x 350 (5 past both panels), height_mm 430. Ledge FLSHLF 3000 x 300 x 32 (double Boston Oak), underside 1800, R300 right front corner (CAD note / part shapes). TV 65 centre 1065, soundbar under.",
+    "Drawers: SLIDE_SETBACK 0 so the 300 Dragon Pro fits the 327 carcass (300.5 available). Ledge both ends seen.",
+    "First draw (2026-10-28) had only the TV wall: cabinets faced north (no room side) - redrawn with the left wall first."
+  ],
+  "projectName": "RHK6586 Greystone Apt 109 Netanya",
+  "roomName": "Lounge TV Unit",
+  "roomHeight": 2320,
+  "walls": [
+    {
+      "x": 0,
+      "y": 2500,
+      "length": 2500,
+      "angle": 270,
+      "_": "left wall with the external doors / curtain pelmet line (face = pelmet line), length not measured - drawn first so the room side is clear"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 3040,
+      "angle": 0,
+      "_": "TV wall"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 40,
+      "dx": 16.5,
+      "dy": 430,
+      "dz": 327,
+      "note": "TV unit left end panel (seen), to the floor"
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 56.5,
+      "dx": 593,
+      "dy": 430,
+      "dz": 327,
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "TV unit lockable EQ drawer 1",
+      "rules": {
+        "SLIDE_SETBACK": 0
+      }
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 649.5,
+      "dx": 594,
+      "dy": 430,
+      "dz": 327,
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "TV unit lockable EQ drawer 2",
+      "rules": {
+        "SLIDE_SETBACK": 0
+      }
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 1243.5,
+      "dx": 593,
+      "dy": 430,
+      "dz": 327,
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "door",
+              "hinge_side": "bottom"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "TV unit data store - flap down door (stays), lockable, GPO x2 inside"
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 1836.5,
+      "dx": 594,
+      "dy": 430,
+      "dz": 327,
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "TV unit lockable EQ drawer 3",
+      "rules": {
+        "SLIDE_SETBACK": 0
+      }
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 2430.5,
+      "dx": 593,
+      "dy": 430,
+      "dz": 327,
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "TV unit lockable EQ drawer 4",
+      "rules": {
+        "SLIDE_SETBACK": 0
+      }
+    },
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 3023.5,
+      "dx": 16.5,
+      "dy": 430,
+      "dz": 327,
+      "note": "TV unit right end panel (seen - the wall steps back past it), to the floor"
+    },
+    {
+      "def": "FLSHLF",
+      "wall": 2,
+      "offset": 40,
+      "dx": 3000,
+      "note": "TV ledge 3000 x 300 x 32 Boston Oak, underside 1800 AFFL, R300 on the right front corner (3100 sheets available). LED uplight TBC",
+      "dz": 300,
+      "set": {
+        "pos_z": 1800,
+        "float_shelf": {
+          "stop": 30,
+          "build": "double",
+          "cleat": true,
+          "strip_w": 90,
+          "tape_id": null,
+          "rebate_h": 10,
+          "seen_left": true,
+          "seen_right": true,
+          "rebate_depth": 30,
+          "strip_spacing": 600
+        }
+      }
+    }
+  ]
+}
