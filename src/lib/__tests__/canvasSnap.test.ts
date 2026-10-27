@@ -49,6 +49,21 @@ describe('cabinet snap', () => {
     expect(r.kind).toBe('cabinet-corner')
   })
 
+  it('kick boards are snap outlines; kick assemblies drop their footprint box', () => {
+    const cx = { x: 2000, y: 1500 }
+    const base = { ...cab, id: 'b', dx: 600 } as unknown as CabinetInstance
+    // Kick face 600 long × 16 thick, set back 50 from the carcase front.
+    const kp = { case_parts: [], face_zones: [], toekick_parts: [{ part_key: 'kick_front_face', X: 0, Y: 0, Z: 514, DX: 150, DY: 600, DZ: 16 }] } as unknown as ResolvedCabinet
+    const os = cabinetSnapOutlines(base, wall, cx, kp)
+    expect(os).toHaveLength(2)
+    expect(front(os[1])).toBeCloseTo(530)
+    const asm = { ...base, is_kick_assembly: true } as unknown as CabinetInstance
+    expect(cabinetSnapOutlines(asm, wall, cx, kp)).toHaveLength(1)
+    const r = computeSnap({ x: 1003, y: 532 }, { walls, cabinets: [asm], benchtops: [], resolved: new Map([['b', kp]]) }, settings, 20)
+    expect(r.kind).toBe('cabinet-corner')
+    expect(r.pt.y).toBeCloseTo(530)
+  })
+
   it('edges can be switched off; old saved settings get the new kind on', () => {
     const off = { ...settings, kinds: { ...settings.kinds, 'cabinet-edge': false } }
     expect(computeSnap({ x: 1000 - 6, y: 300 }, ctx, off, 20).kind).toBeNull()

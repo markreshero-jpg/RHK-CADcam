@@ -9,7 +9,7 @@ import type { Pt } from './geometry'
 import { dist, wallEnd, wallDir, snapAngle, centroid, wallInwardNormal, cabWallPerp, wallMitreCorners, cabinetToPlan, cabinetCornerPts } from './geometry'
 import type { Wall, CabinetInstance, BenchtopInstance } from './types'
 import type { ResolvedCabinet } from './resolver/types'
-import { casePlanCorners, rotEulerXYZ } from './jointDrilling'
+import { casePlanCorners, rotEulerXYZ, tkPlanBox, tkPlanCorners } from './jointDrilling'
 import { customExtents } from './customPartBox'
 
 export type SnapKind = 'cabinet-corner' | 'cabinet-edge' | 'wall-end' | 'benchtop-vertex'
@@ -60,7 +60,8 @@ export interface SnapResult {
 export interface SnapModifiers { ortho?: boolean; ortho45?: boolean }
 
 // Every cabinet class has a rectangular plan footprint, including overheads
-// (wall / wall_corner), which overlap the bases below them.
+// (wall / wall_corner), which overlap the bases below them. Kick assemblies
+// carry the class of their run (base), so they're included too.
 const CORNER_CLASSES = new Set<string>(['base', 'wall', 'tall', 'base_corner', 'wall_corner', 'tall_corner'])
 
 // The 4 footprint corners (back-left, back-right, front-left, front-right) in
@@ -77,16 +78,22 @@ export function cabinetCorners(cab: CabinetInstance, wall: Wall, cx: Pt): Pt[] {
 }
 
 // A cabinet's plan outlines in world space: its carcase footprint, then (when
-// resolved) every case part, room-visible added part (end panels, fillers) and
-// front, as closed polygons. Corners are point snaps; edges are edge snaps.
+// resolved) every case part, kick board, room-visible added part (end panels,
+// fillers) and front, as closed polygons. Corners are point snaps; edges are
+// edge snaps. Kick assemblies (joined kick runs) draw no footprint box in plan,
+// so they snap to their kick boards only.
 export function cabinetSnapOutlines(cab: CabinetInstance, wall: Wall, cx: Pt, rp?: ResolvedCabinet): Pt[][] {
   const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx))
   const toPlan = cabinetToPlan(cab, wall, perp)
-  const out: Pt[][] = [cabinetCornerPts(cab, wall, perp)]
+  const out: Pt[][] = cab.is_kick_assembly ? [] : [cabinetCornerPts(cab, wall, perp)]
   if (!rp) return out
   const rect = (x: number, z: number, w: number, d: number) =>
     [toPlan(x, z), toPlan(x + w, z), toPlan(x + w, z + d), toPlan(x, z + d)]
   for (const p of rp.case_parts) out.push(casePlanCorners(p).map(q => toPlan(q.x, q.z)))
+  for (const p of rp.toekick_parts ?? []) {
+    const b = tkPlanBox(p)
+    if (b.w > 0 && b.d > 0) out.push(tkPlanCorners(p).map(q => toPlan(q.x, q.z)))
+  }
   for (const p of rp.custom_parts ?? []) {
     if (!p.show_in_room) continue
     const { ex, ez } = customExtents(p.orientation, Number(p.dx), Number(p.dy), Number(p.dz))
