@@ -1,0 +1,227 @@
+{
+  "_source": "z_sample_plans/RHK6586 - Greystone Apt 109 Netanya/RHK6586 - Greystone Site Measure.pdf p2 (vanity) + A109 Milross - Drawings-11.pdf p2 (bathroom) + Unit 109 - Combined Plumbing Specs.pdf p1 (basin) + Mark Q&A 2026-10-28",
+  "_notes": [
+    "Wall 2250 F/T, square wall left, 45 wall right (opens out). Vanity sits on the builders 200 tiled plinth (runs into the 45 wall, hides the toilet waste) - no kick of ours.",
+    "Stone top 2100 x 500 at 785 (basin rim 65 above -> top of bowl 850): 20 slab on the carcass + MA150 mitred apron front + seen right end. Carcass 200-765 (dy 565, pos_z 200). Top 5 past fronts + seen panel: fronts at 495 -> carcass 477.",
+    "Bays 700 | 700 (centred on the basin, 1050) | 678.5 + BEPF 16.5 seen right (outer face 2095), stops under the apron (635). Left tight to the wall, no filler (Mark).",
+    "2 drawers per bay, finger pull; room BY_CLASS base REVT 134 + top-row finger_gap 150 so the top drawers clear the apron. L/R bays pinned to Dragon Pro 350 (room behind for the GPOs + curly cords, 520 AFFL). Centre: plumbing cut-out in the drawer bottoms later (Mark); rails on edge.",
+    "Studs (finished face) 285 / 610 / 1400 / 1865 from the left wall (frame 305 / 630 / 1420 / 1885 less 20 tile + gyp)."
+  ],
+  "projectName": "RHK6586 Greystone Apt 109 Netanya",
+  "roomName": "Bathroom Vanity",
+  "roomHeight": 2400,
+  "roomRules": {
+    "BY_CLASS": {
+      "base": {
+        "REVT": 134
+      }
+    }
+  },
+  "walls": [
+    {
+      "x": 0,
+      "y": 1500,
+      "length": 1500,
+      "angle": 270,
+      "_": "left wall (square), length not measured"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2250,
+      "angle": 0,
+      "_": "vanity wall, F/T"
+    },
+    {
+      "x": 2250,
+      "y": 0,
+      "length": 1000,
+      "angle": 45,
+      "_": "45 wall, length not measured"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 0,
+      "dx": 700,
+      "dy": 565,
+      "dz": 477,
+      "set": {
+        "has_toekick": false,
+        "pos_z": 200,
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "row_index": 1,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "9ae61f68-95a7-4789-8872-f883932fc2a8"
+              }
+            },
+            {
+              "col_index": 0,
+              "row_index": 1,
+              "face_type": "drawer_face",
+              "finger_gap": 150,
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "9ae61f68-95a7-4789-8872-f883932fc2a8"
+              }
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "Vanity left drawers - 2, GPO at the back (520 AFFL, curly cords) - 350 runners"
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 700,
+      "dx": 700,
+      "dy": 565,
+      "dz": 477,
+      "rules": {
+        "RAIL_ORIENT": "vertical"
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 200,
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "row_index": 1,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face"
+            },
+            {
+              "col_index": 0,
+              "row_index": 1,
+              "face_type": "drawer_face",
+              "finger_gap": 150
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "Vanity centre drawers under the basin - plumbing cut-out in the drawer bottoms later; waste 450 AFFL"
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 1400,
+      "dx": 678.5,
+      "dy": 565,
+      "dz": 477,
+      "set": {
+        "has_toekick": false,
+        "pos_z": 200,
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "row_index": 1,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "9ae61f68-95a7-4789-8872-f883932fc2a8"
+              }
+            },
+            {
+              "col_index": 0,
+              "row_index": 1,
+              "face_type": "drawer_face",
+              "finger_gap": 150,
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "9ae61f68-95a7-4789-8872-f883932fc2a8"
+              }
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "Vanity right drawers - 2, GPO at the back (520 AFFL, curly cords) - 350 runners"
+    },
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 2078.5,
+      "dx": 16.5,
+      "dy": 435,
+      "dz": 477,
+      "set": {
+        "has_toekick": false,
+        "pos_z": 200
+      },
+      "note": "Vanity seen end panel (right), on the plinth, stops under the 150 apron (635)"
+    }
+  ]
+}
