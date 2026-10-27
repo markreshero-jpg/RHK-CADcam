@@ -1,0 +1,75 @@
+{
+  "_source": "z_sample_plans/RHK6586 - Greystone Apt 109 Netanya/RHK6586 - Greystone Site Measure.pdf p1 (Bed 1 Robe) + A109 Milross - Drawings-11.pdf p9 (robe) + p10 (study) + Mark Q&A 2026-10-27",
+  "_notes": [
+    "Wall 3395 F/P: 1335 study | 170 sliding door head | 505 plumbing box | 1370+15 (Mark: add the 15 short here) = 1385. 45 deg walls both ends; the right one angles into the room (robe front longer than back). Left 45 wall not drawn (reflex corner, nothing against it).",
+    "CH 2480. Beam + plumbing box come down 385 -> robe 2095 incl 100 kick, BH 385 flush with doors over it. 2mm top reveal on tall/wall fronts so doors clear the BH (room BY_CLASS REVT 2).",
+    "Robe 700 OA = 682 carcass + 16 door + 2. Starts at the door head (1505) with TEPF 2x16.5 (stands in for 32 PT Woodmatt), runs 1890 to the 45 corner. Designer bays 500/500/650 + 207 extra spread = 569/569/719 + triangle iron bay on the angle (front 682).",
+    "Luggage bay = D3 (3 equal drawers, 740 incl kick) + W1D on top (door 740-1460, fixed panel 1460-2093 for the TV, open inside behind it so tall cases stand).",
+    "Iron bay = triangle tall (footprint set after placement): 3 open shelves to 740, door to 1460, fixed panel above. Hinge on its square left gable.",
+    "Study 0-1335: 20 stone top 750 AFFL (height_mm 730), waterfall leg on the left, BEPF 2x16.5 on the right, 650 x 130 drawer hung under the top (centred, support TBC). Desk depth 600 assumed (not given)."
+  ],
+  "projectName": "RHK6586 Greystone Apt 109 Netanya",
+  "roomName": "Bed 1 Robe + Study",
+  "roomHeight": 2480,
+  "wallCabinetTop": 2095,
+  "roomRules": { "BY_CLASS": { "tall": { "REVT": 2 }, "wall": { "REVT": 2 } } },
+  "walls": [
+    { "x": 0, "y": 0, "length": 3395, "angle": 0, "_": "robe + study wall, F/P" },
+    { "x": 3395, "y": 0, "length": 1200, "angle": 45, "_": "45 deg wall at the robe end (length not measured)" }
+  ],
+  "cabinets": [
+    { "def": "BEPF", "wall": 1, "offset": 1302, "dx": 16.5, "dy": 730, "dz": 582, "note": "Study desk end panel 1 of 2 (2x16.5 = 32 PT Woodmatt Boston Oak for now), under the stone top" },
+    { "def": "BEPF", "wall": 1, "offset": 1318.5, "dx": 16.5, "dy": 730, "dz": 582, "note": "Study desk end panel 2 of 2" },
+    { "def": "B1D", "wall": 1, "offset": 336, "dx": 650, "dy": 134, "dz": 560,
+      "rules": { "FLOAT": true },
+      "set": { "has_toekick": false, "pos_z": 596,
+        "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }], "rows": [{ "row_index": 0, "height_locked": false }],
+          "zones": [{ "col_index": 0, "row_index": 0, "face_type": "drawer_face" }] } },
+      "note": "Study drawer 650w x 130h hung under the stone top (centred - support/fixing TBC)" },
+    { "def": "TEPF", "wall": 1, "offset": 1505, "dx": 16.5, "dy": 2095, "dz": 682, "note": "Robe seen end panel 1 of 2 at the door head (2x16.5 = 32 PT Woodmatt for now)" },
+    { "def": "TEPF", "wall": 1, "offset": 1521.5, "dx": 16.5, "dy": 2095, "dz": 682, "note": "Robe seen end panel 2 of 2" },
+    { "def": "T2D", "wall": 1, "offset": 1538, "dx": 569, "dy": 2095, "dz": 682,
+      "set": {
+        "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }], "rows": [{ "row_index": 0, "height_locked": false }],
+          "zones": [{ "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left" }] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 167, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "size": 203.5, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "size": 1263.5, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "section": { "type": "open", "fittings": [] } } ] } } },
+      "note": "Robe tall hang 1 - two low fixed shelves (tops 300 / 520 AFFL), hanging rail under the top shelf (top 1800 AFFL), hat space over" },
+    { "def": "T2D", "wall": 1, "offset": 2107, "dx": 569, "dy": 2095, "dz": 682,
+      "set": {
+        "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }], "rows": [{ "row_index": 0, "height_locked": false }],
+          "zones": [{ "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "right" }] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 167, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "size": 203.5, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "size": 1263.5, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "section": { "type": "open", "fittings": [] } } ] } } },
+      "note": "Robe tall hang 2 - safe 430w x 410d x 200h on the 520 shelf, low fixed shelves + rail as hang 1" },
+    { "def": "D3-SLL", "wall": 1, "offset": 2676, "dx": 719, "dy": 740, "dz": 682,
+      "set": { "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }],
+        "rows": [{ "row_index": 0, "height_locked": false }, { "row_index": 1, "height_locked": false }, { "row_index": 2, "height_locked": false }],
+        "zones": [{ "col_index": 0, "row_index": 0, "face_type": "drawer_face" }, { "col_index": 0, "row_index": 1, "face_type": "drawer_face" }, { "col_index": 0, "row_index": 2, "face_type": "drawer_face" }] } },
+      "note": "Robe luggage bay drawers - 3 equal" },
+    { "def": "W1D", "wall": 1, "offset": 2676, "dx": 719, "dy": 1355, "dz": 682,
+      "set": { "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }],
+        "rows": [{ "row_index": 0, "height_locked": false }, { "row_index": 1, "height": 718, "height_locked": true }],
+        "zones": [{ "col_index": 0, "row_index": 0, "face_type": "false_panel" }, { "col_index": 0, "row_index": 1, "face_type": "door", "hinge_side": "left" }] },
+        "internal_grid": { "tree": { "type": "open", "fittings": [] } } },
+      "note": "Robe luggage store on the drawers - door 740-1460, fixed panel 1460-2093 (TV mounts over panel + BH), open inside full height so tall cases stand" },
+    { "def": "T2D", "wall": 1, "offset": 3395, "dx": 682, "dy": 2095, "dz": 682,
+      "set": {
+        "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }],
+          "rows": [{ "row_index": 0, "height_locked": false }, { "row_index": 1, "height": 719, "height_locked": true }, { "row_index": 2, "height": 639, "height_locked": true }],
+          "zones": [{ "col_index": 0, "row_index": 0, "face_type": "false_panel" }, { "col_index": 0, "row_index": 1, "face_type": "door", "hinge_side": "left" }, { "col_index": 0, "row_index": 2, "face_type": "open" }] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 191, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "size": 191, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "size": 191.5, "section": { "type": "open", "fittings": [] }, "separator": "fixed_shelf" },
+          { "section": { "type": "open", "fittings": [] } } ] } } },
+      "note": "Robe iron store on the 45 (triangle footprint, front 682) - 3 open shelves to 740, door 740-1460 hinged on the left gable, fixed panel over for the TV" },
+    { "def": "BH", "wall": 1, "offset": 1505, "dx": 2590, "dy": 385, "dz": 682, "note": "Robe bulkhead 2095-2480 flush with doors, left return (seen end, OA 700, mitre). Right end runs to the 45 wall - fascia end cut 45 to suit" }
+  ]
+}
