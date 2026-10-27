@@ -103,6 +103,15 @@ function drawerBoxPartElevRect(p: ResolvedDrawerBoxPart) {
     case 'db_bottom':      return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
   }
 }
+/** Height spans of lo..hi not covered by any of `covers` (the fronts in front of it). */
+function uncoveredSpans(lo: number, hi: number, covers: [number, number][]): [number, number][] {
+  let spans: [number, number][] = [[lo, hi]]
+  for (const [a, b] of covers) {
+    spans = spans.flatMap(([s0, s1]): [number, number][] =>
+      b <= s0 || a >= s1 ? [[s0, s1]] : ([[s0, Math.min(s1, a)], [Math.max(s0, b), s1]] as [number, number][]).filter(([x0, x1]) => x1 - x0 > 0.5))
+  }
+  return spans
+}
 function slideElevRect(s: ResolvedDrawerSlide) {
   return { ex: s.X, ey: s.Y + s.DY, ew: s.DZ, eh: s.DY }
 }
@@ -312,10 +321,19 @@ export default function ElevationPrintSVG({
               const it = casePartItem(p.part_key)
               if (!layers.show(it)) return null
               const { ex, ey, ew, eh } = caseElevRect(p)
-              const { x, y, w, h } = toSVG(ex, ey, ew, eh)
               const pp = lp(it)
-              return <rect key={`cp-${i}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} opacity={pp.opacity}
-                strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+              // Finger-pull rails: only the strip seen through the gap between the fronts
+              // (Mark, 2026-10-27: the rail's edges behind the fronts printed as double lines).
+              const spans: [number, number][] = p.part_key.startsWith('fprail:')
+                ? uncoveredSpans(ey - eh, ey, rp.face_zones
+                    .filter(z => { const zi = faceZoneItem(z.face_type); return !!zi && layers.show(zi) && z.X < ex + ew && z.X + z.DX > ex })
+                    .map(z => [z.Y, z.Y + z.DY] as [number, number]))
+                : [[ey - eh, ey]]
+              return spans.map(([lo, hi], j) => {
+                const { x, y, w, h } = toSVG(ex, hi, ew, hi - lo)
+                return <rect key={`cp-${i}-${j}`} x={x} y={y} width={w} height={h} fill="none" stroke={INK2} opacity={pp.opacity}
+                  strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
+              })
             })}
 
             {/* Toe kick parts */}

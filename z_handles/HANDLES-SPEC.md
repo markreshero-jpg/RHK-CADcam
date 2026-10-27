@@ -435,6 +435,8 @@ H6 sub-phase, deferred until the handle work is right.
   - Rails are case parts keyed `fprail:<n>`, classed with the shaped
     `side:` / `back:` keys in `isShapedPanelKey`, so every view and sizing path
     treats them as face-kind panels (DX = height, DY = width, DZ = thickness).
+  - Printed elevations (ElevationPrintSVG) draw only the strip of rail seen through the gap,
+    clipped by the fronts drawn (Mark, 2026-10-27: the edges behind the fronts read as double lines).
   - DB check `case_parts_part_key_check` extended (`migration_h6_fprail.sql`).
 - Geometry:
   - Full carcass width (X 0..DX), front face flush with the sides' front edge,
