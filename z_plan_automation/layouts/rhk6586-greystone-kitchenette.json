@@ -1,0 +1,340 @@
+{
+  "_source": "z_sample_plans/RHK6586 - Greystone Apt 109 Netanya/RHK6586 - Greystone Site Measure.pdf p1 (Kitchenette) + A109 Milross - Drawings-11.pdf p5-8 (kitchen) + Unit 109 elec/plumbing spec packs + Mark Q&A 2026-10-28",
+  "_notes": [
+    "Walls clockwise: 1 = pantry-end return (700, not measured, square to the 45 wall), 2 = 45 wall 1605 (angle 315, ends at the corner (0,0)), 3 = straight wall 1935, 4 = right return (700, not measured). CH 2320, 5mm vinyl floor.",
+    "Bulkhead 200 flush with doors over everything (Mark) -> wall_cabinet_top 2120; talls 2120 incl 100 kick, overheads 1500-2120 (620). Tall/wall REVT 2 under the BH.",
+    "45 wall: TFKW 40 at the return | T2D pantry 850 (4 adj shelves EQ) | TEPF 2x16.5 | fridge space 620 (Smeg 600x1530 fixture; microwave box 1500-1873 open, 588 x 340 inside; W2D carcass 350 above set out flush with the panels) | TEPF 2x16.5 -> 1576; 29 to the corner left empty (Mark: no trays). Tall run 620 OA (602 carcass).",
+    "Straight wall (Mark option C): void filler BFK 128.5 at 300 (bench + kick die into the tall face, which crosses the bench front at ~277) | D4 440 (cutlery, utensils, deep x2) under the Miele 378 cooktop | integrated Miele 450 DW door | B2D sink 600 (rails on edge, 400x460 u/m sink) | BEPF 16.5 flush with the bench (panel 600, stops 840 under the apron).",
+    "Bench 900: 20 stone + 60 mitred apron (MA60), carcass 880 incl 100 kick, 575 carcass finger pull (fronts 593), room base REVT 44 + top-row finger_gap 60.",
+    "Overheads 380 OA (362 carcass): range cupboard W2D with an angled left end following the tall side (back 868.5, front from 355), Sirius 520 u/m rangehood in its base, ducted left | WEP 17 front filler at the tall | W2D 525 | W2D 525 | WEP 16.5 end panel right. Range cupboard placed as a rectangle and reshaped in the DB after (see JOB-NOTES).",
+    "After placement (bridge + DB, 2026-10-28): placed W2D 513.5 at 355 (range cupboard), WEP 17 at 338, W2D 620 at 923 on Wall 2 (fridge cupboard), BH Wall 2 0/1576, BH Wall 3 338/1597. DB: half-mm widths + pos; WC-04 range cupboard pos 0, dx 868.5, footprint (0,0)(868.5,0)(868.5,362)(355,362)(0,7) + 1 door hinged right; WC-05 custom part -> front filler; WC-06 dz 350 dy 247 pos set out 252 along the wall normal, open inside; WC-07 BH dz 602 front doors + right return 240; WC-08 BH dz 362 front doors + left angle 45; joinKicks TC-02 + BC-03, sink BC-05 added to KICK 2 (dy 780, pos_z 100) and KICK 2 dx 1618.5 under the DW. Benchtop 1 polygon dies into the tall face; fixtures cooktop / sink / rangehood / microwave / fridge (new catalog rows)."
+  ],
+  "projectName": "RHK6586 Greystone Apt 109 Netanya",
+  "roomName": "Kitchenette",
+  "roomHeight": 2320,
+  "wallCabinetTop": 2120,
+  "roomRules": {
+    "BY_CLASS": {
+      "base": {
+        "REVT": 44
+      },
+      "tall": {
+        "REVT": 2
+      },
+      "wall": {
+        "REVT": 2
+      }
+    }
+  },
+  "walls": [
+    {
+      "x": -640.07,
+      "y": 1629.86,
+      "length": 700,
+      "angle": 225,
+      "_": "pantry-end return"
+    },
+    {
+      "x": -1134.93,
+      "y": 1134.93,
+      "length": 1605,
+      "angle": 315,
+      "_": "45 wall"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 1935,
+      "angle": 0,
+      "_": "straight wall"
+    },
+    {
+      "x": 1935,
+      "y": 0,
+      "length": 700,
+      "angle": 90,
+      "_": "right return"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "TFKW",
+      "wall": 2,
+      "offset": 0,
+      "dx": 40,
+      "dy": 2120,
+      "dz": 602,
+      "note": "Kitchenette 40 filler at the return wall, on the kick"
+    },
+    {
+      "def": "T2D",
+      "wall": 2,
+      "offset": 40,
+      "dx": 850,
+      "dy": 2120,
+      "dz": 602,
+      "set": {
+        "internal_grid": {
+          "tree": {
+            "type": "hsplit",
+            "children": [
+              {
+                "section": {
+                  "type": "open",
+                  "fittings": []
+                },
+                "separator": "adj_shelf"
+              },
+              {
+                "section": {
+                  "type": "open",
+                  "fittings": []
+                },
+                "separator": "adj_shelf"
+              },
+              {
+                "section": {
+                  "type": "open",
+                  "fittings": []
+                },
+                "separator": "adj_shelf"
+              },
+              {
+                "section": {
+                  "type": "open",
+                  "fittings": []
+                },
+                "separator": "adj_shelf"
+              },
+              {
+                "section": {
+                  "type": "open",
+                  "fittings": []
+                }
+              }
+            ]
+          }
+        }
+      },
+      "note": "Pantry - 4 adj shelves EQ, PTO"
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 890,
+      "dx": 16.5,
+      "dy": 2120,
+      "dz": 602,
+      "note": "Fridge space left panel 1 of 2 (32 = 2x16.5)"
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 906.5,
+      "dx": 16.5,
+      "dy": 2120,
+      "dz": 602,
+      "note": "Fridge space left panel 2 of 2"
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 923,
+      "dx": 620,
+      "dy": 373,
+      "dz": 602,
+      "set": {
+        "has_face": false,
+        "has_toekick": false,
+        "top_type": "full_top",
+        "exposed_interior": true,
+        "pos_z": 1500,
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      },
+      "note": "Microwave box over the fridge - open, 588w x 340h inside, GPO at back. LG MF3226PBS 519x317x407"
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 1543,
+      "dx": 16.5,
+      "dy": 2120,
+      "dz": 602,
+      "note": "Fridge space right panel 1 of 2"
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 1559.5,
+      "dx": 16.5,
+      "dy": 2120,
+      "dz": 602,
+      "note": "Fridge space right panel 2 of 2"
+    },
+    {
+      "def": "BFK",
+      "wall": 3,
+      "offset": 300,
+      "dx": 128.5,
+      "dy": 880,
+      "dz": 575,
+      "note": "Void filler - dead corner behind; bench and kick die into the tall face"
+    },
+    {
+      "def": "D4-SSSL",
+      "wall": 3,
+      "offset": 428.5,
+      "dx": 440,
+      "dy": 880,
+      "dz": 575,
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "row_index": 1,
+              "height_locked": false
+            },
+            {
+              "row_index": 2,
+              "height": 140,
+              "height_locked": true
+            },
+            {
+              "row_index": 3,
+              "height": 140,
+              "height_locked": true
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face"
+            },
+            {
+              "col_index": 0,
+              "row_index": 1,
+              "face_type": "drawer_face"
+            },
+            {
+              "col_index": 0,
+              "row_index": 2,
+              "face_type": "drawer_face"
+            },
+            {
+              "col_index": 0,
+              "row_index": 3,
+              "face_type": "drawer_face",
+              "finger_gap": 60
+            }
+          ]
+        }
+      },
+      "note": "Drawers under the cooktop: cutlery, utensils, deep store 1, deep store 2"
+    },
+    {
+      "def": "B1D",
+      "wall": 3,
+      "offset": 868.5,
+      "dx": 450,
+      "dy": 780,
+      "dz": 575,
+      "set": {
+        "has_carcass": false,
+        "has_internal": false,
+        "has_toekick": false,
+        "pos_z": 100,
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "door",
+              "hinge_side": "bottom",
+              "hinges": []
+            }
+          ]
+        }
+      },
+      "note": "INTEGRATED DW door - Miele G5481SCVi 45cm"
+    },
+    {
+      "def": "B2D",
+      "wall": 3,
+      "offset": 1318.5,
+      "dx": 600,
+      "dy": 880,
+      "dz": 575,
+      "rules": {
+        "RAIL_ORIENT": "vertical"
+      },
+      "note": "Sink cupboard - 400x460 undermount sink, GPO under sink 300 AFFL, PTO"
+    },
+    {
+      "def": "BEPF",
+      "wall": 3,
+      "offset": 1918.5,
+      "dx": 16.5,
+      "dy": 840,
+      "dz": 582,
+      "set": {
+        "has_toekick": false
+      },
+      "note": "End panel at the right wall, flush with the bench front (600), stops 840 under the 60 apron"
+    },
+    {
+      "def": "W2D",
+      "wall": 3,
+      "offset": 868.5,
+      "dx": 525,
+      "dy": 620,
+      "dz": 362,
+      "note": "Overhead 525, PTO, LED under"
+    },
+    {
+      "def": "W2D",
+      "wall": 3,
+      "offset": 1393.5,
+      "dx": 525,
+      "dy": 620,
+      "dz": 362,
+      "note": "Overhead 525, PTO, LED under"
+    },
+    {
+      "def": "WEP",
+      "wall": 3,
+      "offset": 1918.5,
+      "dx": 16.5,
+      "dy": 620,
+      "dz": 362,
+      "note": "Overhead end panel right (380)"
+    }
+  ]
+}
