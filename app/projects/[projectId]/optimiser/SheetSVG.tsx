@@ -9,6 +9,8 @@
 
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import type { ShapePt } from '@/src/lib/shapePath'
+import { blockRectOn, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
+import { grainArrow, grainMatchColour } from '@/src/lib/grainMatch'
 
 type Placement = NestedSheet['placements'][number]
 
@@ -38,9 +40,37 @@ export function PlacedHoles({ holes, x, y, H, scale }: {
   ))}</>
 }
 
+/** Grain match blocks on a sheet (z_grain_match G5): an outline round each block in
+ *  its group colour + a GM1 ↔ tag. `shift` moves one block live (Stage 5 drag). */
+export function GrainBlockOutlines({ sheet, blocks, H, scale, shift, fontPx = 10 }: {
+  sheet: NestedSheet; blocks: GrainBlockInfo[]; H: number; scale: number
+  shift?: { uids: ReadonlySet<string>; dx: number; dy: number } | null; fontPx?: number
+}) {
+  return <>{blocks.map(b => {
+    const r = blockRectOn(sheet, b)
+    if (!r) return null
+    const moving = shift && b.memberUids.some(u => shift.uids.has(u))
+    const x = r.x + (moving ? shift!.dx : 0), y = r.y + (moving ? shift!.dy : 0)
+    const col = grainMatchColour(b)
+    const pad = 3
+    const tag = `${b.name} ${grainArrow(b.direction)}${b.pieces > 1 ? ` ${b.piece}/${b.pieces}` : ''}`
+    const left = x * scale - pad, top = (H - y - r.h) * scale - pad
+    return (
+      <g key={b.uid} style={{ pointerEvents: 'none' }}>
+        <rect x={left} y={top} width={r.w * scale + pad * 2} height={r.h * scale + pad * 2}
+          fill="none" stroke={col} strokeWidth={1.5} strokeDasharray="6 3" rx={2} />
+        <rect x={left + pad} y={top + pad} width={tag.length * fontPx * 0.62 + 6} height={fontPx * 1.3} rx={2} fill={col} />
+        <text x={left + pad + 3} y={top + pad + fontPx * 0.95} fontSize={fontPx} fontWeight={700} fill="#fff" fontFamily="Arial, Helvetica, sans-serif">{tag}</text>
+      </g>
+    )
+  })}</>
+}
+
 export default function SheetSVG({
-  sheet, pxWidth, selectedUid, onPartClick, showLabels = true, outlineFor, holesFor,
+  sheet, pxWidth, selectedUid, onPartClick, showLabels = true, outlineFor, holesFor, blocks,
 }: {
+  /** Grain match blocks of the run (only this sheet's are drawn). */
+  blocks?: GrainBlockInfo[]
   sheet: NestedSheet
   pxWidth: number
   selectedUid?: string | null
@@ -95,6 +125,7 @@ export default function SheetSVG({
           </g>
         )
       })}
+      {blocks && blocks.length > 0 && <GrainBlockOutlines sheet={sheet} blocks={blocks} H={H} scale={scale} fontPx={8} />}
     </svg>
   )
 }

@@ -36,7 +36,8 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { loadProjectParts } = await import('../loadClient')
     const { materialGroupKey, buildMargins } = await import('../types')
     const { nest } = await import('../nest')
-    const { buildGrainBlocks, expandGrainBlocks } = await import('../grainBlocks')
+    const { buildGrainBlocks, expandGrainBlocks, blockRectOn, grainMatchTags, grainMatchLine } = await import('../grainBlocks')
+    const { grainMatchColour } = await import('../../grainMatch')
     const { cutBlank, placedOutline, placedHoles } = await import('../shapes')
     const { loadSheetDrills, nestedParts } = await import('../sheetDrills')
     const { generateSheetGcode, postFromProfile, gcodeFileName } = await import('../gcode')
@@ -262,14 +263,16 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       drills.filter(h => h.x >= pl.x - 0.01 && h.x <= pl.x + pl.w + 0.01 && h.y >= pl.y - 0.01 && h.y <= pl.y + pl.h + 0.01)
 
     // Part numbers: sheet-major, in placement order — printed on the sheet + list.
-    const rows: { no: number; sheet: number; cab: string; part: string; w: number; h: number; finW: number; finH: number; rotated: boolean; holes: number; comment: string | null }[] = []
+    const gmTags = grainMatchTags(nestResult)
+    const rows: { no: number; sheet: number; cab: string; part: string; w: number; h: number; finW: number; finH: number; rotated: boolean; holes: number; comment: string | null; gm: string | null }[] = []
     const noByUid = new Map<string, number>()
     gen.forEach((g, si) => g.sheet.placements.forEach(pl => {
       const p = partByUid.get(pl.baseUid)!
       const no = rows.length + 1
       noByUid.set(pl.uid, no)
       rows.push({ no, sheet: si + 1, cab: p.cabinet_label, part: p.label, w: pl.rotated ? pl.h : pl.w, h: pl.rotated ? pl.w : pl.h,
-        finW: p.w, finH: p.h, rotated: pl.rotated, holes: holesIn(pl, g.drills).length, comment: p.comment })
+        finW: p.w, finH: p.h, rotated: pl.rotated, holes: holesIn(pl, g.drills).length, comment: p.comment,
+        gm: gmTags.has(pl.uid) ? grainMatchLine(gmTags.get(pl.uid)!) : null })
     }))
 
     // ── PDF ──
@@ -341,6 +344,23 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
           doc.setFontSize(detail[i]); doc.text(l.replace('  ⟲', ' (R)'), cx, ty, { align: 'center' })
         })
       }
+      // Grain match blocks (z_grain_match G5): dashed outline in the group colour + tag.
+      for (const b of nestResult.blocks ?? []) {
+        const r = blockRectOn(sheet, b)
+        if (!r) continue
+        const hex = grainMatchColour(b).slice(1)
+        const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
+        const pad = 1.2
+        doc.setDrawColor(...rgb); doc.setLineWidth(0.5); doc.setLineDashPattern([2, 1], 0)
+        doc.rect(X(r.x) - pad, Y(r.y + r.h) - pad, r.w * s + 2 * pad, r.h * s + 2 * pad, 'S')
+        doc.setLineDashPattern([], 0)
+        const tag = `${b.name} ${b.direction === 'horizontal' ? 'grain across' : 'grain up'}${b.pieces > 1 ? `  ${b.piece}/${b.pieces}` : ''}`
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(7)
+        const tw = doc.getTextWidth(tag) + 2
+        doc.setFillColor(...rgb); doc.rect(X(r.x) - pad, Y(r.y + r.h) - pad, tw, 3.4, 'F')
+        doc.setTextColor(255); doc.text(tag, X(r.x) - pad + 1, Y(r.y + r.h) - pad + 2.5); doc.setTextColor(0)
+        doc.setDrawColor(40); doc.setLineWidth(0.3); doc.setFont('helvetica', 'normal')
+      }
       doc.setFontSize(7); doc.setTextColor(110)
       doc.text('Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  "grain across" = grain runs along the width (horizontal grain match).  Red circles = drilling.', M, PH - M + 3)
       doc.setTextColor(0)
@@ -348,8 +368,8 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
 
     // Parts list.
     doc.addPage()
-    const head = ['#', 'Sheet', 'Cabinet', 'Part', 'Cut L × W', 'Finished L × W', 'Holes', 'Comment']
-    const colX = [M, M + 10, M + 24, M + 54, M + 124, M + 160, M + 198, M + 214]
+    const head = ['#', 'Sheet', 'Cabinet', 'Part', 'Cut L × W', 'Finished L × W', 'Holes', 'Grain match', 'Comment']
+    const colX = [M, M + 10, M + 24, M + 54, M + 124, M + 160, M + 198, M + 212, M + 238]
     let y = M + 4
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
     doc.text(`Parts list — ${snap.jobNumber ?? ''}  ·  ${roomsTxt}  ·  ${rows.length} parts on ${gen.length} sheet(s)`, M, y)
@@ -359,7 +379,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const r1 = (n: number) => String(Math.round(n * 10) / 10)
     for (const r of rows) {
       if (y > PH - M) { doc.addPage(); y = M + 4; header() }
-      const cells = [String(r.no), String(r.sheet), r.cab, r.part, `${r1(r.h)} × ${r1(r.w)}`, `${r1(r.finH)} × ${r1(r.finW)}`, String(r.holes), r.comment ?? '']
+      const cells = [String(r.no), String(r.sheet), r.cab, r.part, `${r1(r.h)} × ${r1(r.w)}`, `${r1(r.finH)} × ${r1(r.finW)}`, String(r.holes), r.gm ?? '', r.comment ?? '']
       cells.forEach((c, i) => doc.text(doc.splitTextToSize(c, (colX[i + 1] ?? PW - M) - colX[i] - 2)[0] ?? '', colX[i], y))
       y += 5
     }
@@ -400,6 +420,9 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       lab.setFont('helvetica', 'bold'); fitText(p.label, 9, 19.5, 44, 11, 6.5)
       lab.setFont('helvetica', 'normal'); fitText(matName(p.material_id) ?? '', 3, 24.5, 49, 8.5, 6)
       fitText(colourName.get(p.material_id ?? '') ?? '', 3, 28.5, 49, 8.5, 6)
+      // Grain match (z_grain_match G5): "Grain match GM1 · 3 of 6".
+      const gmt = gmTags.get(pl.uid)
+      if (gmt) { lab.setFont('helvetica', 'bold'); fitText(`Grain match ${grainMatchLine(gmt)} ${gmt.direction === 'horizontal' ? '(grain across)' : '(grain up)'}`, 3, 31.9, 49, 7.5, 5); lab.setFont('helvetica', 'normal') }
       // Banded sides from eb_on, so a 0 mm "no tape" band (sprayed round-over) still shows.
       const [onW1, onW2, onH1, onH2] = p.eb_on ?? [p.eb_w1 > 0, p.eb_w2 > 0, p.eb_h1 > 0, p.eb_h2 > 0]
       const lEdges = (onW1 ? 1 : 0) + (onW2 ? 1 : 0)

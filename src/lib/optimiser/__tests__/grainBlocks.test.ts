@@ -109,3 +109,16 @@ describe('buildGrainBlocks', () => {
     expect(res.warnings?.[0]).toMatch(/GM1 didn't fit/)
   })
 })
+
+describe('grainMatchTags', () => {
+  it('numbers fronts across pieces in piece order', async () => {
+    const { grainMatchTags, grainMatchLine } = await import('../grainBlocks')
+    const res = { sheets: [], unplaced: [], blocks: [
+      { uid: 'b2', groupId: 'g', name: 'GM1', direction: 'horizontal' as const, piece: 2, pieces: 2, memberUids: ['c', 'd'], W: 1, H: 1 },
+      { uid: 'b1', groupId: 'g', name: 'GM1', direction: 'horizontal' as const, piece: 1, pieces: 2, memberUids: ['a', 'b'], W: 1, H: 1 },
+    ] }
+    const t = grainMatchTags(res)
+    expect(grainMatchLine(t.get('a')!)).toBe('GM1 · 1 of 4')
+    expect(grainMatchLine(t.get('d')!)).toBe('GM1 · 4 of 4')
+  })
+})

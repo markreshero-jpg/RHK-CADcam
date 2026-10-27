@@ -832,7 +832,7 @@ function Stage4Nesting() {
             <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-5">
               {nestResult.sheets.map(s => (
                 <div key={s.index} className="space-y-1.5">
-                  <SheetSVG sheet={s} pxWidth={230}
+                  <SheetSVG sheet={s} pxWidth={230} blocks={nestResult.blocks}
                     outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }}
                     holesFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedHoles(p, pl, deductEb) : [] }} />
                   <p className="text-[11px] text-ink-muted flex justify-between">

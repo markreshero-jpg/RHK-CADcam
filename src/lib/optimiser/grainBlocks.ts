@@ -271,3 +271,29 @@ export function detachFromBlock(res: NestResult, uid: string, label: string): st
   res.warnings = [...(res.warnings ?? []), msg]
   return msg
 }
+
+// ── Outputs (G5) ────────────────────────────────────────────
+
+export interface GrainMatchTag {
+  name: string                // GM1
+  direction: 'vertical' | 'horizontal'
+  n: number; of: number       // this front's place in the group (elevation order, across pieces)
+  piece: number; pieces: number
+}
+
+/** Every blocked front's "GM1 · 3 of 6" (pieces numbered on in piece order). */
+export function grainMatchTags(res: NestResult | null): Map<string, GrainMatchTag> {
+  const out = new Map<string, GrainMatchTag>()
+  const byGroup = new Map<string, GrainBlockInfo[]>()
+  for (const b of res?.blocks ?? []) byGroup.set(b.groupId, [...(byGroup.get(b.groupId) ?? []), b])
+  for (const bs of byGroup.values()) {
+    bs.sort((a, b) => a.piece - b.piece)
+    const of = bs.reduce((s, b) => s + b.memberUids.length, 0)
+    let n = 0
+    for (const b of bs) for (const uid of b.memberUids) out.set(uid, { name: b.name, direction: b.direction, n: ++n, of, piece: b.piece, pieces: b.pieces })
+  }
+  return out
+}
+
+/** Label / list text: "GM1 · 3 of 6". */
+export const grainMatchLine = (t: GrainMatchTag) => `${t.name} · ${t.n} of ${t.of}`

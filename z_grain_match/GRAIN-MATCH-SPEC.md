@@ -1,6 +1,6 @@
 # Grain match — spec
 
-**Status:** G1–G4 built 2026-10-27 (data, right-click, layer, horizontal grain, optimiser blocks), G2–G4 in-app checks pending. Next: G5.
+**Status:** G1–G5 built 2026-10-27 (data, right-click, layer, horizontal grain, optimiser blocks, outputs), G2–G5 in-app checks pending. Next: G6.
 
 ## Why
 
@@ -158,6 +158,14 @@ GrainSVG fronts hardcode `'v'`; 3D `grainExtents` goes by part kind). With a gro
   top→bottom).
 - Headless run (`headlessRun.test.ts`) uses the same block nesting.
 
+**Built (G5):** `grainMatchTags` / `grainMatchLine` (grainBlocks.ts) number a group's fronts
+across its pieces. `GrainBlockOutlines` (SheetSVG.tsx) — dashed group-colour outline +
+`GM1 ↔` tag (+ `1/3` when split) on Stage 4 thumbnails and the Stage 5 sheet (follows a
+block drag); Stage 5 part panel row "Grain match GM1 · 3 of 6 · horizontal". The app has
+no sheet PDF / labels of its own — those are the chat-run tool: sheets.pdf block outline +
+"GM1 grain across / grain up" tag, parts list "Grain match" column, label line
+"Grain match GM1 · 3 of 6 (grain across)" (jsPDF's font has no arrows → words).
+
 ## Tutorial + check (G6)
 
 Tutorial "Grain matching fronts" (Tutorial mode). In-app check on a grained job:
@@ -173,5 +181,5 @@ make a vertical drawer bank + a horizontal run, check elevation layer, nest, PDF
 - [x] G3 Horizontal grain in elevation, 3D, nest — `verify-grain-match-g3.mjs`,
   `grain-match-set.cjs` (test helper), nestGrain tests. Mark's check pending.
 - [x] G4 Optimiser blocks + split — tests `grainBlocks.test.ts`; Stage 5 drag check by Mark.
-- [ ] G5 Sheet / label outputs
+- [x] G5 Sheet / label outputs — checked headless (RHK1234 test room: Stage 4/5 + PDFs).
 - [ ] G6 Tutorial + in-app check

@@ -11,13 +11,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
-import { blockOfUid, blockRectOn, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
+import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { ShapePt } from '@/src/lib/shapePath'
-import { PlacedOutline, PlacedHoles } from './SheetSVG'
+import { PlacedOutline, PlacedHoles, GrainBlockOutlines } from './SheetSVG'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
@@ -275,6 +275,7 @@ export default function Stage5Edit() {
               onSelect={selectPlacement}
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
               blockFor={uid => blockOfUid(nestResult, uid)}
+              blocks={nestResult.blocks ?? []}
               onMoveBlock={moveBlockBy}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
               outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }}
@@ -349,6 +350,7 @@ export default function Stage5Edit() {
               <InfoRow label="Thk (DZ)" value={selectedInfo.part ? `${selectedInfo.part.thickness} mm` : '—'} />
               <InfoRow label="Material" value={matName(selectedInfo.part?.material_id ?? null)} />
               <InfoRow label="On sheet" value={`${selectedInfo.sheetIndex + 1}${selectedInfo.pl.rotated ? ' · rotated 90°' : ''}`} />
+              {(() => { const t = grainMatchTags(nestResult).get(selectedInfo.pl.uid); return t ? <InfoRow label="Grain match" value={`${grainMatchLine(t)} · ${t.direction}`} /> : null })()}
               {selectedInfo.part?.comment && <InfoRow label="Comment" value={selectedInfo.part.comment} />}
 
               {/* Actions */}
@@ -413,7 +415,8 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock }: {
+function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock, blocks }: {
+  blocks: GrainBlockInfo[]
   /** Grain match block holding a front (z_grain_match G4): it drags as one. */
   blockFor: (uid: string) => GrainBlockInfo | undefined
   onMoveBlock: (uids: string[], dx: number, dy: number) => void
@@ -598,6 +601,9 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
           })}
         </g>
       )}
+      {/* Grain match blocks (z_grain_match G5) — follow a block being dragged. */}
+      <GrainBlockOutlines sheet={sheet} blocks={blocks} H={H} scale={scale} fontPx={11}
+        shift={drag?.block ? { uids: drag.block.uids, dx: drag.gx - drag.block.x0, dy: drag.gy - drag.block.y0 } : null} />
     </svg>
   )
 }
