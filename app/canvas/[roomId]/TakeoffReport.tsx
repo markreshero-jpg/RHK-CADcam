@@ -9,7 +9,7 @@
 // Rollups: src/lib/takeoff/hardware.ts (hardware + counts), roomSheets.ts (nest),
 // optimiser/edgebandLength.ts (tape). Hardware reads the resolved cabinets the
 // modal holds (removed parts out); sheets + tape read the saved part snapshot
-// the optimiser nests (loadProjectParts).
+// the optimiser nests (loadProjectParts). Print HTML: TakeoffPrint.ts.
 
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
@@ -25,7 +25,6 @@ import {
 } from '@/src/lib/takeoff/hardware'
 import { nestRoomsAndJob, type SheetLine } from '@/src/lib/takeoff/roomSheets'
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const m2 = (m: number) => m.toFixed(2)
 const pct = (v: number) => `${Math.round(v * 100)}%`
 
@@ -203,8 +202,6 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
 const TH = 'pb-1 pr-3 font-medium border-b border-gray-800'
 const rowCls = (i: number) => (i % 2 === 0 ? 'text-gray-300' : 'text-gray-400 bg-gray-800/30')
 const cabText = (c: { label: string; qty: number }) => (c.qty > 1 ? `${c.label} ×${c.qty}` : c.label)
-// Print: a label never breaks inside itself ("WC-" / "02").
-const cabsHtml = (l: HardwareLine) => l.cabinets.map(c => `<span style="white-space:nowrap">${esc(cabText(c))}</span>`).join(', ')
 const prodSub = (l: HardwareLine) => [l.brand, l.code].filter(Boolean).join(' · ')
 
 function RoomHead({ name, sub }: { name: string; sub?: string }) {
@@ -272,35 +269,6 @@ export function HardwarePickSheet({ data }: { data: TakeoffData | null }) {
       )}
     </div>
   )
-}
-
-const PRINT_CSS = `<style>
-  .tick { display:inline-block; width:10px; height:10px; border:1px solid #333; }
-  .qty { font-weight: bold; }
-  .sub { color:#666; }
-  .room { break-before: page; } .room:first-child { break-before: auto; }
-  .grid { display:flex; gap:24px; flex-wrap:wrap; } .grid > div { flex:1 1 260px; }
-  .big { font-size: 13px; font-weight: bold; }
-</style>`
-
-const pickTableHtml = (lines: HardwareLine[], showCabs: boolean) => `
-  <table>
-    <thead><tr><th style="width:18px"></th><th class="r" style="width:70px;white-space:nowrap">Qty</th><th style="width:34%">Product</th><th style="width:110px">Type</th>${showCabs ? '<th>Cabinets</th>' : ''}</tr></thead>
-    <tbody>${lines.map((l, i) => `
-      <tr class="${i % 2 ? 'alt' : ''}"><td><span class="tick"></span></td>
-        <td class="r mono qty" style="white-space:nowrap">${l.qty} ${unitLabel(l)}</td>
-        <td>${esc(l.name)}${prodSub(l) ? ` <span class="sub">· ${esc(prodSub(l))}</span>` : ''}${l.lengths ? `<div class="sub">${esc(lengthsText(l.lengths))}</div>` : ''}</td>
-        <td class="sub">${l.group}</td>${showCabs ? `<td class="mono">${cabsHtml(l)}</td>` : ''}</tr>`).join('')}
-    </tbody>
-  </table>`
-
-/** One room per page, so each room's pick can go to the floor on its own. */
-export function hardwarePickPrintHtml(data: TakeoffData | null): string {
-  if (!data?.hardware.length) return ''
-  return PRINT_CSS + data.rooms.filter(r => r.hardware.length).map(r => `
-    <div class="room"><h2>${esc(r.room.name)}</h2>${pickTableHtml(r.hardware, true)}
-      <p class="sub">Picked by ______________ &nbsp; Date ________</p></div>`).join('')
-    + (data.rooms.length > 1 ? `<div class="room"><h2>Job totals</h2>${pickTableHtml(data.hardware, false)}</div>` : '')
 }
 
 // ── Takeoff ──────────────────────────────────────────────────────────────────
@@ -446,41 +414,3 @@ export function TakeoffSheet({ data, nesting }: { data: TakeoffData | null; nest
   )
 }
 
-function takeoffBlockHtml(b: { kinds: KindCount[]; fingerPulls: FingerPullLine[]; sheets: SheetLine[] | null; jobSheets?: SheetLine[] | null; sheetNotes: string[]; tape: EdgebandLine[]; hardware: HardwareLine[] }, waste: number) {
-  const cabs = b.kinds.filter(k => CAB_KINDS.has(k.kind)), extras = b.kinds.filter(k => !CAB_KINDS.has(k.kind))
-  const countRows = [
-    ...cabs.map(k => [KIND_LABEL[k.kind], k.count, codesText(k), true] as const),
-    ...(cabs.length > 1 ? [['Cabinets total', cabs.reduce((a, k) => a + k.count, 0), '', true] as const] : []),
-    ...extras.map(k => [KIND_LABEL[k.kind], k.count, codesText(k), false] as const),
-    ...(b.fingerPulls.length ? [['Finger pull fronts', fingerTotal(b.fingerPulls), b.fingerPulls.map(f => `${fingerText(f)} ×${f.fronts}`).join(', '), false] as const] : []),
-  ]
-  const job = b.jobSheets
-  return `
-    <div class="grid"><div>
-      <h3>Cabinets</h3>
-      ${countRows.length ? `<table><tbody>${countRows.map(([l, n, d, s], i) => `<tr class="${i % 2 ? 'alt' : ''}"><td${s ? ' class="big"' : ''}>${l}</td><td class="r mono big" style="width:50px">${n}</td><td class="mono sub">${esc(d)}</td></tr>`).join('')}</tbody></table>` : '<p class="sub">None placed.</p>'}
-    </div></div>
-    <h3>Sheets</h3>
-    ${b.sheets?.length ? `<table>
-      <thead><tr><th>Material</th><th class="r">Thk</th><th>Sheet</th><th class="r">Parts</th><th class="r">Sheets</th><th class="r">Sheet equiv.</th><th class="r">Yield</th>${job ? '<th class="r">Cut together</th>' : ''}</tr></thead>
-      <tbody>${b.sheets.map((l, i) => `<tr class="${i % 2 ? 'alt' : ''}"><td>${esc(l.material)}</td><td class="r mono">${l.thickness}</td><td class="mono">${l.sheetW}×${l.sheetH}</td>
-        <td class="r mono">${l.parts}</td><td class="r mono big">${l.sheets}</td><td class="r mono">${l.sheetEquiv.toFixed(2)}</td><td class="r mono">${pct(l.efficiency)}</td>
-        ${job ? `<td class="r mono">${job.find(j => j.groupKey === l.groupKey)?.sheets ?? '—'}</td>` : ''}</tr>`).join('')}</tbody></table>` : '<p class="sub">No cut parts.</p>'}
-    ${b.sheetNotes.map(n => `<p><b>${esc(n)}</b></p>`).join('')}
-    <h3>Edgetape</h3>
-    ${b.tape.length ? `<table>
-      <thead><tr><th>Tape</th><th>Finish</th><th class="r">Metres</th><th class="r">+${Math.round(waste * 100)}% waste</th></tr></thead>
-      <tbody>${b.tape.map((l, i) => `<tr class="${i % 2 ? 'alt' : ''}"><td>${esc(l.name)}</td><td>${esc(l.finish)}${l.colourNotChosen ? ' <b>— colour not chosen</b>' : ''}</td><td class="r mono">${m2(l.m)}</td><td class="r mono big">${m2(l.mWaste)}</td></tr>`).join('')}</tbody></table>` : '<p class="sub">No edgebanded parts.</p>'}
-    <h3>Hardware</h3>
-    ${b.hardware.length ? `<table>
-      <thead><tr><th>Type</th><th>Product</th><th class="r">Qty</th></tr></thead>
-      <tbody>${b.hardware.map((l, i) => `<tr class="${i % 2 ? 'alt' : ''}"><td class="sub">${l.group}</td><td>${esc(l.name)}${l.lengths ? ` <span class="sub">· ${esc(lengthsText(l.lengths))}</span>` : ''}</td><td class="r mono big">${l.qty} ${unitLabel(l)}</td></tr>`).join('')}</tbody></table>` : '<p class="sub">No hardware.</p>'}`
-}
-
-export function takeoffPrintHtml(data: TakeoffData | null): string {
-  if (!data) return ''
-  return PRINT_CSS + data.rooms.map(r => `<div class="room"><h2>${esc(r.room.name)}</h2>${takeoffBlockHtml(r, data.tapeWaste)}</div>`).join('')
-    + (data.rooms.length > 1 ? `<div class="room"><h2>Job totals</h2><p class="sub">Sheets = sum of the room nests · Cut together = all rooms nested as one</p>${takeoffBlockHtml({
-      kinds: data.kinds, fingerPulls: data.fingerPulls, sheets: data.sheetsByRoom, jobSheets: data.sheetsJob, sheetNotes: [], tape: data.tape, hardware: data.hardware,
-    }, data.tapeWaste)}</div>` : '')
-}
