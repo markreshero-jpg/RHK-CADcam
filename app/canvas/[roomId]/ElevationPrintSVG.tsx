@@ -200,6 +200,9 @@ export default function ElevationPrintSVG({
   // Only cabinets the layer set draws — they also drive the dimension chains.
   const wallCabs = cabinets.filter(c => c.wall_id === wall.id && cabWallSide(c, wall) === side
     && elevationShowsCabinet(c, layers, resolvedParts?.get(c.id)))
+  // Cabinets can run past the wall ends (e.g. into a 45° corner) — the sheet grows to fit them.
+  const spanL = Math.min(0, ...wallCabs.map(elevX))
+  const spanR = Math.max(wall.length, ...wallCabs.map(c => elevX(c) + c.dx))
   // Layer props at a "zoom" that makes the layer dash pattern 1.6 / 0.8 paper mm.
   const lp = (id: string) => layers.props(id, 5 / P)
   const lineDrawing = layers.lineDrawing
@@ -242,7 +245,7 @@ export default function ElevationPrintSVG({
   const notes = annotations.filter(a => ownedBy(a, elevationOwner(wall.id, side)) && layers.show(annotLayerItem(a.kind)))
   const noteFrame = elevationAnnotFrame(roomH)
   // Notes may sit outside the drawing (off to the side / above) — grow the viewBox to fit them.
-  let x0 = -padL, y0 = -padT, x1 = wall.length + padR, y1 = roomH + padB
+  let x0 = spanL - padL, y0 = -padT, x1 = spanR + padR, y1 = roomH + padB
   for (const a of notes) for (const q of annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, P)) {
     const m = mapPt(noteFrame, q)
     x0 = Math.min(x0, m.x - 2 * P); x1 = Math.max(x1, m.x + 2 * P)
@@ -261,7 +264,7 @@ export default function ElevationPrintSVG({
     const lineW = lw(item, thinSW)
     return (
       <g key={key} pointerEvents="none" opacity={layers.op(item)}>
-        <line x1={0} y1={chainY} x2={wall.length} y2={chainY} stroke={INK} strokeWidth={lineW} strokeDasharray={lp(item).strokeDasharray} />
+        <line x1={Math.min(0, ...boundaries)} y1={chainY} x2={Math.max(wall.length, ...boundaries)} y2={chainY} stroke={INK} strokeWidth={lineW} strokeDasharray={lp(item).strokeDasharray} />
         {boundaries.map((x, i) => (
           <line key={i} x1={x} y1={chainY - tk} x2={x} y2={chainY + tk} stroke={INK} strokeWidth={lineW} />
         ))}
@@ -560,7 +563,11 @@ export default function ElevationPrintSVG({
     const render = (rw: Wall, isLeft: boolean) => {
       const t = rw.thickness
       const rwH = rw.height ?? room.room_dy ?? 2400
-      const x0 = isLeft ? -t : wall.length
+      // A square return is cut at the wall end; an angled one (e.g. 45°) is met where the cabinets stop.
+      const dir = (w: Wall) => { const e = wallEnd(w), l = Math.hypot(e.x - w.pos_x, e.y - w.pos_y) || 1; return { x: (e.x - w.pos_x) / l, y: (e.y - w.pos_y) / l } }
+      const a = dir(wall), b = dir(rw)
+      const square = Math.abs(a.x * b.x + a.y * b.y) < 0.1
+      const x0 = isLeft ? (square ? 0 : spanL) - t : (square ? wall.length : spanR)
       const slabY = roomH - rwH
       const midX = x0 + t / 2, midY = slabY + rwH / 2
       // Cut wall: infill = 'wall_fill' (default hatch), outline = 'walls', name = 'wall_names'.
@@ -746,7 +753,7 @@ export default function ElevationPrintSVG({
       ))}
 
       {/* Floor (bold) */}
-      <line x1={0} y1={roomH} x2={wall.length} y2={roomH} stroke={INK} strokeWidth={pen('ground', P)} />
+      <line x1={spanL} y1={roomH} x2={spanR} y2={roomH} stroke={INK} strokeWidth={pen('ground', P)} />
 
       {/* Cabinets */}
       {wallCabs.map(renderCab)}
