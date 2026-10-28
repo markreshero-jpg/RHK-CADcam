@@ -18,6 +18,8 @@ import type { AnnotationTool, TypedField } from './useAnnotationTool'
 import type { Wall } from '@/src/lib/types'
 import type { CadFieldValues } from '@/src/lib/annotations/blocks'
 import { CadBlocksSection, CadFieldsSection } from './CadBlocksSection'
+import { CadLayersSection, type CadLayerOps } from './CadLayers'
+import type { CadLayer } from '@/src/lib/types'
 
 const TYPED_LABEL: Record<TypedField, [string, string]> = {
   length: ['Length', 'mm'], angle: ['Angle', '°'], w: ['W', 'mm'], h: ['H', 'mm'], offset: ['Offset', 'mm'],
@@ -161,6 +163,14 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
   )
 }
 
+/** Items per layer (General = '', with unknown ids). */
+function layerCounts(annotations: RoomAnnotation[], layers: CadLayer[]): Map<string, number> {
+  const ids = new Set(layers.filter(l => !l.is_default).map(l => l.id))
+  const m = new Map<string, number>()
+  for (const a of annotations) { const k = a.cad_layer_id && ids.has(a.cad_layer_id) ? a.cad_layer_id : ''; m.set(k, (m.get(k) ?? 0) + 1) }
+  return m
+}
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="px-3 py-2.5 border-b border-gray-800">
@@ -211,7 +221,7 @@ function summary(a: RoomAnnotation, k: number): string {
   }
 }
 
-export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose, elevation, itemFields }: {
+export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose, elevation, itemFields, cadLayers }: {
   cad:         AnnotationTool
   /** The drawing's annotations (the list to pick from). */
   annotations: RoomAnnotation[]
@@ -229,6 +239,8 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
   elevation?:  string | null
   /** Drawing on a cabinet (z_item_cad): its fields, listed above the job's. */
   itemFields?: { key: string; label: string }[]
+  /** Named CAD layers (z_cad_layers): the job's list, edits, current layer. */
+  cadLayers?:  { layers: CadLayer[]; ops: CadLayerOps; current: string | null; setCurrent: (id: string | null) => void; onManage: () => void }
 }) {
   const ys = elevation ? -1 : 1
   const sel = cad.selected
@@ -246,6 +258,10 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
         </div>
         <button onClick={onClose} title="Close CAD (F7)" className="text-gray-500 hover:text-white text-lg leading-none px-1">×</button>
       </div>
+
+      {cadLayers && cadLayers.layers.length > 0 && (
+        <CadLayersSection {...cadLayers} Section={Section} counts={layerCounts(annotations, cadLayers.layers)} />
+      )}
 
       <Section title="Cursor">
         <div className="grid grid-cols-2 gap-x-3">

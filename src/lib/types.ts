@@ -698,8 +698,26 @@ export interface RoomAnnotation {
   text:       string | null
   style:      import('./annotations/style').AnnotationStyle
   sort_order: number
+  /** Named CAD layer (z_cad_layers): job_cad_layers.id; null = the job's General layer. */
+  cad_layer_id?: string | null
   created_at: string
   updated_at: string
+}
+
+/** A named CAD layer (z_cad_layers). The shop list (cad_layers) and a job's own copy
+ *  (job_cad_layers, with project_id + shop_layer_id) share this shape. */
+export interface CadLayer {
+  id:             string
+  project_id?:    string
+  shop_layer_id?: string | null
+  name:           string
+  color:          string
+  visible:        boolean
+  print:          boolean
+  is_default:     boolean
+  sort_order:     number
+  created_at?:    string
+  updated_at?:    string
 }
 
 /** A fixture placed in a room — a copy of the catalogue row at placement time. */

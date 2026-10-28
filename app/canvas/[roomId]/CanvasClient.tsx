@@ -8,7 +8,7 @@ import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { underPanelRun, carcassesOverPanel, isUnderPanel, withoutScribe, UNDER_PANEL_DEF } from '@/src/lib/underPanel'
 import { useIsAdmin } from '@/src/lib/useRole'
-import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem } from '@/src/lib/types'
+import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem, CadLayer } from '@/src/lib/types'
 import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
@@ -66,6 +66,8 @@ import { withFieldsFilled, annotationsBounds } from '@/src/lib/annotations/block
 import CadContextMenu from './CadContextMenu'
 import { IDENTITY_FRAME, mapPt } from '@/src/lib/annotations/geometry'
 import { PLAN_OWNER, elevationOwner, elevationAnnotFrame, ownedBy } from '@/src/lib/annotations/owner'
+import { cadLayerView } from '@/src/lib/annotations/cadLayers'
+import { useCadLayerOps, CadLayerManagerModal } from './CadLayers'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import FixturePanel from './FixturePanel'
@@ -152,7 +154,7 @@ function loadStoredCanvasView(roomId: string, walls: Wall[]): { view: CanvasView
 // Shape Editor overlay is client-only and heavy — load it when first opened.
 const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
 
-export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures, initialAnnotations }: {
+export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures, initialAnnotations, initialCadLayers }: {
   project: Project | null
   room: Room
   walls: Wall[]
@@ -161,6 +163,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   initialFixtures?: RoomFixture[]
   /** CAD annotations (z_CAD_tool) — every view's rows for this room. */
   initialAnnotations?: RoomAnnotation[]
+  /** The job's named CAD layers (z_cad_layers). */
+  initialCadLayers?: CadLayer[]
 }) {
   const [project, setProjectState] = useState<Project | null>(initProject)
   const [room, setRoomState] = useState<Room>(initRoom)
@@ -323,6 +327,21 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // CAD annotations (z_CAD_tool). F7 = CAD mode (mode 'cad'); authoring in useAnnotationTool.
   const [annotations, setAnnotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
   const planAnnotations = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
+  // Named CAD layers (z_cad_layers): on/off, ByLayer colour and print are for the whole job.
+  const [cadLayers, setCadLayers] = useState<CadLayer[]>(initialCadLayers ?? [])
+  const cadLayerV = useMemo(() => cadLayerView(cadLayers), [cadLayers])
+  // Current layer for new items, remembered per user per job; null / gone = General.
+  const [cadLayerPick, setCadLayerPick] = useState<string | null>(() => getUserPrefs().cadLayerCurrent[initRoom.project_id] ?? null)
+  const cadLayerCurrent = cadLayerPick && cadLayers.some(l => l.id === cadLayerPick && !l.is_default) ? cadLayerPick : null
+  const setCadLayerCurrent = useCallback((id: string | null) => {
+    setCadLayerPick(id)
+    const all = { ...getUserPrefs().cadLayerCurrent }
+    if (id) all[initRoom.project_id] = id; else delete all[initRoom.project_id]
+    setUserPrefs({ cadLayerCurrent: all })
+  }, [initRoom.project_id])
+  const cadLayerOps = useCadLayerOps({ table: 'job_cad_layers', projectId: initRoom.project_id, layers: cadLayers, setLayers: setCadLayers, setAnnotations })
+  const [showCadLayerManager, setShowCadLayerManager] = useState(false)
+  const cadLayerColorOf = useCallback((id: string | null) => cadLayerV.color({ cad_layer_id: id }), [cadLayerV])
   const [sectionCut, setSectionCut] = useState<SectionCut | null>(null)
   // Cross section in elevation (z_section_view): cut x along the elevation + look direction; null = off.
   // A cut made on another wall re-centres on the current one.
@@ -751,6 +770,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const cadOwner = useMemo(() => cadElevWallId ? elevationOwner(cadElevWallId, elevWallSide) : PLAN_OWNER, [cadElevWallId, elevWallSide])
   const cadFrame = useMemo(() => cadElevWallId ? elevationAnnotFrame(cadElevRoomH) : IDENTITY_FRAME, [cadElevWallId, cadElevRoomH])
   const viewAnnotations = useMemo(() => annotations.filter(a => ownedBy(a, cadOwner)), [annotations, cadOwner])
+  // Off CAD layers: not drawn, not snapped to, not selectable.
+  const shownViewAnnotations = useMemo(() => viewAnnotations.filter(a => cadLayerV.show(a)), [viewAnnotations, cadLayerV])
   // The elevation svg's own pan / zoom (reported up) — CAD maps clicks with it.
   const [elevView, setElevView] = useState({ panX: 80, panY: 60, zoom: 1 })
   const elevSvgRef = useRef<SVGSVGElement | null>(null)
@@ -765,16 +786,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const cadSnapPlan = useMemo(() => mode !== 'cad' || canvasView !== 'plan' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
     walls, cabinets, resolved: planResolvedParts, fixtures, benchtops, annotations: [], paperToFrame: annotScale,
   }), [mode, canvasView, walls, cabinets, planResolvedParts, fixtures, benchtops, annotScale])
+  const cadSnapElevRef = useRef<SnapGeometry>(EMPTY_SNAP_GEOMETRY)
+  const setCadSnapElev = useCallback((g: SnapGeometry) => { cadSnapElevRef.current = g }, [])
   const cadSnapNotes = useMemo(() => mode !== 'cad' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
-    walls: [], cabinets: [], fixtures: [], benchtops: [], annotations: viewAnnotations, paperToFrame: annotScale,
-  }), [mode, viewAnnotations, annotScale])
+    walls: [], cabinets: [], fixtures: [], benchtops: [], annotations: shownViewAnnotations, paperToFrame: annotScale,
+  }), [mode, shownViewAnnotations, annotScale])
   const cad = useAnnotationTool({
     room, annotations, setAnnotations, captureSnapshot, owner: cadOwner, frame: cadFrame, paper: annotScale, zoom: cadZoom,
+    selectable: cadLayerV.show, layerId: cadLayerCurrent, layerColorOf: cadLayerColorOf,
     // The Cabinet Edit modal has its own CAD (z_item_cad): the canvas's stands down under it.
     active: mode === 'cad' && (canvasView === 'plan' || !!cadElevWallId) && !editCabId,
     toWorld: e => {
-  const cadSnapElevRef = useRef<SnapGeometry>(EMPTY_SNAP_GEOMETRY)
-  const setCadSnapElev = useCallback((g: SnapGeometry) => { cadSnapElevRef.current = g }, [])
       if (cadElevWallId) {   // elevation svg: translate(pan) scale(zoom)
         const r = elevSvgRef.current!.getBoundingClientRect()
         return { x: (e.clientX - r.left - elevView.panX) / elevView.zoom, y: (e.clientY - r.top - elevView.panY) / elevView.zoom }
@@ -787,6 +809,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     },
     enterCad, exitCad: () => setMode('select'),
   })
+  // A layer turned off drops its items out of the selection (z_cad_layers).
+  const { selectedIds: cadSel, setSelectedIds: setCadSel } = cad
+  useEffect(() => {
+    const gone = annotations.filter(a => cadSel.has(a.id) && !cadLayerV.show(a))
+    if (gone.length) setCadSel(new Set([...cadSel].filter(id => !gone.some(g => g.id === id))))
+  }, [cadLayerV, annotations, cadSel, setCadSel])
   /** The CAD notes layer for the drawing on show (plan canvas, or the elevation's wall
    *  side): click sheet, notes, preview, live sizes, snap marker, marquee / text box ghost.
    *  Everything is in frame mm, mapped through cadFrame (identity on the plan). */
@@ -800,10 +828,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onPointerDown={cad.onCaptureDown} onPointerMove={cad.onCaptureMove}
           onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
       )}
-      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(viewAnnotations), cadFields)} frame={cadFrame} paper={annotScale} layers={layers}
+      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(viewAnnotations), cadFields)} frame={cadFrame} paper={annotScale} layers={layers} cadLayers={cadLayerV}
         edit={{ ...cad.editProps, hittable: cad.editProps.hittable && (mode === 'cad' || mode === 'select') }} />
       {cad.drawPreview && (
-        <AnnotationLayer annotations={[cad.drawPreview]} frame={cadFrame} paper={annotScale} />
+        <AnnotationLayer annotations={[cad.drawPreview]} frame={cadFrame} paper={annotScale} cadLayers={cadLayerV} />
       )}
       <CadMeasureOverlay live={cad.liveMeasure} frame={cadFrame} zoom={z}
         selected={mode === 'cad' && !cad.editing && cad.selected.length === 1 ? cad.selected[0] : null} />
@@ -3199,7 +3227,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         </div>
       </div>
 
-      {(canvasView === 'plan' || !!cadElevWallId) && <CadContextMenu cad={cad} annotations={viewAnnotations} zoom={cadZoom} onSaveBlock={() => setBlockSaveReq(n => n + 1)} />}
+      {(canvasView === 'plan' || !!cadElevWallId) && <CadContextMenu cad={cad} annotations={viewAnnotations} zoom={cadZoom} onSaveBlock={() => setBlockSaveReq(n => n + 1)} cadLayers={cadLayers} />}
       {cad.editing && (canvasView === 'plan' || !!cadElevWallId) && (
         <AnnotTextEditor key={cad.editing.draft.id} editing={cad.editing} frame={cadFrame} paper={annotScale} zoom={cadZoom}
           toClient={p => {
@@ -3243,7 +3271,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onToggleCad={() => { if (mode === 'cad') setMode('select'); else enterCad() }}
           cadPanel={(canvasView === 'plan' || canvasView === 'elevation') && (
             <CadRibbon cad={cad} viewSupported={canvasView === 'plan' || !!cadElevWallId} scale={annotScale} onScale={setAnnotScale}
-              snap={cadSnapSettings} onSnap={setCadSnapSettings} />
+              snap={cadSnapSettings} onSnap={setCadSnapSettings}
+              cadLayers={{ list: cadLayers, current: cadLayerCurrent, setCurrent: setCadLayerCurrent }} />
           )}
           clipboard={clipboard}
           sidebarW={sidebarW}
@@ -3500,8 +3529,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             elevWallSide={elevWallSide}
             onSetElevWallSide={setElevWallSide}
             annotationsLayer={cadElevWallId ? cadLayer(elevLayers) : undefined}
-            itemCadNotes={itemCad.frontNotes} itemCadPaper={annotScale} itemCadFields={cadFields}
+            itemCadNotes={itemCad.frontNotes} itemCadPaper={annotScale} itemCadFields={cadFields} itemCadLayers={cadLayerV}
             onViewChange={setElevView}
+            onCadSnapGeometry={mode === 'cad' ? setCadSnapElev : undefined}
             svgElRef={elevSvgRef}
             onUpdateCabinet={handleUpdateCabinet}
             onPlaceAtWall={async (wall, rawX, rawY, dx) => {
@@ -3512,7 +3542,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               const t = (rawX - wall.pos_x) * wd.x + (rawY - wall.pos_y) * wd.y
               const gc = centroid(walls)
               const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, elevWallSide === 'back', gc)
-            onCadSnapGeometry={mode === 'cad' ? setCadSnapElev : undefined}
               if (mode === 'paste' && clipboard) {
                 if (clipboardGroup.length > 1) await pasteGroupAt(wall, pos_x, pos_y, elevWallSide === 'back')
                 else await pasteCabinet(wall, pos_x, pos_y, elevWallSide === 'back')
@@ -3678,6 +3707,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         {/* CAD side panel (z_CAD_tool B2c): coordinates, the shape being drawn, the selection's numbers. */}
         {mode === 'cad' && (canvasView === 'plan' || !!cadElevWallId) && (
           <CadPanel cad={cad} annotations={viewAnnotations} paper={annotScale} walls={walls} fieldValues={cadFields} blockSaveReq={blockSaveReq} onClose={() => setMode('select')}
+            cadLayers={{ layers: cadLayers, ops: cadLayerOps, current: cadLayerCurrent, setCurrent: setCadLayerCurrent, onManage: () => setShowCadLayerManager(true) }}
             elevation={cadElevWall ? `${cadElevWall.name} — ${elevWallSide === 'face' ? 'Face' : 'Back'}` : null} />
         )}
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && multiWallObjs.length < 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
@@ -4271,6 +4301,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         </div>
       )}
 
+      {showCadLayerManager && (
+        <CadLayerManagerModal layers={cadLayers} ops={cadLayerOps} onClose={() => setShowCadLayerManager(false)} />
+      )}
       {showLayerManager && (
         <LayerManagerPanel
           api={layerSetsApi}
@@ -4337,6 +4370,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           benchTopZ={b => btInfo(b).topZ}
           fixtures={fixtures}
           annotations={withFieldsFilled(annotations, cadFields)}
+          cadLayers={cadLayerV}
           materialColours={matColours}
           ebByMatId={ebByMatId}
           layerSets={layerSetsApi.sets}

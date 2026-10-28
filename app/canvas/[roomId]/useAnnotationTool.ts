@@ -211,7 +211,7 @@ export const DB_ANNOT_STORE: AnnotStore = {
 
 export function useAnnotationTool({
   room, annotations, setAnnotations, captureSnapshot, owner, frame, paper, zoom, active,
-  toWorld, snap, enterCad, exitCad, store, tools,
+  toWorld, snap, enterCad, exitCad, store, tools, selectable, layerId, layerColorOf,
 }: {
   room:            Room
   /** The drawing being annotated (plan, or one side of one wall — A6): new notes go to
@@ -238,7 +238,17 @@ export function useAnnotationTool({
   store?:          AnnotStore
   /** Only these tools can be picked (default: all) — Edit shape offers the outline tools. */
   tools?:          ReadonlySet<CadTool>
+  /** Marquee / Ctrl+A skip items this says no to (off CAD layers, z_cad_layers). */
+  selectable?:     (a: RoomAnnotation) => boolean
+  /** The current CAD layer new items go on (z_cad_layers); null = General. */
+  layerId?:        string | null
+  /** A CAD layer's colour (ByLayer), for the ribbon's swatches. */
+  layerColorOf?:   (id: string | null) => string | undefined
 }) {
+  const selectableRef = useRef(selectable)
+  useEffect(() => { selectableRef.current = selectable }, [selectable])
+  const layerIdRef = useRef(layerId ?? null)
+  useEffect(() => { layerIdRef.current = layerId ?? null }, [layerId])
   const storeRef = useRef<AnnotStore>(store ?? DB_ANNOT_STORE)
   useEffect(() => { storeRef.current = store ?? DB_ANNOT_STORE }, [store])
   const [tool, setToolState] = useState<CadTool>('select')
@@ -346,11 +356,20 @@ export function useAnnotationTool({
   const ribbonKind: AnnotationKind = editing?.draft.kind ?? selected[0]?.kind ?? TOOL_KIND[tool]
   const ribbonKey: StyleKey = editing ? styleKeyOf(editing.draft.kind, editing.draft.style)
     : selected[0] ? styleKeyOf(selected[0].kind, selected[0].style) : TOOL_STYLE_KEY[tool]
+  /** The CAD layer the ribbon shows: the edited / selected item's (null when the
+   *  selection spans layers), else the current layer for new items. */
+  const ribbonLayerId: string | null | undefined = editing ? (editing.draft.cad_layer_id ?? null)
+    : selected.length ? (selected.every(a => (a.cad_layer_id ?? null) === (selected[0].cad_layer_id ?? null)) ? (selected[0].cad_layer_id ?? null) : undefined)
+    : (layerId ?? null)
+  const ribbonRaw: AnnotationStyle = editing ? editing.draft.style : selected[0] ? selected[0].style : defaultsFor(TOOL_STYLE_KEY[tool])
   const ribbonStyle: ResolvedStyle = useMemo(() => {
-    if (editing) return resolveStyle(editing.draft.kind, editing.draft.style)
-    if (selected[0]) return resolveStyle(selected[0].kind, selected[0].style)
-    return resolveStyle(TOOL_KIND[tool], defaultsFor(TOOL_STYLE_KEY[tool]))
-  }, [editing, selected, defaultsFor, tool])
+    const lc = layerColorOf?.(ribbonLayerId ?? null)
+    if (editing) return resolveStyle(editing.draft.kind, editing.draft.style, lc)
+    if (selected[0]) return resolveStyle(selected[0].kind, selected[0].style, lc)
+    return resolveStyle(TOOL_KIND[tool], defaultsFor(TOOL_STYLE_KEY[tool]), lc)
+  }, [editing, selected, defaultsFor, tool, layerColorOf, ribbonLayerId])
+  /** Line / text colour follows the layer (not set on the item). */
+  const ribbonByLayer = ribbonRaw?.color == null
   /** The selected / edited text has a leader (ribbon shows leader controls). */
   const ribbonLeader = editing ? !!(editing.draft.geom as TextGeom).leader?.length
     : selected[0]?.kind === 'text' ? !!(selected[0].geom as TextGeom).leader?.length : tool === 'leader'
@@ -427,7 +446,7 @@ export function useAnnotationTool({
     const now = new Date().toISOString()
     return {
       id: crypto.randomUUID(), room_id: room.id, ...ownerColumns(owner),
-      kind, geom, text, style, sort_order: nextOrder(), created_at: now, updated_at: now,
+      kind, geom, text, style, sort_order: nextOrder(), cad_layer_id: layerIdRef.current, created_at: now, updated_at: now,
     }
   }, [room.id, owner])
 
@@ -435,6 +454,16 @@ export function useAnnotationTool({
     if (!rows.length) return
     await storeRef.current.insert(rows)
   }, [])
+
+  /** Move the selection onto a CAD layer (z_cad_layers; null = General). One undo step. */
+  const moveToLayer = useCallback((id: string | null, only?: string[]) => {
+    const ids = (only ?? [...liveSelected]).filter(x => annRef.current.find(a => a.id === x && (a.cad_layer_id ?? null) !== id))
+    if (!ids.length) return
+    captureSnapshot()
+    const set = new Set(ids)
+    setAnnotations(xs => xs.map(a => set.has(a.id) ? { ...a, cad_layer_id: id } : a))
+    for (const x of ids) void storeRef.current.update(x, { cad_layer_id: id })
+  }, [liveSelected, captureSnapshot, setAnnotations])
 
   const deleteSelected = useCallback(() => {
     if (!liveSelected.size) return
@@ -462,7 +491,7 @@ export function useAnnotationTool({
     captureSnapshot()
     const off = 5 * k
     let order = nextOrder()
-    const rows = src.map(a => ({ ...newRow(a.kind, translateGeom(a.kind, a.geom, off, off), a.text, a.style), sort_order: order++ }))
+    const rows = src.map(a => ({ ...newRow(a.kind, translateGeom(a.kind, a.geom, off, off), a.text, a.style), cad_layer_id: a.cad_layer_id ?? null, sort_order: order++ }))
     setAnnotations(xs => [...xs, ...rows])
     setSelectedIds(new Set(rows.map(r => r.id)))
     clipboard = rows
@@ -775,7 +804,7 @@ export function useAnnotationTool({
     const d = offsetDist(src, p, typedRef.current)
     const g = Math.abs(d) > 1e-6 ? offsetGeom(src.kind as OffsetKind, src.geom, d) : null
     if (!g) return
-    const row = newRow(src.kind, g, null, src.style)
+    const row = { ...newRow(src.kind, g, null, src.style), cad_layer_id: src.cad_layer_id ?? null }
     captureSnapshot(); setAnnotations(xs => [...xs, row]); void insertRows([row])
     setOffsetSrc(row.id); setSelectedIds(new Set([row.id]))
   }, [newRow, captureSnapshot, setAnnotations, insertRows, setOffsetSrc])
@@ -973,7 +1002,7 @@ export function useAnnotationTool({
       setChain(null); setModMsg('Click a linear or aligned dimension to carry on from'); return
     }
     const g = chainedDim(dimMode === 'baseline' ? 'baseline' : 'continue', root.geom as DimGeom, prev.geom as DimGeom, p, 8 * k)
-    const row = newRow('dim', g, null, prev.style)
+    const row = { ...newRow('dim', g, null, prev.style), cad_layer_id: prev.cad_layer_id ?? null }
     addRow(row)
     setChain({ rootId: ch.rootId, prevId: row.id }); setModMsg(null)
     setLastDimId(row.id)
@@ -1186,7 +1215,7 @@ export function useAnnotationTool({
           minY: Math.min(cur.start.y, cur.cur.y), maxY: Math.max(cur.start.y, cur.cur.y),
         }
         const hit = annRef.current.filter(a => {
-          if (!ownedBy(a, owner)) return false
+          if (!ownedBy(a, owner) || selectableRef.current?.(a) === false) return false
           const b = boundsOf(annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k))
           return b && boxesOverlap(b, box)
         }).map(a => a.id)
@@ -1426,7 +1455,7 @@ export function useAnnotationTool({
       if (mod && (e.key === 'c' || e.key === 'C')) { take(); clipboard = selected; return }
       if (mod && (e.key === 'v' || e.key === 'V')) { take(); paste(clipboard); return }
       if (mod && (e.key === 'd' || e.key === 'D')) { take(); paste(selected); return }
-      if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => ownedBy(a, owner)).map(a => a.id))); return }
+      if (mod && (e.key === 'a' || e.key === 'A')) { take(); setSelectedIds(new Set(annRef.current.filter(a => ownedBy(a, owner) && selectableRef.current?.(a) !== false).map(a => a.id))); return }
       // Tab (or a digit) while drawing → the CAD panel's first size field.
       // Several selected: Tab (or a digit) → the panel's X field to move them.
       if (tool === 'select' && liveSelected.size > 1 && !drawingRef.current && (e.key === 'Tab' || (/^[0-9.\-]$/.test(e.key) && !mod))) {
@@ -1568,8 +1597,8 @@ export function useAnnotationTool({
   return {
     tool, setTool, selected, withEditing, selectedIds: liveSelected, setSelectedIds,
     editing, setEditText, commitEdit, cancelEdit,
-    ribbonKind, ribbonStyle, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
-    deleteSelected, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
+    ribbonKind, ribbonStyle, ribbonByLayer, ribbonLayerId, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
+    deleteSelected, moveToLayer, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     dimMode, setDimMode, applyDimText, chain, arcMode, setArcMode, offsetSrc: offsetSrcA,
     filletR, setFilletR, chamfer, setChamfer, modPick, modMsg, cornerOp, setLineClosed, convertToLines,

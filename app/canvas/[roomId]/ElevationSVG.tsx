@@ -53,6 +53,7 @@ import { grainMatchColour, grainMatchTag, grainMatchTagCabs } from '@/src/lib/gr
 const SPLIT_SNAP = 15
 import type { LabelOff } from '@/src/lib/labelOffsets'
 import AnnotationLayer from './AnnotationLayer'
+import type { CadLayerView } from '@/src/lib/annotations/cadLayers'
 import CabinetPickerMenu from './CabinetPickerMenu'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { FillPatternDef, fillPaint } from './FillPattern'
@@ -263,14 +264,16 @@ interface ElevationSVGProps {
   onViewChange?: (v: { panX: number; panY: number; zoom: number }) => void
   /** Receives the svg element (CAD click → svg mm). */
   svgElRef?: React.MutableRefObject<SVGSVGElement | null>
-  /** Item CAD (z_item_cad) a cabinet's front draws, in its front frame; + paper scale, live fields. */
   /** CAD mode (z_CAD_tool A6b): receives this wall side's snap targets — wall face,
    *  floor / ceiling, cabinets + parts, fronts, benchtops, fixtures — in the note
    *  frame (x along the elevation, y down from the floor). Omitted → not built. */
   onCadSnapGeometry?: (g: SnapGeometry) => void
+  /** Item CAD (z_item_cad) a cabinet's front draws, in its front frame; + paper scale, live fields. */
   itemCadNotes?: (cab: CabinetInstance) => RoomAnnotation[]
   itemCadPaper?: number
   itemCadFields?: CadFieldValues
+  /** Named CAD layers (z_cad_layers) for the item CAD notes. */
+  itemCadLayers?: CadLayerView
 }
 
 export default function ElevationSVG({
@@ -289,7 +292,7 @@ export default function ElevationSVG({
   fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
-  annotationsLayer, onViewChange, svgElRef, onCadSnapGeometry, itemCadNotes, itemCadPaper, itemCadFields,
+  annotationsLayer, onViewChange, svgElRef, onCadSnapGeometry, itemCadNotes, itemCadPaper, itemCadFields, itemCadLayers,
 }: ElevationSVGProps) {
   // Ghost grain on grained colours (z_material_colours MC11).
   const grainedIds = useGrainedMaterialIds()
@@ -453,9 +456,6 @@ export default function ElevationSVG({
     if (elevSnapSettings.kinds['part-corner']) pts.push(...partSnapPoints)
     return pts
   }, [wall, elevSnapSettings, wallCabs, room, roomH, partSnapPoints])
-  // Keep rfData current on every render (synchronous assignment, no useEffect needed).
-  rfData.current = { elevResizeFollowing, view, cabinets, room }
-
   // CAD snap targets (z_CAD_tool A6b): what this view draws, as outlines in the note
   // frame (svg y − roomH = y down from the floor). Same per-cabinet transform as
   // partSnapPoints; only cabinets / fixtures the layer set shows.
@@ -506,6 +506,9 @@ export default function ElevationSVG({
   const onCadSnapRef = useRef(onCadSnapGeometry)
   onCadSnapRef.current = onCadSnapGeometry
   useEffect(() => { if (cadSnapGeometry) onCadSnapRef.current?.(cadSnapGeometry) }, [cadSnapGeometry])
+  // Keep rfData current on every render (synchronous assignment, no useEffect needed).
+  rfData.current = { elevResizeFollowing, view, cabinets, room }
+
   useEffect(() => {
     setPlaceGhost(null)
     setElevCabFollowing(null)
@@ -1928,7 +1931,7 @@ export default function ElevationSVG({
                       bin fronts / code, in its front frame (x from the left, y down from the bottom). */}
                   {itemCadNotes && layers.show('item_cad') && (
                     <AnnotationLayer annotations={withFieldsFilled(itemCadNotes(cab), itemCadFields)}
-                      frame={{ ox: rx, oy: ry + displayDy, s: 1, flipY: false }} paper={itemCadPaper ?? 20} layers={layers} />
+                      frame={{ ox: rx, oy: ry + displayDy, s: 1, flipY: false }} paper={itemCadPaper ?? 20} layers={layers} cadLayers={itemCadLayers} />
                   )}
                 </g>
               )

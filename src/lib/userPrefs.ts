@@ -46,6 +46,10 @@ export interface UserPrefs {
   annotStyleDefaults: Partial<Record<StyleKey, AnnotationStyle>>
   /** CAD object snaps (z_CAD_tool B2): on/off, which kinds, which things to snap to. */
   cadSnap: CadSnapSettings
+  /** Current CAD layer per job (z_cad_layers): project id → job_cad_layers id. */
+  cadLayerCurrent: Record<string, string>
+  /** Remembered CAD colours were dropped once for ByLayer (z_cad_layers). */
+  cadByLayerV1: boolean
 }
 
 export interface TutorialPrefs {
@@ -106,6 +110,8 @@ const DEFAULTS: UserPrefs = {
   tutorial: DEFAULT_TUTORIAL,
   annotStyleDefaults: {},
   cadSnap: DEFAULT_CAD_SNAP,
+  cadLayerCurrent: {},
+  cadByLayerV1: true,
 }
 
 // Legacy fields: per-view `drawingPresets.plan` and the older singular
@@ -153,6 +159,21 @@ function normaliseCabinetViewStyles(raw: unknown): CabinetViewStyles {
   }
 }
 
+// New CAD items are ByLayer (z_cad_layers): colours remembered before layers existed are
+// dropped once; colours picked on purpose after that are kept.
+function normaliseAnnotDefaults(raw: unknown, byLayerDone: boolean): UserPrefs['annotStyleDefaults'] {
+  if (!raw || typeof raw !== 'object') return {}
+  const all = raw as UserPrefs['annotStyleDefaults']
+  if (byLayerDone) return all
+  const out: UserPrefs['annotStyleDefaults'] = {}
+  for (const [k, v] of Object.entries(all)) {
+    const rest = { ...v }
+    delete rest.color; delete rest.borderColor; delete rest.fillColor
+    out[k as keyof typeof out] = rest
+  }
+  return out
+}
+
 export function getUserPrefs(): UserPrefs {
   if (typeof window === 'undefined') return DEFAULTS
   try {
@@ -167,8 +188,10 @@ export function getUserPrefs(): UserPrefs {
       planGrid:         normalisePlanGrid(merged.planGrid),
       wallDraw:         normaliseWallDraw(merged.wallDraw),
       tutorial:         normaliseTutorial(merged.tutorial),
-      annotStyleDefaults: merged.annotStyleDefaults && typeof merged.annotStyleDefaults === 'object' ? merged.annotStyleDefaults : {},
+      annotStyleDefaults: normaliseAnnotDefaults(merged.annotStyleDefaults, stored.cadByLayerV1 === true),
       cadSnap: normaliseCadSnap(merged.cadSnap),
+      cadLayerCurrent: merged.cadLayerCurrent && typeof merged.cadLayerCurrent === 'object' ? merged.cadLayerCurrent : {},
+      cadByLayerV1: true,
     }
   } catch {
     return DEFAULTS

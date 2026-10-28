@@ -3,6 +3,12 @@
 Status: **Phases 1–3 built (3c complete 2026-09-18), pending manual test**
 Date: 2026-09-16
 
+> **Named CAD layers (2026-10-28):** CAD items also sit on the job's named CAD layers
+> (Electrical, Plumbing…): [z_cad_layers/CAD-LAYERS-SPEC.md](../z_cad_layers/CAD-LAYERS-SPEC.md).
+> They're a second gate inside the Annotations group, applied in `AnnotationLayer` / `ReportsModal`
+> next to the `annot_*` items: an item draws only if both are on. They aren't layer-set items,
+> because on/off is per job, not per set.
+>
 > **Per-part hiding (2026-10-18):** hiding one part on one cabinet per view
 > (Plan / Elev / 3D ticks in the Parts tab) lives in
 > [PART-HIDE-SPEC.md](PART-HIDE-SPEC.md). It gates through `filterHiddenMap`,

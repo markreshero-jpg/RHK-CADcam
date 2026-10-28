@@ -17,6 +17,7 @@ import type { Bt3DPrint } from './Room3DCapture'
 import type { BtElevInfo } from './BenchtopElevation'
 import { useCadFields } from './useCadFields'
 import { withFieldsFilled } from '@/src/lib/annotations/blocks'
+import { annotationsForPrint, ALL_CAD_LAYERS, type CadLayerView } from '@/src/lib/annotations/cadLayers'
 import CabinetSheetReport from './CabinetSheetReport'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
@@ -164,7 +165,7 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, initialReport, bt3d, btInfoFor, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], materialColours, ebByMatId, layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, initialReport, bt3d, btInfoFor, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], cadLayers = ALL_CAD_LAYERS, materialColours, ebByMatId, layerSets, activeLayerSetId, onClose }: {
   /** Material colours for the 3D colour render (keyed by material id). */
   materialColours?: ComponentProps<typeof Render3DReport>['materialColours']
   ebByMatId?: ComponentProps<typeof Render3DReport>['ebByMatId']
@@ -189,6 +190,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   fixtures?: RoomFixture[]
   /** CAD annotations (z_CAD_tool) for this room — the plan / elevation reports draw the canvas room. */
   annotations?: RoomAnnotation[]
+  /** The job's named CAD layers (z_cad_layers): off and no-print layers stay off every report. */
+  cadLayers?: CadLayerView
   layerSets: LayerSet[]
   activeLayerSetId: string | null
   onClose: () => void
@@ -440,10 +443,10 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     return () => { dead = true }
   }, [isHere, drawRoom.id])
   const otherFields = useCadFields({ project, room: drawRoom, resolvedParts: drawResolved, fixtures: drawFixtures })
-  const drawAnnots = useMemo(() => isHere
+  const drawAnnots = useMemo(() => annotationsForPrint(isHere
     ? annotations
-    : withFieldsFilled(otherAnnots?.roomId === drawRoom.id ? otherAnnots.rows : [], otherFields),
-  [isHere, annotations, otherAnnots, drawRoom.id, otherFields])
+    : withFieldsFilled(otherAnnots?.roomId === drawRoom.id ? otherAnnots.rows : [], otherFields), cadLayers),
+  [isHere, annotations, otherAnnots, drawRoom.id, otherFields, cadLayers])
   const drawPlanAnnots = useMemo(() => drawAnnots.filter(a => a.view === 'plan'), [drawAnnots])
   function deleteShot(id: string) {
     if (isHere) { onDeleteShopShot?.(id); return }

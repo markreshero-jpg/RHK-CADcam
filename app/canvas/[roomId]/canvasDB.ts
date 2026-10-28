@@ -1607,7 +1607,7 @@ export async function dbLoadRoomPartDetails(cabinetIds: string[]): Promise<{
 // rows server-side (page.tsx); these are for authoring (A2+) and other screens.
 
 export type AnnotationDraft = Omit<RoomAnnotation, 'id' | 'created_at' | 'updated_at'>
-type AnnotationPatch = Partial<Pick<RoomAnnotation, 'geom' | 'text' | 'style' | 'sort_order' | 'kind'>>
+type AnnotationPatch = Partial<Pick<RoomAnnotation, 'geom' | 'text' | 'style' | 'sort_order' | 'kind' | 'cad_layer_id'>>
 
 export async function dbLoadAnnotations(roomId: string): Promise<RoomAnnotation[]> {
   const { data, error } = await supabase.from('room_annotations').select('*').eq('room_id', roomId).order('sort_order')

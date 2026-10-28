@@ -86,11 +86,17 @@ export function styleDefaults(kind: AnnotationKind): ResolvedStyle {
   return { ...BASE, ...KIND_DEFAULTS[kind] }
 }
 
-export function resolveStyle(kind: AnnotationKind, style: AnnotationStyle | null | undefined): ResolvedStyle {
+/** layerColor: the item's CAD layer colour (z_cad_layers ByLayer). Colours the item
+ *  hasn't set itself (line / text, border, fill) take it. */
+export function resolveStyle(kind: AnnotationKind, style: AnnotationStyle | null | undefined, layerColor?: string): ResolvedStyle {
   const out = styleDefaults(kind)
+  if (layerColor) out.color = out.borderColor = out.fillColor = layerColor
   for (const [k, v] of Object.entries(style ?? {})) if (v != null) (out as unknown as Record<string, unknown>)[k] = v
   return out
 }
+
+/** Style keys that follow the layer when unset (ByLayer). */
+export const BYLAYER_KEYS = ['color', 'borderColor', 'fillColor'] as const
 
 /** Print with colours off (decision 6): everything ink, coloured backgrounds go white,
  *  fills drop out. The canvas always passes print=false. */

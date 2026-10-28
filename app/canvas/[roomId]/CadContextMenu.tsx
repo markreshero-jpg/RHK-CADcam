@@ -3,21 +3,27 @@
 // Right-click menu on a CAD note / line (z_CAD_tool B4b). Corner items act on the
 // corner nearest the click; "all corners" on every corner of a line or box.
 
-import { useEffect } from 'react'
-import type { RoomAnnotation } from '@/src/lib/types'
+import { useEffect, useState } from 'react'
+import type { CadLayer, RoomAnnotation } from '@/src/lib/types'
+import { sortCadLayers } from '@/src/lib/annotations/cadLayers'
 import { type LineGeom, segLength } from '@/src/lib/annotations/geometry'
 import { OFFSETTABLE } from '@/src/lib/annotations/geometry'
 import type { AnnotationTool } from './useAnnotationTool'
 
-export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock }: {
+export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock, cadLayers }: {
   cad:         AnnotationTool
   annotations: RoomAnnotation[]
   /** canvas zoom (px per mm) — how near the click must be to a corner. */
   zoom:        number
   /** Open the CAD panel's "save as block" name box for the selection (z_CAD_tool C1). */
   onSaveBlock?: () => void
+  /** The job's CAD layers (z_cad_layers): Move to layer. */
+  cadLayers?:  CadLayer[]
 }) {
   const m = cad.menu
+  // Move to layer list, open for this menu only (a new right-click starts it closed).
+  const [layersFor, setLayersFor] = useState<typeof m>(null)
+  const layersOpen = !!m && layersFor === m
   useEffect(() => {
     if (!m) return
     const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest?.('[data-cad-menu]')) cad.closeMenu() }
@@ -41,7 +47,7 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock }: 
     })
   }
   const run = (fn: () => void) => () => { fn(); cad.closeMenu() }
-  type Item = { label: string; act: () => void; danger?: boolean } | 'sep'
+  type Item = { label: string; act: () => void; danger?: boolean; color?: string } | 'sep'
   const items: Item[] = []
   // Several selected: only what applies to them all (shape tools are one item at a time).
   const many = cad.selected.length > 1 && cad.selected.some(s => s.id === a.id)
@@ -61,6 +67,14 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock }: 
   if (items.length) items.push('sep')
   items.push({ label: many ? `Duplicate ${cad.selected.length} items` : 'Duplicate', act: run(() => cad.paste(many ? cad.selected : [a])) })
   if (onSaveBlock) items.push({ label: cad.selected.length > 1 ? `Save ${cad.selected.length} items as CAD block…` : 'Save as CAD block…', act: run(onSaveBlock) })
+  if (cadLayers && cadLayers.length > 1) {
+    const ids = many ? cad.selected.map(s => s.id) : [a.id]
+    items.push({ label: `Move to layer ${layersOpen ? '▾' : '▸'}`, act: () => setLayersFor(layersOpen ? null : m) })
+    if (layersOpen) for (const l of sortCadLayers(cadLayers)) {
+      const here = many ? cad.selected.every(s => (s.cad_layer_id ?? null) === (l.is_default ? null : l.id)) : (a.cad_layer_id ?? null) === (l.is_default ? null : l.id)
+      items.push({ label: `    ${here ? '✓ ' : ''}${l.name}`, color: l.color, act: run(() => cad.moveToLayer(l.is_default ? null : l.id, ids)) })
+    }
+  }
   items.push({ label: 'Bring to front', act: run(() => cad.reorder('front')) })
   items.push({ label: 'Send to back', act: run(() => cad.reorder('back')) })
   items.push('sep')
@@ -74,7 +88,8 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock }: 
       {items.map((it, i) => it === 'sep'
         ? <div key={i} className="my-1 border-t border-gray-700" />
         : <button key={i} onClick={it.act}
-            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 ${it.danger ? 'text-red-400' : 'text-gray-200'}`}>{it.label}</button>)}
+            className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 whitespace-pre flex items-center gap-1.5 ${it.danger ? 'text-red-400' : 'text-gray-200'}`}>
+            {it.color && <span className="w-2 h-2 rounded-sm shrink-0 ml-3" style={{ background: it.color }} />}{it.color ? it.label.trim() : it.label}</button>)}
     </div>
   )
 }

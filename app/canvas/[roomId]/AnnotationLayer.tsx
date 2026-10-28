@@ -16,6 +16,7 @@ import {
   dimLayout, dimTextPt, readableAngle, dimText, annotLayerItem, boxCorners,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, printStyle, dashPattern, type ResolvedStyle, type ArrowType } from '@/src/lib/annotations/style'
+import type { CadLayerView } from '@/src/lib/annotations/cadLayers'
 
 const FONT = 'Arial, Helvetica, sans-serif'
 
@@ -27,6 +28,10 @@ export interface AnnotationLayerProps {
   layers?:       LayerView
   /** Reports: "Print annotation colours" (decision 6). Canvas always shows colours. */
   printColours?: boolean
+  /** Named CAD layers (z_cad_layers): off layers drop out, ByLayer colours fill in. */
+  cadLayers?:    CadLayerView
+  /** Reports: no-print layers drop out as well. */
+  printing?:     boolean
   /** Canvas editing (A2): selection outlines, hit areas and grips. Reports omit it. */
   edit?: AnnotationEditProps
 }
@@ -53,7 +58,7 @@ export interface AnnotationEditProps {
 
 const SEL = '#38bdf8'
 
-export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, edit }: AnnotationLayerProps) {
+export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, cadLayers, printing, edit }: AnnotationLayerProps) {
   if (!annotations.length) return null
   const sorted = [...annotations].sort((a, b) => a.sort_order - b.sort_order)
   return (
@@ -61,7 +66,8 @@ export default function AnnotationLayer({ annotations, frame, paper, layers, pri
       {sorted.map(a => {
         const item = annotLayerItem(a.kind)
         if (layers && !layers.show(item)) return null   // only what's shown is selectable
-        const s = printStyle(resolveStyle(a.kind, a.style), printColours)
+        if (cadLayers && !(printing ? cadLayers.printable(a) : cadLayers.show(a))) return null
+        const s = printStyle(resolveStyle(a.kind, a.style, cadLayers?.color(a)), printColours)
         const opacity = layers ? layers.alpha(item) : 1
         const hidden = edit?.hiddenId === a.id
         return (

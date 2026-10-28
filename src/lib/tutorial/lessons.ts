@@ -1089,6 +1089,24 @@ export const LESSONS: TutorialLesson[] = [
       body: 'It’s on in every layer set. To change that, pick Manage layers… in the Layers drop-down, Elevation tab, Dimensions group: untick Wall height, or change its colour, weight or offset (the offset moves it further out).',
       target: 'menu-Layers', canvas: true, done: c => c.view === 'elevation' },
   ]},
+
+  // Appended 2026-10-28 (z_cad_layers — named CAD layers).
+  { id: 'cad_layers', level: 'intermediate', topic: 'cad', title: 'CAD layers: Electrical, Plumbing, Site notes…',
+    blurb: 'Put notes and markup on named layers, then turn a whole layer off, recolour it or keep it off the prints.',
+    keywords: 'cad layers layer named electrical plumbing gas site notes construction on off hide show colour bylayer print no print current move', steps: [
+    { id: 'list', title: 'The layer list',
+      body: 'Press F7. At the top of the CAD panel on the right is this job’s layer list, copied from the shop list the first time the job opened. Each row has an eye (on / off), a colour, the name and a printer (prints or not). Click the eye on a layer: everything on it disappears, for everyone on this job and in the reports. Click it again to bring it back.',
+      target: 'cad-layers', canvas: true, done: (c, s) => ev(c, 'cad_layer_toggle') > ev(s, 'cad_layer_toggle') },
+    { id: 'current', title: 'Draw on a layer',
+      body: 'Click a layer’s name (or pick it in Layer on the CAD tools, left) to make it the current layer: new notes, lines and dimensions go on it. Colour shows ByLayer, so they take the layer’s colour. Pick a colour swatch to give one item its own colour instead; ByLayer puts it back.',
+      target: 'cad-layer', canvas: true, done: (c, s) => ev(c, 'cad_layer') > ev(s, 'cad_layer') },
+    { id: 'move', title: 'Move items to another layer',
+      body: 'Select items, then pick a layer in the Layer box on the left, or right-click → Move to layer. Ctrl+Z undoes it.',
+      target: 'cad-layer', canvas: true, done: (c, s) => ev(c, 'cad_layer') > ev(s, 'cad_layer') },
+    { id: 'manage', title: 'Add, rename, no-print',
+      body: 'Manage layers… (under the list) adds, renames, recolours, reorders and deletes this job’s layers; deleting one moves its items to General. Click a printer to keep a layer off the reports but still on screen (Construction starts that way, for working lines). Add from shop list brings in shop layers added since this job started. The shop list itself is in Settings → CAD Layers (admins).',
+      target: 'cad-layers', canvas: true, done: c => c.mode === 'cad' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -30,6 +30,8 @@ import {
 } from '@/src/lib/partPalette'
 import { ThemeToggle } from '../ThemeToggle'
 import { invalidateCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
+import { ShopCadLayers } from '../canvas/[roomId]/CadLayers'
+import { useIsAdmin } from '@/src/lib/useRole'
 
 const LOGO_BUCKET = 'company-assets'
 
@@ -95,7 +97,7 @@ type SettingsTab =
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'hinge_rules'
   | 'cnc_tool' | 'drill_library' | 'cnc_tool_set' | 'cnc_machine'
-  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library' | 'cabinets_library' | 'fixtures_library'
+  | 'materials_library' | 'materials_schedule' | 'joints_library' | 'parts_library' | 'doors_library' | 'cabinets_library' | 'fixtures_library' | 'cad_layers'
 
 interface TabDef {
   id: SettingsTab
@@ -341,6 +343,16 @@ const TABS: TabDef[] = [
       </svg>
     ),
   },
+  {
+    id: 'cad_layers', label: 'CAD Layers', group: 'Library',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7.5 2l6 3-6 3-6-3z"/>
+        <path d="M1.5 8l6 3 6-3"/>
+        <path d="M1.5 11l6 3 6-3"/>
+      </svg>
+    ),
+  },
 ]
 
 const GROUPS = ['User', 'Shop', 'Builders', 'CNC', 'Library'] as const
@@ -376,6 +388,7 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const isAdmin = useIsAdmin() === true
 
   // Company
   const [companyName,    setCompanyName]    = useState(s.company_name    ?? '')
@@ -600,6 +613,8 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
             <CabinetsLibraryClient embedded />
           ) : tab === 'fixtures_library' ? (
             <FixturesLibraryClient embedded />
+          ) : tab === 'cad_layers' ? (
+            <ShopCadLayers isAdmin={isAdmin} />
           ) : tab === 'cabinet_builder' ? (
             <ConstructionMethodsClient embedded />
           ) : tab === 'drawer_builder' ? (

@@ -12,6 +12,10 @@ import { CAD_SNAP_KINDS, CAD_SNAP_SOURCES, type CadSnapSettings } from '@/src/li
 import { ARROW_TYPES, TEXT_SIZES, type AnnotationStyle, type DashType } from '@/src/lib/annotations/style'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import type { AnnotationTool, CadTool } from './useAnnotationTool'
+import type { CadLayer } from '@/src/lib/types'
+import { sortCadLayers } from '@/src/lib/annotations/cadLayers'
+
+const generalId = (list: CadLayer[]) => list.find(l => l.is_default)?.id ?? ''
 
 const PALETTE = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#111111', '#ffffff']
 const WEIGHTS = [0.18, 0.25, 0.35, 0.5, 0.7, 1]
@@ -142,7 +146,7 @@ function SnapMenu({ snap, onSnap }: { snap: CadSnapSettings; onSnap: (s: CadSnap
   )
 }
 
-export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, onSnap }: {
+export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, onSnap, cadLayers }: {
   cad: AnnotationTool
   /** false on views annotations don't cover yet (elevation until A6). */
   viewSupported: boolean
@@ -150,6 +154,8 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
   onScale: (n: number) => void
   snap: CadSnapSettings
   onSnap: (s: CadSnapSettings) => void
+  /** Named CAD layers (z_cad_layers): the job's list + the current layer for new items. */
+  cadLayers?: { list: CadLayer[]; current: string | null; setCurrent: (id: string | null) => void }
 }) {
   const s = cad.ribbonStyle
   // The tutorial (z_tutorial) counts a ribbon style change as one event.
@@ -225,10 +231,33 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
           </Group>
         )}
 
+        {cadLayers && cadLayers.list.length > 0 && (
+          <Group label="Layer" tour="cad-layer">
+            <select data-cad-layer-pick value={cad.ribbonLayerId === undefined ? '__mixed__' : (cad.ribbonLayerId ?? generalId(cadLayers.list))}
+              title={nSel ? 'Layer of the selection: pick another to move them onto it' : 'Current layer: new items go on it'}
+              onChange={e => {
+                const v = e.target.value; if (v === '__mixed__') return
+                const id = v === generalId(cadLayers.list) ? null : v
+                if (nSel && !cad.editing) cad.moveToLayer(id); else cadLayers.setCurrent(id)
+                useTutorial.getState().emit('cad_layer')
+              }}
+              className="h-6 min-w-0 flex-1 bg-gray-800 border border-gray-700 rounded px-1 text-xs text-gray-100 outline-none focus:border-rose-500">
+              {cad.ribbonLayerId === undefined && <option value="__mixed__">— several —</option>}
+              {sortCadLayers(cadLayers.list).map(l => <option key={l.id} value={l.id}>{l.name}{l.visible ? '' : ' (off)'}{l.print ? '' : ' · no print'}</option>)}
+            </select>
+          </Group>
+        )}
+
         <Group label="Colour" tour="cad-colour">
+          {cadLayers && (
+            <button title="ByLayer: use the layer's colour" onMouseDown={keep} onClick={() => set({ color: undefined, borderColor: undefined, fillColor: undefined })}
+              className={`h-4 px-1 shrink-0 rounded-sm border text-[9px] leading-none flex items-center gap-1 ${cad.ribbonByLayer ? 'border-white ring-1 ring-rose-400 text-white' : 'border-gray-600 text-gray-400'}`}>
+              <span className="w-2 h-2 rounded-sm" style={{ background: s.color }} />ByLayer
+            </button>
+          )}
           {PALETTE.map(c => (
             <button key={c} title={c} onMouseDown={keep} onClick={() => set({ color: c, borderColor: c, fillColor: c })}
-              className={`w-4 h-4 shrink-0 rounded-sm border ${s.color.toLowerCase() === c ? 'border-white ring-1 ring-rose-400' : 'border-gray-600'}`}
+              className={`w-4 h-4 shrink-0 rounded-sm border ${!(cadLayers && cad.ribbonByLayer) && s.color.toLowerCase() === c ? 'border-white ring-1 ring-rose-400' : 'border-gray-600'}`}
               style={{ background: c }} />
           ))}
           <Colour value={s.color} title="Custom colour" onChange={c => set({ color: c })} />
