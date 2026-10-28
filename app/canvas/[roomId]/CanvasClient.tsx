@@ -55,7 +55,7 @@ import AnnotationLayer from './AnnotationLayer'
 import AnnotTextEditor from './AnnotTextEditor'
 import CadRibbon from './CadRibbon'
 import { useAnnotationTool } from './useAnnotationTool'
-import { cadSnap, EMPTY_SNAP_GEOMETRY, type CadSnapSettings } from '@/src/lib/annotations/cadSnap'
+import { cadSnap, EMPTY_SNAP_GEOMETRY, type CadSnapSettings, type SnapGeometry } from '@/src/lib/annotations/cadSnap'
 import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import CadSnapMarker from './CadSnapMarker'
 import CadMeasureOverlay from './CadMeasureOverlay'
@@ -760,8 +760,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const setCadSnapSettings = (s: CadSnapSettings) => { setCadSnapSettingsState(s); setUserPrefs({ cadSnap: s }) }
   // Room targets and note targets cached apart: dragging a note changes the notes every
   // move, and shouldn't rebuild every wall and cabinet.
-  // Elevation room targets (cabinets, fronts, benchtop…) come in A6b; notes snap everywhere.
-  const cadSnapRoom = useMemo(() => mode !== 'cad' || canvasView !== 'plan' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
+  // Elevation room targets (A6b) come from ElevationSVG, which owns the part rects —
+  // kept in a ref (read per move), so handing them over never re-renders the canvas.
+  const cadSnapPlan = useMemo(() => mode !== 'cad' || canvasView !== 'plan' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
     walls, cabinets, resolved: planResolvedParts, fixtures, benchtops, annotations: [], paperToFrame: annotScale,
   }), [mode, canvasView, walls, cabinets, planResolvedParts, fixtures, benchtops, annotScale])
   const cadSnapNotes = useMemo(() => mode !== 'cad' ? EMPTY_SNAP_GEOMETRY : planSnapGeometry({
@@ -772,14 +773,18 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     // The Cabinet Edit modal has its own CAD (z_item_cad): the canvas's stands down under it.
     active: mode === 'cad' && (canvasView === 'plan' || !!cadElevWallId) && !editCabId,
     toWorld: e => {
+  const cadSnapElevRef = useRef<SnapGeometry>(EMPTY_SNAP_GEOMETRY)
+  const setCadSnapElev = useCallback((g: SnapGeometry) => { cadSnapElevRef.current = g }, [])
       if (cadElevWallId) {   // elevation svg: translate(pan) scale(zoom)
         const r = elevSvgRef.current!.getBoundingClientRect()
         return { x: (e.clientX - r.left - elevView.panX) / elevView.zoom, y: (e.clientY - r.top - elevView.panY) / elevView.zoom }
       }
       const r = svgRef.current!.getBoundingClientRect(); return toWorld(e.clientX - r.left, e.clientY - r.top)
     },
-    snap: (p, prev, exclude, own) => cadSnap(p, own ? [cadSnapRoom, cadSnapNotes, own] : [cadSnapRoom, cadSnapNotes],
-      cadSnapSettings, SNAP_PX / cadZoom, prev, exclude),
+    snap: (p, prev, exclude, own) => {
+      const room = cadElevWallId ? cadSnapElevRef.current : cadSnapPlan
+      return cadSnap(p, own ? [room, cadSnapNotes, own] : [room, cadSnapNotes], cadSnapSettings, SNAP_PX / cadZoom, prev, exclude)
+    },
     enterCad, exitCad: () => setMode('select'),
   })
   /** The CAD notes layer for the drawing on show (plan canvas, or the elevation's wall
@@ -3507,6 +3512,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               const t = (rawX - wall.pos_x) * wd.x + (rawY - wall.pos_y) * wd.y
               const gc = centroid(walls)
               const { x: pos_x, y: pos_y } = wallAnchorPoint(wall, t, elevWallSide === 'back', gc)
+            onCadSnapGeometry={mode === 'cad' ? setCadSnapElev : undefined}
               if (mode === 'paste' && clipboard) {
                 if (clipboardGroup.length > 1) await pasteGroupAt(wall, pos_x, pos_y, elevWallSide === 'back')
                 else await pasteCabinet(wall, pos_x, pos_y, elevWallSide === 'back')

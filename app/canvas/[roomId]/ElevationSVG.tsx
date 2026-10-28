@@ -29,11 +29,12 @@ import { accessoryToCab } from '@/src/components/three/AccessoryModel'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
-import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
+import BenchtopElevation, { btElevBands, type BtElevInfo } from './BenchtopElevation'
 import { benchDimHeights } from './benchDims'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
 import ReturnSectionSVG, { useReturnSectionData, returnCabinets } from './ReturnSectionSVG'
-import { openingOnWall, elevationFrame, fixtureChainSpans, fixtureLayer, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
+import { addOutline, type SnapGeometry, type CadSnapSource } from '@/src/lib/annotations/cadSnap'
+import { openingOnWall, fixtureOnFace, elevationFrame, fixtureChainSpans, fixtureLayer, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
@@ -263,6 +264,10 @@ interface ElevationSVGProps {
   /** Receives the svg element (CAD click → svg mm). */
   svgElRef?: React.MutableRefObject<SVGSVGElement | null>
   /** Item CAD (z_item_cad) a cabinet's front draws, in its front frame; + paper scale, live fields. */
+  /** CAD mode (z_CAD_tool A6b): receives this wall side's snap targets — wall face,
+   *  floor / ceiling, cabinets + parts, fronts, benchtops, fixtures — in the note
+   *  frame (x along the elevation, y down from the floor). Omitted → not built. */
+  onCadSnapGeometry?: (g: SnapGeometry) => void
   itemCadNotes?: (cab: CabinetInstance) => RoomAnnotation[]
   itemCadPaper?: number
   itemCadFields?: CadFieldValues
@@ -284,7 +289,7 @@ export default function ElevationSVG({
   fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
-  annotationsLayer, onViewChange, svgElRef, itemCadNotes, itemCadPaper, itemCadFields,
+  annotationsLayer, onViewChange, svgElRef, onCadSnapGeometry, itemCadNotes, itemCadPaper, itemCadFields,
 }: ElevationSVGProps) {
   // Ghost grain on grained colours (z_material_colours MC11).
   const grainedIds = useGrainedMaterialIds()
@@ -451,6 +456,56 @@ export default function ElevationSVG({
   // Keep rfData current on every render (synchronous assignment, no useEffect needed).
   rfData.current = { elevResizeFollowing, view, cabinets, room }
 
+  // CAD snap targets (z_CAD_tool A6b): what this view draws, as outlines in the note
+  // frame (svg y − roomH = y down from the floor). Same per-cabinet transform as
+  // partSnapPoints; only cabinets / fixtures the layer set shows.
+  // Deps are the stable inputs (cabinets, not the per-render wallCabs; btInfo by ref).
+  const cadSnapOn = !!onCadSnapGeometry
+  const btInfoRef = useRef(benchtopInfo)
+  btInfoRef.current = benchtopInfo
+  const cadSnapGeometry = useMemo<SnapGeometry | null>(() => {
+    if (!cadSnapOn || !wall) return null
+    const g: SnapGeometry = { segs: [], points: [] }
+    const box = (x0: number, y0: number, w: number, h: number, src: CadSnapSource, centre = false) => {
+      if (!(w > 0) || !(h > 0)) return
+      const t = y0 - roomH, b = t + h
+      addOutline(g, [{ x: x0, y: t }, { x: x0 + w, y: t }, { x: x0 + w, y: b }, { x: x0, y: b }], src, true, undefined, centre)
+    }
+    box(0, 0, wall.length, roomH, 'walls')   // wall ends, floor + ceiling lines
+    for (const cab of wallCabs) {
+      const rp = resolvedParts?.get(cab.id)
+      if (!elevationShowsCabinet(cab, layers, rp)) continue
+      const rx = elevX(cab)
+      const floorY = roomH - cabBottomZ(cab, room, wall)   // svg y of the cabinet's bottom
+      box(rx, floorY - cab.dy, cab.dx, cab.dy, 'cabinets', true)
+      if (!rp) continue
+      const part = (r: { ex: number; ey: number; ew: number; eh: number } | undefined, src: CadSnapSource) => {
+        if (r) box(rx + r.ex, floorY - r.ey, r.ew, r.eh, src)
+      }
+      rp.case_parts.filter(p => p.part_key !== 'back').forEach(p => part(caseElevRect(p), 'cabinets'))
+      rp.toekick_parts.forEach(p => part(tkElevRect(p), 'cabinets'))
+      rp.internal_parts.forEach(p => part(shelfElevRect(p), 'cabinets'))
+      rp.drawer_stacks.forEach(ds => ds.box_parts.forEach(p => part(drawerBoxPartElevRect(p), 'cabinets')))
+      rp.face_zones.forEach(fz => part(zoneElevRect(fz), 'fronts'))
+    }
+    const roomCx = centroid(walls)
+    const btInfo = btInfoRef.current
+    if (benchtops && btInfo && layers.show('benchtops')) {
+      for (const b of btElevBands(benchtops, walls, wall, elevWallSide, roomCx, roomH, btInfo)) box(b.t0, b.yTop, b.t1 - b.t0, b.yBot - b.yTop, 'benchtops')
+    }
+    if (fixtures?.length) {
+      const f = elevationFrame(wall, elevWallSide, roomCx)
+      for (const fx of fixtures) {
+        if (!layers.show(fixtureLayer(fx.category, fx.kind))) continue
+        const on = fx.category === 'opening' ? openingOnWall(fx, wall, elevWallSide, roomCx) : fixtureOnFace(fx, f)
+        if (on) box(on.t0, roomH - (Number(fx.z) || 0) - Number(fx.height), on.t1 - on.t0, Number(fx.height), 'fixtures', true)
+      }
+    }
+    return g
+  }, [cadSnapOn, wall, cabinets, resolvedParts, layers, room, roomH, walls, benchtops, fixtures, elevWallSide])   // eslint-disable-line react-hooks/exhaustive-deps
+  const onCadSnapRef = useRef(onCadSnapGeometry)
+  onCadSnapRef.current = onCadSnapGeometry
+  useEffect(() => { if (cadSnapGeometry) onCadSnapRef.current?.(cadSnapGeometry) }, [cadSnapGeometry])
   useEffect(() => {
     setPlaceGhost(null)
     setElevCabFollowing(null)

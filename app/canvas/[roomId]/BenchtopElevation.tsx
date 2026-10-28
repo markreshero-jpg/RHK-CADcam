@@ -38,6 +38,24 @@ export interface BtElevInfo {
 
 const dot = (a: Pt, b: Pt) => a.x * b.x + a.y * b.y
 
+/** Each top shown on this wall side as its band in elevation svg coords (x along the
+ *  face, back side mirrored; y = roomH − height) — the CAD snap targets (z_CAD_tool A6b). */
+export function btElevBands(benchtops: BenchtopInstance[], walls: Wall[], wall: Wall, side: WallSide, roomCx: Pt, roomH: number,
+  info: (bt: BenchtopInstance) => BtElevInfo): { t0: number; t1: number; yTop: number; yBot: number }[] {
+  const f0 = wallFrame(wall, side, roomCx)
+  const f = side === 'back'
+    ? { ...f0, o: { x: f0.o.x + f0.d.x * f0.len, y: f0.o.y + f0.d.y * f0.len }, d: { x: -f0.d.x, y: -f0.d.y } }
+    : f0
+  return benchtops.flatMap(bt => {
+    const segs = btSegments(bt)
+    if (segs.length < 3 || !btShowsOn(bt, wallContacts(segs, walls, roomCx), wall, side)) return []
+    const ts = outlinePoints(segs).map(p => alongOf(f, p))
+    const { topZ, thick } = info(bt)
+    const yTop = roomH - topZ
+    return [{ t0: Math.min(...ts), t1: Math.max(...ts), yTop, yBot: yTop + thick.total }]
+  })
+}
+
 export default function BenchtopElevation({
   benchtops, walls, wall, side, roomCx, roomH, zoom, layers, selectedId, info, profiles, onSelect, interactive, print,
 }: {
