@@ -219,6 +219,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'dim_row_labels',       group: 'dimensions', label: 'Row names',          views: ['plan'], default: ON,
     hint: 'Plan: BASE / BENCHTOP / WALL CABS / TALL / WALL … at the start of each dimension row' },
   { id: 'dim_elev_height',      group: 'dimensions', label: 'Height chain',       views: ['elevation'], default: ON },
+  { id: 'dim_elev_wall_height', group: 'dimensions', label: 'Wall height',        views: ['elevation'], default: ON,
+    hint: 'Elevation: floor to ceiling, the outermost dimension on the left (outside the height chain and bench heights)' },
   { id: 'dim_elev_bench',       group: 'dimensions', label: 'Bench & basin heights', views: ['elevation'], default: ON,
     hint: 'Elevation: floor to the top of the benchtop, and to the rim of a basin sitting on it' },
   { id: 'dim_elev_floor_chain', group: 'dimensions', label: 'Floor cabinet widths', views: ['elevation'], default: ON },

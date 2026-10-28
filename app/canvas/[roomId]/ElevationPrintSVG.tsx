@@ -237,7 +237,11 @@ export default function ElevationPrintSVG({
 
   // ── ViewBox padding ───────────────────────────────────────────────────────
   const benchDimStep = 8 * P   // bench / basin height lines, outside the height chain
-  const padL = 20 * P + (layers.show('dim_elev_bench') ? benchHeights.length * benchDimStep : 0)
+  // Wall height (floor to ceiling) — one lane outside the height chain / bench dims.
+  const benchLanes = layers.show('dim_elev_bench') ? benchHeights.length : 0
+  const showWallH = layers.show('dim_elev_wall_height') && wall.wall_type !== 'island'
+  const wallHeightX = heightChainX - (benchLanes ? benchLanes + 1 : layers.show('dim_elev_height') ? 1 : 0) * benchDimStep
+  const padL = 20 * P + (benchLanes + (showWallH ? 1 : 0)) * benchDimStep
   const padR = 11 * P
   const padT = 16 * P
   const padB = 18 * P
@@ -713,6 +717,21 @@ export default function ElevationPrintSVG({
     )
   }
 
+  // ── Wall height: floor to ceiling, the outermost vertical dimension ──────────
+  function wallHeightDim() {
+    const lineW = lw('dim_elev_wall_height', thinSW), x = wallHeightX, midY = roomH / 2
+    return (
+      <g pointerEvents="none" opacity={layers.op('dim_elev_wall_height')}>
+        <line x1={x} y1={0} x2={x} y2={roomH} stroke={INK} strokeWidth={lineW} strokeDasharray={lp('dim_elev_wall_height').strokeDasharray} />
+        <line x1={x - tk} y1={0} x2={x + tk} y2={0} stroke={INK} strokeWidth={lineW} />
+        <line x1={x - tk} y1={roomH} x2={x + tk} y2={roomH} stroke={INK} strokeWidth={lineW} />
+        <g transform={`rotate(-90,${x},${midY})`}>
+          <DimLabel x={x} y={midY} label={`${roundMm(roomH)}`} fs={layers.w('dim_elev_wall_height', dimFs)} col={INK} bg="white" padY={0.7} fontFamily="Arial, Helvetica, sans-serif" />
+        </g>
+      </g>
+    )
+  }
+
   const overheadCabs = wallCabs.filter(c => !c.rule_overrides?.UNDER_PANEL && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && !c.bulkhead && !c.float_shelf)
   // Bulkheads (and floating shelves) overlap the overheads — their own row, just outside.
   const bulkheadCabs = wallCabs.filter(c => !!c.bulkhead || !!c.float_shelf)
@@ -805,6 +824,7 @@ export default function ElevationPrintSVG({
           {layers.show('dim_elev_floor_chain') && (floorCabs.length > 0 || fxFloor.length > 0) && hChain(computeElevChain(floorCabs, wall, fxFloor, elevX), floorChainY, 'fl', 'dim_elev_floor_chain')}
           {layers.show('dim_elev_height') && heightChain()}
           {layers.show('dim_elev_bench') && benchDims()}
+          {showWallH && wallHeightDim()}
           {layers.show('dim_openings') && openings.length > 0 && hChain(openingSegs, openingChainY, 'op', 'dim_openings')}
           {/* Sill + opening height at each right jamb (same as the canvas) */}
           {layers.show('dim_openings') && openings.map(o => {

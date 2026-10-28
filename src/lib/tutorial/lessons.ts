@@ -1077,6 +1077,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select the floating shelf (FLSHLF). Under Floating shelf › Front corner radius, type a radius for Left or Right (e.g. 300). The top and bottom boards are cut to it (optimiser, sheets, G-code), and the plan and 3D show the round. Up to the shelf depth; 0 puts it back square. On a triple build the middle layer stays square — trim it by hand.',
       canvas: true, done: c => c.cabinets.some(cab => !!(cab.float_shelf?.radius_l || cab.float_shelf?.radius_r)) },
   ]},
+
+  // Appended 2026-10-28 (z_display_layers — dim_elev_wall_height).
+  { id: 'elev_wall_height', level: 'basics', topic: 'room', title: 'Wall height dimension',
+    blurb: 'The floor-to-ceiling height, the outermost dimension on the left of every elevation.',
+    keywords: 'wall height ceiling floor to ceiling overall height dimension elevation layer', steps: [
+    { id: 'look', title: 'Floor to ceiling',
+      body: 'Open an elevation. The outermost dimension on the left, past the height chain and the bench heights, is the wall from the floor to the ceiling (the wall’s own height, else the room height). It prints on the Elevation Views report and the shop drawings too.',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+    { id: 'layer', title: 'Turn it off or restyle it',
+      body: 'It’s on in every layer set. To change that, pick Manage layers… in the Layers drop-down, Elevation tab, Dimensions group: untick Wall height, or change its colour, weight or offset (the offset moves it further out).',
+      target: 'menu-Layers', canvas: true, done: c => c.view === 'elevation' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

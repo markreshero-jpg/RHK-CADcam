@@ -29,11 +29,12 @@ import { accessoryToCab } from '@/src/components/three/AccessoryModel'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
-import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
+import BenchtopElevation, { btElevBands, type BtElevInfo } from './BenchtopElevation'
 import { benchDimHeights } from './benchDims'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
 import ReturnSectionSVG, { useReturnSectionData, returnCabinets } from './ReturnSectionSVG'
-import { openingOnWall, elevationFrame, fixtureChainSpans, fixtureLayer, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
+import { addOutline, type SnapGeometry, type CadSnapSource } from '@/src/lib/annotations/cadSnap'
+import { openingOnWall, fixtureOnFace, elevationFrame, fixtureChainSpans, fixtureLayer, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
 import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
@@ -52,6 +53,7 @@ import { grainMatchColour, grainMatchTag, grainMatchTagCabs } from '@/src/lib/gr
 const SPLIT_SNAP = 15
 import type { LabelOff } from '@/src/lib/labelOffsets'
 import AnnotationLayer from './AnnotationLayer'
+import type { CadLayerView } from '@/src/lib/annotations/cadLayers'
 import CabinetPickerMenu from './CabinetPickerMenu'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { FillPatternDef, fillPaint } from './FillPattern'
@@ -262,10 +264,16 @@ interface ElevationSVGProps {
   onViewChange?: (v: { panX: number; panY: number; zoom: number }) => void
   /** Receives the svg element (CAD click → svg mm). */
   svgElRef?: React.MutableRefObject<SVGSVGElement | null>
+  /** CAD mode (z_CAD_tool A6b): receives this wall side's snap targets — wall face,
+   *  floor / ceiling, cabinets + parts, fronts, benchtops, fixtures — in the note
+   *  frame (x along the elevation, y down from the floor). Omitted → not built. */
+  onCadSnapGeometry?: (g: SnapGeometry) => void
   /** Item CAD (z_item_cad) a cabinet's front draws, in its front frame; + paper scale, live fields. */
   itemCadNotes?: (cab: CabinetInstance) => RoomAnnotation[]
   itemCadPaper?: number
   itemCadFields?: CadFieldValues
+  /** Named CAD layers (z_cad_layers) for the item CAD notes. */
+  itemCadLayers?: CadLayerView
 }
 
 export default function ElevationSVG({
@@ -284,7 +292,7 @@ export default function ElevationSVG({
   fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
-  annotationsLayer, onViewChange, svgElRef, itemCadNotes, itemCadPaper, itemCadFields,
+  annotationsLayer, onViewChange, svgElRef, onCadSnapGeometry, itemCadNotes, itemCadPaper, itemCadFields, itemCadLayers,
 }: ElevationSVGProps) {
   // Ghost grain on grained colours (z_material_colours MC11).
   const grainedIds = useGrainedMaterialIds()
@@ -448,6 +456,56 @@ export default function ElevationSVG({
     if (elevSnapSettings.kinds['part-corner']) pts.push(...partSnapPoints)
     return pts
   }, [wall, elevSnapSettings, wallCabs, room, roomH, partSnapPoints])
+  // CAD snap targets (z_CAD_tool A6b): what this view draws, as outlines in the note
+  // frame (svg y − roomH = y down from the floor). Same per-cabinet transform as
+  // partSnapPoints; only cabinets / fixtures the layer set shows.
+  // Deps are the stable inputs (cabinets, not the per-render wallCabs; btInfo by ref).
+  const cadSnapOn = !!onCadSnapGeometry
+  const btInfoRef = useRef(benchtopInfo)
+  btInfoRef.current = benchtopInfo
+  const cadSnapGeometry = useMemo<SnapGeometry | null>(() => {
+    if (!cadSnapOn || !wall) return null
+    const g: SnapGeometry = { segs: [], points: [] }
+    const box = (x0: number, y0: number, w: number, h: number, src: CadSnapSource, centre = false) => {
+      if (!(w > 0) || !(h > 0)) return
+      const t = y0 - roomH, b = t + h
+      addOutline(g, [{ x: x0, y: t }, { x: x0 + w, y: t }, { x: x0 + w, y: b }, { x: x0, y: b }], src, true, undefined, centre)
+    }
+    box(0, 0, wall.length, roomH, 'walls')   // wall ends, floor + ceiling lines
+    for (const cab of wallCabs) {
+      const rp = resolvedParts?.get(cab.id)
+      if (!elevationShowsCabinet(cab, layers, rp)) continue
+      const rx = elevX(cab)
+      const floorY = roomH - cabBottomZ(cab, room, wall)   // svg y of the cabinet's bottom
+      box(rx, floorY - cab.dy, cab.dx, cab.dy, 'cabinets', true)
+      if (!rp) continue
+      const part = (r: { ex: number; ey: number; ew: number; eh: number } | undefined, src: CadSnapSource) => {
+        if (r) box(rx + r.ex, floorY - r.ey, r.ew, r.eh, src)
+      }
+      rp.case_parts.filter(p => p.part_key !== 'back').forEach(p => part(caseElevRect(p), 'cabinets'))
+      rp.toekick_parts.forEach(p => part(tkElevRect(p), 'cabinets'))
+      rp.internal_parts.forEach(p => part(shelfElevRect(p), 'cabinets'))
+      rp.drawer_stacks.forEach(ds => ds.box_parts.forEach(p => part(drawerBoxPartElevRect(p), 'cabinets')))
+      rp.face_zones.forEach(fz => part(zoneElevRect(fz), 'fronts'))
+    }
+    const roomCx = centroid(walls)
+    const btInfo = btInfoRef.current
+    if (benchtops && btInfo && layers.show('benchtops')) {
+      for (const b of btElevBands(benchtops, walls, wall, elevWallSide, roomCx, roomH, btInfo)) box(b.t0, b.yTop, b.t1 - b.t0, b.yBot - b.yTop, 'benchtops')
+    }
+    if (fixtures?.length) {
+      const f = elevationFrame(wall, elevWallSide, roomCx)
+      for (const fx of fixtures) {
+        if (!layers.show(fixtureLayer(fx.category, fx.kind))) continue
+        const on = fx.category === 'opening' ? openingOnWall(fx, wall, elevWallSide, roomCx) : fixtureOnFace(fx, f)
+        if (on) box(on.t0, roomH - (Number(fx.z) || 0) - Number(fx.height), on.t1 - on.t0, Number(fx.height), 'fixtures', true)
+      }
+    }
+    return g
+  }, [cadSnapOn, wall, cabinets, resolvedParts, layers, room, roomH, walls, benchtops, fixtures, elevWallSide])   // eslint-disable-line react-hooks/exhaustive-deps
+  const onCadSnapRef = useRef(onCadSnapGeometry)
+  onCadSnapRef.current = onCadSnapGeometry
+  useEffect(() => { if (cadSnapGeometry) onCadSnapRef.current?.(cadSnapGeometry) }, [cadSnapGeometry])
   // Keep rfData current on every render (synchronous assignment, no useEffect needed).
   rfData.current = { elevResizeFollowing, view, cabinets, room }
 
@@ -1873,7 +1931,7 @@ export default function ElevationSVG({
                       bin fronts / code, in its front frame (x from the left, y down from the bottom). */}
                   {itemCadNotes && layers.show('item_cad') && (
                     <AnnotationLayer annotations={withFieldsFilled(itemCadNotes(cab), itemCadFields)}
-                      frame={{ ox: rx, oy: ry + displayDy, s: 1, flipY: false }} paper={itemCadPaper ?? 20} layers={layers} />
+                      frame={{ ox: rx, oy: ry + displayDy, s: 1, flipY: false }} paper={itemCadPaper ?? 20} layers={layers} cadLayers={itemCadLayers} />
                   )}
                 </g>
               )
@@ -2483,6 +2541,30 @@ export default function ElevationSVG({
                       </g>
                     )
                   })}
+                </g>
+              )
+            })()}
+
+            {/* Wall height — floor to ceiling, outermost: one lane past the height chain / bench dims */}
+            {layers.show('dim_elev_wall_height') && wall.wall_type !== 'island' && (() => {
+              const benchN = layers.show('dim_elev_bench') && benchtops && benchtopInfo
+                ? benchDimHeights(wall.id, benchtops, bt => benchtopInfo(bt).topZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category, f.kind)))).length
+                : 0
+              const heightX = layers.show('dim_elev_height') ? -70 / z - layers.offset('dim_elev_height') : null
+              const benchX0 = -70 / z - (heightX != null ? 70 / z + layers.offset('dim_elev_height') : 0) - layers.offset('dim_elev_bench')
+              const outer = benchN ? benchX0 - (benchN - 1) * 50 / z : heightX
+              const x = (outer != null ? outer - 60 / z : -70 / z) - layers.offset('dim_elev_wall_height')
+              const col = layers.color('dim_elev_wall_height', '#ffffff')
+              const sw = layers.w('dim_elev_wall_height', 1) / lz, fs = 12 / z, tk = 8 / z, midY = roomH / 2
+              const dash = layers.props('dim_elev_wall_height', z).strokeDasharray
+              return (
+                <g pointerEvents="none" opacity={layers.op('dim_elev_wall_height')} style={{ userSelect: 'none' }}>
+                  <line x1={x} y1={0} x2={x} y2={roomH} stroke={col} strokeWidth={sw} strokeDasharray={dash} />
+                  <line x1={x - tk} y1={0} x2={x + tk} y2={0} stroke={col} strokeWidth={sw} />
+                  <line x1={x - tk} y1={roomH} x2={x + tk} y2={roomH} stroke={col} strokeWidth={sw} />
+                  <g transform={`rotate(-90,${x},${midY})`}>
+                    <DimLabel x={x} y={midY} label={`${roundMm(roomH)}`} fs={layers.w('dim_elev_wall_height', fs)} col={col} bg={layers.background ?? '#030712'} />
+                  </g>
                 </g>
               )
             })()}
