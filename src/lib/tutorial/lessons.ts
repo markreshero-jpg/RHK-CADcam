@@ -1119,7 +1119,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open that cabinet, select the drawer front in the face grid and find Runner (under Drawer type). Auto shows what the schedule picked. Choose another runner, e.g. Dragon Pro 350x127 Silk White, and the drawer uses that one instead. The box, drilling and 3D colour follow it. Back to Auto lets the schedule pick again. A forced runner isn\'t checked against the depth or height, so pick one that fits.',
       canvas: true, done: c => c.cabinets.some(cab => ((cab.face_grid as { zones?: { drawer_type_config?: { slide_product_id?: string } }[] } | null)?.zones ?? []).some(z => !!z.drawer_type_config?.slide_product_id)) },
   ]},
-  { id: 'spec_carcass_lines', level: 'beginner', topic: 'reports', title: 'Read the carcass lines on the spec block',
+  { id: 'spec_carcass_lines', level: 'basics', topic: 'reports', title: 'Read the carcass lines on the spec block',
     blurb: 'The spec block’s CARCASS section lists the cabinet boxes: an Internal line, and an External line only when a box is built in the exposed colour.',
     keywords: 'spec block specifications carcass internal external colour carcass_internal carcass_external field odd cabinet BC WC TC', steps: [
     { id: 'read', title: 'Internal and External',
