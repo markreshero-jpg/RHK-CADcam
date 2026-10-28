@@ -179,6 +179,7 @@ export default function FaceGridEditor({
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
   const [handles, setHandles] = useState<HandleOpt[]>([])
   const [bins, setBins] = useState<{ id: string; name: string; box_height: number | null; inside_width_min: number | null; inside_width_max: number | null }[]>([])
+  const [runners, setRunners] = useState<{ id: string; name: string }[]>([])
   const [dividerNote, setDividerNote] = useState<string | null>(null)
   const [showChevrons, setShowChevrons] = useState(true)
 
@@ -191,6 +192,9 @@ export default function FaceGridEditor({
     supabase.from('hardware_slides').select('id, name, box_height, inside_width_min, inside_width_max')
       .eq('active', true).eq('kind', 'bin').order('inside_width_min').order('box_height')
       .then(({ data }) => { if (!cancelled) setBins((data ?? []) as typeof bins) })
+    supabase.from('hardware_slides').select('id, name')
+      .eq('active', true).neq('kind', 'bin').order('name')
+      .then(({ data }) => { if (!cancelled) setRunners((data ?? []) as typeof runners) })
     return () => { cancelled = true }
   }, [])
 
@@ -445,6 +449,21 @@ export default function FaceGridEditor({
         if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
         const { slide_product_id: _, ...cfg } = z.drawer_type_config ?? { type: 'bin' as const }
         return { ...z, drawer_type_config: { ...cfg, type: 'bin', ...(id ? { slide_product_id: id } : {}) } }
+      }),
+    })
+  }
+
+  // Force a specific runner on a system drawer (e.g. a Silk White size the Matt
+  // Grey schedule doesn't make). null = the slide schedule picks.
+  function setRunnerProduct(rowIdx: number, colIdx: number, id: string | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        // No zone type yet → keep whatever the job default resolved to.
+        const { slide_product_id: _, ...cfg } = z.drawer_type_config
+          ?? { type: (zoneStack(rowIdx, colIdx)?.drawer_type ?? 'system') as DrawerType }
+        return { ...z, drawer_type_config: { ...cfg, ...(id ? { slide_product_id: id } : {}) } }
       }),
     })
   }
@@ -1254,6 +1273,29 @@ export default function FaceGridEditor({
                               No slide fits this opening — see the Errors tab.
                             </p>
                           )}
+                        </div>
+                      )
+                    })()}
+
+                    {/* Runner — schedule pick, or forced (e.g. a Silk White size the
+                        Matt Grey schedule doesn't make). Any non-bin drawer, and shown
+                        even when nothing in the schedule fits. */}
+                    {(() => {
+                      const stack = zoneStack(gz.row_index, gz.col_index)
+                      if ((stack?.drawer_type ?? gz.drawer_type_config?.type) === 'bin') return null
+                      const forced = gz.drawer_type_config?.slide_product_id ?? ''
+                      const pickedName = runners.find(r => r.id === stack?.slides[0]?.slide_id)?.name
+                      return (
+                        <div className="mt-1.5">
+                          <p className="text-gray-600 mb-0.5">Runner</p>
+                          <select
+                            value={forced}
+                            onChange={e => setRunnerProduct(gz.row_index, gz.col_index, e.target.value || null)}
+                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full"
+                          >
+                            <option value="">Auto{!forced && pickedName ? ` (${pickedName})` : ' (slide schedule)'}</option>
+                            {runners.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                          </select>
                         </div>
                       )
                     })()}
