@@ -1060,6 +1060,16 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select the bulkhead (BH). Size its width to where its front face meets the angled wall. In the bulkhead section, type the wall\'s angle (e.g. 45) in Left end angle ° or Right end angle °. The plan outline now runs along the wall, the fascia end is cut to the wall, and the cleat behind stops at the wall. An angled end has no return. Type 0 to put it back square.',
       canvas: true, done: c => c.cabinets.some(cab => !!(cab.bulkhead?.left?.angle || cab.bulkhead?.right?.angle)) },
   ]},
+  { id: 'kick_returns', level: 'intermediate', topic: 'cabinets', title: 'Return the kick into an appliance opening',
+    blurb: 'Stop the kick either side of a dishwasher (or any opening to the floor) and turn a face-board return back to the wall at each end.',
+    keywords: 'kick return toe kick dishwasher opening end gap stop kick face TOERETL TOERETR', steps: [
+    { id: 'split', title: 'Stop the kick at the opening',
+      body: 'The kick must not run under the opening. If the cabinets either side share a joined kick, shorten that kick (select KICK n, set its width to end at the opening) and give the cabinet on the other side its own kick (or join that side separately).',
+      canvas: true, done: c => c.cabinets.some(cab => cab.has_toekick) },
+    { id: 'return', title: 'Tick the return',
+      body: 'Select the kick on each side of the opening (the KICK n assembly for a joined run, or the cabinet for its own kick). Under Kick Returns tick Left or Right — the end facing the opening. A face-board end panel turns back from behind the kick face to the wall, the inner boards stop short of it, and the face gets tape on that end.',
+      canvas: true, done: c => c.cabinets.some(cab => !!((cab.rule_overrides as Record<string, unknown> | null)?.TOERETL || (cab.rule_overrides as Record<string, unknown> | null)?.TOERETR)) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

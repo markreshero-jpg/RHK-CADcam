@@ -7,6 +7,7 @@ import type { PartMeta } from '@/src/components/three/PartViewer'
 import { saveEdgeOverride } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { caseBox, caseBoxAABB, zoneBoxAABB, rotEulerXYZ, type SeamDrill, type OrientedDrill, type DrillAxis, tkBoxAABB } from '@/src/lib/jointDrilling'
 import type { PartPosOverrides } from './canvasDB'
+import { isKickSidePart } from '@/src/lib/resolver/types'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
   ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack,
@@ -61,7 +62,7 @@ const CASE_LABELS: Record<string, string> = {
 }
 const TK_LABELS: Record<string, string> = {
   kick_front_face: 'Toe Kick Face', kick_sub_front: 'Toe Kick Sub-Front',
-  kick_back: 'Toe Kick Back', spreader_vertical: 'Toe Kick Leg', spreader_horizontal: 'Toe Kick Spreader',
+  kick_back: 'Toe Kick Back', spreader_vertical: 'Toe Kick Leg', spreader_horizontal: 'Toe Kick Spreader', kick_return: 'Toe Kick Return',
 }
 const INT_LABELS: Record<string, string> = {
   adj_shelf: 'Adjustable Shelf', fixed_shelf: 'Fixed Shelf',
@@ -317,7 +318,7 @@ export function svgTkMeta(p: ResolvedToekickPart): PartMeta {
     id: `tk_${p.part_key}_${p.sort_order}`, label: TK_LABELS[p.part_key] ?? p.part_key,
     w: isH ? p.DX : p.DY, h: isH ? p.DY : p.DX, d: p.DZ,
     thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
-    panelKind: isH ? 'horizontal' : p.part_key === 'spreader_vertical' ? 'side' : 'face',
+    panelKind: isH ? 'horizontal' : isKickSidePart(p.part_key) ? 'side' : 'face',
     detail: p.sort_order > 0 ? `#${p.sort_order}` : undefined,
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
   }

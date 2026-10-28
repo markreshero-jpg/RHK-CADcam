@@ -541,6 +541,23 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 })}
               </div>
               <p className="text-[10px] text-gray-600 mt-1">Blank = inherited from the construction method. Negative pushes the kick out past the cabinet.</p>
+              <p className={lbl + ' mt-2'}>Kick Returns</p>
+              <div className="flex gap-4">
+                {(['TOERETL', 'TOERETR'] as const).map((key, i) => (
+                  <label key={key} className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={!!(cabinet.rule_overrides as Record<string, unknown> | null)?.[key]}
+                      onChange={e => {
+                        const next = { ...(cabinet.rule_overrides ?? {}) } as Record<string, unknown>
+                        if (e.target.checked) next[key] = true
+                        else delete next[key]
+                        void onUpdate(cabinet.id, { rule_overrides: next as typeof cabinet.rule_overrides })
+                      }}
+                      className="accent-blue-500" />
+                    <span className="text-xs text-gray-400">{i ? 'Right' : 'Left'}</span>
+                  </label>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-600 mt-1">A face-board end turning back to the wall at an open kick end (e.g. a dishwasher opening).</p>
             </div>
           )
         })()}

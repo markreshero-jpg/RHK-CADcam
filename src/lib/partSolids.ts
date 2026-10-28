@@ -9,6 +9,7 @@
 // the same mapping for the mesh — keep the two in step).
 
 import type { ResolvedCabinet, ResolvedToekickPart, ResolvedInternalPart, ResolvedFaceZone } from './resolver/types'
+import { isKickSidePart } from './resolver/types'
 import type { ShapePt, ShapeSegmentLike, EdgeTag } from './shapePath'
 import { sampleOutline, sampleShapeOutline, outlineEdges } from './shapePath'
 import { caseBox, zoneBevelOutline, caseBevelOutline, tkBevelOutline, rotEulerXYZ } from './jointDrilling'
@@ -218,7 +219,7 @@ export function buildPartSolids(rp: ResolvedCabinet, partOverrides?: Record<stri
   rp.toekick_parts.forEach(p => {
     const id = `tk_${p.part_key}_${p.sort_order}`
     add(id, p.part_key.startsWith('spreader') ? 'spreader' : 'kick', tkBox(applyOv(p, id)),
-      p.part_key === 'spreader_horizontal' ? 'horizontal' : p.part_key === 'spreader_vertical' ? 'side' : 'face', p.AY ?? 0)
+      p.part_key === 'spreader_horizontal' ? 'horizontal' : isKickSidePart(p.part_key) ? 'side' : 'face', p.AY ?? 0)
   })
   rp.face_zones.filter(z => z.face_type !== 'open').forEach(z => { const id = zonePartId(z); add(id, 'face', zoneBox(applyOv(z, id)), 'face', z.AY ?? 0) })
   ;(rp.internal_parts ?? []).forEach(p => { const id = `int_${p.part_type}_${p.sort_order}`; add(id, 'int', intBox(applyOv(p, id)), INT_PANEL_KIND[p.part_type] ?? 'horizontal') })

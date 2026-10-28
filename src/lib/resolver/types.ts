@@ -64,6 +64,7 @@ export interface EdgingDefaults {
   kick_back?:          EdgeSides
   spreader_vertical?:  EdgeSides
   spreader_horizontal?:EdgeSides
+  kick_return?:        EdgeSides
   // Internal parts
   adj_shelf?:          EdgeSides
   fixed_shelf?:        EdgeSides
@@ -109,6 +110,7 @@ export const DEFAULT_EDGING: Required<EdgingDefaults> = {
   kick_back:           [],
   spreader_vertical:   [],
   spreader_horizontal: [],
+  kick_return:         [],
   adj_shelf:           ['top'],                               // top = front-facing edge of shelf
   fixed_shelf:         ['top'],
   inner_drawer_bottom: [],
@@ -138,6 +140,10 @@ export interface ConstructionRules {
   TOESCB:   number   // toe scribe back
   TOESCL:   number   // toe scribe left
   TOESCR:   number   // toe scribe right
+  // Kick end returns (face board turning back to the wall at an open kick end,
+  // e.g. into a dishwasher opening). Cabinet / kick-assembly rule overrides.
+  TOERETL?: boolean
+  TOERETR?: boolean
 
   // Case scribes
   SCRBK:    number   // scribe back
@@ -1455,9 +1461,13 @@ export interface ResolvedCasePart extends ResolvedPart {
             `split:${string}:${number}`   // a cut piece (z_cabinet_split): split:<part key>:<n>
 }
 
+/** Kick parts standing front-to-back like a gable: DX height, DY thickness
+ *  (across X), DZ length (along Z) — the leg spreaders and the end returns. */
+export const isKickSidePart = (k: string) => k === 'spreader_vertical' || k === 'kick_return'
+
 export interface ResolvedToekickPart extends ResolvedPart {
   part_key:   'kick_front_face' | 'kick_sub_front' | 'kick_back' |
-              'spreader_vertical' | 'spreader_horizontal'
+              'spreader_vertical' | 'spreader_horizontal' | 'kick_return'
   sort_order: number
   is_detached: boolean
   // Shaped cabinets (z_cabinet_shape 4b): mitred kick boards, degrees from

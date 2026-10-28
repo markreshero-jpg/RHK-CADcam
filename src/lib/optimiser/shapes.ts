@@ -14,6 +14,7 @@
 
 import { outlineSegments, pointInShape, sampleShapeOutline, type EdgeTag, type OutlinePt, type ShapePt, type ShapeSegmentLike } from '../shapePath'
 import { cutSize, round1 } from './types'
+import { isKickSidePart } from '../resolver/types'
 
 export type ShapeMetaLike = {
   tapeLengthMM?: number | null
@@ -103,7 +104,7 @@ export function shapeFrameFor(table: string, typeKey: string, partId: string): S
       kind = INT_SIDE_KINDS.has(typeKey) ? 'side' : INT_FACE_KINDS.has(typeKey) ? 'face' : 'horizontal'
       break
     case 'toekick_parts':
-      kind = typeKey === 'spreader_horizontal' ? 'horizontal' : typeKey === 'spreader_vertical' ? 'side' : 'face'
+      kind = typeKey === 'spreader_horizontal' ? 'horizontal' : isKickSidePart(typeKey) ? 'side' : 'face'
       break
     case 'face_zones':
       kind = 'face'; dxIsWidth = true

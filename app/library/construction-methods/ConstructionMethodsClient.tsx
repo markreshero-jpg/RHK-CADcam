@@ -1148,7 +1148,7 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
       {/* ── Toe kick ── */}
       {!isWall && (<>
         <QCard question="How is the toe kick constructed?" isOverride={'TOE_TYPE' in delta}
-          partKeys={['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal']}
+          partKeys={['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal','kick_return']}
           onHover={onHoverParts}>
           <ChipSelect
             value={toeType}
@@ -1163,7 +1163,7 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
 
         {toeType !== 'none' && (
           <QCard question="Toe kick height" isOverride={'TOEH' in delta}
-            partKeys={['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal']}
+            partKeys={['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal','kick_return']}
             onHover={onHoverParts}>
             <MmInput value={effectiveRule(delta, 'TOEH')} onChange={v => onChange('TOEH', v as ConstructionRules[RuleKey])} />
           </QCard>

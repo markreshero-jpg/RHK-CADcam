@@ -17,7 +17,7 @@ const CASE_LABELS: Record<string, string> = {
 }
 const TK_LABELS: Record<string, string> = {
   kick_front_face: 'Toe Kick Face', kick_sub_front: 'Toe Kick Sub-Front',
-  kick_back: 'Toe Kick Back', spreader_vertical: 'Toe Kick Leg', spreader_horizontal: 'Toe Kick Spreader',
+  kick_back: 'Toe Kick Back', spreader_vertical: 'Toe Kick Leg', spreader_horizontal: 'Toe Kick Spreader', kick_return: 'Toe Kick Return',
 }
 const INT_LABELS: Record<string, string> = {
   adj_shelf: 'Adj. Shelf', fixed_shelf: 'Fixed Shelf',

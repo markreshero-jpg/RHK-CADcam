@@ -30,6 +30,7 @@ import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
+import { isKickSidePart } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
 import { turnDrill } from '@/src/lib/resolver/hardwareTurn'
@@ -100,6 +101,7 @@ const TK_LABELS: Record<string, string> = {
   kick_sub_front:      'Toe Kick Sub-Front',
   kick_back:           'Toe Kick Back',
   spreader_vertical:   'Toe Kick Leg',
+  kick_return:         'Toe Kick Return',
   spreader_horizontal: 'Toe Kick Spreader',
 }
 
@@ -157,7 +159,7 @@ function buildTkInfoBase(p: ResolvedToekickPart, b: Box): PartMeta {
     edge:      p.edge_band,
     panelKind: p.part_key === 'spreader_horizontal'
       ? 'horizontal'
-      : p.part_key === 'spreader_vertical'
+      : isKickSidePart(p.part_key)
       ? 'side'
       : 'face',
     detail:    p.sort_order > 0 ? `#${p.sort_order}` : undefined,

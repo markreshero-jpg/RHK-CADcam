@@ -4,7 +4,7 @@
 
 import {
   CabinetInput, ResolvedToekickPart, ConstructionRules,
-  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
+  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, EdgeSides
 } from './types'
 import { resolveKickRunParts } from './resolveKickRun'
 import { resolveShapedKick } from './resolveShapedKick'
@@ -76,6 +76,10 @@ export function resolveToekickParts(
 
   // ── Ladder Frame ──────────────────────────────────────────────
 
+  // End returns (TOERETL / TOERETR): the sub front, back and end spreader stop
+  // short of them.
+  const ret = kickReturns(r, TF)
+
   // Kick Front Face — full height TK, inset width W, face material
   parts.push({
     part_key: 'kick_front_face',
@@ -86,7 +90,7 @@ export function resolveToekickParts(
     X: x0, Y: 0, Z: kickFrontZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: fid,
-    edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
+    edge_band: edgeSidesToBanding(ret.faceSides(edging.kick_front_face), cab.toekick_face_edgeband_id),
     is_detached: false,
   })
 
@@ -96,9 +100,9 @@ export function resolveToekickParts(
     part_key: 'kick_sub_front',
     sort_order: 1,
     DX: TK - FC,
-    DY: W,
+    DY: W - ret.l - ret.r,
     DZ: TI,
-    X: x0, Y: FC, Z: kickSubZ,
+    X: x0 + ret.l, Y: FC, Z: kickSubZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
     edge_band: edgeSidesToBanding(edging.kick_sub_front, cab.toekick_interior_edgeband_id),
@@ -110,14 +114,17 @@ export function resolveToekickParts(
     part_key: 'kick_back',
     sort_order: 2,
     DX: TK - FC,
-    DY: W,
+    DY: W - ret.l - ret.r,
     DZ: TI,
-    X: x0, Y: FC, Z: kickBackZ,
+    X: x0 + ret.l, Y: FC, Z: kickBackZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: iid,
     edge_band: edgeSidesToBanding(edging.kick_back, cab.toekick_interior_edgeband_id),
     is_detached: false,
   })
+
+  parts.push(...ret.parts({ x0, W, TK, Z0: kickBackZ, Z1: kickFrontZ, fid,
+    eb: edgeSidesToBanding(edging.kick_return, cab.toekick_face_edgeband_id), detached: false }))
 
   const sprBW   = 100                    // horizontal brace width (fixed 100mm)
 
@@ -144,8 +151,8 @@ export function resolveToekickParts(
 
   // End spreaders — one at each end of the (inset) kick
   const endPositions: Array<{ x: number; isRight: boolean }> = [
-    { x: x0,            isRight: false },
-    { x: x0 + W - TI,   isRight: true  },
+    { x: x0 + ret.l,            isRight: false },
+    { x: x0 + W - TI - ret.r,   isRight: true  },
   ]
 
   for (const { x, isRight } of endPositions) {
@@ -214,4 +221,35 @@ export function resolveToekickParts(
   }
 
   return { parts, errors }
+}
+
+/**
+ * Kick end returns (TOERETL / TOERETR): a face-board end, kick height, at an
+ * open end of the kick (e.g. into a dishwasher opening), running from the kick
+ * back to behind the face. `l` / `r` = how far the interior boards and end
+ * spreaders step in at each end; the face keeps its length and is taped on a
+ * returned end.
+ */
+export function kickReturns(r: Pick<ConstructionRules, 'TOERETL' | 'TOERETR'>, TF: number) {
+  const L = !!r.TOERETL, R = !!r.TOERETR
+  return {
+    l: L ? TF : 0,
+    r: R ? TF : 0,
+    faceSides: (sides: EdgeSides): EdgeSides =>
+      [...new Set([...sides, ...(L ? ['left' as const] : []), ...(R ? ['right' as const] : [])])],
+    parts: (o: {
+      x0: number; W: number; TK: number; Z0: number; Z1: number
+      fid: string; eb: ResolvedToekickPart['edge_band']; detached: boolean
+    }): ResolvedToekickPart[] =>
+      [...(L ? [o.x0] : []), ...(R ? [o.x0 + o.W - TF] : [])].map((x, i) => ({
+        part_key: 'kick_return' as const,
+        sort_order: 50 + i,
+        DX: o.TK, DY: TF, DZ: o.Z1 - o.Z0,
+        X: x, Y: 0, Z: o.Z0,
+        AX: 0, AY: 0, AZ: 0,
+        material_id: o.fid,
+        edge_band: o.eb,
+        is_detached: o.detached,
+      })),
+  }
 }

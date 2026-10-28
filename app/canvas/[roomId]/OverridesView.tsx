@@ -5,6 +5,7 @@ import { supabase } from '@/src/lib/supabase'
 import { extForAxes } from '@/src/components/three/PartViewer'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, SeamJointAssign } from '@/src/lib/resolver/types'
+import { isKickSidePart } from '@/src/lib/resolver/types'
 import { seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
 import { computeElevSeams, internalSeamPartLabel } from '@/src/lib/cabinetSeams'
 import type { CabinetCustomPart, PartPosOverrides, ShapeMeta, ShapeOverride, ShapeOverrides } from './canvasDB'
@@ -43,7 +44,7 @@ const CASE_LABELS: Record<string, string> = {
 }
 const TK_LABELS: Record<string, string> = {
   kick_front_face: 'Toe Kick Face', kick_sub_front: 'Toe Kick Sub-Front',
-  kick_back: 'Toe Kick Back', spreader_vertical: 'Toe Kick Leg', spreader_horizontal: 'Toe Kick Spreader',
+  kick_back: 'Toe Kick Back', spreader_vertical: 'Toe Kick Leg', spreader_horizontal: 'Toe Kick Spreader', kick_return: 'Toe Kick Return',
 }
 const INT_LABELS: Record<string, string> = {
   adj_shelf: 'Adj. Shelf', fixed_shelf: 'Fixed Shelf',
@@ -96,7 +97,7 @@ function idDisplayFrame(id: string): { kind: 'side' | 'face' | 'horizontal'; dxI
   }
   if (id.startsWith('tk_')) {
     const key = id.slice(3, id.lastIndexOf('_'))
-    if (key === 'spreader_vertical') return { kind: 'side' }
+    if (isKickSidePart(key)) return { kind: 'side' }
     return { kind: key === 'spreader_horizontal' ? 'horizontal' : 'face' }
   }
   if (id.startsWith('int_')) {

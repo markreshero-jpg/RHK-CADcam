@@ -82,6 +82,7 @@ const PART_LABEL: Record<string, string> = {
   kick_sub_front:      'Kick Sub Front',
   kick_back:           'Kick Back',
   spreader_vertical:   'Spreader (Vert)',
+  kick_return:         'Kick Return',
   spreader_horizontal: 'Spreader (Horiz)',
   adj_shelf:           'Adj. Shelf',
   fixed_shelf:         'Fixed Shelf',

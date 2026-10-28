@@ -4,8 +4,8 @@
 import { ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeSides } from './resolver/types'
 
 // HANDLE_DRILL is a job / room / cabinet switch (z_handles D13), not a method rule;
-// FLOAT / UNDER_PANEL are cabinet-layer switches (z_floating).
-export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'FPRAIL' | 'RAILGRAIN' | 'FLOAT' | 'UNDER_PANEL'>
+// FLOAT / UNDER_PANEL are cabinet-layer switches (z_floating), TOERETL / TOERETR too (kick returns).
+export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'FPRAIL' | 'RAILGRAIN' | 'FLOAT' | 'UNDER_PANEL' | 'TOERETL' | 'TOERETR'>
 export type EdgingKey  = keyof Required<EdgingDefaults>
 
 export const RULE_LABELS: Record<RuleKey, string> = {
@@ -93,6 +93,7 @@ export const EDGING_LABELS: Record<EdgingKey, string> = {
   kick_sub_front:      'Kick Sub Front',
   kick_back:           'Kick Back',
   spreader_vertical:   'Spreader Vertical',
+  kick_return:         'Kick Return',
   spreader_horizontal: 'Spreader Horizontal',
   adj_shelf:           'Adj Shelf',
   fixed_shelf:         'Fixed Shelf',
@@ -112,7 +113,7 @@ export const EDGING_LABELS: Record<EdgingKey, string> = {
 
 export const EDGING_GROUPS: { label: string; keys: EdgingKey[] }[] = [
   { label: 'Case',     keys: ['left_side','right_side','bottom','back','full_top','front_rail','back_rail'] },
-  { label: 'Toe Kick', keys: ['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal'] },
+  { label: 'Toe Kick', keys: ['kick_front_face','kick_sub_front','kick_back','spreader_vertical','spreader_horizontal','kick_return'] },
   { label: 'Internal', keys: ['adj_shelf','fixed_shelf','divider','inner_drawer_bottom','inner_drawer_back','inner_drawer_side','inner_drawer_front','pull_out_bottom','pull_out_side','pull_out_back','accessory'] },
   { label: 'Face',     keys: ['door','drawer_face','false_panel'] },
 ]

@@ -19,6 +19,7 @@ import {
   CabinetInput, ResolvedToekickPart, ConstructionRules,
   ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults,
 } from './types'
+import { kickReturns } from './resolveToekick'
 
 // Equal-vs-exact segmentation of a run of length L into pieces no longer than
 // maxSeg. 'equal' spreads N = ceil(L/maxSeg) pieces evenly (no sliver offcut);
@@ -97,8 +98,15 @@ export function resolveKickRunParts(
 
   // ── Width-spanning boards, split into segments ──────────────────────────────
   const segs = splitKickSegments(L, cab.kick_run?.max_segment_length ?? null, cab.kick_run?.split_mode ?? 'equal')
+  // End returns (TOERETL / TOERETR): the interior boards and end spreaders step
+  // in at a returned end; only the end face boards take its tape.
+  const ret = kickReturns(r, TF)
+  const last = segs.length - 1
 
   segs.forEach((seg, i) => {
+    const inL = i === 0 ? ret.l : 0, inR = i === last ? ret.r : 0
+    const faceSides = kickReturns({ TOERETL: i === 0 && r.TOERETL, TOERETR: i === last && r.TOERETR }, TF)
+      .faceSides(edging.kick_front_face)
     // Kick Front Face — full height TK, face material
     parts.push({
       part_key: 'kick_front_face',
@@ -107,15 +115,15 @@ export function resolveKickRunParts(
       X: x0 + seg.start, Y: 0, Z: kickFrontZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: fid,
-      edge_band: edgeSidesToBanding(edging.kick_front_face, faceEb),
+      edge_band: edgeSidesToBanding(faceSides, faceEb),
       is_detached: true,
     })
     // Kick Sub Front — behind the face, lifted TOEFC off the floor, flush at top
     parts.push({
       part_key: 'kick_sub_front',
       sort_order: 100 + i,
-      DX: TK - FC, DY: seg.len, DZ: TI,
-      X: x0 + seg.start, Y: FC, Z: kickSubZ,
+      DX: TK - FC, DY: seg.len - inL - inR, DZ: TI,
+      X: x0 + seg.start + inL, Y: FC, Z: kickSubZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
       edge_band: edgeSidesToBanding(edging.kick_sub_front, intEb),
@@ -125,14 +133,17 @@ export function resolveKickRunParts(
     parts.push({
       part_key: 'kick_back',
       sort_order: 200 + i,
-      DX: TK - FC, DY: seg.len, DZ: TI,
-      X: x0 + seg.start, Y: FC, Z: kickBackZ,
+      DX: TK - FC, DY: seg.len - inL - inR, DZ: TI,
+      X: x0 + seg.start + inL, Y: FC, Z: kickBackZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: iid,
       edge_band: edgeSidesToBanding(edging.kick_back, intEb),
       is_detached: true,
     })
   })
+
+  parts.push(...ret.parts({ x0, W: L, TK, Z0: kickBackZ, Z1: kickFrontZ, fid,
+    eb: edgeSidesToBanding(edging.kick_return, faceEb), detached: true }))
 
   // ── Spreaders ───────────────────────────────────────────────────────────────
   const sprBW = 100       // horizontal brace width (fixed 100mm)
@@ -158,7 +169,8 @@ export function resolveKickRunParts(
   // Collect vertical-spreader X positions across the whole run:
   //   • both run ends, • TOESP-spaced internals, • forced at each split seam.
   // Dedupe near-coincident positions (e.g. a seam landing on a TOESP centre).
-  const xs: number[] = [x0, x0 + L - TI]
+  const xL = x0 + ret.l, xR = x0 + L - TI - ret.r
+  const xs: number[] = [xL, xR]
 
   const qty     = Math.max(0, Math.floor(L / r.TOESP) - 1)
   const spacing = L / (qty + 1)
@@ -173,7 +185,7 @@ export function resolveKickRunParts(
   }
 
   uniqXs.forEach((x, k) => {
-    const isRight = Math.abs(x - (x0 + L - TI)) < 1
+    const isRight = Math.abs(x - xR) < 1
     // Vertical spreader
     parts.push({
       part_key: 'spreader_vertical',

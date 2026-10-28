@@ -258,3 +258,18 @@ width** — the merged face legitimately extends past the lead's footprint. Audi
 - `app/canvas/[roomId]/canvasContextItems.ts` — Join / Separate / Settings
 - `app/canvas/[roomId]/useKickRunOps.ts` — **new** (detect + actions)
 - `app/canvas/[roomId]/{Cabinet3DView,ElevationSVG,PartsView}.tsx` — render audit
+
+## Kick end returns (built 2026-10-28, in-app check pending)
+
+Mark, RHK6586 kitchenette: "kick has to stop at end of drawers and start again at sink. we need kick
+returns on both of them into dishwasher opening."
+
+- Rules `TOERETL` / `TOERETR` (booleans, cabinet `rule_overrides` — on the kick assembly for a joined
+  run, on the cabinet for its own kick; not method rules). Sidebar: Kick Returns Left / Right under the
+  kick scribes.
+- Part `kick_return`: kick face board (material + tape of the face), kick height, at the run end, from
+  the kick back (TOESCB) to the back of the face. The face keeps its length and takes tape on that end;
+  sub front, back and the end spreader step in by the face thickness. Straight kicks
+  (`resolveToekick`) and joined runs (`resolveKickRun`); not shaped / curved kicks yet.
+- `toekick_parts_part_key_check` widened (`migration_kr1_kick_return_key.sql`, applied). Gable-like
+  orientation via `isKickSidePart` (3D, sheets, optimiser). Tutorial `kick_returns`.

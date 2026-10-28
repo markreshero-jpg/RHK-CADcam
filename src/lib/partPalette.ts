@@ -64,7 +64,7 @@ const PART_CATEGORY: Record<string, PaletteCategory> = {
   full_top: 'carcase', front_rail: 'carcase', back_rail: 'carcase',
   // toe kick
   kick_front_face: 'toekick', kick_sub_front: 'toekick', kick_back: 'toekick',
-  spreader_vertical: 'toekick', spreader_horizontal: 'toekick',
+  spreader_vertical: 'toekick', spreader_horizontal: 'toekick', kick_return: 'toekick',
   // internal / shelves
   adj_shelf: 'internal', fixed_shelf: 'internal', accessory: 'internal', divider: 'internal',
   pull_out_bottom: 'internal', pull_out_side: 'internal', pull_out_back: 'internal',
