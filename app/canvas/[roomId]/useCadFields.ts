@@ -9,6 +9,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, RoomFixture } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { type CadFieldValues, fixtureSpecFields } from '@/src/lib/annotations/blocks'
+import { carcassSpec, type CarcassSpecCab } from '@/src/lib/annotations/carcassSpec'
 
 type Row = Record<string, unknown>
 const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
@@ -22,11 +23,13 @@ interface Names {
   bins: Map<string, string>   // bin product id → brand + name (z_bin_cabinet)
 }
 
-export function useCadFields({ project, room, resolvedParts, fixtures }: {
+export function useCadFields({ project, room, resolvedParts, fixtures, cabinets }: {
   project:       Project | null
   room:          Room
   resolvedParts: Map<string, ResolvedCabinet>
   fixtures:      RoomFixture[]
+  /** The room's cabinets — labels + exposed interior / overrides for {carcass}. */
+  cabinets:      CarcassSpecCab[]
 }): CadFieldValues {
   const [names, setNames] = useState<Names | null>(null)
 
@@ -100,11 +103,10 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
 
   return useMemo(() => {
     const mat = (id: string | null | undefined) => (id && names?.materials.get(id)) || null
-    const carcass: string[] = [], panels: string[] = [], box: string[] = []
+    const panels: string[] = [], box: string[] = []
     const lengths = new Set<number>()
     const binCount = new Map<string, number>()
     for (const r of resolvedParts.values()) {
-      for (const p of r.case_parts) if (p.part_key === 'left_side' || p.part_key === 'right_side') carcass.push(mat(p.material_id) ?? '')
       for (const p of r.custom_parts ?? []) panels.push(mat(p.material_id) ?? '')
       for (const s of r.drawer_stacks) {
         // A bin's "slide" is the bin frame — listed under {bins}, never as a runner length.
@@ -117,6 +119,8 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
         for (const sl of s.slides) if (sl.nominal_length) lengths.add(Math.round(sl.nominal_length))
       }
     }
+    // Boxes only, internal + external (with the odd cabinets named) — carcassSpec.ts.
+    const carcass = carcassSpec(cabinets, resolvedParts, id => mat(id))
     const runnerLens = [...lengths].sort((a, b) => a - b).map(n => `${n}mm`).join(' / ')
     const bins = [...binCount].map(([n, c]) => (c > 1 ? `${c} x ${n}` : n)).join('\n')
     const jobNo = project?.job_number ?? '', client = project?.client_name ?? ''
@@ -129,7 +133,9 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
       fronts: names?.fronts ?? '',
       panels: uniq(panels).join(', '),
       handles: names?.handles ?? '',
-      carcass: uniq(carcass).join(', '),
+      carcass: carcass.text,
+      carcass_internal: carcass.internal,
+      carcass_external: carcass.external,
       drawer_box: [names?.drawerSystem, uniq(box).join(', ')].filter(Boolean).join(' - '),
       runners: [names?.runnersName, runnerLens].filter(Boolean).join(' '),
       hinges: names?.hinges ?? '',
@@ -137,5 +143,5 @@ export function useCadFields({ project, room, resolvedParts, fixtures }: {
       ...fixtureSpecFields(fixtures),
       bins,
     }
-  }, [names, resolvedParts, fixtures, project, room.name])
+  }, [names, resolvedParts, fixtures, project, room.name, cabinets])
 }

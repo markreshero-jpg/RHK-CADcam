@@ -846,7 +846,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   // Live {field} values (z_CAD_tool C2): drawn + printed notes show them; the editor keeps the tokens.
-  const cadFields = useCadFields({ project, room, resolvedParts, fixtures })
+  const cadFields = useCadFields({ project, room, resolvedParts, fixtures, cabinets })
   // Item CAD (z_item_cad): library notes on bin fronts / cabinet codes, pinned to the job.
   const itemCad = useItemCad({ projectId: project?.id ?? null, projectCreatedAt: project?.created_at ?? null, roomId: room.id, cabinets, resolvedParts, annotations, paper: annotScale })
   const [blockSaveReq, setBlockSaveReq] = useState(0)

@@ -300,7 +300,8 @@ feature. First use: the finishes **spec block** on the plan (RHK6570 vanities).
 | `{fronts}` | door style + colour, e.g. "Laminex 18mm ABS Grain - Elegant Oak"; one line per class when base / wall / tall differ |
 | `{panels}` | exposed material (end panels, floating bottoms) |
 | `{handles}` | handle schedule |
-| `{carcass}` | carcass material (from the resolved parts) |
+| `{carcass}` | cabinet boxes only (gables / tops / bottoms / backs / rails — not end panels, fillers, bulkheads): `Internal: <usual board> (BC-03, WC-02: <other board>)` + `External: <exposed board> (BC-07)` only when a box is built in the exposed colour (exposed interior / finished gable). Usual board = cabinets with no material overrides. `carcassSpec.ts` (Mark 2026-10-28) |
+| `{carcass_internal}` / `{carcass_external}` | the two lines on their own |
 | `{drawer_box}` | drawer box system + material |
 | `{runners}` | slide schedule + the lengths used in the room, e.g. "DTC Dragon Pro 400mm" |
 | `{hinges}` | hinge schedule |

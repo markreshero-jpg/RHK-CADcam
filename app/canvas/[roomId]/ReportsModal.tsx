@@ -442,7 +442,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
       .then(({ data }) => { if (!dead) setOtherAnnots({ roomId: drawRoom.id, rows: (data ?? []) as RoomAnnotation[] }) })
     return () => { dead = true }
   }, [isHere, drawRoom.id])
-  const otherFields = useCadFields({ project, room: drawRoom, resolvedParts: drawResolved, fixtures: drawFixtures })
+  const otherFields = useCadFields({ project, room: drawRoom, resolvedParts: drawResolved, fixtures: drawFixtures, cabinets: drawCabinets })
   const drawAnnots = useMemo(() => annotationsForPrint(isHere
     ? annotations
     : withFieldsFilled(otherAnnots?.roomId === drawRoom.id ? otherAnnots.rows : [], otherFields), cadLayers),
