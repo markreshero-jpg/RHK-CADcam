@@ -62,6 +62,15 @@ cloned from the 500 of the same height, gable rear-bracket hole per length (300/
 install guide). Open: gable hole HEIGHT isn't dimensioned in the guide — rows keep the shop's 44
 from the 500s; no prices (Nikpol login).
 
+## Colours (2026-10-28)
+
+Rows are named by colour: the original 15 are "... Silk White" (colour `#eeece6`); 10 Matt Grey
+rows (`#6e6f71`) cover 400 / 450 / 500 × 95 / 127 / 178 + 500x80 (grey isn't made in 300 / 350);
+plus a Silk White 500x80. Drilling copied from the white twin (80s from 500x95 — front hole at 96
+unchecked). Schedules: **"DTC Dragon Pro – Silk White"** (was "DTC Dragon Pro") and **"DTC Dragon
+Pro – Matt Grey"** (shallow drawers → NO_SLIDE_FITS; force a white runner per drawer with the
+face-grid Runner picker).
+
 ## Drilling check against the guide (2026-10-17)
 
 Nikpol has no separate Dragon Pro drilling guide — the drilling is page 7 ("DTC dragon pro
