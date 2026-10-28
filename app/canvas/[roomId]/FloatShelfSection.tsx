@@ -66,6 +66,15 @@ export default function FloatShelfSection({ cabinet, onUpdate, inp, lbl }: {
       </div>
       <p className="text-[10px] text-gray-600">Front and underside are always seen; the back never is. A seen side is taped and has no slot.</p>
 
+      <p className={lbl}>Front corner radius</p>
+      {(['radius_l', 'radius_r'] as const).map(k => (
+        <div key={k} className="grid grid-cols-[1fr_4.5rem] gap-1 items-center" title="Rounds that front corner of the top + bottom boards (0 = square)">
+          <label className="text-xs text-gray-300">{k === 'radius_l' ? 'Left' : 'Right'}</label>
+          <CalcInput value={s[k]} decimals={1} onCommit={v => { if (v >= 0) put({ [k]: v }) }} className={inp + ' text-right'} />
+        </div>
+      ))}
+      {triple && (s.radius_l > 0 || s.radius_r > 0) && <p className="text-[10px] text-gray-600">Triple: the middle layer stays square — trim it to the round by hand.</p>}
+
       <p className={lbl}>Cleat slot</p>
       {num('rebate_depth', 'Rebate depth', 'How far the slot runs in from the back (and from an unseen side)')}
       {!triple && num('rebate_h', 'Rebate height (each board)', 'Pocket depth into each board\'s inner face — the slot is twice this')}

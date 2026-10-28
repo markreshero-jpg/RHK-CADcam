@@ -116,6 +116,13 @@
       Tutorial `floating_shelf` (Intermediate › Cabinets).
 
 FS1 migration `migration_fs1_float_shelf.sql` applied 2026-10-22. Tests: `src/lib/resolver/__tests__/floatShelf.test.ts`.
+- [~] **FS7 — front corner radius** (built 2026-10-28, check pending) (Mark, RHK6586 TV ledge: "floating
+      shelf still doesn't show curve"). `float_shelf.radius_l / radius_r` (front corners, 0 = square; capped
+      ≤ D each, ≤ W together, `fsCornerRadii`). fs:bot / fs:top get an outline with a true 90° arc
+      (`fsRoundedBoard`, bulge tan 22.5°) → 3D, sheets, optimiser, G-code; plan outline sampled
+      (`floatShelfOutline` in `cabinetCornerPts`). Triple builds: the middle layer stays square (hand trim).
+      Sidebar Front corner radius L / R. Tutorial `floating_shelf_radius`. Replaces hand-drawn
+      part_shape_overrides on the boards.
 - [ ] **FS6 — in-app check** (Mark): 3D, elevation, plan, cut list, optimiser pockets.
 
 ## Later / open

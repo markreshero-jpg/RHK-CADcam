@@ -1,5 +1,6 @@
 import { Wall, CabinetInstance, Room } from './types'
 import { footprintOutline } from './cabinetShape/footprint'
+import { fsCornerRadii } from './floatShelf'
 
 export interface Pt { x: number; y: number }
 
@@ -571,7 +572,30 @@ export function cabinetCornerPts(cab: CabinetInstance, wall: Wall, perp: Pt): Pt
   }
   const bh = bulkheadOutline(cab.bulkhead, cab.dx, cab.dz)
   if (bh) return bh.map(p => toPlan(p.x, p.y))
+  const fs = floatShelfOutline(cab.float_shelf, cab.dx, cab.dz)
+  if (fs) return fs.map(p => toPlan(p.x, p.y))
   return [toPlan(0, 0), toPlan(cab.dx, 0), toPlan(cab.dx, cab.dz), toPlan(0, cab.dz)]
+}
+
+// A floating shelf with rounded front corners (z_floating_shelf radius_l / _r):
+// the outline in the cabinet frame (x along the width, y from the wall, front
+// at y = d), each round sampled every 5°. null when both corners are square.
+export function floatShelfOutline(
+  s: { radius_l?: number; radius_r?: number } | null | undefined, w: number, d: number,
+): Pt[] | null {
+  if (!s) return null
+  const [rl, rr] = fsCornerRadii({ radius_l: s.radius_l ?? 0, radius_r: s.radius_r ?? 0 }, w, d)
+  if (rl <= 0 && rr <= 0) return null
+  const arc = (cx: number, cy: number, r: number, a0: number, a1: number): Pt[] =>
+    Array.from({ length: 19 }, (_, k) => {
+      const a = (a0 + ((a1 - a0) * k) / 18) * Math.PI / 180
+      return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) }
+    })
+  return [
+    { x: 0, y: 0 }, { x: w, y: 0 },
+    ...(rr > 0 ? arc(w - rr, d - rr, rr, 0, 90) : [{ x: w, y: d }]),
+    ...(rl > 0 ? arc(rl, d - rl, rl, 90, 180) : [{ x: 0, y: d }]),
+  ]
 }
 
 // Front depth assumed for a bulkhead flush with the doors when only the

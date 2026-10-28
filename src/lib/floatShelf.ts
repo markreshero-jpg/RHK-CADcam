@@ -23,6 +23,8 @@ export interface FloatShelfSettings {
   strip_spacing: number          // cross strips, max centres
   cleat:         boolean
   tape_id:       string | null   // wide tape for the glued blank; null = exposed edgeband
+  radius_l:      number          // front-left corner radius (0 = square)
+  radius_r:      number          // front-right corner radius
 }
 
 export const FS_BUILDS: { value: FloatShelfBuild; label: string; layers: number }[] = [
@@ -36,6 +38,7 @@ export const DEFAULT_FLOAT_SHELF: FloatShelfSettings = {
   rebate_depth: 30, rebate_h: 10, stop: 30,
   strip_w: 90, strip_spacing: 600,
   cleat: true, tape_id: null,
+  radius_l: 0, radius_r: 0,
 }
 
 // Every board of the shelf carries this comment (prints on the CNC labels).
@@ -63,7 +66,32 @@ export function normaliseFloatShelf(s: Partial<FloatShelfSettings> | null | unde
     strip_spacing: pos(s.strip_spacing, d.strip_spacing),
     cleat: s.cleat ?? d.cleat,
     tape_id: typeof s.tape_id === 'string' && s.tape_id ? s.tape_id : null,
+    radius_l: typeof s.radius_l === 'number' && s.radius_l > 0 ? s.radius_l : 0,
+    radius_r: typeof s.radius_r === 'number' && s.radius_r > 0 ? s.radius_r : 0,
   }
+}
+
+/** The front-corner radii, capped so they fit the shelf (each ≤ D, together ≤ W). */
+export function fsCornerRadii(s: Pick<FloatShelfSettings, 'radius_l' | 'radius_r'> | null | undefined, W: number, D: number): [number, number] {
+  let l = Math.min(Math.max(0, s?.radius_l ?? 0), D), r = Math.min(Math.max(0, s?.radius_r ?? 0), D)
+  if (l + r > W && l + r > 0) { const k = W / (l + r); l *= k; r *= k }
+  return [l, r]
+}
+
+/** A full board with rounded front corners, in the horizontal shape frame (x
+ *  along the width, y back from the front edge): front → right → back → left,
+ *  each round a 90° bulge (tan 22.5°). null when both corners are square. */
+export function fsRoundedBoard(W: number, D: number, rl: number, rr: number): { x: number; y: number; b?: number }[] | null {
+  if (rl <= 0 && rr <= 0) return null
+  const B = Math.SQRT2 - 1
+  const pts: { x: number; y: number; b?: number }[] = []
+  pts.push(rr > 0 ? { x: W - rr, y: 0, b: B } : { x: W, y: 0 })
+  if (rr > 0 && rr < D) pts.push({ x: W, y: rr })
+  pts.push({ x: W, y: D }, { x: 0, y: D })
+  if (rl > 0 && rl < D) pts.push({ x: 0, y: rl, b: B })
+  else if (rl > 0) pts[pts.length - 1].b = B
+  pts.push({ x: rl, y: 0 })
+  return pts
 }
 
 const FS_LABELS: Record<string, string> = {

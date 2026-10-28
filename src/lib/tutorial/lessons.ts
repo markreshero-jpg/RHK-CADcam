@@ -1070,6 +1070,13 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select the kick on each side of the opening (the KICK n assembly for a joined run, or the cabinet for its own kick). Under Kick Returns tick Left or Right — the end facing the opening (or right-click › Kick › Left / Right return, like a bulkhead return). A face board turns back to the wall, mitred 45° to the kick face, and the inner boards stop short of it. Kick Grain (sidebar or right-click › Kick) sets the face + return grain: vertical by default, horizontal to run it along the kick.',
       canvas: true, done: c => c.cabinets.some(cab => !!((cab.rule_overrides as Record<string, unknown> | null)?.TOERETL || (cab.rule_overrides as Record<string, unknown> | null)?.TOERETR)) },
   ]},
+  { id: 'floating_shelf_radius', level: 'intermediate', topic: 'cabinets', title: 'Round a floating shelf corner',
+    blurb: 'Give a floating shelf a radius on its front-left or front-right corner — shown in plan and 3D and cut on the boards.',
+    keywords: 'floating shelf FLSHLF radius round corner curve R300 front corner ledge', steps: [
+    { id: 'radius', title: 'Type the corner radius',
+      body: 'Select the floating shelf (FLSHLF). Under Floating shelf › Front corner radius, type a radius for Left or Right (e.g. 300). The top and bottom boards are cut to it (optimiser, sheets, G-code), and the plan and 3D show the round. Up to the shelf depth; 0 puts it back square. On a triple build the middle layer stays square — trim it by hand.',
+      canvas: true, done: c => c.cabinets.some(cab => !!(cab.float_shelf?.radius_l || cab.float_shelf?.radius_r)) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

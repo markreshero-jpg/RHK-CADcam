@@ -173,3 +173,32 @@ describe('floating shelf — elevation height chain', () => {
     expect(s2.map(s => s.label)).toEqual(['830', '36'])
   })
 })
+
+describe('floating shelf front corner radius', () => {
+  it('rounds the top + bottom board outlines (true arcs), square by default', () => {
+    expect(get(resolve(cab({})).case_parts, 'fs:top')!.outline).toBeUndefined()
+    const ps = resolve(cab({ radius_r: 200, seen_right: true })).case_parts
+    for (const k of ['fs:top', 'fs:bot']) {
+      const o = get(ps, k)!.outline!
+      expect(o).toBeDefined()
+      const arcs = o.filter(p => p.b)
+      expect(arcs).toHaveLength(1)
+      // The arc runs from the front edge (y 0) at W − r to the right side at y = r.
+      const i = o.indexOf(arcs[0])
+      expect(o[i]).toMatchObject({ x: W - 200, y: 0 })
+      expect(o[(i + 1) % o.length]).toMatchObject({ x: W, y: 200 })
+      expect(arcs[0].b).toBeCloseTo(Math.SQRT2 - 1, 9)
+    }
+  })
+
+  it('a radius the full depth meets the back corner; plan outline follows', async () => {
+    const o = get(resolve(cab({ radius_r: D, seen_right: true })).case_parts, 'fs:top')!.outline!
+    expect(o.some(p => p.x === W && p.y === D)).toBe(true)
+    const { floatShelfOutline } = await import('../../geometry')
+    const pl = floatShelfOutline({ radius_r: 100 }, W, D)!
+    expect(pl[0]).toEqual({ x: 0, y: 0 })
+    expect(pl.some(p => Math.abs(p.x - W) < 1e-9 && Math.abs(p.y - (D - 100)) < 1e-9)).toBe(true)
+    expect(pl.some(p => Math.abs(p.x - (W - 100)) < 1e-9 && Math.abs(p.y - D) < 1e-9)).toBe(true)
+    expect(floatShelfOutline({}, W, D)).toBeNull()
+  })
+})

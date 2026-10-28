@@ -15,6 +15,10 @@
 //   fs:cross_<n>           them, cross strips at ≤ strip_spacing centres
 //   fs:cleat_b / _l / _r   hand-cut cleats sized to the slot (never on the CNC)
 //
+// Front corner radii (radius_l / radius_r) round the full boards' outlines
+// (fs:bot / fs:top, and the double build's pockets stay inside them). A triple
+// build's middle layer stays square — trimmed to the round by hand.
+//
 // The cleat slot runs `rebate_depth` in from the back and from each unseen
 // side; it stops `stop` short of the front and of a seen side. Double: a
 // `rebate_h` pocket on each board's inner face. Triple: the middle layer.
@@ -22,7 +26,7 @@
 
 import type { CabinetInput, ResolvedCasePart, EdgeBanding } from './types'
 import type { OutlinePt } from '../shapePath'
-import { fsLayers, type FloatShelfSettings } from '../floatShelf'
+import { fsLayers, fsCornerRadii, fsRoundedBoard, type FloatShelfSettings } from '../floatShelf'
 
 type Rect = { x0: number; x1: number; y0: number; y1: number }
 
@@ -47,6 +51,10 @@ export function resolveFloatShelf(cab: CabinetInput): ResolvedCasePart[] {
     if (p.DX > 0 && p.DY > 0) out.push(p)
   }
 
+  const [rl, rr] = fsCornerRadii(s, W, D)
+  const round = fsRoundedBoard(W, D, rl, rr)
+  const full = round ? { outline: round as OutlinePt[] } : {}
+
   const L = !s.seen_left, R = !s.seen_right       // unseen = slotted
   const rd = Math.min(s.rebate_depth, D), stop = s.stop
   const layers = fsLayers(s.build)
@@ -54,14 +62,14 @@ export function resolveFloatShelf(cab: CabinetInput): ResolvedCasePart[] {
   if (layers === 2) {
     const slot = slotRects(s, W, D, stop)
     const pockets = slot.map(r => ({ ...r, depth: s.rebate_h }))
-    board('fs:bot', { x0: 0, x1: W, y0: 0, y1: D }, 0, { pockets })
-    board('fs:top', { x0: 0, x1: W, y0: 0, y1: D }, t, { pockets })
+    board('fs:bot', { x0: 0, x1: W, y0: 0, y1: D }, 0, { pockets, ...full })
+    board('fs:top', { x0: 0, x1: W, y0: 0, y1: D }, t, { pockets, ...full })
     if (s.cleat) cleats(out, s, W, D, t - s.rebate_h, 2 * s.rebate_h, stop, stop, cab)
     return out
   }
 
-  board('fs:bot', { x0: 0, x1: W, y0: 0, y1: D }, 0)
-  board('fs:top', { x0: 0, x1: W, y0: 0, y1: D }, 2 * t)
+  board('fs:bot', { x0: 0, x1: W, y0: 0, y1: D }, 0, full)
+  board('fs:top', { x0: 0, x1: W, y0: 0, y1: D }, 2 * t, full)
 
   if (s.build === 'triple_solid') {
     board('fs:mid', { x0: 0, x1: W, y0: 0, y1: D }, t, { outline: cutBack(s, W, D, rd, stop) })
