@@ -12,7 +12,9 @@ export function useReportLayerSet(storageKey: string, sets: LayerSet[], activeSe
   useEffect(() => {
     try { if (picked) localStorage.setItem(storageKey, picked) } catch { /* storage unavailable */ }
   }, [storageKey, picked])
-  const set = sets.find(s => s.id === picked) ?? sets.find(s => s.id === activeSetId) ?? sets[0]
+  // A set name works too (headless exports seed localStorage by name).
+  const set = sets.find(s => s.id === picked) ?? sets.find(s => s.name === picked)
+    ?? sets.find(s => s.id === activeSetId) ?? sets[0]
   return [set, setPicked] as const
 }
 

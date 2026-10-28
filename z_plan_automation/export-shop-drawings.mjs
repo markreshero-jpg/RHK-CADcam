@@ -1,13 +1,21 @@
 // Download a job's Shop Drawings PDFs headlessly through Job Reports.
-//   node z_plan_automation/export-shop-drawings.mjs <roomId> <outDir> [--one]
+//   node z_plan_automation/export-shop-drawings.mjs <roomId> <outDir> [--one] [--elev=<set>] [--plan=<set>] [--3d=<set>]
 // One PDF per ticked room (all rooms), or with --one a single combined PDF.
+// Layer sets by name: a fresh headless profile has none of the remembered report
+// picks, so elevations default to "Line Drawing Print" (no carcass internals).
 import fs from 'node:fs'
 import path from 'node:path'
 import puppeteer from 'puppeteer-core'
 
-const [ROOM, OUT_ARG, flag] = process.argv.slice(2)
+const [ROOM, OUT_ARG, ...flags] = process.argv.slice(2)
 const OUT = path.resolve(OUT_ARG)
-const ONE = flag === '--one'
+const ONE = flags.includes('--one')
+const opt = k => flags.find(f => f.startsWith(`--${k}=`))?.slice(k.length + 3)
+const SETS = {
+  'elevation-print-layer-set': opt('elev') ?? 'Line Drawing Print',
+  'plan-view-layer-set': opt('plan'),
+  'shop-3d-layer-set': opt('3d'),
+}
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 fs.mkdirSync(OUT, { recursive: true })
 const START = Date.now()
@@ -20,7 +28,12 @@ try {
   await cdp.send('Browser.setDownloadBehavior', { behavior: 'allow', downloadPath: OUT, eventsEnabled: true })
   await page.setExtraHTTPHeaders({ 'x-dev-automation': '1' })
   page.on('pageerror', e => console.log('PAGE ERROR:', e.message.slice(0, 200)))
-  await page.evaluateOnNewDocument(one => { try { localStorage.setItem('reports-one-pdf', one ? '1' : '0') } catch {} }, ONE)
+  await page.evaluateOnNewDocument((one, sets) => {
+    try {
+      localStorage.setItem('reports-one-pdf', one ? '1' : '0')
+      for (const [k, v] of Object.entries(sets)) if (v) localStorage.setItem(k, v)
+    } catch {}
+  }, ONE, SETS)
   await page.goto(`http://localhost:3001/canvas/${ROOM}`, { waitUntil: 'networkidle2', timeout: 180000 })
   await page.waitForFunction(() => window.__canvasApi, { timeout: 60000 })
   await sleep(5000)
