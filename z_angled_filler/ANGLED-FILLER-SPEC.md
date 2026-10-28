@@ -62,6 +62,12 @@ which can be switched off. Cabinets on each wall butt its sides (`side_a` /
 12. **Backs mitre** where they meet, half the corner each (22.5° at 45°) — Mark, 2026-10-15
     after check #1. `ANGLE_JOIN = mitre` on the BFKANG row (`migration_a5_back_mitre.sql`).
 13. **Construction holes on the angled panels** like any carcass (Mark, 2026-10-15).
+14. **Top + bottom over the gables, gables set in 16.5 each side** (Mark, 2026-10-28,
+    RHK6586 kitchenette): the top and bottom run the full outline (`RAIL_JOIN
+    on_top_of_sides`, `BOTTOM_JOIN bottom_outside` on the row) and `side_a` / `side_b`
+    are scribe gables 16.5 in (`edge_overrides` + the segment edges on the row's
+    footprint), so the top / bottom can be planed to a wall that isn't exactly 45°.
+    Library-row data only, no code change; fillers placed before this keep the old build.
 
 ## Design (locked in code)
 
