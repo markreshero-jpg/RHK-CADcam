@@ -1107,6 +1107,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Manage layers… (under the list) adds, renames, recolours, reorders and deletes this job’s layers; deleting one moves its items to General. Click a printer to keep a layer off the reports but still on screen (Construction starts that way, for working lines). Add from shop list brings in shop layers added since this job started. The shop list itself is in Settings → CAD Layers (admins).',
       target: 'cad-layers', canvas: true, done: c => c.mode === 'cad' },
   ]},
+
+  // Appended 2026-10-28 (Matt Grey Dragon Pro + per-drawer runner pick).
+  { id: 'drawer_runner_pick', level: 'intermediate', topic: 'cabinets', title: 'Pick a different runner for one drawer',
+    blurb: 'Matt Grey Dragon Pro only comes in 400–500 long. Shallow drawers need a Silk White runner: pick it on the drawer.',
+    keywords: 'runner slide drawer dragon pro matt grey silk white colour schedule override no slide fits shallow 300 350', steps: [
+    { id: 'schedule', title: 'Matt Grey for the job',
+      body: 'In Job Properties (or Room Properties), set Slides to DTC Dragon Pro – Matt Grey. Every drawer then gets a grey runner, the longest that fits the depth. Grey isn\'t made in 300 or 350, so a drawer too shallow for a 400 runner shows "No slide fits" in the cabinet\'s Errors.',
+      canvas: true, done: c => c.cabinets.length > 0 },
+    { id: 'force', title: 'Force a runner on the drawer',
+      body: 'Open that cabinet, select the drawer front in the face grid and find Runner (under Drawer type). Auto shows what the schedule picked. Choose another runner, e.g. Dragon Pro 350x127 Silk White, and the drawer uses that one instead. The box, drilling and 3D colour follow it. Back to Auto lets the schedule pick again. A forced runner isn\'t checked against the depth or height, so pick one that fits.',
+      canvas: true, done: c => c.cabinets.some(cab => ((cab.face_grid as { zones?: { drawer_type_config?: { slide_product_id?: string } }[] } | null)?.zones ?? []).some(z => !!z.drawer_type_config?.slide_product_id)) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
