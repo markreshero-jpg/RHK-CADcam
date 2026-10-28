@@ -140,10 +140,12 @@ export interface ConstructionRules {
   TOESCB:   number   // toe scribe back
   TOESCL:   number   // toe scribe left
   TOESCR:   number   // toe scribe right
-  // Kick end returns (face board turning back to the wall at an open kick end,
-  // e.g. into a dishwasher opening). Cabinet / kick-assembly rule overrides.
+  // Kick end returns (face board mitred to the face, turning back to the wall at
+  // an open kick end, e.g. into a dishwasher opening) and the kick face grain
+  // (default vertical). Cabinet / kick-assembly rule overrides.
   TOERETL?: boolean
   TOERETR?: boolean
+  TOEGRAIN?: 'vertical' | 'horizontal'
 
   // Case scribes
   SCRBK:    number   // scribe back
@@ -1462,14 +1464,16 @@ export interface ResolvedCasePart extends ResolvedPart {
 }
 
 /** Kick parts standing front-to-back like a gable: DX height, DY thickness
- *  (across X), DZ length (along Z) — the leg spreaders and the end returns. */
-export const isKickSidePart = (k: string) => k === 'spreader_vertical' || k === 'kick_return'
+ *  (across X), DZ length (along Z). End returns are face-kind boards turned AY. */
+export const isKickSidePart = (k: string) => k === 'spreader_vertical'
 
 export interface ResolvedToekickPart extends ResolvedPart {
   part_key:   'kick_front_face' | 'kick_sub_front' | 'kick_back' |
               'spreader_vertical' | 'spreader_horizontal' | 'kick_return'
   sort_order: number
   is_detached: boolean
+  /** Kick face + returns: sheet grain (rule TOEGRAIN, default vertical). */
+  grain_direction?: 'horizontal' | 'vertical'
   // Shaped cabinets (z_cabinet_shape 4b): mitred kick boards, degrees from
   // square at local x = 0 / x = DY; + = the back (inner) face shorter. The
   // part is listed at its blank. AY turns it about its min corner.

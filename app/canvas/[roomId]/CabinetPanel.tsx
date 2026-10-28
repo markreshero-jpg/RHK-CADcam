@@ -557,7 +557,19 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                   </label>
                 ))}
               </div>
-              <p className="text-[10px] text-gray-600 mt-1">A face-board end turning back to the wall at an open kick end (e.g. a dishwasher opening).</p>
+              <p className="text-[10px] text-gray-600 mt-1">A face board mitred to the kick face, turning back to the wall at an open kick end (e.g. a dishwasher opening).</p>
+              <p className={lbl + ' mt-2'}>Kick Grain</p>
+              <select className={inp}
+                value={String((cabinet.rule_overrides as Record<string, unknown> | null)?.TOEGRAIN ?? 'vertical')}
+                onChange={e => {
+                  const next = { ...(cabinet.rule_overrides ?? {}) } as Record<string, unknown>
+                  if (e.target.value === 'vertical') delete next.TOEGRAIN
+                  else next.TOEGRAIN = e.target.value
+                  void onUpdate(cabinet.id, { rule_overrides: next as typeof cabinet.rule_overrides })
+                }}>
+                <option value="vertical">Vertical (default)</option>
+                <option value="horizontal">Horizontal</option>
+              </select>
             </div>
           )
         })()}

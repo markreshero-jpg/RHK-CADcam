@@ -86,6 +86,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       is_detached:       p.is_detached,
       bevel_lo:          p.bevel_lo ?? null,
       bevel_hi:          p.bevel_hi ?? null,
+      // Kick face + returns: sheet grain (rule TOEGRAIN).
+      ...(p.grain_direction ? { grain_direction: p.grain_direction } : {}),
     })),
     internal_parts: resolved.internal_parts.map(p => ({
       part_type:       p.part_type,

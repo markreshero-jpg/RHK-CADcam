@@ -267,9 +267,18 @@ returns on both of them into dishwasher opening."
 - Rules `TOERETL` / `TOERETR` (booleans, cabinet `rule_overrides` — on the kick assembly for a joined
   run, on the cabinet for its own kick; not method rules). Sidebar: Kick Returns Left / Right under the
   kick scribes.
-- Part `kick_return`: kick face board (material + tape of the face), kick height, at the run end, from
-  the kick back (TOESCB) to the back of the face. The face keeps its length and takes tape on that end;
-  sub front, back and the end spreader step in by the face thickness. Straight kicks
-  (`resolveToekick`) and joined runs (`resolveKickRun`); not shaped / curved kicks yet.
+- Part `kick_return`: kick face board, kick height, at the run end, from the kick back (TOESCB) to the
+  face's front plane, **mitred 45° to the face** like a bulkhead return (Mark 2026-10-28, rev 2): a
+  face-kind board turned AY ∓90 with bevel_hi / bevel_lo 45 at the front; the face keeps its outer
+  length and is bevelled 45 at a returned end (joined runs: only the end face boards). Sub front, back
+  and the end spreader step in by the face thickness. Straight kicks (`resolveToekick`) and joined runs
+  (`resolveKickRun`); not shaped / curved kicks yet.
+- **Grain** `TOEGRAIN` ('vertical' default | 'horizontal') on the face + returns (shaped / leg faces too),
+  persisted as `toekick_parts.grain_direction` (`migration_kr2_toekick_grain.sql`, applied). Optimiser
+  (normalize): a grain-locked kick nests with h along the grain — vertical = h is the kick height,
+  horizontal = h is the board's length.
+- UI: sidebar Kick Returns ticks + Kick Grain select; canvas right-click › **Kick** (Left / Right return,
+  Grain vertical / horizontal) on any cabinet with its own kick, or a joined run's member (edits the
+  run's kick assembly).
 - `toekick_parts_part_key_check` widened (`migration_kr1_kick_return_key.sql`, applied). Gable-like
   orientation via `isKickSidePart` (3D, sheets, optimiser). Tutorial `kick_returns`.

@@ -4,7 +4,7 @@
 
 import {
   CabinetInput, ResolvedToekickPart, ConstructionRules,
-  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, EdgeSides
+  ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
 import { resolveKickRunParts } from './resolveKickRun'
 import { resolveShapedKick } from './resolveShapedKick'
@@ -70,15 +70,17 @@ export function resolveToekickParts(
       material_id: fid,
       edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
       is_detached: false,
+      grain_direction: r.TOEGRAIN ?? 'vertical',
     })
     return { parts, errors }
   }
 
   // ── Ladder Frame ──────────────────────────────────────────────
 
-  // End returns (TOERETL / TOERETR): the sub front, back and end spreader stop
-  // short of them.
+  // End returns (TOERETL / TOERETR), mitred to the face: the sub front, back
+  // and end spreader stop short of them.
   const ret = kickReturns(r, TF)
+  const grain = r.TOEGRAIN ?? 'vertical'
 
   // Kick Front Face — full height TK, inset width W, face material
   parts.push({
@@ -90,8 +92,10 @@ export function resolveToekickParts(
     X: x0, Y: 0, Z: kickFrontZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: fid,
-    edge_band: edgeSidesToBanding(ret.faceSides(edging.kick_front_face), cab.toekick_face_edgeband_id),
+    edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
     is_detached: false,
+    grain_direction: grain,
+    ...ret.faceBevels(),
   })
 
   // Kick Sub Front — sits behind front face, lifted TOEFC off the floor and
@@ -123,8 +127,8 @@ export function resolveToekickParts(
     is_detached: false,
   })
 
-  parts.push(...ret.parts({ x0, W, TK, Z0: kickBackZ, Z1: kickFrontZ, fid,
-    eb: edgeSidesToBanding(edging.kick_return, cab.toekick_face_edgeband_id), detached: false }))
+  parts.push(...ret.parts({ x0, W, TK, Z0: kickBackZ, Zf: kickFrontZ + TF, fid,
+    eb: edgeSidesToBanding(edging.kick_return, cab.toekick_face_edgeband_id), detached: false, grain }))
 
   const sprBW   = 100                    // horizontal brace width (fixed 100mm)
 
@@ -224,32 +228,40 @@ export function resolveToekickParts(
 }
 
 /**
- * Kick end returns (TOERETL / TOERETR): a face-board end, kick height, at an
- * open end of the kick (e.g. into a dishwasher opening), running from the kick
- * back to behind the face. `l` / `r` = how far the interior boards and end
- * spreaders step in at each end; the face keeps its length and is taped on a
- * returned end.
+ * Kick end returns (TOERETL / TOERETR): a face board, kick height, turning back
+ * from an open end of the kick (e.g. into a dishwasher opening) to the kick
+ * back, mitred 45° to the face like a bulkhead return. `l` / `r` = how far the
+ * interior boards and end spreaders step in at each end; `faceBevels(atL, atR)`
+ * = the mitre on the face board's ends (the face keeps its outer length).
+ * A return is a face-kind board turned ±90° about its inner front/back corner
+ * (as the shaped kick boards, resolveShapedKick): local x along the return,
+ * local z = thickness, inner face at z = 0.
  */
 export function kickReturns(r: Pick<ConstructionRules, 'TOERETL' | 'TOERETR'>, TF: number) {
   const L = !!r.TOERETL, R = !!r.TOERETR
   return {
     l: L ? TF : 0,
     r: R ? TF : 0,
-    faceSides: (sides: EdgeSides): EdgeSides =>
-      [...new Set([...sides, ...(L ? ['left' as const] : []), ...(R ? ['right' as const] : [])])],
+    faceBevels: (atL = true, atR = true) => ({
+      ...(L && atL ? { bevel_lo: 45 } : {}), ...(R && atR ? { bevel_hi: 45 } : {}),
+    }),
+    /** Z0 = the kick back, Zf = the kick face's front plane. */
     parts: (o: {
-      x0: number; W: number; TK: number; Z0: number; Z1: number
+      x0: number; W: number; TK: number; Z0: number; Zf: number
       fid: string; eb: ResolvedToekickPart['edge_band']; detached: boolean
-    }): ResolvedToekickPart[] =>
-      [...(L ? [o.x0] : []), ...(R ? [o.x0 + o.W - TF] : [])].map((x, i) => ({
+      grain: ResolvedToekickPart['grain_direction']
+    }): ResolvedToekickPart[] => {
+      const base = {
         part_key: 'kick_return' as const,
-        sort_order: 50 + i,
-        DX: o.TK, DY: TF, DZ: o.Z1 - o.Z0,
-        X: x, Y: 0, Z: o.Z0,
-        AX: 0, AY: 0, AZ: 0,
-        material_id: o.fid,
-        edge_band: o.eb,
-        is_detached: o.detached,
-      })),
+        DX: o.TK, DY: o.Zf - o.Z0, DZ: TF, Y: 0, AX: 0, AZ: 0,
+        material_id: o.fid, edge_band: o.eb, is_detached: o.detached, grain_direction: o.grain,
+      }
+      return [
+        // Left: runs back → front (AY −90), mitre at the front (local x = DY).
+        ...(L ? [{ ...base, sort_order: 50, X: o.x0 + TF, Z: o.Z0, AY: -90, bevel_hi: 45 }] : []),
+        // Right: runs front → back (AY 90), mitre at the front (local x = 0).
+        ...(R ? [{ ...base, sort_order: 51, X: o.x0 + o.W - TF, Z: o.Zf, AY: 90, bevel_lo: 45 }] : []),
+      ]
+    },
   }
 }

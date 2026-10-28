@@ -315,6 +315,15 @@ export function normalizeProject(
       { v: Number(r.dy), d1: flags.left ? tt : 0, d2: flags.right ? tt : 0, b1: flags.left, b2: flags.right },
       { v: Number(r.dz), d1: 0, d2: 0, b1: false, b2: false },
     ].sort((a, b) => b.v - a.v)
+    // Kick face / returns (rule TOEGRAIN): a grain-locked part nests with h along
+    // the grain. Vertical (default) = h is the kick height, which the longest-first
+    // order above already gives a board longer than it is high; horizontal turns
+    // it so h runs along the board's length (dy).
+    if (r.grain_direction) {
+      const hi = trip.findIndex(q => q.v === Number(r.dx))
+      const want = r.grain_direction === 'horizontal' ? trip.findIndex((q, k) => k !== hi && k < 2) : hi
+      if (want === 0) [trip[0], trip[1]] = [trip[1], trip[0]]
+    }
     // Mitred kick boards of a shaped cabinet (z_cabinet_shape 4b): blank + note.
     const mitre = tkBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`,
@@ -381,7 +390,7 @@ export function normalizeProject(
 export const PART_SELECTS = {
   case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,outline,cutouts,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,outline,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
-  toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,grain_direction,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,material_id,no_cnc,hide_views,edge_top,edge_bottom,edge_left,edge_right',

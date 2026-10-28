@@ -134,6 +134,7 @@ export function resolveShapedKick(
       X: e.p0.x + f.u.x * hi + f.n.x * t, Y: y, Z: e.p0.y + f.u.y * hi + f.n.y * t,
       AX: 0, AY: Math.abs(ay) < 1e-9 ? 0 : ay, AZ: 0,
       material_id: mat, edge_band: edgeSidesToBanding(eb, ebId ?? undefined), is_detached: false,
+      ...(key === 'kick_front_face' ? { grain_direction: r.TOEGRAIN ?? 'vertical' } : {}),
       // local x = 0 is the p1 end (hi); + = back face shorter
       ...(b1 ? { bevel_lo: b1 } : {}), ...(b0 ? { bevel_hi: b0 } : {}),
     })

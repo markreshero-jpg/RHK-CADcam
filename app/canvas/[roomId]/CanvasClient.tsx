@@ -4018,6 +4018,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteCabinet: id => void handleDeleteCabinet(id),
             onUpdateBulkhead: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { bulkhead: next }) },
             onUpdateFloatShelf: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { float_shelf: next }) },
+            onUpdateKick: (id, next) => { setContextMenu(null); captureSnapshot(); void handleUpdateCabinet(id, { rule_overrides: next as CabinetInstance['rule_overrides'] }) },
             onMoveLabel: menuLabelMove,
             onResetLabel: menuLabelReset,
             onDeleteMultiple: ids => void handleDeleteMultipleCabinets(ids),

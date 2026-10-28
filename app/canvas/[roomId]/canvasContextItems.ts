@@ -13,7 +13,7 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit, onSplitHeight,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
-  onUpdateBulkhead, onUpdateFloatShelf, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape, grainMatchItems,
+  onUpdateBulkhead, onUpdateFloatShelf, onUpdateKick, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape, grainMatchItems,
 }: {
   /** Grain match (z_grain_match G1): items for the cabinet, acting on the selection holding it. */
   grainMatchItems?: (cabId: string, ids: string[]) => ContextMenuItem[]
@@ -85,6 +85,8 @@ export function buildContextMenuGroups({
   onUpdateBulkhead?: (cabId: string, next: BulkheadSettings) => void
   /** Floating shelves (z_floating_shelf): toggle a seen side / the cleat. */
   onUpdateFloatShelf?: (cabId: string, next: FloatShelfSettings) => void
+  /** Kick options (rule_overrides TOERETL / TOERETR / TOEGRAIN) on the cabinet that owns the kick. */
+  onUpdateKick?: (cabId: string, ruleOverrides: Record<string, unknown>) => void
 }): ContextMenuItem[][] {
   if (vertexContext && onDeleteBenchtopVertex) {
     const { btId, vi } = vertexContext
@@ -229,6 +231,28 @@ export function buildContextMenuGroups({
     const flip = (k: 'seen_left' | 'seen_right' | 'cleat', label: string) =>
       ({ label: tick(fs[k], label), onClick: () => onUpdateFloatShelf(cabId, { ...fs, [k]: !fs[k] }) })
     groups.push([{ label: 'Floating shelf', children: [flip('seen_left', 'Seen left'), flip('seen_right', 'Seen right'), flip('cleat', 'Cleats')] }])
+  }
+
+  // Kick options — the same switches as the sidebar's Kick Returns / Kick Grain.
+  // A joined run's kick belongs to its kick assembly, so a member edits that.
+  const kickOwner = cab?.kick_run_id && !cab.is_kick_assembly
+    ? cabinets.find(c => c.is_kick_assembly && c.kick_run_id === cab.kick_run_id)
+    : cab?.has_toekick && cab.assembly_class !== 'wall' ? cab : undefined
+  if (kickOwner && onUpdateKick) {
+    const ro = (kickOwner.rule_overrides ?? {}) as Record<string, unknown>
+    const tick = (on: boolean, label: string) => (on ? '✓ ' : '    ') + label
+    const set = (k: string, v: unknown) => {
+      const next = { ...ro }
+      if (v == null || v === false) delete next[k]; else next[k] = v
+      onUpdateKick(kickOwner.id, next)
+    }
+    const horiz = ro.TOEGRAIN === 'horizontal'
+    groups.push([{ label: 'Kick', children: [
+      { label: tick(!!ro.TOERETL, 'Left return'), onClick: () => set('TOERETL', !ro.TOERETL) },
+      { label: tick(!!ro.TOERETR, 'Right return'), onClick: () => set('TOERETR', !ro.TOERETR) },
+      { label: tick(!horiz, 'Grain vertical'), onClick: () => set('TOEGRAIN', null) },
+      { label: tick(horiz, 'Grain horizontal'), onClick: () => set('TOEGRAIN', 'horizontal') },
+    ] }])
   }
 
   const libItems: ContextMenuItem[] = []

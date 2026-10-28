@@ -98,15 +98,14 @@ export function resolveKickRunParts(
 
   // ── Width-spanning boards, split into segments ──────────────────────────────
   const segs = splitKickSegments(L, cab.kick_run?.max_segment_length ?? null, cab.kick_run?.split_mode ?? 'equal')
-  // End returns (TOERETL / TOERETR): the interior boards and end spreaders step
-  // in at a returned end; only the end face boards take its tape.
+  // End returns (TOERETL / TOERETR), mitred to the face: the interior boards and
+  // end spreaders step in at a returned end; only the end face boards are mitred.
   const ret = kickReturns(r, TF)
+  const grain = r.TOEGRAIN ?? 'vertical'
   const last = segs.length - 1
 
   segs.forEach((seg, i) => {
     const inL = i === 0 ? ret.l : 0, inR = i === last ? ret.r : 0
-    const faceSides = kickReturns({ TOERETL: i === 0 && r.TOERETL, TOERETR: i === last && r.TOERETR }, TF)
-      .faceSides(edging.kick_front_face)
     // Kick Front Face — full height TK, face material
     parts.push({
       part_key: 'kick_front_face',
@@ -115,8 +114,10 @@ export function resolveKickRunParts(
       X: x0 + seg.start, Y: 0, Z: kickFrontZ,
       AX: 0, AY: 0, AZ: 0,
       material_id: fid,
-      edge_band: edgeSidesToBanding(faceSides, faceEb),
+      edge_band: edgeSidesToBanding(edging.kick_front_face, faceEb),
       is_detached: true,
+      grain_direction: grain,
+      ...ret.faceBevels(i === 0, i === last),
     })
     // Kick Sub Front — behind the face, lifted TOEFC off the floor, flush at top
     parts.push({
@@ -142,8 +143,8 @@ export function resolveKickRunParts(
     })
   })
 
-  parts.push(...ret.parts({ x0, W: L, TK, Z0: kickBackZ, Z1: kickFrontZ, fid,
-    eb: edgeSidesToBanding(edging.kick_return, faceEb), detached: true }))
+  parts.push(...ret.parts({ x0, W: L, TK, Z0: kickBackZ, Zf: kickFrontZ + TF, fid,
+    eb: edgeSidesToBanding(edging.kick_return, faceEb), detached: true, grain }))
 
   // ── Spreaders ───────────────────────────────────────────────────────────────
   const sprBW = 100       // horizontal brace width (fixed 100mm)
