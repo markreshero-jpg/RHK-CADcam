@@ -335,6 +335,13 @@ Esc cancels; one undo step.
     Dishwasher group, **floor**, 598 × 598 × 845 from the bbox, scale 1000, no rotation (origin
     back-left floor, +Z front), no benchtop cut, sort 20 (above the generic). Served from
     `/fixture-models/Miele_G5210SC_Dishwasher.glb`, shapes traced headless. Not checked in-app.
+  - 2026-10-28 (user): **Miele CS 7612 FL** 38 cm 2-zone induction CombiSet dropped in the import
+    folder, filed to new `Cooktops/`. Put on the existing row (made 2026-10-27 as a plain box for
+    RHK6586) rather than a new one: Cooktop group, sort 70, **benchtop**, 378 × 520 × 51.5 from
+    the bbox, **bench_drop 46.5** (GLB origin = back-left of the glass at the top surface, body
+    hangs 46.5 below), raised cut-out 358 × 500 kept, scale 1000, no rotation. The one placed copy
+    (RHK6586 Kitchenette) got the model + sizes too, since it was only a placeholder. Served from
+    `/fixture-models/Miele_CS7612FL_Induction_CombiSet.glb`, shapes traced headless. Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
