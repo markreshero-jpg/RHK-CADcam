@@ -127,6 +127,13 @@ line and mirrors the island elevation.
   basin) gets its top rails on edge — `"rules": { "RAIL_ORIENT": "vertical" }`
   on that cabinet in the layout JSON (same as the "Rails: on edge" select in
   CabinetPanel). Never leave a sink cabinet on the horizontal default.
+- **Finger-pull rails run the whole run** (Mark, 2026-10-29): a finger-pull
+  backing rail is one length across the cabinets added together, not one per
+  cabinet. Over 2400 it splits where two cabinets meet. The optimiser does
+  this itself (`joinFingerRails`, z_handles D17): rails that line up on the
+  wall at the same height, depth and board join end to end. So keep the fronts
+  of a run level and the cabinets touching. A gap between cabinets, or a
+  different height or depth, breaks the run into separate rails.
 - **Hinges vs adj-shelf holes**: the resolver errors `HINGE_SHELF_HOLE_CLASH`
   when a hinge plate sits over shelf-pin holes. Fix by setting the door's
   manual `face_grid.zones[].hinges` (along the door from its bottom), moving

@@ -362,6 +362,31 @@ either side of an internal division (a double division for drawers, see
     panel that end sits in; none where a rail runs through.
   - Tests: `handles.test.ts` (rails per column), `fingerRailOps.test.ts` (H5b block).
 
+**D17. Rails run the whole run (Mark, 2026-10-29).** The shop cuts a
+finger-pull rail as one length across the cabinets added together, not one per
+cabinet. Rails run horizontally, with the grain along their length.
+- Over 2400 the run splits where two cabinets meet. A single cabinet's rail is
+  never cut.
+- The resolver still makes one rail per cabinet, through both sides' notches.
+  The join happens in the cut list only.
+- **As built:** `src/lib/optimiser/joinFingerRails.ts` runs in both optimiser
+  loaders (page.tsx + loadClient, so Takeoff / Edgeband reports too).
+  - `loadRailWallRects` (frontWallRects.ts) places each `fprail:<n>` on its
+    wall in elevation coordinates.
+  - Rails join end to end (±0.5) when they share the wall side, height band,
+    front line, board and thickness.
+  - The joined part keeps the first rail's identity. Its cabinet label is
+    `BC-02/BC-03/…` and its comment is "Joined rail: …".
+  - Rails with a drawn shape or a hand size override, or off CNC, stay as
+    they are.
+  - The block holes are unchanged: they sit in each side's inner face, so
+    every cabinet still gets its blocks.
+  - `MAX_RAIL_RUN` = 2400. Tests in `joinFingerRails.test.ts`.
+- **Knock-in block model:** `z_handles/models/Furnware_CCP_Knockin_Block.glb`
+  (Furnware CCP, built from their line drawing by `make-knockin-block-glb.mjs`).
+  Its origin is the peg axis on the body's underside, with the peg down −Y
+  into the Ø10 hole. Not yet drawn in 3D.
+
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
 - **Reuse, don't rebuild.** Same loader as slides and fixtures
