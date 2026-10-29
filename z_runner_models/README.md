@@ -101,3 +101,13 @@ All 8 rows (300–500 white, 400–500 grey) now **64, 96 + 160, 192**. 80 (2 ho
 
 (Back holes: guide gives them down from the back's top — 20 / 22 / 39, 32 pitch, 9 in.
 The DTC Dragon Pro drawer-box method makes the back box height − 11 = 84 / 116 / 167, as the guide.)
+
+## GLB v2 — inside wall 4 longer (2026-10-29, Mark)
+
+`DTC_DragonPro_{95,127,178}x500_v2.glb`: every vertex with 0 < y ≤ 29 moved down 4, so the inside
+wall runs 25 → H (was 29), the ledge sits at 24–25 and the runner pieces drop 4 with it. The outside
+wall (0 → H) and the top are unchanged. Cross-section 1511.5 mm² at H 127. Uploaded to slide-models as
+`…_v2.glb` (originals kept) and set on the six 500 rows (white + grey). `runnerGeometry.ts` matches
+for the other lengths. The DTC Dragon Pro method's drawer bottom and back now sit **8** above the
+bottom of the outside wall (DB_DADO_HEIGHT / DB_BACK_Y_OFFSET 8, was 12); back = box height − 12.
+(The earlier profile_lift attempt, 9316b4d, was reverted in c623d90.)

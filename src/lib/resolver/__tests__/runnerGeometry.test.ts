@@ -12,12 +12,12 @@ const rail = (side: 'left' | 'right', NL: number, H: number, drawn_as: 'dragon_p
 })
 
 describe('Dragon Pro runner (parametric)', () => {
-  it('the six source pieces rebuild the shop GLB cross-section (1463.5 mm² at H 127)', () => {
+  it('the six source pieces rebuild the shop GLB cross-section (1511.5 mm² at H 127, _v2)', () => {
     const parts = runnerShape(rail('left', 500, 127))
     // Front-face area of the non-assumed pieces: skin, wall, ledge, block, web, foot.
     const src = parts.filter(p => !(p.x - 16.5 < 9 && p.kind === 'runner') && p.kind !== 'bracket' && !(p.kind === 'runner' && p.h === 1.5))
     const area = src.reduce((s, p) => s + p.w * p.h, 0)
-    expect(area).toBeCloseTo(1463.5)
+    expect(area).toBeCloseTo(1511.5)
   })
 
   it('wall grows with height; everything runs the nominal length', () => {
