@@ -300,7 +300,7 @@ function loadClassSchedules(a: ClassScheduleArgs) {
     // All active slide products (for resolver lookup)
     supabase
       .from('hardware_slides')
-      .select('id, name, brand, kind, inside_width_min, inside_width_max, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z, drawn_as')
+      .select('id, name, brand, kind, inside_width_min, inside_width_max, nominal_length, box_height, runner_thickness, side_deduction, min_runner_depth, max_runner_depth, soft_close, full_extension, cost_per_pair, colour, model_url, model_format, model_scale, model_anchor_x, model_anchor_y, model_anchor_z, drawn_as, profile_lift')
       .eq('active', true)
       .order('nominal_length', { ascending: true }),
     // Slide drilling operations (child rows of hardware_slides), grouped onto
@@ -620,6 +620,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     model_anchor_y:   r.model_anchor_y != null ? Number(r.model_anchor_y) : 0,
     model_anchor_z:   r.model_anchor_z != null ? Number(r.model_anchor_z) : 0,
     drawn_as:         r.drawn_as === 'dragon_pro' ? 'dragon_pro' as const : null,
+    profile_lift:     Number(r.profile_lift ?? 0),
     drill_ops:        slideOpsBySlideId.get(r.id as string) ?? [],
   }))
   // Bins share the table but must never be picked as drawer runners (z_bin_cabinet).

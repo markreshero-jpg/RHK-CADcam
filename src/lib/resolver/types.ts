@@ -342,6 +342,10 @@ export interface SlideProduct {
   // z_runner_models: draw this runner from a parametric family at its own
   // nominal_length × box_height (an uploaded model_url wins over it).
   drawn_as?:         RunnerFamily | null
+  // System drawers: mm the box (and the runner's steel profile) sits above the
+  // runner bottom — Dragon Pro 14.8 (guide 22.8 to the bottom underside, bottom
+  // 8 up the profile). Moves the box only; every hole keeps its datum.
+  profile_lift?:     number
   inside_width_min?: number | null   // bins: clear width between the mounting faces
   inside_width_max?: number | null
 }
@@ -1625,6 +1629,7 @@ export interface ResolvedDrawerSlide {
   model_anchor_y:   number
   model_anchor_z:   number
   drawn_as?:        RunnerFamily | null   // parametric 3D drawing (z_runner_models)
+  profile_lift?:    number                // box / profile bottom above Y (SlideProduct.profile_lift)
   // For slides emitted by inner-drawer / pull-out fittings, tags the rail pair
   // with the drawer they belong to so the 3D view can animate them with the
   // drawer's box + face. Absent on face-zone drawer slides (which live inside

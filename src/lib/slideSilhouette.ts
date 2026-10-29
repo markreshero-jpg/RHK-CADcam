@@ -96,7 +96,7 @@ async function doLoad(url: string, format: SlideModelFormat): Promise<Float32Arr
 // the row defaults (0 / 1), so the triangles are already in the model frame.
 export interface SlideModelRef {
   model_url: string | null; model_format: SlideModelFormat | null
-  drawn_as?: RunnerFamily | null; nominal_length?: number; box_height?: number
+  drawn_as?: RunnerFamily | null; nominal_length?: number; box_height?: number; profile_lift?: number
 }
 
 // Returns a Map keyed by triKey → triangle soup. Entries appear as each model
@@ -116,8 +116,8 @@ export function useSlideTriangles(slides: SlideModelRef[]): Map<string, Float32A
     const keys = sig.split('|')
     Promise.all(keys.map(async key => {
       if (key.startsWith('param:')) {
-        const [, fam, L, H] = key.split(':')
-        return [key, runnerModelTriangles(fam as RunnerFamily, Number(L), Number(H))] as const
+        const [, fam, L, H, lift] = key.split(':')
+        return [key, runnerModelTriangles(fam as RunnerFamily, Number(L), Number(H), Number(lift ?? 0))] as const
       }
       const sep = key.indexOf(':')
       const format = key.slice(0, sep) as SlideModelFormat
@@ -138,7 +138,8 @@ export function useSlideTriangles(slides: SlideModelRef[]): Map<string, Float32A
 
 export function triKey(s: SlideModelRef): string | null {
   if (s.model_url && s.model_format) return `${s.model_format}:${s.model_url}`
-  return s.drawn_as && s.nominal_length && s.box_height ? `param:${s.drawn_as}:${s.nominal_length}:${s.box_height}` : null
+  return s.drawn_as && s.nominal_length && s.box_height
+    ? `param:${s.drawn_as}:${s.nominal_length}:${s.box_height}:${s.profile_lift ?? 0}` : null
 }
 
 // ── Projection (pure) ──────────────────────────────────────────────────────────

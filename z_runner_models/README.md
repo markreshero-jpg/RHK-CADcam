@@ -101,3 +101,18 @@ All 8 rows (300–500 white, 400–500 grey) now **64, 96 + 160, 192**. 80 (2 ho
 
 (Back holes: guide gives them down from the back's top — 20 / 22 / 39, 32 pitch, 9 in.
 The DTC Dragon Pro drawer-box method makes the back box height − 11 = 84 / 116 / 167, as the guide.)
+
+## Profile lift (2026-10-29)
+
+Measured drawer (Mark): the 178 profile is exactly 178; the drawer bottom sits **8 mm** above the
+profile's bottom edge. With the guide's 22.8 (runner bottom → bottom underside) the profile starts
+**14.8** above the runner bottom, so its top is 192.8, the guide's "min 192". Same rule for 80/95/127
+(min 95/110/142). **First front hole = 32.7 above the profile bottom** (47.5 − 14.8).
+
+`migration_profile_lift.sql`: `hardware_slides.profile_lift` (Dragon Pro 14.8; the resolver lifts
+the box and the drawn profile by it, keeping `slide.Y` = the runner bottom so the gable holes don't move).
+The DTC Dragon Pro method's bottom and back are 8 up (was 12), and the back is box height − 12
+(178 → 166, Mark). The 500s' GLBs were cleared (files kept in storage) so every length uses the
+parametric drawing, which can lift the profile. The fit check doesn't count the lift yet (option b):
+with it, 3 saved drawers would fail (RHK1234 Kitchen BC-20 r2, RHK6586 Bed 1 BC-03 r0, and Common
+Laundry BC-22 r2, which already fails).
