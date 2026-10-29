@@ -388,6 +388,10 @@ cabinet. Rails run horizontally, with the grain along their length.
   (RAIL_ORIENT vertical, e.g. sink cabinets), the front rail fixes the finger
   rail at the carcass top, so that rail gets no knock-in blocks or holes. The
   lower rails keep theirs.
+- **Clear of a flat front rail.** A block centred on the top finger rail runs
+  into a flat front rail above it. It drops to sit 2 under the front rail's
+  underside, but stays on the finger rail. Both the hole and the block move.
+  Other blocks stay centred on their rail. (Mark, 2026-10-29.)
 - **Model.** `public/hardware-models/Furnware_CCP_Knockin_Block.glb` (Furnware
   CCP). Source is `z_handles/models/make-knockin-block-glb.mjs`, built from
   Furnware's line drawing.

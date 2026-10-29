@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/src/lib/supabase', () => ({ supabase: {} }))
 import { collectDrillRows, collectNotchRoutes } from '../seamDrillSync'
+import { railBlockEnds } from '../../resolver/railBlocks'
 import { resolveCabinet } from '../../resolver/resolver'
 import { mergeRules } from '../../resolver/mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material, type HandleProductInput } from '../../resolver/types'
@@ -101,6 +102,17 @@ describe('finger-rail machining (H6b)', () => {
     expect(blocks).toHaveLength((rs.length - 1) * 2)
     // Flat front rail: every rail keeps its blocks.
     expect(rails.every(p => !p.fprail?.noBlocks)).toBe(true)
+  })
+
+  it('flat front rail: the top rail\'s block drops to sit 2 under it; lower rails stay centred', () => {
+    const fr = rp.case_parts.find(p => p.part_key === 'front_rail')!
+    const top = rails.reduce((a, b) => (b.Y > a.Y ? b : a))
+    const low = rails.find(p => p !== top)!
+    const ends = railBlockEnds(rp.case_parts, rp.internal_parts)
+    const yOf = (rl: { part_key: string }) => ends.find(e => e.railKey === rl.part_key)!.y
+    expect(yOf(top)).toBeCloseTo(fr.Y - 2 - 9.5)
+    expect(yOf(top) - 9.5).toBeGreaterThanOrEqual(top.Y - 0.01)   // still on the rail
+    expect(yOf(low)).toBeCloseTo(low.Y + low.DX / 2)
   })
 })
 
