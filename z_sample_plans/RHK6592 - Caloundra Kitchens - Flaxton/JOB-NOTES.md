@@ -36,7 +36,9 @@ not read yet (Synology online-only file, download failed). Quote not read either
 - **Butlers Pantry** `1c00eb19-09c1-41b8-8c7c-a6441ee0263d` — layout `z_plan_automation/layouts/rhk6592-flaxton-butlers.json`.
   Drawn 2026-10-29, resolver clean. Blind cupboard 860 (drawing 828 — the 32 left over from the 2230 wall
   went into the false panel, 352). Open: benchtop.
-- **Vanities / open book shelf** — not started; Mark will upload the PDF.
+- **Main Bathroom** `6980f63e-923d-4ea8-ae57-a604eb4fa00e` — layout `z_plan_automation/layouts/rhk6592-flaxton-main-bath.json` (rev 3).
+- **Ensuite** `8160a0cd-80aa-42e3-9b00-723db14b0747` — layout `z_plan_automation/layouts/rhk6592-flaxton-ensuite.json` (rev 3).
+- **Bookshelf (Sunroom)** — left for now (Mark). Raw satin board, painted on site by others; photos only, no dims.
 
 ## Rev 1 (Mark 2026-10-29)
 
@@ -61,3 +63,24 @@ not read yet (Synology online-only file, download failed). Quote not read either
   arris edges, 20 past the end panel.
 - Waterfalls: WF on a 20 slab next to MA60 aprons now draws as a built-up 60 waterfall (2026-10-29): 60 face
   piece mitred to the leg + apron, 100 return behind it. Re-resolve the tops to get the face/return supply parts.
+
+## Rev 3 — vanities (Mark 2026-10-29)
+
+Source: `ARCHITECTURALS/296 Flaxton Dr, Flaxton - Vanity Units & Open Book Shelf (1).pdf`. Mark's answers: semi
+inset basins (library "White Semi Recessed Basin 530x360" for now), 5 adj shelves in the tall, bulkhead flush with
+the carcass, 16s against walls = fillers on the kick, seen vanity panels to the floor, bookshelf later, main bath
+~3480 with the opening as their elevation.
+
+- Rooms set up by `_tmp-6592-bath.mjs`: room door style Flat Panel 16mm + new PT range colour "Classic White Matt"
+  (door_schedule_materials, material PT Colour Matt 16mm – Classic White Matt); room_materials exposed + door_face =
+  that board (base/wall/tall); room kick face Whiteboard 16.5; room TOEH 140. Rest of the job stays 2pac 18.
+- Bench 850 = 20 stone on an 830 carcass incl kick; vanity carcass 455 (473.5 OA with 16.5 doors). Tops 495 deep,
+  arris, 20 past the seen panel (`_tmp-6592-bath-tops.mjs`, underside 830).
+- Main: tall TFK 16 | T2D 648 (5 adj, hinges [100, 890, 1485, 1880] off the shelf holes) | TEPF 16.5 = 680.5 x 2125,
+  318.5 OA; BH 75 (2125-2200) wall to the carcass edge, flush with the carcass. Vanity BEPF 16.5 | B2D 692 | D3 400 |
+  B2D 692 | BFK 16 at the wall; 2 basins (front 100 past the top, rim 65 up). Opening 855 x 2080 at 720 on the back
+  wall (scaled off their elevation). Side walls 1000 as their plan.
+- Ensuite: BFK 16 | D3 360 | B2D 700 | BEPF 16.5, top 1112; one basin. Walls 1000 + 2388 as their plan.
+- Both resolver clean, kicks joined, basins linked (main BC-02 / BC-04, ensuite BC-03), spec blocks added.
+- Open: basin + tap models TBC (no taps drawn); main bath room depth not given (side walls drawn 1000); quote says
+  the kitchen is shaker — Mark: revisit once shaker doors are built properly.

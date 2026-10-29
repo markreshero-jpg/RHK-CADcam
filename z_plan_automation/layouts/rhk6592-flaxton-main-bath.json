@@ -1,0 +1,34 @@
+{
+  "_source": "SynologyDrive/_JOBS/RHK6500 - 6599/RHK6592 - Caloundra Kitchens + Carpentry - Flaxton/ARCHITECTURALS/296 Flaxton Dr, Flaxton - Vanity Units & Open Book Shelf (1).pdf (pages 1, 2) + Mark Q&A 2026-10-29",
+  "_notes": [
+    "Frame: x east, y south. Back wall ~3480 scaled (Mark OK), side walls 1000 as the CV plan draws them. Opening in the back wall 720-1575 x 2080 high, scaled off their elevation (fixture, added after the draw).",
+    "Room: 16 PT Matt New Classic White doors + panels (room door style Flat Panel 16mm + exposed / door_face room materials), 140 whiteboard kick (room TOEH 140 + room kick face). Bench 850 = 20 stone on an 830 carcass incl kick.",
+    "Vanity 473 OA incl door -> carcass 455. Wall on the right (16 BFK on the kick), seen end on the left (BEPF to the floor), top 1836 = 20 past it.",
+    "Vanity L->R: BEPF 16.5 | B2D 692 basin | D3 400 equal | B2D 692 basin | BFK 16 at the wall. Semi recessed basins (library 530x360), rails on edge.",
+    "Tall at the left wall: TFK 16 | T2D 648 (5 adj shelves) | TEPF 16.5 seen = 680.5, 318 OA (300 carcass), 2125 incl kick. 75 bulkhead to the 2200 ceiling flush with the carcass (wall to the carcass edge, not over the panel)."
+  ],
+  "projectId": "f801076c-4e6b-4214-b0b6-91e92c2dfa8c",
+  "roomName": "Main Bathroom",
+  "roomHeight": 2200,
+  "wallCabinetTop": 2125,
+  "roomRules": { "TOEH": 140 },
+  "walls": [
+    { "x": 0, "y": 1000, "length": 1000, "angle": 270, "height": 2200, "_": "1 west wall S->N" },
+    { "x": 0, "y": 0, "length": 3480, "angle": 0, "height": 2200, "_": "2 back wall W->E (elevation)" },
+    { "x": 3480, "y": 0, "length": 1000, "angle": 90, "height": 2200, "_": "3 east wall N->S" }
+  ],
+  "cabinets": [
+    { "def": "TFK", "wall": 2, "offset": 0, "dx": 16, "dy": 2125, "dz": 300, "note": "16 filler at the wall, on the kick" },
+    { "def": "T2D", "wall": 2, "offset": 16, "dx": 648, "dy": 2125, "dz": 300, "note": "Tall cupboard 318 OA, 5 adj shelves",
+      "set": { "internal_grid": { "tree": { "type": "open", "fittings": [ {"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false} ] } } } },
+    { "def": "TEPF", "wall": 2, "offset": 664, "dx": 16.5, "dy": 2125, "dz": 300, "note": "Seen end, to the floor" },
+    { "def": "BH", "wall": 2, "offset": 0, "dx": 664, "dy": 75, "dz": 300, "note": "75 bulkhead 2125-2200, flush with the carcass", "set": { "bulkhead": { "front": "carcase" } } },
+
+    { "def": "BEPF", "wall": 2, "offset": 1663.5, "dx": 16.5, "dy": 830, "dz": 455, "note": "Seen end to the floor; top 20 past it" },
+    { "def": "B2D", "wall": 2, "offset": 1680, "dx": 692, "dy": 830, "dz": 455, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Basin cupboard (semi recessed basin)" },
+    { "def": "D3-SLL", "wall": 2, "offset": 2372, "dx": 400, "dy": 830, "dz": 455, "note": "3 equal drawers",
+      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false},{"row_index":1,"height_locked":false},{"row_index":2,"height_locked":false}],"zones":[{"col_index":0,"face_type":"drawer_face","row_index":0,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":1,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":2,"hinge_side":"left"}]} } },
+    { "def": "B2D", "wall": 2, "offset": 2772, "dx": 692, "dy": 830, "dz": 455, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Basin cupboard (semi recessed basin)" },
+    { "def": "BFK", "wall": 2, "offset": 3464, "dx": 16, "dy": 830, "dz": 455, "note": "16 filler at the wall, on the kick" }
+  ]
+}
