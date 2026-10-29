@@ -12,7 +12,7 @@
 
 import { useMemo, useState } from 'react'
 import type { BenchtopInstance, BenchtopSegment, BenchtopEdgeProfile } from '@/src/lib/types'
-import { segPoint, outwardNormal, segLength, edgeProfileColor, effectiveProfileId, waterfallJoin } from '@/src/lib/benchtopGeometry'
+import { segPoint, outwardNormal, segLength, edgeProfileColor, effectiveProfileId, waterfallJoin, waterfallReturn } from '@/src/lib/benchtopGeometry'
 import { tapeable, edgeTape, tapeOverridden, tapeTotals, setTapes, setProfiles, tapeColour } from '@/src/lib/benchtopEdgeband'
 import { btLocal, type BtShapeEdit, type BtEdgeEdit } from './canvasTypes'
 import type { BtTape, BtTapeContext } from './useBenchtopCatalog'
@@ -233,6 +233,19 @@ function ProfileTab({ segs, edit, profiles, profileById, defaultProfileId, profi
               {t === 'butt' ? 'Butt' : 'Mitre'}
             </button>
           ))}
+          <label className="flex items-center gap-1 text-gray-400 ml-1"
+            title="Built-up waterfalls (apron deeper than the top): how far the return behind each face piece runs back">
+            Return
+            <input key={`${edit.sel}-${waterfallReturn(selSeg!)}`} type="number" min={0} step={10}
+              defaultValue={waterfallReturn(selSeg!)}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              onBlur={e => {
+                const v = Math.max(0, Math.round(Number(e.target.value)))
+                if (!Number.isFinite(v) || v === waterfallReturn(selSeg!)) return
+                onApply(s => s.map((x, i) => (i === edit.sel ? { ...x, edge: { ...x.edge, waterfall_return_mm: v } } : x)))
+              }}
+              className="w-12 bg-gray-900 border border-gray-700 rounded px-1 text-gray-200" />
+          </label>
         </div>
       )}
 

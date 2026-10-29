@@ -3,7 +3,7 @@ import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
 import {
-  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, WATERFALL_RETURN_MM,
+  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, waterfallReturn,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
 import { edgeTape, tapeable, tapeOverridden, tapeColour } from '@/src/lib/benchtopEdgeband'
@@ -338,7 +338,7 @@ export default function CanvasSVG({
                   const d = { x: (s.p1.x - s.p0.x) / L, y: (s.p1.y - s.p0.y) / L }
                   const at = (a: number, u: number) => `${s.p0.x + d.x * a - n.x * u},${s.p0.y + d.y * a - n.y * u}`
                   const lines = [[[bu.start ? t : 0, t], [bu.end ? L - t : L, t]]]
-                  const R = Math.min(WATERFALL_RETURN_MM, Math.max(0, L - 2 * t))
+                  const R = Math.min(waterfallReturn(s), Math.max(0, L - 2 * t))
                   for (const [D, a0, sg] of [[bu.start, 0, 1], [bu.end, L, -1]]) {
                     if (!D) continue
                     const A = (a: number) => a0 + sg * a

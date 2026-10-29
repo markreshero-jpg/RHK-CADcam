@@ -24,7 +24,8 @@
 > **2026-10-29: built-up waterfalls** (Mark, RHK6592 "60 top + 60 waterfall"): where a waterfall
 > leg's end meets a straight mitred apron deeper than the top (MA60 on a 20 slab), that end gets a
 > **face piece** the apron's drop wide (floor to top surface; vertical 45° to the leg, 45° in the
-> front plane to the apron) + a **return** 100 long (`WATERFALL_RETURN_MM`, LOCKED by Mark: short
+> front plane to the apron) + a **return** behind it (default 100, `WATERFALL_RETURN_MM`; per waterfall edge
+> `edge.waterfall_return_mm`, "Return" box in the F4 edge panel — e.g. 300 past an island overhang; Mark: short
 > return, not full depth) behind it, floor to underside. Rule in `waterfallBuildUp` (benchtopGeometry);
 > drawn in 3D (convex pieces + `apronCornerTris` wedge), elevation, plan; cabinet obstacles use the
 > drop as the leg depth; resolver parts `waterfall_face` / `waterfall_return` (supply items).

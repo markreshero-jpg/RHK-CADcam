@@ -138,5 +138,9 @@ describe('resolver — shape-true parts', () => {
     expect(parts['Waterfall Face (APR)']).toMatchObject({ part_role: 'waterfall_face', length_mm: 920, width_mm: 60, thickness_mm: 20, supply_item: true })
     expect(parts['Waterfall Return']).toMatchObject({ part_role: 'waterfall_return', length_mm: 900, width_mm: 100, thickness_mm: 20, supply_item: true })
     expect(all.filter(p => p.part_role === 'waterfall_face')).toHaveLength(1)   // the back end is on the wall
+    // Return length is per waterfall edge (island seating overhang → 300).
+    segs[3].edge = { ...segs[3].edge, waterfall_return_mm: 300 }
+    const longer = byLabel(resolveBenchtopParts(input(bt(segs), method({ construction: 'outsourced', active_part_roles: ['stone_slab'] }))))
+    expect(longer['Waterfall Return']).toMatchObject({ width_mm: 300 })
   })
 })

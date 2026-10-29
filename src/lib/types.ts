@@ -333,6 +333,8 @@ export interface BenchtopEdge {
   profile_id?: string | null
   /** Waterfall edges only: how the leg meets the top. Default 'mitre'. */
   waterfall_join?: BenchtopJoinType
+  /** Waterfall edges only: built-up return length behind each face piece (mm). Default WATERFALL_RETURN_MM. */
+  waterfall_return_mm?: number
   /** Edge tape (Phase 7): undefined = the schedule's tape, null = none, id = that tape. */
   edgeband_id?: string | null
   /** Joint with another benchtop here (Phase 7c): not exposed — no profile / tape; the resolver treats it as a join edge. */

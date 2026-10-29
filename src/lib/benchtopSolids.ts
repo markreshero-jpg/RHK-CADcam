@@ -13,12 +13,12 @@
 // Built-up waterfall (waterfallBuildUp — an end meeting a mitred apron deeper
 // than the top): that end gets a face piece the apron's drop wide (vertical 45°
 // to the leg, front-plane 45° to the apron — the apron's corner wedge comes
-// from apronCornerTris) and a WATERFALL_RETURN_MM return behind it.
+// from apronCornerTris) and a return behind it (waterfallReturn, per edge).
 
 import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3, type BufferGeometry } from 'three'
 import type { BenchtopInstance, BenchtopEdgeProfile } from './types'
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, waterfallBuildUp, WATERFALL_RETURN_MM } from './benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallReturn } from './benchtopGeometry'
 import { loftSlab, undersideOutline, apronStrip, apronCornerTris } from './benchtopSlab3d'
 
 export interface BtSolidInfo { topZ: number; thick: { total: number }; defaultProfileId: string | null }
@@ -80,7 +80,7 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
         const face: [number, number][] = [[0, 0], [0, D], [T, D], [T, T]]
         out.push({ key: `l${w.i}f${k}`, geo: hull(face.flatMap(([a, u]) => [at(A(a), u, 0), at(A(a), u, topZ - u)])) })
         // Return: behind the face's inner edge, to the underside.
-        const R = Math.min(WATERFALL_RETURN_MM, Math.max(0, len - 2 * T))
+        const R = Math.min(waterfallReturn(w.s), Math.max(0, len - 2 * T))
         if (R > 0) {
           const ret: [number, number][] = [[T, D - T], [T, D], [T + R, D], [T + R, D - T]]
           out.push({ key: `l${w.i}r${k}`, geo: hull(ret.flatMap(([a, u]) => [at(A(a), u, 0), at(A(a), u, under)])) })

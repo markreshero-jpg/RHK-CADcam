@@ -509,6 +509,8 @@ export const waterfallJoin = (s: BenchtopSegment): BenchtopJoinType => s.edge?.w
 // RETURN behind it, so the leg reads as thick as the apron. start = the leg's
 // p0 end (meets edge i−1), end = its p1 end (edge i+1); 0 = no build-up there.
 export const WATERFALL_RETURN_MM = 100
+/** The edge's return length (set per waterfall edge — e.g. 300 to reach the cabinets past an island's seating overhang). */
+export const waterfallReturn = (s: BenchtopSegment): number => s.edge?.waterfall_return_mm ?? WATERFALL_RETURN_MM
 export interface WaterfallBuildUp { start: number; end: number; depth: number }
 export function waterfallBuildUp(
   segs: BenchtopSegment[], i: number,

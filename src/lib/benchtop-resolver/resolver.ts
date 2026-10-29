@@ -22,7 +22,7 @@
 import type { BenchtopScheduleRow, BenchtopPartRole, BenchtopBuildMethod, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { BenchtopResolverInput, ResolvedBenchtopPart, BenchtopPartMeta } from './types'
 import { DEFAULT_CROSS_MEMBER_SPACING, crossMemberPositions } from './construction'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints, WATERFALL_RETURN_MM } from '@/src/lib/benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints, waterfallReturn } from '@/src/lib/benchtopGeometry'
 import {
   splitIntoPieces, pieceFrame, pieceArea, isRectangle, crossIntervals, edgeLength, pieceContains,
   type PieceSeg, type PieceFrame,
@@ -328,7 +328,7 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
             grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
             supply_item: outsourced, piece: pieceNo,
           })
-          const R = Math.min(WATERFALL_RETURN_MM, Math.max(0, Math.round(len - 2 * thick.total)))
+          const R = Math.min(waterfallReturn(s), Math.max(0, Math.round(len - 2 * thick.total)))
           if (R > 0) push({
             ...wtMaterial, part_role: 'waterfall_return', label: `Waterfall Return${sfx}`,
             length_mm: Math.round(sitsAt), width_mm: R, thickness_mm: thick.top, quantity: 1,
