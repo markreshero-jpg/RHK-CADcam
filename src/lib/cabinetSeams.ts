@@ -121,6 +121,17 @@ export function carcaseSeamParts(topType: string): SeamPart[] {
     })
   }
 
+  // A back top rail fixes to the back panel along its back edge. Listed for a
+  // front-rail method too — a cabinet set to double rail picks it up.
+  if (topType === 'front_rail' || topType === 'double_rail' || topType === 'back_rail') {
+    const railLabel = topType === 'front_rail' ? 'Back Top Rail (double rail)' : 'Back Top Rail'
+    parts.find(p => p.partKey === 'back')!.edges.push({ edgeLabel: 'Top edge', seamKey: 'back:back_rail', joinsLabel: railLabel })
+    const backEdge = { edgeLabel: 'Back edge', seamKey: 'back:back_rail', joinsLabel: 'Back Panel' }
+    const rail = parts.find(p => p.partKey === 'back_rail')
+    if (rail) rail.edges.push(backEdge)
+    else parts.push({ partKey: 'back_rail', label: railLabel, edges: [backEdge] })
+  }
+
   return parts
 }
 
@@ -287,6 +298,9 @@ export function computeElevSeams(rp: ResolvedCabinet): ElevSeam[] {
     seams.push({ key: 'back:right_side', label: 'Back → Right Gable', ex: rs.X,          ey: rs.Y + rs.DY * 0.5, isBack: true })
   if (back && bot)
     seams.push({ key: 'back:bottom', label: 'Back → Bottom', ex: bot.X + bot.DY * 0.5, ey: bot.Y + bot.DZ, isBack: true })
+  const br = byKey['back_rail']
+  if (back && br)
+    seams.push({ key: 'back:back_rail', label: 'Back → Back Rail', ex: br.X + br.DY * 0.5, ey: br.Y, isBack: true })
 
   return seams
 }

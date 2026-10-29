@@ -162,6 +162,7 @@ export function resolveJoints(
   if (byKey['back']   && byKey['left_side'])  seamKeys.push('back:left_side')
   if (byKey['back']   && byKey['right_side']) seamKeys.push('back:right_side')
   if (byKey['back']   && byKey['bottom'])     seamKeys.push('back:bottom')
+  if (byKey['back']   && byKey['back_rail'])  seamKeys.push('back:back_rail')
 
   const result: ResolvedSeamJoint[] = []
 

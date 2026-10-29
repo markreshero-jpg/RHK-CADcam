@@ -410,6 +410,66 @@ function backBottomDrillOps(
   return result
 }
 
+// back:back_rail seam — the back panel (Part A, vertical) meets the back top
+// rail (Part B) along the cabinet width. Mirrors back:bottom: TOP_BACK_JOIN
+// 'butts_into_back' (the rail's back edge against the back's front face) →
+// front-to-back (Z) holes, inset offset_y down from the rail's top face;
+// 'sits_over_back' (rail on the back's top edge) → vertical (Y) holes. The mode
+// is read off the geometry. Holes lay out along the X span the two share.
+function backRailDrillOps(boxBack: Box, boxRail: Box, ops: JointTypeOp[]): DrillOpPos[] {
+  const result: DrillOpPos[] = []
+  const x0 = Math.max(boxBack.x, boxRail.x)
+  const jointLength = Math.min(boxBack.x + boxBack.w, boxRail.x + boxRail.w) - x0
+  if (jointLength <= 0) return result
+  const evBack = { ...boxBack, d: jointLength }
+  const evRail = { ...boxRail, d: jointLength }
+  const thickBack = boxBack.d
+  const sitsOver  = boxRail.y >= boxBack.y + boxBack.h - 0.5
+  // Upright rail: the back face is a face, the "thickness" is its Z depth.
+  const thickRail = sitsOver || boxRail.h <= boxRail.d ? boxRail.h : boxRail.d
+
+  const backFrontZ = boxBack.z + boxBack.d
+  const backTopY   = boxBack.y + boxBack.h
+  const railRearZ  = boxRail.z
+  const railTopY   = boxRail.y + boxRail.h
+
+  for (const op of ops) {
+    if (op.machine_operation !== 'drill') continue
+    const isBack = op.target_part === 'part_a'
+    const ev = evalOp(op, evBack, evRail, thickBack, thickRail)
+    if (!ev) continue
+    const spc = ev.spacing_mm ?? 0
+
+    for (let i = 0; i < ev.qty; i++) {
+      for (const du of uSteps(ev.qty2, ev.spacing2_mm)) {
+        const x = x0 + ev.offset_z_mm + i * spc
+        const oy = ev.offset_y_mm + du
+        let y = 0, z = 0
+        let axis: DrillAxis
+
+        if (sitsOver) {
+          z = backFrontZ - oy
+          if (isBack) { y = backTopY;   axis = 'y-' }
+          else        { y = boxRail.y;  axis = 'y+' }
+        } else {
+          y = railTopY - oy
+          if (isBack) { z = backFrontZ; axis = 'z-' }
+          else        { z = railRearZ;  axis = 'z+' }
+        }
+
+        result.push({
+          x, y, z, axis,
+          radius: ev.tool_diameter_mm / 2,
+          depthLen: ev.depth_mm,
+          targetPartKey: isBack ? 'back' : 'back_rail',
+          router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool,
+        })
+      }
+    }
+  }
+  return result
+}
+
 export function seamDrillOps(
   seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[],
   opts?: {
@@ -433,6 +493,7 @@ export function seamDrillOps(
   if (seamKey === 'back:bottom') {
     return backBottomDrillOps(boxA, boxB, ops, opts?.bottomBackJoin ?? 'back_on_bottom')
   }
+  if (seamKey === 'back:back_rail') return backRailDrillOps(boxA, boxB, ops)
   if (!opts?.side && !isSide(partBKey)) return []
 
   const frame = buildSeamFrame(partAKey, isLeft, boxA, boxB)

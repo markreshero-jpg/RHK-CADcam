@@ -131,6 +131,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
     if (partKeys.has('back')     && partKeys.has('left_side'))  candidateSeams.push('back:left_side')
     if (partKeys.has('back')     && partKeys.has('right_side')) candidateSeams.push('back:right_side')
     if (partKeys.has('back')     && partKeys.has('bottom'))     candidateSeams.push('back:bottom')
+    if (partKeys.has('back')     && partKeys.has('back_rail'))  candidateSeams.push('back:back_rail')
 
     const casePartsArr = myCase.map(p => ({
       part_key: p.part_key,
