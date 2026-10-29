@@ -9,11 +9,17 @@
 // 45° bevel (one solid — loftSlab), and the leg is a full-height prism with the
 // matching 45° top: one diagonal joint. Butt: the top runs over a leg that stops
 // at the underside.
+//
+// Built-up waterfall (waterfallBuildUp — an end meeting a mitred apron deeper
+// than the top): that end gets a face piece the apron's drop wide (vertical 45°
+// to the leg, front-plane 45° to the apron — the apron's corner wedge comes
+// from apronCornerTris) and a WATERFALL_RETURN_MM return behind it.
 
 import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3, type BufferGeometry } from 'three'
 import type { BenchtopInstance, BenchtopEdgeProfile } from './types'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin } from './benchtopGeometry'
-import { loftSlab, undersideOutline, apronStrip } from './benchtopSlab3d'
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, waterfallBuildUp, WATERFALL_RETURN_MM } from './benchtopGeometry'
+import { loftSlab, undersideOutline, apronStrip, apronCornerTris } from './benchtopSlab3d'
 
 export interface BtSolidInfo { topZ: number; thick: { total: number }; defaultProfileId: string | null }
 
@@ -27,7 +33,7 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
     if (s.type !== 'line' || s.edge?.wall || topZ - T <= 0) return []
     const pid = effectiveProfileId(s, defaultProfileId)
     if (!pid || profiles[pid]?.generates !== 'waterfall') return []
-    return [{ i, s, n: outwardNormal(segs, i), join: waterfallJoin(s) }]
+    return [{ i, s, n: outwardNormal(segs, i), join: waterfallJoin(s), bu: waterfallBuildUp(segs, i, profiles, defaultProfileId, T) }]
   })
 
   const aprons = segs.flatMap((s, i) => {
@@ -49,9 +55,39 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
 
   // Leg prisms: a profile in (u = inward from the outer face, v = up), extruded
   // along the edge, placed by a basis matrix (u → −n, v → up, z → edge).
+  const under = topZ - T
+  const hull = (pts: number[][]) => {
+    const g = new ConvexGeometry(pts.map(([x, v, y]) => new Vector3(x, v, y)))
+    g.computeVertexNormals()
+    return g
+  }
   for (const w of waterfalls) {
     const len = Math.hypot(w.s.p1.x - w.s.p0.x, w.s.p1.y - w.s.p0.y)
-    const under = topZ - T
+    if (w.bu.start || w.bu.end) {
+      // Built-up leg: convex pieces in (a = along from p0, u = inward, v = up).
+      const d = { x: (w.s.p1.x - w.s.p0.x) / len, y: (w.s.p1.y - w.s.p0.y) / len }
+      const at = (a: number, u: number, v: number) => [w.s.p0.x + d.x * a - w.n.x * u, v, w.s.p0.y + d.y * a - w.n.y * u]
+      const topAt = (u: number) => (w.join === 'mitre' ? topZ - u : under)
+      const foot: [number, number][] = [
+        ...(w.bu.start ? [[0, 0], [T, T]] : [[0, 0], [0, T]]) as [number, number][],
+        ...(w.bu.end ? [[len - T, T], [len, 0]] : [[len, T], [len, 0]]) as [number, number][],
+      ]
+      out.push({ key: `l${w.i}`, geo: hull(foot.flatMap(([a, u]) => [at(a, u, 0), at(a, u, topAt(u))])) })
+      for (const [D, a0, sg, k] of [[w.bu.start, 0, 1, 's'], [w.bu.end, len, -1, 'e']] as [number, number, number, string][]) {
+        if (!D) continue
+        const A = (a: number) => a0 + sg * a
+        // Face: a ∈ [0, T], u ∈ [a, D], up to the front-plane 45° (v = topZ − u).
+        const face: [number, number][] = [[0, 0], [0, D], [T, D], [T, T]]
+        out.push({ key: `l${w.i}f${k}`, geo: hull(face.flatMap(([a, u]) => [at(A(a), u, 0), at(A(a), u, topZ - u)])) })
+        // Return: behind the face's inner edge, to the underside.
+        const R = Math.min(WATERFALL_RETURN_MM, Math.max(0, len - 2 * T))
+        if (R > 0) {
+          const ret: [number, number][] = [[T, D - T], [T, D], [T + R, D], [T + R, D - T]]
+          out.push({ key: `l${w.i}r${k}`, geo: hull(ret.flatMap(([a, u]) => [at(A(a), u, 0), at(A(a), u, under)])) })
+        }
+      }
+      continue
+    }
     const prof: [number, number][] = w.join === 'mitre'
       ? [[0, 0], [T, 0], [T, under], [0, topZ]]
       : [[0, 0], [T, 0], [T, under], [0, under]]
@@ -67,10 +103,29 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
     out.push({ key: `l${w.i}`, geo: g })
   }
 
+  const n = segs.length
+  const builtAt = (j: number, side: 'start' | 'end') => waterfalls.find(w => w.i === (j + n) % n)?.bu[side] ?? 0
   for (const a of aprons) {
     const k0 = start[a.i], k1 = a.i + 1 < start.length ? start[a.i + 1] : topPts.length
     const idx = [...Array.from({ length: k1 - k0 }, (_, k) => k0 + k), k1 % topPts.length]
-    out.push({ key: `a${a.i}`, geo: apronStrip(idx.map(k => topPts[k]), idx.map(k => botPts[k]), topZ, topZ - T, topZ - a.drop) })
+    const outer = idx.map(k => topPts[k]), inner = idx.map(k => botPts[k])
+    // Built-up waterfall at either end (only straight aprons qualify): the strip
+    // starts D along, an apronCornerTris wedge fills the corner over the face piece.
+    const extra: number[] = []
+    const trim = (D: number, e: 0 | 1) => {
+      if (!D) return true
+      const m = outer.length - 1, c = e ? outer[m] : outer[0], o = e ? outer[0] : outer[m]
+      const L = Math.hypot(o.x - c.x, o.y - c.y) || 1
+      const along = { x: (o.x - c.x) / L, y: (o.y - c.y) / L }
+      const nn = outwardNormal(segs, a.i), inward = { x: -nn.x, y: -nn.y }
+      extra.push(...apronCornerTris(c, along, inward, D, T, topZ))
+      const p = { x: c.x + along.x * D, y: c.y + along.y * D }
+      outer[e ? m : 0] = p
+      inner[e ? m : 0] = { x: p.x + inward.x * T, y: p.y + inward.y * T }
+      return false
+    }
+    const capStart = trim(builtAt(a.i - 1, 'end'), 0), capEnd = trim(builtAt(a.i + 1, 'start'), 1)
+    out.push({ key: `a${a.i}`, geo: apronStrip(outer, inner, topZ, under, topZ - a.drop, { capStart, capEnd, extra }) })
   }
   return out
 }

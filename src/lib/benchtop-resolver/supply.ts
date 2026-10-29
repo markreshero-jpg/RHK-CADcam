@@ -48,7 +48,7 @@ export function supplyMaterialName(p: ResolvedBenchtopPart): string {
 
 /** Supply lines in benchtop order (then piece, then role), skipping cut parts. */
 export function buildSupplyLines(benchtops: SupplyBenchtop[], rows: StoredBenchtopPart[]): SupplyLine[] {
-  const ROLE_ORDER: Record<string, number> = { stone_slab: 0, worktop_panel: 0, waterfall_panel: 1, apron_strip: 2 }
+  const ROLE_ORDER: Record<string, number> = { stone_slab: 0, worktop_panel: 0, waterfall_panel: 1, waterfall_face: 1, waterfall_return: 1, apron_strip: 2 }
   const out: SupplyLine[] = []
   for (const bt of benchtops) {
     const mine = rows.filter(r => r.benchtop_id === bt.id && r.supply_item)

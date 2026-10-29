@@ -21,6 +21,14 @@
 > elevations via BenchtopElevation (the edge reads as one face from the top down to the apron
 > drop; when aprons cover the whole span the band itself is drawn that deep).
 > `apron_drop_mm` = the finished edge height (MA80 = 80). Section view not yet.
+> **2026-10-29: built-up waterfalls** (Mark, RHK6592 "60 top + 60 waterfall"): where a waterfall
+> leg's end meets a straight mitred apron deeper than the top (MA60 on a 20 slab), that end gets a
+> **face piece** the apron's drop wide (floor to top surface; vertical 45° to the leg, 45° in the
+> front plane to the apron) + a **return** 100 long (`WATERFALL_RETURN_MM`, LOCKED by Mark: short
+> return, not full depth) behind it, floor to underside. Rule in `waterfallBuildUp` (benchtopGeometry);
+> drawn in 3D (convex pieces + `apronCornerTris` wedge), elevation, plan; cabinet obstacles use the
+> drop as the leg depth; resolver parts `waterfall_face` / `waterfall_return` (supply items).
+> Wall edges get no face piece. In-app check pending.
 > Phase 4 rules Q-a…Q-h are Claude's defaults; its 3 open questions are locked.
 > **2026-10-19: Phase 8 auto-build tops** built (F4 → Auto-build tops…, click-through dialog) —
 > Mark trying it to see if he likes it; rules A-a…A-f below are Claude's defaults, not locked.

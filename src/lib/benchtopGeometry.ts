@@ -502,6 +502,31 @@ export function effectiveProfileId(s: BenchtopSegment, methodDefault: string | n
 // underside and the top's end runs over it.
 export const waterfallJoin = (s: BenchtopSegment): BenchtopJoinType => s.edge?.waterfall_join ?? 'mitre'
 
+// Built-up waterfall (Mark 2026-10-29, RHK6592 "60 top"): where a waterfall
+// leg's end meets a straight mitred apron deeper than the top (MA60 on a 20
+// slab), that end gets a FACE piece the apron's drop wide — mitred to the leg
+// (vertical 45°) and to the apron (45° in the front plane) — plus a short
+// RETURN behind it, so the leg reads as thick as the apron. start = the leg's
+// p0 end (meets edge i−1), end = its p1 end (edge i+1); 0 = no build-up there.
+export const WATERFALL_RETURN_MM = 100
+export interface WaterfallBuildUp { start: number; end: number; depth: number }
+export function waterfallBuildUp(
+  segs: BenchtopSegment[], i: number,
+  profiles: Record<string, Pick<BenchtopEdgeProfile, 'generates' | 'apron_drop_mm'>>,
+  defaultProfileId: string | null | undefined, T: number,
+): WaterfallBuildUp {
+  const n = segs.length
+  const drop = (j: number) => {
+    const s = segs[(j + n) % n]
+    const pid = s.type === 'line' ? effectiveProfileId(s, defaultProfileId) : null
+    const p = pid ? profiles[pid] : undefined
+    const d = p?.generates === 'apron' ? Number(p.apron_drop_mm) || 0 : 0
+    return d > T ? d : 0
+  }
+  const start = drop(i - 1), end = drop(i + 1)
+  return { start, end, depth: Math.max(T, start, end) }
+}
+
 // ── Join lines ───────────────────────────────────────────────────────────────
 
 // Where the line through `a` along direction `dir` crosses the outline —

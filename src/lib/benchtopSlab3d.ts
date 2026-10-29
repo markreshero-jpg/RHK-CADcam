@@ -78,8 +78,12 @@ export function undersideOutline(segs: BenchtopSegment[], setback: (i: number) =
  * to `bottomZ`, its inner face from the underside (`under`) down, and its top
  * is the 45° mitre against the slab. Plan (x, y) → world (x, height, y).
  */
-export function apronStrip(outer: P[], inner: P[], topZ: number, under: number, bottomZ: number): BufferGeometry {
-  const pos: number[] = []
+export function apronStrip(
+  outer: P[], inner: P[], topZ: number, under: number, bottomZ: number,
+  /** Built-up waterfall ends: no cap there (an apronCornerTris wedge joins on), plus the wedges' triangles. */
+  opt: { capStart?: boolean; capEnd?: boolean; extra?: number[] } = {},
+): BufferGeometry {
+  const pos: number[] = [...(opt.extra ?? [])]
   const w = (p: P, h: number) => [p.x, h, p.y]
   const tri = (a: number[], b: number[], c: number[], dir: number[]) => {
     const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
@@ -103,12 +107,39 @@ export function apronStrip(outer: P[], inner: P[], topZ: number, under: number, 
     tri(w(o, bottomZ), w(i, under), w(i, bottomZ), dir)
   }
   const n = outer.length - 1
-  cap(outer[0], inner[0], { x: outer[0].x - outer[1].x, y: outer[0].y - outer[1].y })
-  cap(outer[n], inner[n], { x: outer[n].x - outer[n - 1].x, y: outer[n].y - outer[n - 1].y })
+  if (opt.capStart !== false) cap(outer[0], inner[0], { x: outer[0].x - outer[1].x, y: outer[0].y - outer[1].y })
+  if (opt.capEnd !== false) cap(outer[n], inner[n], { x: outer[n].x - outer[n - 1].x, y: outer[n].y - outer[n - 1].y })
   const g = new BufferGeometry()
   g.setAttribute('position', new Float32BufferAttribute(pos, 3))
   g.computeVertexNormals()
   return g
+}
+
+/**
+ * Built-up waterfall corner (benchtopGeometry waterfallBuildUp): the end of a
+ * mitred apron over the leg's face piece. c = the outer corner, along = unit
+ * along the apron away from c, inward = unit into the top (= along the leg).
+ * The wedge fills the apron's first D mm above the front-plane 45° (v = topZ − u)
+ * the face piece stops at; the apron strip itself starts D along. Triangles
+ * (positions) for apronStrip's `extra` — its open face is the strip's start.
+ */
+export function apronCornerTris(c: P, along: P, inward: P, D: number, T: number, topZ: number): number[] {
+  const pt = (a: number, u: number, v: number) => [c.x + inward.x * a + along.x * u, v, c.y + inward.y * a + along.y * u]
+  const F1 = pt(0, 0, topZ), F2 = pt(0, D, topZ), F3 = pt(0, D, topZ - D)
+  const B1 = pt(T, T, topZ - T), B2 = pt(T, D, topZ - T), B3 = pt(T, D, topZ - D)
+  const pos: number[] = []
+  const tri = (a: number[], b: number[], c2: number[], dir: number[]) => {
+    const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], v = [c2[0] - a[0], c2[1] - a[1], c2[2] - a[2]]
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]]
+    if (n[0] * dir[0] + n[1] * dir[1] + n[2] * dir[2] >= 0) pos.push(...a, ...b, ...c2)
+    else pos.push(...a, ...c2, ...b)
+  }
+  const out = [-inward.x, 0, -inward.y], up = [inward.x, 1, inward.y], dn = [-along.x, -1, -along.y]
+  tri(F1, F2, F3, out)                           // front face
+  tri(B1, B2, B3, [inward.x, 0, inward.y])       // inner face
+  tri(F1, F2, B2, up); tri(F1, B2, B1, up)       // mitre under the slab
+  tri(F1, F3, B3, dn); tri(F1, B3, B1, dn)       // 45° onto the face piece
+  return pos
 }
 
 function inPoly(p: P, poly: P[]): boolean {

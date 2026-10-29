@@ -9,11 +9,11 @@
 
 import type { Wall, Room, BenchtopInstance, BenchtopEdgeProfile } from './types'
 import { cabVExtent, type Pt } from './geometry'
-import { btSegments, outwardNormal, effectiveProfileId } from './benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallBuildUp } from './benchtopGeometry'
 import { wallFrame, alongOf, offOf, type WallSide } from './benchtopAnchor'
 
 export interface WaterfallLeg {
-  /** Plan footprint: edge p0, p1, then both inset by the top's thickness. */
+  /** Plan footprint: edge p0, p1, then both inset by the top's thickness (built-up: the apron's drop). */
   pts: Pt[]
   /** Leg top height above the floor (the top surface — conservative for butt). */
   topZ: number
@@ -34,7 +34,9 @@ export function waterfallLegs(
       const pid = effectiveProfileId(s, defaultProfileId)
       if (!pid || profiles[pid]?.generates !== 'waterfall') return
       const n = outwardNormal(segs, i)
-      const inset = (p: Pt) => ({ x: p.x - n.x * thick.total, y: p.y - n.y * thick.total })
+      // A built-up leg (face piece + return at an apron end) is the apron's drop deep.
+      const t = waterfallBuildUp(segs, i, profiles, defaultProfileId, thick.total).depth
+      const inset = (p: Pt) => ({ x: p.x - n.x * t, y: p.y - n.y * t })
       legs.push({ pts: [s.p0, s.p1, inset(s.p1), inset(s.p0)], topZ })
     })
   }

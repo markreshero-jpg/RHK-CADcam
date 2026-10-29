@@ -59,5 +59,5 @@ not read yet (Synology online-only file, download failed). Quote not read either
   BT2 island 2511 x 900 (MA60 front/back/right end, WF waterfall left end); BT3 small cupboard 966 x 320 (MA60
   front + seen end). Butlers — BT1 west 600 x 1630 + BT2 south 2540 x 600 running through the corner (butt joint),
   arris edges, 20 past the end panel.
-- Waterfalls are the WF profile on a 20 slab, so the leg reads 20 thick; the drawing's 60 waterfall (built-up)
-  is in the notes only.
+- Waterfalls: WF on a 20 slab next to MA60 aprons now draws as a built-up 60 waterfall (2026-10-29): 60 face
+  piece mitred to the leg + apron, 100 return behind it. Re-resolve the tops to get the face/return supply parts.

@@ -3,7 +3,7 @@ import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
 import {
-  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin,
+  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, WATERFALL_RETURN_MM,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
 import { edgeTape, tapeable, tapeOverridden, tapeColour } from '@/src/lib/benchtopEdgeband'
@@ -331,14 +331,27 @@ export default function CanvasSVG({
                   const pid = effectiveProfileId(s, defaultProfileId)
                   if (!pid || edgeProfiles?.[pid]?.generates !== 'waterfall') return null
                   const n = outwardNormal(segs, i)
-                  const a = { x: s.p0.x - n.x * t, y: s.p0.y - n.y * t }
-                  const b = { x: s.p1.x - n.x * t, y: s.p1.y - n.y * t }
+                  // Built-up ends (apron deeper than the top): face piece the drop
+                  // wide, 45° to the leg, and the return behind it.
+                  const bu = waterfallBuildUp(segs, i, edgeProfiles ?? {}, defaultProfileId, t)
+                  const L = segLength(s)
+                  const d = { x: (s.p1.x - s.p0.x) / L, y: (s.p1.y - s.p0.y) / L }
+                  const at = (a: number, u: number) => `${s.p0.x + d.x * a - n.x * u},${s.p0.y + d.y * a - n.y * u}`
+                  const lines = [[[bu.start ? t : 0, t], [bu.end ? L - t : L, t]]]
+                  const R = Math.min(WATERFALL_RETURN_MM, Math.max(0, L - 2 * t))
+                  for (const [D, a0, sg] of [[bu.start, 0, 1], [bu.end, L, -1]]) {
+                    if (!D) continue
+                    const A = (a: number) => a0 + sg * a
+                    lines.push([[A(0), 0], [A(t), t]], [[A(t), t], [A(t), D - t], [A(t + R), D - t], [A(t + R), D], [A(0), D]], [[A(t), D - t], [A(t), D]])
+                  }
                   return (
-                    <line key={`wf${i}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                      stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
-                      opacity={layers.op('benchtops')}
-                      strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / lz}
-                      style={{ pointerEvents: 'none' }} />
+                    <g key={`wf${i}`} stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
+                      opacity={layers.op('benchtops')} fill="none" style={{ pointerEvents: 'none' }}>
+                      {lines.map((pl, k) => (
+                        <polyline key={k} points={pl.map(([a, u]) => at(a, u)).join(' ')}
+                          strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / lz * (k ? 0.75 : 1)} />
+                      ))}
+                    </g>
                   )
                 })
               })()}

@@ -127,4 +127,16 @@ describe('resolver — shape-true parts', () => {
     const parts = resolveBenchtopParts(input(bt(segs), method({ construction: 'solid' })))
     expect(parts.find(p => p.part_role === 'apron_strip')).toMatchObject({ length_mm: 2000, width_mm: 60, thickness_mm: 16.5 })
   })
+  it('built-up waterfall: a mitred apron deeper than the top adds a face piece + return at that end', () => {
+    // Wall run (RHK6592): back + right on walls, APR 60 front, waterfall on the left.
+    const segs = poly([[0, 0], [1560, 0], [1560, 600], [0, 600]], [0, 1])
+    segs[2].edge = { profile_id: APR }
+    segs[3].edge = { profile_id: WF, waterfall_join: 'mitre' }
+    const all = resolveBenchtopParts(input(bt(segs), method({ construction: 'outsourced', active_part_roles: ['stone_slab'] })))
+    const parts = byLabel(all)
+    expect(parts['Waterfall Leg — mitred']).toMatchObject({ length_mm: 920, width_mm: 600, thickness_mm: 20 })
+    expect(parts['Waterfall Face (APR)']).toMatchObject({ part_role: 'waterfall_face', length_mm: 920, width_mm: 60, thickness_mm: 20, supply_item: true })
+    expect(parts['Waterfall Return']).toMatchObject({ part_role: 'waterfall_return', length_mm: 900, width_mm: 100, thickness_mm: 20, supply_item: true })
+    expect(all.filter(p => p.part_role === 'waterfall_face')).toHaveLength(1)   // the back end is on the wall
+  })
 })

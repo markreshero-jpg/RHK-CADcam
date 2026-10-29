@@ -22,7 +22,7 @@ import type { BenchtopInstance, BenchtopEdgeProfile, Wall } from '@/src/lib/type
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import {
-  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin,
+  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin, waterfallBuildUp,
 } from '@/src/lib/benchtopGeometry'
 import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, type WallSide } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
@@ -140,8 +140,14 @@ export default function BenchtopElevation({
             const m = segMid(s)
             const outer = alongOf(f, m), inner = alongOf(f, inset(m))
             const endOn = Math.abs(dot(n, f.d)) > 0.7
+            // Built-up end facing the viewer (waterfallBuildUp): the face piece reads
+            // the apron's drop wide, 45° up into the apron.
+            const bu = waterfallBuildUp(segs, i, profiles, defaultProfileId, thick.total)
+            const faces = (j: number) => dot(outwardNormal(segs, (j + segs.length) % segs.length), f.n) > 0.5
+            const D = !endOn ? 0 : bu.start && faces(i - 1) ? bu.start : bu.end && faces(i + 1) ? bu.end : 0
             return {
-              i, a: Math.min(...lts), b: Math.max(...lts), endOn, outer, inner,
+              i, a: Math.min(...lts), b: Math.max(...lts), endOn, outer, inner, D,
+              innerD: outer + Math.sign(inner - outer) * D,
               join: waterfallJoin(s),
               // An end-on leg at the band's end shares the band's end line.
               atEnd: endOn && (Math.abs(outer - t0) < 1 ? 'left' as const : Math.abs(outer - t1) < 1 ? 'right' as const : null),
@@ -163,8 +169,19 @@ export default function BenchtopElevation({
             const ats = pts.flatMap(p => [p, { x: p.x - n.x * thick.total, y: p.y - n.y * thick.total }]).map(p => alongOf(f, p))
             return { i, a: Math.min(...ats), b: Math.max(...ats), yLow: yTop + Number(prof!.apron_drop_mm) }
           })
+        // An apron end over a built-up face piece starts on the 45° (outer + T at the
+        // underside, outer + D at the apron's bottom).
+        const apronPts = (ap: typeof aprons[number]) => {
+          const end = (t: number) => legs.find(l => l.D && Math.abs(l.outer - t) < 1)
+          const L = end(ap.a), R = end(ap.b)
+          const tip = (l: typeof legs[number], k: number) => l.outer + Math.sign(l.inner - l.outer) * k
+          return [
+            [L ? tip(L, thick.total) : ap.a, yBot], [R ? tip(R, thick.total) : ap.b, yBot],
+            [R ? tip(R, R.D) : ap.b, ap.yLow], [L ? tip(L, L.D) : ap.a, ap.yLow],
+          ]
+        }
         const apronCovers = (() => {
-          if (!aprons.length || mL || mR) return false
+          if (!aprons.length || mL || mR || legs.some(l => l.D)) return false
           let reach = t0
           for (const a of [...aprons].sort((p, q) => p.a - q.a)) { if (a.a > reach + 1) return false; reach = Math.max(reach, a.b) }
           return reach >= t1 - 1
@@ -179,6 +196,7 @@ export default function BenchtopElevation({
           ...(mL ? [[mL.inner, yBot]] : [[t0, yBand]]),
         ].map(q => q.join(',')).join(' ')
         const legPts = (l: typeof legs[number]) => {
+          if (l.D) return [[l.outer, yTop], [l.outer, roomH], [l.innerD, roomH], [l.innerD, yTop + l.D]]
           if (l.endOn && l.join === 'mitre') {
             // outer face to the top surface, 45° back to the underside
             return [[l.outer, yTop], [l.outer, roomH], [l.inner, roomH], [l.inner, yBot]]
@@ -193,7 +211,7 @@ export default function BenchtopElevation({
             strokeDasharray={lp.strokeDasharray}
             style={{ cursor: 'pointer' }}
             onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
-            <title>{`Waterfall — ${l.join === 'mitre' ? 'mitred' : 'butt (top sits on the leg)'}`}</title>
+            <title>{`Waterfall — ${l.join === 'mitre' ? 'mitred' : 'butt (top sits on the leg)'}${l.D ? ` · built up ${l.D}` : ''}`}</title>
           </polygon>
         )
         // Face-on mitred legs cover the band (the joint is the top edge itself).
@@ -218,7 +236,7 @@ export default function BenchtopElevation({
 
             {/* Apron strips under the band (when they don't cover the whole span) */}
             {!apronCovers && aprons.map(a => (
-              <polygon key={`ap${a.i}`} points={[[a.a, yBot], [a.b, yBot], [a.b, a.yLow], [a.a, a.yLow]].map(q => q.join(',')).join(' ')}
+              <polygon key={`ap${a.i}`} points={apronPts(a).map(q => q.join(',')).join(' ')}
                 fill={fill} fillOpacity={fillOp}
                 stroke={isSel ? '#f59e0b' : stroke} strokeWidth={bandW(false)}
                 strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}

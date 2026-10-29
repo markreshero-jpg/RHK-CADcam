@@ -22,7 +22,7 @@
 import type { BenchtopScheduleRow, BenchtopPartRole, BenchtopBuildMethod, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { BenchtopResolverInput, ResolvedBenchtopPart, BenchtopPartMeta } from './types'
 import { DEFAULT_CROSS_MEMBER_SPACING, crossMemberPositions } from './construction'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints } from '@/src/lib/benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints, WATERFALL_RETURN_MM } from '@/src/lib/benchtopGeometry'
 import {
   splitIntoPieces, pieceFrame, pieceArea, isRectangle, crossIntervals, edgeLength, pieceContains,
   type PieceSeg, type PieceFrame,
@@ -314,6 +314,28 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
           grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
           supply_item: outsourced, piece: pieceNo, meta: { waterfall_join: join },
         })
+        // Built-up ends (benchtopGeometry waterfallBuildUp): where the leg meets a
+        // straight mitred apron deeper than the top, a face piece the apron's drop
+        // wide (floor to the top surface, 45° both ways) + a return behind it
+        // (floor to the underside).
+        for (const j of [i - 1, i + 1]) {
+          const q = ps[(j + np) % np], qp = q.type === 'line' ? profileOf(q) : undefined
+          const D = qp?.generates === 'apron' ? Number(qp.apron_drop_mm) || 0 : 0
+          if (D <= thick.total) continue
+          push({
+            ...wtMaterial, part_role: 'waterfall_face', label: `Waterfall Face (${qp!.code ?? qp!.name})${sfx}`,
+            length_mm: Math.round(sitsAt + thick.total), width_mm: D, thickness_mm: thick.top, quantity: 1,
+            grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
+            supply_item: outsourced, piece: pieceNo,
+          })
+          const R = Math.min(WATERFALL_RETURN_MM, Math.max(0, Math.round(len - 2 * thick.total)))
+          if (R > 0) push({
+            ...wtMaterial, part_role: 'waterfall_return', label: `Waterfall Return${sfx}`,
+            length_mm: Math.round(sitsAt), width_mm: R, thickness_mm: thick.top, quantity: 1,
+            grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
+            supply_item: outsourced, piece: pieceNo,
+          })
+        }
       } else if (prof.generates === 'apron' && prof.apron_drop_mm) {
         const id = tapeOf(s)   // the apron's bottom edge
         push({
