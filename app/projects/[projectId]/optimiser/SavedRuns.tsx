@@ -4,12 +4,13 @@
 // Stage 1 — Saved runs (src/lib/optimiser/savedRuns.ts). Every G-code
 // generation saves its run; reopening one puts the workspace back as it was
 // (layout, holes, programs) and jumps to Labels & Cut Sheets — for when you
-// left the optimiser before printing labels.
+// left the optimiser before printing labels. Open run file loads the backup
+// copy (RHK6570-R3.rhkrun) and puts the run back if it was deleted here.
 // ============================================================
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
-import { listRuns, loadRun, deleteRun, type RunListItem } from '@/src/lib/optimiser/savedRuns'
+import { listRuns, loadRun, deleteRun, parseRunFile, runExists, saveRun, type RunListItem, type RunSnapshot, type SavedRunFile } from '@/src/lib/optimiser/savedRuns'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 
 const when = (iso: string) => {
@@ -24,6 +25,8 @@ export default function SavedRuns() {
   const [busy, setBusy] = useState<string | null>(null)
   const [confirmDel, setConfirmDel] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     let dead = false
@@ -31,22 +34,49 @@ export default function SavedRuns() {
     return () => { dead = true }
   }, [projectId, savedRun?.id])
 
+  async function restore(id: string, name: string, rs: RunSnapshot, files: SavedRunFile[]) {
+    const store = useOptiStore.getState()
+      // Batch runs: bring the run's projects in (and drop any others) before the layout lands.
+    for (const pid of store.includedProjectIds) if (!rs.includedProjectIds.includes(pid)) store.removeProjectData(pid)
+    for (const pid of rs.includedProjectIds) {
+      if (!useOptiStore.getState().includedProjectIds.includes(pid)) store.mergeProjectData(pid, await loadProjectParts(pid))
+    }
+    store.restoreRun(rs, {
+      id, runNo: rs.runNo ?? null, name, savedAt: rs.savedAt, nest: rs.nestResult, files,
+      drillsBySheet: new Map(rs.drills), sim: rs.sim,
+    })
+  }
+
   async function reopen(id: string) {
-    setBusy(id); setError(null)
+    setBusy(id); setError(null); setNote(null)
     try {
       const { name, snap: rs, files } = await loadRun(id)
-      const store = useOptiStore.getState()
-      // Batch runs: bring the run's projects in (and drop any others) before the layout lands.
-      for (const pid of store.includedProjectIds) if (!rs.includedProjectIds.includes(pid)) store.removeProjectData(pid)
-      for (const pid of rs.includedProjectIds) {
-        if (!useOptiStore.getState().includedProjectIds.includes(pid)) store.mergeProjectData(pid, await loadProjectParts(pid))
-      }
-      store.restoreRun(rs, {
-        id, runNo: rs.runNo ?? null, name, savedAt: rs.savedAt, nest: rs.nestResult, files,
-        drillsBySheet: new Map(rs.drills), sim: rs.sim,
-      })
+      await restore(id, name, rs, files)
     } catch (e) {
       setError(`Couldn't reopen: ${e instanceof Error ? e.message : String(e)}`)
+    } finally { setBusy(null) }
+  }
+
+  // The backup copy: open it; if the run was deleted here, put it back first
+  // (same number and date) so it's in Saved runs again.
+  async function openFile(f: File) {
+    setBusy('file'); setError(null); setNote(null)
+    try {
+      const { file, files } = parseRunFile(await f.text())
+      const rs = file.snapshot
+      if (!rs.includedProjectIds.includes(projectId)) throw new Error(`it is for ${file.jobNumber ?? 'another job'} — open it from that job's optimiser.`)
+      let id = file.id
+      if (!id || !(await runExists(id))) {
+        const { v: _v, savedAt: _s, runNo: _r, files: _f, drills: _d, sim: _m, ...state } = rs
+        id = (await saveRun({
+          projectId: file.projectId, name: file.name, runNo: rs.runNo, savedAt: rs.savedAt,
+          state, files, drillsBySheet: new Map(rs.drills), sim: rs.sim,
+        })).id
+        setNote(`${file.name} was put back in Saved runs.`)
+      }
+      await restore(id, file.name, rs, files)
+    } catch (e) {
+      setError(`Couldn't open the run file: ${e instanceof Error ? e.message : String(e)}`)
     } finally { setBusy(null) }
   }
 
@@ -62,7 +92,17 @@ export default function SavedRuns() {
       <h3 className="text-xs font-semibold text-ink mb-1">Saved runs</h3>
       <p className="text-[11px] text-ink-subtle mb-3">
         Each time G-code is generated (Stage 6) the run is saved with a number — RHK6570-R3 — that is also on its NC file names, program headers, cut sheets and labels. Reopen one to print its labels and cut sheets or download its programs again — no re-nesting.
+        Download all also saves a run file (RHK6570-R3.rhkrun) as a backup copy next to the NC files.
       </p>
+      <div className="mb-3">
+        <button onClick={() => fileRef.current?.click()} disabled={!!busy}
+          className="text-[11px] px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-50 transition-colors">
+          {busy === 'file' ? 'Opening…' : 'Open run file…'}
+        </button>
+        <input ref={fileRef} type="file" accept=".rhkrun,.json" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) openFile(f) }} />
+      </div>
+      {note && <p className="text-xs text-green-500 mb-2">{note}</p>}
       {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
       {!runs ? <p className="text-xs text-ink-subtle">Loading…</p>
         : !runs.length ? <p className="text-xs text-ink-subtle">No saved runs for this job yet.</p>

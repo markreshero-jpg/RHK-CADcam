@@ -7,6 +7,10 @@
 //                         settings, the nested parts as they were cut, holes
 //   nest_sheets.gcode   — one program per sheet
 //   nest_placements     — flat placement rows (reporting)
+// A run file (RHK6570-R3.rhkrun, RunFile) is the same run as one JSON file,
+// downloaded next to the NC files — the backup that survives the run being
+// deleted from the app (like Cabinet Vision's export file). Opening it from
+// Stage 1 puts the run back.
 // ============================================================
 
 import { supabase } from '@/src/lib/supabase'
@@ -71,19 +75,26 @@ export async function reserveRunNo(projectId: string): Promise<number> {
   return data
 }
 
-/** Save a run. `replaceId` (the same layout generated again) is deleted first. */
-export async function saveRun(inp: {
-  projectId: string; name: string; runNo?: number | null; state: RunState
-  files: SavedRunFile[]; drillsBySheet: Map<number, SheetDrill[]>; sim?: unknown; replaceId?: string | null
-}): Promise<{ id: string; savedAt: string }> {
-  const { state } = inp
-  const savedAt = new Date().toISOString()
-  const snapshot: RunSnapshot = {
-    v: 2, savedAt, runNo: inp.runNo ?? null, ...state,
+export interface RunInput {
+  runNo?: number | null; state: RunState
+  files: SavedRunFile[]; drillsBySheet: Map<number, SheetDrill[]>; sim?: unknown
+  savedAt?: string             // kept when a run file is put back
+}
+
+export function buildSnapshot(inp: RunInput): RunSnapshot {
+  return {
+    v: 2, savedAt: inp.savedAt ?? new Date().toISOString(), runNo: inp.runNo ?? null, ...inp.state,
     files: inp.files.map(({ gcode: _g, ...f }) => f),
     drills: [...inp.drillsBySheet],
     sim: inp.sim,
   }
+}
+
+/** Save a run. `replaceId` (the same layout generated again) is deleted first. */
+export async function saveRun(inp: RunInput & { projectId: string; name: string; replaceId?: string | null }): Promise<{ id: string; savedAt: string }> {
+  const { state } = inp
+  const snapshot = buildSnapshot(inp)
+  const savedAt = snapshot.savedAt
   if (inp.replaceId) await supabase.from('nest_jobs').delete().eq('id', inp.replaceId)   // sheets + placements cascade
 
   const { data: job, error: jErr } = await supabase.from('nest_jobs').insert({
@@ -127,16 +138,16 @@ export async function saveRun(inp: {
 /** Runs that include this project (as the initiating project or in a batch), newest first. */
 export async function listRuns(projectId: string): Promise<RunListItem[]> {
   const { data, error } = await supabase.from('nest_jobs')
-    .select('id,name,created_at,project_ids,sheets:snapshot->nestResult->sheets,v:snapshot->v')
+    .select('id,name,generated_at,project_ids,sheets:snapshot->nestResult->sheets,v:snapshot->v')
     .or(`project_id.eq.${projectId},project_ids.cs.{${projectId}}`)
-    .order('created_at', { ascending: false }).limit(50)
+    .order('generated_at', { ascending: false }).limit(50)
   if (error) throw new Error(error.message)
   return (data ?? [])
     .filter(r => (r as { v?: number }).v === 2)
     .map(r => {
-      const row = r as { id: string; name: string | null; created_at: string; project_ids: string[] | null; sheets: { placements: unknown[] }[] | null }
+      const row = r as { id: string; name: string | null; generated_at: string; project_ids: string[] | null; sheets: { placements: unknown[] }[] | null }
       return {
-        id: row.id, name: row.name ?? 'Run', savedAt: row.created_at,
+        id: row.id, name: row.name ?? 'Run', savedAt: row.generated_at,
         sheets: row.sheets?.length ?? 0, parts: (row.sheets ?? []).reduce((n, s) => n + s.placements.length, 0),
         batch: (row.project_ids?.length ?? 1) > 1,
       }
@@ -156,6 +167,46 @@ export async function loadRun(id: string): Promise<{ name: string; snap: RunSnap
     return f && gcode ? [{ ...f, gcode }] : []
   })
   return { name: (job as { name: string | null }).name ?? 'Run', snap, files }
+}
+
+// ── Run file (backup) ─────────────────────────────────────────────────────────
+
+const RUN_FILE_KIND = 'rhk-optimiser-run'
+
+export interface RunFile {
+  kind: typeof RUN_FILE_KIND; v: 1
+  id: string | null; name: string; projectId: string; jobNumber: string | null
+  snapshot: RunSnapshot
+  gcode: [number, string][]    // sheetIndex → program
+}
+
+export function runFileName(jobNumber: string | null, runNo: number | null | undefined, savedAt: string): string {
+  return `${runNo ? runCode(jobNumber, runNo) : `${jobNumber || 'JOB'} run ${savedAt.slice(0, 10)}`}.rhkrun`
+}
+
+export function runFileText(f: Omit<RunFile, 'kind' | 'v' | 'snapshot' | 'gcode'> & { run: RunInput }): string {
+  const file: RunFile = {
+    kind: RUN_FILE_KIND, v: 1, id: f.id, name: f.name, projectId: f.projectId, jobNumber: f.jobNumber,
+    snapshot: buildSnapshot(f.run),
+    gcode: f.run.files.map(x => [x.sheetIndex, x.gcode]),
+  }
+  return JSON.stringify(file)
+}
+
+export function parseRunFile(text: string): { file: RunFile; files: SavedRunFile[] } {
+  let file: RunFile
+  try { file = JSON.parse(text) } catch { throw new Error('That isn’t a run file.') }
+  if (file?.kind !== RUN_FILE_KIND || file.snapshot?.v !== 2) throw new Error('That isn’t a run file.')
+  const gcode = new Map(file.gcode)
+  const files = file.snapshot.files.flatMap(f => gcode.has(f.sheetIndex) ? [{ ...f, gcode: gcode.get(f.sheetIndex)! }] : [])
+  return { file, files }
+}
+
+/** Is this saved run still in the app? */
+export async function runExists(id: string | null): Promise<boolean> {
+  if (!id) return false
+  const { data } = await supabase.from('nest_jobs').select('id').eq('id', id).maybeSingle()
+  return !!data
 }
 
 export async function deleteRun(id: string): Promise<void> {

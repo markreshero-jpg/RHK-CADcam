@@ -281,7 +281,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     // ── Saved run round trip (savedRuns.ts): save, list, reopen, compare, delete ──
     let roundTrip: Record<string, unknown> | undefined
     if (cfg.roundTrip && !blocking.length) {
-      const { saveRun, listRuns, loadRun, deleteRun } = await import('../savedRuns')
+      const { saveRun, listRuns, loadRun, deleteRun, runFileText, parseRunFile, runExists } = await import('../savedRuns')
       const nested = new Set(Object.values(index).map(p => p.baseUid))
       const files = gen.map(g => ({ sheetIndex: g.sheet.index, fileName: g.fileName, gcode: g.gcode, outlines: outlinesFor(g.sheet) }))
       const { id } = await saveRun({
@@ -306,8 +306,15 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
           holesSame: canon(back.snap.drills) === canon([...drillsBySheet]),
           parts: back.snap.parts.length, placementRows: count, runNo: back.snap.runNo,
           snapshotKB: Math.round(JSON.stringify(back.snap).length / 1024),
+          // Run file (backup): written from the reopened run, read back.
+          runFile: (() => {
+            const text = runFileText({ id, name: back.name, projectId: snap.projectId, jobNumber: snap.jobNumber, run: { runNo: back.snap.runNo, savedAt: back.snap.savedAt, state: back.snap, files: back.files, drillsBySheet: new Map(back.snap.drills) } })
+            const rf = parseRunFile(text)
+            return { kB: Math.round(text.length / 1024), layoutSame: canon(rf.file.snapshot.nestResult) === canon(nestResult), gcodeSame: rf.files.every((x, i) => x.gcode === gen[i].gcode), runNo: rf.file.snapshot.runNo }
+          })(),
         }
       } finally { await deleteRun(id) }
+      roundTrip.deletedGone = !(await runExists(id))
     }
 
     const summary = {

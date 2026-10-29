@@ -17,7 +17,7 @@ import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
-import { saveRun, reserveRunNo, runCode, type SheetDrill, type SavedRun } from '@/src/lib/optimiser/savedRuns'
+import { saveRun, reserveRunNo, runCode, runFileText, runFileName, type SheetDrill, type SavedRun, type RunInput } from '@/src/lib/optimiser/savedRuns'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
 interface SimState { coord: SimCoord | null; drillBlock: DrillBlockConfig | null; drillCoord: SimDrillCoord | null }
@@ -296,21 +296,36 @@ export default function Stage6Gcode() {
     return `${runNo != null ? runCode(snap.jobNumber, runNo) : (snap.jobNumber ?? snap.projectName)} ${runRooms()}`
   }
 
+  // The run as saved: the workspace now plus the run's own layout, files and holes.
+  function runInput(run: SavedRun): RunInput {
+    const st = useOptiStore.getState()
+    const nested = new Set(Object.values(st.partIndex).map(p => p.baseUid))
+    return {
+      runNo: run.runNo, savedAt: run.savedAt,
+      state: {
+        nestResult: run.nest, partIndex: st.partIndex, selectedUids: [...st.selectedUids], cutQty: st.cutQty,
+        filterRoomIds: st.filterRoomIds, filterCabinetIds: st.filterCabinetIds, filterMaterialIds: st.filterMaterialIds,
+        includedProjectIds: st.includedProjectIds, settings: st.settings, stock: st.stock,
+        machineId: st.machineId, profileId: st.profileId,
+        parts: snap.parts.filter(p => nested.has(p.uid)),
+      },
+      files: run.files, drillsBySheet: run.drillsBySheet, sim: run.sim,
+    }
+  }
+
+  // Backup copy of the run, kept next to the NC files (opened from Stage 1).
+  function downloadRunFile() {
+    if (!current) return
+    const text = runFileText({ id: current.id, name: current.name, projectId: snap.projectId, jobNumber: snap.jobNumber, run: runInput(current) })
+    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url; a.download = runFileName(snap.jobNumber, current.runNo, current.savedAt); a.click()
+    URL.revokeObjectURL(url)
+  }
+
   async function save(run: SavedRun, replaceId: string | null) {
     try {
-      const st = useOptiStore.getState()
-      const nested = new Set(Object.values(st.partIndex).map(p => p.baseUid))
-      const { id, savedAt } = await saveRun({
-        projectId: snap.projectId, name: run.name, runNo: run.runNo, replaceId,
-        state: {
-          nestResult: run.nest, partIndex: st.partIndex, selectedUids: [...st.selectedUids], cutQty: st.cutQty,
-          filterRoomIds: st.filterRoomIds, filterCabinetIds: st.filterCabinetIds, filterMaterialIds: st.filterMaterialIds,
-          includedProjectIds: st.includedProjectIds, settings: st.settings, stock: st.stock,
-          machineId: st.machineId, profileId: st.profileId,
-          parts: snap.parts.filter(p => nested.has(p.uid)),
-        },
-        files: run.files, drillsBySheet: run.drillsBySheet, sim: run.sim,
-      })
+      const { id, savedAt } = await saveRun({ projectId: snap.projectId, name: run.name, replaceId, ...runInput(run) })
       if (useOptiStore.getState().savedRun?.nest === run.nest) setSavedRun({ ...run, id, savedAt })
       setSaved(savedNote(savedAt)); setSaveFailed(false)
     } catch (e) {
@@ -339,8 +354,12 @@ export default function Stage6Gcode() {
           {files.length > 0 && <>
             <button onClick={() => setSimulating(true)}
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">▶ Simulate</button>
-            <button onClick={() => files.forEach(f => download(f.fileName, f.gcode))}
+            <button onClick={() => { files.forEach(f => download(f.fileName, f.gcode)); downloadRunFile() }}
+              title="Every program plus the run file (backup copy of the run)"
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Download all</button>
+            {current && <button onClick={downloadRunFile}
+              title="Backup copy of this run — keep it with the NC files; Stage 1 → Open run file puts it back"
+              className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Run file</button>}
             {saveFailed && <button onClick={retrySave} disabled={busy}
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-50 transition-colors">Retry save</button>}
           </>}
