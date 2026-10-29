@@ -23,6 +23,7 @@ import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 import { filterRemovedParts } from '@/src/lib/resolver/filterHidden'
 import { splitCaseParts, splitPieceFor, isSplitKey } from '@/src/lib/cabinetSplit'
 import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
+import { MARKER_DIA, MARKER_DEPTH } from '@/src/lib/resolver/resolveDrawerMarkers'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -250,6 +251,18 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
       add('face_zones', `zone_${z.row_index}_${z.col_index}`, zoneFrame(z),
         { x: z.X + p.x, y: z.Y + p.y, z: z.Z, axis: 'z+', radius: h.hole_dia / 2, depthLen: z.DZ },
         'handle', opKey, AUTO_TOOL, 'face_back')
+    }
+  }
+
+  // 4b. Drawer front marker pricks (z_handles D22): 1 hole on the top front,
+  //     2 on the next …, 1 deep into the back face, bottom left (front view).
+  for (const z of rp.face_zones) {
+    if (!z.marker_holes?.length) continue
+    const opKey = `df_marker_${z.row_index}_${z.col_index}`
+    for (const p of z.marker_holes) {
+      add('face_zones', `zone_${z.row_index}_${z.col_index}`, zoneFrame(z),
+        { x: z.X + p.x, y: z.Y + p.y, z: z.Z, axis: 'z+', radius: MARKER_DIA / 2, depthLen: MARKER_DEPTH },
+        'df_marker', opKey, AUTO_TOOL, 'face_back')
     }
   }
 

@@ -439,6 +439,27 @@ tapes its long edges.
   - Shaped facet rails are untouched.
   - Tests: `fingerRailOps.test.ts`.
 
+**D22. Drawer front marker pricks (Mark, 2026-10-29 — as Cabinet Vision).**
+Small holes in the back of each drawer front so the shop knows which front it
+is, and which edge is the bottom, once the label is off.
+- Front 1 (the top one) gets 1 hole, front 2 gets 2, and so on. Each column of
+  drawers counts from its own top front.
+- 5 dia × 1 deep, drilled into the back face.
+- First hole 15 up from the bottom and 60 in from the LEFT edge as seen from
+  the front (Mark). The rest run inward along the bottom, 10 apart.
+- Rule `DF_MARKER` (boolean, unset = on), kept out of the method rule editor
+  like HANDLE_DRILL. Switch: Job Properties → Cabinet Standards → Hardware
+  Schedules → "Drawer Front Markers". Room / cabinet can set it through
+  `rule_overrides` (no UI there yet).
+- **As built:**
+  - `src/lib/resolver/resolveDrawerMarkers.ts` puts `marker_holes` (zone-local,
+    front view) on each drawer_face zone, run straight after `resolveHandles`.
+    Facet fronts of shaped cabinets are skipped.
+  - seamDrillSync step 4b writes them as `df_marker` drill rows on the front's
+    `face_back`, auto tool by diameter, like the handle holes.
+  - Not drawn on the elevation / 3D (only in the Part Editor and the CNC).
+  - Tests: `drawerMarkers.test.ts`.
+
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
 - **Reuse, don't rebuild.** Same loader as slides and fixtures

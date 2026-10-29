@@ -22,6 +22,7 @@ import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
 import { resolveHandles, linearHandleParts } from './resolveHandles'
+import { resolveDrawerMarkers } from './resolveDrawerMarkers'
 import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack, type FingerRail } from './resolveFingerRails'
 import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
@@ -65,6 +66,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const openCells = cab.footprint ? [] : openZones
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
+  // Drawer front marker pricks: 1 hole top front, 2 the next … (z_handles D22).
+  resolveDrawerMarkers(cab, zones)
   // Linear strip handles (z_handles D17): a strip of each front's board on its face.
   caseParts.push(...linearHandleParts(zones))
   // Face fillers with the support carcass off: return cleats (z_angled_filler).

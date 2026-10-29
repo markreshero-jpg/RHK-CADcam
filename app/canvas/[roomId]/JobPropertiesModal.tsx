@@ -191,6 +191,9 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   // Handle holes (z_handles D13), job level: rule_overrides.HANDLE_DRILL, unset = drill.
   const [handleDrill, setHandleDrill] = useState<'on' | 'off'>(
     () => (project.rule_overrides as Record<string, unknown> | null)?.HANDLE_DRILL === false ? 'off' : 'on')
+  // Drawer front marker pricks (z_handles D22), job level: rule_overrides.DF_MARKER, unset = on.
+  const [dfMarker, setDfMarker] = useState<'on' | 'off'>(
+    () => (project.rule_overrides as Record<string, unknown> | null)?.DF_MARKER === false ? 'off' : 'on')
   const [handleScheds, setHandleScheds] = useState<SchedItem[]>([])
   const [slideScheds,  setSlideScheds]  = useState<SchedItem[]>([])
   const [hingeScheds,  setHingeScheds]  = useState<SchedItem[]>([])
@@ -264,6 +267,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
     writeClassOverrides(newOverrides, classVals, builderRules)
     if (handleDrill === 'off') newOverrides.HANDLE_DRILL = false
     else delete newOverrides.HANDLE_DRILL
+    if (dfMarker === 'off') newOverrides.DF_MARKER = false
+    else delete newOverrides.DF_MARKER
     if (newOverrides.BY_CLASS) useTutorial.getState().emit('class_reveals_saved')   // tutorial class_reveals
     useTutorial.getState().emit('props_saved')   // tutorial job_colours
     await onSave({
@@ -731,6 +736,20 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                           <option value="off">Don&apos;t drill handle holes</option>
                         </select>
                         <p className="text-[10px] text-gray-500 mt-1">Off = handles are still drawn, listed and costed, but no holes go to the CNC. Rooms, cabinets and single doors / drawers can override this.</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Drawer Front Markers</p>
+                        <select
+                          value={dfMarker}
+                          onChange={e => setDfMarker(e.target.value as 'on' | 'off')}
+                          className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
+                            dfMarker === 'off' ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+                          }`}
+                        >
+                          <option value="on">Prick drawer front markers</option>
+                          <option value="off">Don&apos;t prick drawer front markers</option>
+                        </select>
+                        <p className="text-[10px] text-gray-500 mt-1">5 dia × 1 deep on the back of each drawer front, 15 up and 60 in from the left (front view): 1 hole on the top front, 2 on the next, and so on, 10 apart.</p>
                       </div>
                       <SaveDefaultsButton onClick={saveHardwareDefaults} saving={savingDefaults} />
                     </>

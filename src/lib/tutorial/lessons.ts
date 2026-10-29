@@ -1156,6 +1156,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'If Auto picks the wrong thing, choose the neighbour from the Left or Right list to lock it; Auto goes back to detecting. Cabinets drawn before auto-detection keep their old neighbours until edited. Click Detect neighbours for the whole room to update them all at once (Ctrl+Z undoes it).',
       canvas: true, done: () => true },
   ]},
+
+  // Appended 2026-10-29 (drawer front marker pricks, z_handles D22).
+  { id: 'drawer_markers', level: 'intermediate', topic: 'production', title: 'Drawer front marker holes',
+    blurb: 'Each drawer front is pricked with its number on the back, so the shop knows the order and the bottom edge without the label.',
+    keywords: 'drawer front marker prick hole number order bottom label cabinet vision cnc back face 5mm', steps: [
+    { id: 'what', title: 'What gets drilled',
+      body: 'Every drawer front gets small 5 mm holes, 1 deep, in its back face: 1 hole on the top front, 2 on the next, 3 on the one below, and so on. They sit 15 up from the bottom edge, the first 60 in from the left (as you look at the cabinet), the rest 10 apart running inward. Each column of drawers counts from its own top. Open a drawer front in the Part Editor and flip to the back to see them.',
+      canvas: true, done: () => true },
+    { id: 'off', title: 'Turn them off for a job',
+      body: 'Job Properties → Cabinet Standards → Hardware Schedules → Drawer Front Markers. Pick "Don\'t prick drawer front markers" and save. The next optimiser run leaves them off.',
+      canvas: true, done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

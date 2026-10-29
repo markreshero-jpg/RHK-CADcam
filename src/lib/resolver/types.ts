@@ -221,6 +221,9 @@ export interface ConstructionRules {
   // Handles (z_handles D13): drill handle holes. Unset = true. Set false at
   // job / room / cabinet via rule_overrides; a front can override it again.
   HANDLE_DRILL?: boolean
+  // Drawer front marker holes (z_handles D22): 1 prick on the top front, 2 on
+  // the next … on the back face, bottom left. Unset = on.
+  DF_MARKER?: boolean
   // Finger-pull backing rails (z_handles H6). Unset = on.
   FPRAIL?: boolean
   // Rail grain on the sheet: along the rail (horizontal, default) or across it.
@@ -1603,6 +1606,9 @@ export interface ResolvedFaceZone extends ResolvedPart {
   bevel_r?: number
   // Resolved grip (z_handles H1). null = no handle; absent = not resolved.
   handle?:  ResolvedHandle | null
+  // Drawer marker pricks (z_handles D22), zone-local from the bottom-left as
+  // seen from the front; drilled 5 × 1 deep into the back face.
+  marker_holes?: { x: number; y: number }[]
 }
 
 // ── Resolved Drawer Stack ─────────────────────────────────────
