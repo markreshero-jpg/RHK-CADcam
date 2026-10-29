@@ -160,6 +160,10 @@ export interface ConstructionRules {
   // Top rails stand on edge (face to the front, RD tall) or lie flat (RD deep).
   // Vertical is the shop norm (Mark, 2026-10-15).
   RAIL_ORIENT: 'vertical' | 'horizontal'
+  // The back top rail (double rail) has its own setting — usually flat even when
+  // the front stands on edge (Mark, 2026-10-29). A BACK_TYPE 'rail' back rail
+  // always stands on edge.
+  BACK_RAIL_ORIENT: 'vertical' | 'horizontal'
 
   // Back (z_ubo U1): full back panel, no back, or no panel + a back top rail
   // standing on edge, BKRH tall (e.g. an under-bench oven cabinet).
@@ -274,7 +278,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   TOEH: 150, TOE_TYPE: 'ladder', TOEFC: 16.5, TOESP: 450,
   TOESCF: 40, TOESCB: 0, TOESCL: 0, TOESCR: 0,
   SCRBK: 0, SCRBT: 0, SCRL: 0, SCRR: 0, SCRT: 0,
-  TOP_TYPE: 'front_rail', RD: 100, RAIL_ORIENT: 'horizontal',
+  TOP_TYPE: 'front_rail', RD: 100, RAIL_ORIENT: 'horizontal', BACK_RAIL_ORIENT: 'horizontal',
   BACK_TYPE: 'panel', BKRH: 100,
   ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_DRILL: 'per_shelf', ADJ_ROWS: 0,
   FIXSB_F: 0, FIXSB_B: 0,

@@ -21,7 +21,8 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     // Top
     TOP_TYPE: 'front_rail' as const,
     RD:       100,  // rail depth mm (its height when the rail stands on edge)
-    RAIL_ORIENT: 'horizontal' as 'vertical' | 'horizontal',  // top rails on edge vs flat
+    RAIL_ORIENT: 'horizontal' as 'vertical' | 'horizontal',  // front top rail on edge vs flat
+    BACK_RAIL_ORIENT: 'horizontal' as 'vertical' | 'horizontal',  // back top rail (double rail) on edge vs flat
 
     // Back (z_ubo U1)
     BACK_TYPE: 'panel' as 'panel' | 'none' | 'rail',

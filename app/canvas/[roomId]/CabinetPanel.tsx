@@ -239,26 +239,39 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
             <option value="double_rail">Double Rail</option>
             <option value="none">None</option>
           </select>
-          {/* Rail orientation (z_cabinet_shape L1) — rule_overrides.RAIL_ORIENT */}
+          {/* Rail orientation (z_cabinet_shape L1): front rail = rule_overrides.RAIL_ORIENT,
+              back rail of a double rail = BACK_RAIL_ORIENT (its own, Mark 2026-10-29). */}
           {((f('top_type') as string) ?? 'front_rail') !== 'full_top' && (f('top_type') as string) !== 'none' && (() => {
-            const cur = (cabinet.rule_overrides ?? {}).RAIL_ORIENT
-            const inherited = getCachedInput(cabinet.id)?.rules_base?.RAIL_ORIENT ?? 'horizontal'
             const name = (v: string) => v === 'vertical' ? 'on edge (vertical)' : 'flat (horizontal)'
+            const orientSelect = (key: 'RAIL_ORIENT' | 'BACK_RAIL_ORIENT', what: string) => {
+              const cur = (cabinet.rule_overrides ?? {})[key]
+              const inherited = getCachedInput(cabinet.id)?.rules_base?.[key] ?? 'horizontal'
+              return (
+                <select
+                  key={key}
+                  value={cur === 'horizontal' || cur === 'vertical' ? cur : ''}
+                  onChange={e => {
+                    const next = { ...(cabinet.rule_overrides ?? {}) }
+                    if (e.target.value === '') delete next[key]
+                    else next[key] = e.target.value
+                    void onUpdate(cabinet.id, { rule_overrides: next })
+                  }}
+                  className={inp + ' mt-1'}
+                >
+                  <option value="">{what}: inherit ({name(inherited)})</option>
+                  <option value="horizontal">{what}: flat (horizontal)</option>
+                  <option value="vertical">{what}: on edge (vertical)</option>
+                </select>
+              )
+            }
+            // A BACK_TYPE 'rail' back rail always stands on edge — no choice to offer.
+            const backRail = f('top_type') === 'double_rail'
+              && ((cabinet.rule_overrides ?? {}).BACK_TYPE ?? getCachedInput(cabinet.id)?.rules_base?.BACK_TYPE) !== 'rail'
             return (
-              <select
-                value={cur === 'horizontal' || cur === 'vertical' ? cur : ''}
-                onChange={e => {
-                  const next = { ...(cabinet.rule_overrides ?? {}) }
-                  if (e.target.value === '') delete next.RAIL_ORIENT
-                  else next.RAIL_ORIENT = e.target.value
-                  void onUpdate(cabinet.id, { rule_overrides: next })
-                }}
-                className={inp + ' mt-1'}
-              >
-                <option value="">Rails: inherit ({name(inherited)})</option>
-                <option value="horizontal">Rails: flat (horizontal)</option>
-                <option value="vertical">Rails: on edge (vertical)</option>
-              </select>
+              <>
+                {orientSelect('RAIL_ORIENT', backRail ? 'Front rail' : 'Rail')}
+                {backRail && orientSelect('BACK_RAIL_ORIENT', 'Back rail')}
+              </>
             )
           })()}
         </div>

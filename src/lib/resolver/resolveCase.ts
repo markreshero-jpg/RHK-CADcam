@@ -200,13 +200,13 @@ export function resolveCaseParts(
   // ── Top options ───────────────────────────────────────────────
   const topType = cab.top_type ?? r.TOP_TYPE
 
-  // Top rails (RAIL_ORIENT): on edge — RD tall, front / back face flush with
+  // Top rails (RAIL_ORIENT front / BACK_RAIL_ORIENT back): on edge — RD tall, front / back face flush with
   // the carcass front / the top's back line — or flat, RD deep. DX = RD,
   // DY = length, DZ = thickness either way; `upright` tells caseBox.
   // A BACK_TYPE 'rail' back rail always stands on edge, BKRH tall.
   const railPlace = (at: 'front' | 'back') => {
     const backRail = at === 'back' && backType === 'rail'
-    const upright  = backRail || r.RAIL_ORIENT === 'vertical'
+    const upright  = backRail || (at === 'back' ? r.BACK_RAIL_ORIENT : r.RAIL_ORIENT) === 'vertical'
     const RD       = backRail ? r.BKRH : r.RD
     return {
       DX: RD, DY: railW, DZ: topT, X: railX,
@@ -220,7 +220,7 @@ export function resolveCaseParts(
   // A back rail on edge shows its lower edge (DX runs bottom → top, so that's
   // 'bottom') — taped by default. Flat, it keeps DEFAULT_EDGING (front edge). An
   // explicit EDGING.back_rail always wins.
-  const backRailUpright = backType === 'rail' || r.RAIL_ORIENT === 'vertical'
+  const backRailUpright = backType === 'rail' || r.BACK_RAIL_ORIENT === 'vertical'
   const backRailEdging = r.EDGING?.back_rail ?? (backRailUpright ? ['bottom' as const] : edging.back_rail)
 
   if (topType === 'full_top') {

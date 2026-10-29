@@ -1325,8 +1325,8 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
         />
       </QCard>
 
-      <QCard question="Do top rails stand on edge or lie flat?" isOverride={'RAIL_ORIENT' in delta}
-        partKeys={['front_rail','back_rail']}
+      <QCard question="Does the front top rail stand on edge or lie flat?" isOverride={'RAIL_ORIENT' in delta}
+        partKeys={['front_rail']}
         onHover={onHoverParts}>
         <ChipSelect
           value={effectiveRule(delta, 'RAIL_ORIENT')}
@@ -1334,6 +1334,19 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
           options={[
             { label: 'On edge — face to the front, rail depth is its height', value: 'vertical' },
             { label: 'Flat — lies under the benchtop',                           value: 'horizontal' },
+          ]}
+        />
+      </QCard>
+
+      <QCard question="Does the back top rail (double rail) stand on edge or lie flat?" isOverride={'BACK_RAIL_ORIENT' in delta}
+        partKeys={['back_rail']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'BACK_RAIL_ORIENT')}
+          onChange={v => onChange('BACK_RAIL_ORIENT', v as ConstructionRules['BACK_RAIL_ORIENT'])}
+          options={[
+            { label: 'On edge — rail depth is its height',  value: 'vertical' },
+            { label: 'Flat — lies under the benchtop',      value: 'horizontal' },
           ]}
         />
       </QCard>
@@ -1512,7 +1525,7 @@ function RuleRow({ ruleKey, delta, onChange }: {
     )
   }
 
-  if (ruleKey === 'RAIL_ORIENT') {
+  if (ruleKey === 'RAIL_ORIENT' || ruleKey === 'BACK_RAIL_ORIENT') {
     return (
       <div className={rowCls}>
         <span className={txtCls}>{label}</span>

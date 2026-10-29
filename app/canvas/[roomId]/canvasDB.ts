@@ -741,7 +741,7 @@ export async function saveCabinetToLibrary(
   // Carcass choices made on the cabinet travel with it (z_ubo U6) — a saved
   // UBO copy keeps its back rail. Other cabinet overrides (e.g. the kick height
   // a kick join writes) stay behind.
-  const CARRIED_RULES = ['BACK_TYPE', 'BKRH', 'RAIL_ORIENT', 'FLOAT', 'UNDER_PANEL'] as const
+  const CARRIED_RULES = ['BACK_TYPE', 'BKRH', 'RAIL_ORIENT', 'BACK_RAIL_ORIENT', 'FLOAT', 'UNDER_PANEL'] as const
   const instRules = (inst.rule_overrides ?? {}) as Record<string, unknown>
   const rule_overrides = Object.fromEntries(CARRIED_RULES.filter(k => instRules[k] !== undefined).map(k => [k, instRules[k]]))
 

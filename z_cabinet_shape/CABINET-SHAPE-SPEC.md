@@ -453,6 +453,12 @@ Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
         persist + reload; optimiser frame; ortho/plan/3D treat it as standing. Rule UI in
         construction methods, job + room properties. Finger-pull top rail push reads its height.
         **Changes every existing cabinet's rails on its next resolve.**
+        **2026-10-29 (Mark): the back rail has its own rule, `BACK_RAIL_ORIENT`.** It defaults to
+        horizontal, so on a double rail with the front on edge the back now lies flat unless set.
+        `RAIL_ORIENT` is the front rail only. A `BACK_TYPE` 'rail' back rail still always stands on
+        edge. CabinetPanel shows a "Front rail" and a "Back rail" select on double-rail cabinets.
+        Job / room / method rule UIs list both. Tests in `railOrient.test.ts`. When it shipped, only
+        the RHK6570 basin cabinets had a back rail on edge.
         Per cabinet: "Rails" select under Top Type in CabinetPanel (rule_overrides.RAIL_ORIENT, shown unless full top / none). BCNP library row + placed copies set to vertical (Mark: "all corner cabinets are vertical rails"; so no knock-in block at the pie corner).
       - **Shelf pin rows follow the panel** (`sharedDepth` in jointDrilling — seam frame + full
         bank): rows lay out along the Z overlap of shelf and panel, not the shelf's bbox depth.

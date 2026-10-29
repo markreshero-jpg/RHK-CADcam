@@ -127,6 +127,9 @@ line and mirrors the island elevation.
   basin) gets its top rails on edge — `"rules": { "RAIL_ORIENT": "vertical" }`
   on that cabinet in the layout JSON (same as the "Rails: on edge" select in
   CabinetPanel). Never leave a sink cabinet on the horizontal default.
+  `RAIL_ORIENT` only sets the FRONT rail. The back rail of a double rail stays
+  flat (`BACK_RAIL_ORIENT`, default horizontal) unless Mark asks for it on
+  edge (2026-10-29).
 - **Finger-pull rails run the whole run** (Mark, 2026-10-29): a finger-pull
   backing rail is one length across the cabinets added together, not one per
   cabinet. Over 2400 it splits where two cabinets meet. The optimiser does
