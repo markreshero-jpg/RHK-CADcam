@@ -94,5 +94,10 @@ library row against it:
 line). Every `drawer_front` op shifted +16.5 in the library: 95 → 64, 96 · 127 → 64, 96, 128 ·
 178 → 64, 96 + 128, 160.
 
+**2026-10-29 — 178 top pair fixed:** the guide's 178 front is two pairs 64 apart (47.5 / 79.5 /
+143.5 / 175.5 — lowest to highest 128); the library had carried the old 111.5 / 143.5 forward.
+All 8 rows (300–500 white, 400–500 grey) now **64, 96 + 160, 192**. 80 (2 holes, 32 apart) and
+95 / 127 checked again against p.6 — match.
+
 (Back holes: guide gives them down from the back's top — 20 / 22 / 39, 32 pitch, 9 in.
 The DTC Dragon Pro drawer-box method makes the back box height − 11 = 84 / 116 / 167, as the guide.)
