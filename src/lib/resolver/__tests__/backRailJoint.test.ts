@@ -4,8 +4,8 @@ import { mergeRules } from '../mergeRules'
 import { cabinetSeamDrills, caseBox } from '../../jointDrilling'
 import { DEFAULT_RULES, type CabinetInput, type ConstructionRules, type JointTypeOp, type Material } from '../types'
 
-// back:back_rail — the back panel fixes to the back top rail's back edge
-// ("5mm Dynamic Holes": 50 in from each end, ≤ 280 apart, into part B).
+// back:back_rail — the back top rail's back edge fixes through the back panel
+// ("5mm Dynamic Holes": 50 in from each end, ≤ 280 apart, into part B = the back).
 const board: Material = { id: 'm18', name: 'Board 18', DZ: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
 const dynOp = {
   id: 'op1', target_part: 'part_b', face: 'normal', machine_operation: 'drill',
@@ -27,25 +27,29 @@ const cab = (rules: Partial<ConstructionRules> = {}): CabinetInput => ({
 })
 
 describe('back rail ↔ back panel joint', () => {
-  it('drills the back rail\'s back edge, spread along its length', () => {
+  it('bores through the back where the rail lands, spread along the rail', () => {
     const rp = resolveCabinet(cab())
     expect(rp.seam_joints.some(s => s.seam_key === 'back:back_rail')).toBe(true)
     const rail = caseBox(rp.case_parts.find(p => p.part_key === 'back_rail')!)
+    const back = caseBox(rp.case_parts.find(p => p.part_key === 'back')!)
     const ds = cabinetSeamDrills(rp).filter(d => d.seamKey === 'back:back_rail')
     const xs = ds.map(d => d.x).sort((a, b) => a - b)
     expect(xs[0]).toBeCloseTo(rail.x + 50)
     expect(xs[xs.length - 1]).toBeCloseTo(rail.x + rail.w - 50)
     for (const d of ds) {
-      expect(d.axis).toBe('z+')
-      expect(d.z).toBeCloseTo(rail.z)
-      expect(d.y).toBeCloseTo(rail.y + rail.h / 2)
+      expect(d.targetPartKey).toBe('back')
+      expect(d.axis).toBe('z-')
+      expect(d.z).toBeCloseTo(back.z + back.d)
+      expect(d.depthLen).toBeCloseTo(back.d)
+      expect(d.y).toBeGreaterThan(rail.y)
+      expect(d.y).toBeLessThan(rail.y + rail.h)
     }
   })
 
-  it('rail sitting over the back drills up into its underside', () => {
+  it('rail sitting over the back drills down into the back\'s top edge', () => {
     const rp = resolveCabinet(cab({ TOP_BACK_JOIN: 'sits_over_back' }))
     const ds = cabinetSeamDrills(rp).filter(d => d.seamKey === 'back:back_rail')
     expect(ds.length).toBeGreaterThan(1)
-    for (const d of ds) expect(d.axis).toBe('y+')
+    for (const d of ds) { expect(d.axis).toBe('y-'); expect(d.targetPartKey).toBe('back') }
   })
 })

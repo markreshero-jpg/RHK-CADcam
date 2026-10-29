@@ -410,12 +410,14 @@ function backBottomDrillOps(
   return result
 }
 
-// back:back_rail seam — the back panel (Part A, vertical) meets the back top
-// rail (Part B) along the cabinet width. Mirrors back:bottom: TOP_BACK_JOIN
-// 'butts_into_back' (the rail's back edge against the back's front face) →
-// front-to-back (Z) holes, inset offset_y down from the rail's top face;
-// 'sits_over_back' (rail on the back's top edge) → vertical (Y) holes. The mode
-// is read off the geometry. Holes lay out along the X span the two share.
+// back:back_rail seam — the back top rail's back edge meets the back panel
+// along the cabinet width. Like the gable seams, the edge part plays Part A
+// (the rail) and the face part Part B (the back), so a joint's part_b ops bore
+// the back where the rail lands. TOP_BACK_JOIN 'butts_into_back' (rail edge on
+// the back's front face) → front-to-back (Z) holes, inset offset_y down from
+// the rail's top face; 'sits_over_back' (rail on the back's top edge) →
+// vertical (Y) holes. The mode is read off the geometry. Holes lay out along
+// the X span the two share.
 function backRailDrillOps(boxBack: Box, boxRail: Box, ops: JointTypeOp[]): DrillOpPos[] {
   const result: DrillOpPos[] = []
   const x0 = Math.max(boxBack.x, boxRail.x)
@@ -435,8 +437,8 @@ function backRailDrillOps(boxBack: Box, boxRail: Box, ops: JointTypeOp[]): Drill
 
   for (const op of ops) {
     if (op.machine_operation !== 'drill') continue
-    const isBack = op.target_part === 'part_a'
-    const ev = evalOp(op, evBack, evRail, thickBack, thickRail)
+    const isBack = op.target_part === 'part_b'
+    const ev = evalOp(op, evRail, evBack, thickRail, thickBack)
     if (!ev) continue
     const spc = ev.spacing_mm ?? 0
 
