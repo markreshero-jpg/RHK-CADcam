@@ -90,6 +90,18 @@ describe('finger-rail machining (H6b)', () => {
     expect(collectNotchRoutes(off, 'c1', 'tool10').rows).toHaveLength(0)
     expect(collectDrillRows(off, 'c1').rows.some(o => o.parameters.kind === 'fprail_block')).toBe(false)
   })
+
+  it('on-edge front rail fixes the top rail: no blocks on it, the lower rail keeps its blocks (D20)', () => {
+    const onEdge = resolveCabinet({ ...cab, rules: mergeRules(DEFAULT_RULES, { RAIL_ORIENT: 'vertical' }) })
+    const rs = onEdge.case_parts.filter(p => p.part_key.startsWith('fprail:'))
+    const top = rs.reduce((a, b) => (b.Y > a.Y ? b : a))
+    expect(top.fprail?.noBlocks).toBe(true)
+    const blocks = collectDrillRows(onEdge, 'c1').rows.filter(o => o.parameters.kind === 'fprail_block')
+    expect(blocks.some(o => o.operation_key === `fprail_block_${top.part_key.slice(7)}`)).toBe(false)
+    expect(blocks).toHaveLength((rs.length - 1) * 2)
+    // Flat front rail: every rail keeps its blocks.
+    expect(rails.every(p => !p.fprail?.noBlocks)).toBe(true)
+  })
 })
 
 describe('finger-rail machining per column (H5b)', () => {

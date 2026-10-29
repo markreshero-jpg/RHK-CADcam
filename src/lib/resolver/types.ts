@@ -1423,7 +1423,9 @@ export interface ResolvedCasePart extends ResolvedPart {
   grain_direction?: 'horizontal' | 'vertical'
   // shaped: a facet rail (resolveShapedFingerRails) — turned AY, local z = DZ its
   // front face (as the box rails); seamDrillSync machines its ends in each panel's own frame.
-  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true }
+  // noBlocks: the top rail against an on-edge front rail — that rail fixes it, so no
+  // knock-in blocks / holes (z_handles D20).
+  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true; noBlocks?: true }
   // Linear strip handle (z_handles D17): the sharknose edge (face-kind frame:
   // top / bottom = ends of DX, left / right = ends of DY) and its bevel.
   lh?: { bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number }

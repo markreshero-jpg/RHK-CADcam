@@ -144,6 +144,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     viewDefaults: { '3d': { visible: false } } },
   { id: 'hinges',         group: 'hardware', label: 'Hinges + plates',     views: ['elevation', '3d'], default: ON,
     viewDefaults: { '3d': { visible: false } }, hint: 'Elevation: cup bores; 3D: hinge + plate models' },
+  { id: 'rail_blocks',    group: 'hardware', label: 'Finger rail blocks',  views: ['3d'], default: ON,
+    hint: 'Knock-in nylon blocks holding the finger-pull rails (z_handles D20)' },
   // Handles (z_handles H2) — visible by default (they're part of how the job
   // looks), except plan where they'd clutter the footprint.
   { id: 'handles',        group: 'hardware', label: 'Handles',             views: ALL, default: ON,

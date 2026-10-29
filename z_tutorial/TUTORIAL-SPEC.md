@@ -115,6 +115,7 @@ orders by level / topic, not array position.
 | | Edgeband metres and cost | Reports → Room Reports… → Edgeband Length → set Waste % → Print / PDF (`edgeband_print`) |
 | Advanced › Benchtops | Reshape a benchtop | Have a top → right-click → Edit shape → change the outline + save (a top's segments differ from the start) |
 | Advanced › Production | Cut list and CNC | Production → Generate CNC… (path ends /optimiser) → back to the canvas |
+| Intermediate › Production | Finger-pull rails and knock-in blocks | Read-only: joined rails in the optimiser cut list, blocks in 3D (`finger_rail_runs`) |
 
 ## Phases
 

@@ -161,11 +161,18 @@ export function fingerRails(
   return { rails, warnings }
 }
 
-/** Rail case parts (face-kind: DX = height, DY = width, DZ = thickness). */
-export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails: FingerRail[]): ResolvedCasePart[] {
+/** Rail case parts (face-kind: DX = height, DY = width, DZ = thickness).
+ *  The rail at the carcass top behind an on-edge front rail is screwed to that
+ *  rail instead, so it gets no knock-in blocks (z_handles D20, Mark 2026-10-29). */
+export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails: FingerRail[], caseParts: ResolvedCasePart[] = []): ResolvedCasePart[] {
+  const front = caseParts.find(p => p.part_key === 'front_rail')
+  const fixedByFront = front?.upright ? topRail(front, rails) : undefined
   return rails.map(rl => ({
     grain_direction: r.RAILGRAIN ?? 'horizontal',
-    fprail: { cut: r.RAILCUT, blockSetback: r.RAILBLK, blockDia: r.RAILBLKD, blockDepth: r.RAILBLKZ },
+    fprail: {
+      cut: r.RAILCUT, blockSetback: r.RAILBLK, blockDia: r.RAILBLKD, blockDepth: r.RAILBLKZ,
+      ...(rl === fixedByFront ? { noBlocks: true as const } : {}),
+    },
     part_key: rl.key,
     DX: rl.top - rl.bottom, DY: rl.x1 - rl.x0, DZ: rl.thickness,
     X: rl.x0, Y: rl.bottom, Z: rl.frontZ - rl.thickness,
@@ -180,9 +187,14 @@ export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails:
 export function pushFrontRailBack(caseParts: ResolvedCasePart[], rails: FingerRail[]): void {
   const front = caseParts.find(p => p.part_key === 'front_rail')
   if (!front) return
+  const rail = topRail(front, rails)
+  if (rail) front.Z -= rail.thickness
+}
+
+/** The backing rail level with a base cabinet's front rail (the carcass-top gap). */
+function topRail(front: ResolvedCasePart, rails: FingerRail[]): FingerRail | undefined {
   const frontTop = front.Y + (front.upright ? front.DX : front.DZ)   // on edge: RD tall
-  const topRail = rails.find(rl => rl.top >= frontTop - EPS && rl.bottom < frontTop)
-  if (topRail) front.Z -= topRail.thickness
+  return rails.find(rl => rl.top >= frontTop - EPS && rl.bottom < frontTop)
 }
 
 /** A vertical panel a rail can pass through: a carcass side or an internal

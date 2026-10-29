@@ -1126,6 +1126,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In a spec block, {carcass} fills in two lines. Internal is the board the cabinet boxes are made of; a cabinet whose box was changed to another board is named in brackets (e.g. “(BC-03: Diamond Grey)”). External only appears when a box itself is in the exposed colour — an open cabinet with an exposed interior, or a finished gable — and names those cabinets. End panels, fillers and bulkheads are never listed here. Use {carcass_internal} / {carcass_external} to put the lines anywhere on their own.',
       canvas: true, done: () => true },
   ]},
+
+  // Appended 2026-10-29 (z_handles D19 joined finger rails + D20 knock-in blocks).
+  { id: 'finger_rail_runs', level: 'intermediate', topic: 'production', title: 'Finger-pull rails and knock-in blocks',
+    blurb: 'Finger-pull rails are cut as one length across a run of cabinets. Each rail is held by knock-in blocks, which you can see in 3D.',
+    keywords: 'finger pull rail fingerpull backing rail join run 2400 split knock in block nylon furnware ccp sink on edge vertical rail optimiser', steps: [
+    { id: 'join', title: 'One rail across the run',
+      body: 'Cabinets that touch, with their fronts at the same height and depth, share their finger-pull rails. In the optimiser the rails join into one part: the cabinet column reads e.g. BC-02/BC-03/BC-04 and the comment says "Joined rail". A run over 2400 splits where two cabinets meet. A gap between cabinets, or a front at a different height, starts a new rail.',
+      canvas: true, done: () => true },
+    { id: 'blocks', title: 'See the blocks in 3D',
+      body: 'Each rail end that sits in a gable or divider is held by a knock-in nylon block. The block\'s peg goes in the drilled Ø10 hole and it screws into the back of the rail. In 3D the blocks sit just behind the rails, and Wire shows them best. Layers → Hardware → Finger rail blocks turns them off. A sink cabinet with its top rails on edge has no blocks on its top finger rail: the on-edge front rail holds it, so there are no holes there either.',
+      canvas: true, done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

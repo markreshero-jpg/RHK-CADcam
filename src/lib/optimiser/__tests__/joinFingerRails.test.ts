@@ -16,7 +16,7 @@ function rail(id: string, cab: string, x: number, len: number, y = 460, height =
 const run = (rs: [OptiPart, RailWallRect][], max?: number) =>
   joinFingerRails(rs.map(r => r[0]), new Map(rs.map(r => [r[0].source_part_id, r[1]])), max)
 
-describe('joinFingerRails (z_handles D17)', () => {
+describe('joinFingerRails (z_handles D19)', () => {
   it('joins rails that meet end to end into one run', () => {
     const out = run([rail('a', 'BC-02', 100, 577), rail('b', 'BC-03', 677, 588), rail('c', 'BC-04', 1265, 588)])
     expect(out).toHaveLength(1)

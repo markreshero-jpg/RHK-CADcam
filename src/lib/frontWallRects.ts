@@ -32,7 +32,7 @@ export function frontWallRect(
 
 /**
  * Wall rects for the finger-pull rails (case_parts fprail:<n>) of `cabIds`, keyed
- * by case_parts.id, for joining rails along a run (z_handles D17). Rails are
+ * by case_parts.id, for joining rails along a run (z_handles D19). Rails are
  * face-kind panels: DX = height, DY = width; frontLine = z + DZ.
  */
 export async function loadRailWallRects(sb: SupabaseClient, cabIds: string[]): Promise<Map<string, FrontWallRect & { frontLine: number }>> {

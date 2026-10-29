@@ -57,6 +57,8 @@ import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
 import Runner3D from '@/src/components/three/Runner3D'
 import AccessoryModel, { hasAccessoryModel } from '@/src/components/three/AccessoryModel'
+import RailBlockModel from '@/src/components/three/RailBlockModel'
+import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
 import { splitCaseParts, splitBaseKey, splitPieceRange } from '@/src/lib/cabinetSplit'
@@ -1309,6 +1311,8 @@ export function CabinetScene({
   }, [rp.hinge_instances])
   // World-fixed hinge markers: plate bores always; cup/anchor bores only for
   // non-animated (top/bottom) doors — left/right doors render theirs in DoorPanel.
+  // Knock-in blocks behind the finger-pull rails, at the drilled holes (z_handles D20).
+  const railBlocks = useMemo(() => railBlockEnds(rp.case_parts, rp.internal_parts), [rp])
   const hingeDrills = useMemo(() => {
     if (!showDrilling) return []
     const out: ResolvedHingeDrill[] = []
@@ -1807,6 +1811,9 @@ export function CabinetScene({
       {show('hinges') && hingeDrills.length > 0 && (
         <SlideDrillMarkers drills={hingeDrills} wire={wire} color={palette.hinges} />
       )}
+      {show('rail_blocks') && railBlocks.map(e => (
+        <PartAlpha key={`rblk_${e.railKey}_${e.panelKey}`} a={alpha('rail_blocks')}><RailBlockModel end={e} /></PartAlpha>
+      ))}
     </group>
     </FrontGrainAcrossContext.Provider>
     </GrainContext.Provider>

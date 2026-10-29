@@ -22,6 +22,7 @@ import { dbPartId, zoneKey, zonePartId, stackKey, isShapedPanelKey } from '@/src
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 import { filterRemovedParts } from '@/src/lib/resolver/filterHidden'
 import { splitCaseParts, splitPieceFor, isSplitKey } from '@/src/lib/cabinetSplit'
+import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -255,25 +256,16 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
   // 5. Finger-pull backing rails (z_handles H6 / H5b): a knock-in block hole
   //    at each rail end, into the inner face of the panel (side or divider)
   //    that end sits in, RAILBLK behind the back of the rail, centred on the
-  //    rail's height. A rail running through a division gets none there.
-  const panels = railPanels(rp)
-  for (const rail of rp.case_parts) {
-    if (!rail.part_key.startsWith('fprail:') || !rail.fprail || rail.fprail.shaped) continue
-    const m = rail.fprail
-    const y = rail.Y + rail.DX / 2
-    const z = rail.Z - m.blockSetback
-    const x0 = rail.X, x1 = rail.X + rail.DY
-    const ends = [
-      { p: panels.find(p => p.X <= x0 + RAIL_EPS && p.X + p.DZ > x0 + RAIL_EPS), face: 'right' as const },
-      { p: panels.find(p => p.X < x1 - RAIL_EPS && p.X + p.DZ >= x1 - RAIL_EPS), face: 'left' as const },
-    ]
-    for (const { p, face } of ends) {
-      if (!p) { skipped++; continue }
-      const inner = face === 'right' ? { x: p.X + p.DZ, axis: 'x-' } : { x: p.X, axis: 'x+' }
-      add(p.table, p.key, p.frame,
-        { x: inner.x, y, z, axis: inner.axis, radius: m.blockDia / 2, depthLen: m.blockDepth },
-        'fprail_block', `fprail_block_${rail.part_key.slice(7)}`, AUTO_TOOL)
-    }
+  //    rail's height. A rail running through a division gets none there, and
+  //    the top rail fixed by an on-edge front rail gets none at all (D20).
+  //    Positions from railBlockEnds, shared with the 3D block model.
+  const panels = new Map(railPanels(rp).map(p => [p.key, p]))
+  for (const e of railBlockEnds(rp.case_parts, rp.internal_parts)) {
+    const p = panels.get(e.panelKey)
+    if (!p) { skipped++; continue }
+    add(p.table, p.key, p.frame,
+      { x: e.x, y: e.y, z: e.z, axis: e.axis, radius: e.dia / 2, depthLen: e.depth },
+      'fprail_block', `fprail_block_${e.railKey.slice(7)}`, AUTO_TOOL)
   }
 
   // 5b. Shaped facet rails: the same block hole at each end that sits in a

@@ -84,7 +84,7 @@ async function loadCabinetParts(project: { id: string; name: string; job_number:
     (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab)
   // Where grain-matched fronts hang, for their nest blocks (z_grain_match G4).
   attachWallRects(norm.parts, await loadFrontWallRects(supabase, cabs.filter(c => c.grain_match).map(c => c.id)))
-  // Finger-pull rails run the whole run, split at a cabinet junction past 2400 (z_handles D17).
+  // Finger-pull rails run the whole run, split at a cabinet junction past 2400 (z_handles D19).
   norm.parts = joinFingerRails(norm.parts, await loadRailWallRects(supabase, cabIds))
   return norm
 }

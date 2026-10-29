@@ -362,7 +362,7 @@ either side of an internal division (a double division for drawers, see
     panel that end sits in; none where a rail runs through.
   - Tests: `handles.test.ts` (rails per column), `fingerRailOps.test.ts` (H5b block).
 
-**D17. Rails run the whole run (Mark, 2026-10-29).** The shop cuts a
+**D19. Rails run the whole run (Mark, 2026-10-29).** The shop cuts a
 finger-pull rail as one length across the cabinets added together, not one per
 cabinet. Rails run horizontally, with the grain along their length.
 - Over 2400 the run splits where two cabinets meet. A single cabinet's rail is
@@ -380,12 +380,31 @@ cabinet. Rails run horizontally, with the grain along their length.
   - Rails with a drawn shape or a hand size override, or off CNC, stay as
     they are.
   - The block holes are unchanged: they sit in each side's inner face, so
-    every cabinet still gets its blocks.
+    every cabinet still gets its blocks (except as D20).
   - `MAX_RAIL_RUN` = 2400. Tests in `joinFingerRails.test.ts`.
-- **Knock-in block model:** `z_handles/models/Furnware_CCP_Knockin_Block.glb`
-  (Furnware CCP, built from their line drawing by `make-knockin-block-glb.mjs`).
-  Its origin is the peg axis on the body's underside, with the peg down −Y
-  into the Ø10 hole. Not yet drawn in 3D.
+
+**D20. Knock-in blocks: drawn in 3D; none under an on-edge front rail (Mark, 2026-10-29).**
+- **No blocks on that rail.** When a base cabinet's top rails stand on edge
+  (RAIL_ORIENT vertical, e.g. sink cabinets), the front rail fixes the finger
+  rail at the carcass top, so that rail gets no knock-in blocks or holes. The
+  lower rails keep theirs.
+- **Model.** `public/hardware-models/Furnware_CCP_Knockin_Block.glb` (Furnware
+  CCP). Source is `z_handles/models/make-knockin-block-glb.mjs`, built from
+  Furnware's line drawing.
+  - Origin = the peg axis on the body's underside. The peg runs down −Y, the
+    square end (screw into the rail) faces −X, and the block is 19 wide on Z.
+- **As built:**
+  - `fingerRailParts` sets `fprail.noBlocks` on the rail level with an upright
+    front rail (`topRail`, shared with `pushFrontRailBack`).
+  - `src/lib/resolver/railBlocks.ts` (`railBlockEnds`) gives each block hole.
+    seamDrillSync drills from it and `RailBlockModel` draws from it, so the
+    holes and the 3D blocks always agree.
+  - 3D: the `rail_blocks` layer item (Hardware, 3D only, shown by default),
+    drawn in CabinetScene. That covers the cabinet modal and room 3D, wire mode
+    included. The peg points into the panel and the square end sits 0.5
+    behind the rail.
+  - Tests: `fingerRailOps.test.ts` (D20 case).
+  - Shaped facet rails (5b) still always get blocks and aren't drawn in 3D.
 
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
