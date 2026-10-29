@@ -84,11 +84,13 @@ export function toSheet(ox: number, oy: number, pl: { x: number; y: number; w: n
 // pos_y always references the v-min edge; pos_x references u-min, EXCEPT pre-mirrored
 // down-face bores (projectToFrame flipped them to measure from u-max). A bore is
 // mirrored when its entry face's sign differs from the frame's upSign ('+' for
-// face_zones = doors nest cup-side up, '-' for everything else). Shared by drills
-// and routes so both land identically on the blank.
+// face_zones = doors nest cup-side up, and for carcass gables (caseFrame);
+// '-' for everything else). Shared by drills and routes so both land
+// identically on the blank.
 export function ebShift(part: PartRef, outputFace: string | null | undefined): { sx: number; sy: number } {
   if (!part.deduct) return { sx: 0, sy: 0 }
   const upPos = part.source_table === 'face_zones'
+    || (part.source_table === 'case_parts' && (part.source_part_key === 'case_left_side' || part.source_part_key === 'case_right_side'))
   const mirrored = outputFace != null && POS_FACES.has(outputFace) !== upPos
   return { sx: (mirrored ? part.eb_w2 : part.eb_w1) ?? 0, sy: part.eb_h1 ?? 0 }
 }

@@ -33,13 +33,15 @@ const cab: CabinetInput = {
 describe('finger-rail machining (H6b)', () => {
   const rp = resolveCabinet(cab)
   const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:'))
+  // The right side's op frame is depth from the back (caseFrame); the left's runs
+  // front to back — both hands are checked against holes in shapeOpFrame.test.
   const left = rp.case_parts.find(p => p.part_key === 'left_side')!
 
   it('notch: through pocket the rail thickness deep (not deeper), rail height, run 5 past the front edge', () => {
     const { rows } = collectNotchRoutes(rp, 'c1', 'tool10')
     const pockets = rows.filter(o => o.operation_type === 'route')
     expect(pockets).toHaveLength(rails.length * 2)
-    const r = pockets.find(o => o.source_part_key === 'case_left_side' && o.operation_key === 'fprail_notch_0')!
+    const r = pockets.find(o => o.source_part_key === 'case_right_side' && o.operation_key === 'fprail_notch_0')!
     const rail = rails.find(p => p.part_key === 'fprail:0')!
     const front = rail.Z + rail.DZ - left.Z
     expect(r.pos_x - r.size_dx! / 2).toBeCloseTo(front - 18)      // back of the notch = rail thickness
@@ -51,7 +53,7 @@ describe('finger-rail machining (H6b)', () => {
   })
 
   it('reliefs: a 10mm slot at each closed end reaching 5 behind the rail; none at an open end', () => {
-    const grooves = collectNotchRoutes(rp, 'c1', 'tool10').rows.filter(o => o.operation_type === 'groove' && o.source_part_key === 'case_left_side')
+    const grooves = collectNotchRoutes(rp, 'c1', 'tool10').rows.filter(o => o.operation_type === 'groove' && o.source_part_key === 'case_right_side')
     const rail = rails.find(p => p.part_key === 'fprail:0')!
     const front = rail.Z + rail.DZ - left.Z
     const mine = grooves.filter(g => g.operation_key.startsWith('fprail_relief_0_'))

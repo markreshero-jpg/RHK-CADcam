@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateActio
 import * as THREE from 'three'
 import { Part, PreviewCanvas, extForAxes, type PartMeta, type EbSpec } from '@/src/components/three/PartViewer'
 import { fmtMm } from '@/src/lib/format'
+import { opFrameMirrored } from '@/src/lib/optimiser/partFootprint'
 import { mapOutline, outlineSegments, reverseOutline, sampleOutline, sampleShapeOutline, type ShapePt } from '@/src/lib/shapePath'
 import { type EditorView, displayExtents, roundStore } from './partEditor/partEditorCore'
 import { usePartOps } from './partEditor/usePartOps'
@@ -264,11 +265,14 @@ export default function PartEditor({
   const mirror = part.panelKind === 'side' && part.id.includes('right_side')
   // Edge banding follows the mirror: left/right (the u/DX extremes) swap sides.
   const displayEdge = mirror ? { ...part.edge, left: part.edge.right, right: part.edge.left } : part.edge
+  // Ops are stored in the op frame, which on a carcass left gable runs front to
+  // back (opFrameMirrored) — so their flip onto this display can differ from the part's.
+  const opMirror = mirror !== opFrameMirrored(part.id)
 
   // Area ops (pockets / routes) become real recesses cut into the panel so their
   // depth reads true in 3D; drills stay as surface discs (OpMarkers3D). When there
   // are none, Part keeps its normal multi-face colouring.
-  const subtractions = useMemo(() => buildOpSubtractions(ops, u, v, n, swap, mirror), [ops, u, v, n, swap, mirror])
+  const subtractions = useMemo(() => buildOpSubtractions(ops, u, v, n, swap, opMirror), [ops, u, v, n, swap, opMirror])
 
   // Shape save (M3): persist the revision, then make the part's size the shape's
   // bounding box (locked decision #6). The shape frame is y-DOWN from the visual
@@ -603,13 +607,13 @@ export default function PartEditor({
                   hoverHighlight={false}
                   ebSpec={ebSpec}
                 />
-                <OpMarkers3D ops={ops} pu={u} pv={v} n={n} swap={swap} mirror={mirror} activeFace={hasTwoFaces ? face : undefined} selectedId={selectedId} onSelect={setSelectedId} levels={levels} panelColor="#c9ccd4" />
+                <OpMarkers3D ops={ops} pu={u} pv={v} n={n} swap={swap} mirror={opMirror} activeFace={hasTwoFaces ? face : undefined} selectedId={selectedId} onSelect={setSelectedId} levels={levels} panelColor="#c9ccd4" />
                 {shapePoly && <ShapeOutline3D pts={shapePoly} sh={sh} n={n} />}
               </group>
             </PreviewCanvas>
           ) : (
             <div className="w-full h-full flex items-center justify-center p-6">
-              <PartOrthoView u={u} v={v} n={n} swap={swap} mirror={mirror} face={hasTwoFaces ? face : undefined} view={view} measuring={measuring} wire={wire}
+              <PartOrthoView u={u} v={v} n={n} swap={swap} mirror={mirror} opMirror={opMirror} face={hasTwoFaces ? face : undefined} view={view} measuring={measuring} wire={wire}
                 edge={part.edge} ebSpec={ebSpec} shape={displaySegs}
                 ops={ops} selectedId={selectedId} onSelect={setSelectedId} levels={levels}
                 planePick={planePick && !selLocked}

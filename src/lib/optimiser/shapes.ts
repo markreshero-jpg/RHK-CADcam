@@ -15,6 +15,7 @@
 import { outlineSegments, pointInShape, sampleShapeOutline, type EdgeTag, type OutlinePt, type ShapePt, type ShapeSegmentLike } from '../shapePath'
 import { cutSize, round1 } from './types'
 import { isKickSidePart } from '../resolver/types'
+import { opFrameMirrored } from './partFootprint'
 
 export type ShapeMetaLike = {
   tapeLengthMM?: number | null
@@ -66,11 +67,11 @@ export interface OptiShape {
   /** Banded? per op_polygon edge (same index as op_tape), kept even when the
    *  tape thickness is unknown — the edgeband length report (O7). */
   op_band?: (boolean | null)[]
-  /** A right gable's resolver outline is written like the left's (x = depth
-   *  from the back), but the gable machines inner face up — its holes are
-   *  pre-mirrored (partFootprint projectToFrame) — so the cut blank's contour
-   *  is mirrored across the depth axis ('y' when the part nests turned) to
-   *  sit with them. op_polygon itself stays unmirrored. */
+  /** The resolver writes gable outlines as x = depth from the back. The LEFT
+   *  gable's op frame runs front to back, because its interior bores are
+   *  mirrored (partFootprint caseFrame / opFrameMirrored). So its cut blank's
+   *  contour is mirrored across the depth axis ('y' when the part nests turned)
+   *  to sit with them. op_polygon itself stays unmirrored. */
   blank_mirror?: 'x' | 'y'
   bbox: { w: number; h: number }
   tape_mm: number | null        // banded-segment length at save (meta.tapeLengthMM)
@@ -123,7 +124,10 @@ export function shapeFrameFor(table: string, typeKey: string, partId: string): S
       dxIsWidth = typeKey === 'front'
       break
   }
-  return { swap: kind !== 'side' && !dxIsWidth, mirror: kind === 'side' && partId.includes('right_side') }
+  // Drawn shape (display frame) → op frame. The editor shows right-hand twins
+  // mirrored; a carcass left gable's op frame runs front to back (opFrameMirrored).
+  // Both gables end up mirrored (right: display mirrored; left: op frame mirrored).
+  return { swap: kind !== 'side' && !dxIsWidth, mirror: kind === 'side' && (partId.includes('right_side') !== opFrameMirrored(partId)) }
 }
 
 /** Shape-frame points → op frame of a DX × DY part (see the rule above). */

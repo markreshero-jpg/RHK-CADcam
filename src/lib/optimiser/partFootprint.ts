@@ -37,12 +37,22 @@ const FACE_FOR_AXIS: Record<string, string> = {
 
 // ── Per-part-kind frames ──────────────────────────────────────────────────────
 
+// Gables (RHK6570, 2026-10-29): u = depth from the back (z) reads true from the
+// −X side, which is the RIGHT gable's interior face. So the right gable's
+// interior bores (x+) go as-is, and the LEFT gable's (x−) are mirrored, measured
+// from its front. That's upSign '+'. (It was '−', so every gable was machined as
+// the other hand.) Drawer-box sides get the same result from u dir −1 (boxFrame).
+/** A part whose op frame runs front→back (pos_x measured from the front): the
+ *  carcass LEFT gable. Resolver outlines (depth from the back) must be mirrored
+ *  to sit with its holes. */
+export const opFrameMirrored = (partId: string) => partId === 'case_left_side'
+
 export function caseFrame(p: ResolvedCasePart): FootprintFrame {
   const cb = caseBox(p)   // cabinet-space AABB (min corner + extents), per-part-type remap
   switch (p.part_key) {
     case 'left_side':
     case 'right_side':
-      return { normal: 'x', u: { axis: 'z', dir: 1, origin: cb.z, extent: p.DX }, v: { axis: 'y', dir: 1, origin: cb.y, extent: p.DY } }
+      return { normal: 'x', upSign: '+', u: { axis: 'z', dir: 1, origin: cb.z, extent: p.DX }, v: { axis: 'y', dir: 1, origin: cb.y, extent: p.DY } }
     case 'back':
       return { normal: 'z', u: { axis: 'y', dir: 1, origin: cb.y, extent: p.DX }, v: { axis: 'x', dir: 1, origin: cb.x, extent: p.DY } }
     default: // bottom, full_top, front_rail, back_rail — horizontal panels

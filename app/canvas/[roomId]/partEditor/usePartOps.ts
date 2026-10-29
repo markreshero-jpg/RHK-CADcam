@@ -15,6 +15,7 @@ import { isFiringRole } from '@/src/lib/partOps/enums'
 import { pointInShape, type ShapePt } from '@/src/lib/shapePath'
 import { syncMasterSlaves } from '@/src/lib/optimiser/masterSlaveSync'
 import { syncSeamDrillOperations } from '@/src/lib/optimiser/seamDrillSync'
+import { opFrameMirrored } from '@/src/lib/optimiser/partFootprint'
 import type { PartOp } from '../CabinetRoutesPanel'
 import {
   ANGLE_FIELDS, classify, flatDims, roundAngle, roundStore, sourceTableFor,
@@ -157,7 +158,7 @@ export function usePartOps(cabinetId: string, part: PartMeta, shapePoly?: ShapeP
   const issuesById = useMemo(() => {
     const m: Record<string, Issue[]> = {}
     const swap = part.panelKind !== 'side' && !part.dxIsWidth
-    const mirror = part.panelKind === 'side' && part.id.includes('right_side')
+    const mirror = part.panelKind === 'side' && (part.id.includes('right_side') !== opFrameMirrored(part.id))
     const sh = swap ? u : v
     for (const op of ops) {
       const issues = validateOp(op, u, v, n)

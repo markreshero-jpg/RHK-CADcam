@@ -23,8 +23,8 @@ import { useSvgZoom } from '../ResolvedViews'
 import { PLANE_EDGE_ENDS, type OrthoView } from './partEditorCore'
 import { OpMarkersSVG, OpMarkersDepthSVG } from './partOpGlyphs'
 
-export default function PartOrthoView({ u, v, n, swap, mirror, face, view, measuring, wire, edge, ebSpec, shape, ops, selectedId, onSelect, levels, planePick, onPickPlane, snapOn, onDragMove, onDragEnd }: {
-  u: number; v: number; n: number; swap: boolean; mirror?: boolean; face?: 'front' | 'back'; view: OrthoView; measuring: boolean
+export default function PartOrthoView({ u, v, n, swap, mirror, opMirror, face, view, measuring, wire, edge, ebSpec, shape, ops, selectedId, onSelect, levels, planePick, onPickPlane, snapOn, onDragMove, onDragEnd }: {
+  u: number; v: number; n: number; swap: boolean; mirror?: boolean; opMirror?: boolean; face?: 'front' | 'back'; view: OrthoView; measuring: boolean
   wire?: boolean
   edge?: PartEdge; ebSpec?: EbSpec
   // Saved shape outline (shape frame = this front view's SVG space: mm, y-down,
@@ -48,8 +48,11 @@ export default function PartOrthoView({ u, v, n, swap, mirror, face, view, measu
   // you physically turned the panel over — so a feature on the right edge stays on
   // the right as you'd see it from behind.
   const hmir = !!mirror !== (face === 'back')
-  const toS   = (px: number, py: number) => (swap ? { sx: py, sy: px } : { sx: hmir ? u - px : px, sy: py })
-  const fromS = (sx: number, sy: number) => (swap ? { px: sy, py: sx } : { px: hmir ? u - sx : sx, py: sy })
+  // Ops (and points picked for them) flip by the op frame's own mirror, which on
+  // a carcass left gable differs from the part's (partFootprint opFrameMirrored).
+  const omir = !!(opMirror ?? mirror) !== (face === 'back')
+  const toS   = (px: number, py: number) => (swap ? { sx: py, sy: px } : { sx: omir ? u - px : px, sy: py })
+  const fromS = (sx: number, sy: number) => (swap ? { px: sy, py: sx } : { px: omir ? u - sx : sx, py: sy })
   const sw = swap ? v : u
   const sh = swap ? u : v
   const [vw, vh] = view === 'front' ? [sw, sh] : view === 'top' ? [sw, n] : [n, sh]
@@ -268,8 +271,8 @@ export default function PartOrthoView({ u, v, n, swap, mirror, face, view, measu
           their footprint × cutting depth from the front face (click-select
           only — position editing stays in the Front view). */}
       {view === 'front'
-        ? <OpMarkersSVG ops={ops} pu={u} pv={v} swap={swap} mirror={hmir} activeFace={face} selectedId={selectedId} onSelect={onSelect} interactive={!measuring && !pick} levels={levels} onStartDrag={!measuring && !pick ? startDrag : undefined} />
-        : <OpMarkersDepthSVG ops={ops} pu={u} pv={v} n={n} swap={swap} mirror={hmir} activeFace={face} view={view} selectedId={selectedId} onSelect={onSelect} interactive={!measuring && !pick} levels={levels} />}
+        ? <OpMarkersSVG ops={ops} pu={u} pv={v} swap={swap} mirror={omir} activeFace={face} selectedId={selectedId} onSelect={onSelect} interactive={!measuring && !pick} levels={levels} onStartDrag={!measuring && !pick ? startDrag : undefined} />
+        : <OpMarkersDepthSVG ops={ops} pu={u} pv={v} n={n} swap={swap} mirror={omir} activeFace={face} view={view} selectedId={selectedId} onSelect={onSelect} interactive={!measuring && !pick} levels={levels} />}
 
       {/* Selected op's current edge, highlighted (§7.2 "the marker moves live"). */}
       {view === 'front' && selEdge != null && (() => {

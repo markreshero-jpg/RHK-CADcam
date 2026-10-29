@@ -91,7 +91,7 @@ export function buildLabelData(
   const tapes = [...new Set((p.eb_tape ?? []).map(t => (t.id && look.tapeName.get(t.id)) || ''))].filter(Boolean).join(', ')
 
   // Picture edges. Shaped part: the finished outline put onto the cut blank the
-  // way its holes are (shifted by the tape, mirrored for a right gable —
+  // way its holes are (shifted by the tape, mirrored for a left gable —
   // shapes.makeBlank), each edge taped per its tag or the rectangle side it lies on.
   const edges: [Pt, Pt, boolean][] = []
   const poly = p.shape?.op_polygon && p.shape.op_polygon.length >= 3 ? p.shape.op_polygon : null

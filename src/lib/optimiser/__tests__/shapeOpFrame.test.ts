@@ -17,7 +17,7 @@ import type { OptiPart } from '../types'
 describe('shapeFrameFor — per part kind', () => {
   const cases: [string, string, string, boolean, boolean][] = [
     // table, typeKey, partId, swap, mirror
-    ['case_parts', 'left_side', 'case_left_side', false, false],
+    ['case_parts', 'left_side', 'case_left_side', false, true],    // op frame front→back (opFrameMirrored)
     ['case_parts', 'right_side', 'case_right_side', false, true],
     ['case_parts', 'bottom', 'case_bottom', true, false],
     ['case_parts', 'full_top', 'case_full_top', true, false],
