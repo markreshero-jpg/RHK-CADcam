@@ -183,6 +183,7 @@ export default function PlanViewReportSVG({
   const ROW_OPEN_STEP = 4 * P   // doors / windows row sits where the overall was; the overall steps out
   const ROW_BH_STEP   = 4 * P   // bulkhead row (z_bulkhead) sits next to the overheads; rows past it step out
   const ROW_TOP_STEP  = 4 * P   // benchtop row sits just outside the base row; rows past it step out
+  const ROW_DEPTH_STEP = 4 * P  // wall-end depths: overheads nearest, the benchtop depth one row out
 
   const swingSW = pen('thin', P)  // door swing arc
   const drawSW  = pen('thin', P)  // drawer indicator line
@@ -261,12 +262,13 @@ export default function PlanViewReportSVG({
   // ── Perpendicular depth dimension at a wall end ───────────────────────────
   // Runs from the cabinet's back face to its front. backOffset shifts the start off
   // the wall line to the cabinet back (0 for front cabinets; wall thickness for
-  // back-side cabinets, whose back sits on the outer face).
-  function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string, item: string, backOffset = 0) {
+  // back-side cabinets, whose back sits on the outer face). step stacks a second depth
+  // at the same end one row further out, so the two don't print on one line.
+  function depthDim(wall: Wall, inward: { x: number; y: number }, tPos: number, dz: number, sign: 1 | -1, key: string, item: string, backOffset = 0, step = 0) {
     const lineW = lw(item, dimSW)
     const wd = wallDir(wall)
     // Clear the return wall joined at this end before the paper-space gap.
-    const off = returnWallThickness(wall, walls, tPos === 0 ? 'start' : 'end') + 5 * P
+    const off = returnWallThickness(wall, walls, tPos === 0 ? 'start' : 'end') + 5 * P + step * ROW_DEPTH_STEP
     const offX = wd.x * sign * off, offY = wd.y * sign * off
     const sx = wall.pos_x + tPos * wd.x + offX + inward.x * backOffset
     const sy = wall.pos_y + tPos * wd.y + offY + inward.y * backOffset
@@ -684,6 +686,7 @@ export default function PlanViewReportSVG({
           const overallSeg: Seg[] = [{ from: 0, to: w.length, label: roundMm(w.length) }]
           // Depths at the wall ends: the benchtop (not the base carcass) and the overheads.
           const wallDz = wallCabs.length > 0 ? Math.max(...wallCabs.map(c => c.dz)) : 0
+          const topStep = layers.show('dim_wall_chain') && wallDz > 0 ? 1 : 0
           return (
             <g key={key}>
               {layers.show('dim_wall_chain') && (ohCabs.length > 0 || wallFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_WALLCAB, wallCabSegs, `wc-${key}`, 'dim_wall_chain', wallRowName(ohCabs, wallFx.length > 0))}
@@ -694,8 +697,8 @@ export default function PlanViewReportSVG({
               {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'WALL')}
               {topSegs.length > 0 && (
                 <>
-                  {depthDim(w, depthDir, 0,        tops[0].depth,               -1, `dd0-${key}`, 'dim_benchtop', tops[0].from)}
-                  {depthDim(w, depthDir, w.length, tops[tops.length - 1].depth,  1, `dd1-${key}`, 'dim_benchtop', tops[tops.length - 1].from)}
+                  {depthDim(w, depthDir, 0,        tops[0].depth,               -1, `dd0-${key}`, 'dim_benchtop', tops[0].from, topStep)}
+                  {depthDim(w, depthDir, w.length, tops[tops.length - 1].depth,  1, `dd1-${key}`, 'dim_benchtop', tops[tops.length - 1].from, topStep)}
                 </>
               )}
               {layers.show('dim_wall_chain') && wallDz > 0 && (
