@@ -449,3 +449,37 @@ create trigger set_updated_at before update on door_styles
 - Door thickness (`thickness_mm` from `door_catalogue`) overrides the face zone DZ in the resolver. The assembly material schedule `door_face` role is superseded once a `door_style_id` is set.
 - Do NOT remove the existing `material_override_id` on `face_zones` — it handles non-door face parts (drawer faces, false panels). The new `door_material_override_id` is door-specific.
 - All new tables get RLS enabled with authenticated-only policies (see section 7).
+
+---
+
+## 12. FACE REVEALS + NEIGHBOURS (built 2026-10-29, in-app check pending)
+
+**Rules** (`ConstructionRules`): REVT / REVB top / bottom; REVL / REVR side reveal next to
+a **cabinet**; REVENDL / REVENDR side reveal next to an **end panel, wall or nothing**;
+GAPC between doors side by side; GAPR between rows; FPGAP at a finger-pull grip edge.
+
+**Cascade** (later wins): code `DEFAULT_RULES` → cabinet builder schedule class row
+(base / wall / tall) → construction method (only when a cabinet names one) → job
+`rule_overrides` (BY_CLASS per class) → room (same) → cabinet `rule_overrides`.
+
+**Locked decisions**
+- Neighbours are **auto-detected in plan** (`src/lib/neighbours.ts` `detectNeighbours`):
+  a probe 5 mm past each side, 10 mm behind the front. Only items overlapping the cabinet
+  vertically count (`cabsBlock`). A panel item (no face + no carcass: end panels,
+  fillers, IBP, curved fixed panels) → `end_panel`; any other cabinet → `cabinet`;
+  inside a wall body → `wall`; nothing → `freestanding`. Kick assemblies ignored.
+  Fillers count as end panels (door to filler = the end reveal), so every door-to-
+  whatever gap is 2 mm with the default 1 / 2 values.
+- Detected values are written to `left/right_neighbour_type` (resolver unchanged), by a
+  CanvasClient effect, **only for cabinets whose detected neighbour the edit changed**
+  (placed, moved, resized, a neighbour added / removed, walls edited). Opening a job never
+  rewrites it (as-built). Cabinets drawn before this keep their stored neighbours until
+  edited, or until **Detect neighbours for the whole room** (cabinet sidebar, one undo step).
+- A manual neighbour is a **lock** in cabinet `rule_overrides.NBRL / NBRR`; it beats the
+  detected column in `resolveReveal`. Sidebar "Auto (…)" clears it.
+- Sidebar **Reveals (mm)** (cabinets with a face): Top REVT, Bottom REVB, Door gap GAPC,
+  Left REVSL, Right REVSR, Row gap GAPR, all cabinet `rule_overrides`; blank = inherited
+  (shown grey). REVSL / REVSR set that side **whatever the neighbour** (they win over
+  REVL / REVENDL in `resolveReveal`), so an override survives a neighbour change.
+- Neighbour-only updates re-resolve from the cached input (no reload).
+- Known gap: FaceGridEditor's preview still uses fixed 4/0/1/1/2/2 reveals (display only).

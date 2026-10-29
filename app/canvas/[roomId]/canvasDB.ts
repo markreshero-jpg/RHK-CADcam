@@ -847,6 +847,21 @@ export async function dbUpdateCabinet(
     }
   }
 
+  // Fast path: neighbour-only change (auto-detected neighbours) + cached input —
+  // only the side reveals move, so nothing needs reloading.
+  if (keys.length > 0 && keys.every(k => k === 'left_neighbour_type' || k === 'right_neighbour_type')) {
+    const cachedN = getCachedInput(id)
+    if (cachedN && !cachedN.kick_run) {
+      const updated = {
+        ...cachedN,
+        ...(u.left_neighbour_type != null && { left_neighbour: u.left_neighbour_type }),
+        ...(u.right_neighbour_type != null && { right_neighbour: u.right_neighbour_type }),
+      }
+      setCachedInput(id, updated)
+      return resolveFromCachedInput(id, updated)
+    }
+  }
+
   // Fast path: joint-override-only change + cached input → resolve synchronously
   // so seam drilling updates instantly in the open editor. Falls through to a
   // full reload when a newly-assigned joint's ops aren't in the cached input.

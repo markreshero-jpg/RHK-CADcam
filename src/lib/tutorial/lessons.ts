@@ -1141,6 +1141,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The machine doesn\'t cut narrow strips well, so every finger-pull rail is cut 60 wide. Each one\'s comment (on the cut list and label) says what to do, e.g. "Cut 60 wide, trim to 38, then tape 2 long edges = 40". The top rail is taped on one long edge, the one away from the benchtop. Every other rail is taped on both. The tape is the doors\' tape.',
       canvas: true, done: () => true },
   ]},
+
+  // Appended 2026-10-29 (auto-detected face neighbours + Reveals in the cabinet sidebar).
+  { id: 'cabinet_reveals', level: 'intermediate', topic: 'cabinets', title: 'Check and change a cabinet\'s reveals',
+    blurb: 'Side reveals follow what\'s beside each cabinet, picked up automatically; override any reveal on one cabinet.',
+    keywords: 'reveal reveals gap door drawer face neighbour neighbours auto detect left right top bottom end panel wall cabinet sidebar override', steps: [
+    { id: 'auto', title: 'Neighbours are picked up for you',
+      body: 'Place two base cabinets side by side and select one. In the sidebar\'s Reveals section, Neighbours shows Auto (Cabinet) on the side that touches the other cabinet, and Wall, End panel or Freestanding on the other. Beside a cabinet the side reveal is the builder\'s cabinet reveal (1); beside anything else it\'s the end reveal (2). Moving, resizing, adding or deleting a cabinet updates the ones it touches.',
+      canvas: true, done: c => c.cabinets.some(cab => cab.left_neighbour_type === 'cabinet' || cab.right_neighbour_type === 'cabinet') },
+    { id: 'override', title: 'Override a reveal on one cabinet',
+      body: 'The grey numbers are what the cabinet gets from the builder, job and room. Type over one, e.g. Top 0 or Left 3, to set it on this cabinet only. Clear the box to inherit again. Left and Right set that side whatever is beside it. Door gap is between doors side by side; Row gap is between rows of drawers or doors.',
+      canvas: true, done: c => c.cabinets.some(cab => ['REVT', 'REVB', 'REVSL', 'REVSR', 'GAPC', 'GAPR'].some(k => typeof (cab.rule_overrides ?? {})[k] === 'number')) },
+    { id: 'lock', title: 'Lock a neighbour, or re-detect a room',
+      body: 'If Auto picks the wrong thing, choose the neighbour from the Left or Right list to lock it; Auto goes back to detecting. Cabinets drawn before auto-detection keep their old neighbours until edited. Click Detect neighbours for the whole room to update them all at once (Ctrl+Z undoes it).',
+      canvas: true, done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -55,13 +55,15 @@ export function resolveReveal(
   rules: ConstructionRules,
   manualOverride?: number
 ): number {
-  // Manual override always wins (cabinet-level explicit value)
-  if (manualOverride !== undefined && manualOverride !== null) {
-    return manualOverride
+  // Manual override always wins (cabinet-level explicit value): the argument,
+  // else the cabinet's own side reveal (REVSL / REVSR).
+  const manual = manualOverride ?? (side === 'left' ? rules.REVSL : rules.REVSR)
+  if (manual !== undefined && manual !== null) {
+    return manual
   }
 
-  // Neighbour-aware resolution
-  switch (neighbourType) {
+  // Neighbour-aware resolution — a locked neighbour (NBRL / NBRR) beats the detected one.
+  switch ((side === 'left' ? rules.NBRL : rules.NBRR) ?? neighbourType) {
     case 'cabinet':
       return side === 'left' ? rules.REVL : rules.REVR
     case 'end_panel':

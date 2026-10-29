@@ -232,6 +232,14 @@ export interface ConstructionRules {
   // the panel from blocking the carcasses over it and out of the dim chains.
   UNDER_PANEL?: boolean
 
+  // Face neighbours + side reveals (z_doorFace_module §Neighbours). Cabinet layer.
+  // NBRL / NBRR lock a side's neighbour (else the auto-detected left/right_neighbour_type);
+  // REVSL / REVSR set that side's reveal outright, whatever the neighbour.
+  NBRL?:  'cabinet' | 'end_panel' | 'wall' | 'freestanding'
+  NBRR?:  'cabinet' | 'end_panel' | 'wall' | 'freestanding'
+  REVSL?: number
+  REVSR?: number
+
   // Joinery — how panels connect to each other
   BOTTOM_JOIN:      'sides_outside' | 'bottom_outside'    // sides span full height vs bottom spans full width
   BOTTOM_BACK_JOIN: 'back_on_bottom' | 'butts_into_back'  // bottom runs behind back vs stops at back inner face

@@ -110,6 +110,7 @@ import WallDetachModal, { type WallDetachChoice } from './WallDetachModal'
 import { detachedNeighbours, connectedWallIds, stretchNeighbour, type DetachedNeighbour } from '@/src/lib/wallJoints'
 import CabinetPanel from './CabinetPanel'
 import CabinetGroupPanel from './CabinetGroupPanel'
+import { detectNeighbours, type NeighbourPair } from '@/src/lib/neighbours'
 import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
@@ -1328,6 +1329,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  // In-flight cabinet updates by id — the neighbour writes below wait for them so a
+  // full resolve still reading the DB can't overwrite their result.
+  const cabUpdatesInFlight = useRef(new Map<string, Promise<unknown>>())
   const handleUpdateCabinet = useCallback(async (id: string, u: Partial<CabinetInstance>) => {
     setCabinets(cs => cs.map(c => c.id === id ? { ...c, ...u } : c))
     // Drop stale resolved geometry immediately on dimension changes so the cabinet shows a
@@ -1335,13 +1339,50 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if ('dx' in u || 'dy' in u || 'dz' in u || 'rule_overrides' in u) {
       setResolvedParts(m => { const next = new Map(m); next.delete(id); return next })
     }
-    const resolved = await dbUpdateCabinet(id, u)
+    const pending = dbUpdateCabinet(id, u)
+    cabUpdatesInFlight.current.set(id, pending)
+    const resolved = await pending.finally(() => { if (cabUpdatesInFlight.current.get(id) === pending) cabUpdatesInFlight.current.delete(id) })
     if (resolved) { setResolvedParts(m => new Map(m).set(id, resolved)); applyInputColours(id); applyInputEdgebands(id) }
     // NB: once a kick run is joined, the standalone kick assembly is fully
     // independent — moving or resizing a member cabinet does NOT re-fit it. The
     // assembly only changes when you move/resize it directly, or when the run is
     // dissolved (explicit Separate, or a delete dropping it below 2 members).
   }, [])
+
+  // Auto-detected face neighbours (z_doorFace_module §Neighbours): after any edit,
+  // each cabinet whose detected left / right neighbour that edit changed (placed,
+  // moved, resized, a neighbour added or removed) takes the new one — it picks
+  // the side reveals. Cabinets the edit didn't touch keep what they were drawn
+  // with, so opening a job never rewrites it (as-built).
+  const neighboursSeen = useRef<Map<string, NeighbourPair> | null>(null)
+  const writeNeighbours = useCallback((id: string, n: NeighbourPair) => {
+    void (cabUpdatesInFlight.current.get(id) ?? Promise.resolve()).catch(() => {})
+      .then(() => handleUpdateCabinet(id, { left_neighbour_type: n.left, right_neighbour_type: n.right }))
+  }, [handleUpdateCabinet])
+  useEffect(() => {
+    const now = detectNeighbours(cabinets, walls, room)
+    const seen = neighboursSeen.current
+    neighboursSeen.current = now
+    if (!seen) return
+    for (const [id, n] of now) {
+      const was = seen.get(id)
+      if (was && was.left === n.left && was.right === n.right) continue
+      const c = cabinets.find(x => x.id === id)
+      if (c && (c.left_neighbour_type !== n.left || c.right_neighbour_type !== n.right)) writeNeighbours(id, n)
+    }
+  }, [cabinets, walls, room, writeNeighbours])
+  // Cabinet panel → "Detect neighbours for the whole room": re-detect every
+  // cabinet in the room, drawn before auto-detection or not.
+  function detectRoomNeighbours() {
+    const now = detectNeighbours(cabinets, walls, room)
+    const changed = [...now].filter(([id, n]) => {
+      const c = cabinets.find(x => x.id === id)
+      return c && (c.left_neighbour_type !== n.left || c.right_neighbour_type !== n.right)
+    })
+    if (changed.length) captureSnapshot()
+    for (const [id, n] of changed) writeNeighbours(id, n)
+    setToast(changed.length ? `Neighbours updated on ${changed.length} cabinet${changed.length > 1 ? 's' : ''}` : 'Neighbours already up to date')
+  }
 
   // Edit shape (z_cabinet_shape_edit E3): right-click a cabinet → Edit shape.
   const shp = useCabinetShapeEdit({ cabinets, onUpdate: handleUpdateCabinet, captureSnapshot })
@@ -3803,6 +3844,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onUpdate={handleUpdateCabinet}
             onDelete={handleDeleteCabinet}
             onClose={() => { setSelected(null); setCabResize(null) }}
+            onDetectRoomNeighbours={detectRoomNeighbours}
             autoFocusWidth
           />
         )}

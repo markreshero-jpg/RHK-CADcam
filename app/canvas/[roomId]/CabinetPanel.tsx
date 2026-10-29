@@ -6,6 +6,8 @@ import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
 import { cabT, findFreeSlot, cabsBlock, cabBottomZ, slideAlongWall, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { resolveReveal } from '@/src/lib/resolver/mergeRules'
+import { DEFAULT_RULES, type ConstructionRules } from '@/src/lib/resolver/types'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
@@ -16,7 +18,7 @@ import BackPanelSection from './BackPanelSection'
 import CabinetSplitSection from './CabinetSplitSection'
 import { canFloat, isFloating, floatingPatch, FLOAT_Z } from '@/src/lib/floating'
 
-export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, hideWallPosition, hideDelete, autoFocusWidth }: {
+export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, onDetectRoomNeighbours, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
   wall: Wall | null
   /** centroid(walls) — which way is into the room. Omitted → no "Off wall" field. */
@@ -27,6 +29,8 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
   onDelete: (id: string) => void | Promise<void>
   /** Header ✕ — closes (deselects). Omitted → no ✕. */
   onClose?: () => void
+  /** Re-detect face neighbours on every cabinet in the room. Omitted → no button. */
+  onDetectRoomNeighbours?: () => void
   hideWallPosition?: boolean
   hideDelete?: boolean
   /** Focus the width field when the panel opens, so Tab flows width → height → depth. */
@@ -313,23 +317,76 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
             </select>
           </div>
         )}
-        <div>
-          <p className={lbl}>Neighbours</p>
-          <div className="grid grid-cols-2 gap-1.5">
-            {(['left_neighbour_type', 'right_neighbour_type'] as const).map(side => (
-              <div key={side}>
-                <p className="text-[10px] text-gray-600 mb-0.5 capitalize">{side.split('_')[0]}</p>
-                <select value={(f(side) as string) ?? 'wall'}
-                  onChange={async e => onUpdate(cabinet.id, { [side]: e.target.value as NeighbourType })} className={inp}>
-                  <option value="wall">Wall</option>
-                  <option value="cabinet">Cabinet</option>
-                  <option value="end_panel">End Panel</option>
-                  <option value="freestanding">Freestanding</option>
-                </select>
+        {cabinet.has_face && (() => {
+          // Face reveals (z_doorFace_module §Neighbours). Blank = the cascaded value
+          // (builder class row → job → room), shown greyed; typing overrides it on
+          // this cabinet. Left / right follow the neighbour on that side — auto-
+          // detected, or locked here (rule_overrides.NBRL / NBRR) — unless set
+          // outright (REVSL / REVSR).
+          const ov = (cabinet.rule_overrides ?? {}) as Record<string, unknown>
+          const base = { ...(getCachedInput(cabinet.id)?.rules_base ?? DEFAULT_RULES), ...ov } as ConstructionRules
+          const nbName: Record<NeighbourType, string> = { cabinet: 'Cabinet', end_panel: 'End panel', wall: 'Wall', freestanding: 'Freestanding' }
+          const patch = (key: string, v: unknown) => {
+            const next = { ...(cabinet.rule_overrides ?? {}) }
+            if (v === undefined) delete next[key]; else next[key] = v
+            void onUpdate(cabinet.id, { rule_overrides: next })
+          }
+          const fields: { key: string; label: string; inherited: number }[] = [
+            { key: 'REVT',  label: 'Top',    inherited: base.REVT },
+            { key: 'REVB',  label: 'Bottom', inherited: base.REVB },
+            { key: 'GAPC',  label: 'Door gap',   inherited: base.GAPC },
+            { key: 'REVSL', label: 'Left',   inherited: resolveReveal('left',  cabinet.left_neighbour_type  ?? 'wall', { ...base, REVSL: undefined }) },
+            { key: 'REVSR', label: 'Right',  inherited: resolveReveal('right', cabinet.right_neighbour_type ?? 'wall', { ...base, REVSR: undefined }) },
+            { key: 'GAPR',  label: 'Row gap',    inherited: base.GAPR },
+          ]
+          return (
+            <div>
+              <p className={lbl}>Reveals (mm)</p>
+              <div className="grid grid-cols-3 gap-1">
+                {fields.map(({ key, label, inherited }) => {
+                  const cur = typeof ov[key] === 'number' ? ov[key] as number : null
+                  return (
+                    <div key={key}>
+                      <p className="text-[10px] text-gray-600 mb-0.5">{label}</p>
+                      <CalcInput
+                        value={cur}
+                        decimals={1}
+                        placeholder={String(inherited)}
+                        title={cur == null ? `Inherited: ${inherited} mm — type a value to override, clear to inherit` : 'Clear to inherit'}
+                        onCommit={v => patch(key, v)}
+                        onClear={() => patch(key, undefined)}
+                        className={inp + ' text-right'}
+                      />
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
-        </div>
+              <p className="text-[10px] text-gray-600 mt-2 mb-0.5">Neighbours</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([['NBRL', 'left_neighbour_type', 'Left'], ['NBRR', 'right_neighbour_type', 'Right']] as const).map(([key, col, label]) => {
+                  const locked = typeof ov[key] === 'string' ? ov[key] as NeighbourType : ''
+                  return (
+                    <div key={key}>
+                      <p className="text-[9px] text-gray-500 mb-0.5">{label}</p>
+                      <select value={locked} onChange={e => patch(key, e.target.value || undefined)}
+                        title="Auto = what's touching that side in plan. Pick one to lock it." className={inp}>
+                        <option value="">Auto ({nbName[cabinet[col] ?? 'wall']})</option>
+                        {(Object.keys(nbName) as NeighbourType[]).map(n => <option key={n} value={n}>{nbName[n]}</option>)}
+                      </select>
+                    </div>
+                  )
+                })}
+              </div>
+              {onDetectRoomNeighbours && (
+                <button type="button" onClick={onDetectRoomNeighbours}
+                  title="Re-detect left / right neighbours on every cabinet in this room (cabinets drawn before auto-detection keep their old ones until edited)"
+                  className="mt-1.5 text-[10px] text-blue-400 hover:text-blue-300">
+                  Detect neighbours for the whole room
+                </button>
+              )}
+            </div>
+          )
+        })()}
         {f('has_face') && (
           <div>
             <p className={lbl}>Handle schedule</p>
