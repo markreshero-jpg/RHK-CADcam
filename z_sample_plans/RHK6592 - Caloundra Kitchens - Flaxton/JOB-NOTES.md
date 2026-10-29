@@ -84,3 +84,11 @@ the carcass, 16s against walls = fillers on the kick, seen vanity panels to the 
 - Both resolver clean, kicks joined, basins linked (main BC-02 / BC-04, ensuite BC-03), spec blocks added.
 - Open: basin + tap models TBC (no taps drawn); main bath room depth not given (side walls drawn 1000); quote says
   the kitchen is shaker — Mark: revisit once shaker doors are built properly.
+
+## Rev 4 (Mark 2026-10-29)
+
+- Library basin renamed "White Semi Inset Basin 530x360" (was "Semi Recessed"; placed copies renamed too, incl RHK6586).
+  Bathroom basins named "Semi inset basin", centred on the 495 top depth (y 67.5, front 427.5) — moved with
+  updateFixture (a DB-only move snaps back to the cabinet link). Spec blocks say "Semi inset".
+- Main tall TC-02 handles 1000 AFF to the handle centre: face_grid zones grip_edge bottom, handle_offset 796
+  (door bottom at the 140 kick + 796 + 64 half of the 128 centres). Resolver clean.
