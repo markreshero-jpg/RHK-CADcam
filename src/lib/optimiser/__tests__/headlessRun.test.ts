@@ -262,13 +262,13 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const holesIn = (pl: NestedSheet['placements'][number], drills: { x: number; y: number }[]) =>
       drills.filter(h => h.x >= pl.x - 0.01 && h.x <= pl.x + pl.w + 0.01 && h.y >= pl.y - 0.01 && h.y <= pl.y + pl.h + 0.01)
 
-    // Part numbers: sheet-major, in placement order — printed on the sheet + list.
+    // Part numbers: 1, 2, 3… on each sheet, in placement order — printed on the sheet + list + labels.
     const gmTags = grainMatchTags(nestResult)
     const rows: { no: number; sheet: number; cab: string; part: string; w: number; h: number; finW: number; finH: number; rotated: boolean; holes: number; comment: string | null; gm: string | null }[] = []
     const noByUid = new Map<string, number>()
     gen.forEach((g, si) => g.sheet.placements.forEach(pl => {
       const p = partByUid.get(pl.baseUid)!
-      const no = rows.length + 1
+      const no = rows.filter(r => r.sheet === si + 1).length + 1
       noByUid.set(pl.uid, no)
       rows.push({ no, sheet: si + 1, cab: p.cabinet_label, part: p.label, w: pl.rotated ? pl.h : pl.w, h: pl.rotated ? pl.w : pl.h,
         finW: p.w, finH: p.h, rotated: pl.rotated, holes: holesIn(pl, g.drills).length, comment: p.comment,

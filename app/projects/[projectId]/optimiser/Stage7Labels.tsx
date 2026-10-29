@@ -195,7 +195,7 @@ export default function Stage7Labels() {
               )
             })}
           </div>
-          <input className={`${sel} w-full`} placeholder="Part numbers, e.g. 3, 7-9 (blank = all)" value={partsText} onChange={e => setPartsText(e.target.value)} />
+          <input className={`${sel} w-full`} placeholder="Part numbers on those sheets, e.g. 3, 7-9 (blank = all)" value={partsText} onChange={e => setPartsText(e.target.value)} />
         </section>
 
         <div className="flex items-center gap-2 pt-1">

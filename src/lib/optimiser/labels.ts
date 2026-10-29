@@ -63,10 +63,11 @@ export interface LabelData {
   pic: { W: number; H: number; edges: [Pt, Pt, boolean][]; holes: { x: number; y: number; d: number }[] }
 }
 
-/** Part numbers: sheet-major, in placement order — matches the sheet prints. */
+/** Part numbers: 1, 2, 3… on each sheet, in placement order (Mark, 2026-10-29) —
+ *  label "Sheet 2 / Part 3" matches the sheet prints. */
 export function partNumbers(nest: NestResult): Map<string, number> {
   const out = new Map<string, number>()
-  for (const s of nest.sheets) for (const pl of s.placements) out.set(pl.uid, out.size + 1)
+  for (const s of nest.sheets) s.placements.forEach((pl, i) => out.set(pl.uid, i + 1))
   return out
 }
 
