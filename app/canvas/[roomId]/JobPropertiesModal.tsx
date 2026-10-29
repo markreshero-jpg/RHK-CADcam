@@ -188,6 +188,9 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [handleSched, setHandleSched] = useState(project.handle_schedule_id ?? '')
   const [slideSched,  setSlideSched]  = useState(project.slide_schedule_id  ?? '')
   const [hingeSched,  setHingeSched]  = useState(project.hinge_schedule_id  ?? '')
+  // Handle holes (z_handles D13), job level: rule_overrides.HANDLE_DRILL, unset = drill.
+  const [handleDrill, setHandleDrill] = useState<'on' | 'off'>(
+    () => (project.rule_overrides as Record<string, unknown> | null)?.HANDLE_DRILL === false ? 'off' : 'on')
   const [handleScheds, setHandleScheds] = useState<SchedItem[]>([])
   const [slideScheds,  setSlideScheds]  = useState<SchedItem[]>([])
   const [hingeScheds,  setHingeScheds]  = useState<SchedItem[]>([])
@@ -259,6 +262,8 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       if (!isClassKey(k) && rules[k] !== SYS[k]) newOverrides[k] = rules[k]
     }
     writeClassOverrides(newOverrides, classVals, builderRules)
+    if (handleDrill === 'off') newOverrides.HANDLE_DRILL = false
+    else delete newOverrides.HANDLE_DRILL
     if (newOverrides.BY_CLASS) useTutorial.getState().emit('class_reveals_saved')   // tutorial class_reveals
     useTutorial.getState().emit('props_saved')   // tutorial job_colours
     await onSave({
@@ -712,6 +717,20 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
                         <SchedPicker label="Handles" value={handleSched} onChange={setHandleSched} items={handleScheds} />
                         <SchedPicker label="Slides"  value={slideSched}  onChange={setSlideSched}  items={slideScheds}  />
                         <SchedPicker label="Hinges"  value={hingeSched}  onChange={setHingeSched}  items={hingeScheds}  />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Handle Holes</p>
+                        <select
+                          value={handleDrill}
+                          onChange={e => setHandleDrill(e.target.value as 'on' | 'off')}
+                          className={`w-full bg-gray-800 border rounded px-3 py-1.5 text-xs focus:outline-none focus:border-blue-500 ${
+                            handleDrill === 'off' ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
+                          }`}
+                        >
+                          <option value="on">Drill handle holes</option>
+                          <option value="off">Don&apos;t drill handle holes</option>
+                        </select>
+                        <p className="text-[10px] text-gray-500 mt-1">Off = handles are still drawn, listed and costed, but no holes go to the CNC. Rooms, cabinets and single doors / drawers can override this.</p>
                       </div>
                       <SaveDefaultsButton onClick={saveHardwareDefaults} saving={savingDefaults} />
                     </>

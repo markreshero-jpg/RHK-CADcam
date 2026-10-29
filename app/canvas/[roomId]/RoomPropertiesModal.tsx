@@ -454,7 +454,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
                     handleDrill ? 'border-blue-700 text-blue-300' : 'border-gray-700 text-white'
                   }`}
                 >
-                  <option value="">— inherit from job (drill) —</option>
+                  <option value="">— inherit from job ({(project?.rule_overrides as Record<string, unknown> | null)?.HANDLE_DRILL === false ? "don't drill" : 'drill'}) —</option>
                   <option value="on">Drill handle holes</option>
                   <option value="off">Don&apos;t drill handle holes</option>
                 </select>

@@ -267,7 +267,7 @@ thickness proud. One strip per front:
   on canvas load (`needsResolve` in `dbLoadResolvedParts`).
 
 **D13. Handle holes can be switched off (user, 2026-10-13)** at three levels:
-room, cabinet, and per door / drawer front. The handle is still listed and
+job, room, cabinet, and per door / drawer front. The handle is still listed and
 costed, it just isn't drilled. Built in H2b:
 - Rule `HANDLE_DRILL` (boolean, unset = drill) in `ConstructionRules`, carried
   by the existing `rule_overrides` cascade (job → room → cabinet). It's kept out
@@ -280,8 +280,9 @@ costed, it just isn't drilled. Built in H2b:
   - Room dialog → Hardware tab → "Handle Holes".
   - Cabinet panel → under Handle schedule.
   - Face grid editor → selected door / drawer → "Handle holes".
-- Not built: a job-level control in Job Properties (the rule already cascades
-  from the job if one is added).
+  - Job Properties → Cabinet Standards → Hardware Schedules → "Handle Holes"
+    (added 2026-10-29; drill = key unset, off = `HANDLE_DRILL: false`). The
+    room dropdown's "inherit" option shows the job's value.
 
 **H3 notes (2026-10-13):**
 - Migration `z_handles/migration_h3_sharknose.sql` renamed `bevel_depth_mm` to
