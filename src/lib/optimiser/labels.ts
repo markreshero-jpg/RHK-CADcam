@@ -202,11 +202,12 @@ export function drawLabel(doc: JsPDF, d: LabelData, ox: number, oy: number, W: n
   fs(7.5); underline('Edging:', 3, 35); fit(d.edging, 14, 35, 39, 7.5, 5)
   // Comment box: bottom left, clear of the sizes and the picture (x ≤ 53). The
   // text wraps, shrinking until it fits; past 4.5 pt it's cut with an ellipsis.
+  // No comment → no box at all (Mark, 2026-10-29).
   const BX = 2, BY = 37, BW = 51, BH = 10
-  doc.setLineWidth(0.2 * kf); doc.rect(X(BX), Y(BY), BW * kx, BH * ky)
-  doc.setFont('helvetica', 'bold'); fs(5.5); doc.text('Comment:', X(BX + 1), Y(BY + 2.3))
-  doc.setFont('helvetica', 'normal')
-  if (d.comment) {
+  if (d.comment.trim()) {
+    doc.setLineWidth(0.2 * kf); doc.rect(X(BX), Y(BY), BW * kx, BH * ky)
+    doc.setFont('helvetica', 'bold'); fs(5.5); doc.text('Comment:', X(BX + 1), Y(BY + 2.3))
+    doc.setFont('helvetica', 'normal')
     const avail = (BH - 3.2) * ky, wrapW = (BW - 2) * kx
     let f = 7.5, lines: string[] = []
     const lineH = (g: number) => g * kf * 0.3528 * 1.15
