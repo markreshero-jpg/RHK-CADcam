@@ -392,9 +392,12 @@ export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolI
       const openBot = bot <= EPS, openTop = top >= side.DY - EPS
       const u0 = back, u1 = front + NOTCH_OVERRUN
       const v0 = openBot ? bot - NOTCH_OVERRUN : bot, v1 = openTop ? top + NOTCH_OVERRUN : top
+      // The right side machines inner face up, mirrored front-to-back like its
+      // holes (projectToFrame) — its notch goes the same way.
+      const mx = (u: number) => side.key === 'case_right_side' ? side.DX - u : u
       rows.push({
         ...base, operation_type: 'route', operation_action: 'pocket', operation_key: `fprail_notch_${n}`,
-        pos_x: round((u0 + u1) / 2), pos_y: round((v0 + v1) / 2),
+        pos_x: round(mx((u0 + u1) / 2)), pos_y: round((v0 + v1) / 2),
         size_dx: round(u1 - u0), size_dy: round(v1 - v0), length: null, width: null,
       })
       // Closed-end reliefs: a slot centred one cutter radius in from the end,
@@ -404,7 +407,7 @@ export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolI
         const ends = [...(openTop ? [] : [top - cut]), ...(openBot ? [] : [bot + cut])]
         ends.forEach((v, i) => rows.push({
           ...base, operation_type: 'groove', operation_action: null, operation_key: `fprail_relief_${n}_${i}`,
-          pos_x: round(back), pos_y: round(v), size_dx: null, size_dy: null,
+          pos_x: round(Math.min(mx(back), mx(u1))), pos_y: round(v), size_dx: null, size_dy: null,
           length: round(u1 - back), width: round(2 * cut),
         }))
       }
@@ -438,7 +441,9 @@ function shapedNotchRoutes(
         us.push(q[frame.u.axis] - frame.u.origin); vs.push(q[frame.v.axis] - frame.v.origin)
       }
       const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs)
-      return { pos_x: round((u0 + u1) / 2), pos_y: round((v0 + v1) / 2), size_dx: round(u1 - u0), size_dy: round(v1 - v0) }
+      // A right side machines inner face up, mirrored like its holes (see collectNotchRoutes).
+      const uc = (u0 + u1) / 2
+      return { pos_x: round(panel.part_key === 'right_side' ? frame.u.extent - uc : uc), pos_y: round((v0 + v1) / 2), size_dx: round(u1 - u0), size_dy: round(v1 - v0) }
     }
     const n = rail.part_key.slice(7)
     const cut = rail.fprail!.cut

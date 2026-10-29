@@ -177,7 +177,7 @@ export function normalizeProject(
     const inPlane = transpose || (near(effW, DX) && near(effH, DY))
     const frame = shapeFrameFor(table, table === 'custom_parts' ? String(row.orientation ?? 'flat') : naming.typeKey, partKey)
     const { shape, stale, tapeMissing } = attachShape(shapesByCab.get(cabId)?.[partKey], effW, effH,
-      inPlane ? { frame, DX, DY, transpose } : undefined,
+      inPlane ? { frame, DX, DY, transpose, mirrorBlank: table === 'case_parts' && partKey === 'case_right_side' } : undefined,
       Array.isArray(row.outline) ? row.outline as OutlinePt[] : null, bandOf(table, row))
     // Inner cut-outs (curved end ribs, C4) ride on the resolver outline: dropped
     // with it when a drawn shape replaces it or a size override no longer fits.

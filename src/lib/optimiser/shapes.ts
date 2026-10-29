@@ -66,6 +66,12 @@ export interface OptiShape {
   /** Banded? per op_polygon edge (same index as op_tape), kept even when the
    *  tape thickness is unknown — the edgeband length report (O7). */
   op_band?: (boolean | null)[]
+  /** A right gable's resolver outline is written like the left's (x = depth
+   *  from the back), but the gable machines inner face up — its holes are
+   *  pre-mirrored (partFootprint projectToFrame) — so the cut blank's contour
+   *  is mirrored across the depth axis ('y' when the part nests turned) to
+   *  sit with them. op_polygon itself stays unmirrored. */
+  blank_mirror?: 'x' | 'y'
   bbox: { w: number; h: number }
   tape_mm: number | null        // banded-segment length at save (meta.tapeLengthMM)
   revision: number              // 0 for resolver shapes
@@ -166,7 +172,10 @@ export function cutBlank(part: BlankPart, deductEb: boolean): CutBlank {
 function makeBlank(part: BlankPart, deductEb: boolean): CutBlank {
   const poly = part.shape?.op_polygon
   const shaped = !!poly && poly.length >= 3
-  const finished: CutBlank = { w: part.w, h: part.h, sx: 0, sy: 0, sx2: 0, outline: shaped ? poly! : null }
+  const mirror = part.shape?.blank_mirror
+  const flip = (pts: ShapePt[], w: number, h: number) =>
+    mirror === 'x' ? pts.map(p => ({ x: w - p.x, y: p.y })) : mirror === 'y' ? pts.map(p => ({ x: p.x, y: h - p.y })) : pts
+  const finished: CutBlank = { w: part.w, h: part.h, sx: 0, sy: 0, sx2: 0, outline: shaped ? flip(poly!, part.w, part.h) : null }
   if (!deductEb) return finished
   if (!shaped) {
     return { ...cutSize(part), sx: part.eb_w1, sy: part.eb_h1, sx2: part.eb_w2, outline: null }
@@ -192,7 +201,7 @@ function makeBlank(part: BlankPart, deductEb: boolean): CutBlank {
   for (const p of off) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y) }
   return {
     w: round1(x1 - x0), h: round1(y1 - y0), sx: x0, sy: y0, sx2: part.w - x1,
-    outline: off.map(p => ({ x: p.x - x0, y: p.y - y0 })),
+    outline: flip(off.map(p => ({ x: p.x - x0, y: p.y - y0 })), x1 - x0, y1 - y0),
   }
 }
 
@@ -386,7 +395,7 @@ export function outlineToSegments(pts: OutlinePt[]): ShapeSegmentLike[] {
 // is banded but there's no thickness on record.
 export function attachShape(
   row: ShapeRow | undefined, partW: number, partH: number,
-  op?: { frame: ShapeFrame; DX: number; DY: number; transpose?: boolean },
+  op?: { frame: ShapeFrame; DX: number; DY: number; transpose?: boolean; mirrorBlank?: boolean },
   resolverOutline?: OutlinePt[] | null,
   eb?: { t: number | undefined; flags: Record<EdgeTag, boolean> },
 ): { shape?: OptiShape; stale: boolean; tapeMissing?: boolean } {
@@ -430,6 +439,7 @@ export function attachShape(
       segments,
       polygon,
       op_polygon: opPoly,
+      ...(resolver && op?.mirrorBlank ? { blank_mirror: op.transpose ? 'y' as const : 'x' as const } : {}),
       ...(opTape.some(t => t != null) ? { op_tape: opTape, op_band: opBand } : {}),
       bbox: { w: Math.round(bw * 100) / 100, h: Math.round(bh * 100) / 100 },
       tape_mm: drawn ? row!.meta?.tapeLengthMM ?? null : null,

@@ -209,13 +209,47 @@ describe('L corner (BCNP) outlines in the op frame', () => {
       for (const r of routes) {
         const part = parts.find(p => p.source_part_key === r.source_part_key)!
         expect(part.shape?.source).toBe('resolver')
+        // Checked against the contour actually cut (a right gable's is mirrored).
+        const cut = placedOutline(part, { w: part.w, rotated: false }, false)!
         // The pocket's middle, pulled inside the part's bbox: a notch, not material.
         const x = Math.min(Math.max(r.pos_x, 1), part.w - 1), y = Math.min(Math.max(r.pos_y, 1), part.h - 1)
-        expect(pointInShape({ x, y }, part.shape!.op_polygon)).toBe(false)
+        expect(pointInShape({ x, y }, cut)).toBe(false)
         // Its drill holes are all on material.
         for (const h of collectDrillRows(rp, 'c1').rows.filter(d => d.source_part_key === r.source_part_key))
-          expect(pointInShape({ x: h.pos_x, y: h.pos_y }, part.shape!.op_polygon, 1)).toBe(true)
+          expect(pointInShape({ x: h.pos_x, y: h.pos_y }, cut, 1)).toBe(true)
       }
+    })
+  }
+})
+
+// RHK6570 (2026-10-29): a right gable machines inner face up, so its holes are
+// mirrored front-to-back — the notched contour and the notch pockets must be
+// too, or the knock-in block holes land at the back and the back holes at the front.
+describe('finger-pull gables: contour, notches and holes agree on both hands', () => {
+  const cab: CabinetInput = {
+    ...lCorner('right', true), assembly_class: 'base', DX: 600, DY: 870, DZ: 560, footprint: undefined,
+    face_grid: { rows: [{ row_index: 0, height_locked: false }, { row_index: 1, height_locked: false }], cols: [{ col_index: 0, width_locked: false }],
+      zones: [{ row_index: 0, col_index: 0, face_type: 'drawer_face' }, { row_index: 1, col_index: 0, face_type: 'drawer_face' }] },
+  }
+  const rp = resolveCabinet(cab)
+  const parts = snapshot(rp)
+  const drills = collectDrillRows(rp, 'c1').rows
+  const notches = collectNotchRoutes(rp, 'c1', 'tool10').rows.filter(r => r.operation_type === 'route')
+  for (const key of ['case_left_side', 'case_right_side']) {
+    it(key, () => {
+      const part = parts.find(p => p.source_part_key === key)!
+      const cut = placedOutline(part, { w: part.w, rotated: false }, false)!
+      const mine = notches.filter(r => r.source_part_key === key)
+      expect(mine.length).toBeGreaterThan(0)
+      for (const r of mine) expect(pointInShape({ x: Math.min(Math.max(r.pos_x, 1), part.w - 1), y: r.pos_y }, cut)).toBe(false)
+      const blocks = drills.filter(d => d.source_part_key === key && d.parameters.kind === 'fprail_block')
+      expect(blocks.length).toBe(mine.length)
+      for (const b of blocks) {
+        expect(pointInShape({ x: b.pos_x, y: b.pos_y }, cut, 1)).toBe(true)
+        // Just behind its notch, at the same (front) edge.
+        expect(Math.min(...mine.map(r => Math.abs(r.pos_x - b.pos_x)))).toBeLessThan(40)
+      }
+      for (const d of drills.filter(d => d.source_part_key === key)) expect(pointInShape({ x: d.pos_x, y: d.pos_y }, cut, 1)).toBe(true)
     })
   }
 })
