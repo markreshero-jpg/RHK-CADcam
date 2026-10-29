@@ -6,6 +6,7 @@ import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixtur
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
+import { loadJobCustomParts } from './useMaterialColours'
 import { withFixtureCutouts } from '@/src/lib/fixtureGeometry'
 import { filterHiddenMap, filterRemovedParts } from '@/src/lib/resolver/filterHidden'
 import PlanViewReport from './PlanViewReport'
@@ -277,7 +278,9 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
       setJobCabinets(cabs as CabinetInstance[])
       setJobBtInstances((bts ?? []) as BenchtopInstance[])
       const [resolved, btPartsResult] = await Promise.all([
-        dbLoadResolvedParts(cabs.map(c => c.id)),
+        // Custom-only cabinets (end panels, fillers) have no case rows — without their
+        // custom parts they'd draw as carcass-depth placeholder boxes.
+        dbLoadResolvedParts(cabs.map(c => c.id)).then(async m => { await loadJobCustomParts(m, cabs.map(c => c.id)); return m }),
         (bts ?? []).length > 0
           ? supabase.from('benchtop_resolved_parts').select('*').in('benchtop_id', (bts ?? []).map(b => (b as { id: string }).id))
           : Promise.resolve({ data: [] }),

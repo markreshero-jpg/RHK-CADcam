@@ -24,8 +24,9 @@ function emptyResolved(cabinet_id: string, custom_parts: ResolvedCustomPart[]): 
 }
 
 // Group custom-part rows by cabinet and attach to the resolved map, creating
-// skeleton entries for cabinets that have only custom parts.
-function attachCustomParts(map: Map<string, ResolvedCabinet>, rows: Record<string, unknown>[]) {
+// skeleton entries for cabinets that have only custom parts. Reports' job-wide
+// load uses it too (loadJobCustomParts).
+export function attachCustomParts(map: Map<string, ResolvedCabinet>, rows: Record<string, unknown>[]) {
   const byCab = new Map<string, ResolvedCustomPart[]>()
   for (const r of rows) {
     const cabId = r.cabinet_instance_id as string
@@ -38,6 +39,13 @@ function attachCustomParts(map: Map<string, ResolvedCabinet>, rows: Record<strin
     if (existing) existing.custom_parts = parts
     else map.set(cabId, emptyResolved(cabId, parts))
   }
+}
+
+/** Attach the room-visible custom parts of these cabinets (end panels, fillers…). */
+export async function loadJobCustomParts(map: Map<string, ResolvedCabinet>, ids: string[]) {
+  if (!ids.length) return
+  const { data: cps } = await supabase.from('cabinet_custom_parts').select(CUSTOM_PART_COLS).in('cabinet_instance_id', ids)
+  if (cps && cps.length) attachCustomParts(map, withLibraryKey(cps as Record<string, unknown>[]))
 }
 
 export function useMaterialColours(initialCabinets: CabinetInstance[]) {
@@ -53,8 +61,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
     dbLoadResolvedParts(ids, needsResolve).then(async map => {
       // Attach standalone custom parts (panels/fillers/end panels) so room views
       // can draw them; this also creates entries for custom-only cabinets.
-      const { data: cps } = await supabase.from('cabinet_custom_parts').select(CUSTOM_PART_COLS).in('cabinet_instance_id', ids)
-      if (cps && cps.length) attachCustomParts(map, withLibraryKey(cps as Record<string, unknown>[]))
+      await loadJobCustomParts(map, ids)
       if (map.size === 0) return
       setResolvedParts(map)
 
