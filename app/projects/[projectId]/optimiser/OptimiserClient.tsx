@@ -3,7 +3,7 @@
 // ============================================================
 // Panel Optimiser — standalone workspace at
 // /projects/[projectId]/optimiser  (spec §5).
-// Six-stage flow over a snapshot of the project's parts. Stages
+// Seven-stage flow over a snapshot of the project's parts. Stages
 // 1-2 (machine/tool + part selection) are implemented here;
 // 3-6 are filled in by later build steps.
 // ============================================================
@@ -26,6 +26,7 @@ import { cutBlank, placedOutline, placedHoles } from '@/src/lib/optimiser/shapes
 import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
 import Stage6Gcode from './Stage6Gcode'
+import Stage7Labels from './Stage7Labels'
 
 const STAGES: { n: Stage; label: string }[] = [
   { n: 1, label: 'Machine & Tool' },
@@ -34,6 +35,7 @@ const STAGES: { n: Stage; label: string }[] = [
   { n: 4, label: 'Nesting' },
   { n: 5, label: 'Editing' },
   { n: 6, label: 'G-code' },
+  { n: 7, label: 'Labels' },
 ]
 
 const sel = 'bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent'
@@ -112,6 +114,7 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
         {stage === 4 && <Stage4Nesting />}
         {stage === 5 && <Stage5Edit />}
         {stage === 6 && <Stage6Gcode />}
+        {stage === 7 && <Stage7Labels />}
       </div>
 
       {/* Footer nav */}
@@ -122,9 +125,9 @@ export default function OptimiserClient({ snapshot }: { snapshot: OptiSnapshot }
           className="px-4 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 transition-colors">
           ← Back
         </button>
-        <span className="text-[11px] text-ink-subtle">Stage {stage} of 6</span>
+        <span className="text-[11px] text-ink-subtle">Stage {stage} of 7</span>
         <button
-          disabled={stage === 6 || !canAdvance}
+          disabled={stage === 7 || !canAdvance}
           onClick={() => setStage((stage + 1) as Stage)}
           className="px-4 py-1.5 text-xs rounded-lg bg-accent text-white hover:bg-accent-hover disabled:opacity-40 transition-colors">
           Next →

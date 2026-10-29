@@ -1168,6 +1168,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Job Properties → Cabinet Standards → Hardware Schedules → Drawer Front Markers. Pick "Don\'t prick drawer front markers" and save. The next optimiser run leaves them off.',
       canvas: true, done: () => true },
   ]},
+
+  // Appended 2026-10-29 (optimiser Stage 7 — part labels).
+  { id: 'part_labels', level: 'advanced', topic: 'production', title: 'Print part labels',
+    blurb: 'Print a label for every nested part from the optimiser, on a label printer or A4 sheets.',
+    keywords: 'label labels print printer sticker part number cabinet vision zebra brother dymo a4 optimiser stage 7 nest', steps: [
+    { id: 'open', title: 'Go to Labels (Stage 7)',
+      body: 'Production → Generate CNC…, run the Nesting stage, then click Labels at the top (stage 7). Every nested part gets one label, numbered sheet by sheet like the sheet prints: job, room, cabinet type, part, board, colour, edging, comment, Cab #, sheet and part number, the cut size, and a picture of the part with its taped edges (thick lines) and holes.',
+      target: 'menu-Production', done: c => c.path.endsWith('/optimiser') },
+    { id: 'size', title: 'Pick the label size and printer',
+      body: 'Choose a label size (102 × 48 is the Cabinet Vision size; Custom… takes any size) and the printer type. Label printer prints one label per page. A4 sheet tiles them with cut guides. The preview on the right updates as you change things, and your choices are remembered on this computer.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'print', title: 'Print',
+      body: 'Click Print and pick your label printer in the print dialog. Set the paper size to the label size and the scale to 100% / Actual size. If the print sits off the label, nudge it with Offset (mm right, mm down). To reprint a few, click sheets off, or type part numbers like 3, 7-9. Download PDF saves the same labels.',
+      done: c => c.path.endsWith('/optimiser') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

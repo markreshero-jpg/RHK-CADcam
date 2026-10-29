@@ -14,7 +14,7 @@ import { findBestPlacement, findNearestValid, sheetEfficiency } from './edit'
 import { blockOfUid, blockRectOn, detachFromBlock } from './grainBlocks'
 import { getUserPrefs, setUserPrefs } from '../userPrefs'
 
-export type Stage = 1 | 2 | 3 | 4 | 5 | 6
+export type Stage = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 // Canonical Stage 2 column set. A persisted order is reconciled against this so
 // columns added/removed in code never corrupt a saved layout.

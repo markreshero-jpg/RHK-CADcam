@@ -385,108 +385,11 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     }
     writeFileSync(join(outDir, 'sheets.pdf'), Buffer.from(doc.output('arraybuffer')))
 
-    // ── Part labels (Cabinet Vision layout, z_Part_label_example) ──
-    // One label per page, part-number order. Sizes are CUT size (edgeband
-    // conventions: labels default to cut size). Length = DY (grain), width = DX.
-    const LW = 102, LH = 48
-    const cabIds = [...new Set(nestableParts.map(p => p.cabinet_instance_id))]
-    const { data: defRows } = await supabase.from('cabinet_instances').select('id,cabinet_definitions(name)').in('id', cabIds)
-    const cabType = new Map((defRows ?? []).map(r => [r.id as string, ((r as { cabinet_definitions?: { name?: string } | null }).cabinet_definitions?.name) ?? '']))
-    const tapeIds = [...new Set(nestableParts.flatMap(p => (p.eb_tape ?? []).map(t => t.id).filter((x): x is string => !!x)))]
-    const { data: tapeRows } = tapeIds.length ? await supabase.from('edge_banding').select('id,name').in('id', tapeIds) : { data: [] }
-    const tapeName = new Map((tapeRows ?? []).map(t => [t.id as string, t.name as string]))
-    const { data: colRows } = await supabase.from('materials').select('id,colour_name').in('id', [...new Set(nestableParts.map(p => p.material_id).filter((x): x is string => !!x))])
-    const colourName = new Map((colRows ?? []).map(r => [r.id as string, (r.colour_name as string | null) ?? '']))
-
-    const lab = new jsPDF({ orientation: 'landscape', unit: 'mm', format: [LH, LW] })
-    const fitText = (txt: string, x: number, y: number, maxW: number, fs: number, minFs: number, opts?: { align?: 'right' | 'center' }) => {
-      let f = fs
-      lab.setFontSize(f)
-      while (f > minFs && lab.getTextWidth(txt) > maxW) { f -= 0.5; lab.setFontSize(f) }
-      lab.text(txt, x, y, opts)
-    }
-    gen.forEach((g, si) => g.sheet.placements.forEach(pl => {
-      const p = partByUid.get(pl.baseUid)!
-      const no = noByUid.get(pl.uid)!
-      if (no > 1) lab.addPage([LH, LW], 'landscape')
-      const blank = cutBlank(p, deductEb)
-      const Wc = blank.w, Hc = blank.h
-      const len = Math.round(Hc * 10) / 10, wid = Math.round(Wc * 10) / 10
-      lab.setTextColor(0); lab.setDrawColor(0); lab.setLineWidth(0.2)
-      // Left column
-      lab.setFont('helvetica', 'bold'); fitText(snap.projectName, 3, 6.5, 48, 11, 7)
-      lab.setFont('helvetica', 'normal'); fitText(p.room_name, 3, 10.5, 48, 8.5, 6)
-      fitText(cabType.get(p.cabinet_instance_id) ?? '', 3, 14.5, 48, 8.5, 6)
-      lab.setFont('helvetica', 'bold'); fitText(p.label, 9, 19.5, 44, 11, 6.5)
-      lab.setFont('helvetica', 'normal'); fitText(matName(p.material_id) ?? '', 3, 24.5, 49, 8.5, 6)
-      fitText(colourName.get(p.material_id ?? '') ?? '', 3, 28.5, 49, 8.5, 6)
-      // Grain match (z_grain_match G5): "Grain match GM1 · 3 of 6".
-      const gmt = gmTags.get(pl.uid)
-      if (gmt) { lab.setFont('helvetica', 'bold'); fitText(`Grain match ${grainMatchLine(gmt)} ${gmt.direction === 'horizontal' ? '(grain across)' : '(grain up)'}`, 3, 31.9, 49, 7.5, 5); lab.setFont('helvetica', 'normal') }
-      // Banded sides from eb_on, so a 0 mm "no tape" band (sprayed round-over) still shows.
-      const [onW1, onW2, onH1, onH2] = p.eb_on ?? [p.eb_w1 > 0, p.eb_w2 > 0, p.eb_h1 > 0, p.eb_h2 > 0]
-      const lEdges = (onW1 ? 1 : 0) + (onW2 ? 1 : 0)
-      const wEdges = (onH1 ? 1 : 0) + (onH2 ? 1 : 0)
-      const tapes = [...new Set((p.eb_tape ?? []).map(t => (t.id && tapeName.get(t.id)) || ''))].filter(Boolean).join(', ')
-      const edging = lEdges + wEdges ? `${lEdges}L ${wEdges}W${tapes ? ` - ${tapes}` : ''}` : 'None'
-      lab.setFontSize(7.5); lab.text('Edging:', 3, 35); lab.line(3, 35.6, 3 + lab.getTextWidth('Edging:'), 35.6)
-      fitText(edging, 14, 35, 39, 7.5, 5)
-      lab.setFontSize(7.5); lab.text('Comment:', 3, 40.5); lab.line(3, 41.1, 3 + lab.getTextWidth('Comment:'), 41.1)
-      fitText(p.comment ?? '', 16, 40.5, 37, 7.5, 5)
-      // Cab # + sheet / part numbers
-      lab.setFontSize(10); lab.text('Cab #', 53, 8.5); lab.line(53, 9.2, 53 + lab.getTextWidth('Cab #'), 9.2)
-      lab.setFont('helvetica', 'bold'); fitText(p.cabinet_label, 64, 9.5, 18, 18, 9)
-      lab.setFontSize(7)
-      lab.setFont('helvetica', 'normal'); lab.text('Sheet No:', 95, 5, { align: 'right' }); lab.text('Part No:', 95, 9, { align: 'right' })
-      lab.setFont('helvetica', 'bold'); lab.text(String(si + 1), 99.5, 5, { align: 'right' }); lab.text(String(no), 99.5, 9, { align: 'right' })
-
-      // Part picture: length across, width up, seen from the machined (up) face —
-      // the sheet view turned, never mirrored. Footprint (x = width, y = length,
-      // cut-blank frame) → picture (u, v) = (y, Wc − x), so the taped sides are
-      // w1 (x=0) top, w2 (x=Wc) bottom, h1 (y=0) left, h2 (y=Hc) right.
-      const AX = 61, AY = 14, AW = 37, AH = 21
-      const s = Math.min(AW / Hc, AH / Wc)
-      const pw = Hc * s, ph = Math.max(Wc * s, 2.5)
-      const vs = ph / Wc
-      const px = AX + (AW - pw) / 2, py = AY + (AH - ph) / 2
-      const P = (x: number, y: number): [number, number] => [px + y * s, py + ph - (Wc - x) * vs]
-      const edge = (a: [number, number], b: [number, number], taped: boolean) => {
-        lab.setLineWidth(taped ? 1.1 : 0.2); lab.line(a[0], a[1], b[0], b[1])
-      }
-      const poly = p.shape?.op_polygon && p.shape.op_polygon.length >= 3 ? p.shape.op_polygon : null
-      if (poly) {
-        // Shaped part: the finished outline shifted onto the cut blank, each
-        // edge taped per its op_tape tag or the rectangle side it lies on (shapes.makeBlank).
-        const T = 0.05
-        const on = (a: number, b: number, v: number) => Math.abs(a - v) < T && Math.abs(b - v) < T
-        poly.forEach((a, i) => {
-          const b = poly[(i + 1) % poly.length]
-          const tag = p.shape!.op_band?.[i] ?? (p.shape!.op_tape?.[i] != null ? p.shape!.op_tape![i]! > 0 : null)
-          const taped = tag != null ? tag : on(a.x, b.x, 0) ? onW1 : on(a.x, b.x, p.w) ? onW2 : on(a.y, b.y, 0) ? onH1 : on(a.y, b.y, p.h) ? onH2 : false
-          edge(P(a.x - blank.sx, a.y - blank.sy), P(b.x - blank.sx, b.y - blank.sy), taped)
-        })
-      } else {
-        edge(P(0, 0), P(0, Hc), onW1)
-        edge(P(Wc, 0), P(Wc, Hc), onW2)
-        edge(P(0, 0), P(Wc, 0), onH1)
-        edge(P(0, Hc), P(Wc, Hc), onH2)
-      }
-      // Holes: sheet → placement-local → footprint (undo the placement turn).
-      lab.setFillColor(0, 0, 0)
-      for (const hd of holesIn(pl, g.drills)) {
-        const dx = hd.x - pl.x, dy = hd.y - pl.y
-        const [x, y] = pl.rotated ? [dy, pl.w - dx] : [dx, dy]
-        const [cx, cy] = P(x, y)
-        lab.circle(cx, cy, Math.max(0.3, (hd as unknown as { diameter: number }).diameter / 2 * s), 'F')
-      }
-      lab.setLineWidth(0.2)
-      // Sizes: width up the left (across grain), length under (with grain).
-      lab.setFont('helvetica', 'bold'); lab.setFontSize(11)
-      lab.text(String(wid), 58.5, AY + AH / 2, { angle: 270, align: 'center' })
-      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text(p.grain_across ? 'With Grain' : 'Across Grain', 55, AY + AH / 2, { angle: 270, align: 'center' })
-      lab.setFont('helvetica', 'bold'); lab.setFontSize(11); lab.text(String(len), AX + AW / 2, 40.5, { align: 'center' })
-      lab.setFont('helvetica', 'normal'); lab.setFontSize(5.5); lab.text(p.grain_across ? 'Across Grain' : 'With Grain', AX + AW / 2, 43.5, { align: 'center' })
-    }))
+    // ── Part labels (shared with optimiser Stage 7 — labels.ts) ──
+    const { loadLabelLookups, buildAllLabels, labelsPdf, DEFAULT_LABEL_SETTINGS } = await import('../labels')
+    const look = await loadLabelLookups(supabase, nestableParts, snap.projectName, matName)
+    const drillsBySheet = new Map(gen.map(g => [g.sheet.index, g.drills]))
+    const lab = await labelsPdf(buildAllLabels(nestResult, partByUid, drillsBySheet, deductEb, look, 'cut'), DEFAULT_LABEL_SETTINGS)
     writeFileSync(join(outDir, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
 
     const summary = {
