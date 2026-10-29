@@ -70,6 +70,9 @@ function LabelsPanel() {
   const nestResult = useOptiStore(s => s.nestResult)
   const partIndex = useOptiStore(s => s.partIndex)
   const profileId = useOptiStore(s => s.profileId)
+  // Holes as machined when this layout's G-code was made (Stage 6 / a reopened run).
+  const savedRun = useOptiStore(s => s.savedRun)
+  const savedDrills = savedRun && savedRun.nest === nestResult ? savedRun.drillsBySheet : null
   const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
 
   const [st, setSt] = useState<LabelSettings>(DEFAULT_LABEL_SETTINGS)
@@ -96,7 +99,7 @@ function LabelsPanel() {
     setLoading(true); setError(null)
     ;(async () => {
       const parts = nestedParts(snap.parts, partIndex)
-      const { bySheet } = await loadSheetDrills(parts, nestResult.sheets, { sync: true, deductEdgeband: deductEb })
+      const bySheet = savedDrills ?? (await loadSheetDrills(parts, nestResult.sheets, { sync: true, deductEdgeband: deductEb })).bySheet
       const matName = (id: string | null) => id ? snap.materials.find(m => m.id === id)?.name ?? null : null
       const look = await loadLabelLookups(supabase, parts, snap.projectName, matName)
       const byUid = new Map(snap.parts.map(p => [p.uid, p]))
@@ -107,7 +110,7 @@ function LabelsPanel() {
     })().catch(e => { if (!dead) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!dead) setLoading(false) })
     return () => { dead = true }
-  }, [nestResult, partIndex, snap, deductEb])
+  }, [nestResult, partIndex, snap, deductEb, savedDrills])
 
   const picked = useMemo(() => {
     const list = labels ? labels[st.dims] : []

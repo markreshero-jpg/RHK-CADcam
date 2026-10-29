@@ -1172,7 +1172,7 @@ export const LESSONS: TutorialLesson[] = [
   // Appended 2026-10-29 (optimiser Stage 7 — part labels).
   { id: 'part_labels', level: 'advanced', topic: 'production', title: 'Print part labels',
     blurb: 'Print a label for every nested part from the optimiser, on a label printer or A4 sheets.',
-    keywords: 'label labels print printer sticker part number cabinet vision zebra brother dymo a4 optimiser stage 7 nest', steps: [
+    keywords: 'label labels print printer sticker part number cabinet vision zebra brother dymo a4 optimiser stage 7 nest saved run reopen reprint snapshot', steps: [
     { id: 'open', title: 'Go to Labels & Cut Sheets (Stage 7)',
       body: 'Production → Generate CNC…, run the Nesting stage, then click Labels & Cut Sheets at the top (stage 7). The Labels tab gives every nested part one label: job, room, cabinet type, part, board, colour, edging, comment, Cab #, sheet and part number, the cut size, and a picture of the part with its taped edges (thick lines) and holes. Part numbers start at 1 on each sheet. The comment box only shows when the part has a comment.',
       target: 'menu-Production', done: c => c.path.endsWith('/optimiser') },
@@ -1184,6 +1184,9 @@ export const LESSONS: TutorialLesson[] = [
       done: c => c.path.endsWith('/optimiser') },
     { id: 'sheets', title: 'Cut sheets',
       body: 'Click the Cut sheets tab. Each nested sheet prints on its own A4 landscape page: each part’s cut outline (finger-pull notches included), its number, cabinet, part and cut size, the drilling as red circles, and grain-match blocks boxed in their colour. A parts list follows. Click sheets off to print only some; untick Drilling or Parts list to leave them out.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'reopen', title: 'Reprint later: Saved runs',
+      body: 'Every time you generate G-code (Stage 6) the run is saved — “Run saved …” shows next to the buttons. Left the optimiser before printing? Open the optimiser again; under Saved runs on Stage 1 click Reopen. It goes straight to Labels & Cut Sheets with the same sheets, part numbers and holes, and Stage 6 has the same programs to download. ✕ deletes a run you no longer need.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
 ]

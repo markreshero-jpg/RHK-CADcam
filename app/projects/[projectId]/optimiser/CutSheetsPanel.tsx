@@ -18,6 +18,8 @@ export default function CutSheetsPanel() {
   const nestResult = useOptiStore(s => s.nestResult)
   const partIndex = useOptiStore(s => s.partIndex)
   const profileId = useOptiStore(s => s.profileId)
+  const savedRun = useOptiStore(s => s.savedRun)
+  const savedDrills = savedRun && savedRun.nest === nestResult ? savedRun.drillsBySheet : null
   const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
 
   const [opts, setOpts] = useState({ holes: true, partsList: true })
@@ -38,12 +40,13 @@ export default function CutSheetsPanel() {
 
   useEffect(() => {
     if (!nestResult?.sheets.length) return
+    if (savedDrills) { setDrills(savedDrills); return }   // holes as machined
     let dead = false
     loadSheetDrills(nestedParts(snap.parts, partIndex), nestResult.sheets, { sync: true, deductEdgeband: deductEb })
       .then(r => { if (!dead) setDrills(r.bySheet) })
       .catch(e => { if (!dead) setError(e instanceof Error ? e.message : String(e)) })
     return () => { dead = true }
-  }, [nestResult, partIndex, snap, deductEb])
+  }, [nestResult, partIndex, snap, deductEb, savedDrills])
 
   const scope = useMemo(() => {
     const rooms = [...new Set(nestedParts(snap.parts, partIndex).map(p => p.room_name).filter(Boolean))]
@@ -58,13 +61,14 @@ export default function CutSheetsPanel() {
     cutSheetsPdf({
       nest: nestResult, partByUid: new Map(snap.parts.map(p => [p.uid, p])), drillsBySheet: drills, deductEb,
       jobNumber: snap.jobNumber, projectName: snap.projectName, scope, materialName: matName,
+      fileNames: savedDrills ? nestResult.sheets.map(s => savedRun!.files.find(f => f.sheetIndex === s.index)?.fileName) : undefined,
     }, { sheets: sheetsOn, holes: opts.holes, partsList: opts.partsList }).then(doc => {
       if (dead) return
       url = URL.createObjectURL(doc.output('blob'))
       setPdfUrl(url)
     }).catch(e => setError(e instanceof Error ? e.message : String(e)))
     return () => { dead = true; if (url) URL.revokeObjectURL(url) }
-  }, [nestResult, drills, snap, deductEb, scope, sheetsOn, opts])
+  }, [nestResult, drills, snap, deductEb, scope, sheetsOn, opts, savedDrills, savedRun])
 
   if (!nestResult?.sheets.length) {
     return <p className="text-xs text-ink-subtle text-center py-12">Nothing nested — run Stage 4 first.</p>

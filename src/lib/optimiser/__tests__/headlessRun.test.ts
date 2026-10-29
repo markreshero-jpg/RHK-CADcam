@@ -26,7 +26,7 @@ vi.mock('@/src/lib/supabase', async () => {
   return { supabase }
 })
 
-interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best' }
+interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean }
 const CFG: RunCfg | null = process.env.OPTI_RUN ? JSON.parse(process.env.OPTI_RUN) : null
 
 describe.skipIf(!CFG)('headless optimiser run', () => {
@@ -274,7 +274,40 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const lab = await labelsPdf(buildAllLabels(nestResult, partByUid, drillsBySheet, deductEb, look, 'cut'), DEFAULT_LABEL_SETTINGS)
     writeFileSync(join(outDir, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
 
+    // ── Saved run round trip (savedRuns.ts): save, list, reopen, compare, delete ──
+    let roundTrip: Record<string, unknown> | undefined
+    if (cfg.roundTrip && !blocking.length) {
+      const { saveRun, listRuns, loadRun, deleteRun } = await import('../savedRuns')
+      const nested = new Set(Object.values(index).map(p => p.baseUid))
+      const files = gen.map(g => ({ sheetIndex: g.sheet.index, fileName: g.fileName, gcode: g.gcode, outlines: outlinesFor(g.sheet) }))
+      const { id } = await saveRun({
+        projectId: snap.projectId, name: `${snap.jobNumber} headless round trip`,
+        state: {
+          nestResult, partIndex: index, selectedUids: [...nested], cutQty: {}, filterRoomIds: [], filterCabinetIds: [], filterMaterialIds: [],
+          includedProjectIds: [snap.projectId], settings: { quality: cfg.quality ?? 'balanced', allowRotation: true }, stock: stockForRun,
+          machineId: snap.machines[0]?.id ?? null, profileId, parts: snap.parts.filter(p => nested.has(p.uid)),
+        },
+        files, drillsBySheet,
+      })
+      try {
+        const listed = (await listRuns(snap.projectId)).find(r => r.id === id)
+        const back = await loadRun(id)
+        const { count } = await supabase.from('nest_placements').select('id, nest_sheets!inner(nest_job_id)', { count: 'exact', head: true }).eq('nest_sheets.nest_job_id', id)
+        // jsonb reorders object keys — compare with keys sorted.
+        const canon = (v: unknown): string => JSON.stringify(v, (_k, x) => x && typeof x === 'object' && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a.localeCompare(b))) : x)
+        roundTrip = {
+          listed: listed ? `${listed.sheets} sheets, ${listed.parts} parts` : 'MISSING',
+          layoutSame: canon(back.snap.nestResult) === canon(nestResult),
+          gcodeSame: back.files.length === gen.length && back.files.every((f, i) => f.gcode === gen[i].gcode && f.fileName === gen[i].fileName),
+          holesSame: canon(back.snap.drills) === canon([...drillsBySheet]),
+          parts: back.snap.parts.length, placementRows: count,
+          snapshotKB: Math.round(JSON.stringify(back.snap).length / 1024),
+        }
+      } finally { await deleteRun(id) }
+    }
+
     const summary = {
+      roundTrip,
       job: snap.jobNumber, rooms: cfg.rooms, materials: cfg.materials, profile: prof?.name, deductEdgeband: deductEb,
       parts: rows.length, sheets: gen.map((g, i) => ({ n: i + 1, file: g.fileName, parts: g.sheet.placements.length, holes: g.drills.length, routes: g.routes.length, efficiency: Math.round(g.sheet.efficiency * 100) })),
       unplaced: nestResult.unplaced.map(u => u.label), notes, drillWarnings, gcodeErrors: blocking, gcodeWarnings: warned,

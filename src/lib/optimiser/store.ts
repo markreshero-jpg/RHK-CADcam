@@ -2,8 +2,9 @@
 // Panel Optimiser workspace store (Zustand).
 // Holds the cross-stage working state — selections, filters,
 // machine/profile, pre-opt settings, and (later) the nested
-// sheets/placements. No persistence: per spec §8.2 the optimiser
-// uses Zustand state, never localStorage/sessionStorage.
+// sheets/placements. No browser persistence: per spec §8.2 the optimiser
+// uses Zustand state, never localStorage/sessionStorage. Runs are saved
+// to the DB at G-code time and reopened from Stage 1 (savedRuns.ts).
 // ============================================================
 
 import { create } from 'zustand'
@@ -13,6 +14,7 @@ import { grainOrient, type GroupStock, type SheetStock, type NestResult, type Ne
 import { findBestPlacement, findNearestValid, sheetEfficiency } from './edit'
 import { blockOfUid, blockRectOn, detachFromBlock } from './grainBlocks'
 import { getUserPrefs, setUserPrefs } from '../userPrefs'
+import type { SavedRun, RunSnapshot } from './savedRuns'
 
 export type Stage = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
@@ -86,6 +88,10 @@ interface OptiState {
   editFuture: NestResult[]
   editError: string | null
 
+  // Stage 6 — the saved run behind the current layout (savedRuns.ts). Its files
+  // and holes are reused while `savedRun.nest === nestResult`.
+  savedRun: SavedRun | null
+
   // Actions
   init: (snap: OptiSnapshot) => void
   mergeProjectData: (projectId: string, data: NormalizedProject) => void
@@ -128,6 +134,9 @@ interface OptiState {
   resizeSheet: (index: number, w: number, h: number) => void
   undo: () => void
   redo: () => void
+  setSavedRun: (r: SavedRun | null) => void
+  /** Reopen a saved run: the workspace as it was when its G-code was made. */
+  restoreRun: (snap: RunSnapshot, run: SavedRun) => void
 }
 
 export const DEFAULT_SETTINGS: PreOptSettings = {
@@ -160,6 +169,7 @@ export const useOptiStore = create<OptiState>((set) => ({
   editPast: [],
   editFuture: [],
   editError: null,
+  savedRun: null,
 
   init: (snap) => set(() => {
     // Default machine/profile to the marked defaults; pre-select parts flagged
@@ -438,6 +448,28 @@ export const useOptiStore = create<OptiState>((set) => ({
     if (!st.editPast.length || !st.nestResult) return {}
     const prev = st.editPast[st.editPast.length - 1]
     return { nestResult: prev, editPast: st.editPast.slice(0, -1), editFuture: [st.nestResult, ...st.editFuture].slice(0, 50), selectedUid: null }
+  }),
+
+  setSavedRun: (r) => set({ savedRun: r }),
+
+  restoreRun: (rs, run) => set(st => {
+    if (!st.snapshot) return {}
+    // The nested parts as they were cut win over today's (names, comments,
+    // shapes); parts deleted since are put back so every label still prints.
+    const saved = new Map(rs.parts.map(p => [p.uid, p]))
+    const live = new Set(st.snapshot.parts.map(p => p.uid))
+    const parts = [...st.snapshot.parts.map(p => saved.get(p.uid) ?? p), ...rs.parts.filter(p => !live.has(p.uid))]
+    return {
+      snapshot: { ...st.snapshot, parts },
+      machineId: rs.machineId, profileId: rs.profileId,
+      includedProjectIds: rs.includedProjectIds,
+      filterRoomIds: rs.filterRoomIds, filterCabinetIds: rs.filterCabinetIds, filterMaterialIds: rs.filterMaterialIds,
+      selectedUids: new Set(rs.selectedUids), cutQty: rs.cutQty,
+      settings: rs.settings, stock: rs.stock,
+      nestResult: run.nest, partIndex: rs.partIndex,
+      editPast: [], editFuture: [], selectedUid: null, currentSheet: 0, editError: null,
+      savedRun: run, stage: 7, maxStageReached: 7,
+    }
   }),
 
   redo: () => set(st => {

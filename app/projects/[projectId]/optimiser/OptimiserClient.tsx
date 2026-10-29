@@ -27,6 +27,7 @@ import SheetSVG from './SheetSVG'
 import Stage5Edit from './Stage5Edit'
 import Stage6Gcode from './Stage6Gcode'
 import Stage7Labels from './Stage7Labels'
+import SavedRuns from './SavedRuns'
 
 const STAGES: { n: Stage; label: string }[] = [
   { n: 1, label: 'Machine & Tool' },
@@ -177,6 +178,7 @@ function Stage1Machine() {
           </div>
         </div>
       )}
+      <SavedRuns />
     </div>
   )
 }

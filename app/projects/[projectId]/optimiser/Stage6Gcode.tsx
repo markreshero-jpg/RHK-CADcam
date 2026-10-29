@@ -3,8 +3,9 @@
 // ============================================================
 // Stage 6 — G-code generation + snapshot save (spec §5.8).
 // Generates one program per sheet (drilling → routing inside-out),
-// lets the operator preview/download each, and saves a complete
-// reloadable snapshot to nest_jobs / nest_sheets / nest_placements.
+// lets the operator preview/download each, and saves the run straight
+// away (savedRuns.ts) so it can be reopened from Stage 1 later — e.g. to
+// print labels after leaving the optimiser.
 // This is the ONLY stage that writes to job tables (spec §5.2).
 // ============================================================
 
@@ -16,13 +17,20 @@ import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
+import { saveRun, type SheetDrill, type SavedRun } from '@/src/lib/optimiser/savedRuns'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
+interface SimState { coord: SimCoord | null; drillBlock: DrillBlockConfig | null; drillCoord: SimDrillCoord | null }
 interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[]; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]> }
 
 function dateStamp() {
   const d = new Date()
   return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+}
+
+function savedNote(iso: string) {
+  const d = new Date(iso)
+  return `Run saved ${d.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} — reopen it any time from Stage 1 → Saved runs.`
 }
 
 function download(name: string, text: string) {
@@ -48,24 +56,30 @@ export default function Stage6Gcode() {
   const stock = useOptiStore(s => s.stock)
   const includedProjectIds = useOptiStore(s => s.includedProjectIds)
   const isBatch = includedProjectIds.length > 1
+  const savedRun = useOptiStore(s => s.savedRun)
+  const setSavedRun = useOptiStore(s => s.setSavedRun)
+  // The run already made for this exact layout (this visit or reopened from Stage 1).
+  const current = savedRun && savedRun.nest === nestResult ? savedRun : null
+  const sim0 = (current?.sim ?? null) as SimState | null
 
-  const [files, setFiles] = useState<GenFile[]>([])
-  const [preview, setPreview] = useState<number | null>(null)
+  const [files, setFiles] = useState<GenFile[]>(() => current?.files.map(f => ({ ...f, lines: f.gcode.split('\n').length, findings: [] })) ?? [])
+  const [preview, setPreview] = useState<number | null>(() => current?.files[0]?.sheetIndex ?? null)
   const [busy, setBusy] = useState(false)
-  const [saved, setSaved] = useState<string | null>(null)
+  const [saved, setSaved] = useState<string | null>(() => current?.id ? savedNote(current.savedAt) : null)
+  const [saveFailed, setSaveFailed] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [drillNotes, setDrillNotes] = useState<string[]>([])
   const [postWarnings, setPostWarnings] = useState<string[]>([])
   const [simulating, setSimulating] = useState(false)
-  const [coord, setCoord] = useState<SimCoord | null>(null)
-  const [simDrillBlock, setSimDrillBlock] = useState<DrillBlockConfig | null>(null)
-  const [simDrillCoord, setSimDrillCoord] = useState<SimDrillCoord | null>(null)
+  const [coord, setCoord] = useState<SimCoord | null>(sim0?.coord ?? null)
+  const [simDrillBlock, setSimDrillBlock] = useState<DrillBlockConfig | null>(sim0?.drillBlock ?? null)
+  const [simDrillCoord, setSimDrillCoord] = useState<SimDrillCoord | null>(sim0?.drillCoord ?? null)
 
   const matCode = (id: string | null) => id ? (snap.materials.find(m => m.id === id)?.name ?? 'MAT') : 'MAT'
 
   async function generate() {
     if (!nestResult || nestResult.sheets.length === 0) { setError('Nothing nested — run Stage 4 first.'); return }
-    setBusy(true); setError(null); setSaved(null); setDrillNotes([]); setPostWarnings([])
+    setBusy(true); setError(null); setSaved(null); setSaveFailed(false); setDrillNotes([]); setPostWarnings([])
     try {
       const { data: profileRow } = profileId
         ? await supabase.from('cnc_machine_profiles').select('*').eq('id', profileId).single()
@@ -73,10 +87,11 @@ export default function Stage6Gcode() {
       const profile = profileRow as Record<string, unknown> | null
       // Capture the output datum so the simulator can invert it back to sheet space.
       const post0 = postFromProfile(profile)
-      setCoord({
+      const coordNow: SimCoord = {
         originCorner: post0.origin_corner, xDir: post0.x_axis_direction, yDir: post0.y_axis_direction,
         surfaceZ: post0.material_surface_z, zUp: post0.z_axis_up,
-      })
+      }
+      setCoord(coordNow)
 
       // Routing tool per material: materials.cnc_tool_id → cnc_tools (depth/feed/speed).
       const { data: toolRows } = await supabase.from('cnc_tools')
@@ -132,9 +147,10 @@ export default function Stage6Gcode() {
       setSimDrillBlock(drillBlock ?? null)   // hand the block layout to the simulator overlay
       // Block datum so the simulator inverts gang-drilled holes from the block's
       // own G54 frame (not the routing datum) back onto the sheet.
-      setSimDrillCoord(drillBlock
+      const drillCoordNow: SimDrillCoord | null = drillBlock
         ? { headOffsetX: drillBlock.headOffsetXMm, headOffsetY: drillBlock.headOffsetYMm, signY: post0.sign_y, mirrorY: post0.mirror_y }
-        : null)
+        : null
+      setSimDrillCoord(drillCoordNow)
 
       // Joint-sync + read part_operations + resolve auto_tool/drill_id, projected
       // to sheet space. Shared with Stage 5 so the holes match exactly.
@@ -226,7 +242,7 @@ export default function Stage6Gcode() {
 
       // Hard gate: a program with errors is never offered for download, and is
       // checked here rather than at the download button so that a bad program
-      // cannot reach nest_sheets.gcode through "Save run" either. Warnings
+      // cannot reach nest_sheets.gcode through the run save either. Warnings
       // surface but do not block.
       const blocking = gen.flatMap(g => errorsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
       const warned = gen.flatMap(g => warningsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
@@ -240,6 +256,16 @@ export default function Stage6Gcode() {
 
       setFiles(gen)
       setPreview(gen[0]?.sheetIndex ?? null)
+      // Save straight away — the run can then be reopened from Stage 1.
+      const sim: SimState = { coord: coordNow, drillBlock: drillBlock ?? null, drillCoord: drillCoordNow }
+      const run = {
+        id: null, name: runName(), savedAt: new Date().toISOString(), nest: nestResult,
+        files: gen.map(({ sheetIndex, fileName, gcode, outlines, holes }) => ({ sheetIndex, fileName, gcode, outlines, holes })),
+        drillsBySheet: new Map<number, SheetDrill[]>([...sheetDrills].map(([k, v]) => [k, v.map(d => ({ x: d.x, y: d.y, diameter: d.diameter }))])),
+        sim,
+      }
+      setSavedRun(run)
+      await save(run, current?.id ?? null)
     } catch (e) {
       // The post-processor hard-fails rather than emit a program that would
       // crash the machine (e.g. group-01 motion inside an open canned cycle).
@@ -249,50 +275,39 @@ export default function Stage6Gcode() {
     } finally { setBusy(false) }
   }
 
-  async function save() {
-    if (!nestResult || files.length === 0) { setError('Generate G-code before saving.'); return }
-    setBusy(true); setError(null)
+  // Job + rooms in the run, for the saved run's name.
+  function runName() {
+    const rooms = [...new Set(nestedParts(snap.parts, partIndex).map(p => p.room_name).filter(Boolean))]
+    return `${snap.jobNumber ?? snap.projectName} ${rooms.length ? rooms.join(', ') : 'All rooms'}${isBatch ? ' (batch)' : ''}`
+  }
+
+  async function save(run: SavedRun, replaceId: string | null) {
     try {
-      const snapshot = { nestResult, settings, stock, machineId, profileId, savedAt: new Date().toISOString() }
-      const { data: job, error: jErr } = await supabase.from('nest_jobs').insert({
-        project_id: snap.projectId, project_ids: includedProjectIds, cnc_machine_id: machineId,
-        status: 'generated', snapshot, generated_at: new Date().toISOString(),
-        name: `${snap.projectName} optimise ${dateStamp()}`,
-      }).select().single()
-      if (jErr || !job) throw new Error(jErr?.message ?? 'job insert failed')
-
-      for (const [i, sheet] of nestResult.sheets.entries()) {
-        const file = files.find(f => f.sheetIndex === sheet.index)
-        const { data: ns, error: sErr } = await supabase.from('nest_sheets').insert({
-          nest_job_id: (job as { id: string }).id, material_id: sheet.materialId, sheet_number: i + 1,
-          efficiency: sheet.efficiency, gcode: file?.gcode ?? null,
-          sheet_dx: sheet.stock.w, sheet_dy: sheet.stock.h, is_offcut: sheet.stock.isOffcut, sheet_label: sheet.stock.label,
-        }).select().single()
-        if (sErr || !ns) throw new Error(sErr?.message ?? 'sheet insert failed')
-
-        if (sheet.placements.length) {
-          const partProject = new Map(snap.parts.map(p => [p.uid, p.project_id]))
-          // O3: the part's outline in its own op frame (mm, origin bottom-left,
-          // y up, FINISHED size, pre-rotation) — rotation / sheet_x / sheet_y place it.
-          const partShape = new Map(snap.parts.map(p => [p.uid, p.shape?.op_polygon?.length ? p.shape.op_polygon : null]))
-          const rows = sheet.placements.map(pl => {
-            const [stbl, ...rest] = pl.baseUid.split(':')
-            return {
-              nest_sheet_id: (ns as { id: string }).id,
-              source_table: stbl, source_part_id: rest.join(':') || null,
-              sheet_x: pl.x, sheet_y: pl.y, rotation: pl.rotated ? 90 : 0,
-              cut_dx: pl.w, cut_dy: pl.h,
-              part_label: pl.label, project_id: partProject.get(pl.baseUid) ?? snap.projectId, cut_quantity: 1, shape_polygon: partShape.get(pl.baseUid) ?? null,
-            }
-          })
-          const { error: pErr } = await supabase.from('nest_placements').insert(rows)
-          if (pErr) throw new Error(pErr.message)
-        }
-      }
-      setSaved(`Saved run with ${nestResult.sheets.length} sheet(s).`)
+      const st = useOptiStore.getState()
+      const nested = new Set(Object.values(st.partIndex).map(p => p.baseUid))
+      const { id, savedAt } = await saveRun({
+        projectId: snap.projectId, name: run.name, replaceId,
+        state: {
+          nestResult: run.nest, partIndex: st.partIndex, selectedUids: [...st.selectedUids], cutQty: st.cutQty,
+          filterRoomIds: st.filterRoomIds, filterCabinetIds: st.filterCabinetIds, filterMaterialIds: st.filterMaterialIds,
+          includedProjectIds: st.includedProjectIds, settings: st.settings, stock: st.stock,
+          machineId: st.machineId, profileId: st.profileId,
+          parts: snap.parts.filter(p => nested.has(p.uid)),
+        },
+        files: run.files, drillsBySheet: run.drillsBySheet, sim: run.sim,
+      })
+      if (useOptiStore.getState().savedRun?.nest === run.nest) setSavedRun({ ...run, id, savedAt })
+      setSaved(savedNote(savedAt)); setSaveFailed(false)
     } catch (e) {
-      setError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)
-    } finally { setBusy(false) }
+      setSaveFailed(true)
+      setError(`Run not saved: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  async function retrySave() {
+    if (!current) return
+    setBusy(true); setError(null)
+    try { await save(current, current.id) } finally { setBusy(false) }
   }
 
   const previewFile = files.find(f => f.sheetIndex === preview)
@@ -311,8 +326,8 @@ export default function Stage6Gcode() {
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">▶ Simulate</button>
             <button onClick={() => files.forEach(f => download(f.fileName, f.gcode))}
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Download all</button>
-            <button onClick={save} disabled={busy}
-              className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-50 transition-colors">Save run</button>
+            {saveFailed && <button onClick={retrySave} disabled={busy}
+              className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-50 transition-colors">Retry save</button>}
           </>}
           {saved && <span className="text-xs text-green-500">{saved}</span>}
           {error && <span className="text-xs text-red-400">{error}</span>}
