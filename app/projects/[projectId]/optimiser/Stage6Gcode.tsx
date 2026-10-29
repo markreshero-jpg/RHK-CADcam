@@ -17,6 +17,7 @@ import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
+import { sheetNumbers } from '@/src/lib/optimiser/labels'
 import { saveRun, reserveRunNo, runCode, runFileText, runFileName, type SheetDrill, type SavedRun, type RunInput } from '@/src/lib/optimiser/savedRuns'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
@@ -217,6 +218,9 @@ export default function Stage6Gcode() {
         return out
       }
 
+      // Sheet numbers restart per material (Whiteboard 01-10, then LX 01-05). The
+      // O-number stays unique across the whole run.
+      const sheetNos = sheetNumbers(nestResult.sheets)
       const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
         const drills = sheetDrills.get(sheet.index) ?? []
         const routes = sheetRoutes.get(sheet.index) ?? []
@@ -237,19 +241,28 @@ export default function Stage6Gcode() {
           jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
           toolName: (tool?.name as string | null) ?? null, toolNames,
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,
-          runNote,
+          runNote, sheetNo: sheetNos.get(sheet.index)!.no,
           drillBlock,
           outlines,
           holes,
           holeSkins: holeSkinsFor(sheet),
         })
-        const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension, runNo })
+        const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: sheetNos.get(sheet.index)!.no, ext: post.file_extension, runNo })
         return {
           sheetIndex: sheet.index, fileName,
           gcode, lines: gcode.split('\n').length,
           findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }),
           outlines, holes,
         }
+      })
+
+      // Two materials can share a file-name code (Whiteboard 16.5 / Whiteboard 16 →
+      // "Whiteboard16"); then their per-material numbers would clash — number those
+      // files through the run instead so nothing is overwritten.
+      const nameCount = new Map<string, number>()
+      for (const g of gen) nameCount.set(g.fileName, (nameCount.get(g.fileName) ?? 0) + 1)
+      gen.forEach((g, i) => {
+        if (nameCount.get(g.fileName)! > 1) g.fileName = g.fileName.replace(/_(\d{2,})(\.[^.]+)$/, `_${String(i + 1).padStart(2, '0')}x$2`)
       })
 
       // Hard gate: a program with errors is never offered for download, and is

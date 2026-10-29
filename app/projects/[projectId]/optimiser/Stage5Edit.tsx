@@ -16,6 +16,7 @@ import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
+import { sheetNumbers } from '@/src/lib/optimiser/labels'
 import type { ShapePt } from '@/src/lib/shapePath'
 import { PlacedOutline, PlacedHoles, GrainBlockOutlines } from './SheetSVG'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
@@ -158,6 +159,9 @@ export default function Stage5Edit() {
   })()
   const matName = (id: string | null) => id ? (snap?.materials.find(m => m.id === id)?.name ?? '—') : '—'
   const matLabel = (s: NestedSheet) => `${s.materialId ? matName(s.materialId) : 'No material'} ${s.thickness}mm`
+  // Sheet numbers restart per material (labels.sheetNumbers).
+  const sheetNos = sheetNumbers(nestResult.sheets)
+  const sheetNo = (s: NestedSheet) => sheetNos.get(s.index)?.no ?? s.index + 1
 
   // Sheets grouped by material+thickness for the left list.
   const sheetGroups = (() => {
@@ -204,7 +208,7 @@ export default function Stage5Edit() {
                 {isOpen && g.sheets.map(s => (
                   <button key={s.index} onClick={() => setCurrentSheet(s.index)}
                     className={`w-full text-left pl-5 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] transition-colors ${s.index === sheet.index ? 'bg-accent/15 text-accent-ink' : 'text-ink-muted hover:bg-surface-2'}`}>
-                    <span className="truncate">Sheet {s.index + 1}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
+                    <span className="truncate">Sheet {sheetNo(s)}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
                     <span className="font-mono text-ink-subtle shrink-0">{(s.efficiency * 100).toFixed(0)}% · {s.placements.length}</span>
                   </button>
                 ))}
@@ -225,7 +229,7 @@ export default function Stage5Edit() {
           <button disabled={!selectedUid} onClick={() => selectedUid && cutToClipboard(selectedUid)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 transition-colors">Cut</button>
           <button disabled={!clipboard.length} onClick={() => pasteClipboard(sheet.index)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 transition-colors">Paste{clipboard.length ? ` (${clipboard.length})` : ''}</button>
           <button disabled={!selectedUid} onClick={() => selectedUid && removeToUnplaced(selectedUid)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-red-900/30 hover:text-red-300 disabled:opacity-40 transition-colors">Delete</button>
-          <span className="ml-auto text-ink-subtle">Sheet {sheet.index + 1} · {(sheet.efficiency * 100).toFixed(1)}%{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
+          <span className="ml-auto text-ink-subtle">{matLabel(sheet)} · Sheet {sheetNo(sheet)} · {(sheet.efficiency * 100).toFixed(1)}%{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
         </div>
 
         {editError && (
@@ -241,8 +245,8 @@ export default function Stage5Edit() {
         <div ref={scrollRef} className="flex-1 overflow-auto p-6 bg-canvas">
           <div className="mx-auto w-fit flex flex-col items-center gap-2">
             <div className="text-lg font-semibold text-ink flex items-center gap-3">
-              <span>Sheet {sheet.index + 1}
-                <span className="text-ink-subtle text-sm font-normal"> of {nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
+              <span>Sheet {sheetNo(sheet)}
+                <span className="text-ink-subtle text-sm font-normal"> of {sheetNos.get(sheet.index)?.of ?? nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
               </span>
               <button onClick={() => setShowDrills(s => !s)}
                 className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${showDrills ? 'border-amber-600/60 text-amber-400 bg-amber-900/15' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
@@ -374,14 +378,14 @@ export default function Stage5Edit() {
                   className="w-full bg-surface-2 border border-edge-strong rounded px-2 py-1 text-[11px] text-ink-muted focus:outline-none focus:border-accent">
                   <option value="">Move to sheet…</option>
                   {nestResult.sheets.filter(s => s.index !== selectedInfo.sheetIndex).map(s => (
-                    <option key={s.index} value={s.index}>Sheet {s.index + 1}{s.stock.isOffcut ? ' (offcut)' : ''}</option>
+                    <option key={s.index} value={s.index}>{matLabel(s)} · Sheet {sheetNo(s)}{s.stock.isOffcut ? ' (offcut)' : ''}</option>
                   ))}
                 </select>
               </div>
             </div>
           )}
         </div>
-        <SheetManagePanel sheet={sheet} onDelete={() => deleteSheet(sheet.index)} onResize={(w, h) => resizeSheet(sheet.index, w, h)} />
+        <SheetManagePanel sheet={sheet} sheetNo={sheetNo(sheet)} onDelete={() => deleteSheet(sheet.index)} onResize={(w, h) => resizeSheet(sheet.index, w, h)} />
       </div>
 
       {/* Context menu */}
@@ -395,7 +399,7 @@ export default function Stage5Edit() {
           <p className="px-3 py-1 text-[10px] text-ink-subtle uppercase tracking-wider">Move to sheet</p>
           <div className="max-h-40 overflow-y-auto">
             {nestResult.sheets.filter(s => s.index !== sheet.index).map(s => (
-              <CtxItem key={s.index} label={`Sheet ${s.index + 1}`} onClick={() => {
+              <CtxItem key={s.index} label={`${matLabel(s)} · Sheet ${sheetNo(s)}`} onClick={() => {
                 const st = useOptiStore.getState()
                 const part = st.partIndex[ctxMenu.uid]
                 const target = st.nestResult?.sheets.find(x => x.index === s.index)
@@ -631,10 +635,10 @@ function AddSheetButton({ onAdd }: { onAdd: (stock: { w: number; h: number; trim
   return <button onClick={add} className="text-[11px] px-1.5 py-0.5 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">+ Sheet</button>
 }
 
-function SheetManagePanel({ sheet, onDelete, onResize }: { sheet: NestedSheet; onDelete: () => void; onResize: (w: number, h: number) => void }) {
+function SheetManagePanel({ sheet, sheetNo, onDelete, onResize }: { sheet: NestedSheet; sheetNo: number; onDelete: () => void; onResize: (w: number, h: number) => void }) {
   return (
     <div className="flex-none border-t border-edge p-3 space-y-2">
-      <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Sheet {sheet.index + 1}</p>
+      <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Sheet {sheetNo}</p>
       <div className="grid grid-cols-2 gap-2">
         <label className="text-[10px] text-ink-subtle">W
           <input type="number" defaultValue={sheet.stock.w} key={`w${sheet.index}${sheet.stock.w}`}

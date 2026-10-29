@@ -11,12 +11,12 @@ import type { NestResult } from './nest'
 import { placedOutline } from './shapes'
 import { blockRectOn, grainMatchTags, grainMatchLine } from './grainBlocks'
 import { grainMatchColour } from '../grainMatch'
-import { partNumbers, holesIn } from './labels'
+import { partNumbers, holesIn, sheetNumbers } from './labels'
 
 type Drill = { x: number; y: number; diameter: number }
 
 export interface CutSheetRow {
-  no: number; sheet: number; cab: string; part: string
+  no: number; sheet: number; sheetNo: number; materialId: string | null; cab: string; part: string
   w: number; h: number; finW: number; finH: number; rotated: boolean
   holes: number; comment: string | null; gm: string | null
 }
@@ -24,13 +24,14 @@ export interface CutSheetRow {
 /** The parts list: sheet by sheet, in placement order. */
 export function cutSheetRows(nest: NestResult, partByUid: Map<string, OptiPart>, drillsBySheet: Map<number, Drill[]>): CutSheetRow[] {
   const nos = partNumbers(nest)
+  const sheetNos = sheetNumbers(nest.sheets)
   const gm = grainMatchTags(nest)
   const rows: CutSheetRow[] = []
   nest.sheets.forEach((s, si) => s.placements.forEach(pl => {
     const p = partByUid.get(pl.baseUid)
     if (!p) return
     rows.push({
-      no: nos.get(pl.uid)!, sheet: si + 1, cab: p.cabinet_label, part: p.label,
+      no: nos.get(pl.uid)!, sheet: si + 1, sheetNo: sheetNos.get(s.index)!.no, materialId: s.materialId, cab: p.cabinet_label, part: p.label,
       w: pl.rotated ? pl.h : pl.w, h: pl.rotated ? pl.w : pl.h, finW: p.w, finH: p.h, rotated: pl.rotated,
       holes: holesIn(pl, drillsBySheet.get(s.index) ?? []).length, comment: p.comment,
       gm: gm.has(pl.uid) ? grainMatchLine(gm.get(pl.uid)!) : null,
@@ -65,7 +66,7 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
   const PW = 297, PH = 210, M = 10
   const { nest, partByUid } = inp
   const nos = partNumbers(nest)
-  const total = nest.sheets.length
+  const sheetNos = sheetNumbers(nest.sheets)
   const d = inp.date ?? new Date()
   const dateTxt = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`
   const title = `${inp.jobNumber ?? ''} ${inp.projectName.replace(inp.jobNumber ?? '', '').trim()}  ·  ${inp.scope}`.trim()
@@ -81,7 +82,7 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
     const eff = (sheet.efficiency * 100).toFixed(0)
     const file = inp.fileNames?.[si]
-    doc.text(`${inp.materialName(sheet.materialId)}  ·  Sheet ${si + 1} of ${total}  ·  ${W} × ${H}  ·  ${sheet.placements.length} parts  ·  ${drills.length} holes  ·  ${eff}% used${file ? `  ·  ${file}` : ''}`, M, M + 10)
+    doc.text(`${inp.materialName(sheet.materialId)}  ·  Sheet ${sheetNos.get(sheet.index)!.no} of ${sheetNos.get(sheet.index)!.of}  ·  ${W} × ${H}  ·  ${sheet.placements.length} parts  ·  ${drills.length} holes  ·  ${eff}% used${file ? `  ·  ${file}` : ''}`, M, M + 10)
     doc.text(`${inp.runCode ? `Run ${inp.runCode}   ` : ''}${dateTxt}`, PW - M, M + 4, { align: 'right' })
 
     const top = M + 15
@@ -173,9 +174,16 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
     const header = () => { doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); head.forEach((h, i) => doc.text(h, colX[i], y)); doc.setLineWidth(0.2); doc.line(M, y + 1.2, PW - M, y + 1.2); y += 5.5; doc.setFont('helvetica', 'normal') }
     header()
     const r1 = (n: number) => String(Math.round(n * 10) / 10)
+    let mat: string | null | undefined
     for (const r of rows) {
-      if (y > PH - M) { doc.addPage(); y = M + 4; header() }
-      const cells = [String(r.sheet), String(r.no), r.cab, r.part, `${r1(r.h)} × ${r1(r.w)}`, `${r1(r.finH)} × ${r1(r.finW)}`, String(r.holes), r.gm ?? '', r.comment ?? '']
+      if (y > PH - M - (r.materialId !== mat ? 6 : 0)) { doc.addPage(); y = M + 4; header() }
+      // Sheet numbers restart per material — a heading line where the material changes.
+      if (r.materialId !== mat) {
+        mat = r.materialId
+        doc.setFont('helvetica', 'bold'); doc.text(inp.materialName(mat), M, y + 0.5); doc.setFont('helvetica', 'normal')
+        y += 5.5
+      }
+      const cells = [String(r.sheetNo), String(r.no), r.cab, r.part, `${r1(r.h)} × ${r1(r.w)}`, `${r1(r.finH)} × ${r1(r.finW)}`, String(r.holes), r.gm ?? '', r.comment ?? '']
       cells.forEach((c, i) => doc.text(doc.splitTextToSize(c, (colX[i + 1] ?? PW - M) - colX[i] - 2)[0] ?? '', colX[i], y))
       y += 5
     }

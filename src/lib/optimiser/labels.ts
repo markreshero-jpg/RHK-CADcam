@@ -7,8 +7,8 @@
 // ============================================================
 
 import type { jsPDF as JsPDF } from 'jspdf'
-import type { OptiPart } from './types'
-import type { NestResult } from './nest'
+import { materialGroupKey, type OptiPart } from './types'
+import type { NestResult, NestedSheet } from './nest'
 import { cutBlank } from './shapes'
 import { grainMatchTags, grainMatchLine, type GrainMatchTag } from './grainBlocks'
 
@@ -57,7 +57,8 @@ export interface LabelData {
   projectName: string; room: string; cabType: string; part: string
   material: string; colour: string; grainMatch: string | null
   edging: string; comment: string; cab: string
-  sheetNo: number; partNo: number
+  sheetNo: number; partNo: number   // sheet number within its material (sheetNumbers)
+  sheetKey: number                  // the sheet's place in the run (1-based) — for picking sheets
   runNo?: number | null        // saved run (savedRuns.ts) — "Run No" under Part No
   len: number; wid: number; grainAcross: boolean
   // Part picture in the cut-blank frame (x = width, y = length).
@@ -69,6 +70,23 @@ export interface LabelData {
 export function partNumbers(nest: NestResult): Map<string, number> {
   const out = new Map<string, number>()
   for (const s of nest.sheets) s.placements.forEach((pl, i) => out.set(pl.uid, i + 1))
+  return out
+}
+
+/** Sheet numbers restart for each material (Mark, 2026-10-30): Whiteboard
+ *  sheets 1-10, then LX Elegant Oak 1-5. Keyed by sheet.index; `of` = that
+ *  material's sheet count. Used by every sheet number the optimiser shows or
+ *  prints (stages 4-7, NC file names, labels, cut sheets). */
+export function sheetNumbers(sheets: NestedSheet[]): Map<number, { no: number; of: number }> {
+  const key = (s: NestedSheet) => materialGroupKey(s.materialId, s.thickness)
+  const count = new Map<string, number>()
+  for (const s of sheets) count.set(key(s), (count.get(key(s)) ?? 0) + 1)
+  const seen = new Map<string, number>()
+  const out = new Map<number, { no: number; of: number }>()
+  for (const s of sheets) {
+    const k = key(s), no = (seen.get(k) ?? 0) + 1
+    seen.set(k, no); out.set(s.index, { no, of: count.get(k)! })
+  }
   return out
 }
 
@@ -126,7 +144,7 @@ export function buildLabelData(
     material: look.matName(p.material_id) ?? '', colour: look.colourName.get(p.material_id ?? '') ?? '',
     grainMatch: gm ? `Grain match ${grainMatchLine(gm)} ${gm.direction === 'horizontal' ? '(grain across)' : '(grain up)'}` : null,
     edging: lEdges + wEdges ? `${lEdges}L ${wEdges}W${tapes ? ` - ${tapes}` : ''}` : 'None',
-    comment: p.comment ?? '', cab: p.cabinet_label, sheetNo, partNo,
+    comment: p.comment ?? '', cab: p.cabinet_label, sheetNo, sheetKey: sheetNo, partNo,
     len: Math.round(size.h * 10) / 10, wid: Math.round(size.w * 10) / 10, grainAcross: !!p.grain_across,
     pic: { W: Wc, H: Hc, edges, holes },
   }
@@ -139,12 +157,13 @@ export function buildAllLabels(
   deductEb: boolean, look: LabelLookups, dims: 'cut' | 'finished', runNo?: number | null,
 ): LabelData[] {
   const nos = partNumbers(nest)
+  const sheetNos = sheetNumbers(nest.sheets)
   const gm = grainMatchTags(nest)
   const out: LabelData[] = []
   nest.sheets.forEach((s, si) => s.placements.forEach(pl => {
     const p = partByUid.get(pl.baseUid)
     if (!p) return
-    out.push({ ...buildLabelData(p, pl, si + 1, nos.get(pl.uid)!, drillsBySheet.get(s.index) ?? [], deductEb, look, gm.get(pl.uid), dims), runNo })
+    out.push({ ...buildLabelData(p, pl, sheetNos.get(s.index)!.no, nos.get(pl.uid)!, drillsBySheet.get(s.index) ?? [], deductEb, look, gm.get(pl.uid), dims), sheetKey: si + 1, runNo })
   }))
   return out
 }
@@ -192,15 +211,15 @@ export function drawLabel(doc: JsPDF, d: LabelData, ox: number, oy: number, W: n
   const underline = (txt: string, x: number, y: number) => { doc.text(txt, X(x), Y(y)); doc.line(X(x), Y(y + 0.6), X(x) + doc.getTextWidth(txt), Y(y + 0.6)) }
 
   doc.setTextColor(0); doc.setDrawColor(0); doc.setLineWidth(0.2 * kf)
-  // Left column
+  // Left column — ends by x 48, clear of the rotated "Across Grain" (≈49–51).
   doc.setFont('helvetica', 'bold'); fit(d.projectName, 3, 6.5, 48, 11, 7)
   doc.setFont('helvetica', 'normal'); fit(d.room, 3, 10.5, 48, 8.5, 6)
   fit(d.cabType, 3, 14.5, 48, 8.5, 6)
   doc.setFont('helvetica', 'bold'); fit(d.part, 9, 19.5, 44, 11, 6.5)
-  doc.setFont('helvetica', 'normal'); fit(d.material, 3, 24.5, 49, 8.5, 6)
-  fit(d.colour, 3, 28.5, 49, 8.5, 6)
-  if (d.grainMatch) { doc.setFont('helvetica', 'bold'); fit(d.grainMatch, 3, 31.9, 49, 7.5, 5); doc.setFont('helvetica', 'normal') }
-  fs(7.5); underline('Edging:', 3, 35); fit(d.edging, 14, 35, 39, 7.5, 5)
+  doc.setFont('helvetica', 'normal'); fit(d.material, 3, 24.5, 45, 8.5, 5.5)
+  fit(d.colour, 3, 28.5, 45, 8.5, 5.5)
+  if (d.grainMatch) { doc.setFont('helvetica', 'bold'); fit(d.grainMatch, 3, 31.9, 45, 7.5, 5); doc.setFont('helvetica', 'normal') }
+  fs(7.5); underline('Edging:', 3, 35); fit(d.edging, 14, 35, 34, 7.5, 4.5)
   // Comment box: bottom left, clear of the sizes and the picture (x ≤ 53). The
   // text wraps, shrinking until it fits; past 4.5 pt it's cut with an ellipsis.
   // No comment → no box at all (Mark, 2026-10-29).

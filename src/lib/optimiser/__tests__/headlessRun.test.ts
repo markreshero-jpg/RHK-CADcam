@@ -224,6 +224,8 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { reserveRunNo, runCode } = await import('../savedRuns')
     const runNo = cfg.roundTrip ? await reserveRunNo(snap.projectId) : null
     const runNote = runNo != null ? `RUN ${runCode(snap.jobNumber, runNo)} ${cfg.rooms?.join(', ') ?? 'All rooms'} ${d.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: '2-digit' })}` : null
+    const { sheetNumbers } = await import('../labels')
+    const sheetNos = sheetNumbers(nestResult.sheets)
     const gen = nestResult.sheets.map((sheet, i) => {
       const drills = sheetDrills.get(sheet.index) ?? []
       const routes = sheetRoutes.get(sheet.index) ?? []
@@ -241,9 +243,9 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
         toolName: (tool?.name as string | null) ?? null, toolNames,
         programNumber: `O${String(oBase + i).padStart(4, '0')}`,
-        drillBlock, outlines: outlinesFor(sheet), holes: holesFor(sheet), holeSkins: holeSkinsFor(sheet), runNote,
+        drillBlock, outlines: outlinesFor(sheet), holes: holesFor(sheet), holeSkins: holeSkinsFor(sheet), runNote, sheetNo: sheetNos.get(sheet.index)!.no,
       })
-      const fileName = gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: i + 1, ext: post.file_extension, runNo })
+      const fileName = gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: sheetNos.get(sheet.index)!.no, ext: post.file_extension, runNo })
       return { sheet, fileName, gcode, drills, routes, findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }) }
     })
     const blocking = gen.flatMap(g => errorsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))

@@ -6,11 +6,12 @@
 // restart on each sheet, matching the labels.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { cutSheetsPdf } from '@/src/lib/optimiser/cutSheets'
 import { runCode } from '@/src/lib/optimiser/savedRuns'
+import { sheetNumbers } from '@/src/lib/optimiser/labels'
 
 const STORE_KEY = 'rhk.optimiser.cutSheetSettings'
 
@@ -76,7 +77,9 @@ export default function CutSheetsPanel() {
     return <p className="text-xs text-ink-subtle text-center py-12">Nothing nested — run Stage 4 first.</p>
   }
 
-  const sheetNos = nestResult.sheets.map((s, i) => ({ n: i + 1, parts: s.placements.length, eff: Math.round(s.efficiency * 100) }))
+  const nums = sheetNumbers(nestResult.sheets)
+  const matName = (id: string | null) => (id ? snap.materials.find(m => m.id === id)?.name : null) ?? 'No material'
+  const sheetNos = nestResult.sheets.map((s, i) => ({ n: i + 1, no: nums.get(s.index)!.no, mat: matName(s.materialId), parts: s.placements.length, eff: Math.round(s.efficiency * 100) }))
   const toggleSheet = (n: number) => setSheetsOn(prev => {
     const next = new Set(prev ?? sheetNos.map(s => s.n))
     if (next.has(n)) next.delete(n); else next.add(n)
@@ -96,13 +99,16 @@ export default function CutSheetsPanel() {
         <section className="space-y-2">
           <h3 className="text-xs font-semibold text-ink">Sheets</h3>
           <div className="flex flex-wrap gap-1.5">
-            {sheetNos.map(s => {
+            {sheetNos.map((s, i) => {
               const on = !sheetsOn || sheetsOn.has(s.n)
               return (
-                <button key={s.n} onClick={() => toggleSheet(s.n)}
-                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${on ? 'border-accent bg-accent/10 text-ink' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
-                  Sheet {s.n} <span className="text-ink-subtle">({s.parts} · {s.eff}%)</span>
-                </button>
+                <Fragment key={s.n}>
+                  {(i === 0 || sheetNos[i - 1].mat !== s.mat) && <span className="w-full text-[10px] text-ink-subtle mt-1">{s.mat}</span>}
+                  <button onClick={() => toggleSheet(s.n)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${on ? 'border-accent bg-accent/10 text-ink' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
+                    Sheet {s.no} <span className="text-ink-subtle">({s.parts} · {s.eff}%)</span>
+                  </button>
+                </Fragment>
               )
             })}
           </div>

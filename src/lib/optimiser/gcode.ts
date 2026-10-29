@@ -214,6 +214,7 @@ export interface GcodeInput {
   // Saved run comment, e.g. "RUN RHK6570-R3 Bed 2 Ensuite 30/10/26" (savedRuns.ts) —
   // ties a program on the server back to its run. {RUN} in a header template.
   runNote?: string | null
+  sheetNo?: number           // sheet number within its material (labels.sheetNumbers)
   materialName?: string | null
   toolName?: string | null   // routing bit name, for the tool comment block
   // Name per tool number, so pocket and internal-feature tools get named too.
@@ -589,7 +590,7 @@ export function generateSheetGcode(input: GcodeInput): string {
     tpl.forEach((l, i) => { if (i === runAt) c(input.runNote!); emit(subst(l)) })
     if (runAt === tpl.length) c(input.runNote!)
   } else {
-    c(`Sheet ${sheet.index + 1}  ${sheet.stock.w}x${sheet.stock.h}mm  ${thickness}mm`)
+    c(`Sheet ${input.sheetNo ?? sheet.index + 1}  ${sheet.stock.w}x${sheet.stock.h}mm  ${thickness}mm`)
     if (input.runNote) c(input.runNote)
     if (p.program_header) p.program_header.split('\n').forEach(l => emit(l))
     emit(`${p.units_code} G90 G17`)            // mm, absolute, XY plane

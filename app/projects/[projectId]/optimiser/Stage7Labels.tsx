@@ -8,13 +8,13 @@
 // is picked in the browser's print dialog — a web page can't choose one.
 // ============================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import CutSheetsPanel from './CutSheetsPanel'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import {
-  LABEL_SIZES, DEFAULT_LABEL_SETTINGS, loadLabelLookups, buildAllLabels, labelsPdf, a4Grid,
+  LABEL_SIZES, DEFAULT_LABEL_SETTINGS, loadLabelLookups, buildAllLabels, labelsPdf, a4Grid, sheetNumbers,
   type LabelSettings, type LabelData,
 } from '@/src/lib/optimiser/labels'
 
@@ -116,7 +116,7 @@ function LabelsPanel() {
   const picked = useMemo(() => {
     const list = labels ? labels[st.dims] : []
     const parts = parseParts(partsText)
-    return list.filter(l => (!sheetsOn || sheetsOn.has(l.sheetNo)) && (!parts || parts.has(l.partNo)))
+    return list.filter(l => (!sheetsOn || sheetsOn.has(l.sheetKey)) && (!parts || parts.has(l.partNo)))
   }, [labels, st.dims, sheetsOn, partsText])
 
   // Rebuild the preview PDF whenever the pick or the settings change.
@@ -147,7 +147,9 @@ function LabelsPanel() {
     return <p className="text-xs text-ink-subtle text-center py-12">Nothing nested — run Stage 4 first.</p>
   }
 
-  const sheetNos = nestResult.sheets.map((s, i) => ({ n: i + 1, parts: s.placements.length }))
+  const nums = sheetNumbers(nestResult.sheets)
+  const matName = (id: string | null) => (id ? snap.materials.find(m => m.id === id)?.name : null) ?? 'No material'
+  const sheetNos = nestResult.sheets.map((s, i) => ({ n: i + 1, no: nums.get(s.index)!.no, mat: matName(s.materialId), parts: s.placements.length }))
   const grid = st.printer === 'a4' ? a4Grid(st.w, st.h) : null
   const toggleSheet = (n: number) => setSheetsOn(prev => {
     const next = new Set(prev ?? sheetNos.map(s => s.n))
@@ -214,13 +216,16 @@ function LabelsPanel() {
         <section className="space-y-2">
           <h3 className="text-xs font-semibold text-ink">Which labels</h3>
           <div className="flex flex-wrap gap-1.5">
-            {sheetNos.map(s => {
+            {sheetNos.map((s, i) => {
               const on = !sheetsOn || sheetsOn.has(s.n)
               return (
-                <button key={s.n} onClick={() => toggleSheet(s.n)}
-                  className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${on ? 'border-accent bg-accent/10 text-ink' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
-                  Sheet {s.n} <span className="text-ink-subtle">({s.parts})</span>
-                </button>
+                <Fragment key={s.n}>
+                  {(i === 0 || sheetNos[i - 1].mat !== s.mat) && <span className="w-full text-[10px] text-ink-subtle mt-1">{s.mat}</span>}
+                  <button onClick={() => toggleSheet(s.n)}
+                    className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${on ? 'border-accent bg-accent/10 text-ink' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
+                    Sheet {s.no} <span className="text-ink-subtle">({s.parts})</span>
+                  </button>
+                </Fragment>
               )
             })}
           </div>
