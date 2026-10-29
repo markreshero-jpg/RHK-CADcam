@@ -30,10 +30,20 @@ not read yet (Synology online-only file, download failed). Quote not read either
 - **Kitchen** `dc7a22f3-ed0b-4771-a42e-4548fc4de1e1` — layout `z_plan_automation/layouts/rhk6592-flaxton-kitchen.json`.
   Drawn 2026-10-29, resolver clean. Kicks joined (KICK 1 wall run, KICK 2 island, KICK 3 small cupboard).
   Sink/tap: library Abi Ohelu 380 U/M + Abi Pull-out mixer on BC-10 (model TBC).
-  Open: benchtops + 60 waterfalls not drawn; IBPK back kick face not generated (IBPK spec gap);
+  Open: benchtops + 60 waterfalls not drawn;
   small cupboard right side drawn as an 18 BFK at the wall (drawing shows a 16 panel);
-  room size scaled (3925 x 5420); spec block not added.
+  room size scaled (3925 x 5420).
 - **Butlers Pantry** `1c00eb19-09c1-41b8-8c7c-a6441ee0263d` — layout `z_plan_automation/layouts/rhk6592-flaxton-butlers.json`.
   Drawn 2026-10-29, resolver clean. Blind cupboard 860 (drawing 828 — the 32 left over from the 2230 wall
-  went into the false panel, 352). Sink Abi Ohelu 380 (TBC). Open: benchtop, spec block.
-- **Vanities / open book shelf** — not started (PDF not read).
+  went into the false panel, 352). Open: benchtop.
+- **Vanities / open book shelf** — not started; Mark will upload the PDF.
+
+## Rev 1 (Mark 2026-10-29)
+
+- Island back panel BC-01 -> IBPF to the floor (3 x 810 x 880, 2pac board). No separate back kick needed.
+- Kick face -> Satin Board 18 – White (2pac, matches fronts) in job_toekick_materials; all kicks re-resolved.
+- Sinks 600 wide (cutout 570), named "Undermount sink", rim at the carcass top 880 (z 675, bench_drop 225).
+  Fixture x/y are ROOM coords of the fixture's back-left corner in its own rotated frame (not wall offsets) —
+  first placement put both sinks near the north walls. Now linked: kitchen BC-10, butlers BC-02. No GLB model
+  (the Ohelu 380 model would stretch), so they draw as the catalog plan shape.
+- Spec blocks added on both rooms (plan, right of the room at x 4300). Butlers has no DRAWERS / Runners.
