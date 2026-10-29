@@ -1,0 +1,42 @@
+{
+  "_source": "SynologyDrive/_JOBS/RHK6500 - 6599/RHK6592 - Caloundra Kitchens + Carpentry - Flaxton/ARCHITECTURALS/296 Flaxton Dr, Flaxton - Kitchen & Butlers Pantry.pdf (pages 1, 4, 5) + Mark Q&A 2026-10-29",
+  "_notes": [
+    "Frame: x east, y south. Butlers 3915 x 2230. W1 west (S->N, Elev p4 right), W2 north (W->E, Elev p5), W4 south (E->W, Elev p4 left). Ceiling slope ignored, 2200 (Mark).",
+    "2pac 18 like the kitchen; bench 900 = 20 stone on the carcass (880 incl the 110 kick), normal REVT.",
+    "SW void corner, 40 x 40: W1 BFK 40 at 580 (south run dz 560 + 18 + 2); W4 BFK 58 at 560 from the west wall.",
+    "W1 L->R: BFK 40 | B2D 750 sink (rails on edge) | blind B1D 860 to the north wall: door 508 hinged off a 352 false panel (>= 320 so the 300 shelving clears it). Drawing has 828; the 32 left over from 2230 went into the false panel.",
+    "W2 L->R from 585.5: TEPF 16.5 | T2D 970 open | T2D 970 open | TEPF 16.5 | 24 gap to the door frame. Open shelving 300 deep, 2200 incl kick, 6 adj shelves, all PT 16 Classic White Matt (material override exposed + exposed interior).",
+    "W4 from the west (offsets from the east start): BFK 58 | BEPF 18 | D/W 610 | BEPF 18 | washer 610 | BEPF 18 | dryer 610 | BEPF 18 seen end at the entry. Freestanding appliances, panels to the floor, top 20 past the end."
+  ],
+  "projectId": "f801076c-4e6b-4214-b0b6-91e92c2dfa8c",
+  "roomName": "Butlers Pantry",
+  "roomHeight": 2200,
+  "wallCabinetTop": 2200,
+  "walls": [
+    { "x": 0, "y": 2230, "length": 2230, "angle": 270, "height": 2200, "_": "1 west wall S->N" },
+    { "x": 0, "y": 0, "length": 3915, "angle": 0, "height": 2200, "_": "2 north wall W->E" },
+    { "x": 3915, "y": 0, "length": 2230, "angle": 90, "height": 2200, "_": "3 east wall (kitchen, doorway)" },
+    { "x": 3915, "y": 2230, "length": 3915, "angle": 180, "height": 2200, "_": "4 south wall E->W" }
+  ],
+  "cabinets": [
+    { "def": "BFK", "wall": 1, "offset": 580, "dx": 40, "dy": 880, "dz": 560, "note": "Void corner filler 40 (first wall)" },
+    { "def": "B2D", "wall": 1, "offset": 620, "dx": 750, "dy": 880, "dz": 560, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink cupboard, undermount sink (model TBC)" },
+    { "def": "B1D", "wall": 1, "offset": 1370, "dx": 860, "dy": 880, "dz": 560, "note": "Blind corner: door 508 hinged off a 352 false panel (shelving 300 deep comes off it)",
+      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false},{"col_index":1,"width":352,"width_locked":true}],"rows":[{"row_index":0,"height_locked":false}],"zones":[{"col_index":0,"face_type":"door","row_index":0,"hinge_side":"right"},{"col_index":1,"face_type":"false_panel","row_index":0}]} } },
+
+    { "def": "BFK", "wall": 4, "offset": 3297, "dx": 58, "dy": 880, "dz": 560, "note": "Void corner return filler 58 (40 face + 18)" },
+    { "def": "BEPF", "wall": 4, "offset": 3279, "dx": 18, "dy": 880, "dz": 560, "note": "Panel beside the D/W" },
+    { "def": "BEPF", "wall": 4, "offset": 2651, "dx": 18, "dy": 880, "dz": 560, "note": "Panel between the D/W and the washer. D/W 610 freestanding west of it" },
+    { "def": "BEPF", "wall": 4, "offset": 2023, "dx": 18, "dy": 880, "dz": 560, "note": "Panel between the washer and the dryer. Washer 610 west of it" },
+    { "def": "BEPF", "wall": 4, "offset": 1395, "dx": 18, "dy": 880, "dz": 560, "note": "Seen end at the entry, top 20 past it. Dryer 610 west of it" },
+
+    { "def": "TEPF", "wall": 2, "offset": 585.5, "dx": 16.5, "dy": 2200, "dz": 280, "note": "PT 16 Classic White Matt panel, floor to 2200, 300 OA", "set": { "material_overrides": { "exposed": "fcfa8ede-490a-4dfc-bee9-42923d1e9c0f" } } },
+    { "def": "T2D", "wall": 2, "offset": 602, "dx": 970, "dy": 2200, "dz": 300, "note": "Open shelving, PT 16 Classic White Matt, 6 adj shelves",
+      "set": { "has_face": false, "exposed_interior": true, "material_overrides": { "exposed": "fcfa8ede-490a-4dfc-bee9-42923d1e9c0f" },
+        "internal_grid": { "tree": { "type": "open", "fittings": [ {"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false} ] } } } },
+    { "def": "T2D", "wall": 2, "offset": 1572, "dx": 970, "dy": 2200, "dz": 300, "note": "Open shelving, PT 16 Classic White Matt, 6 adj shelves",
+      "set": { "has_face": false, "exposed_interior": true, "material_overrides": { "exposed": "fcfa8ede-490a-4dfc-bee9-42923d1e9c0f" },
+        "internal_grid": { "tree": { "type": "open", "fittings": [ {"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false},{"type":"adj_shelf","y_locked":false} ] } } } },
+    { "def": "TEPF", "wall": 2, "offset": 2542, "dx": 16.5, "dy": 2200, "dz": 280, "note": "PT 16 Classic White Matt seen end, floor to 2200, 300 OA; 24 gap to the door frame", "set": { "material_overrides": { "exposed": "fcfa8ede-490a-4dfc-bee9-42923d1e9c0f" } } }
+  ]
+}

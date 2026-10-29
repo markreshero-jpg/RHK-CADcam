@@ -1,0 +1,50 @@
+{
+  "_source": "SynologyDrive/_JOBS/RHK6500 - 6599/RHK6592 - Caloundra Kitchens + Carpentry - Flaxton/ARCHITECTURALS/296 Flaxton Dr, Flaxton - Kitchen & Butlers Pantry.pdf (Caloundra Kitchens #3738, Liam G 10/10/2026) + Mark Q&A 2026-10-29",
+  "_notes": [
+    "Frame: x east, y south. Kitchen 3925 x 5420 scaled off the plan (not dimensioned, Mark OK). W1 = west wall (shared with the butlers, opening in the bottom 950), drawn S->N so Elev 3 (right) reads L->R.",
+    "Job: 2pac Classic White Satin on 18 satin board (job default). Kick 110 in whiteboard 16.5 (drawing). Bench 900: 60 Nuvola Snow = 20 slab on the carcass (880 incl kick) + 60 apron, fronts drop 40 (room base REVT 44). Seen end panels 840 (apron folds over), top 20 past them (Mark).",
+    "W1 L->R: TEPF 18 to 2200, 600 OA (flush with the bench) | fridge space 920 | TEPF 18 | D2 450 | UBO 600 | D2 450 | 60 stone waterfall (not a cabinet) to 3466.",
+    "W1 overheads 695 x 300 carcass, top 2200: W2D 920 x 350 fridge overhead flush with the tall panels | W1D 449 | W2D 600 (rangehood TBC) | W1D 494 | WEP 18 seen end.",
+    "W1 north end: small cupboard 946 OA x 298 incl door: BEPF 18 seen (left) | B2D 910 | BFK 18 at the north wall. Top 966 = 20 past the seen panel.",
+    "Island: zero-thickness line at the cabinet backs (x 2285), drawn N->S so it faces west. 60 waterfall north | D4 647 | BBIN 450 | B2D 726 sink | D3 590 (2 small 1 large) | BEPF 18 | top 20 past. Top 900 deep = ~300 seating overhang behind. IBPK back panel on kick height."
+  ],
+  "projectId": "f801076c-4e6b-4214-b0b6-91e92c2dfa8c",
+  "roomName": "Kitchen",
+  "roomHeight": 2200,
+  "wallCabinetTop": 2200,
+  "roomRules": { "BY_CLASS": { "base": { "REVT": 44 } } },
+  "walls": [
+    { "x": 0, "y": 5420, "length": 5420, "angle": 270, "height": 2200, "_": "1 west wall S->N (Elev 3 right)" },
+    { "x": 0, "y": 0, "length": 3925, "angle": 0, "height": 2200, "_": "2 north wall" },
+    { "x": 3925, "y": 0, "length": 5420, "angle": 90, "height": 2200, "_": "3 east wall" },
+    { "x": 3925, "y": 5420, "length": 3925, "angle": 180, "height": 2200, "_": "4 south wall" },
+    { "x": 2285, "y": 1959, "length": 2511, "angle": 90, "type": "island", "detached": true, "_": "5 island, N->S, faces west" }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 1, "offset": 950, "dx": 18, "dy": 2200, "dz": 580, "note": "Fridge panel, seen end at the doorway, floor to 2200, 600 OA flush with the bench" },
+    { "def": "TEPF", "wall": 1, "offset": 1888, "dx": 18, "dy": 2200, "dz": 580, "note": "Fridge panel, floor to 2200, 600 OA flush with the bench" },
+    { "def": "D2-LL", "wall": 1, "offset": 1906, "dx": 450, "dy": 880, "dz": 560, "note": "2 equal drawers" },
+    { "def": "UBO", "wall": 1, "offset": 2356, "dx": 600, "dy": 880, "dz": 560, "note": "Under-bench oven 600, cooktop over" },
+    { "def": "D2-LL", "wall": 1, "offset": 2956, "dx": 450, "dy": 880, "dz": 560, "note": "2 equal drawers. 60 stone waterfall past this end (to 3466)" },
+
+    { "def": "BEPF", "wall": 1, "offset": 4474, "dx": 18, "dy": 840, "dz": 278, "note": "Seen end of the small cupboard, 40 under the apron; top 20 past it" },
+    { "def": "B2D", "wall": 1, "offset": 4492, "dx": 910, "dy": 880, "dz": 278, "note": "Small cupboard 946 OA incl panels, 298 deep incl doors" },
+    { "def": "BFK", "wall": 1, "offset": 5402, "dx": 18, "dy": 880, "dz": 278, "note": "18 filler at the north wall" },
+
+    { "def": "D4-SSSL", "wall": 5, "offset": 60, "dx": 647, "dy": 880, "dz": 560, "note": "Island: 4 equal drawers. 60 stone waterfall north of it",
+      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false},{"row_index":1,"height_locked":false},{"row_index":2,"height_locked":false},{"row_index":3,"height_locked":false}],"zones":[{"col_index":0,"face_type":"drawer_face","row_index":0,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":1,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":2,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":3,"hinge_side":"left"}]} } },
+    { "def": "BBIN", "wall": 5, "offset": 707, "dx": 450, "dy": 880, "dz": 560, "note": "Pull-out bin" },
+    { "def": "B2D", "wall": 5, "offset": 1157, "dx": 726, "dy": 880, "dz": 560, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink cupboard: undermount single bowl (smaller)" },
+    { "def": "D3-SLL", "wall": 5, "offset": 1883, "dx": 590, "dy": 880, "dz": 560, "note": "3 drawers: 2 small over 1 large",
+      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false},{"height":170,"row_index":1,"height_locked":true},{"height":170,"row_index":2,"height_locked":true}],"zones":[{"col_index":0,"face_type":"drawer_face","row_index":0,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":1,"hinge_side":"left"},{"col_index":0,"face_type":"drawer_face","row_index":2,"hinge_side":"left"}]} } },
+    { "def": "BEPF", "wall": 5, "offset": 2473, "dx": 18, "dy": 840, "dz": 560, "note": "Island seen end, 40 under the apron; top 20 past it" },
+    { "def": "IBPK", "wall": 5, "offset": 60, "dx": 2431, "dy": 880, "flip": true, "note": "Island back panel to kick height, over the end panel's back edge. Seen kick face below (TBC how)" },
+
+    { "def": "W2D", "wall": 1, "offset": 968, "dx": 920, "dy": 350, "dz": 580, "note": "Fridge overhead 1850-2200, flush with the tall panels" },
+    { "def": "W1D", "wall": 1, "offset": 1906, "dx": 449, "dy": 695, "dz": 300, "note": "Overhead" },
+    { "def": "W2D", "wall": 1, "offset": 2355, "dx": 600, "dy": 695, "dz": 300, "note": "RANGEHOOD TBC - drawn as W2D for now" },
+    { "def": "W1D", "wall": 1, "offset": 2955, "dx": 494, "dy": 695, "dz": 300, "note": "Overhead, hinged right",
+      "set": { "face_grid": {"cols":[{"col_index":0,"width_locked":false}],"rows":[{"row_index":0,"height_locked":false}],"zones":[{"col_index":0,"face_type":"door","row_index":0,"hinge_side":"right"}]} } },
+    { "def": "WEP", "wall": 1, "offset": 3449, "dx": 18, "dy": 695, "dz": 300, "note": "Overhead seen end" }
+  ]
+}
