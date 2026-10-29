@@ -47,3 +47,17 @@ not read yet (Synology online-only file, download failed). Quote not read either
   first placement put both sinks near the north walls. Now linked: kitchen BC-10, butlers BC-02. No GLB model
   (the Ohelu 380 model would stretch), so they draw as the catalog plan shape.
 - Spec blocks added on both rooms (plan, right of the room at x 4300). Butlers has no DRAWERS / Runners.
+
+## Rev 2 (Mark 2026-10-29)
+
+- Kitchen room rotated 90° left in the DB (`_tmp-6592-rotate.mjs`: (x,y) -> (y, 3925 - x), angles -90). Room is now
+  5420 wide x 3925 deep; the wall run is on Wall 1 = south wall (drawn E->W), island Wall 5 drawn W->E (faces south),
+  small cupboard at the west end. Elevations unchanged. The layout JSON is the PRE-rotation frame — don't redraw from
+  it without rotating.
+- Benchtops drawn (`_tmp-6592-tops.mjs`, schedule 20mm Stone, underside 880):
+  Kitchen — BT1 wall run 1560 x 600 (MA60 front, WF 60 waterfall on the open end, butts the fridge panel);
+  BT2 island 2511 x 900 (MA60 front/back/right end, WF waterfall left end); BT3 small cupboard 966 x 320 (MA60
+  front + seen end). Butlers — BT1 west 600 x 1630 + BT2 south 2540 x 600 running through the corner (butt joint),
+  arris edges, 20 past the end panel.
+- Waterfalls are the WF profile on a 20 slab, so the leg reads 20 thick; the drawing's 60 waterfall (built-up)
+  is in the notes only.
