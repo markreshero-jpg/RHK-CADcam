@@ -137,20 +137,29 @@ export function bulgeArc(p: ShapePt, q: ShapePt, b: number): { c: ShapePt; r: nu
 }
 
 /** Each edge-tagged edge of an outline as a polyline (arcs sampled every
- *  `stepDeg`), with its tag — where the 3D view draws a shaped part's tape. */
+ *  `stepDeg`), with its tag — where the 3D view draws a shaped part's tape.
+ *  An untagged straight edge takes the rectangle side it lies on (x = 0 left,
+ *  x = max right, y = 0 top, y = max bottom), inner edges none — as the
+ *  optimiser classifies them (notched gables: the front runs carry the tape,
+ *  the notch sides don't). */
 export function outlineEdges(pts: OutlinePt[], stepDeg = 5): { pts: ShapePt[]; e: EdgeTag }[] {
   const out: { pts: ShapePt[]; e: EdgeTag }[] = []
+  const xs = pts.map(p => p.x), ys = pts.map(p => p.y)
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
+  const on = (a: number, b: number, v: number) => Math.abs(a - v) < 0.05 && Math.abs(b - v) < 0.05
   pts.forEach((a, i) => {
-    if (!a.e) return
     const q = pts[(i + 1) % pts.length]
-    if (!hasBulge(a)) { out.push({ pts: [{ x: a.x, y: a.y }, { x: q.x, y: q.y }], e: a.e }); return }
+    const e: EdgeTag | undefined = a.e ?? (hasBulge(a) ? undefined
+      : on(a.x, q.x, x0) ? 'left' : on(a.x, q.x, x1) ? 'right' : on(a.y, q.y, y0) ? 'top' : on(a.y, q.y, y1) ? 'bottom' : undefined)
+    if (!e) return
+    if (!hasBulge(a)) { out.push({ pts: [{ x: a.x, y: a.y }, { x: q.x, y: q.y }], e }); return }
     const { c, r } = bulgeArc(a, q, a.b!)
     const a0 = Math.atan2(a.y - c.y, a.x - c.x), sweep = 4 * Math.atan(a.b!)
     const n = Math.max(1, Math.ceil(Math.abs(sweep) * 180 / Math.PI / stepDeg))
     out.push({
       pts: Array.from({ length: n + 1 }, (_, k) => k === 0 ? { x: a.x, y: a.y } : k === n ? { x: q.x, y: q.y }
         : { x: c.x + r * Math.cos(a0 + sweep * k / n), y: c.y + r * Math.sin(a0 + sweep * k / n) }),
-      e: a.e,
+      e,
     })
   })
   return out

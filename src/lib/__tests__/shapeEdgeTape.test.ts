@@ -19,6 +19,18 @@ describe('outlineEdges', () => {
     expect(ed[1].pts).toEqual([{ x: 338, y: 383.5 }, { x: 763, y: 133.6 }])
   })
 
+  it('tags an untagged outline by the rectangle side each edge lies on (notched gable)', () => {
+    // RHK6570 BC-03 gable: fingerpull notches in the front (x = 475); y down from the top.
+    const gable: OutlinePt[] = [
+      { x: 0, y: 0 }, { x: 457, y: 0 }, { x: 457, y: 30 }, { x: 452, y: 30 }, { x: 452, y: 40 }, { x: 475, y: 40 },
+      { x: 475, y: 245 }, { x: 452, y: 245 }, { x: 452, y: 255 }, { x: 457, y: 255 }, { x: 457, y: 280 }, { x: 452, y: 280 },
+      { x: 452, y: 290 }, { x: 475, y: 290 }, { x: 475, y: 500 }, { x: 0, y: 500 },
+    ]
+    const ed = outlineEdges(gable)
+    expect(ed.map(e => e.e)).toEqual(['top', 'right', 'right', 'bottom', 'left'])
+    expect(ed[1].pts).toEqual([{ x: 475, y: 40 }, { x: 475, y: 245 }])
+  })
+
   it('samples an arc edge on the same side as sampleOutline', () => {
     const pts: OutlinePt[] = [{ x: 0, y: 0, b: 0.4, e: 'top' }, { x: 100, y: 0, e: 'right' }, { x: 100, y: 100, e: 'bottom' }, { x: 0, y: 100, e: 'left' }]
     const arc = outlineEdges(pts, 2)[0].pts
