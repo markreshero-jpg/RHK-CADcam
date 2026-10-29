@@ -19,6 +19,12 @@ export const MARKER_INSET   = 60   // left edge (front view) → first hole cent
 export const MARKER_UP      = 15   // bottom edge → hole centres
 export const MARKER_SPACING = 10   // hole to hole, running inward
 
+// Marker holes in cabinet space (front view) for the 2D views: elevation and
+// the cabinet editor. Same points the CNC drills.
+export function markerHoleShapes(zones: ResolvedFaceZone[]): { x: number; y: number; r: number }[] {
+  return zones.flatMap(z => (z.marker_holes ?? []).map(p => ({ x: z.X + p.x, y: z.Y + p.y, r: MARKER_DIA / 2 })))
+}
+
 export function resolveDrawerMarkers(cab: CabinetInput, zones: ResolvedFaceZone[]): void {
   if (cab.rules.DF_MARKER === false) return
   const cols = new Map<number, ResolvedFaceZone[]>()

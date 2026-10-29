@@ -35,7 +35,9 @@ const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 // cabinet_instances.resolved_drawer_hw — written by persistResolved.
 // hinge_instances: saved since z_cabinet_shape Phase 3b; warnings since
 // z_material_colours MC5 (both absent on older saves).
+// df_markers: drawer front marker pricks (z_handles D22), absent before 2026-10-29.
 type DrawerHw = Pick<ResolvedCabinet, 'drawer_stacks' | 'internal_slides'> & Partial<Pick<ResolvedCabinet, 'hinge_instances' | 'warnings'>>
+  & { df_markers?: { row_index: number; col_index: number; holes: { x: number; y: number }[] }[] }
 
 // `needsResolve` (optional) collects cabinets whose saved copy can't be drawn
 // as-is and needs a live resolve: drawers but no saved drawer hardware (saved
@@ -271,6 +273,10 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
     // Recover hinges (drills + 3D model fields) from the persisted instances so
     // they render in the canvas + edit modal without a live re-resolve.
     // Saved resolved hinges win; older saves rebuild them from the hinge rows.
+    for (const m of drawerHwById.get(id)?.df_markers ?? []) {
+      const z = built.face_zones.find(fz => !fz.facet && fz.row_index === m.row_index && fz.col_index === m.col_index)
+      if (z) z.marker_holes = m.holes
+    }
     built.hinge_instances = drawerHwById.get(id)?.hinge_instances
       ?? reconstructHinges(id, built, instancesByCab, hardwareById, plateById, countRules, faceGridById.get(id) ?? null)
     if (needsResolve) {
@@ -282,7 +288,10 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       const handleStale = built.face_zones.some(z =>
         (z.face_type === 'door' || z.face_type === 'drawer_face')
         && (z.handle === undefined || (z.handle !== null && !Array.isArray(z.handle.holes))))
-      if ((hasDrawers && !drawerHwById.has(id)) || halfSaved || handleStale) needsResolve.add(id)
+      // Drawer fronts saved before the marker pricks (z_handles D22) re-resolve once.
+      const markersStale = drawerHwById.has(id) && drawerHwById.get(id)!.df_markers === undefined
+        && built.face_zones.some(z => z.face_type === 'drawer_face')
+      if ((hasDrawers && !drawerHwById.has(id)) || halfSaved || handleStale || markersStale) needsResolve.add(id)
     }
     // NB: left UNFILTERED — this map also feeds the edit modal (which never hides
     // anything) and the cut lists. Room views + their print reports call

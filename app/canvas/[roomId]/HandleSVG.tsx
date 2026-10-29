@@ -32,6 +32,27 @@ export function HandleElevSVG({ s, project, stroke, fill, strokeWidth, opacity, 
   )
 }
 
+/** Drawer front marker pricks (z_handles D22): small rings, no cross, so they
+ *  read apart from the handle through-holes. They're on the back face. */
+export function DrawerMarkersSVG({ holes, project, color, strokeWidth, opacity }: {
+  holes: { x: number; y: number; r: number }[]
+  project: Project
+  color: string
+  strokeWidth: number
+  opacity?: number
+}) {
+  if (!holes.length) return null
+  return (
+    <g opacity={opacity} style={{ pointerEvents: 'none' }}>
+      {holes.map((p, i) => {
+        const c = project(p.x, p.y)
+        const r = Math.abs(project(p.x + p.r, p.y).x - c.x)
+        return <circle key={i} cx={c.x} cy={c.y} r={r} fill="none" stroke={color} strokeWidth={strokeWidth} />
+      })}
+    </g>
+  )
+}
+
 /** The handle's drilled through-holes: a ring at true size plus a centre cross,
  *  so they read even when small. Empty when the handle isn't drilled. */
 export function HandleHolesSVG({ s, project, color, strokeWidth, opacity }: {

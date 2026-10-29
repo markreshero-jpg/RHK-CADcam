@@ -202,6 +202,9 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       internal_slides: resolved.internal_slides,
       hinge_instances: resolved.hinge_instances,
       warnings:        resolved.warnings,
+      // Drawer front marker pricks (z_handles D22), by front.
+      df_markers:      resolved.face_zones.filter(z => z.marker_holes?.length)
+        .map(z => ({ row_index: z.row_index, col_index: z.col_index, holes: z.marker_holes })),
     },
   }
 }

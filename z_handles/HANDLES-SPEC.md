@@ -457,7 +457,15 @@ is, and which edge is the bottom, once the label is off.
     Facet fronts of shaped cabinets are skipped.
   - seamDrillSync step 4b writes them as `df_marker` drill rows on the front's
     `face_back`, auto tool by diameter, like the handle holes.
-  - Not drawn on the elevation / 3D (only in the Part Editor and the CNC).
+  - Drawn (2026-10-29) as small cyan rings, no centre cross, from
+    `markerHoleShapes`:
+    - Room elevation: layer item `drawer_markers` (Hardware, elevation only,
+      shown by default). Not on the prints (they skip drilling).
+    - Cabinet editor elevation: with the Drilling toggle.
+    - Not in 3D.
+  - Saved with the drawer hardware (`resolved_drawer_hw.df_markers`) so the
+    room loads them without re-resolving. Older saves re-resolve once
+    (`markersStale` in `dbLoadResolvedParts`).
   - Tests: `drawerMarkers.test.ts`.
 
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry

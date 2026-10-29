@@ -39,8 +39,9 @@ import type { RoomFixture } from '@/src/lib/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
 import { handleShapes } from '@/src/lib/handleGeometry'
+import { markerHoleShapes } from '@/src/lib/resolver/resolveDrawerMarkers'
 import { binOutlines } from '@/src/lib/binGeometry'
-import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
+import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG, DrawerMarkersSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
@@ -1761,6 +1762,12 @@ export default function ElevationSVG({
                           color={layers.color('handle_holes', isLineDrawing ? '#475569' : '#f97316')}
                           strokeWidth={layers.w('handle_holes', 0.6) / lz} opacity={layers.op('handle_holes')} />
                       ))}
+                      {/* Drawer front marker pricks (z_handles D22) on the fronts that are drawn. */}
+                      {layers.show('drawer_markers') && (
+                        <DrawerMarkersSVG holes={markerHoleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) }))}
+                          project={toSVGPt} color={layers.color('drawer_markers', isLineDrawing ? '#475569' : '#06b6d4')}
+                          strokeWidth={layers.w('drawer_markers', 0.6) / lz} opacity={layers.op('drawer_markers')} />
+                      )}
                       </g>)}
 
                       {/* Custom parts (panels / fillers / end panels) — room-visible only */}

@@ -152,6 +152,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     viewDefaults: { plan: { visible: false } }, hint: 'Door + drawer handles from the handle schedule' },
   { id: 'handle_holes',   group: 'hardware', label: 'Handle holes',        views: ['elevation', '3d'], default: ON,
     hint: 'Through-holes drilled for each handle (gone when drilling is switched off)' },
+  { id: 'drawer_markers', group: 'hardware', label: 'Drawer front markers', views: ['elevation'], default: ON,
+    hint: 'Marker pricks on the back of each drawer front: 1 hole top front, 2 the next … (z_handles D22)' },
   { id: 'drawer_front_drilling', group: 'hardware', label: 'Drawer front drilling', views: ['elevation'], default: ON,
     hint: 'Drawer-box fixing bores into the back of each drawer front (from the runner drilling)' },
   { id: 'machining',      group: 'hardware', label: 'Drilling / machining', views: ['elevation', '3d'], default: ON,

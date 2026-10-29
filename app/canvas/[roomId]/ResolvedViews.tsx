@@ -37,7 +37,8 @@ import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } fro
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
 import { handleShapes, sharknoseProfile, sharknoseTapeBand, sharknoseTopLine } from '@/src/lib/handleGeometry'
-import { HandleElevSVG, SharknoseLinesSVG } from './HandleSVG'
+import { markerHoleShapes } from '@/src/lib/resolver/resolveDrawerMarkers'
+import { HandleElevSVG, SharknoseLinesSVG, DrawerMarkersSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { normaliseSplit } from '@/src/lib/cabinetSplit'
@@ -804,6 +805,9 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         <HandleElevSVG key={`hd${i}`} s={s} project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
           stroke="#cbd5e1" fill={wireMode ? 'none' : '#64748b'} strokeWidth={1} showHoles={showDrilling} />
       ))}
+      {/* Drawer front marker pricks (z_handles D22) with the drilling */}
+      {showDrilling && <DrawerMarkersSVG holes={markerHoleShapes(rp.face_zones)}
+        project={(x, y) => ({ x: ox + x, y: oy + dy - y })} color="#22d3ee" strokeWidth={1} />}
       <SlideDrillOverlay drills={slideDrills} perp="z"
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
