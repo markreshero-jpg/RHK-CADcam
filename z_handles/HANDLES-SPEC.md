@@ -403,6 +403,12 @@ cabinet. Rails run horizontally, with the grain along their length.
     drawn in CabinetScene. That covers the cabinet modal and room 3D, wire mode
     included. The peg points into the panel and the square end sits 0.5
     behind the rail.
+  - Cabinet modal Top / Elevation / Side: `RailBlockShapes` (ResolvedViews)
+    outlines the GLB at each hole, like the hinges. The model→cabinet mapping
+    is `railBlockToCab`, the same placement as the 3D. Not on the room
+    elevation or the prints yet.
+  - In solid 3D the blocks are hidden behind the rails and inside the gables,
+    as they are on the real cabinet. Wire shows them.
   - Tests: `fingerRailOps.test.ts` (D20 case).
   - Shaped facet rails (5b) still always get blocks and aren't drawn in 3D.
 

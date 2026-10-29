@@ -12,9 +12,8 @@ import { Suspense, useMemo } from 'react'
 import * as THREE from 'three'
 import { ModelSource } from './ModelAsset'
 import { ModelErrorBoundary } from './FixtureModel'
-import type { RailBlockEnd } from '@/src/lib/resolver/railBlocks'
+import { RAIL_BLOCK_MODEL_URL, type RailBlockEnd } from '@/src/lib/resolver/railBlocks'
 
-export const RAIL_BLOCK_MODEL_URL = '/hardware-models/Furnware_CCP_Knockin_Block.glb'
 const WHITE = '#f2f2ee'
 
 // Model axes → cabinet axes: −Y into the panel, −X towards the rail (+Z).

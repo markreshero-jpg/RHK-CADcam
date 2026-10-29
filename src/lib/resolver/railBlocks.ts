@@ -22,6 +22,20 @@ export interface RailBlockEnd {
 
 const EPS = 0.01
 
+/** The block model (Furnware CCP GLB, metres, Y up) — z_handles D20. */
+export const RAIL_BLOCK_MODEL_URL = '/hardware-models/Furnware_CCP_Knockin_Block.glb'
+
+/**
+ * Model-local (metres) → cabinet coords (mm) for one block. Model: origin = peg
+ * axis on the body's underside, peg down −Y, square end −X. Placed with the peg
+ * running into the panel along the hole axis and the square end towards the
+ * rail (+Z). Same placement as the 3D RailBlockModel.
+ */
+export function railBlockToCab(e: RailBlockEnd): (mx: number, my: number, mz: number) => [number, number, number] {
+  const into = e.axis === 'x-' ? -1 : 1
+  return (mx, my, mz) => [e.x - into * my * 1000, e.y + into * mz * 1000, e.z - mx * 1000]
+}
+
 export function railBlockEnds(caseParts: ResolvedCasePart[], internalParts: ResolvedInternalPart[]): RailBlockEnd[] {
   const panels: { key: string; X: number; DZ: number }[] = [
     ...caseParts.filter(p => p.part_key === 'left_side' || p.part_key === 'right_side')

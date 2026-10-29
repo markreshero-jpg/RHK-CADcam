@@ -31,7 +31,8 @@ import { useViewBoxPinch } from './usePinchZoom'
 import { cabinetSeamDrills, orientSeamDrills, caseBoxByKey, type DrillAxis } from '@/src/lib/jointDrilling'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
-import { useSlideTriangles, triKey } from '@/src/lib/slideSilhouette'
+import { useSlideTriangles, triKey, modelSilhouetteOutline } from '@/src/lib/slideSilhouette'
+import { railBlockEnds, railBlockToCab, RAIL_BLOCK_MODEL_URL } from '@/src/lib/resolver/railBlocks'
 import { hingePlacement, hingeSilhouetteOutline, hingeSilhouetteSnapPoints } from '@/src/lib/hingeSilhouette'
 import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeasure'
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
@@ -416,6 +417,30 @@ function HingeShapes({ rp, project }: {
   )
 }
 
+// ── Knock-in blocks (z_handles D20) ───────────────────────────────────────────
+// The Furnware CCP block at each finger-rail block hole, outlined from its GLB
+// like the hinges (same placement as the 3D RailBlockModel). Nothing until the
+// model loads; none on a rail fixed by an on-edge front rail.
+const RAIL_BLOCK_REFS = [{ model_url: RAIL_BLOCK_MODEL_URL, model_format: 'glb' as const }]
+function RailBlockShapes({ rp, project }: {
+  rp: ResolvedCabinet
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+}) {
+  const ends = useMemo(() => railBlockEnds(rp.case_parts, rp.internal_parts), [rp])
+  const triMap = useSlideTriangles(ends.length ? RAIL_BLOCK_REFS : [])
+  const tris = triMap.get(`glb:${RAIL_BLOCK_MODEL_URL}`)
+  if (!tris?.length) return null
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {ends.map(e => {
+        const d = modelSilhouetteOutline(tris, railBlockToCab(e), project, 60)
+        return d ? <path key={`${e.railKey}_${e.panelKey}`} d={d} fill="none" stroke="#d1d5db" strokeWidth={0.6}
+          strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" /> : null
+      })}
+    </g>
+  )
+}
+
 // Distinct hinge + plate GLB refs used on a cabinet — for loading their tris in
 // the parent view (so the measure tool can snap to the hinge / plate bodies).
 function hingeModelRefs(rp: ResolvedCabinet) {
@@ -771,6 +796,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })} />
       {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
+      <RailBlockShapes rp={rp} project={proj} />
       <SharknoseLinesSVG zones={rp.face_zones} project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         stroke="#fbbf24" strokeWidth={1} dash="6 4" fontSize={11} />
       {/* Handles (z_handles H2); hole centres shown with the drilling overlay */}
@@ -1053,6 +1079,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })} />
       {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
+      <RailBlockShapes rp={rp} project={proj} />
       <SlideDrillOverlay drills={slideDrills} perp="y"
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
@@ -1335,6 +1362,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })} />
       {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
+      <RailBlockShapes rp={rp} project={proj} />
       <SlideDrillOverlay drills={slideDrills} perp="x"
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />
