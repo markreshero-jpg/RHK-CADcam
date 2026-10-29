@@ -111,3 +111,5 @@ wall (0 → H) and the top are unchanged. Cross-section 1511.5 mm² at H 127. Up
 for the other lengths. The DTC Dragon Pro method's drawer bottom and back now sit **8** above the
 bottom of the outside wall (DB_DADO_HEIGHT / DB_BACK_Y_OFFSET 8, was 12); back = box height − 12.
 (The earlier profile_lift attempt, 9316b4d, was reverted in c623d90.)
+
+Lift (same day): the whole runner graphic sits **4.5 above** the rail line. The `_v2` rows have model_anchor_y +4.5 (95 −88.5, 127 −122.5, 178 −171.5), and `runnerGeometry.ts` adds the same 4.5. Drawing only, no holes changed.

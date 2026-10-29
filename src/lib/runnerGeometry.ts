@@ -39,7 +39,10 @@ function dragonPro(L: number, H: number): LocalBox[] {
   ]
   const bh = Math.min(60, H - 40)
   if (bh > 0) out.push({ kind: 'bracket', moving: true, x0: 10, x1: 22, y0: 25, y1: 25 + bh, z0: L - 20, z1: L })  // front bracket (assumed)
-  return out
+  // The whole runner sits 4.5 above the rail line (Mark 2026-10-29) — the 500
+  // GLB rows carry the same +4.5 in model_anchor_y.
+  const LIFT = 4.5
+  return out.map(b => ({ ...b, y0: b.y0 + LIFT, y1: b.y1 + LIFT }))
 }
 
 const FAMILIES: Record<RunnerFamily, (L: number, H: number) => LocalBox[]> = {

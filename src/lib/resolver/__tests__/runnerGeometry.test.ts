@@ -24,7 +24,7 @@ describe('Dragon Pro runner (parametric)', () => {
     for (const H of [95, 127, 178]) {
       const parts = runnerShape(rail('left', 400, H))
       const r = rail('left', 400, H)
-      expect(Math.max(...parts.map(p => p.y + p.h))).toBeCloseTo(r.Y + H)
+      expect(Math.max(...parts.map(p => p.y + p.h))).toBeCloseTo(r.Y + H + 4.5)   // drawn 4.5 up (Mark)
       expect(Math.max(...parts.map(p => p.z + p.d))).toBeCloseTo(r.Z + 400)
       expect(Math.min(...parts.map(p => p.z))).toBeCloseTo(r.Z)
     }
