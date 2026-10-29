@@ -36,8 +36,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { loadProjectParts } = await import('../loadClient')
     const { materialGroupKey, buildMargins } = await import('../types')
     const { nest } = await import('../nest')
-    const { buildGrainBlocks, expandGrainBlocks, blockRectOn, grainMatchTags, grainMatchLine } = await import('../grainBlocks')
-    const { grainMatchColour } = await import('../../grainMatch')
+    const { buildGrainBlocks, expandGrainBlocks } = await import('../grainBlocks')
     const { cutBlank, placedOutline, placedHoles } = await import('../shapes')
     const { loadSheetDrills, nestedParts } = await import('../sheetDrills')
     const { generateSheetGcode, postFromProfile, gcodeFileName } = await import('../gcode')
@@ -258,137 +257,20 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       writeFileSync(join(outDir, g.fileName), bytes)
     }
 
-    // Holes per placement (a hole belongs to the part whose rect holds it).
-    const holesIn = (pl: NestedSheet['placements'][number], drills: { x: number; y: number }[]) =>
-      drills.filter(h => h.x >= pl.x - 0.01 && h.x <= pl.x + pl.w + 0.01 && h.y >= pl.y - 0.01 && h.y <= pl.y + pl.h + 0.01)
-
-    // Part numbers: 1, 2, 3… on each sheet, in placement order — printed on the sheet + list + labels.
-    const gmTags = grainMatchTags(nestResult)
-    const rows: { no: number; sheet: number; cab: string; part: string; w: number; h: number; finW: number; finH: number; rotated: boolean; holes: number; comment: string | null; gm: string | null }[] = []
-    const noByUid = new Map<string, number>()
-    gen.forEach((g, si) => g.sheet.placements.forEach(pl => {
-      const p = partByUid.get(pl.baseUid)!
-      const no = rows.filter(r => r.sheet === si + 1).length + 1
-      noByUid.set(pl.uid, no)
-      rows.push({ no, sheet: si + 1, cab: p.cabinet_label, part: p.label, w: pl.rotated ? pl.h : pl.w, h: pl.rotated ? pl.w : pl.h,
-        finW: p.w, finH: p.h, rotated: pl.rotated, holes: holesIn(pl, g.drills).length, comment: p.comment,
-        gm: gmTags.has(pl.uid) ? grainMatchLine(gmTags.get(pl.uid)!) : null })
-    }))
-
-    // ── PDF ──
-    const { jsPDF } = await import('jspdf')
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
-    const PW = 297, PH = 210, M = 10
-    const roomsTxt = cfg.rooms?.join(', ') ?? 'All rooms'
-    gen.forEach((g, si) => {
-      if (si) doc.addPage()
-      const { sheet } = g
-      const { w: W, h: H } = sheet.stock
-      const mat = sheet.materialId ? matById.get(sheet.materialId)?.name ?? '' : ''
-      doc.setFont('helvetica', 'bold'); doc.setFontSize(13)
-      doc.text(`${snap.jobNumber ?? ''} ${snap.projectName.replace(snap.jobNumber ?? '', '').trim()}  ·  ${roomsTxt}`, M, M + 4)
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
-      const eff = (sheet.efficiency * 100).toFixed(0)
-      doc.text(`${mat}  ·  Sheet ${si + 1} of ${gen.length}  ·  ${W} × ${H}  ·  ${sheet.placements.length} parts  ·  ${g.drills.length} holes  ·  ${eff}% used  ·  ${g.fileName}`, M, M + 10)
-      doc.text(ds.replace(/(\d{4})(\d\d)(\d\d)/, '$3/$2/$1'), PW - M, M + 4, { align: 'right' })
-
-      const top = M + 15
-      const s = Math.min((PW - 2 * M) / W, (PH - top - M - 6) / H)
-      const ox = M, oy = top
-      const X = (x: number) => ox + x * s, Y = (y: number) => oy + (H - y) * s
-      doc.setDrawColor(40); doc.setLineWidth(0.4); doc.rect(ox, oy, W * s, H * s, 'S')
-      doc.setLineDashPattern([1.2, 1], 0); doc.setLineWidth(0.15); doc.setDrawColor(140)
-      doc.rect(X(sheet.stock.trimLeft), Y(H - sheet.stock.trimTop), (W - sheet.stock.trimLeft - sheet.stock.trimRight) * s, (H - sheet.stock.trimTop - sheet.stock.trimBottom) * s, 'S')
-      doc.setLineDashPattern([], 0)
-      // Machine origin hint (sheet bottom-left).
-      doc.setFontSize(6.5); doc.setTextColor(120); doc.text('0,0', ox + 0.6, oy + H * s - 0.8); doc.setTextColor(0)
-
-      const outlines = outlinesFor(sheet)
-      for (const pl of sheet.placements) {
-        const p = partByUid.get(pl.baseUid)!
-        const poly = outlines[pl.uid]
-        doc.setDrawColor(20); doc.setLineWidth(0.3); doc.setFillColor(236, 240, 245)
-        if (poly) {
-          doc.setLineDashPattern([0.8, 0.8], 0); doc.setLineWidth(0.1); doc.rect(X(pl.x), Y(pl.y + pl.h), pl.w * s, pl.h * s, 'S')
-          doc.setLineDashPattern([], 0); doc.setLineWidth(0.3)
-          const pts = poly.map(q => [X(q.x), Y(q.y)] as [number, number])
-          doc.lines(pts.slice(1).map((q, i) => [q[0] - pts[i][0], q[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], 'FD', true)
-        } else doc.rect(X(pl.x), Y(pl.y + pl.h), pl.w * s, pl.h * s, 'FD')
-        // Holes as small circles (true size, min 0.35 mm so 5 mm pins show).
-        doc.setDrawColor(200, 40, 40); doc.setLineWidth(0.12)
-        for (const hd of holesIn(pl, g.drills)) doc.circle(X(hd.x), Y(hd.y), Math.max(0.35, (hd as unknown as { diameter: number }).diameter / 2 * s), 'S')
-        doc.setDrawColor(20)
-        // Label: number big, then cabinet + part + cut size when it fits.
-        const cx = X(pl.x + pl.w / 2), cy = Y(pl.y + pl.h / 2)
-        const bw = pl.w * s - 1.5, bh = pl.h * s
-        const no = String(noByUid.get(pl.uid))
-        const cutW = pl.rotated ? pl.h : pl.w, cutH = pl.rotated ? pl.w : pl.h
-        const lines = [`${p.cabinet_label}  ${p.label}`, `${Math.round(cutH * 10) / 10} × ${Math.round(cutW * 10) / 10}${pl.rotated ? '  ⟲' : ''}${p.grain_across ? ' grain across' : ''}`]
-        const fit = (txt: string, max: number, min: number) => {
-          let fs = max
-          doc.setFontSize(fs)
-          while (fs > min && doc.getTextWidth(txt) > bw) { fs -= 0.5; doc.setFontSize(fs) }
-          return doc.getTextWidth(txt) <= bw ? fs : 0
-        }
-        doc.setFont('helvetica', 'bold')
-        const nfs = Math.min(fit(no, 11, 5), bh / 0.3528 * 0.55)
-        const detail = bh > 9 ? lines.map(l => { doc.setFont('helvetica', 'normal'); return fit(l.replace('  ⟲', ' (R)'), 7, 4.5) }) : [0, 0]
-        const shown = detail.filter(f => f > 0).length
-        const blockH = (nfs > 0 ? nfs * 0.3528 : 0) + shown * 2.8
-        let ty = cy - blockH / 2 + (nfs > 0 ? nfs * 0.3528 * 0.8 : 0)
-        if (nfs > 0) { doc.setFont('helvetica', 'bold'); doc.setFontSize(nfs); doc.text(no, cx, ty, { align: 'center' }) }
-        doc.setFont('helvetica', 'normal')
-        lines.forEach((l, i) => {
-          if (!detail[i]) return
-          ty += 2.8
-          doc.setFontSize(detail[i]); doc.text(l.replace('  ⟲', ' (R)'), cx, ty, { align: 'center' })
-        })
-      }
-      // Grain match blocks (z_grain_match G5): dashed outline in the group colour + tag.
-      for (const b of nestResult.blocks ?? []) {
-        const r = blockRectOn(sheet, b)
-        if (!r) continue
-        const hex = grainMatchColour(b).slice(1)
-        const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
-        const pad = 1.2
-        doc.setDrawColor(...rgb); doc.setLineWidth(0.5); doc.setLineDashPattern([2, 1], 0)
-        doc.rect(X(r.x) - pad, Y(r.y + r.h) - pad, r.w * s + 2 * pad, r.h * s + 2 * pad, 'S')
-        doc.setLineDashPattern([], 0)
-        const tag = `${b.name} ${b.direction === 'horizontal' ? 'grain across' : 'grain up'}${b.pieces > 1 ? `  ${b.piece}/${b.pieces}` : ''}`
-        doc.setFont('helvetica', 'bold'); doc.setFontSize(7)
-        const tw = doc.getTextWidth(tag) + 2
-        doc.setFillColor(...rgb); doc.rect(X(r.x) - pad, Y(r.y + r.h) - pad, tw, 3.4, 'F')
-        doc.setTextColor(255); doc.text(tag, X(r.x) - pad + 1, Y(r.y + r.h) - pad + 2.5); doc.setTextColor(0)
-        doc.setDrawColor(40); doc.setLineWidth(0.3); doc.setFont('helvetica', 'normal')
-      }
-      doc.setFontSize(7); doc.setTextColor(110)
-      doc.text('Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  "grain across" = grain runs along the width (horizontal grain match).  Red circles = drilling.', M, PH - M + 3)
-      doc.setTextColor(0)
-    })
-
-    // Parts list.
-    doc.addPage()
-    const head = ['#', 'Sheet', 'Cabinet', 'Part', 'Cut L × W', 'Finished L × W', 'Holes', 'Grain match', 'Comment']
-    const colX = [M, M + 10, M + 24, M + 54, M + 124, M + 160, M + 198, M + 212, M + 238]
-    let y = M + 4
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
-    doc.text(`Parts list — ${snap.jobNumber ?? ''}  ·  ${roomsTxt}  ·  ${rows.length} parts on ${gen.length} sheet(s)`, M, y)
-    y += 8
-    const header = () => { doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); head.forEach((h, i) => doc.text(h, colX[i], y)); doc.setLineWidth(0.2); doc.line(M, y + 1.2, PW - M, y + 1.2); y += 5.5; doc.setFont('helvetica', 'normal') }
-    header()
-    const r1 = (n: number) => String(Math.round(n * 10) / 10)
-    for (const r of rows) {
-      if (y > PH - M) { doc.addPage(); y = M + 4; header() }
-      const cells = [String(r.no), String(r.sheet), r.cab, r.part, `${r1(r.h)} × ${r1(r.w)}`, `${r1(r.finH)} × ${r1(r.finW)}`, String(r.holes), r.gm ?? '', r.comment ?? '']
-      cells.forEach((c, i) => doc.text(doc.splitTextToSize(c, (colX[i + 1] ?? PW - M) - colX[i] - 2)[0] ?? '', colX[i], y))
-      y += 5
-    }
+    // ── Cut sheets + parts list (shared with optimiser Stage 7 — cutSheets.ts) ──
+    const { cutSheetsPdf, cutSheetRows } = await import('../cutSheets')
+    const drillsBySheet = new Map(gen.map(g => [g.sheet.index, g.drills]))
+    const rows = cutSheetRows(nestResult, partByUid, drillsBySheet)
+    const doc = await cutSheetsPdf({
+      nest: nestResult, partByUid, drillsBySheet, deductEb, jobNumber: snap.jobNumber, projectName: snap.projectName,
+      scope: cfg.rooms?.join(', ') ?? 'All rooms', materialName: id => (id ? matById.get(id)?.name : null) ?? '',
+      fileNames: gen.map(g => g.fileName), date: d,
+    }, { holes: true, partsList: true })
     writeFileSync(join(outDir, 'sheets.pdf'), Buffer.from(doc.output('arraybuffer')))
 
     // ── Part labels (shared with optimiser Stage 7 — labels.ts) ──
     const { loadLabelLookups, buildAllLabels, labelsPdf, DEFAULT_LABEL_SETTINGS } = await import('../labels')
     const look = await loadLabelLookups(supabase, nestableParts, snap.projectName, matName)
-    const drillsBySheet = new Map(gen.map(g => [g.sheet.index, g.drills]))
     const lab = await labelsPdf(buildAllLabels(nestResult, partByUid, drillsBySheet, deductEb, look, 'cut'), DEFAULT_LABEL_SETTINGS)
     writeFileSync(join(outDir, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
 

@@ -35,7 +35,7 @@ const STAGES: { n: Stage; label: string }[] = [
   { n: 4, label: 'Nesting' },
   { n: 5, label: 'Editing' },
   { n: 6, label: 'G-code' },
-  { n: 7, label: 'Labels' },
+  { n: 7, label: 'Labels & Cut Sheets' },
 ]
 
 const sel = 'bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent'

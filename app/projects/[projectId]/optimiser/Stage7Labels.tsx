@@ -1,7 +1,8 @@
 'use client'
 
 // ============================================================
-// Stage 7 — Part labels (Cabinet Vision layout, src/lib/optimiser/labels.ts).
+// Stage 7 — Labels & Cut Sheets. Two tabs: part labels (Cabinet Vision
+// layout, src/lib/optimiser/labels.ts) and the cut sheets report (CutSheetsPanel).
 // One label per nested part, numbered sheet-major like the sheet prints.
 // Label size + printer mode are remembered per browser. The printer itself
 // is picked in the browser's print dialog — a web page can't choose one.
@@ -9,6 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import CutSheetsPanel from './CutSheetsPanel'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import {
@@ -40,7 +42,30 @@ function parseParts(s: string): Set<number> | null {
   return out.size ? out : null
 }
 
+const TAB_KEY = 'rhk.optimiser.stage7Tab'
+
 export default function Stage7Labels() {
+  const [tab, setTab] = useState<'labels' | 'sheets'>('labels')
+  useEffect(() => { try { if (localStorage.getItem(TAB_KEY) === 'sheets') setTab('sheets') } catch { /* ignore */ } }, [])
+  const pick = (t: 'labels' | 'sheets') => { setTab(t); try { localStorage.setItem(TAB_KEY, t) } catch { /* ignore */ } }
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex-none flex gap-1 px-6 pt-2 border-b border-edge">
+        {([['labels', 'Labels'], ['sheets', 'Cut sheets']] as const).map(([t, txt]) => (
+          <button key={t} onClick={() => pick(t)}
+            className={`px-3 py-1.5 text-xs border-b-2 -mb-px transition-colors ${tab === t ? 'border-accent text-ink' : 'border-transparent text-ink-subtle hover:text-ink-muted'}`}>
+            {txt}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-hidden">
+        {tab === 'labels' ? <LabelsPanel /> : <CutSheetsPanel />}
+      </div>
+    </div>
+  )
+}
+
+function LabelsPanel() {
   const snap = useOptiStore(s => s.snapshot)!
   const nestResult = useOptiStore(s => s.nestResult)
   const partIndex = useOptiStore(s => s.partIndex)
