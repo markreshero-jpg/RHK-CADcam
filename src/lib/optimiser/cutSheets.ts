@@ -49,6 +49,7 @@ export interface CutSheetsInput {
   scope: string                              // e.g. the rooms in the run
   materialName: (id: string | null) => string
   fileNames?: (string | undefined)[]         // G-code program per sheet, when known
+  runCode?: string | null                    // saved run, e.g. RHK6570-R3
   date?: Date
 }
 
@@ -81,7 +82,7 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
     const eff = (sheet.efficiency * 100).toFixed(0)
     const file = inp.fileNames?.[si]
     doc.text(`${inp.materialName(sheet.materialId)}  ·  Sheet ${si + 1} of ${total}  ·  ${W} × ${H}  ·  ${sheet.placements.length} parts  ·  ${drills.length} holes  ·  ${eff}% used${file ? `  ·  ${file}` : ''}`, M, M + 10)
-    doc.text(dateTxt, PW - M, M + 4, { align: 'right' })
+    doc.text(`${inp.runCode ? `Run ${inp.runCode}   ` : ''}${dateTxt}`, PW - M, M + 4, { align: 'right' })
 
     const top = M + 15
     const s = Math.min((PW - 2 * M) / W, (PH - top - M - 6) / H)
@@ -167,7 +168,7 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
     const colX = [M, M + 12, M + 24, M + 54, M + 124, M + 160, M + 198, M + 212, M + 238]
     let y = M + 4
     doc.setFont('helvetica', 'bold'); doc.setFontSize(12)
-    doc.text(`Parts list — ${title}  ·  ${rows.length} parts`, M, y)
+    doc.text(`Parts list — ${title}  ·  ${rows.length} parts${inp.runCode ? `  ·  Run ${inp.runCode}` : ''}`, M, y)
     y += 8
     const header = () => { doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); head.forEach((h, i) => doc.text(h, colX[i], y)); doc.setLineWidth(0.2); doc.line(M, y + 1.2, PW - M, y + 1.2); y += 5.5; doc.setFont('helvetica', 'normal') }
     header()

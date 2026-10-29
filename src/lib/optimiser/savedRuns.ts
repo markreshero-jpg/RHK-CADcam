@@ -26,6 +26,7 @@ export interface SavedRunFile {
  *  `nest === store.nestResult` — any edit makes a new layout. */
 export interface SavedRun {
   id: string | null            // null until the save lands
+  runNo: number | null         // per job, never reused (projects.nest_run_seq)
   name: string
   savedAt: string
   nest: NestResult
@@ -37,6 +38,7 @@ export interface SavedRun {
 export interface RunSnapshot {
   v: 2
   savedAt: string
+  runNo?: number | null
   nestResult: NestResult
   partIndex: Record<string, NestPartInput>
   selectedUids: string[]
@@ -56,17 +58,28 @@ export interface RunSnapshot {
 export interface RunListItem { id: string; name: string; savedAt: string; sheets: number; parts: number; batch: boolean }
 
 /** The live workspace pieces a snapshot is built from. */
-export type RunState = Omit<RunSnapshot, 'v' | 'savedAt' | 'files' | 'drills' | 'sim'>
+export type RunState = Omit<RunSnapshot, 'v' | 'savedAt' | 'runNo' | 'files' | 'drills' | 'sim'>
+
+/** "RHK6570-R3" — the run's name on the NC files, programs, cut sheets and labels. */
+export const runCode = (jobNumber: string | null, runNo: number) => `${jobNumber || 'JOB'}-R${runNo}`
+
+/** The job's next run number. A counter (never max+1), so a deleted run's number
+ *  is never handed out again — its NC files may still be on the server. */
+export async function reserveRunNo(projectId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('next_nest_run_no', { p_project_id: projectId })
+  if (error || typeof data !== 'number') throw new Error(`run number: ${error?.message ?? 'no number'}`)
+  return data
+}
 
 /** Save a run. `replaceId` (the same layout generated again) is deleted first. */
 export async function saveRun(inp: {
-  projectId: string; name: string; state: RunState
+  projectId: string; name: string; runNo?: number | null; state: RunState
   files: SavedRunFile[]; drillsBySheet: Map<number, SheetDrill[]>; sim?: unknown; replaceId?: string | null
 }): Promise<{ id: string; savedAt: string }> {
   const { state } = inp
   const savedAt = new Date().toISOString()
   const snapshot: RunSnapshot = {
-    v: 2, savedAt, ...state,
+    v: 2, savedAt, runNo: inp.runNo ?? null, ...state,
     files: inp.files.map(({ gcode: _g, ...f }) => f),
     drills: [...inp.drillsBySheet],
     sim: inp.sim,

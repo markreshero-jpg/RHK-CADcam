@@ -17,7 +17,7 @@ import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
-import { saveRun, type SheetDrill, type SavedRun } from '@/src/lib/optimiser/savedRuns'
+import { saveRun, reserveRunNo, runCode, type SheetDrill, type SavedRun } from '@/src/lib/optimiser/savedRuns'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 
 interface SimState { coord: SimCoord | null; drillBlock: DrillBlockConfig | null; drillCoord: SimDrillCoord | null }
@@ -109,6 +109,17 @@ export default function Stage6Gcode() {
       }
 
       const ds = dateStamp()
+      // Run number (RHK6570-R3): on every file name and program header so files on
+      // the server lead back to the run. Regenerating the same layout keeps its number.
+      let runNo = current?.runNo ?? null
+      if (runNo == null) {
+        try { runNo = await reserveRunNo(snap.projectId) }
+        catch (e) { console.error('[optimiser] run number', e) }   // still post — just unnumbered
+      }
+      const now = new Date()
+      const runNote = runNo != null
+        ? `RUN ${runCode(snap.jobNumber, runNo)} ${runRooms()} ${now.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: '2-digit' })}`
+        : null
       const batch = isBatch
 
       // Drill block for Anderson gang drilling (per machine). Only activates the
@@ -226,12 +237,13 @@ export default function Stage6Gcode() {
           jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
           toolName: (tool?.name as string | null) ?? null, toolNames,
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,
+          runNote,
           drillBlock,
           outlines,
           holes,
           holeSkins: holeSkinsFor(sheet),
         })
-        const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension })
+        const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: i + 1, ext: post.file_extension, runNo })
         return {
           sheetIndex: sheet.index, fileName,
           gcode, lines: gcode.split('\n').length,
@@ -259,7 +271,7 @@ export default function Stage6Gcode() {
       // Save straight away — the run can then be reopened from Stage 1.
       const sim: SimState = { coord: coordNow, drillBlock: drillBlock ?? null, drillCoord: drillCoordNow }
       const run = {
-        id: null, name: runName(), savedAt: new Date().toISOString(), nest: nestResult,
+        id: null, runNo, name: runName(runNo), savedAt: new Date().toISOString(), nest: nestResult,
         files: gen.map(({ sheetIndex, fileName, gcode, outlines, holes }) => ({ sheetIndex, fileName, gcode, outlines, holes })),
         drillsBySheet: new Map<number, SheetDrill[]>([...sheetDrills].map(([k, v]) => [k, v.map(d => ({ x: d.x, y: d.y, diameter: d.diameter }))])),
         sim,
@@ -275,10 +287,13 @@ export default function Stage6Gcode() {
     } finally { setBusy(false) }
   }
 
-  // Job + rooms in the run, for the saved run's name.
-  function runName() {
+  // Rooms in the run; the saved run's name is "RHK6570-R3 Bed 2 Ensuite".
+  function runRooms() {
     const rooms = [...new Set(nestedParts(snap.parts, partIndex).map(p => p.room_name).filter(Boolean))]
-    return `${snap.jobNumber ?? snap.projectName} ${rooms.length ? rooms.join(', ') : 'All rooms'}${isBatch ? ' (batch)' : ''}`
+    return `${rooms.length ? rooms.join(', ') : 'All rooms'}${isBatch ? ' (batch)' : ''}`
+  }
+  function runName(runNo: number | null) {
+    return `${runNo != null ? runCode(snap.jobNumber, runNo) : (snap.jobNumber ?? snap.projectName)} ${runRooms()}`
   }
 
   async function save(run: SavedRun, replaceId: string | null) {
@@ -286,7 +301,7 @@ export default function Stage6Gcode() {
       const st = useOptiStore.getState()
       const nested = new Set(Object.values(st.partIndex).map(p => p.baseUid))
       const { id, savedAt } = await saveRun({
-        projectId: snap.projectId, name: run.name, replaceId,
+        projectId: snap.projectId, name: run.name, runNo: run.runNo, replaceId,
         state: {
           nestResult: run.nest, partIndex: st.partIndex, selectedUids: [...st.selectedUids], cutQty: st.cutQty,
           filterRoomIds: st.filterRoomIds, filterCabinetIds: st.filterCabinetIds, filterMaterialIds: st.filterMaterialIds,

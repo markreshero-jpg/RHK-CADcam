@@ -58,6 +58,7 @@ export interface LabelData {
   material: string; colour: string; grainMatch: string | null
   edging: string; comment: string; cab: string
   sheetNo: number; partNo: number
+  runNo?: number | null        // saved run (savedRuns.ts) — "Run No" under Part No
   len: number; wid: number; grainAcross: boolean
   // Part picture in the cut-blank frame (x = width, y = length).
   pic: { W: number; H: number; edges: [Pt, Pt, boolean][]; holes: { x: number; y: number; d: number }[] }
@@ -135,7 +136,7 @@ export function buildLabelData(
 export function buildAllLabels(
   nest: NestResult, partByUid: Map<string, OptiPart>,
   drillsBySheet: Map<number, { x: number; y: number; diameter: number }[]>,
-  deductEb: boolean, look: LabelLookups, dims: 'cut' | 'finished',
+  deductEb: boolean, look: LabelLookups, dims: 'cut' | 'finished', runNo?: number | null,
 ): LabelData[] {
   const nos = partNumbers(nest)
   const gm = grainMatchTags(nest)
@@ -143,7 +144,7 @@ export function buildAllLabels(
   nest.sheets.forEach((s, si) => s.placements.forEach(pl => {
     const p = partByUid.get(pl.baseUid)
     if (!p) return
-    out.push(buildLabelData(p, pl, si + 1, nos.get(pl.uid)!, drillsBySheet.get(s.index) ?? [], deductEb, look, gm.get(pl.uid), dims))
+    out.push({ ...buildLabelData(p, pl, si + 1, nos.get(pl.uid)!, drillsBySheet.get(s.index) ?? [], deductEb, look, gm.get(pl.uid), dims), runNo })
   }))
   return out
 }
@@ -223,8 +224,12 @@ export function drawLabel(doc: JsPDF, d: LabelData, ox: number, oy: number, W: n
   fs(10); underline('Cab #', 53, 8.5)
   doc.setFont('helvetica', 'bold'); fit(d.cab, 64, 9.5, 18, 18, 9)
   fs(7)
-  doc.setFont('helvetica', 'normal'); doc.text('Sheet No:', X(95), Y(5), { align: 'right' }); doc.text('Part No:', X(95), Y(9), { align: 'right' })
-  doc.setFont('helvetica', 'bold'); doc.text(String(d.sheetNo), X(99.5), Y(5), { align: 'right' }); doc.text(String(d.partNo), X(99.5), Y(9), { align: 'right' })
+  doc.setFont('helvetica', 'normal'); doc.text('Sheet No:', X(95), Y(4.5), { align: 'right' }); doc.text('Part No:', X(95), Y(8.2), { align: 'right' })
+  doc.setFont('helvetica', 'bold'); doc.text(String(d.sheetNo), X(99.5), Y(4.5), { align: 'right' }); doc.text(String(d.partNo), X(99.5), Y(8.2), { align: 'right' })
+  if (d.runNo) {
+    doc.setFont('helvetica', 'normal'); doc.text('Run No:', X(95), Y(11.9), { align: 'right' })
+    doc.setFont('helvetica', 'bold'); doc.text(String(d.runNo), X(99.5), Y(11.9), { align: 'right' })
+  }
 
   // Part picture: length across, width up, seen from the machined (up) face —
   // the sheet view turned, never mirrored. Blank (x = width, y = length) →

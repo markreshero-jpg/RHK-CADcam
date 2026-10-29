@@ -42,7 +42,7 @@ export default function SavedRuns() {
         if (!useOptiStore.getState().includedProjectIds.includes(pid)) store.mergeProjectData(pid, await loadProjectParts(pid))
       }
       store.restoreRun(rs, {
-        id, name, savedAt: rs.savedAt, nest: rs.nestResult, files,
+        id, runNo: rs.runNo ?? null, name, savedAt: rs.savedAt, nest: rs.nestResult, files,
         drillsBySheet: new Map(rs.drills), sim: rs.sim,
       })
     } catch (e) {
@@ -61,7 +61,7 @@ export default function SavedRuns() {
     <div className="mt-10 max-w-xl">
       <h3 className="text-xs font-semibold text-ink mb-1">Saved runs</h3>
       <p className="text-[11px] text-ink-subtle mb-3">
-        Each time G-code is generated (Stage 6) the run is saved. Reopen one to print its labels and cut sheets or download its programs again — no re-nesting.
+        Each time G-code is generated (Stage 6) the run is saved with a number — RHK6570-R3 — that is also on its NC file names, program headers, cut sheets and labels. Reopen one to print its labels and cut sheets or download its programs again — no re-nesting.
       </p>
       {error && <p className="text-xs text-red-400 mb-2">{error}</p>}
       {!runs ? <p className="text-xs text-ink-subtle">Loading…</p>

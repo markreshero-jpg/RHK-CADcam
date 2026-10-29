@@ -211,6 +211,9 @@ export interface GcodeInput {
   maxDepthPerPass?: number // routing tool's max cut depth per pass (mm); falls back to rough_pass_z_step
   // Template substitution values for header_template / footer_template.
   jobNumber?: string | null
+  // Saved run comment, e.g. "RUN RHK6570-R3 Bed 2 Ensuite 30/10/26" (savedRuns.ts) —
+  // ties a program on the server back to its run. {RUN} in a header template.
+  runNote?: string | null
   materialName?: string | null
   toolName?: string | null   // routing bit name, for the tool comment block
   // Name per tool number, so pocket and internal-feature tools get named too.
@@ -571,6 +574,7 @@ export function generateSheetGcode(input: GcodeInput): string {
     .replace(/\{WIDTH\}/g, f(sheet.stock.h))
     .replace(/\{THICKNESS\}/g, f(thickness))
     .replace(/\{JOB\}/g, input.jobNumber ?? '')
+    .replace(/\{RUN\}/g, input.runNote ?? '')
     .replace(/\{MATERIAL\}/g, input.materialName ?? '')
     .replace(/\{SAFEZ\}/g, fz(safeZ))
 
@@ -578,9 +582,15 @@ export function generateSheetGcode(input: GcodeInput): string {
   // A machine template (Anderson .anc) fully OWNS the preamble: the % wrapper,
   // O-number, #1/#2/#3 macros, vacuum/zone subprograms and look-ahead mode.
   if (p.header_template) {
-    subst(p.header_template).split('\n').forEach(l => emit(l))
+    // The run comment goes under the template's job line (else at its end),
+    // unless the template places {RUN} itself.
+    const tpl = p.header_template.split('\n')
+    const runAt = input.runNote && !p.header_template.includes('{RUN}') ? (tpl.findIndex(l => l.includes('{JOB}')) + 1 || tpl.length) : -1
+    tpl.forEach((l, i) => { if (i === runAt) c(input.runNote!); emit(subst(l)) })
+    if (runAt === tpl.length) c(input.runNote!)
   } else {
     c(`Sheet ${sheet.index + 1}  ${sheet.stock.w}x${sheet.stock.h}mm  ${thickness}mm`)
+    if (input.runNote) c(input.runNote)
     if (p.program_header) p.program_header.split('\n').forEach(l => emit(l))
     emit(`${p.units_code} G90 G17`)            // mm, absolute, XY plane
     emit(p.work_offset_code)
@@ -1476,14 +1486,17 @@ export function postFromProfile(row: Record<string, unknown> | null, tool?: { ba
 }
 
 // File name (spec §5.8.3).
-export function gcodeFileName(opts: { batch: boolean; jobNumber: string | null; dateStr: string; materialCode: string; sheetNumber: number; ext?: string }): string {
+export function gcodeFileName(opts: { batch: boolean; jobNumber: string | null; dateStr: string; materialCode: string; sheetNumber: number; ext?: string; runNo?: number | null }): string {
   // The extension is a controller/file-browser convention, not a format, so it
   // comes from the machine profile (file_extension). The machine's known-good
   // files are .anc. Leading dots and anything unsafe for a filename are stripped.
   const ext = (opts.ext ?? DEFAULT_POST.file_extension).replace(/[^A-Za-z0-9]+/g, '') || 'nc'
   const mat = (opts.materialCode || 'MAT').replace(/[^A-Za-z0-9]+/g, '').slice(0, 12) || 'MAT'
   const n = String(opts.sheetNumber).padStart(2, '0')
+  // Saved run number (RHK6570_R3_…) so runs for one job never overwrite each other on the server.
+  const job = (opts.jobNumber || 'JOB').replace(/[^A-Za-z0-9]+/g, '')
+  if (opts.runNo) return `${opts.batch ? `BATCH_${job}` : job}_R${opts.runNo}_${mat}_${n}.${ext}`
   return opts.batch
     ? `BATCH_${opts.dateStr}_${mat}_${n}.${ext}`
-    : `${(opts.jobNumber || 'JOB').replace(/[^A-Za-z0-9]+/g, '')}_${mat}_${n}.${ext}`
+    : `${job}_${mat}_${n}.${ext}`
 }

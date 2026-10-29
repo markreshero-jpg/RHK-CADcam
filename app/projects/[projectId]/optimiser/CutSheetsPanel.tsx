@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { cutSheetsPdf } from '@/src/lib/optimiser/cutSheets'
+import { runCode } from '@/src/lib/optimiser/savedRuns'
 
 const STORE_KEY = 'rhk.optimiser.cutSheetSettings'
 
@@ -62,6 +63,7 @@ export default function CutSheetsPanel() {
       nest: nestResult, partByUid: new Map(snap.parts.map(p => [p.uid, p])), drillsBySheet: drills, deductEb,
       jobNumber: snap.jobNumber, projectName: snap.projectName, scope, materialName: matName,
       fileNames: savedDrills ? nestResult.sheets.map(s => savedRun!.files.find(f => f.sheetIndex === s.index)?.fileName) : undefined,
+      runCode: savedDrills && savedRun!.runNo != null ? runCode(snap.jobNumber, savedRun!.runNo) : null,
     }, { sheets: sheetsOn, holes: opts.holes, partsList: opts.partsList }).then(doc => {
       if (dead) return
       url = URL.createObjectURL(doc.output('blob'))

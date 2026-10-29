@@ -73,6 +73,7 @@ function LabelsPanel() {
   // Holes as machined when this layout's G-code was made (Stage 6 / a reopened run).
   const savedRun = useOptiStore(s => s.savedRun)
   const savedDrills = savedRun && savedRun.nest === nestResult ? savedRun.drillsBySheet : null
+  const runNo = savedRun && savedRun.nest === nestResult ? savedRun.runNo : null
   const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
 
   const [st, setSt] = useState<LabelSettings>(DEFAULT_LABEL_SETTINGS)
@@ -104,13 +105,13 @@ function LabelsPanel() {
       const look = await loadLabelLookups(supabase, parts, snap.projectName, matName)
       const byUid = new Map(snap.parts.map(p => [p.uid, p]))
       if (!dead) setLabels({
-        cut: buildAllLabels(nestResult, byUid, bySheet, deductEb, look, 'cut'),
-        finished: buildAllLabels(nestResult, byUid, bySheet, deductEb, look, 'finished'),
+        cut: buildAllLabels(nestResult, byUid, bySheet, deductEb, look, 'cut', runNo),
+        finished: buildAllLabels(nestResult, byUid, bySheet, deductEb, look, 'finished', runNo),
       })
     })().catch(e => { if (!dead) setError(e instanceof Error ? e.message : String(e)) })
       .finally(() => { if (!dead) setLoading(false) })
     return () => { dead = true }
-  }, [nestResult, partIndex, snap, deductEb, savedDrills])
+  }, [nestResult, partIndex, snap, deductEb, savedDrills, runNo])
 
   const picked = useMemo(() => {
     const list = labels ? labels[st.dims] : []

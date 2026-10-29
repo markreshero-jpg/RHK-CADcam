@@ -220,6 +220,10 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     }
     const d = new Date()
     const ds = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+    // Round trip: a real run number (savedRuns.ts) on files, headers, labels, cut sheets.
+    const { reserveRunNo, runCode } = await import('../savedRuns')
+    const runNo = cfg.roundTrip ? await reserveRunNo(snap.projectId) : null
+    const runNote = runNo != null ? `RUN ${runCode(snap.jobNumber, runNo)} ${cfg.rooms?.join(', ') ?? 'All rooms'} ${d.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: '2-digit' })}` : null
     const gen = nestResult.sheets.map((sheet, i) => {
       const drills = sheetDrills.get(sheet.index) ?? []
       const routes = sheetRoutes.get(sheet.index) ?? []
@@ -237,9 +241,9 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
         toolName: (tool?.name as string | null) ?? null, toolNames,
         programNumber: `O${String(oBase + i).padStart(4, '0')}`,
-        drillBlock, outlines: outlinesFor(sheet), holes: holesFor(sheet), holeSkins: holeSkinsFor(sheet),
+        drillBlock, outlines: outlinesFor(sheet), holes: holesFor(sheet), holeSkins: holeSkinsFor(sheet), runNote,
       })
-      const fileName = gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: i + 1, ext: post.file_extension })
+      const fileName = gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: i + 1, ext: post.file_extension, runNo })
       return { sheet, fileName, gcode, drills, routes, findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }) }
     })
     const blocking = gen.flatMap(g => errorsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
@@ -264,14 +268,14 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const doc = await cutSheetsPdf({
       nest: nestResult, partByUid, drillsBySheet, deductEb, jobNumber: snap.jobNumber, projectName: snap.projectName,
       scope: cfg.rooms?.join(', ') ?? 'All rooms', materialName: id => (id ? matById.get(id)?.name : null) ?? '',
-      fileNames: gen.map(g => g.fileName), date: d,
+      fileNames: gen.map(g => g.fileName), date: d, runCode: runNo != null ? runCode(snap.jobNumber, runNo) : null,
     }, { holes: true, partsList: true })
     writeFileSync(join(outDir, 'sheets.pdf'), Buffer.from(doc.output('arraybuffer')))
 
     // ── Part labels (shared with optimiser Stage 7 — labels.ts) ──
     const { loadLabelLookups, buildAllLabels, labelsPdf, DEFAULT_LABEL_SETTINGS } = await import('../labels')
     const look = await loadLabelLookups(supabase, nestableParts, snap.projectName, matName)
-    const lab = await labelsPdf(buildAllLabels(nestResult, partByUid, drillsBySheet, deductEb, look, 'cut'), DEFAULT_LABEL_SETTINGS)
+    const lab = await labelsPdf(buildAllLabels(nestResult, partByUid, drillsBySheet, deductEb, look, 'cut', runNo), DEFAULT_LABEL_SETTINGS)
     writeFileSync(join(outDir, 'labels.pdf'), Buffer.from(lab.output('arraybuffer')))
 
     // ── Saved run round trip (savedRuns.ts): save, list, reopen, compare, delete ──
@@ -281,7 +285,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       const nested = new Set(Object.values(index).map(p => p.baseUid))
       const files = gen.map(g => ({ sheetIndex: g.sheet.index, fileName: g.fileName, gcode: g.gcode, outlines: outlinesFor(g.sheet) }))
       const { id } = await saveRun({
-        projectId: snap.projectId, name: `${snap.jobNumber} headless round trip`,
+        projectId: snap.projectId, name: `${snap.jobNumber} headless round trip`, runNo,
         state: {
           nestResult, partIndex: index, selectedUids: [...nested], cutQty: {}, filterRoomIds: [], filterCabinetIds: [], filterMaterialIds: [],
           includedProjectIds: [snap.projectId], settings: { quality: cfg.quality ?? 'balanced', allowRotation: true }, stock: stockForRun,
@@ -300,7 +304,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
           layoutSame: canon(back.snap.nestResult) === canon(nestResult),
           gcodeSame: back.files.length === gen.length && back.files.every((f, i) => f.gcode === gen[i].gcode && f.fileName === gen[i].fileName),
           holesSame: canon(back.snap.drills) === canon([...drillsBySheet]),
-          parts: back.snap.parts.length, placementRows: count,
+          parts: back.snap.parts.length, placementRows: count, runNo: back.snap.runNo,
           snapshotKB: Math.round(JSON.stringify(back.snap).length / 1024),
         }
       } finally { await deleteRun(id) }
