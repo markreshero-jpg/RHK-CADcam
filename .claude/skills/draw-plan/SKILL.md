@@ -140,6 +140,13 @@ line and mirrors the island elevation.
   rails on edge (sink cabinets) the front rail fixes the top finger rail, so it
   gets no knock-in blocks (D20). The resolver does this, so there is nothing
   to set.
+- **Finger-pull rails are cut as a 60 strip, then trimmed and taped** (Mark,
+  2026-10-29, standard practice). The machine can't cut anything under 50–60
+  wide well, so the optimiser nests every narrower rail at 60 wide. The top
+  rail is taped on its one long edge away from the carcass edge; every other
+  rail on both long edges, after trimming. Each rail's comment gives its trim
+  size ("Cut 60 wide, trim to 38, then tape 2 long edges = 40"). This is
+  automatic (z_handles D21). Never hand-edit rail sizes or tape to get it.
 - **Hinges vs adj-shelf holes**: the resolver errors `HINGE_SHELF_HOLE_CLASH`
   when a hinge plate sits over shelf-pin holes. Fix by setting the door's
   manual `face_grid.zones[].hinges` (along the door from its bottom), moving

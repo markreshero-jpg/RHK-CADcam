@@ -1137,6 +1137,9 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'blocks', title: 'See the blocks in 3D',
       body: 'Each rail end that sits in a gable or divider is held by a knock-in nylon block. The block\'s peg goes in the drilled Ø10 hole and it screws into the back of the rail. In 3D the blocks sit just behind the rails, and Wire shows them best. Layers → Hardware → Finger rail blocks turns them off. A sink cabinet with its top rails on edge has no blocks on its top finger rail: the on-edge front rail holds it, so there are no holes there either.',
       canvas: true, done: () => true },
+    { id: 'strip', title: 'Cut at 60, trim, then tape',
+      body: 'The machine doesn\'t cut narrow strips well, so every finger-pull rail is cut 60 wide. Each one\'s comment (on the cut list and label) says what to do, e.g. "Cut 60 wide, trim to 38, then tape 2 long edges = 40". The top rail is taped on one long edge, the one away from the benchtop. Every other rail is taped on both. The tape is the doors\' tape.',
+      canvas: true, done: () => true },
   ]},
 ]
 

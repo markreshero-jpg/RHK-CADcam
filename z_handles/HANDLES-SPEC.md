@@ -416,6 +416,28 @@ cabinet. Rails run horizontally, with the grain along their length.
   - Tests: `fingerRailOps.test.ts` (D20 case).
   - Shaped facet rails (5b) still always get blocks and aren't drawn in 3D.
 
+**D21. Rails cut as a 60 strip, trimmed, then taped (Mark, 2026-10-29 — standard practice).**
+The machine doesn't cut anything under 50–60 wide well. So the CNC cuts each
+finger-pull rail as a 60-wide strip, and the shop trims it to width and then
+tapes its long edges.
+- **Tape:**
+  - The rail at the carcass top gap (base) or bottom gap (wall) gets 1 long
+    edge: the one away from the carcass edge.
+  - Every other rail gets both long edges.
+  - The tape is the front's (door) tape.
+- **Comment on every rail:** "Cut 60 wide, trim to {W − n × tape}, then tape n
+  long edge(s) = W". Joined rails (D19) keep it, followed by "Joined rail: …".
+- **As built:**
+  - `fingerRails` marks each rail `at` 'top' / 'bottom' and carries the front's
+    `edgeband_id`.
+  - `fingerRailParts` sets the long-edge flags (face-kind top / bottom = ends of
+    DX).
+  - normalize: `RAIL_NEST_W` = 60. `fingerRailStrip` makes a rail under 60 nest
+    at 60 × length with no tape deducted, and writes the note. Its tape still
+    counts in the edgeband metres and shows on the label.
+  - Shaped facet rails are untouched.
+  - Tests: `fingerRailOps.test.ts`.
+
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
 - **Reuse, don't rebuild.** Same loader as slides and fixtures

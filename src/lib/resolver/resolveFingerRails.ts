@@ -40,6 +40,8 @@ export interface FingerRail {
   frontZ:    number
   thickness: number
   material_id: string
+  edgeband_id?: string        // the front's tape (rails take the door's board + tape)
+  at?: 'top' | 'bottom'       // the rail at the carcass top / bottom gap
 }
 
 const EPS = 0.01
@@ -112,7 +114,7 @@ export function fingerRails(
       if (d.joint <= cx && d.joint > x0) x0 = d.joint
       if (d.joint >= cx && d.joint < x1) x1 = d.joint
     }
-    found.push({ key: 'fprail:0', bottom, top, x0, x1, frontZ, thickness: z.DZ, material_id: z.material_id })
+    found.push({ key: 'fprail:0', bottom, top, x0, x1, frontZ, thickness: z.DZ, material_id: z.material_id, edgeband_id: z.edge_band?.id })
   }
 
   // 2. Within a column, fronts on one seam share a rail; different gaps with
@@ -157,7 +159,10 @@ export function fingerRails(
 
   const rails = merged
     .sort((a, b) => a.bottom - b.bottom || a.x0 - b.x0)
-    .map((rail, i) => ({ ...rail, key: `fprail:${i}` as const }))
+    .map((rail, i) => ({
+      ...rail, key: `fprail:${i}` as const,
+      ...(rail.top >= carcTop - EPS ? { at: 'top' as const } : rail.bottom <= carcBot + EPS ? { at: 'bottom' as const } : {}),
+    }))
   return { rails, warnings }
 }
 
@@ -178,7 +183,13 @@ export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails:
     X: rl.x0, Y: rl.bottom, Z: rl.frontZ - rl.thickness,
     AX: 0, AY: 0, AZ: 0,
     material_id: rl.material_id,
-    edge_band: { top: false, bottom: false, left: false, right: false },
+    // Long edges taped after the shop trims the CNC strip (Mark, 2026-10-29): the rail
+    // at the carcass top / bottom gap on its one long edge away from the carcass
+    // edge, every other rail on both. Face-kind frame: top / bottom = ends of DX.
+    edge_band: {
+      top: rl.at !== 'top', bottom: rl.at !== 'bottom', left: false, right: false,
+      id: rl.edgeband_id,
+    },
   }) as ResolvedCasePart)
 }
 

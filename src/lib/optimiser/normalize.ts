@@ -37,6 +37,23 @@ type EdgePair  = [keyof EdgeFlags, keyof EdgeFlags]
 
 const NO_EB: EbFields = { eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, eb_missing: false }
 
+// Finger-pull rails (z_handles D21): the CNC cuts anything narrower than this as
+// a strip this wide; the shop trims it to size, then tapes its long edges.
+export const RAIL_NEST_W = 60
+
+/** A narrow finger-pull rail's nest strip + its shop note. Face-kind frame: the
+ *  long edges are top / bottom (ends of DX = the rail's finished width). */
+export function fingerRailStrip(width: number, length: number, thickness: number, flags: EdgeFlags, t: number | undefined, turned: boolean) {
+  const edges = (flags.top ? 1 : 0) + (flags.bottom ? 1 : 0)
+  const tt = t ?? 0
+  const trim = Math.round((width - edges * tt) * 10) / 10
+  const tape = edges === 0 ? 'no tape' : `tape ${edges} long edge${edges > 1 ? 's' : ''}`
+  return {
+    dims: turned ? { w: length, h: RAIL_NEST_W, thickness } : { w: RAIL_NEST_W, h: length, thickness },
+    note: `Cut ${RAIL_NEST_W} wide, trim to ${trim}, then ${tape} = ${width}`,
+  }
+}
+
 function ebFields(flags: EdgeFlags, t: number | undefined, wPair: EdgePair, hPair: EdgePair): EbFields {
   const banded = flags.top || flags.bottom || flags.left || flags.right
   const tt = t ?? 0
@@ -269,13 +286,21 @@ export function normalizeProject(
     // with no machining: turned the same way, their tape turning with them.
     const turned = (key.startsWith('fprail:') || key.startsWith('ibp:') || key.startsWith('lh:')) && r.grain_direction === 'vertical'
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
+    // Finger-pull rails narrower than the machine cuts well nest as a RAIL_NEST_W
+    // strip; the shop trims it and tapes the long edges after (Mark, 2026-10-29), so
+    // nothing is deducted for tape here and the comment gives the trim size.
+    const railStrip = key.startsWith('fprail:') && Number(r.dx) < RAIL_NEST_W
+      ? fingerRailStrip(Number(r.dx), Number(r.dy), Number(r.dz), flagsOf(r), tFor(r), !!turned) : null
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     const cutHere = new Set(cutParts.has(`${r.cabinet_instance_id}|${pieceOf}`) ? [pieceOf] : [])
     const piece = splitPieceSuffix(key, cutHere).trim().replace(/[()]/g, '') || null
     push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : key.startsWith('lh:') ? `Linear Handle ${Number(key.slice(3)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
       ...(bevel || piece || key.startsWith('lh:') ? { suffix: [bevel, piece, key.startsWith('lh:') ? 'sharknose edge, saw' : null].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
-      (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), turned, eb, base)
+      (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), railStrip?.dims ?? turned,
+      railStrip ? { ...eb, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0 } : eb, base)
+    const last = parts[parts.length - 1]
+    if (railStrip && last?.source_part_id === r.id) last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
   }
   for (const r0 of ip) {
     const type = String(r0.part_type)

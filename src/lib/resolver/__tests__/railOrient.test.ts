@@ -13,6 +13,7 @@ const cab = (rules: Partial<ConstructionRules>): CabinetInput => ({
   material: board, door_material: board, shelf_material: board, exposed_material: board,
   toekick_face_material: board, toekick_interior_material: board,
   slide_side_deduction: 13, rules: mergeRules(DEFAULT_RULES, rules),
+  face_grid: { rows: [], cols: [], zones: [] },
   internal_tree: { type: 'open', fittings: [] },
 })
 const rails = (rules: Partial<ConstructionRules>) => {
