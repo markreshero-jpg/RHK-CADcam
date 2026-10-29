@@ -45,3 +45,29 @@ describe('Dragon Pro runner (parametric)', () => {
     expect(runnerShape(rail('left', 300, 95, null))).toEqual([])
   })
 })
+
+describe('Dragon Pro 2D silhouette (no GLB)', () => {
+  it('a parametric rail gets triangles that land on its 3D boxes, both sides', async () => {
+    const { runnerModelTriangles } = await import('../../runnerGeometry')
+    const { triKey, slideSilhouettePath } = await import('../../slideSilhouette')
+    for (const side of ['left', 'right'] as const) {
+      const r = rail(side, 350, 127)
+      expect(triKey(r)).toBe('param:dragon_pro:350:127')
+      const tris = runnerModelTriangles('dragon_pro', 350, 127)
+      expect(tris.length).toBe(runnerShape(r).length * 12 * 9)
+      // Plan (x, z) extents of the projected silhouette = the boxes' extents.
+      const xs: number[] = [], zs: number[] = []
+      slideSilhouettePath(tris, r, (x, _y, z) => { xs.push(x); zs.push(z); return { x, y: z } })
+      const boxes = runnerShape(r)
+      expect(Math.min(...xs)).toBeCloseTo(Math.min(...boxes.map(b => b.x)))
+      expect(Math.max(...xs)).toBeCloseTo(Math.max(...boxes.map(b => b.x + b.w)))
+      expect(Math.min(...zs)).toBeCloseTo(Math.min(...boxes.map(b => b.z)))
+      expect(Math.max(...zs)).toBeCloseTo(Math.max(...boxes.map(b => b.z + b.d)))
+    }
+  })
+
+  it('a rail with a GLB keeps the GLB key', async () => {
+    const { triKey } = await import('../../slideSilhouette')
+    expect(triKey({ ...rail('left', 500, 127), model_url: 'u.glb', model_format: 'glb' })).toBe('glb:u.glb')
+  })
+})

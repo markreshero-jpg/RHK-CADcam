@@ -25,6 +25,8 @@
 // canvas bundle stays light until a cabinet actually has a slide model to draw.
 
 import { useEffect, useRef, useState } from 'react'
+import { runnerModelTriangles } from './runnerGeometry'
+import type { RunnerFamily } from './resolver/types'
 
 export type SlideModelFormat = 'glb' | 'stl' | 'obj'
 
@@ -89,17 +91,22 @@ async function doLoad(url: string, format: SlideModelFormat): Promise<Float32Arr
 
 // ── React hook: load every distinct slide model used by a cabinet ──────────────
 
-export interface SlideModelRef { model_url: string | null; model_format: SlideModelFormat | null }
+// A rail with no uploaded model but a parametric family (drawn_as, z_runner_models)
+// gets built-in triangles keyed `param:<family>:<NL>:<H>` — its anchors / scale are
+// the row defaults (0 / 1), so the triangles are already in the model frame.
+export interface SlideModelRef {
+  model_url: string | null; model_format: SlideModelFormat | null
+  drawn_as?: RunnerFamily | null; nominal_length?: number; box_height?: number
+}
 
-// Returns a Map keyed by `${format}:${url}` → triangle soup. Entries appear as
-// each model resolves; consumers fall back to the box while an entry is absent.
+// Returns a Map keyed by triKey → triangle soup. Entries appear as each model
+// resolves; consumers fall back to the box while an entry is absent.
 export function useSlideTriangles(slides: SlideModelRef[]): Map<string, Float32Array> {
   const [map, setMap] = useState<Map<string, Float32Array>>(() => new Map())
 
   // Stable signature of the distinct models requested, so the effect only re-runs
   // when the set of model URLs actually changes (not on every parent render).
-  const refs = slides.filter(s => s.model_url && s.model_format) as Required<SlideModelRef>[]
-  const sig = Array.from(new Set(refs.map(s => `${s.model_format}:${s.model_url}`))).sort().join('|')
+  const sig = Array.from(new Set(slides.map(triKey).filter((k): k is string => !!k))).sort().join('|')
   const sigRef = useRef('')
 
   useEffect(() => {
@@ -108,6 +115,10 @@ export function useSlideTriangles(slides: SlideModelRef[]): Map<string, Float32A
     let cancelled = false
     const keys = sig.split('|')
     Promise.all(keys.map(async key => {
+      if (key.startsWith('param:')) {
+        const [, fam, L, H] = key.split(':')
+        return [key, runnerModelTriangles(fam as RunnerFamily, Number(L), Number(H))] as const
+      }
       const sep = key.indexOf(':')
       const format = key.slice(0, sep) as SlideModelFormat
       const url = key.slice(sep + 1)
@@ -126,7 +137,8 @@ export function useSlideTriangles(slides: SlideModelRef[]): Map<string, Float32A
 }
 
 export function triKey(s: SlideModelRef): string | null {
-  return s.model_url && s.model_format ? `${s.model_format}:${s.model_url}` : null
+  if (s.model_url && s.model_format) return `${s.model_format}:${s.model_url}`
+  return s.drawn_as && s.nominal_length && s.box_height ? `param:${s.drawn_as}:${s.nominal_length}:${s.box_height}` : null
 }
 
 // ── Projection (pure) ──────────────────────────────────────────────────────────

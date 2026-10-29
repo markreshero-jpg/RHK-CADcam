@@ -44,6 +44,30 @@ const FAMILIES: Record<RunnerFamily, (L: number, H: number) => LocalBox[]> = {
   dragon_pro: dragonPro,
 }
 
+/**
+ * The family's boxes as a triangle soup in the slide-model frame the 2D
+ * silhouettes use (slideSilhouette.ts: origin = front-top-outer corner, +x
+ * toward the drawer, +y up, +z into the cabinet), so a rail drawn parametrically
+ * gets its true outline in plan / elevation / side views like a GLB rail.
+ */
+export function runnerModelTriangles(family: RunnerFamily, L: number, H: number): Float32Array {
+  const fam = FAMILIES[family]
+  if (!fam || !(L > 40) || !(H > 40)) return new Float32Array()
+  const out: number[] = []
+  for (const b of fam(L, H)) {
+    const x = [b.x0, b.x1], y = [b.y0 - H, b.y1 - H], z = [b.z0 - L, b.z1 - L]
+    const c = (i: number, j: number, k: number) => [x[i], y[j], z[k]]
+    // 6 faces × 2 triangles (winding doesn't matter — the silhouette normalises it).
+    const quads = [
+      [c(0, 0, 0), c(1, 0, 0), c(1, 1, 0), c(0, 1, 0)], [c(0, 0, 1), c(1, 0, 1), c(1, 1, 1), c(0, 1, 1)],
+      [c(0, 0, 0), c(1, 0, 0), c(1, 0, 1), c(0, 0, 1)], [c(0, 1, 0), c(1, 1, 0), c(1, 1, 1), c(0, 1, 1)],
+      [c(0, 0, 0), c(0, 1, 0), c(0, 1, 1), c(0, 0, 1)], [c(1, 0, 0), c(1, 1, 0), c(1, 1, 1), c(1, 0, 1)],
+    ]
+    for (const [p, q, r, s] of quads) out.push(...p, ...q, ...r, ...p, ...r, ...s)
+  }
+  return new Float32Array(out)
+}
+
 // The rail's parts in cabinet space. Rail geometry (resolveDrawerStack): left
 // rail's X = the member face; right rail's member face = X + DZ; Y = drawer-box
 // bottom line; Z = back of the runner, front = Z + DX (DX = nominal length).
