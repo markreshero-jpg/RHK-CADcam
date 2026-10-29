@@ -8,7 +8,7 @@ import { BenchtopInstance, BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopJoi
 import type { BtPosition, WallSide, BtOverhang, StretchEnd } from '@/src/lib/benchtopAnchor'
 import type { BtThickness, BtTape, BtTapeContext } from './useBenchtopCatalog'
 import { tapeTotals } from '@/src/lib/benchtopEdgeband'
-import { btSegments, segLength, effectiveProfileId, outlineBounds, outlinePoints, signedArea } from '@/src/lib/benchtopGeometry'
+import { btSegments, segLength, effectiveProfileId, outlineBounds, outlinePoints, signedArea, shapeWrite, waterfallJoin, waterfallReturn } from '@/src/lib/benchtopGeometry'
 import { resolveBenchtopFromDB, loadResolvedParts } from '@/src/lib/benchtop-resolver/resolveBenchtopFromDB'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 
@@ -339,6 +339,38 @@ export default function BenchtopPanel({
                   Shape Editor…
                 </button>
               </div>
+
+              {/* Waterfall legs: joint + built-up return length (also in Edit edges) */}
+              {segs.map((s, i) => {
+                const pid = effectiveProfileId(s, defaultProfileId)
+                if (!pid || profileById[pid]?.generates !== 'waterfall') return null
+                const setEdge = (e: Partial<NonNullable<typeof s.edge>>) =>
+                  void onUpdate(benchtop.id, shapeWrite(segs.map((x, k) => (k === i ? { ...x, edge: { ...x.edge, ...e } } : x))))
+                return (
+                  <div key={`wf${i}`} className="flex items-center gap-1 text-[10px] border border-purple-800/60 rounded p-1.5">
+                    <span className="text-purple-300 flex-1">Edge {i + 1} waterfall</span>
+                    {(['butt', 'mitre'] as const).map(t => (
+                      <button key={t} onClick={() => setEdge({ waterfall_join: t })}
+                        title={t === 'mitre' ? 'Leg runs to the top surface, 45° corner' : 'The top sits on the leg'}
+                        className={`px-1.5 py-0.5 rounded ${waterfallJoin(s) === t ? 'bg-purple-800 text-purple-100' : 'text-gray-400 hover:bg-gray-800'}`}>
+                        {t === 'butt' ? 'Butt' : 'Mitre'}
+                      </button>
+                    ))}
+                    <label className="flex items-center gap-1 text-gray-400 ml-1"
+                      title="Built-up waterfalls (apron deeper than the top): how far the return behind each face piece runs back">
+                      Return
+                      <input key={`${i}-${waterfallReturn(s)}`} type="number" min={0} step={10}
+                        defaultValue={waterfallReturn(s)}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                        onBlur={e => {
+                          const v = Math.max(0, Math.round(Number(e.target.value)))
+                          if (Number.isFinite(v) && v !== waterfallReturn(s)) setEdge({ waterfall_return_mm: v })
+                        }}
+                        className="w-12 bg-gray-900 border border-gray-700 rounded px-1 text-gray-200" />
+                    </label>
+                  </div>
+                )
+              })}
             </div>
           )
         })()}
