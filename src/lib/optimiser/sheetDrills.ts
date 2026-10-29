@@ -9,7 +9,7 @@
 // ============================================================
 
 import { supabase } from '@/src/lib/supabase'
-import { buildSheetDrills, groupDrillOps, type DrillOpRaw, type PartRef } from './drills'
+import { buildSheetDrills, groupDrillOps, drillKey, type DrillOpRaw, type PartRef } from './drills'
 import { buildSheetRoutes, groupRouteOps, expandToolSetMember, type RouteOpRaw, type RouteGeom, type ToolSetMember } from './routes'
 import { resolveDrillTool, type DrillLibItem, type RouterToolItem } from './resolveDrillTools'
 import { syncSeamDrillOperations } from './seamDrillSync'
@@ -173,10 +173,17 @@ export async function loadResolvedDrillOps(
   // material-up pass for now — plane_kind is loaded but not yet acted on.
   const routesByKey = new Map<string, RouteOpRaw[]>()
   if (cabIds.length) {
-    const rRows = await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,output_to_cnc',
+    const rRows = await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,output_to_cnc',
       cabIds, ['route', 'groove'])
     type RouteRow = RouteGeom & { router_tool_id: string | null; tool_set_id: string | null; output_to_cnc: boolean | null }
-    const rawRoutes = (rRows as unknown as RouteRow[]).filter(o => o.output_to_cnc !== false)
+    // Finger-pull notches + reliefs are already in a gable's resolver outline, so
+    // the perimeter cut takes them out in one go (z_handles H6). Their generated
+    // pockets / slots only run when the part is cut as a plain rectangle (e.g. a
+    // hand size override dropped its outline).
+    const outlined = new Set(parts.filter(p => p.shape?.source === 'resolver').map(p => drillKey(p.source_table, p.cabinet_instance_id, p.source_part_key)))
+    const notchCut = (o: RouteRow & { operation_key?: string | null }) =>
+      /^fprail_(notch|relief)_/.test(o.operation_key ?? '') && outlined.has(drillKey(o.source_table, o.source_cabinet_id, o.source_part_key))
+    const rawRoutes = (rRows as unknown as (RouteRow & { operation_key?: string | null })[]).filter(o => o.output_to_cnc !== false && !notchCut(o))
     if (rawRoutes.length) {
       const { data: toolRows } = await supabase.from('cnc_tools')
         .select('id,tool_number,diameter,max_depth_per_pass').eq('active', true)
