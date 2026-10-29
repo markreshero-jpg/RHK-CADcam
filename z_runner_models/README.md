@@ -113,3 +113,4 @@ bottom of the outside wall (DB_DADO_HEIGHT / DB_BACK_Y_OFFSET 8, was 12); back =
 (The earlier profile_lift attempt, 9316b4d, was reverted in c623d90.)
 
 Lift (same day): the whole runner graphic sits **4.5 above** the rail line. The `_v2` rows have model_anchor_y +4.5 (95 −88.5, 127 −122.5, 178 −171.5), and `runnerGeometry.ts` adds the same 4.5. Drawing only, no holes changed.
+Drawer bottom and back raised to match (same day): DTC Dragon Pro method DB_DADO_HEIGHT / DB_BACK_Y_OFFSET **12.5** (8 + 4.5). They are still 8 above the bottom of the lifted outside wall.
