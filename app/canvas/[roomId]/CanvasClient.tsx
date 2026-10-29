@@ -1359,8 +1359,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     void (cabUpdatesInFlight.current.get(id) ?? Promise.resolve()).catch(() => {})
       .then(() => handleUpdateCabinet(id, { left_neighbour_type: n.left, right_neighbour_type: n.right }))
   }, [handleUpdateCabinet])
+  const detectedNeighbours = useMemo(() => detectNeighbours(cabinets, walls, room), [cabinets, walls, room])
   useEffect(() => {
-    const now = detectNeighbours(cabinets, walls, room)
+    const now = detectedNeighbours
     const seen = neighboursSeen.current
     neighboursSeen.current = now
     if (!seen) return
@@ -1370,12 +1371,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       const c = cabinets.find(x => x.id === id)
       if (c && (c.left_neighbour_type !== n.left || c.right_neighbour_type !== n.right)) writeNeighbours(id, n)
     }
-  }, [cabinets, walls, room, writeNeighbours])
+  }, [cabinets, detectedNeighbours, writeNeighbours])
   // Cabinet panel → "Detect neighbours for the whole room": re-detect every
   // cabinet in the room, drawn before auto-detection or not.
   function detectRoomNeighbours() {
-    const now = detectNeighbours(cabinets, walls, room)
-    const changed = [...now].filter(([id, n]) => {
+    const changed = [...detectedNeighbours].filter(([id, n]) => {
       const c = cabinets.find(x => x.id === id)
       return c && (c.left_neighbour_type !== n.left || c.right_neighbour_type !== n.right)
     })
@@ -3845,6 +3845,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDelete={handleDeleteCabinet}
             onClose={() => { setSelected(null); setCabResize(null) }}
             onDetectRoomNeighbours={detectRoomNeighbours}
+            detectedNeighbours={detectedNeighbours.get(selectedCab.id)}
+            onApplyNeighbours={n => { captureSnapshot(); writeNeighbours(selectedCab.id, n) }}
             autoFocusWidth
           />
         )}

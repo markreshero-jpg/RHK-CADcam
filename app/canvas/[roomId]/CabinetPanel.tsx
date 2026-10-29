@@ -8,6 +8,7 @@ import { cabT, findFreeSlot, cabsBlock, cabBottomZ, slideAlongWall, cabWallGap, 
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveReveal } from '@/src/lib/resolver/mergeRules'
 import { DEFAULT_RULES, type ConstructionRules } from '@/src/lib/resolver/types'
+import type { NeighbourPair } from '@/src/lib/neighbours'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetShapeSection from './CabinetShapeSection'
@@ -18,7 +19,7 @@ import BackPanelSection from './BackPanelSection'
 import CabinetSplitSection from './CabinetSplitSection'
 import { canFloat, isFloating, floatingPatch, FLOAT_Z } from '@/src/lib/floating'
 
-export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, onDetectRoomNeighbours, hideWallPosition, hideDelete, autoFocusWidth }: {
+export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRef, onUpdate, onDelete, onClose, onDetectRoomNeighbours, detectedNeighbours, onApplyNeighbours, hideWallPosition, hideDelete, autoFocusWidth }: {
   cabinet: CabinetInstance
   wall: Wall | null
   /** centroid(walls) — which way is into the room. Omitted → no "Off wall" field. */
@@ -31,6 +32,10 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
   onClose?: () => void
   /** Re-detect face neighbours on every cabinet in the room. Omitted → no button. */
   onDetectRoomNeighbours?: () => void
+  /** What's touching each side in plan now (may differ from the stored neighbours on cabinets drawn earlier). */
+  detectedNeighbours?: NeighbourPair
+  /** Write the detected neighbours onto this cabinet. */
+  onApplyNeighbours?: (n: NeighbourPair) => void
   hideWallPosition?: boolean
   hideDelete?: boolean
   /** Focus the width field when the panel opens, so Tab flows width → height → depth. */
@@ -370,13 +375,24 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                       <p className="text-[9px] text-gray-500 mb-0.5">{label}</p>
                       <select value={locked} onChange={e => patch(key, e.target.value || undefined)}
                         title="Auto = what's touching that side in plan. Pick one to lock it." className={inp}>
-                        <option value="">Auto ({nbName[cabinet[col] ?? 'wall']})</option>
+                        <option value="">Auto ({nbName[(col === 'left_neighbour_type' ? detectedNeighbours?.left : detectedNeighbours?.right) ?? cabinet[col] ?? 'wall']})</option>
                         {(Object.keys(nbName) as NeighbourType[]).map(n => <option key={n} value={n}>{nbName[n]}</option>)}
                       </select>
                     </div>
                   )
                 })}
               </div>
+              {/* Drawn before auto-detection (or detected since): the stored neighbours
+                  the reveals use still differ from what's touching now. */}
+              {detectedNeighbours && onApplyNeighbours
+                && (detectedNeighbours.left !== (cabinet.left_neighbour_type ?? 'wall') || detectedNeighbours.right !== (cabinet.right_neighbour_type ?? 'wall')) && (
+                <div className="mt-1.5 rounded border border-amber-700/60 bg-amber-950/40 px-2 py-1 text-[10px] text-amber-300">
+                  Reveals still use {nbName[cabinet.left_neighbour_type ?? 'wall']} / {nbName[cabinet.right_neighbour_type ?? 'wall']} (drawn before auto-detect).{' '}
+                  <button type="button" onClick={() => onApplyNeighbours(detectedNeighbours)} className="underline text-amber-200 hover:text-white">
+                    Apply {nbName[detectedNeighbours.left]} / {nbName[detectedNeighbours.right]}
+                  </button>
+                </div>
+              )}
               {onDetectRoomNeighbours && (
                 <button type="button" onClick={onDetectRoomNeighbours}
                   title="Re-detect left / right neighbours on every cabinet in this room (cabinets drawn before auto-detection keep their old ones until edited)"

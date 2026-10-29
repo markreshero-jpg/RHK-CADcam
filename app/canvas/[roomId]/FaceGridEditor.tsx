@@ -11,6 +11,9 @@ import { useViewBoxPinch } from './usePinchZoom'
 import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
 import { normalizeSection } from './InternalGridEditor'
+import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { mergeRules, resolveReveal } from '@/src/lib/resolver/mergeRules'
+import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { addBinDivisions } from './binDivisionsAction'
@@ -85,8 +88,8 @@ const ZONE_STYLE: Record<string, { fill: string; stroke: string; label: string }
 }
 
 // ── Display geometry ──────────────────────────────────────────────────────────
-// Uses default rule constants for the approximation preview.
-// The resolver uses the actual merged rules — this is close enough for editing.
+// Same face opening as resolveFace: the cabinet's merged rules (reveals, gaps,
+// kick height) and its left / right neighbours. Finger-pull gaps aren't shown.
 
 interface GridDisplay {
   rowHeights:  number[]
@@ -97,12 +100,15 @@ interface GridDisplay {
 
 function computeDisplay(
   grid: FaceGridInput,
-  cabDX: number,
-  cabDY: number,
+  cabinet: CabinetInstance,
+  r: ConstructionRules,
   hasToeKick: boolean,
-  toeKickH = 150,
+  toeKickH: number,
 ): GridDisplay {
-  const REVT = 4, REVB = 0, REVL = 1, REVR = 1, GAPR = 2, GAPC = 2
+  const cabDX = cabinet.dx, cabDY = cabinet.dy
+  const { REVT, REVB, GAPR, GAPC } = r
+  const REVL = resolveReveal('left',  cabinet.left_neighbour_type  ?? 'wall', r)
+  const REVR = resolveReveal('right', cabinet.right_neighbour_type ?? 'wall', r)
 
   const faceW = cabDX - REVL - REVR
   const faceH = cabDY - (hasToeKick ? toeKickH : 0) - REVT - REVB
@@ -200,13 +206,14 @@ export default function FaceGridEditor({
 
   const isBase = cabinet.assembly_class === 'base' || cabinet.assembly_class === 'base_corner'
   const isTall = cabinet.assembly_class === 'tall' || cabinet.assembly_class === 'tall_corner'
-  const tkHeight = (isBase || isTall) && rp
-    ? rp.toekick_parts.filter(p => p.part_key !== 'spreader_horizontal').reduce((max, p) => Math.max(max, p.DX), 0) || 150
-    : 150
-  // Both base and tall cabinets carry a toe kick — the face opening starts above
-  // it, matching the resolved Elevation view. (Wall cabinets have no kick.)
-  const hasToeKick = isBase || isTall
-  const d = computeDisplay(grid, cabinet.dx, cabinet.dy, hasToeKick, tkHeight)
+  // The cascaded rules (builder → job → room) + this cabinet's own overrides as they
+  // stand now; code defaults until the cabinet has resolved once.
+  const rules = mergeRules(getCachedInput(cabinet.id)?.rules_base, cabinet.rule_overrides as Partial<ConstructionRules>)
+  // Base and tall cabinets carry a toe kick — the face opening starts above it,
+  // matching the resolved Elevation view. Wall units, kick-run members (their
+  // kick belongs to the run) and floating cabinets have none.
+  const hasToeKick = (isBase || isTall) && cabinet.has_toekick && !rules.FLOAT
+  const d = computeDisplay(grid, cabinet, rules, hasToeKick, rules.TOEH)
 
   async function save(next: FaceGridInput) {
     setGrid(next)
@@ -692,8 +699,8 @@ export default function FaceGridEditor({
             <rect x={ox} y={oy} width={cabDX} height={cabDY} fill="#0a111e" />
 
             {/* Toekick shading */}
-            {(isBase || isTall) && tkHeight > 0 && (
-              <rect x={ox} y={svgY(tkHeight)} width={cabDX} height={tkHeight}
+            {hasToeKick && rules.TOEH > 0 && (
+              <rect x={ox} y={svgY(rules.TOEH)} width={cabDX} height={rules.TOEH}
                 fill="#06090f" stroke="#1e293b" strokeWidth={0.5} />
             )}
 

@@ -482,4 +482,7 @@ GAPC between doors side by side; GAPR between rows; FPGAP at a finger-pull grip 
   (shown grey). REVSL / REVSR set that side **whatever the neighbour** (they win over
   REVL / REVENDL in `resolveReveal`), so an override survives a neighbour change.
 - Neighbour-only updates re-resolve from the cached input (no reload).
-- Known gap: FaceGridEditor's preview still uses fixed 4/0/1/1/2/2 reveals (display only).
+- The sidebar's Auto label shows the **live** detection; when the stored neighbours differ
+  (cabinet drawn earlier) an amber line offers **Apply** for that cabinet (one undo step).
+- FaceGridEditor's preview uses the same merged rules + neighbours as resolveFace (finger
+  gaps not shown); its kick follows has_toekick / FLOAT / TOEH like the resolver.
