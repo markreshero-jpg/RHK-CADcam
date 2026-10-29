@@ -52,7 +52,7 @@ describe('Dragon Pro 2D silhouette (no GLB)', () => {
     const { triKey, slideSilhouettePath } = await import('../../slideSilhouette')
     for (const side of ['left', 'right'] as const) {
       const r = rail(side, 350, 127)
-      expect(triKey(r)).toBe('param:dragon_pro:350:127:0')
+      expect(triKey(r)).toBe('param:dragon_pro:350:127')
       const tris = runnerModelTriangles('dragon_pro', 350, 127)
       expect(tris.length).toBe(runnerShape(r).length * 12 * 9)
       // Plan (x, z) extents of the projected silhouette = the boxes' extents.
@@ -69,18 +69,5 @@ describe('Dragon Pro 2D silhouette (no GLB)', () => {
   it('a rail with a GLB keeps the GLB key', async () => {
     const { triKey } = await import('../../slideSilhouette')
     expect(triKey({ ...rail('left', 500, 127), model_url: 'u.glb', model_format: 'glb' })).toBe('glb:u.glb')
-  })
-})
-
-describe('Dragon Pro profile lift (guide p.6 + measured drawer)', () => {
-  it('profile starts 14.8 up, bottom ledge 8 up it; the runner stays on the floor', () => {
-    const r = { ...rail('left', 400, 178), profile_lift: 14.8 }
-    const parts = runnerShape(r)
-    const moving = parts.filter(p => p.moving), fixed = parts.filter(p => !p.moving)
-    expect(Math.min(...moving.map(p => p.y))).toBeCloseTo(r.Y + 14.8)
-    expect(Math.max(...moving.map(p => p.y + p.h))).toBeCloseTo(r.Y + 14.8 + 178)   // = guide min 192
-    expect(Math.min(...fixed.map(p => p.y))).toBeCloseTo(r.Y + 10.5)
-    // Top front hole (47.5 + 128 above the runner bottom) clears the profile top.
-    expect(r.Y + 175.5 + 5).toBeLessThan(Math.max(...moving.map(p => p.y + p.h)))
   })
 })

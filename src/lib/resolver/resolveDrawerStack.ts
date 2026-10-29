@@ -457,12 +457,8 @@ export function resolveDrawerStacks(
     const boxX = leftMemberX + runnerThick
     // Bottom sits `lift` above the face zone (system drawers), never below the
     // interior floor — the lowest drawer's zone.Y sits a panel thickness below it,
-    // which would drop the box through the carcase bottom panel. That line is the
-    // runner bottom (the slide's Y — gable holes measure from it); the box and its
-    // steel profile sit the runner's profile_lift above it (Dragon Pro 14.8).
-    const railY = Math.max(zone.Y + lift, internalFloorY)
-    const profileLift = drawerType === 'system' ? (slide?.profile_lift ?? 0) : 0
-    const boxY = railY + profileLift
+    // which would drop the box through the carcase bottom panel.
+    const boxY = Math.max(zone.Y + lift, internalFloorY)
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 
     // Slide Z: back of slide rail. Front of slide aligns with the front face of the box sides
@@ -499,7 +495,7 @@ export function resolveDrawerStacks(
 
     // Slide rails — one on each gable inner face
     const slideBase: Omit<ResolvedDrawerSlide, 'side' | 'X'> = {
-      Y: railY,
+      Y: boxY,
       Z: slideZ,
       DX: nominalLength,
       DY: slide?.box_height ?? boxHeight,
@@ -516,7 +512,6 @@ export function resolveDrawerStacks(
       model_anchor_y:   slide?.model_anchor_y ?? 0,
       model_anchor_z:   slide?.model_anchor_z ?? 0,
       drawn_as:         slide?.drawn_as ?? null,
-      ...(profileLift ? { profile_lift: profileLift } : {}),
       drills:           [],
     }
 
