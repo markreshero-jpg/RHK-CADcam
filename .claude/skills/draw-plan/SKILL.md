@@ -115,6 +115,13 @@ line and mirrors the island elevation.
   `width` locked (e.g. 635 for a 575 carcass), plus a `BFK` 40 at the start of
   the adjacent run (same kick_run_id / has_toekick / pos_z / dy as the run's
   members if the kick is already joined).
+- **Cabinets meeting a 45° wall → 40 filler, 10 into the wall** (Mark, RHK6586
+  2026-10-27): oversized for scribing. The cabinet stops short (shaped footprint
+  ending in a short `open` edge) and a `TFKW` 40 in the door plane runs 10 past
+  the wall line. A waterfall end against a 45° wall runs parallel to it.
+- **`face_grid` rows are bottom-up** — `row_index 0` = the BOTTOM row (a door
+  under a TV panel = row 0 door, row 1 false_panel). Hand-written `footprint`s
+  need `params: {}` or the canvas crashes (evalExpr).
 - **Inner drawers next to a wall → 50 filler** (not 30), so the door opens far
   enough to clear the drawers. If a cupboard with inner drawers / pull-outs sits
   against a wall, either use a 50 TFKW/BFK there or ASK before drawing
@@ -207,6 +214,11 @@ line and mirrors the island elevation.
   `kind: 'text'`, `style: { size: 2.5 }`, `geom.at` = top-left of the text, x
   along the elevation, **y = −(height AFFL)** (y down from the floor). Rail
   bottom AFFL = rail Y + kick; text top ≈ 20 below, x ≈ bay centre − 165.
+- **After `joinKicks`, don't `updateCabinet {dy}` a run member** — it lifts its
+  pos_z (RHK6586 TV unit: 150 / 250 instead of 100, boxes through the top). If
+  a member's dy didn't drop, fix dy + pos_z in the DB and re-resolve with a
+  no-op `{dz}`. **A room with one wall has no room side** — draw a second wall
+  (side wall) first or the cabinets can land behind the wall.
 - **`joinKicks` drops the members' dy by the kick height** — run it on the
   as-placed cabinets; if you nudged a dy to 2400-incl-kick values first, set
   the carcasses back to 2300 afterwards.
@@ -252,9 +264,22 @@ line and mirrors the island elevation.
   shorten it by the panel thickness (e.g. 18 TEPF left → BH offset 18, dx
   run − 18). Against a wall it still runs to the wall. With `front: 'doors'`
   it comes out over the panel instead.
+  **Same with a return on that end** (Mark, RHK6586 kitchenette 2026-10-31): the
+  return's outer face finishes flush with the END OF THE CARCASS below it (the
+  gable's outer face), never with the end panel — the end panel stands proud of
+  the return by its thickness. E.g. overheads to 1918.5 + WEP 16.5 to 1935 → the
+  BH ends at 1918.5, not 1935. Beside a tall end panel (TEPF) the return sits in
+  by the panel thickness (~18) the same way. Check the BH's `pos_x + dx` against
+  the last carcass's `pos_x + dx`, not the panel's.
 - **"No bulkhead, flat panel to top"** (Mark, RHK6581 J01) = a `BH` with
   `front: 'doors'` — flush with the door faces, running over the end panel —
   plus the seen-end return at depth = OA (carcass + door + 2).
+- **Shaping a flat part (`part_shape_overrides`)**: the horizontal shape frame is
+  **x along the part's length (cabinet x, 0 = left end), y measured BACK from the
+  front edge** (y 0 = front, y = depth at the back); `meta.bounds` maxX = length,
+  maxY = depth, `baseAtSave {w: length, h: depth}`. Key = `custom_<custom part id>`
+  for a WUP / custom part, the case part key (`fs:top`) otherwise. Getting x / y
+  swapped turns the part 90° — it sticks out the back wall (RHK6586, 2026-10-28).
 - **WUP is always FLAT** (an under panel: part `dx cab.d · dy cab.w · dz
   t.exposed`) — whatever dy you give the cabinet, the part lies horizontal. For
   an upright back panel (e.g. the back of an open seat bay, RHK6581 J01 WC-02)
@@ -283,6 +308,18 @@ line and mirrors the island elevation.
   face zone `hinge_side: 'bottom'`, `hinges: []` (shows the swing, no hinges) + CAD
   "INTEGRATED DW". Fridge space + its overhead: see **Fridge spaces** in
   `references/cabinet-vision-conventions.md`.
+  **The kick stops at the DW opening, with returns** (Mark, RHK6586 2026-10-28): never
+  join the kick through the DW — the run each side gets its own kick (a joined
+  KICK n, or the cabinet's own kick) and the end facing the opening a mitred kick
+  return: `rule_overrides.TOERETL` / `TOERETR: true` on the kick's owner (the
+  KICK n assembly for a joined run). Kick grain = `TOEGRAIN` (default vertical,
+  `'horizontal'` only when asked).
+- **Undermount sinks sit UNDER the top** (Mark, RHK6586 2026-10-28): the rim is at
+  the benchtop's underside, so `bench_drop` = sink height + top thickness (20 stone
+  → 205 + 20 = 225) and `z` = bench top − bench_drop (900 − 225 = 675). Inset /
+  top-mount sinks keep the library drop (rim on the top). Use the library sink +
+  tap (fixture_catalog, kind `Kitchen sink` / `Tap`, with GLBs) rather than making
+  a new catalog row; the tap sits behind the bowl on the cupboard centre, z = top.
 - **Benchtops thicker than 20 = an apron edge** (Mark, 2026-10-24, RHK6581
   island: 80 stone): the slab is still 20 and sits STRAIGHT on the carcass (no
   shadowline); only the edge drops. Run the carcass up to bench top − 20 (e.g.
