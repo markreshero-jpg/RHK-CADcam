@@ -14,11 +14,11 @@ import CutSheetsPanel from './CutSheetsPanel'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import {
-  LABEL_SIZES, DEFAULT_LABEL_SETTINGS, loadLabelLookups, buildAllLabels, labelsPdf, a4Grid, sheetNumbers,
+  LABEL_SIZES, DEFAULT_LABEL_SETTINGS, LABEL_SETTINGS_KEY, loadLabelLookups, buildAllLabels, labelsPdf, a4Grid, sheetNumbers,
   type LabelSettings, type LabelData,
 } from '@/src/lib/optimiser/labels'
 
-const STORE_KEY = 'rhk.optimiser.labelSettings'
+const STORE_KEY = LABEL_SETTINGS_KEY
 const sel = 'bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent'
 const num = 'w-20 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-sm text-ink focus:outline-none focus:border-accent'
 

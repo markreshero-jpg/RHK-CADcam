@@ -89,6 +89,7 @@ describe('buildHardware', () => {
     expect(r1['Sharknose 45']).toBeUndefined()
     expect(hw.rooms[0].fingerPulls).toEqual([{ name: 'Sharknose 45', grip: 'sharknose', fronts: 1 }])
     expect(r1['Oval rail']).toMatchObject({ qty: 1, lengths: [864] })
+    expect(r1['Oval rail'].cuts).toHaveLength(1)
     expect(r1['Rail end'].qty).toBe(2)
     // Job totals add the second room.
     expect(hw.totals.find(l => l.name === 'Clip top 110')!.qty).toBe(4)

@@ -34,6 +34,8 @@ import { zoneBlank } from '@/src/lib/jointDrilling'
 import { EdgebandSheet, edgebandPrintHtml } from './EdgebandReport'
 import { useTakeoff, HardwarePickSheet, TakeoffSheet } from './TakeoffReport'
 import { hardwarePickPrintHtml, takeoffPrintHtml } from './TakeoffPrint'
+import { buildCutStickers, cutStickersPdf } from '@/src/lib/takeoff/cutStickers'
+import { loadLabelSettings } from '@/src/lib/optimiser/labels'
 import { buildEdgebandReport, type EdgebandProduct, type EdgebandBoard } from '@/src/lib/optimiser/edgebandLength'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { OptiPart } from '@/src/lib/optimiser/types'
@@ -506,6 +508,22 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
 
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
 
+  // Cut-length stickers (z_takeoff T5): one per hanging rail / linear strip on
+  // the pick list, at the optimiser's label size.
+  const cutStickers = useMemo(() => takeoff.data
+    ? buildCutStickers(project?.name ?? '', takeoff.data.rooms.map(r => ({ name: r.room.name, lines: r.hardware })))
+    : [], [takeoff.data, project?.name])
+  async function downloadCutStickers() {
+    const st = loadLabelSettings()
+    const doc = await cutStickersPdf(cutStickers, st)
+    const url = URL.createObjectURL(doc.output('blob'))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${project?.job_number || project?.name || 'job'} ${scope === 'room' ? `${room.name} ` : ''}cut stickers ${st.w}x${st.h}.pdf`
+    a.click()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  }
+
   function handlePrint() {
     if (selectedReport === 'edgeband_length') useTutorial.getState().emit('edgeband_print')   // tutorial edgeband_length
     if (selectedReport === 'hardware_pick' || selectedReport === 'takeoff') useTutorial.getState().emit('takeoff_print')   // tutorial takeoff_reports
@@ -647,6 +665,13 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                       className="w-12 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1 text-right" />
                     %
                   </label>
+                )}
+                {selectedReport === 'hardware_pick' && cutStickers.length > 0 && (
+                  <button onClick={() => void downloadCutStickers()}
+                    title="One sticker per cut piece (hanging rails, linear handles) — label size from Optimiser → Labels"
+                    className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors">
+                    Cut stickers ({cutStickers.length})
+                  </button>
                 )}
                 {/* The plan / elevation / cabinet reports have their own download button in their toolbar. */}
                 {selectedReport !== 'plan_view_v2' && selectedReport !== 'benchtop_quote' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && (

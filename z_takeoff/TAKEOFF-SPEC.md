@@ -1,6 +1,6 @@
 # Hardware Pick List + Takeoff — Spec
 
-Status: **T1–T3 built 2026-10-27**, in-app check by Mark pending. T4 (CSV) not started.
+Status: **T1–T3 built 2026-10-27**, in-app check by Mark pending. T4 (CSV) not started. T5 cut-length stickers built 2026-10-30.
 
 Two reports in Reports (Room / Job), for the floor and for quoting:
 
@@ -65,6 +65,7 @@ Checks: `src/lib/takeoff/__tests__/hardware.test.ts`; real-job dry run
 | T2 | Per-room nest sheet counts | ✅ built 2026-10-27 |
 | T3 | Takeoff report (counts, finger pulls, sheets, tape, hardware) + print + tutorial `takeoff_reports` | ✅ built 2026-10-27 |
 | T4 | CSV / Excel export of the takeoff for the quoting system | not started — needs the quoting system's import format |
+| T5 | Cut-length stickers: Hardware Pick List → **Cut stickers (n)** — one sticker per cut piece (hanging rails, linear handle strips): job, room, type, product + code, Cab #, cut length, n of N. Size / printer / nudge = Optimiser → Labels settings (102 × 48 default). Code `src/lib/takeoff/cutStickers.ts` (shared pager `labelPagesPdf` in optimiser/labels.ts) | built 2026-10-30, in-app check pending |
 
 ## Open
 

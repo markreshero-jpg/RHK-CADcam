@@ -95,6 +95,8 @@ export interface HardwareLine {
   unit: 'ea' | 'pr'
   /** Hanging rails / linear handles: each cut length (mm), longest first. */
   lengths?: number[]
+  /** Each cut piece with its cabinet — one cut-length sticker each (cutStickers.ts). */
+  cuts?: { label: string; length: number }[]
   /** Cabinet labels using it, with how many each. */
   cabinets: { label: string; qty: number }[]
 }
@@ -116,7 +118,10 @@ class Acc {
       this.lines.set(key, l)
     }
     l.qty += qty
-    if (length != null) (l.lengths ??= []).push(Math.round(length))
+    if (length != null) {
+      (l.lengths ??= []).push(Math.round(length))
+      ;(l.cuts ??= []).push({ label: cab, length: Math.round(length) })
+    }
     const c = l.cabinets.find(x => x.label === cab)
     if (c) c.qty += qty; else l.cabinets.push({ label: cab, qty })
   }
@@ -173,7 +178,7 @@ const byLabel = (a: { label: string }, b: { label: string }) => a.label.localeCo
 
 function finish(acc: Acc, fp: Map<string, FingerPullLine>) {
   const lines = [...acc.lines.values()].sort((a, b) => groupRank(a.group) - groupRank(b.group) || a.name.localeCompare(b.name, undefined, { numeric: true }))
-  for (const l of lines) { l.cabinets.sort(byLabel); l.lengths?.sort((a, b) => b - a) }
+  for (const l of lines) { l.cabinets.sort(byLabel); l.lengths?.sort((a, b) => b - a); l.cuts?.sort(byLabel) }
   const fingerPulls = [...fp.values()].sort((a, b) => a.grip.localeCompare(b.grip) || a.name.localeCompare(b.name))
   return { lines, fingerPulls }
 }

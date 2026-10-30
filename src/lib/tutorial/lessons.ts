@@ -1016,12 +1016,12 @@ export const LESSONS: TutorialLesson[] = [
   // Appended 2026-10-27 (z_takeoff — hardware pick list + quoting takeoff).
   { id: 'takeoff_reports', level: 'intermediate', topic: 'reports', title: 'Hardware pick list and takeoff',
     blurb: 'A per-room hardware list for the floor to pick, and a takeoff (cabinets, sheets, tape, hardware) for the quote.',
-    keywords: 'hardware pick list picking hinges runners slides handles bins rails takeoff take off quote quoting sheets sheet count nest edgetape edgeband count base wall tall end panels fillers bulkheads finger pull', steps: [
+    keywords: 'hardware pick list picking stickers sticker cut length hinges runners slides handles bins rails takeoff take off quote quoting sheets sheet count nest edgetape edgeband count base wall tall end panels fillers bulkheads finger pull', steps: [
     { id: 'open', title: 'Open Job Reports',
       body: 'Click Reports in the menu bar and choose Job Reports… (Room Reports… gives just this room).',
       target: 'menu-Reports', canvas: true, done: c => c.report !== null },
     { id: 'pick', title: 'Hardware Pick List',
-      body: 'Click Hardware Pick List. Each room lists every hinge, hinge plate, runner (in pairs), bin, handle, hanging rail and rail support with its qty, a tick box and the cabinets it goes in, then the job totals. It reads the saved cabinets, so removed parts drop out. Print / PDF puts each room on its own page with a Picked by line.',
+      body: 'Click Hardware Pick List. Each room lists every hinge, hinge plate, runner (in pairs), bin, handle, hanging rail and rail support with its qty, a tick box and the cabinets it goes in, then the job totals. It reads the saved cabinets, so removed parts drop out. Print / PDF puts each room on its own page with a Picked by line. Cut stickers (n) downloads one sticker per cut piece (each hanging rail and linear handle strip, with its cabinet and cut length) at the label size set in Optimiser → Labels.',
       target: 'report-hardware_pick', canvas: true, done: c => c.report === 'hardware_pick' },
     { id: 'takeoff', title: 'Takeoff',
       body: 'Click Takeoff. Per room: base / wall / tall cabinet counts (with the codes), then end panels, fillers, bulkheads, shadowlines, floating shelves and finger-pull fronts on their own lines; sheets per material from nesting that room on its own (Sheet equiv. = part area in sheets, for part-sheet pricing); edgetape metres with the waste % from Edgeband Length; and the hardware totals. The Job totals add the rooms up; Cut together shows the sheets if the whole job were nested at once. A yellow line means a part is too big for any sheet and isn’t counted.',

@@ -289,27 +289,44 @@ export function a4Grid(W: number, H: number): { cols: number; rows: number; x0: 
 }
 
 /** The labels PDF: one per page (label printer) or tiled on A4. */
-export async function labelsPdf(labels: LabelData[], st: LabelSettings): Promise<JsPDF> {
+export function labelsPdf(labels: LabelData[], st: LabelSettings): Promise<JsPDF> {
+  return labelPagesPdf(labels, st, (doc, d, x, y) => drawLabel(doc, d, x, y, st.w, st.h, st.picture))
+}
+
+/** Lay any label out at the chosen size: one per page (label printer) or tiled
+ *  on A4 with cut guides. `draw` gets the label's top-left. Also the hardware
+ *  cut-length stickers (takeoff/cutStickers.ts). */
+export async function labelPagesPdf<T>(items: T[], st: LabelSettings, draw: (doc: JsPDF, item: T, x: number, y: number) => void): Promise<JsPDF> {
   const { jsPDF } = await import('jspdf')
   const { w: W, h: H } = st
   if (st.printer === 'roll') {
     const orient = W >= H ? 'landscape' : 'portrait'
     const doc = new jsPDF({ orientation: orient, unit: 'mm', format: [Math.min(W, H), Math.max(W, H)] })
-    labels.forEach((d, i) => {
+    items.forEach((d, i) => {
       if (i) doc.addPage([Math.min(W, H), Math.max(W, H)], orient)
-      drawLabel(doc, d, st.offsetX, st.offsetY, W, H, st.picture)
+      draw(doc, d, st.offsetX, st.offsetY)
     })
     return doc
   }
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
   const g = a4Grid(W, H)
   const per = g.cols * g.rows
-  labels.forEach((d, i) => {
+  items.forEach((d, i) => {
     const k = i % per
     if (i && !k) doc.addPage('a4', 'portrait')
     const x = g.x0 + (k % g.cols) * W + st.offsetX, y = g.y0 + Math.floor(k / g.cols) * H + st.offsetY
     doc.setDrawColor(200); doc.setLineWidth(0.1); doc.rect(x, y, W, H)   // cut guide
-    drawLabel(doc, d, x, y, W, H, st.picture)
+    draw(doc, d, x, y)
   })
   return doc
+}
+
+/** Stage 7's remembered label size / printer (per browser) — the stickers use it too. */
+export const LABEL_SETTINGS_KEY = 'rhk.optimiser.labelSettings'
+export function loadLabelSettings(): LabelSettings {
+  try {
+    const raw = localStorage.getItem(LABEL_SETTINGS_KEY)
+    if (raw) return { ...DEFAULT_LABEL_SETTINGS, ...JSON.parse(raw) }
+  } catch { /* private window / blocked storage */ }
+  return DEFAULT_LABEL_SETTINGS
 }
