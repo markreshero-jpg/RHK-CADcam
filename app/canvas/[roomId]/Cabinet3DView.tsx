@@ -3,7 +3,7 @@
 import PartInfoCard from './PartInfoCard'
 import { GrainContext, FrontGrainAcrossContext } from '@/src/components/three/woodGrain'
 import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
-import { Children, useRef, useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
+import { Children, Fragment, isValidElement, useRef, useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
@@ -1207,7 +1207,19 @@ function ExplodeGroup({ amount, centre, version, position, children }: {
       w.position.set((u.exC.x - centre[0]) * amount, (u.exC.y - centre[1]) * amount, (u.exC.z - centre[2]) * amount)
     }
   })
-  return <group ref={ref} position={position}>{Children.map(children, ch => <group>{ch}</group>)}</group>
+  return <group ref={ref} position={position}>{explodeItems(children).map(({ key, node }) => <group key={key}>{node}</group>)}</group>
+}
+
+// The scene's children with fragments opened up (the internals block returns a
+// fragment of parts), so each part gets its own explode wrapper. Keys carry the
+// fragment path so siblings from different fragments never collide.
+function explodeItems(nodes: React.ReactNode, prefix = ''): { key: string; node: React.ReactNode }[] {
+  return Children.toArray(nodes).flatMap((ch, i) => {
+    const key = `${prefix}${isValidElement(ch) && ch.key != null ? ch.key : i}`
+    return isValidElement(ch) && ch.type === Fragment
+      ? explodeItems((ch.props as { children?: React.ReactNode }).children, `${key}/`)
+      : [{ key, node: ch }]
+  })
 }
 
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
