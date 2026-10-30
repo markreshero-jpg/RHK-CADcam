@@ -58,8 +58,11 @@ their supports now; wardrobe / pantry / misc items later on the same table.
 - **A10 Chrome** (Mark, 2026-10-25): the Finista chrome range (7104016 rail,
   7104018 end support, 7104019 centre pillar, 7104020 end pillar), sizes from the
   models' notes (nominal). Pillars hold the rail centre 50 below the shelf: a
-  rail with pillars hangs there (unless locked). Rail stops 5 short of each end
-  support's panel / 5 past an end pillar's centre — the rail part is the cut length.
+  rail with pillars hangs there (unless locked). Rail stops `rail_gap_mm` short of
+  each end support's panel / 5 past an end pillar's centre — the rail part is the cut length.
+- **A11 Cut length = ICW − 7** (Mark, 2026-10-30): between end supports the rail
+  is the inside cabinet width less 7 — end support `rail_gap_mm` 3.5 each side
+  (library data, was 3). RHK6581's saved rails updated to match.
 - **A9 Rails are controlled in the Interior editor** (existing): add / drag /
   lock height, product. S2 adds the support controls to the same rail row.
 

@@ -485,8 +485,8 @@ function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingC
     const y = (a.y_locked && a.y_position !== undefined) ? a.y_position
       : plan?.drop ? box.y + box.h - plan.drop - R.h / 2
       : box.y + box.h - R.belowTop - R.h
-    // The rail stops short of its supports (end support: 5 off the panel; end
-    // pillar: 5 past its centre) — the part is the cut length.
+    // The rail stops short of its supports (end support: rail_gap_mm off the
+    // panel, 3.5 → ICW − 7; end pillar: 5 past its centre) — the part is the cut length.
     const insL = plan?.inset.left ?? 0, insR = plan?.inset.right ?? 0
     out.push({
       part_type:   'accessory',
