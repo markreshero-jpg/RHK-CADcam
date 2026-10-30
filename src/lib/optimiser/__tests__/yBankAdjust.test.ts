@@ -2,7 +2,7 @@
 // Y bank adjustment — the head offsets are measured on the X bank (M88); Y-bank
 // (M89) firings add the Y bank's own extra. On the EVO49 the shelf-hole rows
 // (Y bank) landed 192mm low while X-bank holes were right (test gables,
-// 2026-10-30), so the Y bank carries -192 more in Y.
+// 2026-10-30); -192 made it worse, so the Y bank carries +192 (net 0).
 // ============================================================
 
 import { describe, it, expect } from 'vitest'
