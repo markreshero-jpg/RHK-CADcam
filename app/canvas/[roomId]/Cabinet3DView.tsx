@@ -3,7 +3,7 @@
 import PartInfoCard from './PartInfoCard'
 import { GrainContext, FrontGrainAcrossContext } from '@/src/components/three/woodGrain'
 import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
-import { useRef, useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
+import { Children, useRef, useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { createPortal } from 'react-dom'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
@@ -1179,40 +1179,35 @@ function AnimatedGroup({ targetTravel, children }: { targetTravel: number; child
 
 // Exploded view (edit modal slider): every top-level part / assembly slides out
 // from the cabinet centre by `amount` × its own centre's distance from it, so a
-// part keeps its holes, hinges and handles with it. Works on the three.js
-// children; a child whose position something else set this frame (a drawer's
-// AnimatedGroup) is taken as the new base, so its own motion still plays.
+// part keeps its holes, hinges and handles with it. Each child gets its own
+// wrapper group that only this moves, so the offset is absolute (0 = assembled)
+// and never fights the part's own position or a door / drawer animation.
 function ExplodeGroup({ amount, centre, version, position, children }: {
   amount: number; centre: [number, number, number]; version: unknown
   position: [number, number, number]; children: React.ReactNode
 }) {
   const ref = useRef<THREE.Group>(null)
-  const tmp = useMemo(() => ({ box: new THREE.Box3(), v: new THREE.Vector3(), inv: new THREE.Matrix4() }), [])
+  const tmp = useMemo(() => ({ box: new THREE.Box3(), c: new THREE.Vector3(), inv: new THREE.Matrix4() }), [])
   useFrame(() => {
     const g = ref.current
     if (!g) return
-    g.updateWorldMatrix(true, false)
-    tmp.inv.copy(g.matrixWorld).invert()
-    for (const c of g.children) {
-      const u = c.userData as { exOff?: THREE.Vector3; exPos?: THREE.Vector3; exC?: THREE.Vector3; exVer?: unknown }
-      if (!amount && !u.exOff) continue
-      // Back to the base position (unless moved by its own animation this frame).
-      if (u.exOff && u.exPos?.equals(c.position)) c.position.sub(u.exOff)
-      if (!amount) { delete u.exOff; delete u.exPos; continue }
+    for (const w of g.children) {
+      if (!amount) { if (w.position.lengthSq()) w.position.set(0, 0, 0); continue }
+      const u = w.userData as { exC?: THREE.Vector3; exVer?: unknown }
       if (!u.exC || u.exVer !== version) {
-        c.updateWorldMatrix(false, true)
-        tmp.box.setFromObject(c)
+        // The wrapper's centre with it at rest (its offset is a pure translation).
+        g.updateWorldMatrix(true, false)
+        w.updateWorldMatrix(false, true)
+        tmp.box.setFromObject(w)
         if (tmp.box.isEmpty()) continue
-        u.exC = tmp.box.getCenter(new THREE.Vector3()).applyMatrix4(tmp.inv).sub(c.position)   // centre relative to its position
+        tmp.inv.copy(g.matrixWorld).invert()
+        u.exC = tmp.box.getCenter(tmp.c).applyMatrix4(tmp.inv).sub(w.position).clone()
         u.exVer = version
       }
-      tmp.v.copy(c.position).add(u.exC)
-      u.exOff = (u.exOff ?? new THREE.Vector3()).set(tmp.v.x - centre[0], tmp.v.y - centre[1], tmp.v.z - centre[2]).multiplyScalar(amount)
-      c.position.add(u.exOff)
-      u.exPos = (u.exPos ?? new THREE.Vector3()).copy(c.position)
+      w.position.set((u.exC.x - centre[0]) * amount, (u.exC.y - centre[1]) * amount, (u.exC.z - centre[2]) * amount)
     }
   })
-  return <group ref={ref} position={position}>{children}</group>
+  return <group ref={ref} position={position}>{Children.map(children, ch => <group>{ch}</group>)}</group>
 }
 
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
