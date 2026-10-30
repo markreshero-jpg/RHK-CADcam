@@ -450,6 +450,8 @@ export interface DrawerBoxRules {
   DB_TOP_CLEAR:          number                         // system drawers: mm that must stay clear above the box inside the
                                                         // face opening. Gates slide selection (box_height + DB_TOP_CLEAR must
                                                         // fit the opening). Five-piece uses height_adjustment instead.
+  DB_RUNNER_RAISE:       number                         // system drawers: lifts runners + box (and the front-fixing hole datum)
+                                                        // this much higher in the front, for clearance off the opening bottom (mm)
   IDB_FRONT_CLEAR:         number                         // inner-drawer face per-side clearance from compartment opening (mm)
   IDB_FRONT_TOP_ADJUST:    number                         // mm added above the box top (positive grows upward)
   IDB_FRONT_BOTTOM_ADJUST: number                         // mm added below the box bottom (positive grows downward)
@@ -470,6 +472,7 @@ export const DEFAULT_DB_RULES: DrawerBoxRules = {
   DB_BACK_WIDTH_ADJUST:  0,
   DB_BACK_Y_OFFSET:      0,
   DB_TOP_CLEAR:          0,
+  DB_RUNNER_RAISE:       0,
   IDB_FRONT_CLEAR:         2,
   IDB_FRONT_TOP_ADJUST:    0,
   IDB_FRONT_BOTTOM_ADJUST: 0,

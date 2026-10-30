@@ -358,7 +358,10 @@ export function resolveDrawerStacks(
       continue
     }
     // System boxes ride frontLift above the front bottom, so that much of the front is unusable.
-    const lift = drawerType === 'system' ? frontLift : 0
+    // DB_RUNNER_RAISE lifts runners + box further for clearance off the opening
+    // bottom; the front-fixing holes ride up with it (frontDatumY below).
+    const raise = drawerType === 'system' ? (dbRules.DB_RUNNER_RAISE ?? 0) : 0
+    const lift = drawerType === 'system' ? frontLift + raise : 0
 
     const slide = findSlide(depthHere, openingHeight - lift, slideProducts, slideSchedule, slideOverride, { clearance })
 
@@ -529,6 +532,7 @@ export function resolveDrawerStacks(
         p.part_type === (sl.side === 'left' ? 'db_left_side' : 'db_right_side'))
       sl.drills = slideDrillOps(sl, slide?.drill_ops ?? [], {
         backPart, bottomPart, sidePart, face: zone,
+        ...(raise ? { frontDatumY: zone.Y + raise } : {}),
         memberFaceX: sl.side === 'left' ? leftMemberX : rightMemberX,
       })
     }

@@ -22,6 +22,7 @@ export const DB_RULE_LABELS: Record<DbRuleKey, string> = {
   DB_BACK_WIDTH_ADJUST:  'Back Panel Width Adjust (mm)',
   DB_BACK_Y_OFFSET:      'Offset off Drawer Box Bottom (mm)',
   DB_TOP_CLEAR:          'Clearance Above Box (mm)',
+  DB_RUNNER_RAISE:       'Runner Raise in Front (mm)',
   IDB_FRONT_CLEAR:         'Front Face Clearance Per Side (mm)',
   IDB_FRONT_TOP_ADJUST:    'Front Top Adjust (mm)',
   IDB_FRONT_BOTTOM_ADJUST: 'Front Bottom Adjust (mm)',
@@ -35,7 +36,7 @@ export const DB_RULE_GROUPS: { label: string; keys: DbRuleKey[] }[] = [
   { label: 'Bottom',             keys: ['DB_BOTTOM_JOIN', 'DB_DADO_HEIGHT', 'DB_DADO_DEPTH', 'DB_BACK_SETBACK'] },
   { label: 'Joinery',            keys: ['DB_JOINT_TYPE'] },
   { label: 'Back Panel',         keys: ['DB_BACK_HEIGHT_ADJUST', 'DB_BACK_WIDTH_ADJUST', 'DB_BACK_Y_OFFSET'] },
-  { label: 'Opening Fit',        keys: ['DB_TOP_CLEAR'] },
+  { label: 'Opening Fit',        keys: ['DB_TOP_CLEAR', 'DB_RUNNER_RAISE'] },
   { label: 'Inner Drawer Front', keys: ['IDB_FRONT_CLEAR', 'IDB_FRONT_TOP_ADJUST', 'IDB_FRONT_BOTTOM_ADJUST', 'IDB_FRONT_WIDTH_ADJUST', 'IDB_DRAWER_Z_SETBACK'] },
 ]
 

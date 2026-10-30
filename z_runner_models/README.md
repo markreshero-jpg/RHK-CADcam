@@ -114,3 +114,8 @@ bottom of the outside wall (DB_DADO_HEIGHT / DB_BACK_Y_OFFSET 8, was 12); back =
 
 Lift (same day): the whole runner graphic sits **4.5 above** the rail line. The `_v2` rows have model_anchor_y +4.5 (95 −88.5, 127 −122.5, 178 −171.5), and `runnerGeometry.ts` adds the same 4.5. Drawing only, no holes changed.
 Drawer bottom and back raised to match (same day): DTC Dragon Pro method DB_DADO_HEIGHT / DB_BACK_Y_OFFSET **12.5** (8 + 4.5). They are still 8 above the bottom of the lifted outside wall.
+
+Runner raise (2026-10-30 Mark): new method rule DB_RUNNER_RAISE ("Runner Raise in Front", Opening Fit group),
+set to **5** on DTC Dragon Pro. System drawers' runners + box sit that much higher above the front bottom, and
+the front-fixing holes move up with them (frontDatumY = front bottom + raise), so the front still lines up with
+the box. It counts against the opening when picking a slide.
