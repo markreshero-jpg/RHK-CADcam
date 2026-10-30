@@ -16,7 +16,7 @@
 
 import {
   DrawerBoxInput, ResolvedDrawerBoxPart, DrawerBoxRules,
-  EdgeBanding, EdgeSides, DbEdgingKey, DEFAULT_DB_EDGING,
+  EdgeBanding, EdgeSides, DbEdgingKey, DEFAULT_DB_EDGING, DEFAULT_DB_RULES,
 } from './types'
 
 function ebFromSides(sides: EdgeSides, id?: string): EdgeBanding {
@@ -70,6 +70,12 @@ export function resolveDrawerBox(input: DrawerBoxInput): ResolvedDrawerBoxPart[]
   // For dado: sits in the groove at DB_DADO_HEIGHT from the bottom of the sides.
   // For screwed: sits at the very bottom (Y=0) between the sides.
   const bottomY = r.DB_BOTTOM_JOIN === 'dado' ? r.DB_DADO_HEIGHT : 0
+  // Runners are made for 16–16.5 board: a thicker bottom is rebated underneath
+  // on the edges that sit on the runner ledges, back down to the fit thickness.
+  const fitT = r.DB_BOTTOM_FIT_T ?? DEFAULT_DB_RULES.DB_BOTTOM_FIT_T
+  const rebate = fitT > 0 && Tb > fitT + 0.5
+    ? { depth: Math.round((Tb - fitT) * 100) / 100, width: r.DB_BOTTOM_REBATE_W ?? DEFAULT_DB_RULES.DB_BOTTOM_REBATE_W }
+    : undefined
   parts.push({
     part_type:   'db_bottom',
     DX: D - r.DB_BACK_SETBACK,
@@ -79,6 +85,7 @@ export function resolveDrawerBox(input: DrawerBoxInput): ResolvedDrawerBoxPart[]
     AX: 0, AY: 0, AZ: 0,
     material_id: bmid,
     edge_band:   ebFromSides(getEdging('db_bottom', r), bottom_edgeband_id ?? edgeband_id),
+    ...(rebate ? { rebate } : {}),
   })
 
   // ── Front & Back (butt joint) ─────────────────────────────────

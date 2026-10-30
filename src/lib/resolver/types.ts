@@ -458,7 +458,11 @@ export interface DrawerBoxRules {
                                                         // fit the opening). Five-piece uses height_adjustment instead.
   DB_RUNNER_RAISE:       number                         // system drawers: lifts runners + box (and the front-fixing hole datum)
                                                         // this much higher in the front, for clearance off the opening bottom (mm)
-  IDB_FRONT_CLEAR:         number                         // inner-drawer face per-side clearance from compartment opening (mm)
+  DB_BOTTOM_FIT_T:       number                         // board thickness the runner's bottom ledge takes (mm). A thicker bottom
+                                                        // (> fit + 0.5, so 16.5 board passes) gets an underside rebate on its
+                                                        // left + right edges, depth = thickness − fit. 0 = never rebate.
+  DB_BOTTOM_REBATE_W:    number                         // width of that rebate in from each edge (mm)
+  IDB_FRONT_CLEAR:        number                         // inner-drawer face per-side clearance from compartment opening (mm)
   IDB_FRONT_TOP_ADJUST:    number                         // mm added above the box top (positive grows upward)
   IDB_FRONT_BOTTOM_ADJUST: number                         // mm added below the box bottom (positive grows downward)
   IDB_FRONT_WIDTH_ADJUST:  number                         // added to inner-drawer face width  (mm); 0 = opening minus 2×clearance. Centred.
@@ -479,6 +483,8 @@ export const DEFAULT_DB_RULES: DrawerBoxRules = {
   DB_BACK_Y_OFFSET:      0,
   DB_TOP_CLEAR:          0,
   DB_RUNNER_RAISE:       0,
+  DB_BOTTOM_FIT_T:       16,
+  DB_BOTTOM_REBATE_W:    16,
   IDB_FRONT_CLEAR:         2,
   IDB_FRONT_TOP_ADJUST:    0,
   IDB_FRONT_BOTTOM_ADJUST: 0,
@@ -689,6 +695,10 @@ export type DrawerBoxPartType = 'db_left_side' | 'db_right_side' | 'db_bottom' |
 
 export interface ResolvedDrawerBoxPart extends ResolvedPart {
   part_type: DrawerBoxPartType
+  // db_bottom thicker than the runner ledge takes (18 board in a 16 runner):
+  // the underside rebate along its left + right edges (DB_BOTTOM_FIT_T).
+  // seamDrillSync turns it into generated route pockets. Not persisted.
+  rebate?: { depth: number; width: number }
 }
 
 // ── Kick run (joined toe kicks across a straight run) ─────────────────────────

@@ -119,3 +119,11 @@ Runner raise (2026-10-30 Mark): new method rule DB_RUNNER_RAISE ("Runner Raise i
 set to **5** on DTC Dragon Pro. System drawers' runners + box sit that much higher above the front bottom, and
 the front-fixing holes move up with them (frontDatumY = front bottom + raise), so the front still lines up with
 the box. It counts against the opening when picking a slide.
+
+Thick drawer bottoms (2026-10-30 Mark): the runners take a 16–16.5 bottom. New method rules DB_BOTTOM_FIT_T
+("Runner Takes Bottom Thickness", default **16**) and DB_BOTTOM_REBATE_W ("Thick Bottom Rebate Width", default **16**),
+Opening Fit group. A bottom thicker than fit + 0.5 (so 16.5 board passes) gets an underside rebate along its left +
+right edges (the runner-ledge edges), depth = thickness − fit, so 18 board → **2 deep × 16 wide**. seamDrillSync
+writes it as two generated route pockets on the db_bottom (`db_rebate_*`, 10 mm bit, output_face bottom). Drawing
+only shows it through the part's ops; the 3D box is unchanged. Drawer box schedules were seeded the same day for
+every 16 / 16.5 / 18 board colour (z_material_colours/seed_drawerbox_schedules.sql).

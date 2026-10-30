@@ -371,7 +371,7 @@ const NOTCH_OVERRUN = 5
 const NOTCH_TOOL_DIA = 10
 
 interface GeneratedRoute {
-  source_table: 'case_parts' | 'internal_parts'
+  source_table: 'case_parts' | 'internal_parts' | 'drawer_box_parts'
   source_cabinet_id: string
   source_part_key: string
   operation_type: 'route' | 'groove'
@@ -559,6 +559,37 @@ export function collectFloatShelfPocketRoutes(rp: ResolvedCabinet, cabinetId: st
   return { rows, skipped }
 }
 
+// Thick drawer bottoms (18 board in a runner made for 16): the underside rebate
+// along the left + right edges, one pocket strip per edge. Op frame of a box
+// bottom (boxFrame): x = DX (depth), y = DY (width), so the strips run the full
+// DX at y 0..w and DY−w..DY, overrunning the open edges like the other pockets.
+export function collectDrawerBottomRebateRoutes(rp: ResolvedCabinet, cabinetId: string, toolId: string | null): { rows: GeneratedRoute[]; skipped: number } {
+  rp = filterRemovedParts(rp)
+  const rows: GeneratedRoute[] = []
+  let skipped = 0
+  const ov = CURVED_POCKET_OVERRUN
+  for (const stack of rp.drawer_stacks) {
+    const p = stack.box_parts.find(b => b.part_type === 'db_bottom')
+    if (!p?.rebate) continue
+    if (!toolId) { skipped += 2; continue }
+    const w = Math.min(p.rebate.width, p.DY / 2)
+    ;([['l', -ov, w], ['r', p.DY - w, p.DY + ov]] as const).forEach(([side, y0, y1]) => {
+      rows.push({
+        source_table: 'drawer_box_parts', source_cabinet_id: cabinetId, source_part_key: dbPartId(stack, 'db_bottom'),
+        operation_type: 'route', operation_action: 'pocket', operation_key: `db_rebate_${stackKey(stack)}_${side}`,
+        pos_x: round(p.DX / 2), pos_y: round((y0 + y1) / 2),
+        size_dx: round(p.DX + 2 * ov), size_dy: round(y1 - y0),
+        length: null, width: null,
+        depth: round(p.rebate!.depth),
+        output_face: 'bottom',        // the underside — it sits on the runner ledges
+        output_to_cnc: true, router_tool_id: toolId,
+        parameters: { generated: GENERATED_MARK, kind: 'db_bottom_rebate' },
+      })
+    })
+  }
+  return { rows, skipped }
+}
+
 // The notch cutter: the active 10mm router bit with the lowest tool number.
 async function notchToolId(): Promise<string | null> {
   const { data } = await supabase.from('cnc_tools').select('id,tool_number,diameter').eq('active', true)
@@ -606,12 +637,16 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
   const hasRails = rp.case_parts.some(p => p.part_key.startsWith('fprail:'))
   const hasBends = rp.case_parts.some(p => p.wrap?.bend)
   const hasSlots = rp.case_parts.some(p => p.pockets?.length)
-  const cutter = hasRails || hasBends || hasSlots ? await notchToolId() : null
+  const hasRebates = rp.drawer_stacks.some(s => s.box_parts.some(b => b.rebate))
+  const cutter = hasRails || hasBends || hasSlots || hasRebates ? await notchToolId() : null
   const notch = collectNotchRoutes(rp, cabinetId, hasRails ? cutter : null)
   const bends = collectCurvedPocketRoutes(rp, cabinetId, cutter)
   notch.rows.push(...bends.rows)
   const slots = collectFloatShelfPocketRoutes(rp, cabinetId, cutter)
   notch.rows.push(...slots.rows)
+  const rebates = collectDrawerBottomRebateRoutes(rp, cabinetId, cutter)
+  notch.rows.push(...rebates.rows)
+  if (hasRebates && rebates.skipped) console.warn(`[seamDrillSync] ${rebates.skipped} drawer bottom rebate pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasSlots && slots.skipped) console.warn(`[seamDrillSync] ${slots.skipped} floating shelf slot pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasBends && bends.skipped) console.warn(`[seamDrillSync] ${bends.skipped} curved end bend pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
 
@@ -633,7 +668,7 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
   if (insR?.error) { console.error('[seamDrillSync] insert routes', insR.error); throw insR.error }
   if (hasRails && notch.skipped) console.warn(`[seamDrillSync] ${notch.skipped} finger-rail notch(es) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
 
-  return { written: rows.length + notch.rows.length, skipped: skipped + notch.skipped + bends.skipped + slots.skipped }
+  return { written: rows.length + notch.rows.length, skipped: skipped + notch.skipped + bends.skipped + slots.skipped + rebates.skipped }
 }
 
 // Regenerate for many cabinets (e.g. every cabinet in a nest), with bounded
