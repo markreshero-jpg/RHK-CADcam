@@ -247,7 +247,10 @@ export default function Stage5Edit() {
             and stays fully scrollable to the edges when zoomed past the viewport
             (grid place-items-center would clip the overflow and block panning). */}
         <div ref={scrollRef} className="flex-1 overflow-auto p-6 bg-canvas">
-          <div className="mx-auto w-fit flex flex-col items-center gap-2">
+          {/* Zoomed in: a buffer round the sheet (grows with zoom, up to 240px)
+              so you can scroll a corner away from the viewport edge. */}
+          <div className="mx-auto w-fit flex flex-col items-center gap-2"
+            style={zoom > 1 ? { padding: Math.min(240, (zoom - 1) * 240) } : undefined}>
             <div className="text-lg font-semibold text-ink flex items-center gap-3">
               <span>Sheet {sheetNo(sheet)}
                 <span className="text-ink-subtle text-sm font-normal"> of {sheetNos.get(sheet.index)?.of ?? nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
