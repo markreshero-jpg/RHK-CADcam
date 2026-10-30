@@ -20,7 +20,7 @@ https://asset.duluxgroup.com.au/asset/3d4ecadb-3048-4fd5-ad6c-368fcf01a0e0/BR012
 | BF-05 2-door set **left** 12.5 kg | 7104969 | 2-113-50L | 1 upper roller, 1 bottom roller, 4 centre hinges (nylon, metal pin), centre hinge template |
 | BF-05 2-door set **right** 12.5 kg | 7104970 | — | as left |
 | BF-05 track 2 m white (top & bottom) | 7104967 | 2-113-502 | also silver 2-113-501 |
-| Extra centre hinge set | — | 2-113-610 | when more than 4 standard centre hinges |
+| BF-05/BF-06 centre hinge, aluminium, 2 per pack | 7104981 | 2-113-610 | the **35 cup** centre hinge option (replaces the kit's nylon ones; LS: for doors over 2 m). Mark, 2026-10-30 |
 
 Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 
@@ -65,6 +65,10 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
    Cabinet Edit modal.
 10. **Folded diagram** (20 / 40 / 500 / 20–50) = clearance when open. Used for drawing
     the folded pack only.
+10a. **Hand naming**: LS "left set" = doors hung on the left gable (Mark, 2026-10-30).
+10b. **One handle**, on the leading door, at the joint edge (middle of the cabinet,
+     where the doors meet); the outer door gets none (Mark, 2026-10-30).
+10c. **B* = (32 − gap) ÷ 2** accepted for now; Mark adjusts after a test (2026-10-30).
 11. **Width limit** 1200 inside for the 2 doors (warning above it).
 12. **Library cabinets, not a switch on every cabinet** (Mark, 2026-10-30): **W2D/BF**
     (wall, e.g. an appliance cupboard on the bench) and **T2D/BF** (tall). The `/BF`
@@ -106,18 +110,14 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 
 ## Open questions
 
-- **B\***: confirm (32 − gap) ÷ 2 (15 at a 2 gap) against the kit's template.
-- **Handles**: both doors take the hand as their hinge side, so the outer door's
-  handle lands at the joint. Should the outer door have no handle?
-- **Cup centre hinge product**: what to order (code) for option 2.
-- **Hand naming**: confirm LS "left set" = doors hung on the left gable.
+- None. B* to be checked on the first test door.
 
 ## Phases
 
 | Phase | Scope | Status |
 |---|---|---|
 | F1 | Switches + RHS sidebar (tick, hand, bottom, centre). Resolver: carriage, bottom guide and centre hinge drills on the right doors (both centre options), no hinges on the leading door, warnings. CNC through seamDrillSync. Tests. | [x] built 2026-10-30, see F1 notes; in-app check pending |
-| F2 | Hardware pick list / takeoff: LS set (L/R), tracks (2 m count), extra centre hinge sets. `hardware_accessories` rows. | [ ] |
+| F2 | Hardware pick list / takeoff: LS set (L/R), tracks (2 m count), centre hinges (35 cup option: 7104981 packs of 2, ceil(hinges ÷ 2) per pair of doors). `hardware_accessories` rows. | [ ] |
 | F3 | Cabinet Edit modal: tracks + carriage / guide outlines in Top / Elevation / Side; a Side detail with fixed dims (47.5, 64, 26.5, 22.5, 55, 15, 22.7 / 30.5); `bifold_tracks` layer item. | [ ] |
 | F4 | 3D: tracks + fittings, folding open animation (trailing door pivots on the outer door's edge). Plan: folded-pack swing. | [ ] |
 | F5 | Tutorial. | [ ] |

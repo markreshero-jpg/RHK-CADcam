@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { caseBox } from '../../jointDrilling'
-import { DEFAULT_RULES, type CabinetInput, type ConstructionRules, type HingeHardwareInput, type Material } from '../types'
+import { DEFAULT_RULES, type CabinetInput, type ConstructionRules, type HingeHardwareInput, type Material, type HandleProductInput } from '../types'
 
 // z_bifold_slide F1: Finista BF-05 sliding bi-fold on an ordinary 2-door cabinet.
 const board: Material = { id: 'm18', name: 'Board 18', DZ: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
@@ -11,6 +11,8 @@ const hinge: HingeHardwareInput = {
   anchor_holes: [], model_combined_url: null, model_combined_scale: 1, bore_centre_to_door_face_mm: null, open_angle_deg: null,
   model_arm_fold_fraction: 0.5,
 }
+const bar160: HandleProductInput = { id: 'h160', name: 'D Handle 160', grip_kind: 'hardware', handle_type: 'bar', length: 180, bore_centres: 160, projection: 30, cost_per_unit: 5, hole_dia_mm: null, holes: [], needs_finger_gap: false, bevel_angle_deg: null, bevel_land_mm: null }
+const handles = { door_tall: { handle: bar160, offset_from_edge_mm: 50, inset_from_side_mm: 50, orientation: 'vertical' as const } }
 const twoDoors = {
   rows: [{ row_index: 0, height_locked: false }],
   cols: [{ col_index: 0, width_locked: false }, { col_index: 1, width_locked: false }],
@@ -78,6 +80,22 @@ describe('sliding bi-fold (Finista BF-05)', () => {
       const ox = outer.X + outer.bifold_holes!.find(h => h.kind === 'centre')!.x
       const lx = leading.X + leading.bifold_holes!.find(h => h.kind === 'centre')!.x
       expect(Math.abs(ox - lx)).toBeCloseTo(32, 6)
+    })
+  }
+
+  for (const hand of ['L', 'R'] as const) {
+    it(`hand ${hand}: one handle, on the leading door at the joint; none on the outer door`, () => {
+      const plain = resolveCabinet(cab({}, { handle_schedule: handles })).face_zones
+      const rp = resolveCabinet(cab({ BIFOLD: hand }, { handle_schedule: handles }))
+      const outer = rp.face_zones.find(z => z.bifold_role === 'outer')!
+      const leading = rp.face_zones.find(z => z.bifold_role === 'leading')!
+      expect(outer.handle).toBeNull()
+      expect(leading.handle).toBeTruthy()
+      // Same place as that door's handle on a plain pair hinged on the leading
+      // edge (L hand: the right door, plainly hinged right, handle on its left).
+      const twin = plain.find(z => z.col_index === leading.col_index)!
+      expect(twin.hinge_side).toBe(hand === 'L' ? 'right' : 'left')
+      expect(leading.handle).toEqual(twin.handle)
     })
   }
 

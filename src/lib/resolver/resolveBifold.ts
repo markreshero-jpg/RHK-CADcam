@@ -17,6 +17,7 @@
 
 import type { CabinetInput, ConstructionRules, ResolvedFaceZone, ResolvedCasePart, ResolvedHingeInstance, ResolverError, BifoldHole } from './types'
 import { caseBox } from '../jointDrilling'
+import { resolveHandle } from './resolveHandles'
 
 export const BIFOLD = {
   cupDia: 35, cupDepth: 11.5,
@@ -60,6 +61,19 @@ export function bifoldPair(cab: CabinetInput, zones: ResolvedFaceZone[], warning
   outer.bifold_role = 'outer'
   leading.bifold_role = 'leading'
   return { hand, outer, leading }
+}
+
+/** One handle, on the leading door at the joint (the middle of the cabinet,
+ *  where the pair folds out); none on the outer door (Mark, 2026-10-30). The
+ *  handle sits opposite a door's hinge side, so the leading door's is resolved
+ *  as if hinged on its leading edge. After resolveHandles. */
+export function bifoldHandles(cab: CabinetInput, pair: BifoldPair): void {
+  const { leading, outer } = pair
+  const side = leading.hinge_side
+  leading.hinge_side = side === 'left' ? 'right' : 'left'
+  leading.handle = resolveHandle(cab, leading)
+  leading.hinge_side = side
+  outer.handle = null
 }
 
 /** Fitting holes on both doors + the pair's checks. After the hinges, whose
