@@ -2,7 +2,7 @@ import { supabase } from '@/src/lib/supabase'
 import {
   CabinetInput, ConstructionRules, FaceGridInput, Section, EMPTY_SECTION, Material, DEFAULT_RULES,
   SlideProduct, SlideScheduleEntry, SlideDrillOp, DrawerBoxRules, DEFAULT_DB_RULES,
-  JointTypeOp, rowToJointTypeOp, SeamJointAssign, seamAssignJoint,
+  JointTypeOp, rowToJointTypeOp, JOINT_OP_SELECT, SeamJointAssign, seamAssignJoint,
   RawProfileOp, ResolvedDoorStyleInput, EdgeSides,
   HingeRuleInput, HingeHardwareInput, HingePlateInput, ExistingHingeInput, HingeBoreHole,
   KickRunInput, KickSplitMode, ResolverError,
@@ -724,7 +724,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   if (jointTypeIds.size > 0) {
     const ids = [...jointTypeIds].sort()
     const [opsRes, namesRes] = await cachedCascade(`joints:${ids.join(',')}`, () => Promise.all([
-      supabase.from('joint_type_operations').select('*').in('joint_type_id', ids).order('operation_order'),
+      supabase.from('joint_type_operations').select(JOINT_OP_SELECT).in('joint_type_id', ids).order('operation_order'),
       supabase.from('joint_types').select('id, name').in('id', ids),
     ]))
 

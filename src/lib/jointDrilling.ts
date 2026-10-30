@@ -7,7 +7,7 @@
 // consumer can render it (bore cylinder in 3D, circle/slot marker in 2D).
 
 import type { Box } from '@/src/components/three/PartViewer'
-import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, JointTypeOp, ResolvedToekickPart } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, JointTypeOp, JointFitting, ResolvedToekickPart } from '@/src/lib/resolver/types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { removedIds, seamPartId } from '@/src/lib/resolver/filterHidden'
 import { sampleOutline } from '@/src/lib/shapePath'
@@ -230,6 +230,10 @@ export interface DrillOpPos {
   // hole, so dropNearDrills only yields to OTHER ops' holes (z_curved_end C3).
   skipNear?:       number
   opRef?:          string
+  // The op's fitting (JointTypeOp.fitting), on the middle hole of each set
+  // only, with the direction from it to the seam edge — the 3D model sits
+  // there (z_joints C4). Inside/outside faces only for now.
+  fitting?:        { item: JointFitting; toward: DrillAxis }
 }
 
 // Expression evaluator: supports math globals + part-dimension variables.
@@ -539,8 +543,10 @@ export function seamDrillOps(
     // and inside/outside faces, the inset (offset_y) axis for normal/end faces.
     const isYFace = op.face === 'top' || op.face === 'bottom' || inOut
 
+    const steps  = uSteps(ev.qty2, ev.spacing2_mm)
+    const midSet = (steps.length - 1) >> 1
     for (let i = 0; i < ev.qty; i++) {
-      for (const du of uSteps(ev.qty2, ev.spacing2_mm)) {
+      for (const [j, du] of steps.entries()) {
         const pos = { x: 0, y: 0, z: 0 }
         let axis: DrillAxis = 'x-'
 
@@ -614,6 +620,7 @@ export function seamDrillOps(
         result.push({
           ...pos, axis, radius: ev.tool_diameter_mm / 2, depthLen, targetPartKey,
           router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool,
+          ...(op.fitting && inOut && j === midSet ? { fitting: { item: op.fitting, toward: isLeft ? 'x-' as const : 'x+' as const } } : {}),
         })
       }
     }

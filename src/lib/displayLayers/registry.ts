@@ -146,6 +146,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     viewDefaults: { '3d': { visible: false } }, hint: 'Elevation: cup bores; 3D: hinge + plate models' },
   { id: 'rail_blocks',    group: 'hardware', label: 'Finger rail blocks',  views: ['3d'], default: ON,
     hint: 'Knock-in nylon blocks holding the finger-pull rails (z_handles D20)' },
+  { id: 'joint_fittings', group: 'hardware', label: 'Joint fittings',      views: ['3d'], default: ON,
+    hint: 'Connectors a joint places, e.g. the Lamello Cabineo (z_joints)' },
   // Handles (z_handles H2) — visible by default (they're part of how the job
   // looks), except plan where they'd clutter the footprint.
   { id: 'handles',        group: 'hardware', label: 'Handles',             views: ALL, default: ON,

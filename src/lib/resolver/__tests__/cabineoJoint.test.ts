@@ -65,6 +65,16 @@ describe('Cabineo joint', () => {
     expect(d.filter(h => h.targetPartKey === 'left_side').every(h => h.z === 11 && h.depthLen === 12)).toBe(true)
   })
 
+  it('fitting rides on the middle pocket of each set, pointing at the seam edge', () => {
+    const fitting = { id: 'cab', name: 'Cabineo 12', colour: null, model: null }
+    const ops = cabineo('inside'); ops[0] = { ...ops[0], fitting }
+    const fit = seamDrillOps('bottom:left_side', bottom, gableL, ops).filter(h => h.fitting)
+    expect(fit).toHaveLength(3)
+    expect(fit.every(h => r(h.x) === 30.8 && h.fitting!.toward === 'x-' && h.fitting!.item.id === 'cab')).toBe(true)
+    const right = { ...gableL, x: 584 }
+    expect(seamDrillOps('bottom:right_side', bottom, right, ops).filter(h => h.fitting).every(h => h.fitting!.toward === 'x+')).toBe(true)
+  })
+
   it('unflagged part_b face holes still bore through', () => {
     const d = seamDrillOps('bottom:left_side', bottom, gableL, [op({ target_part: 'part_b' })])
     expect(d.every(h => h.depthLen === 16)).toBe(true)

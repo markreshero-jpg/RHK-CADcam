@@ -546,7 +546,23 @@ export interface JointTypeOp {
   // part_b face bores are through-bored by default (carcase screws); stopped
   // keeps the authored depth — a concealed fitting's blind screw hole.
   stopped?:          boolean
+  // Bought-in fitting that goes in each set of this op (one per first-axis
+  // step) — an Accessories row, e.g. the Lamello Cabineo (z_joints C4).
+  // fitting = the row, joined by the loaders that draw it.
+  fitting_id?:       string | null
+  fitting?:          JointFitting | null
 }
+
+export interface JointFitting {
+  id:     string
+  name:   string
+  colour: string | null
+  model:  { url: string; format: string; scale: number } | null
+}
+
+// joint_type_operations select for loaders that resolve cabinets: the row plus
+// its fitting's Accessories row (rowToJointTypeOp maps it).
+export const JOINT_OP_SELECT = '*, fitting:fitting_id(id, name, colour, model_url, model_format, model_scale)'
 
 // Single source of truth for mapping a raw joint_type_operations row to a
 // JointTypeOp — every loader must use this so new columns can't silently drop
@@ -575,6 +591,18 @@ export function rowToJointTypeOp(op: Record<string, unknown>): JointTypeOp {
     expressions:       (op.expressions as Record<string, string> | null) ?? null,
     skip_near_mm:      op.skip_near_mm != null && Number(op.skip_near_mm) > 0 ? Number(op.skip_near_mm) : null,
     stopped:           op.stopped === true,
+    fitting_id:        (op.fitting_id as string | null) ?? null,
+    fitting:           rowToJointFitting(op.fitting),
+  }
+}
+
+function rowToJointFitting(r: unknown): JointFitting | null {
+  if (!r || typeof r !== 'object') return null
+  const f = r as Record<string, unknown>
+  const url = f.model_url as string | null
+  return {
+    id: f.id as string, name: (f.name as string) ?? '', colour: (f.colour as string | null) ?? null,
+    model: url ? { url, format: (f.model_format as string) ?? 'glb', scale: Number(f.model_scale) || 1 } : null,
   }
 }
 

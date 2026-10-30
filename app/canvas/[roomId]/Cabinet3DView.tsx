@@ -61,6 +61,7 @@ import RailBlockModel from '@/src/components/three/RailBlockModel'
 import BifoldTrackModel from '@/src/components/three/BifoldTrackModel'
 import { bifoldTracks } from '@/src/lib/resolver/resolveBifold'
 import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
+import JointFittingModel from '@/src/components/three/JointFittingModel'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
 import { splitCaseParts, splitBaseKey, splitPieceRange } from '@/src/lib/cabinetSplit'
@@ -1372,6 +1373,17 @@ export function CabinetScene({
   const railBlocks = useMemo(() => railBlockEnds(rp.case_parts, rp.internal_parts), [rp])
   // Sliding bi-fold tracks (z_bifold_slide), cut to the inside width.
   const bifoldTrackList = useMemo(() => bifoldTracks(rp), [rp])
+  // Joint fittings (z_joints C4, e.g. Lamello Cabineo): one per set, at the
+  // set's middle hole — drawn whether or not drilling is shown.
+  const jointFittings = useMemo(() => {
+    const out: DrillOpPos[] = []
+    for (const sj of rp.seam_joints) {
+      if (!sj.ops.some(o => o.fitting)) continue
+      const bA = boxByKey[sj.part_a_key], bB = boxByKey[sj.part_b_key]
+      if (bA && bB) out.push(...seamDrillsFor(sj, rp, bA, bB).filter(d => d.fitting))
+    }
+    return out
+  }, [rp, boxByKey])
   const hingeDrills = useMemo(() => {
     if (!showDrilling) return []
     const out: ResolvedHingeDrill[] = []
@@ -1875,6 +1887,9 @@ export function CabinetScene({
       ))}
       {show('rail_blocks') && railBlocks.map(e => (
         <PartAlpha key={`rblk_${e.railKey}_${e.panelKey}`} a={alpha('rail_blocks')}><RailBlockModel end={e} /></PartAlpha>
+      ))}
+      {show('joint_fittings') && jointFittings.map((d, i) => (
+        <PartAlpha key={`jfit_${d.targetPartKey}_${i}`} a={alpha('joint_fittings')}><JointFittingModel drill={d} /></PartAlpha>
       ))}
     </ExplodeGroup>
     </FrontGrainAcrossContext.Provider>

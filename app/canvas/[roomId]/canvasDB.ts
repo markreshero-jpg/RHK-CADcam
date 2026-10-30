@@ -20,7 +20,7 @@ import type {
   CabinetInput, HingeHardwareInput, HingePlateInput, HingeRuleInput, ExistingHingeInput, HingeBoreHole,
   FaceGridInput, PartHideViews, PartHideView, BifoldHole, ResolvedBifold,
 } from '@/src/lib/resolver/types'
-import { rowToJointTypeOp, seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
+import { rowToJointTypeOp, JOINT_OP_SELECT, seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
 import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { mergeRules } from '@/src/lib/resolver/mergeRules'
 import { normaliseBulkhead } from '@/src/lib/bulkhead'
@@ -95,7 +95,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
   if (jointTypeIds.size > 0) {
     const ids = [...jointTypeIds]
     const [opsRes, namesRes] = await Promise.all([
-      supabase.from('joint_type_operations').select('*').in('joint_type_id', ids).order('operation_order'),
+      supabase.from('joint_type_operations').select(JOINT_OP_SELECT).in('joint_type_id', ids).order('operation_order'),
       supabase.from('joint_types').select('id, name').in('id', ids),
     ])
     for (const op of (opsRes.data ?? []) as Record<string, unknown>[]) {

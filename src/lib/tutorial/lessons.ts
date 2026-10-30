@@ -1243,7 +1243,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'On the joint you want hidden, change 5mm Dynamic Holes to Lamello Cabineo 12 - inside (pocket on the face that looks into the cabinet — a bottom’s top, a top’s underside, a back’s front) or Lamello Cabineo 12 - outside (the other face). The joint keeps the same spacing as 5mm Dynamic Holes: 50 in from each end, no more than 280 apart. Change it back any time.',
       canvas: true, done: c => c.cabEditorOpen },
     { id: 'what', title: 'What gets machined',
-      body: 'The panel whose edge butts in gets the Cabineo pocket: three overlapping Ø15 circles, 11 deep, 3.6 / 14.8 / 26 in from that edge (the CNC routes them with a router bit). The panel it butts into gets a Ø5 hole 12 deep — not through — 5 off the pocket face. Fit the Cabineo collar-on-surface. The panel with the pocket needs to be 16 thick or more.',
+      body: 'The panel whose edge butts in gets the Cabineo pocket: three overlapping Ø15 circles, 11 deep, 3.6 / 14.8 / 26 in from that edge (the CNC routes them with a router bit). The panel it butts into gets a Ø5 hole 12 deep — not through — 5 off the pocket face. Fit the Cabineo collar-on-surface. The panel with the pocket needs to be 16 thick or more. In the 3D tab each Cabineo is drawn in its pocket (Layers → Joint fittings turns them off). The connector is in Library → Materials → Accessories (category Connector).',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
 ]

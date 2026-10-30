@@ -47,6 +47,7 @@ interface JointTypeOperation {
   expressions:       Record<string, string> | null
   skip_near_mm:      number | null
   stopped:           boolean
+  fitting_id:        string | null
 }
 
 interface Fastener {
@@ -123,6 +124,7 @@ const OP_DEFAULTS: Omit<JointTypeOperation, 'id' | 'joint_type_id'> = {
   expressions:       null,
   skip_near_mm:      null,
   stopped:           false,
+  fitting_id:        null,
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -155,6 +157,7 @@ function toOp(r: Record<string, unknown>): JointTypeOperation {
     expressions:       (r.expressions as Record<string, string> | null) ?? null,
     skip_near_mm:      r.skip_near_mm != null ? Number(r.skip_near_mm) : null,
     stopped:           r.stopped === true,
+    fitting_id:        (r.fitting_id as string | null) ?? null,
   }
 }
 
@@ -181,6 +184,12 @@ export default function JointsClient({
   embedded?:         boolean
 }) {
   const { tools: cncTools, drills: cncDrills } = useToolLibraries()
+  // Connectors a joint op can place in each set (Accessories, z_joints C4).
+  const [fittings, setFittings] = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    supabase.from('hardware_accessories').select('id, name').eq('category', 'connector').order('name')
+      .then(({ data }) => setFittings((data ?? []) as { id: string; name: string }[]))
+  }, [])
   const [tab,       setTab]       = useState<Tab>('joints')
   const [joints,    setJoints]    = useState<JointType[]>(initialJoints.map(toJointType))
   const [fasteners, setFasteners] = useState<Fastener[]>(initialFasteners.map(toFastener))
@@ -321,7 +330,7 @@ export default function JointsClient({
 
   async function patchOp(id: string, key: keyof JointTypeOperation, raw: string | number | boolean) {
     const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm','qty2','spacing2_mm','skip_near_mm']
-    const val = numKeys.includes(key) ? parseFloat(raw as string) : raw
+    const val = numKeys.includes(key) ? parseFloat(raw as string) : key === 'fitting_id' && raw === '' ? null : raw
     if (numKeys.includes(key) && isNaN(val as number)) return
     const { error } = await supabase.from('joint_type_operations').update({ [key]: val }).eq('id', id)
     if (error) { console.warn('patchOp failed:', String(key), error.message, error); setSaveError(`Couldn't save ${String(key)}: ${error.message}`); return }
@@ -502,7 +511,7 @@ export default function JointsClient({
                         <p className="text-xs text-red-400 border border-red-500/40 bg-red-500/10 rounded px-2 py-1">{saveError}</p>
                       )}
                       <OpsTable ops={ops} onPatch={patchOp} onPatchExpr={patchExpr} onPatchTool={patchOpTool} onDelete={deleteOp} onAdd={addOp}
-                        tools={cncTools} drills={cncDrills}
+                        tools={cncTools} drills={cncDrills} fittings={fittings}
                         selOpId={selOpId} onSelOpChange={setSelOpId} />
                     </Section>
                   )}
@@ -617,7 +626,7 @@ const EXPR_SUGGESTIONS: Record<string, { label: string; formula: string }[]> = {
 // ── Operations table ──────────────────────────────────────────────────────────
 
 function OpsTable({
-  ops, onPatch, onPatchExpr, onPatchTool, onDelete, onAdd, tools, drills, selOpId, onSelOpChange,
+  ops, onPatch, onPatchExpr, onPatchTool, onDelete, onAdd, tools, drills, fittings, selOpId, onSelOpChange,
 }: {
   ops:            JointTypeOperation[]
   onPatch:        (id: string, key: keyof JointTypeOperation, val: string | number | boolean) => void
@@ -627,6 +636,7 @@ function OpsTable({
   onAdd:          () => void
   tools:          ToolLite[]
   drills:         DrillLite[]
+  fittings:       { id: string; name: string }[]
   selOpId:        string | null
   onSelOpChange:  (id: string | null) => void
 }) {
@@ -658,6 +668,7 @@ function OpsTable({
               <th className={thCls} style={{ width: 56 }} title="Position along the face (offset_y for end/normal, offset_x in from the joint edge for top/bottom/inside/outside)">U</th>
               <th className={thCls} style={{ width: 56 }} title="Distance from front face (offset_z)">V (front)</th>
               <th className={thCls} style={{ width: 56 }} title="Skip near: drop this op's holes within this many mm of another op's hole in the same part (blank = keep all)">Skip ≤</th>
+              <th className={thCls} style={{ width: 130 }} title="Connector placed in each set of this op (Accessories → Connector), drawn in 3D — inside/outside faces">Fitting</th>
               <th className={thCls} style={{ width: 28 }} />
             </tr>
           </thead>
@@ -784,6 +795,14 @@ function OpsTable({
                       onChange={n => onPatch(op.id, 'skip_near_mm', Math.max(0, n))}
                       className={numCls} />
                   </td>
+                  <td className={tdCls} onClick={e => e.stopPropagation()}>
+                    <select value={op.fitting_id ?? ''}
+                      onChange={e => onPatch(op.id, 'fitting_id', e.target.value)}
+                      className={`${celCls} cursor-pointer`}>
+                      <option value="">—</option>
+                      {fittings.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                    </select>
+                  </td>
                   <td className="border border-edge-strong px-1.5 text-center">
                     <button onClick={e => { e.stopPropagation(); onDelete(op.id) }}
                       className="text-ink-subtle hover:text-red-400 transition-colors">✕</button>
@@ -793,7 +812,7 @@ function OpsTable({
             })}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={17} className="px-4 py-6 text-center text-xs text-ink-subtle">
+                <td colSpan={18} className="px-4 py-6 text-center text-xs text-ink-subtle">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>

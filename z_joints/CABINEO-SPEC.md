@@ -1,6 +1,6 @@
 # Lamello Cabineo 12 — concealed joint
 
-Status: **C1 built 2026-10-30** (engine + joint types + tutorial), in-app check pending.
+Status: **C1 + C4 built 2026-10-30**. In-app checks (C2, C4) and the nest check (C3) pending.
 
 Source: `Lamello/Lamello Cabineo 12.png` + Lamello's machining files
 (`Cabineo-12th_machining-stp.zip` / `-dxf.zip`; the DXFs are ACIS solids, the
@@ -50,12 +50,34 @@ it butts into (gable).
 - Test: `src/lib/resolver/__tests__/cabineoJoint.test.ts`.
 - Tutorial: `cabineo` (Intermediate ▸ Cabinets).
 
+## Hardware + 3D (C4)
+
+- **Accessories → category `connector`** (constraint widened): row
+  *Lamello Cabineo 12, collar on surface* (brand Lamello, colour #3a3a3a).
+  Supplier code + $/ea left for Mark.
+- **`joint_type_operations.fitting_id`** → hardware_accessories: the fitting in each
+  set of that op (one per first-axis step). Set on both Cabineo pocket ops.
+  Library editor: **Fitting** column (connectors only).
+- Loaders that resolve cabinets join it (`JOINT_OP_SELECT` in resolver/types);
+  `seamDrillOps` tags the middle hole of each set with `fitting` + the direction
+  to the seam edge (inside/outside faces only).
+- **3D**: `JointFittingModel` draws each set, layer item **Joint fittings**
+  (hardware, 3D, default on). Model axes (after model_scale → cabinet mm):
+  origin = middle pocket centre on the face, +Y out of the face, −X toward the
+  seam edge. No model_url → built-in stand-in (housing filling the pocket,
+  1 mm collar 1.5 wider, Ø5 screw 12 into part B at 5 below the face).
+- **Real model**: Lamello's zips are the *pocket* solids, not the connector.
+  Upload the Cabineo 12 connector model (STEP → GLB/STL) to the accessory row's
+  model_url, oriented as above.
+- Takeoff / pick list: not counted (TAKEOFF-SPEC D3 says no joint fasteners) —
+  ask Mark.
+
 ## Phases
 
 | | | |
 |---|---|---|
 | C1 | Engine (inside/outside, IN, stopped) + 2 joint types + tutorial | built 2026-10-30 |
-| C2 | In-app check: swap a bottom / back joint, look at 3D + Edge joints, run the optimiser on it | pending |
+| C2 | In-app check: swap a bottom / back joint, look at 3D + Edge joints, run the optimiser on it | pending (Mark OK'd the plan 2026-10-30) |
 | C3 | Nest check: the first circle runs 3.9 past the part edge, 11 deep — must land in the part gap (no bounds check in the optimiser). Check the router pick (≥ Ø10) + the warnings | pending |
-| C4 | Hardware: Cabineo 12 in the hardware library (takeoff / costing), 3D model | after C2 |
+| C4 | Hardware: Cabineo 12 in Accessories (connector), joint op fitting link, 3D (stand-in until the real model) | built 2026-10-30, check pending; real model + takeoff open |
 | C5 | Optional: back:bottom seam support, construction-method default | when needed |
