@@ -15,8 +15,10 @@
 // into the back face. Tracks are not drilled (drawn only, F3).
 // ============================================================
 
-import type { CabinetInput, ConstructionRules, ResolvedFaceZone, ResolvedCasePart, ResolvedHingeInstance, ResolverError, BifoldHole, ResolvedCabinet } from './types'
-import { caseBox } from '../jointDrilling'
+import type { CabinetInput, ConstructionRules, ResolvedFaceZone, ResolvedCasePart, ResolvedInternalPart, ResolvedHingeInstance, ResolverError, BifoldHole, ResolvedCabinet } from './types'
+import { caseBox, internalBox } from '../jointDrilling'
+
+type Box = ReturnType<typeof caseBox>
 import { resolveHandle } from './resolveHandles'
 
 export const BIFOLD = {
@@ -66,9 +68,28 @@ export function trackProfile(t: BifoldTrack): { z: number; y: number }[] {
   return BIFOLD_TRACK_PROFILE.map(([u, v]) => ({ z: t.zFront - u, y: t.face + dir * v }))
 }
 
+/** The panels the tracks fix to: the lowest one over the pair (the cabinet top or
+ *  front rail, or a fixed shelf when the pair is a lower row — RHK6595 WC-02, Mark
+ *  2026-10-31) and the highest one under it (the bottom or a fixed shelf). A fixed
+ *  shelf counts when it runs across the middle of the pair. */
+export function bifoldPanels(caseParts: ResolvedCasePart[], internalParts: ResolvedInternalPart[], pair: ResolvedFaceZone[]): { top: Box | null; bottom: Box | null } {
+  if (!pair.length) return { top: null, bottom: null }
+  const mid = Math.min(...pair.map(z => z.Y)) + Math.max(...pair.map(z => z.DY)) / 2
+  const cx = (Math.min(...pair.map(z => z.X)) + Math.max(...pair.map(z => z.X + z.DX))) / 2
+  const boxes: Box[] = [
+    ...caseParts.filter(p => p.part_key === 'full_top' || p.part_key === 'front_rail' || p.part_key === 'bottom').map(caseBox),
+    ...internalParts.filter(p => p.part_type === 'fixed_shelf').map(internalBox).filter((b): b is Box => !!b && b.x <= cx && cx <= b.x + b.w),
+  ]
+  const above = boxes.filter(b => b.y >= mid), below = boxes.filter(b => b.y + b.h <= mid)
+  return {
+    top:    above.length ? above.reduce((a, b) => (b.y < a.y ? b : a)) : null,
+    bottom: below.length ? below.reduce((a, b) => (b.y + b.h > a.y + a.h ? b : a)) : null,
+  }
+}
+
 /** The top track, and the bottom one unless the guide is None: gable to gable,
  *  under the top; on top of the bottom ('above') or under it ('below'). */
-export function bifoldTracks(rp: Pick<ResolvedCabinet, 'bifold' | 'case_parts' | 'face_zones'>): BifoldTrack[] {
+export function bifoldTracks(rp: Pick<ResolvedCabinet, 'bifold' | 'case_parts' | 'face_zones'> & { internal_parts?: ResolvedInternalPart[] }): BifoldTrack[] {
   const pair = rp.face_zones.filter(z => z.bifold_role)
   const leading = pair.find(z => z.bifold_role === 'leading')
   if (!leading) return []
@@ -82,10 +103,9 @@ export function bifoldTracks(rp: Pick<ResolvedCabinet, 'bifold' | 'case_parts' |
   const track = (which: BifoldTrack['which'], face: number, open: BifoldTrack['open']): BifoldTrack =>
     ({ which, x, y: open === 'down' ? face - T.height : face, z, dx, dy: T.height, dz, open, face, zFront })
   const out: BifoldTrack[] = []
-  const top = box('full_top') ?? box('front_rail')
+  const { top, bottom: bot } = bifoldPanels(rp.case_parts, rp.internal_parts ?? [], pair)
   if (top) out.push(track('top', top.y, 'down'))
   const mode = rp.bifold?.bottom ?? 'above'
-  const bot = box('bottom')
   if (bot && mode !== 'none') out.push(mode === 'above' ? track('bottom', bot.y + bot.h, 'up') : track('bottom', bot.y, 'down'))
   return out
 }
@@ -104,19 +124,23 @@ export function bifoldHoleShapes(zones: ResolvedFaceZone[]): { x: number; y: num
 
 export interface BifoldPair { hand: 'L' | 'R'; outer: ResolvedFaceZone; leading: ResolvedFaceZone }
 
-const sameRow = (a: ResolvedFaceZone, b: ResolvedFaceZone) => a.row_index === b.row_index
-
 /** The two doors side by side the pair is made of, or null when the cabinet
- *  isn't a bi-fold. Sets both doors' hinge side to the hand (the leading door
- *  turns about its edge at the joint) and their roles. Run before handles. */
+ *  isn't a bi-fold. The pair is a row of exactly 2 doors (nothing else in that
+ *  row); with several such rows, the tallest (RHK6595 WC-02: the 1000 appliance
+ *  doors, not the 390 PTO doors over them). Sets both doors' hinge side to the
+ *  hand (the leading door turns about its edge at the joint) and their roles.
+ *  Run before handles. */
 export function bifoldPair(cab: CabinetInput, zones: ResolvedFaceZone[], warnings: ResolverError[]): BifoldPair | null {
   const hand = cab.rules.BIFOLD
   if (hand !== 'L' && hand !== 'R') return null
-  const doors = zones.filter(z => z.face_type === 'door' && !z.facet && !z.AY)
-  if (cab.footprint || doors.length !== 2 || !sameRow(doors[0], doors[1])) {
-    warnings.push({ code: 'BIFOLD_NEEDS_2_DOORS', message: 'Sliding bi-fold needs exactly 2 doors side by side — the doors are left as normal doors', part: 'hinge' })
+  const rows = new Map<number, ResolvedFaceZone[]>()
+  for (const z of zones) if (!z.facet && !z.AY) rows.set(z.row_index, [...(rows.get(z.row_index) ?? []), z])
+  const pairs = [...rows.values()].filter(r => r.length === 2 && r.every(z => z.face_type === 'door'))
+  if (cab.footprint || !pairs.length) {
+    warnings.push({ code: 'BIFOLD_NEEDS_2_DOORS', message: 'Sliding bi-fold needs a row of exactly 2 doors side by side — the doors are left as normal doors', part: 'hinge' })
     return null
   }
+  const doors = pairs.reduce((best, r) => (Math.max(...r.map(z => z.DY)) > Math.max(...best.map(z => z.DY)) ? r : best))
   const [a, b] = [...doors].sort((p, q) => p.X - q.X)
   const outer = hand === 'L' ? a : b
   const leading = hand === 'L' ? b : a
@@ -144,7 +168,7 @@ export function bifoldHandles(cab: CabinetInput, pair: BifoldPair): void {
 /** Fitting holes on both doors + the pair's checks. After the hinges, whose
  *  heights on the outer door the centre hinges follow. */
 export function resolveBifoldHoles(
-  pair: BifoldPair, r: ConstructionRules, caseParts: ResolvedCasePart[],
+  pair: BifoldPair, r: ConstructionRules, caseParts: ResolvedCasePart[], internalParts: ResolvedInternalPart[],
   hinges: ResolvedHingeInstance[], warnings: ResolverError[],
 ): void {
   const { hand, outer, leading } = pair
@@ -159,18 +183,17 @@ export function resolveBifoldHoles(
 
   const box = (k: ResolvedCasePart['part_key']) => { const p = caseParts.find(c => c.part_key === k); return p ? caseBox(p) : null }
 
-  // Top carriage.
-  const top = box('full_top') ?? box('front_rail')
+  // Top carriage: under the panel over the pair (cabinet top, or a fixed shelf).
+  const { top, bottom } = bifoldPanels(caseParts, internalParts, [outer, leading])
   if (top) {
     const y = top.y - B.topDrop - leading.Y
     lead.push(cup(leadX, y, 'carriage'), cup(leadX, y - B.carriagePitch, 'carriage'))
   } else {
-    warnings.push({ code: 'BIFOLD_NO_TOP', message: 'Sliding bi-fold: no cabinet top for the top track — no carriage holes', part: 'hinge' })
+    warnings.push({ code: 'BIFOLD_NO_TOP', message: 'Sliding bi-fold: no cabinet top or fixed shelf over the doors for the top track — no carriage holes', part: 'hinge' })
   }
 
   // Bottom guide.
   const mode = r.BIFOLD_BOTTOM ?? 'above'
-  const bottom = box('bottom')
   if (mode !== 'none' && bottom) {
     if (mode === 'above') lead.push(cup(leadX, bottom.y + bottom.h + B.guideOffset - leading.Y, 'guide'))
     else {

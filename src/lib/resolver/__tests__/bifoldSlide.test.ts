@@ -3,7 +3,7 @@ import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { caseBox } from '../../jointDrilling'
 import { bifoldTracks } from '../resolveBifold'
-import { DEFAULT_RULES, type CabinetInput, type ConstructionRules, type HingeHardwareInput, type Material, type HandleProductInput } from '../types'
+import { DEFAULT_RULES, type CabinetInput, type ConstructionRules, type HingeHardwareInput, type Material, type HandleProductInput, type ResolvedFaceZone, type ResolvedCasePart, type ResolvedInternalPart, type ResolverError } from '../types'
 
 // z_bifold_slide F1: Finista BF-05 sliding bi-fold on an ordinary 2-door cabinet.
 const board: Material = { id: 'm18', name: 'Board 18', DZ: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
@@ -198,5 +198,34 @@ describe('sliding bi-fold in plan (folded pack)', () => {
       expect(m.arc.to).toEqual(m.doors[0][1])
     }
     expect(bifoldPlanMarks({ dx: 900, dz: 580, rule_overrides: {} })).toBeNull()
+  })
+})
+
+describe('bi-fold on one row of a 2-row front (RHK6595 WC-02)', () => {
+  // 711 wide column: 1000 appliance doors at the bottom, a fixed shelf, 390 PTO doors over.
+  const zone = (row: number, col: number, Y: number, DY: number) =>
+    ({ row_index: row, col_index: col, face_type: 'door', X: col ? 356.5 : 2, Y, Z: 502, DX: 352.5, DY, DZ: 18, hinge_side: col ? 'right' : 'left' }) as unknown as ResolvedFaceZone
+  const zones = () => [zone(0, 0, 1000, 390), zone(0, 1, 1000, 390), zone(1, 0, 0, 998), zone(1, 1, 0, 998)]
+
+  it('the pair is the tallest row of exactly 2 doors; the other row keeps its doors', async () => {
+    const { bifoldPair } = await import('../resolveBifold')
+    const zs = zones(), warnings: ResolverError[] = []
+    const p = bifoldPair({ rules: { BIFOLD: 'L' } } as unknown as CabinetInput, zs, warnings)!
+    expect(warnings).toEqual([])
+    expect([p.outer.row_index, p.outer.col_index, p.leading.col_index]).toEqual([1, 0, 1])
+    expect(zs.filter(z => z.row_index === 0).every(z => !z.bifold_role)).toBe(true)
+  })
+
+  it('the top track hangs under the fixed shelf over the pair, not the cabinet top', async () => {
+    const { bifoldPanels } = await import('../resolveBifold')
+    const top = { part_key: 'full_top', X: 0, Y: 1372, Z: 0, DX: 500, DY: 711, DZ: 18 } as unknown as ResolvedCasePart
+    const bottom = { part_key: 'bottom', X: 0, Y: 0, Z: 0, DX: 500, DY: 711, DZ: 18 } as unknown as ResolvedCasePart
+    const shelf = { part_type: 'fixed_shelf', sort_order: 0, X: 18, Y: 990, Z: 0, DX: 480, DY: 675, DZ: 18 } as unknown as ResolvedInternalPart
+    const pair = zones().filter(z => z.row_index === 1)
+    const p = bifoldPanels([top, bottom], [shelf], pair)
+    expect(p.top?.y).toBe(990)
+    expect(p.bottom?.y).toBe(0)
+    // No shelf: the cabinet top.
+    expect(bifoldPanels([top, bottom], [], pair).top?.y).toBe(1372)
   })
 })

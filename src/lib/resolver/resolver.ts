@@ -171,7 +171,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     ? resolveHinges(cab, zones, caseParts, internalParts, shapedHw, allWarnings)
     : []
   // Bi-fold carriage / guide / centre hinge holes, at the outer door's hinge heights.
-  if (bifold) resolveBifoldHoles(bifold, r, caseParts, hingeInstances, allWarnings)
+  if (bifold) resolveBifoldHoles(bifold, r, caseParts, internalParts, hingeInstances, allWarnings)
 
   // ── 6c. Hinge ↔ inner-drawer clash ────────────────────────────
   // A hinge body protruding into the front of the interior can foul an inner
