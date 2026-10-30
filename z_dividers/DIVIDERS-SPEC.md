@@ -107,3 +107,58 @@ After V4, `z_handles` H5b (rails per column) can split rails at the dividers.
 2. Partial-height dividers where only some rows are drawers side by side:
    the double runs the height of the drawer rows (V-D3). Check what happens
    above them during V4.
+
+---
+
+## 7. Half-check crossings (egg-crate cubbies) — V5
+
+**Status:** V5a resolver + V5b editor toggle built 2026-10-30, in-app check pending.
+First used on RHK6595 WC-10 (3 × 3 cubbies of 124 over the fridge).
+
+### Locked decisions (Mark, 2026-10-30)
+
+**V-D5. Shelves and dividers cross, half-checked.** Inside a flagged split, the
+dividers run the full height of the opening and the fixed shelves the full
+width; where they cross each is notched to the meeting line.
+
+**V-D6. Notch direction.** Shelves are notched from the **back**, dividers from
+the **front** (the shelves read unbroken at the front).
+
+**V-D7. Notch size.** Through the full board thickness. Width = the other
+part's thickness + **0.2** (16.5 board → 16.7). Length = to the meeting line
+(the middle of the depth both parts share) **+ 5 over-cut** on each part, so
+the router's corner radius clears and the joint never bottoms out.
+
+**V-D8. No drilling.** The half-checked shelves and dividers get no joint
+drilling — no seams at the crossings, none at their ends. They are fixed by
+screwing through the bottom, top and gables at assembly.
+
+### Data model
+
+```ts
+// SplitSection: half-check every shelf × divider crossing in this subtree.
+half_check?: boolean
+// ResolvedInternalPart: set on the merged, notched parts (not persisted).
+half_check?: true
+```
+
+Lives in `internal_grid` JSON (no migration). The notches ride on the part's
+resolver `outline` (persisted `internal_parts.outline`), so 3D, cabinet sheets and
+the optimiser / G-code cut them like any resolver shape (same path as the
+finger-pull gable notches).
+
+### As built (2026-10-30)
+
+- `resolveInternal.halfCheck()` runs after a flagged split is walked: collinear
+  divider pieces (same X, gaps ≤ shelf thickness) merge into one; collinear
+  fixed-shelf pieces (same Y, gaps ≤ 2 × divider thickness) merge into one.
+  Crossings → notches on the outlines. Divider / fixed-shelf `sort_order`s are
+  renumbered in array order after a merge. Constants `HALF_CHECK_CLEARANCE` 0.2,
+  `HALF_CHECK_OVERCUT` 5. Adjustable shelves never half-check.
+- `resolveJoints` skips internal seams whose part A is a half-check part.
+- Internal editor: select a shelf or divider inside a grid → **Half-check
+  crossings** tick, stored on the nearest split whose subtree has both shelves
+  and dividers. The editor still draws the bays as before (pieces), the
+  resolved parts are full length.
+- Build a grid as an hsplit of rows, each row a vsplit of columns (or the other
+  way round): both work, the merge makes the long parts.

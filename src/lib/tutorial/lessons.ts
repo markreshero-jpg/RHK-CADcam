@@ -1204,6 +1204,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'A third click starts a new measure. Esc or right-click clears it. Click 📏 Measure again (or press M) to go back to dragging parts. Changing sheet clears the measure.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
+
+  // Appended 2026-10-30 (z_dividers V5 — half-check crossings, RHK6595 WC-10).
+  { id: 'half_check', level: 'intermediate', topic: 'cabinets', title: 'Cubbies with half-checked shelves',
+    blurb: 'Build an egg-crate cubby / wine-rack grid: full-height dividers and full-width shelves notched where they cross.',
+    keywords: 'half check halving egg crate cubby cubbies wine rack grid notch slot divider shelf crossing internals no drilling', steps: [
+    { id: 'grid', title: 'Build the grid',
+      body: 'Double-click the cupboard and go to the internals. Add fixed shelves to make the rows, then click each row and add dividers to make the columns (or columns first, then shelves in each). Leave the bay sizes unlocked so the cubbies come out equal.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'tick', title: 'Tick Half-check crossings',
+      body: 'Click any shelf or divider in the grid and tick Half-check crossings. The dividers now run the full height and the shelves the full width. Where they cross, each is notched through the board: shelves from the back, dividers from the front. Each notch is the other board’s thickness + 0.2 wide, and runs 5 past the middle of the depth so the router’s corner radius never stops the joint closing.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'fix', title: 'No drilling — fix through the box',
+      body: 'Half-checked shelves and dividers get no joint drilling. Screw through the top, bottom and gables at assembly. The notches show in 3D and on the cut sheets, and the CNC cuts them with the part outline.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

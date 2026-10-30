@@ -147,6 +147,7 @@ export function normalizeSection(raw: unknown): Section {
     const children = Array.isArray(s.children) ? (s.children as Record<string, unknown>[]) : []
     return {
       type: s.type,
+      ...(s.half_check === true ? { half_check: true } : {}),
       children: children.map(c => ({
         ...(typeof c.size === 'number' ? { size: c.size } : {}),
         ...(typeof c.equalise_group === 'string' && c.equalise_group ? { equalise_group: c.equalise_group } : {}),
@@ -739,6 +740,35 @@ function setChildDivider(root: Section, path: Path, index: number, divider: Sect
       const rest = { ...c }; delete rest.divider
       return divider ? { ...rest, divider } : rest
     }) }
+  })
+}
+
+// Half-check crossings (z_dividers V5) live on the nearest split, from `path`
+// up, whose subtree holds both fixed shelves and dividers. Null = none does.
+function sectionAt(root: Section, path: Path): Section | null {
+  let s: Section = root
+  for (const i of path) { if (s.type === 'open') return null; s = s.children[i]?.section; if (!s) return null }
+  return s
+}
+function hasSeps(s: Section): { h: boolean; v: boolean } {
+  if (s.type === 'open') return { h: false, v: false }
+  const own = s.children.length > 1
+  const h0 = own && s.type === 'hsplit' && s.children.slice(0, -1).some(c => (c.separator ?? 'fixed_shelf') === 'fixed_shelf')
+  return s.children.reduce((a, c) => { const k = hasSeps(c.section); return { h: a.h || k.h, v: a.v || k.v } },
+    { h: h0, v: own && s.type === 'vsplit' })
+}
+function halfCheckHost(root: Section, path: Path): Path | null {
+  for (let n = path.length; n >= 0; n--) {
+    const p = path.slice(0, n), s = sectionAt(root, p)
+    if (s && s.type !== 'open') { const k = hasSeps(s); if (k.h && k.v) return p }
+  }
+  return null
+}
+function setHalfCheck(root: Section, path: Path, on: boolean): Section {
+  return updateAtPath(root, path, s => {
+    if (s.type === 'open') return s
+    const rest = { ...s }; delete rest.half_check
+    return on ? { ...rest, half_check: true } : rest
   })
 }
 
@@ -2178,6 +2208,20 @@ export default function InternalGridEditor({
                   </p>
                 </div>
               )}
+              {selSep.kind !== 'adj_shelf' && (() => {
+                const host = halfCheckHost(tree, selSep.path)
+                if (!host) return null
+                const hs = sectionAt(tree, host)
+                const on = !!(hs && hs.type !== 'open' && hs.half_check)
+                return (
+                  <label className="flex items-start gap-1.5 mt-2 cursor-pointer"
+                    title="Dividers run full height and fixed shelves full width, notched where they cross (shelves from the back, dividers from the front, +0.2 wide, 5 over-cut). No joint drilling — fix through the top, bottom and gables.">
+                    <input type="checkbox" checked={on} className="mt-0.5"
+                      onChange={e => save(setHalfCheck(tree, host, e.target.checked))} />
+                    <span className="text-gray-400">Half-check crossings<span className="block text-gray-600 text-[9px]">Egg-crate grid, no drilling</span></span>
+                  </label>
+                )
+              })()}
               <div className="flex flex-col gap-1 mt-2">
                 <button className={addBtn + ' text-left'} onClick={() => equaliseThis(selSep.path)}>= Equalise this split</button>
                 <button className="px-2 py-0.5 rounded text-[10px] bg-red-900/40 hover:bg-red-900/60 text-red-300 text-left transition-colors"

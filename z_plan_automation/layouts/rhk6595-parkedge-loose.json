@@ -1,0 +1,13 @@
+{
+  "_notes": ["Loose melamine for the fridge recess closure (Caloundra note page 1): 1 x 2400 x 900 + 2 rips 2400 x 70, whiteboard 16.5, cut down on site. TEPF used as a carrier; its parts are rewritten to fixed sizes after placing."],
+  "projectId": "0ebb6866-f1ff-4fcf-b000-17dceb207df4",
+  "roomName": "Loose Parts",
+  "roomHeight": 2440,
+  "walls": [
+    { "x": 0, "y": 1500, "length": 1500, "angle": 270 },
+    { "x": 0, "y": 0, "length": 3000, "angle": 0 }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 2, "offset": 0, "dx": 16.5, "dy": 2400, "dz": 600, "note": "LOOSE: melamine to close the back of the fridge recess off from the understair storage. 1 x 2400 x 900 + 2 rips 2400 x 70, cut down on site" }
+  ]
+}

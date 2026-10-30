@@ -126,3 +126,55 @@ describe('automatic double for drawers side by side (z_dividers V4)', () => {
     expect(rp.internal_parts.filter(p => p.part_type === 'divider')).toHaveLength(1)
   })
 })
+
+describe('half-check crossings (z_dividers V5)', () => {
+  // 3 × 3 egg-crate: rows of columns, the outer hsplit flagged.
+  const row = (): Section => ({ type: 'vsplit', children: [{ section: open() }, { section: open() }, { section: open() }] })
+  const grid = (flag: boolean): Section => ({
+    type: 'hsplit', ...(flag ? { half_check: true } : {}),
+    children: [{ section: row() }, { section: row() }, { section: row() }],
+  })
+  const c = (flag: boolean) => cab(grid(flag), { has_face: false, has_toekick: false, DY: 600, DX: 600 })
+  const parts = (flag: boolean) => resolveCabinet(c(flag)).internal_parts
+  const of = (ps: ReturnType<typeof parts>, t: string) => ps.filter(p => p.part_type === t)
+
+  it('off: dividers are cut into pieces between the shelves', () => {
+    expect(of(parts(false), 'divider')).toHaveLength(6)
+    expect(of(parts(false), 'fixed_shelf')).toHaveLength(2)
+  })
+
+  it('on: two full-height dividers and two full-width shelves, sort orders renumbered', () => {
+    const ps = parts(true)
+    const divs = of(ps, 'divider'), shelves = of(ps, 'fixed_shelf')
+    expect(divs).toHaveLength(2)
+    expect(shelves).toHaveLength(2)
+    expect(divs.map(d => d.sort_order).sort()).toEqual([0, 1])
+    const off = of(parts(false), 'divider')
+    const span = Math.max(...off.map(d => d.Y + d.DY)) - Math.min(...off.map(d => d.Y))
+    for (const d of divs) { expect(d.DY).toBeCloseTo(span); expect(d.half_check).toBe(true) }
+  })
+
+  it('notches: shelf from the back, divider from the front, +0.2 wide, 5 past the meeting line', () => {
+    const ps = parts(true)
+    const [d] = of(ps, 'divider').sort((a, b) => a.X - b.X)
+    const [s] = of(ps, 'fixed_shelf').sort((a, b) => a.Y - b.Y)
+    // Shelf outline (x along the width, y back from the front): notch at the divider, from the back.
+    const inner = s.outline!.filter(p => p.y < s.DX - 0.01 && p.y > 0.01)
+    expect(inner).toHaveLength(4)   // both dividers cross it
+    const xs = inner.sort((a, b) => a.x - b.x).slice(0, 2)   // the notch at the left divider
+    expect(Math.abs(xs[0].x - xs[1].x)).toBeCloseTo(18.2)
+    expect(Math.min(...xs.map(p => p.x))).toBeCloseTo(d.X - s.X - 0.1)
+    const zm = (Math.max(s.Z, d.Z) + Math.min(s.Z + s.DX, d.Z + d.DX)) / 2
+    expect(xs[0].y).toBeCloseTo(s.Z + s.DX - (zm + 5))
+    // Divider outline (x = depth from the back, y down from the top): notch from the front.
+    const ys = d.outline!.filter(p => p.x < d.DX - 0.01 && p.x > 0.01)
+    expect(ys).toHaveLength(4)   // two shelves cross it
+    expect(ys[0].x).toBeCloseTo(zm - 5 - d.Z)
+    expect(Math.abs(ys[0].y - ys[1].y)).toBeCloseTo(18.2)
+  })
+
+  it('no joint seams on the half-checked parts', () => {
+    const seams = resolveCabinet(c(true)).seam_joints
+    expect(seams.filter(j => /^int_(divider|fixed_shelf)_/.test(j.part_a_key))).toHaveLength(0)
+  })
+})

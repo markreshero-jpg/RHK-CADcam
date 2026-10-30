@@ -1329,6 +1329,9 @@ export interface OpenSection {
 export interface SplitSection {
   type:     SectionSplitType
   children: SectionChild[]       // N children ⇒ N−1 separators between them
+  // Half-check every fixed shelf × divider crossing in this subtree (z_dividers
+  // V5): dividers run full height, shelves full width, notched where they cross.
+  half_check?: boolean
 }
 
 export type Section = OpenSection | SplitSection
@@ -1510,6 +1513,9 @@ export interface ResolvedInternalPart extends ResolvedPart {
   sort_order: number
   y_locked:   boolean
   x_locked?:  boolean   // dividers only
+  // Half-checked shelf / divider (z_dividers V5): notched on its outline, no
+  // joint drilling. Not persisted.
+  half_check?: true
   // Groups parts belonging to the same inner-drawer / pull-out instance so the
   // 3D view can animate them together (e.g. open-drawer cascade). Unique per
   // emitted drawer; absent on shelves, dividers, accessories.

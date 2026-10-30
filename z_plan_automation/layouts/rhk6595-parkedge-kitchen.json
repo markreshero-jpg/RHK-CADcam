@@ -1,0 +1,802 @@
+{
+  "_source": "SynologyDrive/_JOBS/RHK6500 - 6599/RHK6595 - CKC - 1-21 Parkedge Rd Sunshine/ARCHITECTURALS/Park Edge Dr, Sunshine Beach.pdf (Caloundra Kitchens #3431, Liam G 28/10/2026) + Mark Q&A 2026-10-30",
+  "_notes": [
+    "Frame: x east, y south, y 0 = island bench back edge. Positions scaled off the plan except the dimensioned runs.",
+    "W2 sink wall drawn E->W so its elevation reads like page 3 (east on the left). 2780 wall to wall.",
+    "W4 = melamine closure behind the fridge (loose sheet, drawn as a 16 wall), soffit 274 -> fridge box top 2166.",
+    "W6 island centreline at the back-to-back join (y 302): front 560 carcass faces south, back 264 carcass flipped north; 900 top, 20 overhang both sides.",
+    "Overheads 765 overall = 747 carcass + 18 under panel (SCRBT 18), top 2340, underside 1575 (625 clear). Teak column above the bench = one W2D 1390 x 500 sitting on the stone."
+  ],
+  "projectId": "0ebb6866-f1ff-4fcf-b000-17dceb207df4",
+  "roomName": "Kitchen",
+  "roomHeight": 2440,
+  "wallCabinetTop": 2340,
+  "roomRules": {
+    "TOEH": 100
+  },
+  "walls": [
+    {
+      "x": 2780,
+      "y": 2003,
+      "length": 708,
+      "angle": 90,
+      "_": "1 east nib"
+    },
+    {
+      "x": 2780,
+      "y": 2711,
+      "length": 2780,
+      "angle": 180,
+      "_": "2 sink wall (south), E->W"
+    },
+    {
+      "x": 0,
+      "y": 2711,
+      "length": 2507,
+      "angle": 270,
+      "_": "3 west wall"
+    },
+    {
+      "x": 0,
+      "y": 204,
+      "length": 890,
+      "angle": 0,
+      "thickness": 16,
+      "soffit": 274,
+      "_": "4 melamine closure behind the fridge"
+    },
+    {
+      "x": 890,
+      "y": 204,
+      "length": 696,
+      "angle": 90,
+      "thickness": 100,
+      "_": "5 understair stub wall, west face"
+    },
+    {
+      "x": 990,
+      "y": 302,
+      "length": 1996,
+      "angle": 0,
+      "type": "island",
+      "detached": true,
+      "_": "6 island back-to-back line, faces south"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 0,
+      "dx": 16.5,
+      "dy": 930,
+      "dz": 560,
+      "note": "Panel at the east wall, below the bench"
+    },
+    {
+      "def": "D3-SLL",
+      "wall": 2,
+      "offset": 16.5,
+      "dx": 711,
+      "dy": 930,
+      "dz": 560,
+      "note": "3 drawers 202 / 323 / 302 (same as the island)",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "height": 323,
+              "row_index": 1,
+              "height_locked": true
+            },
+            {
+              "height": 202,
+              "row_index": 2,
+              "height_locked": true
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 0,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 1,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 2,
+              "hinge_side": "left"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "D3-SLL",
+      "wall": 2,
+      "offset": 727.5,
+      "dx": 711,
+      "dy": 930,
+      "dz": 560,
+      "note": "3 drawers 202 / 323 / 302 (same as the island)",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "height": 323,
+              "row_index": 1,
+              "height_locked": true
+            },
+            {
+              "height": 202,
+              "row_index": 2,
+              "height_locked": true
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 0,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 1,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 2,
+              "hinge_side": "left"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "B2D",
+      "wall": 2,
+      "offset": 1438.5,
+      "dx": 700,
+      "dy": 930,
+      "dz": 560,
+      "rules": {
+        "RAIL_ORIENT": "vertical"
+      },
+      "note": "Sink cupboard. Abey LUA190PK drop-in sink (drawn undermount for now), Blanco Linus-S 527700 tap"
+    },
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 2138.5,
+      "dx": 16.5,
+      "dy": 930,
+      "dz": 560,
+      "note": "Panel beside the dishwasher"
+    },
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 2763.5,
+      "dx": 16.5,
+      "dy": 930,
+      "dz": 560,
+      "note": "Panel at the west wall, below the bench. 608.5 dishwasher opening (existing 600 freestanding)"
+    },
+    {
+      "def": "WEP",
+      "wall": 2,
+      "offset": 0,
+      "dx": 16.5,
+      "dy": 1390,
+      "dz": 500,
+      "note": "Wall filler at the east wall beside the teak column (front filler)"
+    },
+    {
+      "def": "W2D",
+      "wall": 2,
+      "offset": 16.5,
+      "dx": 711,
+      "dy": 1390,
+      "dz": 500,
+      "note": "Appliance / microwave cupboard on the stone: no bottom, 1000 doors (bi-fold later) with 1 adj shelf (min 500 clear for the coffee machine), fixed shelf, 390 PTO doors over. Microwave sits inside",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            },
+            {
+              "col_index": 1,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "height": 1000,
+              "row_index": 0,
+              "height_locked": true
+            },
+            {
+              "row_index": 1,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "left",
+              "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f"
+            },
+            {
+              "col_index": 1,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "right",
+              "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f"
+            },
+            {
+              "col_index": 0,
+              "face_type": "door",
+              "row_index": 1,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 1,
+              "face_type": "door",
+              "row_index": 1,
+              "hinge_side": "right"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "hsplit",
+            "children": [
+              {
+                "size": 975,
+                "section": {
+                  "type": "open",
+                  "fittings": [
+                    {
+                      "type": "adj_shelf",
+                      "y_locked": false
+                    }
+                  ]
+                },
+                "separator": "fixed_shelf"
+              },
+              {
+                "section": {
+                  "type": "open",
+                  "fittings": [
+                    {
+                      "type": "adj_shelf",
+                      "y_locked": false
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        "part_hide_views": {
+          "case_bottom": [
+            "plan",
+            "elevation",
+            "3d"
+          ]
+        }
+      }
+    },
+    {
+      "def": "WEP",
+      "wall": 2,
+      "offset": 727.5,
+      "dx": 18,
+      "dy": 1390,
+      "dz": 500,
+      "note": "Seen side panel of the teak column (west side)"
+    },
+    {
+      "def": "W2D",
+      "wall": 2,
+      "offset": 745.5,
+      "dx": 672,
+      "dy": 747,
+      "dz": 320,
+      "rules": {
+        "SCRBT": 18
+      },
+      "note": "Overhead, fingerpull under + PTO. LED strip recessed in the under panel"
+    },
+    {
+      "def": "W2D",
+      "wall": 2,
+      "offset": 1417.5,
+      "dx": 672,
+      "dy": 747,
+      "dz": 320,
+      "rules": {
+        "SCRBT": 18
+      },
+      "note": "Overhead, fingerpull under + PTO. LED strip recessed in the under panel"
+    },
+    {
+      "def": "W2D",
+      "wall": 2,
+      "offset": 2089.5,
+      "dx": 672,
+      "dy": 747,
+      "dz": 320,
+      "rules": {
+        "SCRBT": 18
+      },
+      "note": "Overhead, fingerpull under + PTO. LED strip recessed in the under panel"
+    },
+    {
+      "def": "WEP",
+      "wall": 2,
+      "offset": 2761.5,
+      "dx": 18.5,
+      "dy": 765,
+      "dz": 320,
+      "note": "Overhead wall filler at the west wall (front filler)"
+    },
+    {
+      "def": "BH",
+      "wall": 2,
+      "offset": 0,
+      "dx": 745.5,
+      "dy": 100,
+      "dz": 500,
+      "note": "Bulkhead 2340 to ceiling over the teak column - oversized, cut on site"
+    },
+    {
+      "def": "BH",
+      "wall": 2,
+      "offset": 745.5,
+      "dx": 2034.5,
+      "dy": 100,
+      "dz": 320,
+      "note": "Bulkhead 2340 to ceiling over the overheads - oversized, cut on site"
+    },
+    {
+      "def": "W2D",
+      "wall": 4,
+      "offset": 0,
+      "dx": 890,
+      "dy": 436,
+      "dz": 690,
+      "note": "Open box over the fridge 1730-2166: 3 x 3 square cubbies (121.3 in 18 board), half-checked egg-crate (z_dividers V5), open bay right. Carcass as panel",
+      "set": {
+        "has_face": false,
+        "exposed_interior": true,
+        "internal_grid": {
+          "tree": {
+            "type": "vsplit",
+            "children": [
+              {
+                "size": 400,
+                "divider": "single",
+                "section": {
+                  "type": "hsplit",
+                  "children": [
+                    {
+                      "separator": "fixed_shelf",
+                      "section": {
+                        "type": "vsplit",
+                        "children": [
+                          {
+                            "divider": "single",
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          },
+                          {
+                            "divider": "single",
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          },
+                          {
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "separator": "fixed_shelf",
+                      "section": {
+                        "type": "vsplit",
+                        "children": [
+                          {
+                            "divider": "single",
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          },
+                          {
+                            "divider": "single",
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          },
+                          {
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "section": {
+                        "type": "vsplit",
+                        "children": [
+                          {
+                            "divider": "single",
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          },
+                          {
+                            "divider": "single",
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          },
+                          {
+                            "section": {
+                              "type": "open",
+                              "fittings": []
+                            }
+                          }
+                        ]
+                      }
+                    }
+                  ],
+                  "half_check": true
+                }
+              },
+              {
+                "section": {
+                  "type": "open",
+                  "fittings": []
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "def": "BH",
+      "wall": 4,
+      "offset": 0,
+      "dx": 890,
+      "dy": 274,
+      "dz": 690,
+      "note": "Bulkhead 2166 to ceiling over the fridge box - oversized, cut on site"
+    },
+    {
+      "def": "B2D",
+      "wall": 6,
+      "offset": 0,
+      "dx": 616.5,
+      "dy": 930,
+      "dz": 264,
+      "flip": true,
+      "note": "Island back, PTO doors, no handles",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            },
+            {
+              "col_index": 1,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "left",
+              "handle_id": "b199eb9d-a6e0-4b5f-95f6-c751f187db6c"
+            },
+            {
+              "col_index": 1,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "right",
+              "handle_id": "b199eb9d-a6e0-4b5f-95f6-c751f187db6c"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "B2D",
+      "wall": 6,
+      "offset": 616.5,
+      "dx": 690,
+      "dy": 930,
+      "dz": 264,
+      "flip": true,
+      "rules": {
+        "BACK_JOIN": "between_sides"
+      },
+      "note": "Island back, PTO doors. Back fits between the gables - installer may bring it forward for the downdraft vent",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            },
+            {
+              "col_index": 1,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "left",
+              "handle_id": "b199eb9d-a6e0-4b5f-95f6-c751f187db6c"
+            },
+            {
+              "col_index": 1,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "right",
+              "handle_id": "b199eb9d-a6e0-4b5f-95f6-c751f187db6c"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "B2D",
+      "wall": 6,
+      "offset": 1306.5,
+      "dx": 689,
+      "dy": 930,
+      "dz": 264,
+      "flip": true,
+      "note": "Island back, PTO doors, no handles",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            },
+            {
+              "col_index": 1,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "left",
+              "handle_id": "b199eb9d-a6e0-4b5f-95f6-c751f187db6c"
+            },
+            {
+              "col_index": 1,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "right",
+              "handle_id": "b199eb9d-a6e0-4b5f-95f6-c751f187db6c"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "BEPF",
+      "wall": 6,
+      "offset": 0,
+      "dx": 16.5,
+      "dy": 930,
+      "dz": 560,
+      "note": "Island panel at the stub wall"
+    },
+    {
+      "def": "UBO",
+      "wall": 6,
+      "offset": 16.5,
+      "dx": 600,
+      "dy": 930,
+      "dz": 560,
+      "note": "Under-bench oven: Westinghouse WVEP6716SD"
+    },
+    {
+      "def": "D3-SLL",
+      "wall": 6,
+      "offset": 616.5,
+      "dx": 690,
+      "dy": 930,
+      "dz": 560,
+      "note": "Under the Bosch PVQ811H26E 800 downdraft cooktop: top front a false panel, 400 drawers below to clear the fan (check the spec sheet)",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "height": 323,
+              "row_index": 1,
+              "height_locked": true
+            },
+            {
+              "height": 202,
+              "row_index": 2,
+              "height_locked": true
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 0,
+              "hinge_side": "left",
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "fc2663e4-dc57-4d9a-bfb8-7961ca08cfa9"
+              }
+            },
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 1,
+              "hinge_side": "left",
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "fc2663e4-dc57-4d9a-bfb8-7961ca08cfa9"
+              }
+            },
+            {
+              "col_index": 0,
+              "face_type": "false_panel",
+              "row_index": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "D3-SLL",
+      "wall": 6,
+      "offset": 1306.5,
+      "dx": 689,
+      "dy": 930,
+      "dz": 560,
+      "note": "3 drawers 202 / 323 / 302. 20 stone waterfall past this end",
+      "set": {
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            },
+            {
+              "height": 323,
+              "row_index": 1,
+              "height_locked": true
+            },
+            {
+              "height": 202,
+              "row_index": 2,
+              "height_locked": true
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 0,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 1,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 0,
+              "face_type": "drawer_face",
+              "row_index": 2,
+              "hinge_side": "left"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

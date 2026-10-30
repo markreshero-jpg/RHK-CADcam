@@ -337,6 +337,19 @@ line and mirrors the island elevation.
   set `face_grid` to one col (`hinge_side`); for 2 drawers side by side place
   `D2-SL` and set face_grid 1 row × 2 `drawer_face` cols + `internal_grid`
   `{tree:{type:'vsplit', children:[{divider:'single', section:open},{section:open}]}}`.
+- **Cubby / wine-rack grids = half-checked (egg-crate)** (Mark, RHK6595 WC-10
+  2026-10-30, z_dividers V5): build the grid as an hsplit of rows, each row a
+  vsplit of columns (fixed-shelf separators, `divider: 'single'`), and put
+  `"half_check": true` on that grid's split section. The resolver merges the
+  pieces into full-height dividers + full-width shelves and notches every
+  crossing: shelves from the back, dividers from the front, the other part's
+  thickness + 0.2 wide, to the depth middle + 5 over-cut, through the board.
+  No joint drilling on them (fixed through top / bottom / gables). In the app:
+  Internals → select a shelf or divider in the grid → **Half-check crossings**.
+  Size the cubbies for the BOX's board (an 18 exposed box ≠ the drawing's 16):
+  leave rows / columns unsized so they come out equal and square. Open box =
+  `has_face: false, exposed_interior: true`. Check with `internal_parts`: dividers
+  full height with `outline` notches.
 - **joinKicks across TEPKs**: TEPKs aren't kick-run members, so a TEPK between
   two single cupboards leaves runs of one and joinKicks **pops a window.alert**
   ("needs at least two adjacent…") that hangs puppeteer — always attach

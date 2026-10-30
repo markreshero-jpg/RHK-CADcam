@@ -15,6 +15,7 @@ import {
 } from './types'
 import { Box, FittingCtx, resolveFittings, DEFAULT_STACK_GAP } from './fittings'
 import { caseBackT, caseFloor } from './resolveCase'
+import type { OutlinePt } from '../shapePath'
 
 // A drawer/rollout bay = an open compartment holding a drawer or rollout. Such a
 // bay should have OPEN gaps around it (no shelves), so we detect it to self-heal
@@ -309,6 +310,7 @@ export function resolveInternalParts(
       return
     }
 
+    const start = parts.length
     let cursor = horiz ? box.y : box.x
     kids.forEach((c, i) => {
       const size = childResolved[i] ?? flexSize
@@ -344,14 +346,17 @@ export function resolveInternalParts(
       }
       cursor += size + st
     })
+    // Egg-crate grid (z_dividers V5): merge the pieces, notch the crossings.
+    if (section.half_check && halfCheck(parts, start, TS, T)) merged = true
   }
 
   const root: Box = { x: intLeft, y: intBottom, w: intW, h: intH }
   const startErrors = errors.length
+  let merged = false
   walk(cab.internal_tree, root)
   if (autoDouble.size) {
     // Second walk with the doubles in place (thicker separators move the bays).
-    parts.length = 0; slides.length = 0; errors.length = startErrors
+    parts.length = 0; slides.length = 0; errors.length = startErrors; merged = false
     for (const k of Object.keys(sort)) sort[k] = 0
     groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, T, cab.slide_products ?? [], autoDouble)
     const found = new Set(autoDouble)
@@ -360,6 +365,11 @@ export function resolveInternalParts(
     // without moving the layout again).
     autoDouble.clear(); found.forEach(k => autoDouble.add(k))
   }
+  // Half-check merges drop pieces: close the gaps in their sort orders.
+  if (merged) for (const t of ['divider', 'fixed_shelf'] as const) {
+    let n = 0
+    for (const p of parts) if (p.part_type === t) p.sort_order = n++
+  }
 
   return { parts, slides, errors, ...(autoDouble.size ? { autoDouble: [...autoDouble] } : {}) }
 }
@@ -367,6 +377,87 @@ export function resolveInternalParts(
 // How far an automatic divider's centre may sit from a drawer seam's centre
 // line and still count as standing between the drawers.
 const AUTO_DOUBLE_TOL = 30
+
+// ── Half-check crossings (z_dividers V5) ─────────────────────────────────────
+// Notch width = the crossing part's thickness + clearance; each notch runs past
+// the meeting line by the over-cut so the router's corner radius clears.
+export const HALF_CHECK_CLEARANCE = 0.2
+export const HALF_CHECK_OVERCUT   = 5
+
+// Merge runs of pieces lying end to end along one line into single parts.
+// `line` = the coordinate the pieces share, `lo` / `len` their extent along the
+// run; pieces join across gaps up to `maxGap` (the crossing panels between them).
+function mergeRuns(ps: ResolvedInternalPart[], line: (p: ResolvedInternalPart) => number,
+  lo: 'X' | 'Y', len: 'DY', maxGap: number): ResolvedInternalPart[] {
+  const out: ResolvedInternalPart[] = []
+  const sorted = ps.slice().sort((a, b) => line(a) - line(b) || a[lo] - b[lo])
+  for (const p of sorted) {
+    const prev = out[out.length - 1]
+    if (prev && Math.abs(line(prev) - line(p)) < 0.05 && p[lo] - (prev[lo] + prev[len]) <= maxGap + 0.05) {
+      prev[len] = Math.round((p[lo] + p[len] - prev[lo]) * 1000) / 1000
+      prev.x_locked = prev.x_locked || p.x_locked
+      prev.y_locked = prev.y_locked || p.y_locked
+    } else out.push({ ...p })
+  }
+  return out
+}
+
+/** Half-check the fixed shelves × dividers emitted from parts[start] on: merge
+ *  each run of pieces into one full-length part, then notch every crossing on
+ *  the outlines — shelves from the back, dividers from the front (V-D6), to the
+ *  meeting line + over-cut, the other part's thickness + clearance wide (V-D7).
+ *  The parts are flagged `half_check` (no joint drilling, V-D8). Returns true
+ *  when pieces were merged (sort orders then need renumbering). */
+function halfCheck(parts: ResolvedInternalPart[], start: number, shelfT: number, matT: number): boolean {
+  const mine = parts.slice(start)
+  const divs = mine.filter(p => p.part_type === 'divider')
+  const shelves = mine.filter(p => p.part_type === 'fixed_shelf')
+  if (!divs.length || !shelves.length) return false
+  const mDivs = mergeRuns(divs, p => p.X, 'Y', 'DY', shelfT)
+  const mShelves = mergeRuns(shelves, p => p.Y, 'X', 'DY', 2 * matT)
+  const c = HALF_CHECK_CLEARANCE / 2, oc = HALF_CHECK_OVERCUT
+  type Notch = { a0: number; a1: number; deep: number }
+  const shelfNotches = new Map<ResolvedInternalPart, Notch[]>()
+  const divNotches = new Map<ResolvedInternalPart, Notch[]>()
+  for (const s of mShelves) for (const d of mDivs) {
+    const crosses = d.X > s.X + 0.05 && d.X + d.DZ < s.X + s.DY - 0.05
+      && s.Y > d.Y + 0.05 && s.Y + s.DZ < d.Y + d.DY - 0.05
+    if (!crosses) continue
+    // Meeting line: the middle of the depth both parts share (Z = back edge).
+    const z0 = Math.max(s.Z, d.Z), z1 = Math.min(s.Z + s.DX, d.Z + d.DX)
+    if (z1 <= z0) continue
+    const zm = (z0 + z1) / 2
+    // Shelf (horizontal frame: x along its width, y back from the front edge):
+    // notch from the back edge forward to zm + over-cut.
+    shelfNotches.set(s, [...(shelfNotches.get(s) ?? []), {
+      a0: d.X - s.X - c, a1: d.X + d.DZ - s.X + c, deep: s.Z + s.DX - Math.min(zm + oc, s.Z + s.DX),
+    }])
+    // Divider (side frame: x = depth from its back, y down from its top):
+    // notch from the front edge back to zm − over-cut.
+    divNotches.set(d, [...(divNotches.get(d) ?? []), {
+      a0: d.Y + d.DY - (s.Y + s.DZ) - c, a1: d.Y + d.DY - s.Y + c, deep: Math.max(zm - oc - d.Z, 0),
+    }])
+  }
+  for (const [s, ns] of shelfNotches) {
+    const W = s.DY, D = s.DX
+    const pts: OutlinePt[] = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }]
+    for (const n of ns.sort((a, b) => b.a0 - a.a0)) pts.push({ x: n.a1, y: D }, { x: n.a1, y: n.deep }, { x: n.a0, y: n.deep }, { x: n.a0, y: D })
+    pts.push({ x: 0, y: D })
+    s.outline = pts
+  }
+  for (const [d, ns] of divNotches) {
+    const D = d.DX, H = d.DY
+    const pts: OutlinePt[] = [{ x: 0, y: 0 }, { x: D, y: 0 }]
+    for (const n of ns.sort((a, b) => a.a0 - b.a0)) pts.push({ x: D, y: n.a0 }, { x: n.deep, y: n.a0 }, { x: n.deep, y: n.a1 }, { x: D, y: n.a1 })
+    pts.push({ x: D, y: H }, { x: 0, y: H })
+    d.outline = pts
+  }
+  for (const p of [...mDivs, ...mShelves]) p.half_check = true
+  // Swap the pieces for the merged parts, keeping everything else in place.
+  const rest = mine.filter(p => p.part_type !== 'divider' && p.part_type !== 'fixed_shelf')
+  parts.splice(start, mine.length, ...mDivs, ...mShelves, ...rest)
+  return mDivs.length < divs.length || mShelves.length < shelves.length
+}
 
 // Pass-1 walker: collect per-split natural fair-share for each group, then take
 // the min so the group fits in every split that contains its members. Splits
