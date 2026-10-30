@@ -227,9 +227,9 @@
       "wall": 2,
       "offset": 16.5,
       "dx": 711,
-      "dy": 1390,
+      "dy": 1000,
       "dz": 500,
-      "note": "Appliance / microwave cupboard on the stone: no bottom, 1000 doors (bi-fold later) with 1 adj shelf (min 500 clear for the coffee machine), fixed shelf, 390 PTO doors over. Microwave sits inside",
+      "note": "Appliance / microwave cupboard on the stone: no bottom, 1000 sliding bi-fold doors (Finista BF-05, hung left, no bottom guide) with 1 adj shelf (min 500 clear for the coffee machine). Microwave sits inside. Rev 3: the 390 PTO doors over are their own cabinet (last entry).",
       "set": {
         "face_grid": {
           "cols": [
@@ -244,12 +244,7 @@
           ],
           "rows": [
             {
-              "height": 1000,
               "row_index": 0,
-              "height_locked": true
-            },
-            {
-              "row_index": 1,
               "height_locked": false
             }
           ],
@@ -259,56 +254,32 @@
               "face_type": "door",
               "row_index": 0,
               "hinge_side": "left",
-              "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f"
+              "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f",
+              "hinges": [
+                100,
+                880
+              ]
             },
             {
               "col_index": 1,
               "face_type": "door",
               "row_index": 0,
               "hinge_side": "right",
-              "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f"
-            },
-            {
-              "col_index": 0,
-              "face_type": "door",
-              "row_index": 1,
-              "hinge_side": "left"
-            },
-            {
-              "col_index": 1,
-              "face_type": "door",
-              "row_index": 1,
-              "hinge_side": "right"
+              "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f",
+              "hinges": [
+                100,
+                880
+              ]
             }
           ]
         },
         "internal_grid": {
           "tree": {
-            "type": "hsplit",
-            "children": [
+            "type": "open",
+            "fittings": [
               {
-                "size": 975,
-                "section": {
-                  "type": "open",
-                  "fittings": [
-                    {
-                      "type": "adj_shelf",
-                      "y_locked": false
-                    }
-                  ]
-                },
-                "separator": "fixed_shelf"
-              },
-              {
-                "section": {
-                  "type": "open",
-                  "fittings": [
-                    {
-                      "type": "adj_shelf",
-                      "y_locked": false
-                    }
-                  ]
-                }
+                "type": "adj_shelf",
+                "y_locked": false
               }
             ]
           }
@@ -319,6 +290,10 @@
             "elevation",
             "3d"
           ]
+        },
+        "rule_overrides": {
+          "BIFOLD": "L",
+          "BIFOLD_BOTTOM": "none"
         }
       }
     },
@@ -795,6 +770,59 @@
               "hinge_side": "left"
             }
           ]
+        }
+      }
+    },
+    {
+      "def": "W2D",
+      "wall": 2,
+      "offset": 16.5,
+      "dx": 711,
+      "dy": 390,
+      "dz": 500,
+      "note": "390 PTO doors over the bi-fold appliance cupboard (split from it 2026-10-31, easier to fit). Bottom reveal 2 keeps the 2 gap over the bi-fold doors.",
+      "set": {
+        "pos_z": 1000,
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            },
+            {
+              "col_index": 1,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "left"
+            },
+            {
+              "col_index": 1,
+              "face_type": "door",
+              "row_index": 0,
+              "hinge_side": "right"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        },
+        "rule_overrides": {
+          "REVB": 2
         }
       }
     }
