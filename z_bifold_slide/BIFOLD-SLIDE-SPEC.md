@@ -130,8 +130,9 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
   - `BifoldTrackModel`: `BIFOLD_TRACK_PROFILE` extruded gable to gable, white. The
     profile was shaped from Mark's LS photo (`z_accessories/models/Bi-fold Door/Top
     Track.png`, the lower track): a channel closed against the panel and open away
-    from it, a foot flange along the open edge running back to 40, two ribs on that
-    side (2026-10-30);
+    from it, at the back (29–40 behind the doors); a foot flange along the open edge
+    running forward to 22.7, toward the doors (Mark: first version faced the wrong
+    way); two ribs on that side (2026-10-30);
   - Cabinet Edit modal Elevation / Top / Side: `BifoldTrackShapes` (`ResolvedViews`)
     draws the end profile at both ends, joined along the length;
   - `bifoldTracks()` in `resolveBifold.ts` gives the positions;

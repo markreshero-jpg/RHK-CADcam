@@ -38,16 +38,17 @@ export const BIFOLD = {
 export const BIFOLD_TRACK = { front: 22.7, back: 40, height: 20, wall: 1.5 } as const
 
 /** End profile, shaped like the LS photo (z_accessories/models/Bi-fold Door):
- *  a channel closed against the panel and open away from it, the roller inside;
- *  a foot flange along the open edge running back to the envelope's back, and
+ *  a channel closed against the panel and open away from it, the roller inside,
+ *  at the back of the envelope; a foot flange along the open edge running
+ *  forward to the envelope's front (toward the doors — Mark, 2026-10-30), and
  *  two small ribs on that side. u = back from the track's front, v = away from
  *  the panel. */
 export const BIFOLD_TRACK_PROFILE: readonly (readonly [number, number])[] = [
-  [0, 0], [11, 0],
-  [11, 5], [11.6, 5], [11.6, 6], [11, 6],            // ribs
-  [11, 9], [11.6, 9], [11.6, 10], [11, 10],
-  [11, 18.5], [17.3, 18.5], [17.3, 20],               // foot flange
-  [9.5, 20], [9.5, 1.5], [1.5, 1.5], [1.5, 20], [0, 20],
+  [17.3, 0], [6.3, 0],
+  [6.3, 5], [5.7, 5], [5.7, 6], [6.3, 6],            // ribs
+  [6.3, 9], [5.7, 9], [5.7, 10], [6.3, 10],
+  [6.3, 18.5], [0, 18.5], [0, 20],               // foot flange
+  [7.8, 20], [7.8, 1.5], [15.8, 1.5], [15.8, 20], [17.3, 20],
 ]
 
 export interface BifoldTrack {
