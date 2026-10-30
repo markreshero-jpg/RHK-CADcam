@@ -58,6 +58,8 @@ import Bin3D from '@/src/components/three/Bin3D'
 import Runner3D from '@/src/components/three/Runner3D'
 import AccessoryModel, { hasAccessoryModel } from '@/src/components/three/AccessoryModel'
 import RailBlockModel from '@/src/components/three/RailBlockModel'
+import BifoldTrackModel from '@/src/components/three/BifoldTrackModel'
+import { bifoldTracks } from '@/src/lib/resolver/resolveBifold'
 import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
@@ -1368,6 +1370,8 @@ export function CabinetScene({
   // non-animated (top/bottom) doors — left/right doors render theirs in DoorPanel.
   // Knock-in blocks behind the finger-pull rails, at the drilled holes (z_handles D20).
   const railBlocks = useMemo(() => railBlockEnds(rp.case_parts, rp.internal_parts), [rp])
+  // Sliding bi-fold tracks (z_bifold_slide), cut to the inside width.
+  const bifoldTrackList = useMemo(() => bifoldTracks(rp), [rp])
   const hingeDrills = useMemo(() => {
     if (!showDrilling) return []
     const out: ResolvedHingeDrill[] = []
@@ -1866,6 +1870,9 @@ export function CabinetScene({
       {show('hinges') && hingeDrills.length > 0 && (
         <SlideDrillMarkers drills={hingeDrills} wire={wire} color={palette.hinges} />
       )}
+      {show('bifold') && bifoldTrackList.map(t => (
+        <PartAlpha key={`bftrack_${t.which}`} a={alpha('bifold')}><BifoldTrackModel t={t} wire={wire} /></PartAlpha>
+      ))}
       {show('rail_blocks') && railBlocks.map(e => (
         <PartAlpha key={`rblk_${e.railKey}_${e.panelKey}`} a={alpha('rail_blocks')}><RailBlockModel end={e} /></PartAlpha>
       ))}

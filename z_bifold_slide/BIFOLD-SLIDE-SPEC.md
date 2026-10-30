@@ -119,8 +119,29 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 | F1 | Switches + RHS sidebar (tick, hand, bottom, centre). Resolver: carriage, bottom guide and centre hinge drills on the right doors (both centre options), no hinges on the leading door, warnings. CNC through seamDrillSync. Tests. | [x] built 2026-10-30, see F1 notes; in-app check pending |
 | F2 | Hardware pick list / takeoff: LS set (L/R), tracks (2 m count), centre hinges (35 cup option: 7104981 packs of 2, ceil(hinges ÷ 2) per pair of doors). `hardware_accessories` rows. | [ ] |
 | F3 | Cabinet Edit modal: tracks + carriage / guide outlines in Top / Elevation / Side; a Side detail with fixed dims (47.5, 64, 26.5, 22.5, 55, 15, 22.7 / 30.5); `bifold_tracks` layer item. | [ ] |
-| F4 | 3D: tracks + fittings, folding open animation (trailing door pivots on the outer door's edge). Plan: folded-pack swing. | [ ] |
+| F4 | 3D: tracks + fittings, folding open animation (trailing door pivots on the outer door's edge). Plan: folded-pack swing. | [~] tracks built 2026-10-30 (see F4 notes); fittings + fold animation + plan swing to do |
 | F5 | Tutorial. | [ ] |
+
+## F4 notes (2026-10-30)
+
+- **No maker 3D model.** Lincoln Sentry publishes no CAD / GLB for BF-05, and a web
+  search found none. The track is drawn in code instead (it is cut to each
+  cabinet's width anyway):
+  - `BifoldTrackModel`: a white U-channel, 1.5 walls;
+  - `bifoldTracks()` in `resolveBifold.ts` gives the positions;
+  - profile `BIFOLD_TRACK`: front 22.7 / back 40 behind the doors' back face,
+    20 high, read off the BR0124CH drawing at scale.
+- **Where the tracks go:**
+  - Top: under the cabinet top, open down.
+  - Bottom: the same track (LS sells it as "Top & Bottom"). On top of the bottom,
+    open up ("above"), or under it, open down ("below"). None for "none".
+  - Gable to gable.
+- **Saved:** the resolved cabinet carries `bifold` (hand / bottom / centre), stored in
+  `resolved_drawer_hw.bifold_cfg`. Without it (saved before) the bottom is drawn
+  "above" until a re-resolve.
+- **Drawn** in the Cabinet Edit modal 3D and the room 3D, on the `bifold` layer item
+  (now shown in 3D by default).
+- **To check:** profile height and depth against a real track.
 
 ## F1 notes (2026-10-30)
 

@@ -202,6 +202,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       internal_slides: resolved.internal_slides,
       hinge_instances: resolved.hinge_instances,
       warnings:        resolved.warnings,
+      // Sliding bi-fold settings for the tracks (z_bifold_slide).
+      ...(resolved.bifold ? { bifold_cfg: resolved.bifold } : {}),
       // Drawer front marker pricks (z_handles D22), by front.
       df_markers:      resolved.face_zones.filter(z => z.marker_holes?.length)
         .map(z => ({ row_index: z.row_index, col_index: z.col_index, holes: z.marker_holes })),

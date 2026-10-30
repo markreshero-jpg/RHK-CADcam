@@ -15,7 +15,7 @@
 // into the back face. Tracks are not drilled (drawn only, F3).
 // ============================================================
 
-import type { CabinetInput, ConstructionRules, ResolvedFaceZone, ResolvedCasePart, ResolvedHingeInstance, ResolverError, BifoldHole } from './types'
+import type { CabinetInput, ConstructionRules, ResolvedFaceZone, ResolvedCasePart, ResolvedHingeInstance, ResolverError, BifoldHole, ResolvedCabinet } from './types'
 import { caseBox } from '../jointDrilling'
 import { resolveHandle } from './resolveHandles'
 
@@ -31,6 +31,41 @@ export const BIFOLD = {
   dowelDia: 10, dowelDepth: 11.5, dowelPitch: 52, dowelOut: 5.5,
   maxInside: 1200, maxHeight: 2200, maxThick: 25, maxOverlay: 17,
 } as const
+
+/** Track profile off the BR0124CH sheet (no maker model): a U-channel whose
+ *  front is 22.7 and back 40 behind the doors' back face (screws on 30.5),
+ *  20 high. The same track top and bottom (LS 7104967 "Track Top & Bottom"). */
+export const BIFOLD_TRACK = { front: 22.7, back: 40, height: 20, wall: 1.5 } as const
+
+export interface BifoldTrack {
+  which: 'top' | 'bottom'
+  x: number; y: number; z: number      // min corner, cabinet coords
+  dx: number; dy: number; dz: number
+  open: 'up' | 'down'                  // toward the roller
+}
+
+/** The top track, and the bottom one unless the guide is None: gable to gable,
+ *  under the top; on top of the bottom ('above') or under it ('below'). */
+export function bifoldTracks(rp: Pick<ResolvedCabinet, 'bifold' | 'case_parts' | 'face_zones'>): BifoldTrack[] {
+  const pair = rp.face_zones.filter(z => z.bifold_role)
+  const leading = pair.find(z => z.bifold_role === 'leading')
+  if (!leading) return []
+  const T = BIFOLD_TRACK
+  const box = (k: ResolvedCasePart['part_key']) => { const p = rp.case_parts.find(c => c.part_key === k); return p ? caseBox(p) : null }
+  const ls = box('left_side'), rs = box('right_side')
+  const x = ls ? ls.x + ls.w : Math.min(...pair.map(z => z.X))
+  const dx = (rs ? rs.x : Math.max(...pair.map(z => z.X + z.DX))) - x
+  const z = leading.Z - T.back, dz = T.back - T.front
+  const out: BifoldTrack[] = []
+  const top = box('full_top') ?? box('front_rail')
+  if (top) out.push({ which: 'top', x, y: top.y - T.height, z, dx, dy: T.height, dz, open: 'down' })
+  const mode = rp.bifold?.bottom ?? 'above'
+  const bot = box('bottom')
+  if (bot && mode !== 'none') out.push(mode === 'above'
+    ? { which: 'bottom', x, y: bot.y + bot.h, z, dx, dy: T.height, dz, open: 'up' }
+    : { which: 'bottom', x, y: bot.y - T.height, z, dx, dy: T.height, dz, open: 'down' })
+  return out
+}
 
 /** Bi-fold fitting holes in cabinet space (front view) for the 2D views — the points the CNC drills. */
 export function bifoldHoleShapes(zones: ResolvedFaceZone[]): { x: number; y: number; r: number }[] {

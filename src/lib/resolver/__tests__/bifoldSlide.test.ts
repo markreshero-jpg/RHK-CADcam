@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { caseBox } from '../../jointDrilling'
+import { bifoldTracks } from '../resolveBifold'
 import { DEFAULT_RULES, type CabinetInput, type ConstructionRules, type HingeHardwareInput, type Material, type HandleProductInput } from '../types'
 
 // z_bifold_slide F1: Finista BF-05 sliding bi-fold on an ordinary 2-door cabinet.
@@ -144,6 +145,29 @@ describe('sliding bi-fold (Finista BF-05)', () => {
     expect(rp.warnings.map(w => w.code)).toContain('BIFOLD_NEEDS_2_DOORS')
     expect(rp.face_zones[0].bifold_role).toBeUndefined()
     expect(rp.hinge_instances.length).toBeGreaterThan(0)
+  })
+
+  it('tracks: gable to gable, 22.7–40 behind the doors, 20 high; bottom per option', () => {
+    for (const [bottom, n] of [['above', 2], ['below', 2], ['none', 1]] as const) {
+      const rp = resolveCabinet(cab({ BIFOLD: 'L', BIFOLD_BOTTOM: bottom }))
+      expect(rp.bifold).toEqual({ hand: 'L', bottom, centre: 'standard' })
+      const tr = bifoldTracks(rp)
+      expect(tr).toHaveLength(n)
+      const box = (k: string) => caseBox(rp.case_parts.find(p => p.part_key === k)!)
+      const ls = box('left_side'), rs = box('right_side'), top = box('full_top'), bot = box('bottom')
+      const lead = rp.face_zones.find(z => z.bifold_role === 'leading')!
+      for (const t of tr) {
+        expect(t.x).toBeCloseTo(ls.x + ls.w, 6)
+        expect(t.x + t.dx).toBeCloseTo(rs.x, 6)
+        expect(t.z).toBeCloseTo(lead.Z - 40, 6)
+        expect(t.z + t.dz).toBeCloseTo(lead.Z - 22.7, 6)
+        expect(t.dy).toBe(20)
+      }
+      expect(tr[0]).toMatchObject({ which: 'top', y: top.y - 20, open: 'down' })
+      if (bottom === 'above') expect(tr[1]).toMatchObject({ which: 'bottom', y: bot.y + bot.h, open: 'up' })
+      if (bottom === 'below') expect(tr[1]).toMatchObject({ which: 'bottom', y: bot.y - 20, open: 'down' })
+    }
+    expect(bifoldTracks(resolveCabinet(cab({})))).toEqual([])
   })
 
   it('over 1200 inside → width warning', () => {

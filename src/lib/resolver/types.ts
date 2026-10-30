@@ -1419,6 +1419,9 @@ export interface ResolvedCabinet {
   // One per physical hinge on each door zone (schema v0.6). Empty when no hinge
   // schedule is assigned or the cabinet has no door zones.
   hinge_instances: ResolvedHingeInstance[]
+  // Sliding bi-fold settings (z_bifold_slide) — the doors carry the roles + holes;
+  // this tells the tracks which bottom option to draw.
+  bifold?: ResolvedBifold
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]
@@ -1637,6 +1640,12 @@ export interface ResolvedFaceZone extends ResolvedPart {
   // drilled into the back face.
   bifold_role?:  'outer' | 'leading'
   bifold_holes?: BifoldHole[]
+}
+
+export interface ResolvedBifold {
+  hand:   'L' | 'R'
+  bottom: 'above' | 'below' | 'none'
+  centre: 'standard' | 'cup'
 }
 
 export interface BifoldHole {

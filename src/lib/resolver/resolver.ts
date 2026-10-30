@@ -207,6 +207,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     seam_joints:     seamJoints,
     ...(cab.split?.at.length ? { split_at: cab.split.at } : {}),
     hinge_instances: hingeInstances,
+    ...(bifold ? { bifold: { hand: bifold.hand, bottom: r.BIFOLD_BOTTOM ?? 'above', centre: r.BIFOLD_CENTRE ?? 'standard' } } : {}),
     errors:          allErrors,
     warnings:        allWarnings,
   }
