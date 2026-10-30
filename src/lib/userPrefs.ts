@@ -50,6 +50,9 @@ export interface UserPrefs {
   cadLayerCurrent: Record<string, string>
   /** Remembered CAD colours were dropped once for ByLayer (z_cad_layers). */
   cadByLayerV1: boolean
+  /** One-off marker: the plan grid was switched off for everyone (Mark, 2026-10-30).
+   *  Saved prefs without it get the grid turned off once; the menu toggle still works. */
+  planGridOffV1: boolean
 }
 
 export interface TutorialPrefs {
@@ -82,7 +85,7 @@ export interface PlanGridPrefs {
   step: number
 }
 
-export const DEFAULT_PLAN_GRID: PlanGridPrefs = { visible: true, step: 0 }
+export const DEFAULT_PLAN_GRID: PlanGridPrefs = { visible: false, step: 0 }
 
 const KEY = 'rhk_user_prefs'
 
@@ -112,6 +115,7 @@ const DEFAULTS: UserPrefs = {
   cadSnap: DEFAULT_CAD_SNAP,
   cadLayerCurrent: {},
   cadByLayerV1: true,
+  planGridOffV1: true,
 }
 
 // Legacy fields: per-view `drawingPresets.plan` and the older singular
@@ -185,13 +189,14 @@ export function getUserPrefs(): UserPrefs {
       cabinetViewStyles: normaliseCabinetViewStyles(stored.cabinetViewStyles),
       snapSettings:     normaliseSnapSettings(merged.snapSettings),
       elevSnapSettings: normaliseElevSnapSettings(merged.elevSnapSettings),
-      planGrid:         normalisePlanGrid(merged.planGrid),
+      planGrid:         normalisePlanGrid(stored.planGridOffV1 === true ? merged.planGrid : { ...merged.planGrid, visible: false }),
       wallDraw:         normaliseWallDraw(merged.wallDraw),
       tutorial:         normaliseTutorial(merged.tutorial),
       annotStyleDefaults: normaliseAnnotDefaults(merged.annotStyleDefaults, stored.cadByLayerV1 === true),
       cadSnap: normaliseCadSnap(merged.cadSnap),
       cadLayerCurrent: merged.cadLayerCurrent && typeof merged.cadLayerCurrent === 'object' ? merged.cadLayerCurrent : {},
       cadByLayerV1: true,
+      planGridOffV1: true,
     }
   } catch {
     return DEFAULTS
