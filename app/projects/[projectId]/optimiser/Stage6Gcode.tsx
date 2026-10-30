@@ -150,6 +150,7 @@ export default function Stage6Gcode() {
               xBankMcode: String(blk.x_bank_mcode ?? 'M88'), yBankMcode: String(blk.y_bank_mcode ?? 'M89'),
               sharedCorner: Boolean(blk.shared_corner ?? true),
               headOffsetXMm: Number(blk.head_offset_x_mm ?? 0), headOffsetYMm: Number(blk.head_offset_y_mm ?? -128),
+              yBankAdjustXMm: Number(blk.y_bank_adjust_x_mm ?? 0), yBankAdjustYMm: Number(blk.y_bank_adjust_y_mm ?? 0),
               workOffsetCode: String(blk.work_offset_code ?? 'G54'), xDiameters, yDiameters,
             }
           }
@@ -160,7 +161,7 @@ export default function Stage6Gcode() {
       // Block datum so the simulator inverts gang-drilled holes from the block's
       // own G54 frame (not the routing datum) back onto the sheet.
       const drillCoordNow: SimDrillCoord | null = drillBlock
-        ? { headOffsetX: drillBlock.headOffsetXMm, headOffsetY: drillBlock.headOffsetYMm, signY: post0.sign_y, mirrorY: post0.mirror_y }
+        ? { headOffsetX: drillBlock.headOffsetXMm, headOffsetY: drillBlock.headOffsetYMm, yBankAdjustX: drillBlock.yBankAdjustXMm ?? 0, yBankAdjustY: drillBlock.yBankAdjustYMm ?? 0, signY: post0.sign_y, mirrorY: post0.mirror_y }
         : null
       setSimDrillCoord(drillCoordNow)
 

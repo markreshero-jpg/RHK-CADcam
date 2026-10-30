@@ -29,7 +29,7 @@ export interface SimFile { sheetIndex: number; fileName: string; gcode: string; 
 export interface SimCoord { originCorner: string; xDir: string; yDir: string; surfaceZ: string; zUp: boolean }
 // The drill block's own datum (G54 + head offsets + Y sign/mirror) — gang drilling
 // is posted in this frame, not the routing one, so block-frame moves invert with it.
-export interface SimDrillCoord { headOffsetX: number; headOffsetY: number; signY: number; mirrorY: boolean }
+export interface SimDrillCoord { headOffsetX: number; headOffsetY: number; yBankAdjustX?: number; yBankAdjustY?: number; signY: number; mirrorY: boolean }
 interface ToolRow { tool_number: number | null; name: string | null; diameter: number | null; tool_type: string | null; cutting_length: number | null; shape_profile: { type: string; params: Record<string, number> } | null }
 
 const SPEEDS = [1, 5, 20, 100] as const
@@ -50,19 +50,20 @@ function toInternal(prog: ParsedProgram, sheet: NestedSheet, c: SimCoord, dc?: S
   // Inverse of the drill block's tx/ty (gcode.ts emitGangDrilling): machine → sheet.
   //   tx(x) = x + headOffsetX            → x = X − headOffsetX
   //   ty(y) = signY·(mirrorY? H−y : y) + headOffsetY
-  const bx = (x: number) => dc ? x - dc.headOffsetX : ix(x)
-  const by = (y: number) => {
+  // (Y-bank moves also carry the Y bank's adjustment.)
+  const bx = (x: number, bank?: 'x' | 'y') => dc ? x - dc.headOffsetX - (bank === 'y' ? dc.yBankAdjustX ?? 0 : 0) : ix(x)
+  const by = (y: number, bank?: 'x' | 'y') => {
     if (!dc) return iy(y)
-    const t = (y - dc.headOffsetY) / dc.signY
+    const t = (y - dc.headOffsetY - (bank === 'y' ? dc.yBankAdjustY ?? 0 : 0)) / dc.signY
     return dc.mirrorY ? H - t : t
   }
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   const moves = prog.moves.map(m => {
     const block = m.blockFrame && dc
-    const x0 = block ? bx(m.x0) : ix(m.x0)
-    const y0 = block ? by(m.y0) : iy(m.y0)
-    const x1 = block ? bx(m.x1) : ix(m.x1)
-    const y1 = block ? by(m.y1) : iy(m.y1)
+    const x0 = block ? bx(m.x0, m.frameBank) : ix(m.x0)
+    const y0 = block ? by(m.y0, m.frameBank) : iy(m.y0)
+    const x1 = block ? bx(m.x1, m.frameBank) : ix(m.x1)
+    const y1 = block ? by(m.y1, m.frameBank) : iy(m.y1)
     minX = Math.min(minX, x0, x1); maxX = Math.max(maxX, x0, x1)
     minY = Math.min(minY, y0, y1); maxY = Math.max(maxY, y0, y1)
     return { ...m, x0, y0, z0: iz(m.z0), x1, y1, z1: iz(m.z1) }

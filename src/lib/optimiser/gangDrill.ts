@@ -26,6 +26,11 @@ export interface DrillBlockConfig {
   sharedCorner: boolean
   headOffsetXMm: number        // physical block head offset, X
   headOffsetYMm: number        // physical block head offset, Y (e.g. -128)
+  // Where the Y bank sits relative to the X bank — added to the head offset for
+  // Y-bank (M89) firings only. The head offsets are measured on the X bank; on
+  // the EVO49 the Y bank needed another -192 in Y (test gables, 2026-10-30).
+  yBankAdjustXMm?: number
+  yBankAdjustYMm?: number
   workOffsetCode: string       // 'G54' (drill block work offset)
   // Fitted bit diameter per spindle, indexed by (position − 1). null = empty.
   xDiameters: (number | null)[]
