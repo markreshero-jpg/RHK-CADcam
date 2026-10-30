@@ -63,3 +63,13 @@ elevations, 3D, appliance list).
 - Outer (left) door keeps its 100 / 880 hinges, no handle; leading door has the one handle at the joint; centre hinge holes at
   100 / 880 ± 16, 15.5 from the joint (door gap 1). Re-resolved with `_tmp-6595-bifold.mjs`, no warnings.
 - Order: LS 7104969 left set + track 7104967 (top only, 675 long) — both listed as clearance / discontinued, check stock.
+
+## Rev 3 (Mark 2026-10-31) — top cupboard split off
+
+- WC-02 split into two cabinets (easier to fit):
+  - **WC-02**, 711 × 1000 × 500 on the stone: the bi-fold appliance cupboard, 1 adj shelf, bottom still Removed. Its own top
+    is now the track panel: carriage cups at 936 / 872.
+  - **WC-14**, 711 × 390 × 500 over it (pos_z 1000): plain W2D, 2 PTO doors (room schedule). REVB 2 keeps the doors at 388
+    with the 2 gap over the bi-fold doors, as before.
+  - The fixed shelf is gone: the top of WC-02 + the bottom of WC-14 take its place.
+- Applied in the DB + re-resolved (`_tmp-6595-split.mjs`), no warnings. The layout JSON carries the split (WC-14 = last entry).
