@@ -503,7 +503,12 @@ function HingeArmFold({ url, pivot, openAngle, doorsOpen, mirror, scale, color, 
   )
 }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, ...partProps }: PartProps & {
+/** Sliding bi-fold pair (z_bifold_slide): how one of its doors opens. span = both doors +
+ *  the gap between them; maxAngle = how far they fold (the open pack, door thicknesses
+ *  side by side at the hinge gable). */
+interface BifoldOpen { role: 'outer' | 'leading'; span: number; maxAngle: number }
+
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, bifold, ...partProps }: PartProps & {
   handle?:    HandleShape | null   // z_handles H2 — swings with the door
   handleMeta?: PartMeta            // click-to-select info for the handle
   selectedId?: string | null       // selected part id (hinge / handle highlight)
@@ -519,27 +524,42 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
   hinges?:    ResolvedHingeInstance[]
   cupDrills?: ResolvedHingeDrill[]   // world coords; converted to local below
   showDrilling?: boolean
+  bifold?:    BifoldOpen
 }) {
   const groupRef     = useRef<THREE.Group>(null)
   const curAngle     = useRef(0)
   const doorsOpenRef = useRef(doorsOpen)
   doorsOpenRef.current = doorsOpen
 
-  const openAngle = hingeSide === 'left' ? -Math.PI / 2 : Math.PI / 2
-  const hingeX    = hingeSide === 'left' ? b.x : b.x + b.w
-  const localB: Box = { x: hingeSide === 'left' ? 0 : -b.w, y: 0, z: 0, w: b.w, h: b.h, d: b.d }
+  const sign      = hingeSide === 'left' ? -1 : 1
+  const openAngle = sign * (bifold ? bifold.maxAngle : Math.PI / 2)
+  // A bi-fold's leading door turns about its leading edge (the carriage on the top
+  // track), the far side from the hinge gable; that edge slides toward the gable as
+  // the pair folds: span·(1 − cos θ) for the outer door at θ. It turns the other way,
+  // so the joint between the doors comes out into the room.
+  const leading   = bifold?.role === 'leading'
+  const pivotLeft = leading ? hingeSide === 'right' : hingeSide === 'left'
+  const hingeX    = pivotLeft ? b.x : b.x + b.w
+  const localB: Box = { x: pivotLeft ? 0 : -b.w, y: 0, z: 0, w: b.w, h: b.h, d: b.d }
   const mirror    = hingeSide === 'left'   // swapped: left hand gets the X reflection
 
+  const place = (a: number) => {
+    const g = groupRef.current
+    if (!g) return
+    if (!leading) { g.rotation.y = a; return }
+    g.rotation.y = -a
+    g.position.x = hingeX + sign * bifold!.span * (1 - Math.cos(a))
+  }
   useFrame(() => {
     if (!groupRef.current) return
     const target = doorsOpenRef.current ? openAngle : 0
     if (Math.abs(curAngle.current - target) < 0.001) {
       curAngle.current = target
-      groupRef.current.rotation.y = target
+      place(target)
       return
     }
     curAngle.current = THREE.MathUtils.lerp(curAngle.current, target, 0.12)
-    groupRef.current.rotation.y = curAngle.current
+    place(curAngle.current)
   })
 
   return (
@@ -1373,6 +1393,15 @@ export function CabinetScene({
   const railBlocks = useMemo(() => railBlockEnds(rp.case_parts, rp.internal_parts), [rp])
   // Sliding bi-fold tracks (z_bifold_slide), cut to the inside width.
   const bifoldTrackList = useMemo(() => bifoldTracks(rp), [rp])
+  // Bi-fold pair opening: span = both doors + the gap; folded as far as the two
+  // door thicknesses side by side (+4) at the hinge gable allow.
+  const bifoldOpen = useMemo(() => {
+    const pair = rp.face_zones.filter(z => z.bifold_role)
+    if (pair.length !== 2) return null
+    const span = Math.max(...pair.map(z => z.X + z.DX)) - Math.min(...pair.map(z => z.X))
+    const pack = 2 * Math.max(...pair.map(z => z.DZ)) + 4
+    return { span, maxAngle: Math.acos(Math.min(1, pack / span)) }
+  }, [rp])
   // Joint fittings (z_joints C4, e.g. Lamello Cabineo): one per set, at the
   // set's middle hole — drawn whether or not drilling is shown.
   const jointFittings = useMemo(() => {
@@ -1745,6 +1774,7 @@ export function CabinetScene({
 
         if (z.face_type === 'door' && (z.hinge_side === 'left' || z.hinge_side === 'right')) {
           const zoneHinges = show('hinges') ? hingesByZone.get(zoneKey(z)) ?? [] : []
+          const bifold: BifoldOpen | undefined = z.bifold_role && bifoldOpen ? { role: z.bifold_role, ...bifoldOpen } : undefined
           const hingeX = z.hinge_side === 'left' ? b.x : b.x + b.w
           const mirror = z.hinge_side === 'left'   // swapped to match DoorPanel
           return (
@@ -1765,6 +1795,7 @@ export function CabinetScene({
                 selectedId={selected?.id ?? null}
                 handleAlpha={alpha('handles')}
                 handleParts={{ bar: show('handles'), holes: show('handle_holes') }}
+                bifold={bifold}
                 {...partProps}
               />
               {/* Plates stay fixed in world space at the bore-centre anchor.
@@ -1814,7 +1845,7 @@ export function CabinetScene({
                     b.y + h.y_position_mm,
                     b.z - ((h.bore_to_door_mm ?? 0) * h.model_scale + seatNudge(b.d)),
                   ]}
-                  openAngle={z.hinge_side === 'left' ? -Math.PI / 2 : Math.PI / 2}
+                  openAngle={(z.hinge_side === 'left' ? -1 : 1) * (bifold ? bifold.maxAngle : Math.PI / 2)}
                   doorsOpen={doorsOpen}
                   mirror={mirror}
                   scale={h.model_scale}

@@ -149,6 +149,16 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 - **Drawn** in the Cabinet Edit modal 3D and the room 3D, on the `bifold` layer item
   (now shown in 3D by default).
 - **To check:** profile height and depth against a real track.
+- **Open doors** (Cabinet Edit modal 3D, 2026-10-31, `DoorPanel` `bifold` prop):
+  - The outer door swings out on its gable hinges by θ.
+  - The leading door turns the other way about its leading edge (the carriage). That
+    edge slides along the top toward the hinge gable: span · (1 − cos θ), where
+    span = both doors + the gap. So the joint comes out into the room.
+  - Fully open is θ = acos(pack ÷ span), pack = 2 × door thickness + 4: the doors end
+    as a ~40 pack standing out at the hinge gable, like the sheet's 20 / 40 diagram.
+  - The outer door's hinge arms fold to the same θ.
+  - Checked headless on a W2D/BF (mid-fold + fully open).
+  - Plan-view folded swing still to do.
 
 ## F1 notes (2026-10-30)
 
