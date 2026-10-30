@@ -38,7 +38,7 @@ import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeas
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
 import { handleShapes, sharknoseProfile, sharknoseTapeBand, sharknoseTopLine } from '@/src/lib/handleGeometry'
 import { markerHoleShapes } from '@/src/lib/resolver/resolveDrawerMarkers'
-import { bifoldHoleShapes } from '@/src/lib/resolver/resolveBifold'
+import { bifoldHoleShapes, bifoldTracks, trackProfile } from '@/src/lib/resolver/resolveBifold'
 import { HandleElevSVG, SharknoseLinesSVG, DrawerMarkersSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
@@ -443,6 +443,28 @@ function RailBlockShapes({ rp, project }: {
   )
 }
 
+// Sliding bi-fold tracks (z_bifold_slide): the end profile at each end of the
+// track, joined along its length, projected into this view.
+function BifoldTrackShapes({ rp, project }: {
+  rp: ResolvedCabinet
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+}) {
+  const tracks = useMemo(() => bifoldTracks(rp), [rp])
+  if (!tracks.length) return null
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {tracks.map(t => {
+        const prof = trackProfile(t)
+        const [a, b] = [t.x, t.x + t.dx].map(x => prof.map(p => project(x, p.y, p.z)))
+        const d = [a, b].map(e => 'M' + e.map(q => `${q.x},${q.y}`).join('L') + 'Z').join('')
+          + a.map((q, i) => `M${q.x},${q.y}L${b[i].x},${b[i].y}`).join('')
+        return <path key={t.which} d={d} fill="none" stroke="#d1d5db" strokeWidth={0.6}
+          strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      })}
+    </g>
+  )
+}
+
 // Distinct hinge + plate GLB refs used on a cabinet — for loading their tris in
 // the parent view (so the measure tool can snap to the hinge / plate bodies).
 function hingeModelRefs(rp: ResolvedCabinet) {
@@ -799,6 +821,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
       {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
       <RailBlockShapes rp={rp} project={proj} />
+      <BifoldTrackShapes rp={rp} project={proj} />
       <SharknoseLinesSVG zones={rp.face_zones} project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         stroke="#fbbf24" strokeWidth={1} dash="6 4" fontSize={11} />
       {/* Handles (z_handles H2); hole centres shown with the drilling overlay */}
@@ -1088,6 +1111,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
       <RailBlockShapes rp={rp} project={proj} />
+      <BifoldTrackShapes rp={rp} project={proj} />
       <SlideDrillOverlay drills={slideDrills} perp="y"
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
@@ -1371,6 +1395,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       {showDrilling && <HandOpMarkersSVG markers={handMarkers} project={proj} />}
       <HingeShapes rp={rp} project={proj} />
       <RailBlockShapes rp={rp} project={proj} />
+      <BifoldTrackShapes rp={rp} project={proj} />
       <SlideDrillOverlay drills={slideDrills} perp="x"
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />

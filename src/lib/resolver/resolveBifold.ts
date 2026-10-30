@@ -32,16 +32,37 @@ export const BIFOLD = {
   maxInside: 1200, maxHeight: 2200, maxThick: 25, maxOverlay: 17,
 } as const
 
-/** Track profile off the BR0124CH sheet (no maker model): a U-channel whose
- *  front is 22.7 and back 40 behind the doors' back face (screws on 30.5),
- *  20 high. The same track top and bottom (LS 7104967 "Track Top & Bottom"). */
+/** Track envelope off the BR0124CH sheet (no maker model): front 22.7 and back
+ *  40 behind the doors' back face (screws on 30.5), 20 deep off the panel it's
+ *  fixed to. The same track top and bottom (LS 7104967 "Track Top & Bottom"). */
 export const BIFOLD_TRACK = { front: 22.7, back: 40, height: 20, wall: 1.5 } as const
+
+/** End profile, shaped like the LS photo (z_accessories/models/Bi-fold Door):
+ *  a channel closed against the panel and open away from it, the roller inside;
+ *  a foot flange along the open edge running back to the envelope's back, and
+ *  two small ribs on that side. u = back from the track's front, v = away from
+ *  the panel. */
+export const BIFOLD_TRACK_PROFILE: readonly (readonly [number, number])[] = [
+  [0, 0], [11, 0],
+  [11, 5], [11.6, 5], [11.6, 6], [11, 6],            // ribs
+  [11, 9], [11.6, 9], [11.6, 10], [11, 10],
+  [11, 18.5], [17.3, 18.5], [17.3, 20],               // foot flange
+  [9.5, 20], [9.5, 1.5], [1.5, 1.5], [1.5, 20], [0, 20],
+]
 
 export interface BifoldTrack {
   which: 'top' | 'bottom'
-  x: number; y: number; z: number      // min corner, cabinet coords
+  x: number; y: number; z: number      // bounding box min corner, cabinet coords
   dx: number; dy: number; dz: number
   open: 'up' | 'down'                  // toward the roller
+  face: number                         // y of the panel face it's fixed to
+  zFront: number                       // z of the track's front (22.7 behind the doors)
+}
+
+/** The track's end profile in cabinet (z, y). */
+export function trackProfile(t: BifoldTrack): { z: number; y: number }[] {
+  const dir = t.open === 'down' ? -1 : 1
+  return BIFOLD_TRACK_PROFILE.map(([u, v]) => ({ z: t.zFront - u, y: t.face + dir * v }))
 }
 
 /** The top track, and the bottom one unless the guide is None: gable to gable,
@@ -55,15 +76,16 @@ export function bifoldTracks(rp: Pick<ResolvedCabinet, 'bifold' | 'case_parts' |
   const ls = box('left_side'), rs = box('right_side')
   const x = ls ? ls.x + ls.w : Math.min(...pair.map(z => z.X))
   const dx = (rs ? rs.x : Math.max(...pair.map(z => z.X + z.DX))) - x
+  const zFront = leading.Z - T.front
   const z = leading.Z - T.back, dz = T.back - T.front
+  const track = (which: BifoldTrack['which'], face: number, open: BifoldTrack['open']): BifoldTrack =>
+    ({ which, x, y: open === 'down' ? face - T.height : face, z, dx, dy: T.height, dz, open, face, zFront })
   const out: BifoldTrack[] = []
   const top = box('full_top') ?? box('front_rail')
-  if (top) out.push({ which: 'top', x, y: top.y - T.height, z, dx, dy: T.height, dz, open: 'down' })
+  if (top) out.push(track('top', top.y, 'down'))
   const mode = rp.bifold?.bottom ?? 'above'
   const bot = box('bottom')
-  if (bot && mode !== 'none') out.push(mode === 'above'
-    ? { which: 'bottom', x, y: bot.y + bot.h, z, dx, dy: T.height, dz, open: 'up' }
-    : { which: 'bottom', x, y: bot.y - T.height, z, dx, dy: T.height, dz, open: 'down' })
+  if (bot && mode !== 'none') out.push(mode === 'above' ? track('bottom', bot.y + bot.h, 'up') : track('bottom', bot.y, 'down'))
   return out
 }
 

@@ -127,7 +127,13 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 - **No maker 3D model.** Lincoln Sentry publishes no CAD / GLB for BF-05, and a web
   search found none. The track is drawn in code instead (it is cut to each
   cabinet's width anyway):
-  - `BifoldTrackModel`: a white U-channel, 1.5 walls;
+  - `BifoldTrackModel`: `BIFOLD_TRACK_PROFILE` extruded gable to gable, white. The
+    profile was shaped from Mark's LS photo (`z_accessories/models/Bi-fold Door/Top
+    Track.png`, the lower track): a channel closed against the panel and open away
+    from it, a foot flange along the open edge running back to 40, two ribs on that
+    side (2026-10-30);
+  - Cabinet Edit modal Elevation / Top / Side: `BifoldTrackShapes` (`ResolvedViews`)
+    draws the end profile at both ends, joined along the length;
   - `bifoldTracks()` in `resolveBifold.ts` gives the positions;
   - profile `BIFOLD_TRACK`: front 22.7 / back 40 behind the doors' back face,
     20 high, read off the BR0124CH drawing at scale.
