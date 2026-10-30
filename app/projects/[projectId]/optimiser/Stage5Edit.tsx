@@ -463,9 +463,11 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, measuring, onZoom,
   // Plain mouse-wheel zoom toward the cursor. Native non-passive listener so
   // preventDefault actually suppresses the page/container scroll (React's
   // synthetic onWheel can be passive). Pan is via the scrollbars once zoomed in.
+  // Listens on the whole canvas area (not just the sheet), so the wheel zooms
+  // off the sheet too; the anchor fraction can then sit outside 0..1.
   useEffect(() => {
-    const el = svgRef.current
-    if (!el) return
+    const el = svgRef.current, area = scrollRef.current
+    if (!el || !area) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
       const r = el.getBoundingClientRect()
@@ -476,9 +478,9 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, measuring, onZoom,
       }
       onZoom(wheelZoomFactor(e))
     }
-    el.addEventListener('wheel', onWheel, { passive: false })
-    return () => el.removeEventListener('wheel', onWheel)
-  }, [onZoom])
+    area.addEventListener('wheel', onWheel, { passive: false })
+    return () => area.removeEventListener('wheel', onWheel)
+  }, [onZoom, scrollRef])
 
   // After a wheel-zoom re-renders at the new scale, nudge the scroll container so
   // the anchored fraction lands back under the original cursor point.
