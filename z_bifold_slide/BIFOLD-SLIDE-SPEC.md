@@ -35,7 +35,8 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 1. **Door gap** between the two doors = our middle reveal (GAPC). Nothing new.
 2. **Overlay** up to 16–17 is fine. The sheet's 15 max is not enforced.
 3. **Gable hinges** = standard Blum 110° soft close, normal hinge count rules.
-4. **Hand** (which gable the doors hang on) is set on the RHS sidebar.
+4. **Hand** (which gable the doors hang on) is set on the RHS sidebar of a bi-fold
+   cabinet.
 5. **Top carriage**, on the leading door:
    - 2 × Ø35 × 11.5 cups, 64 apart vertically;
    - top cup centre 47.5 below the underside of the cabinet top (= 47.5 + top overlay
@@ -65,6 +66,13 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 10. **Folded diagram** (20 / 40 / 500 / 20–50) = clearance when open. Used for drawing
     the folded pack only.
 11. **Width limit** 1200 inside for the 2 doors (warning above it).
+12. **Library cabinets, not a switch on every cabinet** (Mark, 2026-10-30): **W2D/BF**
+    (wall, e.g. an appliance cupboard on the bench) and **T2D/BF** (tall). The `/BF`
+    modifier works like `/FL`: same carcass as W2D / T2D, with the bi-fold set on the
+    cabinet. Both are copies of W2D / T2D, 900 wide, `rule_overrides.BIFOLD = 'L'`
+    (`migration_bifold_library.sql`, applied). The RHS sidebar shows Hung on /
+    Bottom guide / Centre hinge only on cabinets that have BIFOLD set; there is no
+    tick box on other cabinets.
 
 ## Defaults (Claude, 2026-10-30 — Mark to overrule)
 
@@ -135,5 +143,6 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
   - room elevation, through the `bifold` layer item (on the doors that are drawn);
   - Cabinet Edit modal elevation with Drilling on;
   - the 3D door bores in the modal.
-- **Sidebar**: `CabinetPanel` → "Sliding Bi-fold": a tick, plus Hung on / Bottom
-  guide / Centre hinge. The `BIFOLD*` keys carry to the library (`CARRIED_RULES`).
+- **Sidebar**: `CabinetPanel` → "Sliding Bi-fold": Hung on / Bottom guide / Centre
+  hinge, shown only when BIFOLD is set (decision 12). The `BIFOLD*` keys carry to the
+  library (`CARRIED_RULES`).
