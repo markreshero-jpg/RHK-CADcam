@@ -21,6 +21,7 @@ import type { ShapePt } from '@/src/lib/shapePath'
 import { PlacedOutline, PlacedHoles, GrainBlockOutlines } from './SheetSVG'
 import type { SheetDrill } from '@/src/lib/optimiser/gcode'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
+import { snapPoint, rectLoop, type MeasureSnap, type SnapSources } from '@/src/lib/optimiser/measure'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 const MAX_W = 860, MAX_H = 470
@@ -77,6 +78,8 @@ export default function Stage5Edit() {
   // INSTANTLY (no sync); regenerating from joints (slow) only happens on first
   // load if nothing exists yet, or when the user hits ↻ after changing joints.
   const [showDrills, setShowDrills] = useState(true)
+  // Measure tool: click two points (snaps to hole centres, part corners, edges).
+  const [measuring, setMeasuring] = useState(false)
   const [drillOps, setDrillOps] = useState<ResolvedDrillOps | null>(null)
   const [drillsLoading, setDrillsLoading] = useState(false)
   useEffect(() => {
@@ -131,6 +134,7 @@ export default function Stage5Edit() {
       else if (mod && e.key.toLowerCase() === 'x') { if (st.selectedUid) { e.preventDefault(); st.cutToClipboard(st.selectedUid) } }
       else if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); st.pasteClipboard(st.currentSheet) }
       else if (e.key === 'Delete' || e.key === 'Backspace') { if (st.selectedUid) { e.preventDefault(); st.removeToUnplaced(st.selectedUid) } }
+      else if (!mod && e.key.toLowerCase() === 'm') { setMeasuring(m => !m) }
       else if (e.key === 'Escape') { st.selectPlacement(null); setCtxMenu(null) }
     }
     window.addEventListener('keydown', onKey)
@@ -257,6 +261,11 @@ export default function Stage5Edit() {
                 className="text-[11px] px-1.5 py-0.5 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 font-normal transition-colors">
                 ↻
               </button>
+              <button onClick={() => setMeasuring(m => !m)}
+                title="Measure (M) — click two points; snaps to boring-hole centres, part corners and edges. Esc or right-click clears."
+                className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${measuring ? 'border-cyan-500/70 text-cyan-300 bg-cyan-900/20' : 'border-edge-strong text-ink-muted hover:bg-surface-2'}`}>
+                📏 Measure{measuring ? ' ✓' : ''}
+              </button>
               {/* Zoom controls */}
               <div className="flex items-center gap-px text-sm font-normal">
                 <button onClick={() => zoomBy(1 / 1.25)} title="Zoom out (scroll)"
@@ -274,6 +283,7 @@ export default function Stage5Edit() {
               selectedUid={selectedUid}
               drills={showDrills ? (drillsBySheet.get(sheet.index) ?? []) : []}
               zoom={zoom}
+              measuring={measuring}
               onZoom={zoomBy}
               scrollRef={scrollRef}
               onSelect={selectPlacement}
@@ -419,7 +429,7 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock, blocks }: {
+function InteractiveSheet({ sheet, selectedUid, drills, zoom, measuring, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock, blocks }: {
   blocks: GrainBlockInfo[]
   /** Grain match block holding a front (z_grain_match G4): it drags as one. */
   blockFor: (uid: string) => GrainBlockInfo | undefined
@@ -430,6 +440,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
   selectedUid: string | null
   drills: SheetDrill[]
   zoom: number
+  measuring: boolean
   onZoom: (factor: number) => void
   scrollRef: React.RefObject<HTMLDivElement | null>
   onSelect: (uid: string | null) => void
@@ -513,6 +524,24 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
   }
 
   const fy = (y: number, h: number) => (H - y - h) * scale
+
+  // ── Measure tool ── snap targets in sheet mm: sheet border, each part's outline (or rect), cutouts, drill holes.
+  const snapSrc = useMemo<SnapSources | null>(() => {
+    if (!measuring) return null
+    const loops = [rectLoop(0, 0, W, H)]
+    for (const p of sheet.placements) {
+      const ol = outlineFor(p)
+      loops.push(ol ? ol.map(q => ({ x: p.x + q.x, y: p.y + q.y })) : rectLoop(p.x, p.y, p.w, p.h))
+      for (const h of holesFor(p)) loops.push(h.map(q => ({ x: p.x + q.x, y: p.y + q.y })))
+    }
+    return { loops, holes: drills }
+    // outlineFor / holesFor are fresh closures each render; the sheet + drills drive them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [measuring, sheet, drills, W, H])
+  const measureSnap = (clientX: number, clientY: number) => {
+    const { mx, my } = toMm(clientX, clientY)
+    return snapPoint(mx, my, snapSrc!, 10 / scale)   // 10px snap radius
+  }
 
   return (
     <svg ref={svgRef} width={pxW} height={pxH} viewBox={`0 0 ${pxW} ${pxH}`}
@@ -608,7 +637,79 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, onZoom, scrollRef,
       {/* Grain match blocks (z_grain_match G5) — follow a block being dragged. */}
       <GrainBlockOutlines sheet={sheet} blocks={blocks} H={H} scale={scale} fontPx={11}
         shift={drag?.block ? { uids: drag.block.uids, dx: drag.gx - drag.block.x0, dy: drag.gy - drag.block.y0 } : null} />
+      {/* Keyed on the sheet: switching sheet or turning the tool off clears the points. */}
+      {measuring && snapSrc && (
+        <MeasureOverlay key={sheet.index} snap={measureSnap} H={H} scale={scale} pxW={pxW} pxH={pxH} />
+      )}
     </svg>
+  )
+}
+
+// Measure overlay: transparent hit layer (blocks part drag while measuring),
+// the A→B dimension with ΔX / ΔY legs, and the snap marker under the cursor
+// (○+ hole centre, □ corner, △ on a line, × free point). Click A, click B;
+// the next click starts a new measure. Esc / right-click clears.
+function MeasureOverlay({ snap, H, scale, pxW, pxH }: {
+  snap: (clientX: number, clientY: number) => MeasureSnap
+  H: number; scale: number; pxW: number; pxH: number
+}) {
+  const [pts, setPts] = useState<{ a: MeasureSnap | null; b: MeasureSnap | null }>({ a: null, b: null })
+  const [hover, setHover] = useState<MeasureSnap | null>(null)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setPts({ a: null, b: null }) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+  const a = pts.a, b = pts.b ?? (pts.a ? hover : null)
+  const px = (p: { x: number; y: number }) => ({ x: p.x * scale, y: (H - p.y) * scale })
+  const col = '#22d3ee'
+  const fmt = (v: number) => (Math.round(v * 10) / 10).toString()
+  const marker = (s: MeasureSnap, key: string) => {
+    const { x, y } = px(s), r = 5
+    return (
+      <g key={key}>
+        {s.kind === 'hole' && <><circle cx={x} cy={y} r={r} fill="none" stroke={col} strokeWidth={1.5} />
+          <path d={`M${x - r - 2} ${y}H${x + r + 2}M${x} ${y - r - 2}V${y + r + 2}`} stroke={col} strokeWidth={1} /></>}
+        {s.kind === 'corner' && <rect x={x - r} y={y - r} width={r * 2} height={r * 2} fill="none" stroke={col} strokeWidth={1.5} />}
+        {s.kind === 'line' && <path d={`M${x} ${y - r}L${x + r} ${y + r}L${x - r} ${y + r}Z`} fill="none" stroke={col} strokeWidth={1.5} />}
+        {s.kind === 'free' && <path d={`M${x - r} ${y - r}L${x + r} ${y + r}M${x + r} ${y - r}L${x - r} ${y + r}`} stroke={col} strokeWidth={1} />}
+      </g>
+    )
+  }
+  let dim: React.ReactNode = null
+  if (a && b) {
+    const A = px(a), B = px(b)
+    const dx = Math.abs(b.x - a.x), dy = Math.abs(b.y - a.y), d = Math.hypot(dx, dy)
+    const text = `${fmt(d)} mm   ΔX ${fmt(dx)}   ΔY ${fmt(dy)}`
+    const tw = text.length * 6.6 + 10
+    const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2
+    const lx = Math.min(Math.max(mx - tw / 2, 2), pxW - tw - 2), ly = Math.min(Math.max(my - 26, 2), pxH - 20)
+    dim = (
+      <g>
+        <path d={`M${A.x} ${A.y}H${B.x}V${B.y}`} fill="none" stroke={col} strokeOpacity={0.45} strokeWidth={1} strokeDasharray="4 3" />
+        <line x1={A.x} y1={A.y} x2={B.x} y2={B.y} stroke={col} strokeWidth={1.5} />
+        <rect x={lx} y={ly} width={tw} height={18} rx={3} fill="#0f172a" fillOpacity={0.9} stroke={col} strokeWidth={1} />
+        <text x={lx + 5} y={ly + 13} fontSize={11} fontFamily="monospace" fill={col}>{text}</text>
+      </g>
+    )
+  }
+  return (
+    <g>
+      <g style={{ pointerEvents: 'none' }}>
+        {dim}
+        {a && marker(a, 'a')}
+        {b && b !== hover && marker(b, 'b')}
+        {hover && marker(hover, 'h')}
+      </g>
+      <rect x={0} y={0} width={pxW} height={pxH} fill="transparent" style={{ cursor: 'crosshair' }}
+        onPointerMove={e => setHover(snap(e.clientX, e.clientY))} onPointerLeave={() => setHover(null)}
+        onClick={e => {
+          e.stopPropagation()
+          const s = snap(e.clientX, e.clientY)
+          setPts(m => (!m.a || m.b) ? { a: s, b: null } : { a: m.a, b: s })
+        }}
+        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setPts({ a: null, b: null }) }} />
+    </g>
   )
 }
 

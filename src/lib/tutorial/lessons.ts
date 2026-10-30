@@ -1189,6 +1189,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Every time you generate G-code (Stage 6) the run is saved with a number per job, e.g. RHK6570-R3. The number is in every NC file name (RHK6570_R3_Whiteboard16_01.anc), in the program header (RUN RHK6570-R3 …), on the cut sheets and as Run No on the labels — so files on the server lead back to their run. Download all also saves a run file (RHK6570-R3.rhkrun) next to the programs: a backup copy. Stage 1 → Open run file… loads it, and puts the run back in Saved runs if it was deleted. Left the optimiser before printing? Open the optimiser again; under Saved runs on Stage 1 click Reopen. It goes straight to Labels & Cut Sheets with the same sheets, part numbers and holes, and Stage 6 has the same programs to download. ✕ deletes a run you no longer need.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
+
+  // Appended 2026-10-30 (optimiser Stage 5 — measure tool).
+  { id: 'opti_measure', level: 'advanced', topic: 'production', title: 'Measure on a nested sheet',
+    blurb: 'Measure between holes, part corners and edges on a sheet in the optimiser before you cut.',
+    keywords: 'measure measuring tape distance dimension check hole centre centre boring drilling corner edge snap optimiser stage 5 edit sheet', steps: [
+    { id: 'open', title: 'Go to the edit stage (Stage 5)',
+      body: 'Production → Generate CNC…, run the Nesting stage, then click the edit stage (stage 5). Leave Drilling ✓ on so the boring holes show — hidden holes are not snapped to.',
+      target: 'menu-Production', done: c => c.path.endsWith('/optimiser') },
+    { id: 'measure', title: 'Click two points',
+      body: 'Click 📏 Measure above the sheet (or press M). The cursor turns to a cross and snaps as you move: a circle with a cross is a boring-hole centre (anywhere inside a big hole picks its centre), a square is a part corner, a triangle is a point on a part or sheet edge, an × is a free point. Click the first point, then the second. The line shows the straight distance and the ΔX / ΔY along the sheet. Zoom in (mouse wheel) to pick between holes that sit close together.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'clear', title: 'Measure again, or finish',
+      body: 'A third click starts a new measure. Esc or right-click clears it. Click 📏 Measure again (or press M) to go back to dragging parts. Changing sheet clears the measure.',
+      done: c => c.path.endsWith('/optimiser') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
