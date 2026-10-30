@@ -1231,6 +1231,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Drag the Explode slider (bottom right). Every part slides out from the middle of the cabinet: gables sideways, top up, bottom down, back away, fronts forward. Holes, hinges and handles go with their part. Click a part to inspect it as usual. Double-click the slider to put it back together.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-10-30 (z_joints C1 — Lamello Cabineo 12 concealed joint).
+  { id: 'cabineo', level: 'intermediate', topic: 'cabinets', title: 'Concealed joints: Lamello Cabineo',
+    blurb: 'Swap the screw holes on one joint for hidden Cabineo 12 connectors, e.g. an exposed end or a back.',
+    keywords: 'lamello cabineo concealed hidden joint connector screw pocket no holes outside exposed end back swap 5mm dynamic holes', steps: [
+    { id: 'open', title: 'Open the cabinet’s joints',
+      body: 'Double-click the cabinet and click the Joints tab. Each row is one joint, e.g. Bottom → Left gable.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'pick', title: 'Pick Lamello Cabineo 12',
+      body: 'On the joint you want hidden, change 5mm Dynamic Holes to Lamello Cabineo 12 - inside (pocket on the face that looks into the cabinet — a bottom’s top, a top’s underside, a back’s front) or Lamello Cabineo 12 - outside (the other face). The joint keeps the same spacing as 5mm Dynamic Holes: 50 in from each end, no more than 280 apart. Change it back any time.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'what', title: 'What gets machined',
+      body: 'The panel whose edge butts in gets the Cabineo pocket: three overlapping Ø15 circles, 11 deep, 3.6 / 14.8 / 26 in from that edge (the CNC routes them with a router bit). The panel it butts into gets a Ø5 hole 12 deep — not through — 5 off the pocket face. Fit the Cabineo collar-on-surface. The panel with the pocket needs to be 16 thick or more.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

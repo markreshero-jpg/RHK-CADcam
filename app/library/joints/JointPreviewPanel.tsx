@@ -131,6 +131,7 @@ function buildVars(
     MW: masterW, ML: masterL, MD: masterD,
     SW: slaveW,  SL: slaveL,  SD: slaveD,
     CW: thickA,
+    IN: 1,      // the preview shelf's inside face is its top (the offset_y face)
   }
 }
 

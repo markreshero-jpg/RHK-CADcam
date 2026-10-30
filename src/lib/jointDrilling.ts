@@ -247,7 +247,11 @@ function evalExpr(expr: string, vars: Record<string, number>): number | null {
 // Returns null if any expression-bearing field fails to evaluate — callers must skip the op.
 // CW = the contact width across the joint: part A's thickness for an edge on a
 // face, or the strip's width on a declared face-to-face seam.
-function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: number, contactWidth = thickA): {
+// IN = 1 when part A's inside face is the one offset_y measures from (a
+// bottom's top face, a back's front face), else 0 — so a part_b hole can sit a
+// set distance off whichever face carries an inside/outside op, e.g. the
+// Cabineo screw 5 below its pocket face: "IN ? 5 : CW - 5".
+function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: number, contactWidth = thickA, insideIsOrigin = true): {
   tool_diameter_mm: number; depth_mm: number
   offset_x_mm: number; offset_y_mm: number; offset_z_mm: number
   qty: number; spacing_mm: number | null
@@ -263,6 +267,7 @@ function evalOp(op: JointTypeOp, boxA: Box, boxB: Box, thickA: number, thickB: n
     MW: boxA.w, ML: boxA.h, MD: boxA.d,
     SW: boxB.w, SL: boxB.h, SD: boxB.d,
     CW: contactWidth,
+    IN: insideIsOrigin ? 1 : 0,
   }
   const ev = (field: string, fallback: number): number | null =>
     exprs[field] != null ? evalExpr(exprs[field], vars) : fallback
@@ -304,6 +309,10 @@ function uSteps(qty2: number, spacing2: number | null): number[] {
     ? Array.from({ length: qty2 }, (_, j) => (j - (qty2 - 1) / 2) * spacing2)
     : [0]
 }
+
+// Inside / outside part_a faces (z_joints/CABINEO-SPEC.md) only resolve on the
+// gable seams (seamDrillOps); the other seam shapes skip them.
+const isInOutFace = (f: string) => f === 'inside' || f === 'outside'
 
 // ── SeamFrame — edge-local coordinate frame ───────────────────────────────────
 // Maps joint operation fields (offset_z_mm, offset_y_mm, spacing) to cabinet
@@ -374,7 +383,7 @@ function backBottomDrillOps(
   const bottomTopY  = boxBottom.y + boxBottom.h
 
   for (const op of ops) {
-    if (op.machine_operation !== 'drill') continue
+    if (op.machine_operation !== 'drill' || isInOutFace(op.face)) continue
     const isBack = op.target_part === 'part_a'
     const ev = evalOp(op, evBack, evBottom, thickBack, thickBottom)
     if (!ev) continue
@@ -436,7 +445,7 @@ function backRailDrillOps(boxBack: Box, boxRail: Box, ops: JointTypeOp[]): Drill
   const railTopY   = boxRail.y + boxRail.h
 
   for (const op of ops) {
-    if (op.machine_operation !== 'drill') continue
+    if (op.machine_operation !== 'drill' || isInOutFace(op.face)) continue
     const isBack = op.target_part === 'part_b'
     const ev = evalOp(op, evRail, evBack, thickRail, thickBack)
     if (!ev) continue
@@ -510,15 +519,25 @@ export function seamDrillOps(
   const setInset = (pos: { x: number; y: number; z: number }, v: number) =>
     { if (frame.insetAxis === 'z') pos.z = v; else pos.y = v }
 
+  // Part A's inside face: the one toward part B's middle. Its high face (top
+  // of a horizontal panel, front of an upright back) is the face offset_y
+  // measures from, so insideHigh also answers evalOp's IN.
+  const aVertical  = boxA.h > boxA.d
+  const insideHigh = aVertical
+    ? boxA.z + boxA.d / 2 < boxB.z + boxB.d / 2
+    : boxA.y + boxA.h / 2 < boxB.y + boxB.h / 2
+
   for (const op of ops) {
     if (op.machine_operation !== 'drill') continue
-    const ev = evalOp(op, evBoxA, evBoxB, frame.thickA, frame.thickB)
+    const inOut = isInOutFace(op.face)
+    if (inOut && (op.target_part !== 'part_a' || isSide(partAKey))) continue
+    const ev = evalOp(op, evBoxA, evBoxB, frame.thickA, frame.thickB, frame.thickA, insideHigh)
     if (!ev) continue
 
     const spc = ev.spacing_mm ?? 0
     // 2nd axis lands on the face-local U axis: the X offset for top/bottom
-    // (Y-drill) faces, the inset (offset_y) axis for normal/end faces.
-    const isYFace = op.face === 'top' || op.face === 'bottom'
+    // and inside/outside faces, the inset (offset_y) axis for normal/end faces.
+    const isYFace = op.face === 'top' || op.face === 'bottom' || inOut
 
     for (let i = 0; i < ev.qty; i++) {
       for (const du of uSteps(ev.qty2, ev.spacing2_mm)) {
@@ -550,6 +569,16 @@ export function seamDrillOps(
               pos.y = boxA.y; setAlong(pos, alongCoord)
               axis = 'y+'
               break
+            case 'inside':
+            case 'outside': {
+              // offset_x in from the seam edge on A's inside/outside face.
+              const high = (op.face === 'inside') === insideHigh
+              pos.x = isLeft ? frame.interfaceX + ox : frame.interfaceX - ox
+              setAlong(pos, alongCoord)
+              if (aVertical) { pos.z = high ? boxA.z + boxA.d : boxA.z; axis = high ? 'z-' : 'z+' }
+              else           { pos.y = high ? boxA.y + boxA.h : boxA.y; axis = high ? 'y-' : 'y+' }
+              break
+            }
             default: continue
           }
         } else {
@@ -579,7 +608,7 @@ export function seamDrillOps(
 
         const isFaceDrill = op.target_part === 'part_b' && op.face === 'normal'
                          && (axis === 'x-' || axis === 'x+')
-        const depthLen    = isFaceDrill && !opts?.stoppedFaceDrills ? boxB.w : ev.depth_mm
+        const depthLen    = isFaceDrill && !opts?.stoppedFaceDrills && !op.stopped ? boxB.w : ev.depth_mm
 
         const targetPartKey = op.target_part === 'part_a' ? partAKey : partBKey
         result.push({
@@ -615,7 +644,7 @@ function dividerSeamDrillOps(
   const alongOrigin = boxA.z + boxA.d
 
   for (const op of ops) {
-    if (op.machine_operation !== 'drill') continue
+    if (op.machine_operation !== 'drill' || isInOutFace(op.face)) continue
     const isA = op.target_part === 'part_a'
     const ev = evalOp(op, evA, evB, thickA, thickB)
     if (!ev) continue
@@ -928,7 +957,7 @@ export function declaredSeamDrillOps(sj: ResolvedSeamJoint, caseParts: ResolvedC
         if (op.target_part === 'part_b') {
           if (op.face !== 'normal') continue
           if (nIn.x) p.x = innerX; else p.z = innerZ
-          axis = intoB; depthLen = b.DZ
+          axis = intoB; depthLen = op.stopped ? ev.depth_mm : b.DZ
         } else {
           if (op.face !== 'normal' && op.face !== 'end') continue
           axis = axisOf(g.toward); depthLen = ev.depth_mm

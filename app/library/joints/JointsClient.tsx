@@ -14,7 +14,7 @@ import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 
 type TargetPart      = 'part_a' | 'part_b'
 type MachineOp       = 'drill' | 'route' | 'pocket' | 'saw'
-type FaceType        = 'normal' | 'end' | 'top' | 'bottom'
+type FaceType        = 'normal' | 'end' | 'top' | 'bottom' | 'inside' | 'outside'
 type FastenerType    = 'screw' | 'bolt' | 'dowel' | 'cam_lock' | 'biscuit' | 'staple' | 'bracket' | 'other'
 type Tab             = 'joints' | 'fasteners'
 
@@ -46,6 +46,7 @@ interface JointTypeOperation {
   notes:             string | null
   expressions:       Record<string, string> | null
   skip_near_mm:      number | null
+  stopped:           boolean
 }
 
 interface Fastener {
@@ -80,6 +81,9 @@ const FACE_TYPES: { value: FaceType; label: string }[] = [
   { value: 'end',    label: 'End' },
   { value: 'top',    label: 'Top' },
   { value: 'bottom', label: 'Bottom' },
+  // Part A's face toward / away from the cabinet's inside, picked per seam (z_joints/CABINEO-SPEC.md).
+  { value: 'inside',  label: 'Inside' },
+  { value: 'outside', label: 'Outside' },
 ]
 
 const FASTENER_TYPES: { value: FastenerType; label: string }[] = [
@@ -118,6 +122,7 @@ const OP_DEFAULTS: Omit<JointTypeOperation, 'id' | 'joint_type_id'> = {
   notes:             null,
   expressions:       null,
   skip_near_mm:      null,
+  stopped:           false,
 }
 
 // ── DB helpers ────────────────────────────────────────────────────────────────
@@ -149,6 +154,7 @@ function toOp(r: Record<string, unknown>): JointTypeOperation {
     notes:             (r.notes as string | null) ?? null,
     expressions:       (r.expressions as Record<string, string> | null) ?? null,
     skip_near_mm:      r.skip_near_mm != null ? Number(r.skip_near_mm) : null,
+    stopped:           r.stopped === true,
   }
 }
 
@@ -313,7 +319,7 @@ export default function JointsClient({
     if (data) setOps(prev => [...prev, toOp(data as Record<string, unknown>)])
   }
 
-  async function patchOp(id: string, key: keyof JointTypeOperation, raw: string | number) {
+  async function patchOp(id: string, key: keyof JointTypeOperation, raw: string | number | boolean) {
     const numKeys: (keyof JointTypeOperation)[] = ['operation_order','tool_diameter_mm','depth_mm','offset_x_mm','offset_y_mm','offset_z_mm','qty','spacing_mm','qty2','spacing2_mm','skip_near_mm']
     const val = numKeys.includes(key) ? parseFloat(raw as string) : raw
     if (numKeys.includes(key) && isNaN(val as number)) return
@@ -518,7 +524,8 @@ export default function JointsClient({
                   operation_order:   op.operation_order,
                   target_part:       op.target_part,
                   machine_operation: op.machine_operation,
-                  face:              op.face,
+                  // The preview's Part A is a shelf, inside face up.
+                  face:              op.face === 'inside' ? 'top' : op.face === 'outside' ? 'bottom' : op.face,
                   tool_diameter_mm:  op.tool_diameter_mm,
                   depth_mm:          op.depth_mm,
                   offset_x_mm:       op.offset_x_mm,
@@ -613,7 +620,7 @@ function OpsTable({
   ops, onPatch, onPatchExpr, onPatchTool, onDelete, onAdd, tools, drills, selOpId, onSelOpChange,
 }: {
   ops:            JointTypeOperation[]
-  onPatch:        (id: string, key: keyof JointTypeOperation, val: string | number) => void
+  onPatch:        (id: string, key: keyof JointTypeOperation, val: string | number | boolean) => void
   onPatchExpr:    (opId: string, field: string, expr: string | null) => void
   onPatchTool:    (id: string, v: OpToolValue) => void
   onDelete:       (id: string) => void
@@ -647,7 +654,8 @@ function OpsTable({
               <th className={thCls} style={{ width: 100 }}>Tool</th>
               <th className={thCls} style={{ width: 60 }}>Ø dia</th>
               <th className={thCls} style={{ width: 58 }}>Depth</th>
-              <th className={thCls} style={{ width: 56 }} title="Position along the face (offset_y for end/normal, offset_x for top/bottom)">U</th>
+              <th className={thCls} style={{ width: 40 }} title="Stopped: a Part B face hole keeps its depth instead of boring through (concealed fittings)">Stop</th>
+              <th className={thCls} style={{ width: 56 }} title="Position along the face (offset_y for end/normal, offset_x in from the joint edge for top/bottom/inside/outside)">U</th>
               <th className={thCls} style={{ width: 56 }} title="Distance from front face (offset_z)">V (front)</th>
               <th className={thCls} style={{ width: 56 }} title="Skip near: drop this op's holes within this many mm of another op's hole in the same part (blank = keep all)">Skip ≤</th>
               <th className={thCls} style={{ width: 28 }} />
@@ -744,9 +752,14 @@ function OpsTable({
                       onPatchExpr={(f, e) => onPatchExpr(op.id, f, e)}
                       className={numCls} />
                   </td>
+                  <td className={tdCls + ' text-center'} onClick={e => e.stopPropagation()}>
+                    <input type="checkbox" checked={op.stopped}
+                      onChange={e => onPatch(op.id, 'stopped', e.target.checked)}
+                      className="cursor-pointer" />
+                  </td>
                   {/* U = face-local: offset_y for X-drill faces, offset_x for Y-drill faces */}
                   {(() => {
-                    const isYDrill = op.face === 'top' || op.face === 'bottom'
+                    const isYDrill = op.face === 'top' || op.face === 'bottom' || op.face === 'inside' || op.face === 'outside'
                     const uField   = isYDrill ? 'offset_x_mm' : 'offset_y_mm' as const
                     return (
                       <td className={tdCls}>
@@ -780,7 +793,7 @@ function OpsTable({
             })}
             {ops.length === 0 && (
               <tr>
-                <td colSpan={16} className="px-4 py-6 text-center text-xs text-ink-subtle">
+                <td colSpan={17} className="px-4 py-6 text-center text-xs text-ink-subtle">
                   No operations yet. Click + Add operation below.
                 </td>
               </tr>
