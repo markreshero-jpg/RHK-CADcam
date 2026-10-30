@@ -43,7 +43,7 @@ elevations, 3D, appliance list).
 
 - Benchtops (2780 x 600 wall run; island 2016 x 900 with 20 waterfall east end), sink/tap/cooktop/oven fixtures, spec blocks — not drawn.
 - Bosch PVQ811H26E spec sheet not in the job folder — drawer depth 400 is a placeholder; cooktop cutout is wider than the 690 cabinet.
-- Island kick join. Handle length. Bi-fold hardware for the appliance cupboard.
+- Island kick join. Handle length.
 
 ## Rev 1 (Mark 2026-10-30) — WC-10 cubbies half-checked
 
@@ -52,3 +52,14 @@ elevations, 3D, appliance list).
   dividers from the front; no joint drilling (fixed through top / bottom / gables).
 - Cubbies resized for the 18 board: block 400, rows + columns equal = 121.3 square (drawing's 124 was for 16 board).
   Applied with `_tmp-6595-hc.mjs`; the layout JSON now carries it.
+
+## Rev 2 (Mark 2026-10-31) — appliance cupboard bi-fold
+
+- WC-02's 1000 appliance doors are now a Finista BF-05 sliding bi-fold (z_bifold_slide), **hung on the left**, **no bottom
+  guide** (the cabinet bottom is Removed, it sits on the stone), standard centre hinges. The 390 PTO doors + fixed shelf over stay.
+  Set as `rule_overrides` BIFOLD L / BIFOLD_BOTTOM none (WC-02 stays its own cabinet, not swapped to W2D/BF, so its two rows stay).
+- Needed a resolver change (d2c5fa2): the bi-fold can be one row of a multi-row front, and the top track hangs under the fixed
+  shelf over the pair (underside 991.5): carriage cups at 944 / 880 on the leading door, 22.5 in.
+- Outer (left) door keeps its 100 / 880 hinges, no handle; leading door has the one handle at the joint; centre hinge holes at
+  100 / 880 ± 16, 15.5 from the joint (door gap 1). Re-resolved with `_tmp-6595-bifold.mjs`, no warnings.
+- Order: LS 7104969 left set + track 7104967 (top only, 675 long) — both listed as clearance / discontinued, check stock.
