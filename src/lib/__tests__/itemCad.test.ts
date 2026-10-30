@@ -3,7 +3,7 @@ import type { RoomAnnotation } from '@/src/lib/types'
 import type { TextGeom, LineGeom } from '@/src/lib/annotations/geometry'
 import {
   anchorPoint, nearestAnchor, toItemCadItems, placeItemCad, itemsForOwner, missingJobCopies, ownerId,
-  itemFieldValues, binProductName,
+  itemFieldValues, binProductName, sheetItemCadView, itemCadViewSheet, asAnnotationRows,
   type LibraryCad, type JobItemCad,
 } from '@/src/lib/annotations/itemCad'
 import { withFieldsFilled } from '@/src/lib/annotations/blocks'
@@ -106,4 +106,27 @@ describe('cabinet sheet owner', () => {
     expect(ownedBy(n, cabinetSheetOwner('c2', 'front'))).toBe(false)
     expect(ownedBy(n, elevationOwner('w1', 'face'))).toBe(false)
   })
+})
+
+describe('Side / Top tabs (IC3a)', () => {
+  it('each modal tab has its own library view, and back', () => {
+    expect((['front', 'top', 'side'] as const).map(sheetItemCadView)).toEqual(['elevation', 'plan', 'side'])
+    for (const v of ['elevation', 'plan', 'side'] as const) expect(sheetItemCadView(itemCadViewSheet(v))).toBe(v)
+  })
+  it('placed rows belong to that tab', () => {
+    const rows = asAnnotationRows([{ kind: 'line', text: null, style: {}, geom: { pts: [{ x: 0, y: 0 }, { x: 1, y: 0 }] } as LineGeom }], 'p', 'r1', 'side')
+    expect(rows[0].sheet_view).toBe('side')
+    expect(asAnnotationRows([], 'p', 'r1')).toEqual([])
+  })
+  it('a sheet places library notes at its own paper scale (k)', () => {
+    const box = { minX: 0, maxX: 580, minY: -2100, maxY: 0 }
+    // A short line near the top-left corner anchors there: (10, 100)–(30, 100) frame mm
+    // from it = (0.5, 5)–(1.5, 5) paper mm at 1:20.
+    const items = toItemCadItems([note('t', 'line', { pts: [{ x: 10, y: -2000 }, { x: 30, y: -2000 }] })], box, 20)
+    expect(items[0].anchor).toBe('tl')
+    const at = (k: number) => (placeItemCad(items, box, k)[0].geom as LineGeom).pts[0]
+    expect(at(20)).toEqual({ x: 10, y: -2000 })
+    expect(at(10)).toEqual({ x: 5, y: -2050 })
+  })
+
 })

@@ -501,8 +501,9 @@ function hingeSnapPts(
 }
 
 // ── CAD host (z_item_cad) ─────────────────────────────────────────────────────
-// A view that takes CAD notes (the Cabinet Edit modal's Elevation tab): it hands its
-// svg + screen scale up, draws the notes layer last, and ignores its own clicks while on.
+// A view that takes CAD notes (the Cabinet Edit modal's Elevation / Top / Side tabs,
+// z_item_cad IC3a): it hands its svg, screen scale and frame origin up, draws the notes
+// layer last, and ignores its own clicks while on.
 
 /** Elevation view margins: the cabinet's left edge is at svg x = pl, its top at y = pt. */
 export const ELEV_PAD = { pl: 80, pt: 50 }
@@ -514,12 +515,17 @@ export interface ModalCadHost {
   setSvg:   (el: SVGSVGElement | null) => void
   /** svg units per screen px. */
   onUnit:   (unit: number) => void
+  /** svg point of the sheet frame's origin: front / side = the cabinet's bottom at its
+   *  left / back, top = its back left corner (owner.ts frames). */
+  onOrigin?: (o: { x: number; y: number }) => void
 }
 
-function useModalCadHost(cad: ModalCadHost | undefined, svgRef: React.RefObject<SVGSVGElement | null>, unit: number) {
-  const setSvg = cad?.setSvg, onUnit = cad?.onUnit
+function useModalCadHost(cad: ModalCadHost | undefined, svgRef: React.RefObject<SVGSVGElement | null>, unit: number, origin: { x: number; y: number }) {
+  const setSvg = cad?.setSvg, onUnit = cad?.onUnit, onOrigin = cad?.onOrigin
+  const { x, y } = origin
   useEffect(() => { setSvg?.(svgRef.current) })
   useEffect(() => { onUnit?.(unit) }, [onUnit, unit])
+  useEffect(() => { onOrigin?.({ x, y }) }, [onOrigin, x, y])
 }
 
 // ── Resolved views ────────────────────────────────────────────────────────────
@@ -661,7 +667,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   }
   const measure = useMeasure(!!measureMode, svgRef, measurePts, [], rawPanelPts)
 
-  useModalCadHost(cad, svgRef, unit)
+  useModalCadHost(cad, svgRef, unit, { x: ox, y: oy + dy })
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
     if (cad?.on) { e.stopPropagation(); return }
@@ -865,7 +871,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   )
 }
 
-export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, shapeOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect }: {
+export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, shapeOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect, cad }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   // Linked fixtures drawn in the cabinet (z_ubo U5) + their selection.
@@ -876,6 +882,8 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides; shapeOverrides?: ShapeOverrides
   partLabels?: PartLabels; partComments?: PartComments
   ebByMatId?: EbByMatId
+  /** CAD in the modal (z_item_cad IC3a). */
+  cad?: ModalCadHost
 }) {
   const { dx, dz } = cab
   const RC = useMemo(() => paletteRC(), [])   // line colours from Settings → part colours
@@ -959,8 +967,10 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
     measurePts.push(...hingeSnapPts(rp, hingeTri, proj))
   }
   const measure = useMeasure(!!measureMode, svgRef, measurePts)
+  useModalCadHost(cad, svgRef, unit, { x: ox, y: oz })
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (cad?.on) { e.stopPropagation(); return }
     if (measureMode) { e.stopPropagation(); measure.onClick(e); return }
     e.stopPropagation()
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
@@ -968,6 +978,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
 
   function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
     e.preventDefault(); e.stopPropagation()
+    if (cad?.on) return
     if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
     if (selectedPartId && hits.some(h => h.id === selectedPartId)) { onPartContextMenu?.(hits, e.clientX, e.clientY); return }
@@ -1130,11 +1141,12 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
       <CabinetFixturesOverlay view="top" fixtures={fixtures ?? []} map={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         selectedId={selectedFixtureId} onSelect={onFixtureSelect} />
+      {cad?.overlay}
     </svg>
   )
 }
 
-export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, shapeOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect }: {
+export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, measureMode, selectedPartId, onPartsAtPoint, onPartContextMenu, onEmptyContextMenu, customParts, partOverrides, shapeOverrides, partLabels, partComments, ebByMatId, fixtures, selectedFixtureId, onFixtureSelect, cad }: {
   cab: CabinetInstance; rp: ResolvedCabinet; wireMode: boolean; showInternals: boolean
   showDrilling?: boolean; measureMode?: boolean
   // Linked fixtures drawn in the cabinet (z_ubo U5) + their selection.
@@ -1145,6 +1157,8 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
   customParts?: CabinetCustomPart[]; partOverrides?: PartPosOverrides; shapeOverrides?: ShapeOverrides
   partLabels?: PartLabels; partComments?: PartComments
   ebByMatId?: EbByMatId
+  /** CAD in the modal (z_item_cad IC3a). */
+  cad?: ModalCadHost
 }) {
   const { dz, dy } = cab
   const RC = useMemo(() => paletteRC(), [])   // line colours from Settings → part colours
@@ -1237,8 +1251,10 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
     measurePts.push(...hingeSnapPts(rp, hingeTri, proj))
   }
   const measure = useMeasure(!!measureMode, svgRef, measurePts)
+  useModalCadHost(cad, svgRef, unit, { x: oz, y: oy + dy })
 
   function handleClick(e: React.MouseEvent<SVGSVGElement>) {
+    if (cad?.on) { e.stopPropagation(); return }
     if (measureMode) { e.stopPropagation(); measure.onClick(e); return }
     e.stopPropagation()
     onPartsAtPoint(svgHitParts(e, partMap), e.clientX, e.clientY)
@@ -1246,6 +1262,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
 
   function handleContextMenu(e: React.MouseEvent<SVGSVGElement>) {
     e.preventDefault(); e.stopPropagation()
+    if (cad?.on) return
     if (measureMode) { measure.cancel(); return }
     const hits = svgHitParts(e, partMap)
     if (selectedPartId && hits.some(h => h.id === selectedPartId)) { onPartContextMenu?.(hits, e.clientX, e.clientY); return }
@@ -1438,6 +1455,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       {measureMode && <MeasureOverlay start={measure.start} end={measure.end} cursor={measure.cursor} snapped={measure.snapped} unit={unit} vb={vb} pts={measurePts} />}
       <CabinetFixturesOverlay view="side" fixtures={fixtures ?? []} map={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         selectedId={selectedFixtureId} onSelect={onFixtureSelect} />
+      {cad?.overlay}
     </svg>
   )
 }

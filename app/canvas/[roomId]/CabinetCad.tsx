@@ -1,21 +1,23 @@
 'use client'
 
-// CAD in the Cabinet Edit modal (z_item_cad IC1–IC2). F7 / the CAD button on the Elevation
-// tab draws notes on the cabinet's front with the room's CAD tools. Notes drawn here are
-// "this cabinet only" (room_annotations, view cabinet_sheet / front) and show on the
-// room elevation with the cabinet. "Move to library" turns selected notes into item
+// CAD in the Cabinet Edit modal (z_item_cad IC1–IC2, IC3a). F7 / the CAD button on the
+// Elevation, Top or Side tab draws notes on that view of the cabinet with the room's CAD
+// tools. Notes drawn here are "this cabinet only" (room_annotations, view cabinet_sheet /
+// front | top | side); front notes show on the room elevation with the cabinet. "Move to library" turns selected notes into item
 // CAD on a bin front or on the cabinet code, so every cabinet with one draws them.
 // Hide here / Detach (IC2) are per cabinet; {bin} {code} {w}… fill per cabinet / front.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CabinetInstance, Room, RoomAnnotation, Wall } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import { cabinetSheetOwner, ownedBy } from '@/src/lib/annotations/owner'
+import { cabinetSheetOwner, ownedBy, type SheetView } from '@/src/lib/annotations/owner'
 import { mapPt, type AnnotFrame, type Box, type Pt } from '@/src/lib/annotations/geometry'
 import { cadSnap, addOutline, type CadSnapSettings, type SnapGeometry } from '@/src/lib/annotations/cadSnap'
 import { planSnapGeometry } from '@/src/lib/annotations/planSnapGeometry'
 import { withFieldsFilled, annotationsBounds, type CadFieldValues } from '@/src/lib/annotations/blocks'
-import { placeItemCad, asAnnotationRows, ownerId, ITEM_CAD_FIELDS, type ItemCadTarget } from '@/src/lib/annotations/itemCad'
+import { placeItemCad, asAnnotationRows, ownerId, sheetItemCadView, ITEM_CAD_FIELDS, type ItemCadTarget } from '@/src/lib/annotations/itemCad'
+import { caseBox } from '@/src/lib/jointDrilling'
+import { bifoldTracks, trackProfile } from '@/src/lib/resolver/resolveBifold'
 import { SNAP_PX } from '@/src/lib/geometry'
 import { supabase } from '@/src/lib/supabase'
 import { useAnnotationTool } from './useAnnotationTool'
@@ -54,11 +56,15 @@ const boxPts = (b: Box): Pt[] => [{ x: b.minX, y: b.minY }, { x: b.maxX, y: b.mi
 const centreOf = (b: Box): Pt => ({ x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 })
 const inBox = (b: Box, p: Pt) => p.x >= b.minX && p.x <= b.maxX && p.y >= b.minY && p.y <= b.maxY
 
-export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
+const SHEET_NAME: Record<SheetView, string> = { front: 'Front', top: 'Top', side: 'Side' }
+
+export function useCabinetCad({ ctx, cabinet, rp, sheet = 'front', viewOn, onEnter }: {
   ctx:     ModalCadContext | undefined
   cabinet: CabinetInstance
   rp:      ResolvedCabinet | undefined
-  /** The Elevation tab is on show (the only view with CAD in IC1). */
+  /** Which tab's drawing: front = Elevation, top = Top, side = Side (IC3a). */
+  sheet?:  SheetView
+  /** That tab is on show. */
   viewOn:  boolean
   /** CAD turning on (the modal drops its part selection / measure tool). */
   onEnter?: () => void
@@ -73,24 +79,49 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
   const [unit, setUnit] = useState(1)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const paper = ctx?.scale ?? 20
-  const owner = useMemo(() => cabinetSheetOwner(cabinet.id, 'front'), [cabinet.id])
-  // Cabinet front frame (x from the left, y down from the bottom) → the view's svg.
-  const frame = useMemo<AnnotFrame>(() => ({ ox: ELEV_PAD.pl, oy: ELEV_PAD.pt + cabinet.dy, s: 1, flipY: false }), [cabinet.dy])
+  const owner = useMemo(() => cabinetSheetOwner(cabinet.id, sheet), [cabinet.id, sheet])
+  const libView = sheetItemCadView(sheet)
+  // Sheet frame (owner.ts) → the view's svg: the view reports where the frame's origin
+  // sits (front / side: the cabinet's bottom left / back; top: its back left corner).
+  const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null)
+  const frame = useMemo<AnnotFrame>(() => origin
+    ? { ox: origin.x, oy: origin.y, s: 1, flipY: false }
+    : { ox: ELEV_PAD.pl, oy: ELEV_PAD.pt + cabinet.dy, s: 1, flipY: false }, [origin, cabinet.dy])
   const zoom = 1 / unit
   const annotations = useMemo(() => ctx?.annotations ?? [], [ctx?.annotations])
   const own = useMemo(() => annotations.filter(a => ownedBy(a, owner)), [annotations, owner])
 
   // Snaps: the cabinet's outline + each front (corners, mids, centre) and the notes.
+  // Top / Side: also every carcass panel, the doors and the bi-fold tracks (its end
+  // profile in Side), so a detail can be dimensioned off them.
   const snapRoom = useMemo<SnapGeometry>(() => {
     const g: SnapGeometry = { segs: [], points: [] }
-    addOutline(g, boxPts({ minX: 0, maxX: cabinet.dx, minY: -cabinet.dy, maxY: 0 }), 'cabinets', true, undefined, true)
+    const rect = (b: Box, src: 'cabinets' | 'fronts') => addOutline(g, boxPts(b), src, true, undefined, true)
+    if (sheet === 'front') {
+      rect({ minX: 0, maxX: cabinet.dx, minY: -cabinet.dy, maxY: 0 }, 'cabinets')
+      for (const z of rp?.face_zones ?? []) {
+        if (z.face_type === 'open') continue
+        const r = zoneElevRect(z)
+        rect({ minX: r.ex, maxX: r.ex + r.ew, minY: -r.ey, maxY: -(r.ey - r.eh) }, 'fronts')
+      }
+      return g
+    }
+    // A cabinet-space box → this sheet's frame (top: x, z; side: z, y down).
+    const put = (b: { x: number; y: number; z: number; w: number; h: number; d: number }, src: 'cabinets' | 'fronts') => rect(sheet === 'top'
+      ? { minX: b.x, maxX: b.x + b.w, minY: b.z, maxY: b.z + b.d }
+      : { minX: b.z, maxX: b.z + b.d, minY: -(b.y + b.h), maxY: -b.y }, src)
+    rect(sheet === 'top' ? { minX: 0, maxX: cabinet.dx, minY: 0, maxY: cabinet.dz } : { minX: 0, maxX: cabinet.dz, minY: -cabinet.dy, maxY: 0 }, 'cabinets')
+    for (const p of rp?.case_parts ?? []) if (!p.AY) put(caseBox(p), 'cabinets')
     for (const z of rp?.face_zones ?? []) {
-      if (z.face_type === 'open') continue
-      const r = zoneElevRect(z)
-      addOutline(g, boxPts({ minX: r.ex, maxX: r.ex + r.ew, minY: -r.ey, maxY: -(r.ey - r.eh) }), 'fronts', true, undefined, true)
+      if (z.face_type === 'open' || z.AY) continue
+      put({ x: z.X, y: z.Y, z: z.Z, w: z.DX, h: z.DY, d: z.DZ }, 'fronts')
+    }
+    for (const t of rp ? bifoldTracks(rp) : []) {
+      if (sheet === 'side') addOutline(g, trackProfile(t).map(p => ({ x: p.z, y: -p.y })), 'cabinets', true, undefined, true)
+      else put({ x: t.x, y: t.y, z: t.z, w: t.dx, h: t.dy, d: t.dz }, 'cabinets')
     }
     return g
-  }, [cabinet.dx, cabinet.dy, rp])
+  }, [sheet, cabinet.dx, cabinet.dy, cabinet.dz, rp])
   const snapNotes = useMemo(() => planSnapGeometry({ walls: [], cabinets: [], fixtures: [], benchtops: [], annotations: own, paperToFrame: paper }), [own, paper])
 
   const noop = useCallback(() => {}, [])
@@ -109,7 +140,7 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
     enterCad: () => setOn(true), exitCad: () => setOn(false),
   })
 
-  // F7 toggles the modal's CAD on the Elevation tab (the canvas behind never sees it).
+  // F7 toggles the modal's CAD on this tab (the canvas behind never sees it).
   useEffect(() => {
     if (!ctx || !viewOn) return
     const onKey = (e: KeyboardEvent) => {
@@ -125,7 +156,7 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
 
   // Item CAD on this cabinet (read-only here; Edit pulls it back into the drawing).
   const targetsFor = ctx?.itemCad.targetsFor
-  const targets = useMemo(() => targetsFor ? targetsFor(cabinet, rp) : [], [targetsFor, cabinet, rp])
+  const targets = useMemo(() => targetsFor ? targetsFor(cabinet, rp, sheet) : [], [targetsFor, cabinet, rp, sheet])
   const hidden = useMemo(() => hiddenOwners(cabinet), [cabinet])
   // Fields: this cabinet's ({code}, {w}, {bin}…) over the job's; a front's notes read its own bin.
   const fieldsFor = ctx?.itemCad.fieldsFor
@@ -133,12 +164,12 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
   const libraryNotes = useMemo(() => !ctx ? { shown: [], hidden: [] } : (() => {
     const shown: RoomAnnotation[] = [], hid: RoomAnnotation[] = []
     targets.forEach((t, i) => {
-      const rows = withFieldsFilled(withFieldsFilled(asAnnotationRows(placeItemCad(ctx.itemCad.targetItems(t), t.box, paper),
-        `itemcad:${cabinet.id}:${i}`, ctx.room.id), ctx.itemCad.fieldsFor(cabinet, t, rp)), ctx.fields)
+      const rows = withFieldsFilled(withFieldsFilled(asAnnotationRows(placeItemCad(ctx.itemCad.targetItems(t, libView), t.box, paper),
+        `itemcad:${cabinet.id}:${sheet}:${i}`, ctx.room.id, sheet), ctx.itemCad.fieldsFor(cabinet, t, rp)), ctx.fields)
       ;(hidden.has(ownerId(t.kind, t.key)) ? hid : shown).push(...rows)
     })
     return { shown, hidden: hid }
-  })(), [ctx, targets, paper, cabinet, rp, hidden])
+  })(), [ctx, targets, paper, cabinet, rp, hidden, libView, sheet])
 
   const cursorStyle = cad.tool === 'select' ? 'default' : 'crosshair'
   const overlay = !ctx ? null : (
@@ -174,7 +205,7 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
   )
 
   const setSvg = useCallback((el: SVGSVGElement | null) => { svgRef.current = el }, [])
-  const host: ModalCadHost = { on: active, overlay, setSvg, onUnit: setUnit }
+  const host: ModalCadHost = { on: active, overlay, setSvg, onUnit: setUnit, onOrigin: setOrigin }
 
   // ── Move to library / Edit / Remove ──
   const [msg, setMsg] = useState<string | null>(null)
@@ -198,7 +229,7 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
     if (!ctx || !selOwn.length || busy) return
     setBusy(true); setMsg(null)
     const target = pickTarget(t)
-    const err = await ctx.itemCad.saveToLibrary(target, selOwn)
+    const err = await ctx.itemCad.saveToLibrary(target, selOwn, libView)
     if (err) { setMsg(err); setBusy(false); return }
     const ids = new Set(selOwn.map(a => a.id))
     ctx.captureSnapshot()
@@ -213,12 +244,12 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
   /** Library notes on these targets → this cabinet's own notes (fields stay as tokens). */
   async function copyToCabinet(ts: ItemCadTarget[]): Promise<RoomAnnotation[] | null> {
     if (!ctx) return null
-    const items = ts.flatMap(t => placeItemCad(ctx.itemCad.targetItems(t), t.box, paper))
+    const items = ts.flatMap(t => placeItemCad(ctx.itemCad.targetItems(t, libView), t.box, paper))
     if (!items.length) return null
     const base = Math.max(0, ...own.map(a => a.sort_order)) + 1
     const rows = items.map((it, i) => ({
       id: crypto.randomUUID(), room_id: ctx.room.id, view: 'cabinet_sheet' as const, wall_id: null, wall_side: null,
-      cabinet_id: cabinet.id, sheet_view: 'front' as const, kind: it.kind, geom: it.geom, text: it.text, style: it.style, sort_order: base + i,
+      cabinet_id: cabinet.id, sheet_view: sheet, kind: it.kind, geom: it.geom, text: it.text, style: it.style, sort_order: base + i,
     }))
     const { data, error } = await supabase.from('room_annotations').insert(rows).select('*')
     if (error || !data) { console.error('[item cad copy]', error); return null }
@@ -227,11 +258,11 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
 
   /** Library notes back into this cabinet's drawing to change, and cleared from the library. */
   async function editFromLibrary(t: ItemCadTarget) {
-    if (!ctx || busy || !ctx.itemCad.targetItems(t).length) return
+    if (!ctx || busy || !ctx.itemCad.targetItems(t, libView).length) return
     setBusy(true); setMsg(null)
     const data = await copyToCabinet([t])
     if (!data) { setMsg('Couldn’t bring the notes back.'); setBusy(false); return }
-    const err = await ctx.itemCad.clearOwner(t)
+    const err = await ctx.itemCad.clearOwner(t, libView)
     if (err) {
       void dbDeleteAnnotations(data.map(r => r.id))
       setMsg(err); setBusy(false); return
@@ -271,7 +302,7 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
   async function removeFromLibrary(t: ItemCadTarget) {
     if (!ctx || busy) return
     setBusy(true); setMsg(null); setConfirmRemove(null)
-    const err = await ctx.itemCad.clearOwner(t)
+    const err = await ctx.itemCad.clearOwner(t, libView)
     setMsg(err ?? `${t.label} item CAD removed. Jobs already drawn keep theirs.`)
     setBusy(false)
   }
@@ -294,8 +325,8 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
           {selOwn.length > 0 && !targets.length && <span className="text-gray-500">this cabinet has no bin front or library code</span>}
         </span>
       ) : <span className="text-gray-500">F7 or CAD to draw on this cabinet.</span>}
-      {distinctTargets(targets).filter(t => ctx.itemCad.targetItems(t).length).map(t => {
-        const id = ownerId(t.kind, t.key), n = ctx.itemCad.targetItems(t).length, isHidden = hidden.has(id)
+      {distinctTargets(targets).filter(t => ctx.itemCad.targetItems(t, libView).length).map(t => {
+        const id = ownerId(t.kind, t.key), n = ctx.itemCad.targetItems(t, libView).length, isHidden = hidden.has(id)
         return (
           <span key={id} className="flex items-center gap-1.5">
             <span className="text-gray-300">{t.label}: {n} note{n > 1 ? 's' : ''}{isHidden ? ' (hidden here)' : ''}</span>
@@ -323,7 +354,7 @@ export function useCabinetCad({ ctx, cabinet, rp, viewOn, onEnter }: {
 
   const panel = active && ctx ? (
     <CadPanel cad={cad} annotations={own} paper={paper} walls={ctx.walls} fieldValues={cabFields} blockSaveReq={0}
-      onClose={() => setOn(false)} elevation={`${cabinet.label ?? 'Cabinet'} — Front`} itemFields={ITEM_CAD_FIELDS} />
+      onClose={() => setOn(false)} elevation={`${cabinet.label ?? 'Cabinet'} — ${SHEET_NAME[sheet]}`} itemFields={ITEM_CAD_FIELDS} sheet={sheet} />
   ) : null
 
   // Text editor + right-click menu (fixed-position, so they sit over the modal).

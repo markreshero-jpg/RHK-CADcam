@@ -221,7 +221,7 @@ function summary(a: RoomAnnotation, k: number): string {
   }
 }
 
-export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose, elevation, itemFields, cadLayers }: {
+export default function CadPanel({ cad, annotations, paper, walls, fieldValues, blockSaveReq, onClose, elevation, itemFields, cadLayers, sheet }: {
   cad:         AnnotationTool
   /** The drawing's annotations (the list to pick from). */
   annotations: RoomAnnotation[]
@@ -239,10 +239,12 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
   elevation?:  string | null
   /** Drawing on a cabinet (z_item_cad): its fields, listed above the job's. */
   itemFields?: { key: string; label: string }[]
+  /** Cabinet Edit modal tab (z_item_cad IC3a): top reads Y from the back (no Z up). */
+  sheet?:      'front' | 'top' | 'side'
   /** Named CAD layers (z_cad_layers): the job's list, edits, current layer. */
   cadLayers?:  { layers: CadLayer[]; ops: CadLayerOps; current: string | null; setCurrent: (id: string | null) => void; onManage: () => void }
 }) {
-  const ys = elevation ? -1 : 1
+  const ys = elevation && sheet !== 'top' ? -1 : 1
   const sel = cad.selected
   const one = !cad.editing && sel.length === 1 ? sel[0] : null
   const c = cad.cursor, from = cad.fromPt
@@ -254,7 +256,7 @@ export default function CadPanel({ cad, annotations, paper, walls, fieldValues, 
       <div className="px-3 py-2.5 border-b border-gray-800 flex items-center justify-between">
         <div>
           <div className="text-sm font-semibold text-rose-300">CAD</div>
-          <div className="text-[11px] text-gray-500">{itemFields ? `${elevation} · X from the cabinet’s left · Z up from its bottom` : elevation ? `${elevation} · X along the wall · Z up from the floor` : 'Room mm · Y runs down the plan'}</div>
+          <div className="text-[11px] text-gray-500">{itemFields ? `${elevation} · ${sheet === 'top' ? 'X from the cabinet’s left · Y from its back' : sheet === 'side' ? 'X from the cabinet’s back · Z up from its bottom' : 'X from the cabinet’s left · Z up from its bottom'}` : elevation ? `${elevation} · X along the wall · Z up from the floor` : 'Room mm · Y runs down the plan'}</div>
         </div>
         <button onClick={onClose} title="Close CAD (F7)" className="text-gray-500 hover:text-white text-lg leading-none px-1">×</button>
       </div>

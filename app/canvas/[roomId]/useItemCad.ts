@@ -11,15 +11,17 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   type LibraryCad, type JobItemCad, type ItemCadTarget, type ItemCadView,
   FRONT_TYPE_LABELS, ownerId, itemsForOwner, missingJobCopies, toItemCadItems, placeItemCad, asAnnotationRows,
-  binProductName, itemFieldValues,
+  binProductName, itemFieldValues, itemCadViewSheet,
 } from '@/src/lib/annotations/itemCad'
 import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
-import { ownedBy, cabinetSheetOwner } from '@/src/lib/annotations/owner'
+import { ownedBy, cabinetSheetOwner, type SheetView } from '@/src/lib/annotations/owner'
 import { zoneElevRect } from './cabinetEditSvgHelpers'
 
-/** Where item CAD can attach on a cabinet's front, in the cabinet front frame (x from
- *  the left, y down from the bottom): each bin front, and the cabinet code. */
-export function cabinetItemCadTargets(cab: CabinetInstance, rp: ResolvedCabinet | undefined, defName?: string): ItemCadTarget[] {
+/** Where item CAD can attach on a cabinet, in that sheet's frame. Front (x from the
+ *  left, y down from the bottom): each bin front, and the cabinet code. Top (x from the
+ *  left, y from the back toward the front) and side (x from the back toward the front,
+ *  y down from the bottom): the cabinet code only (IC3a). */
+export function cabinetItemCadTargets(cab: CabinetInstance, rp: ResolvedCabinet | undefined, defName?: string, sheet: SheetView = 'front'): ItemCadTarget[] {
   const out: ItemCadTarget[] = []
   const allBins: string[] = []
   for (const ds of rp?.drawer_stacks ?? []) {
@@ -27,14 +29,16 @@ export function cabinetItemCadTargets(cab: CabinetInstance, rp: ResolvedCabinet 
     const binId = ds.slides[0]?.slide_id
     if (binId) allBins.push(binId)
     const z = rp!.face_zones.find(f => f.row_index === ds.face_zone_row && f.col_index === ds.face_zone_col)
-    if (!z) continue
+    if (!z || sheet !== 'front') continue
     const r = zoneElevRect(z)
     out.push({ kind: 'front_type', key: 'bin', label: FRONT_TYPE_LABELS.bin, binIds: binId ? [binId] : [],
       box: { minX: r.ex, maxX: r.ex + r.ew, minY: -r.ey, maxY: -(r.ey - r.eh) } })
   }
   if (cab.cabinet_definition_id) {
     out.push({ kind: 'cabinet_def', key: cab.cabinet_definition_id, label: defName ?? 'Cabinet code', binIds: allBins,
-      box: { minX: 0, maxX: cab.dx, minY: -cab.dy, maxY: 0 } })
+      box: sheet === 'front' ? { minX: 0, maxX: cab.dx, minY: -cab.dy, maxY: 0 }
+        : sheet === 'top' ? { minX: 0, maxX: cab.dx, minY: 0, maxY: cab.dz }
+        : { minX: 0, maxX: cab.dz, minY: -cab.dy, maxY: 0 } })
   }
   return out
 }
@@ -95,8 +99,8 @@ export function useItemCad({ projectId, projectCreatedAt, roomId, cabinets, reso
     return () => { off = true }
   }, [defIds])
 
-  const targetsFor = useCallback((c: CabinetInstance, rp: ResolvedCabinet | undefined) =>
-    cabinetItemCadTargets(c, rp, c.cabinet_definition_id ? defNames[c.cabinet_definition_id] : undefined), [defNames])
+  const targetsFor = useCallback((c: CabinetInstance, rp: ResolvedCabinet | undefined, sheet: SheetView = 'front') =>
+    cabinetItemCadTargets(c, rp, c.cabinet_definition_id ? defNames[c.cabinet_definition_id] : undefined, sheet), [defNames])
 
   // Bin product names for {bin} (a bin's "slide" is the bin itself, z_bin_cabinet).
   const binIds = useMemo(() => [...new Set([...resolvedParts.values()].flatMap(r =>
@@ -150,16 +154,19 @@ export function useItemCad({ projectId, projectCreatedAt, roomId, cabinets, reso
     })()
   }, [loaded, projectId, projectCreatedAt, job, lib, targetsByCab])
 
-  /** Everything a cabinet's front draws, in its front frame, item fields filled: its own
-   *  notes (Cabinet Edit modal, "this cabinet only") then the item CAD of each target it
-   *  doesn't hide. */
-  const frontNotes = useCallback((cab: CabinetInstance, view: ItemCadView = 'elevation'): RoomAnnotation[] => {
-    const own = withFieldsFilled(annotations.filter(a => ownedBy(a, cabinetSheetOwner(cab.id, view === 'plan' ? 'top' : 'front'))), fieldsFor(cab))
+  /** Everything one view of a cabinet draws, in that sheet's frame, item fields filled:
+   *  its own notes (Cabinet Edit modal, "this cabinet only") then the item CAD of each
+   *  target it doesn't hide. `k` = frame mm per paper mm to place library notes at
+   *  (default the room's; a cabinet sheet passes its view's own, IC3a). */
+  const frontNotes = useCallback((cab: CabinetInstance, view: ItemCadView = 'elevation', k: number = paper): RoomAnnotation[] => {
+    const sheet = itemCadViewSheet(view)
+    const own = withFieldsFilled(annotations.filter(a => ownedBy(a, cabinetSheetOwner(cab.id, sheet))), fieldsFor(cab))
     const hidden = hiddenOwners(cab)
-    const placed = (targetsByCab.get(cab.id) ?? []).flatMap((t, i) => hidden.has(ownerId(t.kind, t.key)) ? [] : withFieldsFilled(
-      asAnnotationRows(placeItemCad(itemsForOwner(lib, job, t.kind, t.key, view), t.box, paper), `itemcad:${cab.id}:${i}`, roomId), fieldsFor(cab, t)))
+    const targets = sheet === 'front' ? (targetsByCab.get(cab.id) ?? []) : targetsFor(cab, resolvedParts.get(cab.id), sheet)
+    const placed = targets.flatMap((t, i) => hidden.has(ownerId(t.kind, t.key)) ? [] : withFieldsFilled(
+      asAnnotationRows(placeItemCad(itemsForOwner(lib, job, t.kind, t.key, view), t.box, k), `itemcad:${cab.id}:${sheet}:${i}`, roomId, sheet), fieldsFor(cab, t)))
     return [...own, ...placed]
-  }, [annotations, targetsByCab, lib, job, paper, roomId, fieldsFor])
+  }, [annotations, targetsByCab, targetsFor, resolvedParts, lib, job, paper, roomId, fieldsFor])
 
   /** Library item CAD drawn on one target (what this job shows). */
   const targetItems = useCallback((t: ItemCadTarget, view: ItemCadView = 'elevation') =>

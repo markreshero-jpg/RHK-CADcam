@@ -118,7 +118,7 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
 |---|---|---|
 | F1 | Switches + RHS sidebar (tick, hand, bottom, centre). Resolver: carriage, bottom guide and centre hinge drills on the right doors (both centre options), no hinges on the leading door, warnings. CNC through seamDrillSync. Tests. | [x] built 2026-10-30, see F1 notes; in-app check pending |
 | F2 | Hardware pick list / takeoff: LS set (L/R), tracks (2 m count), centre hinges (35 cup option: 7104981 packs of 2, ceil(hinges ÷ 2) per pair of doors). `hardware_accessories` rows. | [ ] |
-| F3 | Cabinet Edit modal: tracks + carriage / guide outlines in Top / Elevation / Side; a Side detail with fixed dims (47.5, 64, 26.5, 22.5, 55, 15, 22.7 / 30.5); `bifold_tracks` layer item. | [ ] |
+| F3 | Cabinet Edit modal: tracks + carriage / guide outlines in Top / Elevation / Side; a Side detail with fixed dims (47.5, 64, 26.5, 22.5, 55, 15, 22.7 / 30.5); `bifold_tracks` layer item. | [~] 2026-10-30: tracks drawn in the modal views + cabinet sheets; CAD on the Side / Top tabs built (z_item_cad IC3a), so Mark draws the detail once on W2D/BF + T2D/BF and moves it to the cabinet code. Carriage / guide outlines not drawn. |
 | F4 | 3D: tracks + fittings, folding open animation (trailing door pivots on the outer door's edge). Plan: folded-pack swing. | [~] tracks built 2026-10-30 (see F4 notes); fittings + fold animation + plan swing to do |
 | F5 | Tutorial. | [ ] |
 

@@ -32,8 +32,12 @@ import { roundMm } from '@/src/lib/format'
 import { cutListDims, cabinetLookups, shapeMark, type CutListDims, type CutListPart, type CutListTable } from '@/src/lib/optimiser/cutListDims'
 import type { ShapeRow } from '@/src/lib/optimiser/shapes'
 import { normaliseSplit, splitCaseParts, splitBaseKey, cutBaseKeys, splitPieceSuffix } from '@/src/lib/cabinetSplit'
+import type { RoomAnnotation } from '@/src/lib/types'
+import type { ItemCadView } from '@/src/lib/annotations/itemCad'
+import { bifoldTracks, trackProfile } from '@/src/lib/resolver/resolveBifold'
+import AnnotationLayer from './AnnotationLayer'
 
-export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean }
+export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean; cad?: boolean }
 
 // Effective hardware schedules for the room (resolved room→project→shop default).
 export interface HardwareCfg {
@@ -96,7 +100,7 @@ type OvP = { X: number; Y: number; Z: number }
 
 export default function CabinetSheetSVG({
   cab, rp: rpRaw, wall, projectName, roomName, materialNames, paperKey, svgRef, show,
-  partOverrides, customParts, hardware, jointNames, shapeRows,
+  partOverrides, customParts, hardware, jointNames, shapeRows, cadNotes,
 }: {
   cab: CabinetInstance
   rp?: ResolvedCabinet
@@ -113,6 +117,9 @@ export default function CabinetSheetSVG({
   jointNames?: Record<string, string>
   /** part_shape_overrides rows for this cabinet (any revision order). */
   shapeRows?: ShapeRow[]
+  /** CAD notes for a view of this cabinet (z_item_cad IC3a): the Cabinet Edit modal's
+   *  own notes + library item CAD, library notes placed at `k` frame mm per paper mm. */
+  cadNotes?: (view: ItemCadView, k: number) => RoomAnnotation[]
 }) {
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for the elevation.
   const rp = rpRaw && frontViewHardware(rpRaw)
@@ -192,6 +199,22 @@ export default function CabinetSheetSVG({
     return els
   }
 
+  // CAD notes for a view (IC3a), at the view's scale: paper mm stay paper mm on the page.
+  // Frames as owner.ts: front / side y down from the bottom, top y from the back.
+  const cadEl = (view: ItemCadView, s: number, ox: number, oy: number) =>
+    show.cad !== false && cadNotes && s > 0
+      ? <AnnotationLayer key={`cad_${view}`} annotations={cadNotes(view, 1 / s)} frame={{ ox, oy, s, flipY: false }} paper={1} printColours={false} printing />
+      : null
+  // Sliding bi-fold tracks (z_bifold_slide): end profile at each end, joined along its length.
+  const tracks = rp ? bifoldTracks(rp) : []
+  const trackEls = (key: string, m: (x: number, y: number, z: number) => [number, number]) => tracks.map(t => {
+    const prof = trackProfile(t)
+    const [a, b] = [t.x, t.x + t.dx].map(x => prof.map(p => m(x, p.y, p.z)))
+    const d = [a, b].map(e => 'M' + e.map(([x, y]) => `${x.toFixed(2)} ${y.toFixed(2)}`).join('L') + 'Z').join('')
+      + a.map(([x, y], i) => `M${x.toFixed(2)} ${y.toFixed(2)}L${b[i][0].toFixed(2)} ${b[i][1].toFixed(2)}`).join('')
+    return <path key={`${key}${t.which}`} d={d} fill="none" stroke={INK2} strokeWidth={THIN} strokeLinejoin="round" />
+  })
+
   // ── FRONT (modal elevRect geometry, B&W) ──────────────────────────────────
   function front() {
     const { s, tx, ty } = place(frontBox, dx, dy, 6, 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
@@ -264,6 +287,8 @@ export default function CabinetSheetSVG({
       const xl = tx - 4.5
       els.push(...dim(xl, ty, xl, ty + dy * s, `${roundMm(dy)}`, 'left', 'fh'))
     }
+    els.push(...trackEls('trf', (x, y) => FM(x, y)))
+    els.push(cadEl('elevation', s, tx, ty + dy * s))
     return els
   }
 
@@ -314,6 +339,8 @@ export default function CabinetSheetSVG({
       const xl = tx - 4.5
       els.push(...dim(xl, ty, xl, ty + dy * s, `${roundMm(dy)}`, 'left', 'sh'))
     }
+    els.push(...trackEls('trs', (_x, y, z) => SM(z, y)))
+    els.push(cadEl('side', s, tx, ty + dy * s))
     return els
   }
 
@@ -348,6 +375,8 @@ export default function CabinetSheetSVG({
       const xl = tx - 4.5
       els.push(...dim(xl, fy, xl, fy + dz * s, `${roundMm(dz)}`, 'left', 'pd'))
     }
+    els.push(...trackEls('trp', (x, _y, z) => PM(x, z)))
+    els.push(cadEl('plan', s, tx - x0 * s, ty - z0 * s))
     return els
   }
 

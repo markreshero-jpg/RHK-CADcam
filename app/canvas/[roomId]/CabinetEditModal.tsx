@@ -536,9 +536,12 @@ export default function CabinetEditModal({
     return rp && input ? buildFormulaScope(rp, input) : null
   }, [rp, cabinet.id])
 
-  // CAD on the Elevation tab (z_item_cad IC1).
+  // CAD on the Elevation / Top / Side tabs (z_item_cad IC1, IC3a): one drawing per tab.
   const onCadEnter = useCallback(() => { setSelectedSVGPart(null); setMeasureMode(false) }, [])
-  const mcad = useCabinetCad({ ctx: cadCtx, cabinet, rp, viewOn: activeView === 'elevation', onEnter: onCadEnter })
+  const mcadFront = useCabinetCad({ ctx: cadCtx, cabinet, rp, sheet: 'front', viewOn: activeView === 'elevation', onEnter: onCadEnter })
+  const mcadTop   = useCabinetCad({ ctx: cadCtx, cabinet, rp, sheet: 'top',   viewOn: activeView === 'top',       onEnter: onCadEnter })
+  const mcadSide  = useCabinetCad({ ctx: cadCtx, cabinet, rp, sheet: 'side',  viewOn: activeView === 'side',      onEnter: onCadEnter })
+  const mcad = activeView === 'top' ? mcadTop : activeView === 'side' ? mcadSide : mcadFront
   useEffect(() => { cadOnRef.current = mcad.on }, [mcad.on])
 
   return (
@@ -613,10 +616,10 @@ export default function CabinetEditModal({
             })}
             {(isOrthoView || activeView === 'face' || activeView === 'interior' || activeView === '3d') && rp && (
               <div className="ml-auto flex items-center gap-1.5">
-                {activeView === 'elevation' && mcad.available && (
+                {(activeView === 'elevation' || activeView === 'top' || activeView === 'side') && mcad.available && (
                   <button
                     onClick={() => mcad.toggle()}
-                    title="CAD notes on this cabinet (F7). Move them to the library to show on every bin front / cabinet code"
+                    title="CAD notes on this view of the cabinet (F7). Move them to the library to show on every bin front / cabinet code"
                     className={`px-2.5 py-1 text-xs rounded transition-colors ${
                       mcad.on
                         ? 'bg-rose-700 text-white hover:bg-rose-600'
@@ -698,7 +701,7 @@ export default function CabinetEditModal({
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null); setSelFixtureId(null) } : undefined}
           >
             {activeView === 'top' && (
-              visibleRp ? <ResolvedTop cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
+              visibleRp ? <ResolvedTop cad={mcadTop.host} cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
@@ -708,7 +711,7 @@ export default function CabinetEditModal({
               : <TopView cab={cabinet} />
             )}
             {activeView === 'elevation' && (
-              visibleRp ? <ResolvedElevation cad={mcad.host} cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
+              visibleRp ? <ResolvedElevation cad={mcadFront.host} cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}
@@ -718,7 +721,7 @@ export default function CabinetEditModal({
               : <ElevationView cab={cabinet} />
             )}
             {activeView === 'side' && (
-              visibleRp ? <ResolvedSide cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
+              visibleRp ? <ResolvedSide cad={mcadSide.host} cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
                 onPartContextMenu={handlePartContextMenu}
                 onEmptyContextMenu={(pos, cx, cy) => setAddMenu({ ...pos, cx, cy })}

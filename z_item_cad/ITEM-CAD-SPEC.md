@@ -1,6 +1,6 @@
 # Item CAD — CAD attached to library items
 
-**Status:** IC1 + IC2 built 2026-10-25 (checked headless, in-app checks pending). Next: IC3 (prints + plan).
+**Status:** IC1 + IC2 built 2026-10-25 (checked headless, in-app checks pending). IC3a (Side + Top tabs, cabinet sheet prints) built 2026-10-30, checked headless (modal), in-app check pending. Next: rest of IC3 (plan canvas + other prints).
 
 CAD notes (the F7 tools) that belong to a library item, not a room: whenever
 the item comes out of the library, its CAD draws with it. First use: "PULLOUT BIN"
@@ -82,7 +82,8 @@ renderer (`AnnotationLayer`), with notes placed into each view's frame through t
 |---|---|---|
 | IC1 | `library_cad` + `job_item_cad` tables; F7 CAD in the Cabinet Edit modal Elevation tab; save target picker (cabinet only / front type / cabinet code); anchors; draw on the elevation canvas from the job copy | [x] built 2026-10-25, see IC1 notes; checked headless, in-app check pending |
 | IC2 | Item fields (`{bin}`, `{code}`…), Hide / Detach per placed item; seed "PULLOUT BIN" on the bin front (Mark to draw it — the test one was removed) | [x] built 2026-10-25, see IC2 notes; checked headless, in-app check pending. PULLOUT BIN not seeded: Mark draws it |
-| IC3 | Top tab → plan attachments (canvas + Plan View PDF); prints: Elevation Views PDF, shop drawings, cabinet sheets | [ ] |
+| IC3a | CAD on the modal's **Side** and **Top** tabs (Mark, 2026-10-30, for the bi-fold track detail): own drawing per tab, library view `side` / `plan` on the cabinet code; **cabinet sheets** print Front / Side / Plan notes | [x] built 2026-10-30, see IC3a notes; in-app check pending |
+| IC3 | Top tab notes on the plan canvas + Plan View PDF; prints: Elevation Views PDF, shop drawings | [ ] |
 | IC4 | Update job (item CAD part): newer-version list + refresh | [ ] |
 | IC5 | Library view of attachments (list / edit / remove without a room), optional stretch | [ ] |
 | IC6 | Fixture edit window: the Cabinet Edit modal's view shell (Top / Elevation / Side) for a fixture, F7 CAD in it, fixture models as owners (decision 5) | [ ] |
@@ -130,3 +131,45 @@ renderer (`AnnotationLayer`), with notes placed into each view's frame through t
   "PULLOUT BIN / {bin}" → "Nikpol Teramo 74L" on the room elevation; Hide → gone;
   Show + Detach → drawn once (own copy); cleans up after itself.
 - The `item_cad` display layer was done in IC1.
+
+## IC3a notes (2026-10-30)
+
+- **Why:** Mark wanted a dimensioned detail of the bi-fold track (z_bifold_slide) on
+  the cabinet. That's drawn on the Side view, and the Side tab had no CAD.
+- **Database:** `library_cad.view` now allows `side` (`migration_ic3a_side_view.sql`,
+  applied). `room_annotations.sheet_view` already took front / top / side.
+- **Library view per tab:** front = `elevation`, top = `plan`, side = `side`
+  (`sheetItemCadView` / `itemCadViewSheet` in `itemCad.ts`).
+- **Frames** (owner.ts):
+  - top: x from the left, y from the back;
+  - side: x from the back, y down from the bottom.
+- **Targets:** `cabinetItemCadTargets(…, sheet)` gives the cabinet code's box in that
+  frame. Bin fronts are front only.
+- **Modal** (`CabinetEditModal`): one `useCabinetCad` per tab (`sheet` front / top /
+  side). The CAD button and F7 work on Elevation, Top and Side.
+- **Views:** each view reports its frame origin through the CAD host (`onOrigin`), so
+  the hook doesn't hard-code paddings. `ResolvedTop` / `ResolvedSide` take `cad` like
+  `ResolvedElevation`.
+- **Snaps on Top / Side:**
+  - the cabinet outline;
+  - every carcass panel (`caseBox`);
+  - the doors;
+  - the bi-fold tracks (Side: the end profile).
+- **CadPanel:** the `sheet` prop gives the axes caption. Top reads Y from the back, not
+  Z up.
+- **Cabinet sheets** (`CabinetSheetSVG` `cadNotes`):
+  - Front, Side and Plan each draw the cabinet's own notes plus library item CAD.
+  - Library notes are placed at that view's paper scale (`frontNotes(cab, view, k)`,
+    k = 1 / view scale), so text keeps its paper size.
+  - A "CAD notes" toggle (on by default).
+  - `CabinetSheetReport` runs `useItemCad` (the job's pinned copies) and waits for it
+    before a batch download.
+  - `ReportsModal` passes the print-ready room rows + fields.
+  - The sheets also draw the bi-fold tracks.
+- **Tests:** `itemCad.test.ts`, IC3a block.
+- **Headless check** (2026-10-30, RHK1234 test room, T2D/BF, deleted afterwards):
+  - the Side tab took a note, and the panel read "Side · X from the cabinet's back";
+  - the track profile drew under the top behind the door (Side) and across the width
+    (Top).
+- **Not yet:** the printed cabinet sheet wasn't opened headless.
+- **Tutorial:** `item_cad_side_top`.

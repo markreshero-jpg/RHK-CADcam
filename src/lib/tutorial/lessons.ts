@@ -1246,6 +1246,24 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The panel whose edge butts in gets the Cabineo pocket: three overlapping Ø15 circles, 11 deep, 3.6 / 14.8 / 26 in from that edge (the CNC routes them with a router bit). The panel it butts into gets a Ø5 hole 12 deep — not through — 5 off the pocket face. Fit the Cabineo collar-on-surface. The panel with the pocket needs to be 16 thick or more. In the 3D tab each Cabineo is drawn in its pocket (Layers → Joint fittings turns them off). The connector is in Library → Materials → Accessories (category Connector).',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-10-30 (z_item_cad IC3a — CAD on the Side + Top tabs, printed on cabinet sheets).
+  { id: 'item_cad_side_top', level: 'intermediate', topic: 'cad', title: 'Details on the side or top of a cabinet',
+    blurb: 'Draw a dimensioned detail on a cabinet’s Side or Top view, e.g. the bi-fold track, keep it with the cabinet code and print it on the cabinet sheets.',
+    keywords: 'item cad side top view detail dimension cabinet sheet print bifold bi-fold track w2d/bf t2d/bf library code f7', steps: [
+    { id: 'open', title: 'Side tab, CAD',
+      body: 'Double-click a cabinet (e.g. a W2D/BF bi-fold) to open its edit window. Click the Side tab (or Top) and press F7, or click CAD next to Measure. Each tab has its own drawing: notes on the Side tab stay on the side view. The CAD panel shows where you are: Side = X from the cabinet’s back, Z up from its bottom; Top = X from the left, Y from the back.',
+      canvas: true, done: (c, s) => ev(c, 'item_cad_on') > ev(s, 'item_cad_on') },
+    { id: 'dim', title: 'Dimension it',
+      body: 'Zoom in on what you want to show (the scroll wheel zooms). The dimension tools snap to the carcass panels, the doors and the bi-fold track’s outline, so a detail like "track 22.7 behind the door" picks up the real edges. Add text with the Text tool (T).',
+      canvas: true, done: (c, s) => ev(c, 'item_cad_on') > ev(s, 'item_cad_on') },
+    { id: 'library', title: 'Keep it with the cabinet code',
+      body: 'Select the notes (Ctrl+A), then in the Item CAD bar click the cabinet code button (e.g. W2D/BF (this code)). Every cabinet of that code now draws them on its Side (or Top) view, at any size. Hide here, Detach, Edit and Remove work as on the Elevation tab.',
+      canvas: true, done: (c, s) => ev(c, 'item_cad_moved') > ev(s, 'item_cad_moved') },
+    { id: 'print', title: 'Print it',
+      body: 'Reports → Room Reports… → Cabinet Sheets: each cabinet’s Front, Side and Plan views print their CAD notes (the CAD notes button at the top turns them off). The notes print at their paper size whatever the view’s scale.',
+      canvas: true, done: c => c.report === 'cabinet_sheets' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

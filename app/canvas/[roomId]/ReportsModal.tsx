@@ -841,6 +841,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   resolvedParts={drawResolved}
                   materialNames={materialNames}
                   paperKey={printPaper}
+                  annotations={drawAnnots}
+                  cadFields={otherFields}
                 />
               ) : selectedReport === 'hardware_pick' ? (
                 <HardwarePickSheet data={takeoff.data} />

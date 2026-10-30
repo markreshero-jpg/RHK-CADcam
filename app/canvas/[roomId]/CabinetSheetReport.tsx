@@ -7,7 +7,9 @@ import { useBatchDownload } from './useBatchDownload'
 import { svg2pdf } from 'svg2pdf.js'
 import { reportDoc, saveReport } from './pdfCombine'
 import { supabase } from '@/src/lib/supabase'
-import type { Project, Room, Wall, CabinetInstance } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, RoomAnnotation } from '@/src/lib/types'
+import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
+import { useItemCad } from './useItemCad'
 import type { ResolvedCabinet, SlideProduct, SlideScheduleEntry } from '@/src/lib/resolver/types'
 import { dbLoadPartPosOverrides, dbLoadCustomParts, type PartPosOverrides, type CabinetCustomPart } from './canvasDB'
 import { SHAPE_SELECT, type ShapeRow } from '@/src/lib/optimiser/shapes'
@@ -17,14 +19,15 @@ const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 }, A3L: { w: 420, h: 297 }, A2L: { w: 594, h: 420 }, A1L: { w: 841, h: 594 },
 }
 const LS_KEY = 'cabinet-sheet-layers'
-const DEFAULT_LAYERS: CabinetSheetLayers = { internals: true, dims: true, threeD: true }
+const DEFAULT_LAYERS: CabinetSheetLayers = { internals: true, dims: true, threeD: true, cad: true }
 const TOGGLES: { key: keyof CabinetSheetLayers; label: string }[] = [
   { key: 'internals', label: 'Internals' },
   { key: 'dims',      label: 'Dimensions' },
   { key: 'threeD',    label: '3D View' },
+  { key: 'cad',       label: 'CAD notes' },
 ]
 
-export default function CabinetSheetReport({ project, room, walls, cabinets, resolvedParts, materialNames, paperKey, batch }: {
+export default function CabinetSheetReport({ project, room, walls, cabinets, resolvedParts, materialNames, paperKey, batch, annotations, cadFields }: {
   /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
   batch?: () => void
   project:       Project | null
@@ -34,6 +37,11 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
   resolvedParts: Map<string, ResolvedCabinet>
   materialNames: Record<string, string>
   paperKey:      string
+  /** The room's CAD rows, print-ready (fields filled, no-print layers out): the cabinets'
+   *  own Cabinet Edit modal notes come from here (z_item_cad IC3a). */
+  annotations?:  RoomAnnotation[]
+  /** Job / room {fields} for library item CAD notes. */
+  cadFields?:    CadFieldValues
 }) {
   const refs = useRef<Map<string, SVGSVGElement>>(new Map())
   const [busy, setBusy] = useState(false)
@@ -53,6 +61,9 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
   const visible = useMemo(() => sorted.filter(c => selectedIds.has(c.id)), [sorted, selectedIds])
   const visibleKey = visible.map(c => c.id).join(',')
   const projectName = project?.name ?? 'Untitled Project'
+  // Library item CAD (z_item_cad) — the job's pinned copies, as the canvas draws them.
+  const itemCad = useItemCad({ projectId: project?.id ?? null, projectCreatedAt: project?.created_at ?? null, roomId: room.id,
+    cabinets, resolvedParts, annotations: annotations ?? [], paper: 1 })
 
   // ── Per-cabinet overrides + custom parts (so views match the modal) ─────────
   const [overridesByCab, setOverridesByCab] = useState<Record<string, PartPosOverrides>>({})
@@ -144,7 +155,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
   }
 
   // Ready once the hardware + per-cabinet overrides have loaded.
-  useBatchDownload(batch, hardware !== null && visible.every(c => c.id in overridesByCab), handleDownload)
+  useBatchDownload(batch, hardware !== null && itemCad.loaded && visible.every(c => c.id in overridesByCab), handleDownload)
 
   if (sorted.length === 0) {
     return <div className="text-gray-500 text-center py-12 text-sm">No cabinets in this room.</div>
@@ -208,6 +219,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
             shapeRows={shapesByCab[c.id]}
             hardware={hardware ?? undefined}
             jointNames={jointNames}
+            cadNotes={(view, k) => withFieldsFilled(itemCad.frontNotes(c, view, k), cadFields ?? {})}
           />
         </div>
       ))}

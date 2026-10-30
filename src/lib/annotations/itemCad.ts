@@ -11,10 +11,16 @@ import type { RoomAnnotation } from '../types'
 import type { CadBlockItem } from './blocks'
 import { mapGeom, annotationsBounds } from './blocks'
 import type { Pt, Box } from './geometry'
+import type { SheetView } from './owner'
 
 export type ItemCadAnchor = 'tl' | 'tc' | 'tr' | 'ml' | 'mc' | 'mr' | 'bl' | 'bc' | 'br'
 export type ItemCadOwnerKind = 'front_type' | 'cabinet_def' | 'fixture_model'
-export type ItemCadView = 'elevation' | 'plan'
+export type ItemCadView = 'elevation' | 'plan' | 'side'
+
+/** The Cabinet Edit modal tab a library view is drawn on (IC3a): front = elevation,
+ *  top = plan, side = side. */
+export const sheetItemCadView = (s: SheetView): ItemCadView => s === 'front' ? 'elevation' : s === 'top' ? 'plan' : 'side'
+export const itemCadViewSheet = (v: ItemCadView): SheetView => v === 'elevation' ? 'front' : v === 'plan' ? 'top' : 'side'
 
 export interface ItemCadItem extends CadBlockItem { anchor: ItemCadAnchor }
 
@@ -127,9 +133,9 @@ export function placeItemCad(items: ItemCadItem[], box: Box, k: number): CadBloc
 }
 
 /** Placed items as read-only annotation rows for AnnotationLayer (ids `prefix:i`). */
-export function asAnnotationRows(items: CadBlockItem[], prefix: string, roomId: string): RoomAnnotation[] {
+export function asAnnotationRows(items: CadBlockItem[], prefix: string, roomId: string, sheet: SheetView = 'front'): RoomAnnotation[] {
   return items.map((it, i) => ({
-    id: `${prefix}:${i}`, room_id: roomId, view: 'cabinet_sheet', wall_id: null, cabinet_id: null, sheet_view: 'front',
+    id: `${prefix}:${i}`, room_id: roomId, view: 'cabinet_sheet', wall_id: null, cabinet_id: null, sheet_view: sheet,
     wall_side: null, kind: it.kind, geom: it.geom, text: it.text, style: it.style, sort_order: i,
     created_at: '', updated_at: '',
   }))
