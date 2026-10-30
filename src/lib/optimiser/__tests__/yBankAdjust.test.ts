@@ -49,4 +49,11 @@ describe('Y bank adjustment', () => {
   it('defaults to nothing extra', () => {
     expect(gen({ ...block, yBankAdjustXMm: 0, yBankAdjustYMm: 0 })).toBe(gen(block))
   })
+  it('shifts X-bank firings back by their master spindle distance from spindle 1', () => {
+    const x = (l: string) => Number(/X(-?[\d.]+)/.exec(l)![1])
+    const base = gen(block), comp = gen({ ...block, xBankSpindleCompMm: 32 })
+    // the runner pair fires spindles 5+6 → master 5 → 4 × 32 = 128
+    expect(x(masterAfter(comp, 'M88'))).toBeCloseTo(x(masterAfter(base, 'M88')) - 128, 3)
+    expect(masterAfter(comp, 'M89')).toBe(masterAfter(base, 'M89'))   // Y bank untouched
+  })
 })

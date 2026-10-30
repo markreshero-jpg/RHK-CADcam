@@ -31,6 +31,8 @@ interface DrillBlock {
   head_offset_y_mm: number
   y_bank_adjust_x_mm: number
   y_bank_adjust_y_mm: number
+  x_bank_spindle_comp_mm: number
+  y_bank_spindle_comp_mm: number
   work_offset_code: string
 }
 interface Spindle {
@@ -242,9 +244,12 @@ export default function DrillBlockSetup({ machineId }: { machineId: string }) {
         <Txt label="Work offset" value={block.work_offset_code} onSave={v => patchBlock({ work_offset_code: v || 'G54' })} />
         <NumF label="Y bank extra X (mm)" value={block.y_bank_adjust_x_mm} onSave={v => patchBlock({ y_bank_adjust_x_mm: v ?? 0 })} />
         <NumF label="Y bank extra Y (mm)" value={block.y_bank_adjust_y_mm} onSave={v => patchBlock({ y_bank_adjust_y_mm: v ?? 0 })} />
+        <NumF label="X bank per-spindle shift (mm)" value={block.x_bank_spindle_comp_mm} onSave={v => patchBlock({ x_bank_spindle_comp_mm: v ?? 0 })} />
+        <NumF label="Y bank per-spindle shift (mm)" value={block.y_bank_spindle_comp_mm} onSave={v => patchBlock({ y_bank_spindle_comp_mm: v ?? 0 })} />
       </div>
       <p className="text-[11px] text-ink-muted -mt-2 mb-4 max-w-xl">
         Head offsets are for the X bank (M88). The Y bank (M89) gets the head offset plus its extra — set the extra if Y-bank holes (e.g. shelf holes) land out when X-bank holes are right.
+        Per-spindle shift: when the control puts spindle 1 on the programmed point, each firing is moved back by (first spindle − 1) × this (EVO49 X bank: 32).
       </p>
 
       <div className="flex gap-6 flex-wrap">

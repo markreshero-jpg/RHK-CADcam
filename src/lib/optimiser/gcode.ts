@@ -978,11 +978,12 @@ function emitGangDrilling(
 
   // Sheet-local → machine coords. X carries the head offset; Y is mirrored (face
   // down) then signed, plus the head offset (the multidrill-head compensation).
-  // Y-bank firings add the Y bank's own adjustment on top.
-  const adjX = (bank: 'x' | 'y') => bank === 'y' ? block.yBankAdjustXMm ?? 0 : 0
-  const adjY = (bank: 'x' | 'y') => bank === 'y' ? block.yBankAdjustYMm ?? 0 : 0
-  const tx = (x: number, bank: 'x' | 'y') => x + block.headOffsetXMm + adjX(bank)
-  const ty = (y: number, bank: 'x' | 'y') => p.sign_y * (p.mirror_y ? sheetHeight - y : y) + block.headOffsetYMm + adjY(bank)
+  // Y-bank firings add the Y bank's own adjustment on top, and the master is
+  // shifted back by its distance from spindle 1 along its bank's axis.
+  const adjX = (bank: 'x' | 'y', master: number) => bank === 'y' ? block.yBankAdjustXMm ?? 0 : -(master - 1) * (block.xBankSpindleCompMm ?? 0)
+  const adjY = (bank: 'x' | 'y', master: number) => bank === 'y' ? (block.yBankAdjustYMm ?? 0) - (master - 1) * (block.yBankSpindleCompMm ?? 0) : 0
+  const tx = (x: number, bank: 'x' | 'y', master: number) => x + block.headOffsetXMm + adjX(bank, master)
+  const ty = (y: number, bank: 'x' | 'y', master: number) => p.sign_y * (p.mirror_y ? sheetHeight - y : y) + block.headOffsetYMm + adjY(bank, master)
   // Drill-block Z (defect D9, plus the depth-datum bug it was hiding).
   //
   // Depth is measured from the MATERIAL SURFACE, not from the retract plane.
@@ -1043,11 +1044,11 @@ function emitGangDrilling(
     if (!prepDone) { prep.forEach(l => emit(l)); prepDone = true }
     emit(`${mcode} B${g.bitmask}`)
     const m0 = masters[0]
-    const b = g.bank
-    emit(`G90 G0 ${block.workOffsetCode} G43 H1 X${f(tx(m0.x, b))} Y${f(ty(m0.y, b))} Z${rapidZ}`)
+    const b = g.bank, ms = g.masterSpindle
+    emit(`G90 G0 ${block.workOffsetCode} G43 H1 X${f(tx(m0.x, b, ms))} Y${f(ty(m0.y, b, ms))} Z${rapidZ}`)
     emit(`${p.drill_return_code} ${p.drill_cycle_code} Z${dz} R${rapidZ} F${drillFeed}`)
-    for (let k = 1; k < passes; k++) emit(`X${f(tx(m0.x, b))} Y${f(ty(m0.y, b))} Z${dz}`)   // re-plunge master 0
-    for (const m of masters.slice(1)) for (let k = 0; k < passes; k++) emit(`X${f(tx(m.x, b))} Y${f(ty(m.y, b))} Z${dz}`)
+    for (let k = 1; k < passes; k++) emit(`X${f(tx(m0.x, b, ms))} Y${f(ty(m0.y, b, ms))} Z${dz}`)   // re-plunge master 0
+    for (const m of masters.slice(1)) for (let k = 0; k < passes; k++) emit(`X${f(tx(m.x, b, ms))} Y${f(ty(m.y, b, ms))} Z${dz}`)
     emit('G80')   // cancel canned cycle
     // NO Z-homing here. Between firings the block travels at the retract plane,
     // which already clears the sheet, so the gold reference homes ONCE after all

@@ -177,6 +177,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
             sharedCorner: Boolean(blk.shared_corner ?? true),
             headOffsetXMm: Number(blk.head_offset_x_mm ?? 0), headOffsetYMm: Number(blk.head_offset_y_mm ?? -128),
             yBankAdjustXMm: Number(blk.y_bank_adjust_x_mm ?? 0), yBankAdjustYMm: Number(blk.y_bank_adjust_y_mm ?? 0),
+            xBankSpindleCompMm: Number(blk.x_bank_spindle_comp_mm ?? 0), yBankSpindleCompMm: Number(blk.y_bank_spindle_comp_mm ?? 0),
             workOffsetCode: String(blk.work_offset_code ?? 'G54'), xDiameters, yDiameters,
           }
         }

@@ -40,6 +40,7 @@ export interface SimMove {
   // invert them with the block datum, not the routing one.
   blockFrame?: boolean
   frameBank?: 'x' | 'y'                 // which bank's datum (the Y bank carries its own adjustment)
+  frameMask?: number                    // the live bitmask — its lowest spindle is the master
 }
 
 // Minimal drill-block geometry holesOf needs (DrillBlockConfig is a superset).
@@ -188,7 +189,7 @@ export function parseGcode(text: string, opts?: ParseOpts): ParsedProgram {
     const extra = {
       ...(kind === 'drill' && activeBank ? { bank: activeBank, bitmask: activeBank === 'x' ? bankX : bankY } : {}),
       ...(kind === 'drill' && drillDia ? { dia: drillDia } : {}),
-      ...(activeBank ? { blockFrame: true, frameBank: activeBank } : {}),   // posted in the block's G54 datum
+      ...(activeBank ? { blockFrame: true, frameBank: activeBank, frameMask: activeBank === 'x' ? bankX : bankY } : {}),   // posted in the block's G54 datum
       ...(comp && (kind === 'cut' || kind === 'plunge') ? { comp } : {}),
     }
     const arcPts = (motion === 2 || motion === 3) && !cycle && (ci || cj)

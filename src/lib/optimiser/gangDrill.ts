@@ -31,6 +31,11 @@ export interface DrillBlockConfig {
   // the EVO49 the Y bank needed +192 in Y (net 0; test gables, 2026-10-30).
   yBankAdjustXMm?: number
   yBankAdjustYMm?: number
+  // The EVO49 control puts spindle 1 of the bank on the programmed point, not
+  // the firing master: the master is shifted back by (master − 1) × this along
+  // its bank's axis (X bank spindle 5 drilled 128 right before, 2026-10-30).
+  xBankSpindleCompMm?: number
+  yBankSpindleCompMm?: number
   workOffsetCode: string       // 'G54' (drill block work offset)
   // Fitted bit diameter per spindle, indexed by (position − 1). null = empty.
   xDiameters: (number | null)[]
