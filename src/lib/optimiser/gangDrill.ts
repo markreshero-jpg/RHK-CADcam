@@ -36,6 +36,11 @@ export interface DrillBlockConfig {
   // its bank's axis (X bank spindle 5 drilled 128 right before, 2026-10-30).
   xBankSpindleCompMm?: number
   yBankSpindleCompMm?: number
+  // Higher-numbered spindles sit toward LOWER sheet coordinates along the bank's
+  // axis, so the master goes on the highest-coordinate hole of a gang. EVO49 Y
+  // bank: hinge pairs came out 96 high while 5-spindle shelf rows were right.
+  xBankReversed?: boolean
+  yBankReversed?: boolean
   workOffsetCode: string       // 'G54' (drill block work offset)
   // Fitted bit diameter per spindle, indexed by (position − 1). null = empty.
   xDiameters: (number | null)[]

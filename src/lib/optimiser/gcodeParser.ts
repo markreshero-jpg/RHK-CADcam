@@ -44,7 +44,7 @@ export interface SimMove {
 }
 
 // Minimal drill-block geometry holesOf needs (DrillBlockConfig is a superset).
-export interface DrillBlockGeom { bankXCount: number; bankYCount: number; spacingMm: number }
+export interface DrillBlockGeom { bankXCount: number; bankYCount: number; spacingMm: number; xBankReversed?: boolean; yBankReversed?: boolean }
 
 // Expand a drill move into the actual hole positions it produces. A gang move
 // (bank + bitmask) fires several spindles simultaneously at `spacingMm` offsets
@@ -58,9 +58,11 @@ export function holesOf(m: SimMove, block?: DrillBlockGeom): { x: number; y: num
   const fired: number[] = []
   for (let p = 1; p <= count; p++) if (m.bitmask & (1 << (p - 1))) fired.push(p)
   const master = fired[0] ?? 1
+  // A reversed bank's slaves run toward lower coordinates from the master.
+  const dir = (m.bank === 'x' ? block.xBankReversed : block.yBankReversed) ? -1 : 1
   return fired.map(p => m.bank === 'x'
-    ? { x: m.x1 + (p - master) * sp, y: m.y1, dia }
-    : { x: m.x1, y: m.y1 + (p - master) * sp, dia })
+    ? { x: m.x1 + dir * (p - master) * sp, y: m.y1, dia }
+    : { x: m.x1, y: m.y1 + dir * (p - master) * sp, dia })
 }
 
 export interface ParsedProgram {

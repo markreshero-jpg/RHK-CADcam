@@ -56,4 +56,11 @@ describe('Y bank adjustment', () => {
     expect(x(masterAfter(comp, 'M88'))).toBeCloseTo(x(masterAfter(base, 'M88')) - 128, 3)
     expect(masterAfter(comp, 'M89')).toBe(masterAfter(base, 'M89'))   // Y bank untouched
   })
+  it('puts a reversed bank\'s master on the gang\'s far hole', () => {
+    const y = (l: string) => Number(/Y(-?[\d.]+)/.exec(l)![1])
+    const base = gen(block), rev = gen({ ...block, yBankReversed: true })
+    // the 5-hole shelf row fires spindles 3-7: master moves 4 x 32 = 128 up the sheet (machine Y +128)
+    expect(y(masterAfter(rev, 'M89'))).toBeCloseTo(y(masterAfter(base, 'M89')) + 128, 3)
+    expect(masterAfter(rev, 'M88')).toBe(masterAfter(base, 'M88'))
+  })
 })

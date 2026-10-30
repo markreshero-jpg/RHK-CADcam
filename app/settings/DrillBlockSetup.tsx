@@ -33,6 +33,8 @@ interface DrillBlock {
   y_bank_adjust_y_mm: number
   x_bank_spindle_comp_mm: number
   y_bank_spindle_comp_mm: number
+  x_bank_reversed: boolean
+  y_bank_reversed: boolean
   work_offset_code: string
 }
 interface Spindle {
@@ -246,10 +248,19 @@ export default function DrillBlockSetup({ machineId }: { machineId: string }) {
         <NumF label="Y bank extra Y (mm)" value={block.y_bank_adjust_y_mm} onSave={v => patchBlock({ y_bank_adjust_y_mm: v ?? 0 })} />
         <NumF label="X bank per-spindle shift (mm)" value={block.x_bank_spindle_comp_mm} onSave={v => patchBlock({ x_bank_spindle_comp_mm: v ?? 0 })} />
         <NumF label="Y bank per-spindle shift (mm)" value={block.y_bank_spindle_comp_mm} onSave={v => patchBlock({ y_bank_spindle_comp_mm: v ?? 0 })} />
+        <label className="flex items-center gap-2 text-xs text-ink-muted self-end pb-1">
+          <input type="checkbox" checked={!!block.x_bank_reversed} onChange={e => patchBlock({ x_bank_reversed: e.target.checked })} />
+          X bank runs reversed
+        </label>
+        <label className="flex items-center gap-2 text-xs text-ink-muted self-end pb-1">
+          <input type="checkbox" checked={!!block.y_bank_reversed} onChange={e => patchBlock({ y_bank_reversed: e.target.checked })} />
+          Y bank runs reversed
+        </label>
       </div>
       <p className="text-[11px] text-ink-muted -mt-2 mb-4 max-w-xl">
         Head offsets are for the X bank (M88). The Y bank (M89) gets the head offset plus its extra — set the extra if Y-bank holes (e.g. shelf holes) land out when X-bank holes are right.
         Per-spindle shift: when the control puts spindle 1 on the programmed point, each firing is moved back by (first spindle − 1) × this (EVO49 X bank: 32).
+        Reversed: higher spindle numbers sit toward the sheet origin, so the first spindle drills the far hole of a gang (EVO49 Y bank).
       </p>
 
       <div className="flex gap-6 flex-wrap">

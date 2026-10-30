@@ -1043,12 +1043,15 @@ function emitGangDrilling(
     // reference does it — repeating it per firing achieved nothing.
     if (!prepDone) { prep.forEach(l => emit(l)); prepDone = true }
     emit(`${mcode} B${g.bitmask}`)
-    const m0 = masters[0]
     const b = g.bank, ms = g.masterSpindle
+    // A reversed bank's master drills the gang's far (highest-coordinate) hole.
+    const far = (b === 'x' ? block.xBankReversed : block.yBankReversed) ? g.slaveSpindles.length * (block.spacingMm || 32) : 0
+    const pts = far ? masters.map(m => b === 'x' ? { x: m.x + far, y: m.y } : { x: m.x, y: m.y + far }) : masters
+    const m0 = pts[0]
     emit(`G90 G0 ${block.workOffsetCode} G43 H1 X${f(tx(m0.x, b, ms))} Y${f(ty(m0.y, b, ms))} Z${rapidZ}`)
     emit(`${p.drill_return_code} ${p.drill_cycle_code} Z${dz} R${rapidZ} F${drillFeed}`)
     for (let k = 1; k < passes; k++) emit(`X${f(tx(m0.x, b, ms))} Y${f(ty(m0.y, b, ms))} Z${dz}`)   // re-plunge master 0
-    for (const m of masters.slice(1)) for (let k = 0; k < passes; k++) emit(`X${f(tx(m.x, b, ms))} Y${f(ty(m.y, b, ms))} Z${dz}`)
+    for (const m of pts.slice(1)) for (let k = 0; k < passes; k++) emit(`X${f(tx(m.x, b, ms))} Y${f(ty(m.y, b, ms))} Z${dz}`)
     emit('G80')   // cancel canned cycle
     // NO Z-homing here. Between firings the block travels at the retract plane,
     // which already clears the sheet, so the gold reference homes ONCE after all

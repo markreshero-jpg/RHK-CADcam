@@ -178,6 +178,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
             headOffsetXMm: Number(blk.head_offset_x_mm ?? 0), headOffsetYMm: Number(blk.head_offset_y_mm ?? -128),
             yBankAdjustXMm: Number(blk.y_bank_adjust_x_mm ?? 0), yBankAdjustYMm: Number(blk.y_bank_adjust_y_mm ?? 0),
             xBankSpindleCompMm: Number(blk.x_bank_spindle_comp_mm ?? 0), yBankSpindleCompMm: Number(blk.y_bank_spindle_comp_mm ?? 0),
+            xBankReversed: Boolean(blk.x_bank_reversed), yBankReversed: Boolean(blk.y_bank_reversed),
             workOffsetCode: String(blk.work_offset_code ?? 'G54'), xDiameters, yDiameters,
           }
         }
