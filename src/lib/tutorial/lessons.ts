@@ -1219,6 +1219,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Half-checked shelves and dividers get no joint drilling. Screw through the top, bottom and gables at assembly. The notches show in 3D and on the cut sheets, and the CNC cuts them with the part outline.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-10-30 (cabinet edit modal 3D — explode slider).
+  { id: 'explode_3d', level: 'basics', topic: 'cabinets', title: 'Exploded view of a cabinet',
+    blurb: 'Pull a cabinet apart in its 3D view to see how the parts go together.',
+    keywords: 'explode exploded view apart parts 3d cabinet edit slider assembly see inside', steps: [
+    { id: 'open', title: 'Open the cabinet in 3D',
+      body: 'Double-click a cabinet and click the 3D tab.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'slide', title: 'Drag Explode',
+      body: 'Drag the Explode slider (bottom right). Every part slides out from the middle of the cabinet: gables sideways, top up, bottom down, back away, fronts forward. Holes, hinges and handles go with their part. Click a part to inspect it as usual. Double-click the slider to put it back together.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

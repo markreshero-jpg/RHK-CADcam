@@ -1177,6 +1177,44 @@ function AnimatedGroup({ targetTravel, children }: { targetTravel: number; child
   return <group ref={groupRef} userData={{ drawerTravel: true }}>{children}</group>
 }
 
+// Exploded view (edit modal slider): every top-level part / assembly slides out
+// from the cabinet centre by `amount` × its own centre's distance from it, so a
+// part keeps its holes, hinges and handles with it. Works on the three.js
+// children; a child whose position something else set this frame (a drawer's
+// AnimatedGroup) is taken as the new base, so its own motion still plays.
+function ExplodeGroup({ amount, centre, version, position, children }: {
+  amount: number; centre: [number, number, number]; version: unknown
+  position: [number, number, number]; children: React.ReactNode
+}) {
+  const ref = useRef<THREE.Group>(null)
+  const tmp = useMemo(() => ({ box: new THREE.Box3(), v: new THREE.Vector3(), inv: new THREE.Matrix4() }), [])
+  useFrame(() => {
+    const g = ref.current
+    if (!g) return
+    g.updateWorldMatrix(true, false)
+    tmp.inv.copy(g.matrixWorld).invert()
+    for (const c of g.children) {
+      const u = c.userData as { exOff?: THREE.Vector3; exPos?: THREE.Vector3; exC?: THREE.Vector3; exVer?: unknown }
+      if (!amount && !u.exOff) continue
+      // Back to the base position (unless moved by its own animation this frame).
+      if (u.exOff && u.exPos?.equals(c.position)) c.position.sub(u.exOff)
+      if (!amount) { delete u.exOff; delete u.exPos; continue }
+      if (!u.exC || u.exVer !== version) {
+        c.updateWorldMatrix(false, true)
+        tmp.box.setFromObject(c)
+        if (tmp.box.isEmpty()) continue
+        u.exC = tmp.box.getCenter(new THREE.Vector3()).applyMatrix4(tmp.inv).sub(c.position)   // centre relative to its position
+        u.exVer = version
+      }
+      tmp.v.copy(c.position).add(u.exC)
+      u.exOff = (u.exOff ?? new THREE.Vector3()).set(tmp.v.x - centre[0], tmp.v.y - centre[1], tmp.v.z - centre[2]).multiplyScalar(amount)
+      c.position.add(u.exOff)
+      u.exPos = (u.exPos ?? new THREE.Vector3()).copy(c.position)
+    }
+  })
+  return <group ref={ref} position={position}>{children}</group>
+}
+
 // ── Cabinet scene ─────────────────────────────────────────────────────────────
 
 // Exported so the room 3D view renders cabinets with the exact same geometry
@@ -1188,9 +1226,11 @@ export type SceneCustomPart = Pick<CabinetCustomPart,
   { part_library_id?: string | null; library_key?: string | null }
 
 export function CabinetScene({
-  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, openInnerDrawers, edgeOverrides, wire, customParts, partOverrides, shapeOverrides, showDrilling: showDrillingProp = true, handMarkers = [], layers, roomOutlines,
+  cab, rp, selected, onSelect, highlightPartKeys, materialColours, ebByMatId, doorsOpen, openDrawers, openInnerDrawers, edgeOverrides, wire, customParts, partOverrides, shapeOverrides, showDrilling: showDrillingProp = true, handMarkers = [], layers, roomOutlines, explode = 0,
 }: {
   roomOutlines?:        boolean
+  // Exploded view, 0 = assembled (edit modal slider; the room 3D leaves it off).
+  explode?:             number
   cab:                  CabinetInstance
   rp:                   ResolvedCabinet
   selected:             PartMeta | null
@@ -1376,7 +1416,7 @@ export function CabinetScene({
   return (
     <GrainContext.Provider value={grainIds}>
     <FrontGrainAcrossContext.Provider value={frontsAcross}>
-    <group position={[-dx / 2, -dy / 2, -dz / 2]}>
+    <ExplodeGroup amount={explode} centre={[dx / 2, dy / 2, dz / 2]} version={rp} position={[-dx / 2, -dy / 2, -dz / 2]}>
       {showDrilling && handMarkers.length > 0 && (
         <HandOpMarkers3D markers={handMarkers} csgPartKeys={new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_')))} />
       )}
@@ -1814,7 +1854,7 @@ export function CabinetScene({
       {show('rail_blocks') && railBlocks.map(e => (
         <PartAlpha key={`rblk_${e.railKey}_${e.panelKey}`} a={alpha('rail_blocks')}><RailBlockModel end={e} /></PartAlpha>
       ))}
-    </group>
+    </ExplodeGroup>
     </FrontGrainAcrossContext.Provider>
     </GrainContext.Provider>
   )
@@ -1880,6 +1920,7 @@ export default function Cabinet3DView({
   const showFullPanel = !!selectedPart && (!compactInfo || fullFor === selectedPart.id)
   const [editMenu, setEditMenu]               = useState<{ cx: number; cy: number } | null>(null)
   const [doorsOpen, setDoorsOpen]             = useState(false)
+  const [explode, setExplode]                 = useState(0)   // exploded view, 0–100 %
   const [openDrawers, setOpenDrawers]         = useState<Map<string, number>>(new Map())
   const [openInnerDrawers, setOpenInnerDrawers] = useState<Map<number, number>>(new Map())
   const [edgeOverrides, setEdgeOverrides]     = useState<Map<string, PartEdge>>(new Map())
@@ -2229,6 +2270,15 @@ export default function Cabinet3DView({
             </>
           )}
           <div className="absolute bottom-8 right-3 flex flex-col gap-1 items-end pointer-events-none">
+            <label className="flex items-center gap-1.5 text-[11px] font-mono text-gray-700 bg-white/70 border border-gray-300 rounded px-2 py-1 pointer-events-auto select-none"
+              title="Pull the parts apart from the cabinet centre. Double-click to put it back together.">
+              Explode
+              <input type="range" min={0} max={100} step={1} value={explode}
+                onChange={e => setExplode(Number(e.target.value))}
+                onDoubleClick={() => setExplode(0)}
+                onPointerDown={e => e.stopPropagation()}
+                className="w-24 accent-orange-600 cursor-pointer" />
+            </label>
             <button
               onClick={() => setEbPaint(m => (m ? null : 'toggle'))}
               className={`text-[11px] font-mono rounded px-2 py-1 transition-colors pointer-events-auto select-none border ${ebPaint
@@ -2278,6 +2328,7 @@ export default function Cabinet3DView({
           shapeOverrides={shapeOverrides}
           showDrilling={showDrilling}
           handMarkers={handMarkers}
+          explode={explode / 100}
         />
         </EdgeEditContext.Provider>
       ) : (
