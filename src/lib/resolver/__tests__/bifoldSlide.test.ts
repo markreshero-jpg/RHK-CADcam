@@ -175,3 +175,28 @@ describe('sliding bi-fold (Finista BF-05)', () => {
     expect(rp.warnings.map(w => w.code)).toContain('BIFOLD_WIDTH')
   })
 })
+
+describe('sliding bi-fold in plan (folded pack)', () => {
+  it('both doors folded at the hinge gable; joint arc + leading edge run', async () => {
+    const { bifoldPlanMarks } = await import('../../cabinetShape/planSwings')
+    const { bifoldFoldAngle } = await import('../resolveBifold')
+    for (const hand of ['L', 'R'] as const) {
+      const rp = resolveCabinet(cab({ BIFOLD: hand }))
+      const m = bifoldPlanMarks({ dx: 900, dz: 580, rule_overrides: { BIFOLD: hand } }, rp.face_zones)!
+      const pair = rp.face_zones.filter(z => z.bifold_role)
+      const x0 = Math.min(...pair.map(z => z.X)), x1 = Math.max(...pair.map(z => z.X + z.DX))
+      const span = x1 - x0, th = bifoldFoldAngle(span, pair[0].DZ)
+      const H = hand === 'L' ? x0 : x1, s = hand === 'L' ? 1 : -1
+      // Outer door starts at the hinge; the leading edge ends span·cos θ in from it.
+      expect(m.doors[0][0].x).toBeCloseTo(H, 6)
+      expect(m.travel[0].x).toBeCloseTo(H + s * span, 6)
+      expect(m.travel[1].x).toBeCloseTo(H + s * span * Math.cos(th), 6)
+      expect((m.travel[1].x - H) * s).toBeCloseTo(2 * pair[0].DZ + 4, 6)   // the pack
+      // Joint: the outer door's free end = the leading door's top, out in the room.
+      expect(m.doors[0][1].x).toBeCloseTo(m.doors[1][1].x, 0)
+      expect(m.doors[0][1].z).toBeGreaterThan(pair[0].Z + 400)
+      expect(m.arc.to).toEqual(m.doors[0][1])
+    }
+    expect(bifoldPlanMarks({ dx: 900, dz: 580, rule_overrides: {} })).toBeNull()
+  })
+})

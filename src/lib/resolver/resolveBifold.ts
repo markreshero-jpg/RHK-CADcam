@@ -90,6 +90,13 @@ export function bifoldTracks(rp: Pick<ResolvedCabinet, 'bifold' | 'case_parts' |
   return out
 }
 
+/** How far the pair folds open: until the two doors (thickness `thick`) sit side by
+ *  side as a pack (+4) at the hinge gable. The outer door's angle, radians; `span` =
+ *  both doors + the gap between them. The 3D open doors and the plan share it. */
+export function bifoldFoldAngle(span: number, thick: number): number {
+  return Math.acos(Math.min(1, (2 * thick + 4) / span))
+}
+
 /** Bi-fold fitting holes in cabinet space (front view) for the 2D views — the points the CNC drills. */
 export function bifoldHoleShapes(zones: ResolvedFaceZone[]): { x: number; y: number; r: number }[] {
   return zones.flatMap(z => (z.bifold_holes ?? []).map(p => ({ x: z.X + p.x, y: z.Y + p.y, r: p.dia / 2 })))

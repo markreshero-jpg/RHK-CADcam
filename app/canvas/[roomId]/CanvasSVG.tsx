@@ -44,7 +44,7 @@ import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
 import { dbLoadRoomPartDetails, type PartPosOverrides } from './canvasDB'
-import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
+import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, bifoldPlanMarks, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { FillPatternDef, fillPaint } from './FillPattern'
 import { toFrame, type LabelOff } from '@/src/lib/labelOffsets'
@@ -1652,8 +1652,28 @@ export default function CanvasSVG({
 
           const nodes: React.ReactNode[] = []
 
+          // Sliding bi-fold (z_bifold_slide): the pair drawn folded open at its hinge
+          // gable, the joint's arc and the leading edge's run — instead of two swings.
+          const bf = bifoldPlanMarks(cab, resolvedParts?.get(cab.id)?.face_zones)
+          if (bf && layers.show('door_swings')) {
+            const swingCol = layers.colorOf('door_swings')
+            const paint = swingCol
+              ? { fill: swingCol, fillOpacity: 0.08, stroke: swingCol, strokeOpacity: 0.4, opacity: layers.op('door_swings') }
+              : { fill: '#3b82f615', stroke: '#60a5fa60', opacity: layers.op('door_swings') }
+            const toP = (p: LocalPt) => ({ x: fo.x + p.x * wd.x + p.z * perp.x, y: fo.y + p.x * wd.y + p.z * perp.y })
+            const sw = layers.w('door_swings', 0.75) / lz, dash = `${4 / view.zoom} ${2 / view.zoom}`
+            bf.doors.forEach((q, i) => nodes.push(<polygon key={`bf-door-${cab.id}-${i}`} points={q.map(toP).map(p => `${p.x},${p.y}`).join(' ')}
+              {...paint} strokeWidth={sw} style={{ pointerEvents: 'none' }} />))
+            const c = toP(bf.arc.c), a = toP(bf.arc.from), b = toP(bf.arc.to)
+            const t0 = toP(bf.travel[0]), t1 = toP(bf.travel[1])
+            nodes.push(<path key={`bf-path-${cab.id}`}
+              d={`M ${a.x} ${a.y} A ${bf.arc.r} ${bf.arc.r} 0 0 ${sweepFlag(c, a, b)} ${b.x} ${b.y} M ${t0.x} ${t0.y} L ${t1.x} ${t1.y}`}
+              fill="none" stroke={paint.stroke} strokeOpacity={swingCol ? 0.4 : undefined} opacity={paint.opacity}
+              strokeWidth={sw} strokeDasharray={dash} style={{ pointerEvents: 'none' }} />)
+          }
+
           // Door swing arcs — one per column (rows irrelevant in plan view)
-          if (layers.show('door_swings')) {
+          if (layers.show('door_swings') && !bf) {
             const swingCol = layers.colorOf('door_swings')
             const swingPaint = swingCol
               ? { fill: swingCol, fillOpacity: 0.08, stroke: swingCol, strokeOpacity: 0.4, opacity: layers.op('door_swings') }

@@ -7,6 +7,7 @@
 import type { ResolvedFaceZone } from '../resolver/types'
 import { turnPoint, turnDir } from '../resolver/hardwareTurn'
 import { zoneKey } from './partKeys'
+import { bifoldFoldAngle } from '../resolver/resolveBifold'
 
 export type LocalPt = { x: number; z: number }
 
@@ -113,4 +114,46 @@ export function shapedFrontMarks(zones: ResolvedFaceZone[]): { swings: LocalSwin
 /** SVG arc sweep flag for an arc from `a` to `b` turning the short way about `c` (plan coords). */
 export function sweepFlag(c: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): 0 | 1 {
   return (a.x - c.x) * (b.y - c.y) - (a.y - c.y) * (b.x - c.x) > 0 ? 1 : 0
+}
+
+/** Sliding bi-fold in plan (z_bifold_slide): the pair drawn folded open — the outer door
+ *  out from its hinge gable, the leading door folded back beside it — plus the joint's
+ *  arc and the leading edge's run along the front. Same fold as the 3D open doors. */
+export interface BifoldPlanMarks {
+  doors:  LocalPt[][]                                     // two quads (door outlines)
+  arc:    { c: LocalPt; r: number; from: LocalPt; to: LocalPt }
+  travel: [LocalPt, LocalPt]
+}
+
+export function bifoldPlanMarks(
+  cab: { dx: number; dz: number; rule_overrides?: Record<string, unknown> | null },
+  zones?: ResolvedFaceZone[],
+): BifoldPlanMarks | null {
+  const hand = cab.rule_overrides?.BIFOLD
+  if (hand !== 'L' && hand !== 'R') return null
+  // The pair's doors from the resolver when saved, else two halves of the front.
+  const pair = (zones ?? []).filter(z => z.bifold_role)
+  const outerZ = pair.find(z => z.bifold_role === 'outer'), leadZ = pair.find(z => z.bifold_role === 'leading')
+  const x0 = outerZ && leadZ ? Math.min(outerZ.X, leadZ.X) : 0
+  const x1 = outerZ && leadZ ? Math.max(outerZ.X + outerZ.DX, leadZ.X + leadZ.DX) : cab.dx
+  const w1 = outerZ?.DX ?? (x1 - x0) / 2, w2 = leadZ?.DX ?? (x1 - x0) / 2
+  const t = Math.max(outerZ?.DZ ?? 18, leadZ?.DZ ?? 18)
+  const zf = outerZ?.Z ?? cab.dz + 2                       // the doors' back face
+  const span = x1 - x0
+  const th = bifoldFoldAngle(span, t)
+  const s = hand === 'L' ? 1 : -1                          // from the hinge gable inward
+  const H = hand === 'L' ? x0 : x1
+  const c = Math.cos(th), n = Math.sin(th)
+  const P = (u: number, v: number): LocalPt => ({ x: H + s * u, z: zf + v })
+  // Outer door: from the hinge out at θ; thickness on its outside (toward the gable).
+  const J = { u: w1 * c, v: w1 * n }
+  const outer = [P(0, 0), P(J.u, J.v), P(J.u - n * t, J.v + c * t), P(-n * t, c * t)]
+  // Leading door: from its edge on the front, back up to the joint.
+  const E = { u: span * c, v: 0 }
+  const lead = [P(E.u, 0), P(E.u - w2 * c, w2 * n), P(E.u - w2 * c + n * t, w2 * n + c * t), P(E.u + n * t, c * t)]
+  return {
+    doors:  [outer, lead],
+    arc:    { c: P(0, 0), r: w1, from: P(w1, 0), to: P(J.u, J.v) },
+    travel: [P(span, 0), P(E.u, 0)],
+  }
 }

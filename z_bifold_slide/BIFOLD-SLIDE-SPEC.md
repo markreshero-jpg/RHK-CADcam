@@ -158,7 +158,14 @@ Gable hinges are not in the kit: we use our standard **Blum 110° soft close**.
     as a ~40 pack standing out at the hinge gable, like the sheet's 20 / 40 diagram.
   - The outer door's hinge arms fold to the same θ.
   - Checked headless on a W2D/BF (mid-fold + fully open).
-  - Plan-view folded swing still to do.
+  - **Plan view** (2026-10-31, `bifoldPlanMarks` in `planSwings.ts`, canvas + Plan View
+    print): instead of two door swings (the face grid has both hinged on the hand, so
+    they were drawn the wrong way), the pair is drawn folded open as the 3D's fully
+    open pack. The outer door goes out from the hinge gable and the leading door
+    folds back beside it. A dashed arc shows the joint's path, and a dashed line the
+    leading edge's run along the front. The fold angle is shared with the 3D
+    (`bifoldFoldAngle`). Tested; not seen on screen yet (the headless check was
+    stopped for low memory).
 
 ## F1 notes (2026-10-30)
 

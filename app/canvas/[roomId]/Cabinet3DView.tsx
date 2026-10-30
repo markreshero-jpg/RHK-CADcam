@@ -59,7 +59,7 @@ import Runner3D from '@/src/components/three/Runner3D'
 import AccessoryModel, { hasAccessoryModel } from '@/src/components/three/AccessoryModel'
 import RailBlockModel from '@/src/components/three/RailBlockModel'
 import BifoldTrackModel from '@/src/components/three/BifoldTrackModel'
-import { bifoldTracks } from '@/src/lib/resolver/resolveBifold'
+import { bifoldTracks, bifoldFoldAngle } from '@/src/lib/resolver/resolveBifold'
 import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 import JointFittingModel from '@/src/components/three/JointFittingModel'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
@@ -1399,8 +1399,7 @@ export function CabinetScene({
     const pair = rp.face_zones.filter(z => z.bifold_role)
     if (pair.length !== 2) return null
     const span = Math.max(...pair.map(z => z.X + z.DX)) - Math.min(...pair.map(z => z.X))
-    const pack = 2 * Math.max(...pair.map(z => z.DZ)) + 4
-    return { span, maxAngle: Math.acos(Math.min(1, pack / span)) }
+    return { span, maxAngle: bifoldFoldAngle(span, Math.max(...pair.map(z => z.DZ))) }
   }, [rp])
   // Joint fittings (z_joints C4, e.g. Lamello Cabineo): one per set, at the
   // set's middle hole — drawn whether or not drilling is shown.

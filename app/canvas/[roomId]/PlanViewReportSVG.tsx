@@ -39,7 +39,7 @@ import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { customExtents } from '@/src/lib/customPartBox'
 import { returnWallThickness } from '@/src/lib/wallJoints'
-import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
+import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, bifoldPlanMarks, type LocalPt } from '@/src/lib/cabinetShape/planSwings'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 import { FillPatternDef, fillPaint } from './FillPattern'
@@ -539,7 +539,19 @@ export default function PlanViewReportSVG({
         // Door swing arcs — one per column (rows irrelevant in plan)
         const swP = lp('door_swings'), swW = lw('door_swings', swingSW)
         const swDash = swP.strokeDasharray ?? `${1.2 * P} ${0.8 * P}`
-        if (layers.show('door_swings')) {
+        // Sliding bi-fold (z_bifold_slide): the folded-open pair instead of two swings.
+        const bf = bifoldPlanMarks(cab, resolvedParts?.get(cab.id)?.face_zones)
+        if (bf && layers.show('door_swings')) {
+          const toP = (p: LocalPt) => ({ x: fo.x + p.x * wd.x + p.z * perp.x, y: fo.y + p.x * wd.y + p.z * perp.y })
+          bf.doors.forEach((q, i) => nodes.push(<polygon key={`bf-door-${cab.id}-${i}`} points={q.map(toP).map(p => `${p.x},${p.y}`).join(' ')}
+            fill="none" stroke={INK} strokeWidth={swW} opacity={swP.opacity} style={{ pointerEvents: 'none' }} />))
+          const c = toP(bf.arc.c), a = toP(bf.arc.from), b = toP(bf.arc.to)
+          const t0 = toP(bf.travel[0]), t1 = toP(bf.travel[1])
+          nodes.push(<path key={`bf-path-${cab.id}`}
+            d={`M ${a.x} ${a.y} A ${bf.arc.r} ${bf.arc.r} 0 0 ${sweepFlag(c, a, b)} ${b.x} ${b.y} M ${t0.x} ${t0.y} L ${t1.x} ${t1.y}`}
+            fill="none" stroke={INK} strokeWidth={swW} opacity={swP.opacity} strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
+        }
+        if (layers.show('door_swings') && !bf) {
           const baseCross  = wd.x * perp.y - wd.y * perp.x
           const leftSweep  = baseCross > 0 ? 1 : 0
           const rightSweep = 1 - leftSweep
