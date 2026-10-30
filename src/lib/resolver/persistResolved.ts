@@ -205,6 +205,9 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       // Drawer front marker pricks (z_handles D22), by front.
       df_markers:      resolved.face_zones.filter(z => z.marker_holes?.length)
         .map(z => ({ row_index: z.row_index, col_index: z.col_index, holes: z.marker_holes })),
+      // Sliding bi-fold roles + fitting holes (z_bifold_slide), by door.
+      bifold: resolved.face_zones.filter(z => z.bifold_role)
+        .map(z => ({ row_index: z.row_index, col_index: z.col_index, role: z.bifold_role, holes: z.bifold_holes ?? [] })),
     },
   }
 }

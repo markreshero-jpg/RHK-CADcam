@@ -154,6 +154,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     hint: 'Through-holes drilled for each handle (gone when drilling is switched off)' },
   { id: 'drawer_markers', group: 'hardware', label: 'Drawer front markers', views: ['elevation'], default: ON,
     hint: 'Marker pricks on the back of each drawer front: 1 hole top front, 2 the next … (z_handles D22)' },
+  { id: 'bifold',         group: 'hardware', label: 'Bi-fold fittings',    views: ['elevation', '3d'], default: ON,
+    viewDefaults: { '3d': { visible: false } }, hint: 'Sliding bi-fold (z_bifold_slide): carriage, guide + centre hinge holes on the doors' },
   { id: 'drawer_front_drilling', group: 'hardware', label: 'Drawer front drilling', views: ['elevation'], default: ON,
     hint: 'Drawer-box fixing bores into the back of each drawer front (from the runner drilling)' },
   { id: 'machining',      group: 'hardware', label: 'Drilling / machining', views: ['elevation', '3d'], default: ON,

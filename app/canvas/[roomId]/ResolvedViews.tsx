@@ -38,6 +38,7 @@ import { useMeasure, MeasureOverlay, rectCorners, type MPt } from './cabinetMeas
 import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
 import { handleShapes, sharknoseProfile, sharknoseTapeBand, sharknoseTopLine } from '@/src/lib/handleGeometry'
 import { markerHoleShapes } from '@/src/lib/resolver/resolveDrawerMarkers'
+import { bifoldHoleShapes } from '@/src/lib/resolver/resolveBifold'
 import { HandleElevSVG, SharknoseLinesSVG, DrawerMarkersSVG } from './HandleSVG'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
@@ -808,6 +809,9 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
       {/* Drawer front marker pricks (z_handles D22) with the drilling */}
       {showDrilling && <DrawerMarkersSVG holes={markerHoleShapes(rp.face_zones)}
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })} color="#22d3ee" strokeWidth={1} />}
+      {/* Sliding bi-fold carriage / guide / centre hinge holes (z_bifold_slide) */}
+      {showDrilling && <DrawerMarkersSVG holes={bifoldHoleShapes(rp.face_zones)}
+        project={(x, y) => ({ x: ox + x, y: oy + dy - y })} color={HINGE_DRILL_COL} strokeWidth={1} />}
       <SlideDrillOverlay drills={slideDrills} perp="z"
         project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />

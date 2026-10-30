@@ -146,6 +146,12 @@ export interface ConstructionRules {
   TOERETL?: boolean
   TOERETR?: boolean
   TOEGRAIN?: 'vertical' | 'horizontal'
+  // Finista BF-05 sliding bi-fold (z_bifold_slide): the cabinet's two doors fold
+  // as a pair hung on the BIFOLD gable; bottom guide above / below the cabinet
+  // bottom or none; centre hinges = the kit's nylon ones or 35 cups. Cabinet layer.
+  BIFOLD?:        'L' | 'R'
+  BIFOLD_BOTTOM?: 'above' | 'below' | 'none'
+  BIFOLD_CENTRE?: 'standard' | 'cup'
 
   // Case scribes
   SCRBK:    number   // scribe back
@@ -503,7 +509,11 @@ export function seamAssignRows(v: SeamJointAssign | undefined): number | undefin
 
 export type JointTargetPart = 'part_a' | 'part_b'
 export type JointMachineOp  = 'drill' | 'route' | 'pocket' | 'saw'
-export type JointFace       = 'normal' | 'end' | 'top' | 'bottom'
+// inside / outside: part_a's face that looks into / out of the cabinet, picked
+// per seam (a bottom's top face, a top's underside, a back's front face) —
+// face-machined fittings that must stay hidden, e.g. the Lamello Cabineo
+// pocket (z_joints/CABINEO-SPEC.md).
+export type JointFace       = 'normal' | 'end' | 'top' | 'bottom' | 'inside' | 'outside'
 
 export interface JointTypeOp {
   id:                string
@@ -533,6 +543,9 @@ export interface JointTypeOp {
   // drilled face) of a hole from another op on the same part — e.g. a curved
   // end block's face screws give way to its end screws (z_curved_end C3). null = keep all.
   skip_near_mm?:     number | null
+  // part_b face bores are through-bored by default (carcase screws); stopped
+  // keeps the authored depth — a concealed fitting's blind screw hole.
+  stopped?:          boolean
 }
 
 // Single source of truth for mapping a raw joint_type_operations row to a
@@ -561,6 +574,7 @@ export function rowToJointTypeOp(op: Record<string, unknown>): JointTypeOp {
     notes:             (op.notes as string | null) ?? null,
     expressions:       (op.expressions as Record<string, string> | null) ?? null,
     skip_near_mm:      op.skip_near_mm != null && Number(op.skip_near_mm) > 0 ? Number(op.skip_near_mm) : null,
+    stopped:           op.stopped === true,
   }
 }
 
@@ -1618,6 +1632,17 @@ export interface ResolvedFaceZone extends ResolvedPart {
   // Drawer marker pricks (z_handles D22), zone-local from the bottom-left as
   // seen from the front; drilled 5 × 1 deep into the back face.
   marker_holes?: { x: number; y: number }[]
+  // Sliding bi-fold (z_bifold_slide): this door's role in the pair, and its
+  // fitting holes, zone-local from the bottom-left as seen from the front,
+  // drilled into the back face.
+  bifold_role?:  'outer' | 'leading'
+  bifold_holes?: BifoldHole[]
+}
+
+export interface BifoldHole {
+  x: number; y: number
+  dia: number; depth: number
+  kind: 'carriage' | 'guide' | 'centre'
 }
 
 // ── Resolved Drawer Stack ─────────────────────────────────────

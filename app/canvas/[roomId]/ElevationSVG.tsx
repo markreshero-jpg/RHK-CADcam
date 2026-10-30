@@ -40,6 +40,7 @@ import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { caseBoxAABB, zoneBoxAABB, tkBoxAABB } from '@/src/lib/jointDrilling'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { markerHoleShapes } from '@/src/lib/resolver/resolveDrawerMarkers'
+import { bifoldHoleShapes } from '@/src/lib/resolver/resolveBifold'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG, DrawerMarkersSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
@@ -1767,6 +1768,12 @@ export default function ElevationSVG({
                         <DrawerMarkersSVG holes={markerHoleShapes(rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !it || layers.show(it) }))}
                           project={toSVGPt} color={layers.color('drawer_markers', isLineDrawing ? '#475569' : '#06b6d4')}
                           strokeWidth={layers.w('drawer_markers', 0.6) / lz} opacity={layers.op('drawer_markers')} />
+                      )}
+                      {/* Sliding bi-fold fitting holes (z_bifold_slide) on the doors that are drawn. */}
+                      {layers.show('bifold') && layers.show('doors') && (
+                        <DrawerMarkersSVG holes={bifoldHoleShapes(rp.face_zones)}
+                          project={toSVGPt} color={layers.color('bifold', isLineDrawing ? '#475569' : '#a855f7')}
+                          strokeWidth={layers.w('bifold', 0.6) / lz} opacity={layers.op('bifold')} />
                       )}
                       </g>)}
 

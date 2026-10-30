@@ -266,6 +266,18 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
     }
   }
 
+  // 4c. Sliding bi-fold fittings (z_bifold_slide): carriage / guide cups on the
+  //     leading door, centre hinge holes on both, into the back face.
+  for (const z of rp.face_zones) {
+    if (!z.bifold_holes?.length) continue
+    const opKey = `bifold_${z.row_index}_${z.col_index}`
+    for (const p of z.bifold_holes) {
+      add('face_zones', `zone_${z.row_index}_${z.col_index}`, zoneFrame(z),
+        { x: z.X + p.x, y: z.Y + p.y, z: z.Z, axis: 'z+', radius: p.dia / 2, depthLen: p.depth },
+        p.dia >= 35 ? 'hinge_cup' : 'bifold', opKey, AUTO_TOOL, 'face_back')
+    }
+  }
+
   // 5. Finger-pull backing rails (z_handles H6 / H5b): a knock-in block hole
   //    at each rail end, into the inner face of the panel (side or divider)
   //    that end sits in, RAILBLK behind the back of the rail, centred on the

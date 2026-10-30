@@ -23,6 +23,7 @@ import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
 import { resolveHandles, linearHandleParts } from './resolveHandles'
 import { resolveDrawerMarkers } from './resolveDrawerMarkers'
+import { bifoldPair, resolveBifoldHoles } from './resolveBifold'
 import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack, type FingerRail } from './resolveFingerRails'
 import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
@@ -64,6 +65,9 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   // Shaped fronts keep facet zones in their own frames — open cells reported
   // for the primary box front only.
   const openCells = cab.footprint ? [] : openZones
+  // Sliding bi-fold pair (z_bifold_slide): both doors take the hand as their
+  // hinge side before the handles are placed.
+  const bifold = cab.has_face ? bifoldPair(cab, zones, allWarnings) : null
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
   // Drawer front marker pricks: 1 hole top front, 2 the next … (z_handles D22).
@@ -165,6 +169,8 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   const hingeInstances = (cab.has_face && cab.hinge_hardware)
     ? resolveHinges(cab, zones, caseParts, internalParts, shapedHw, allWarnings)
     : []
+  // Bi-fold carriage / guide / centre hinge holes, at the outer door's hinge heights.
+  if (bifold) resolveBifoldHoles(bifold, r, caseParts, hingeInstances, allWarnings)
 
   // ── 6c. Hinge ↔ inner-drawer clash ────────────────────────────
   // A hinge body protruding into the front of the interior can foul an inner

@@ -1354,8 +1354,16 @@ export function CabinetScene({
         push(zoneKey({ facet: mt.facet, row_index: mt.row_index ?? 0, col_index: mt.col_index ?? 0 }), h.plate_drills)
       }
     }
+    // Sliding bi-fold fittings (z_bifold_slide): zone-local → cabinet coords.
+    for (const z of rp.face_zones) {
+      if (!z.bifold_holes?.length) continue
+      push(zoneKey(z), z.bifold_holes.map(p => ({
+        x: z.X + p.x, y: z.Y + p.y, z: z.Z, axis: 'z+' as const,
+        radius: p.dia / 2, depthLen: p.depth, kind: p.dia >= 35 ? 'cup' as const : 'anchor' as const,
+      })))
+    }
     return m
-  }, [rp.hinge_instances])
+  }, [rp.hinge_instances, rp.face_zones])
   // World-fixed hinge markers: plate bores always; cup/anchor bores only for
   // non-animated (top/bottom) doors — left/right doors render theirs in DoorPanel.
   // Knock-in blocks behind the finger-pull rails, at the drilled holes (z_handles D20).

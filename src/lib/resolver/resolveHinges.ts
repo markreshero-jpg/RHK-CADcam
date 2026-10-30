@@ -138,6 +138,8 @@ export function resolveHinges(
     const pie = pies?.get(zoneKey(z))
     // The trailing door has no cups: the lead door's bi-fold carries it.
     if (pie?.role === 'trailing') continue
+    // A sliding bi-fold's leading door rides its tracks (z_bifold_slide).
+    if (z.bifold_role === 'leading') continue
 
     const doorH = z.DY   // cabinet-Y extent (height)
     const doorW = z.DX   // cabinet-X extent (width)

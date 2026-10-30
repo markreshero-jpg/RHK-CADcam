@@ -683,6 +683,67 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
           )
         })()}
 
+        {/* Sliding bi-fold, Finista BF-05 (z_bifold_slide) — rule_overrides.BIFOLD* */}
+        {cabinet.has_face && (() => {
+          const ov = (cabinet.rule_overrides ?? {}) as Record<string, unknown>
+          const hand = ov.BIFOLD === 'L' || ov.BIFOLD === 'R' ? ov.BIFOLD : null
+          const setRule = (key: string, value: string | null) => {
+            const next = { ...ov }
+            if (value == null) delete next[key]
+            else next[key] = value
+            void onUpdate(cabinet.id, { rule_overrides: next as typeof cabinet.rule_overrides })
+          }
+          return (
+            <div>
+              <p className={lbl}>Sliding Bi-fold</p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={!!hand}
+                  onChange={e => {
+                    const next = { ...ov }
+                    if (e.target.checked) next.BIFOLD = 'L'
+                    else { delete next.BIFOLD; delete next.BIFOLD_BOTTOM; delete next.BIFOLD_CENTRE }
+                    void onUpdate(cabinet.id, { rule_overrides: next as typeof cabinet.rule_overrides })
+                  }}
+                  className="accent-blue-500" />
+                <span className="text-xs text-gray-400">Finista BF-05 (2 doors)</span>
+              </label>
+              {hand && (
+                <div className="grid grid-cols-3 gap-1 mt-1">
+                  <div>
+                    <p className="text-[10px] text-gray-600 mb-0.5">Hung on</p>
+                    <select className={inp} value={hand} onChange={e => setRule('BIFOLD', e.target.value)}>
+                      <option value="L">Left</option>
+                      <option value="R">Right</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-600 mb-0.5">Bottom guide</p>
+                    <select className={inp} value={String(ov.BIFOLD_BOTTOM ?? 'above')}
+                      onChange={e => setRule('BIFOLD_BOTTOM', e.target.value === 'above' ? null : e.target.value)}>
+                      <option value="above">Above bottom</option>
+                      <option value="below">Below bottom</option>
+                      <option value="none">None</option>
+                    </select>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-gray-600 mb-0.5">Centre hinge</p>
+                    <select className={inp} value={String(ov.BIFOLD_CENTRE ?? 'standard')}
+                      onChange={e => setRule('BIFOLD_CENTRE', e.target.value === 'standard' ? null : e.target.value)}>
+                      <option value="standard">Standard (kit)</option>
+                      <option value="cup">35 cup</option>
+                    </select>
+                  </div>
+                </div>
+              )}
+              <p className="text-[10px] text-gray-600 mt-1">
+                {hand
+                  ? 'Outer door on Blum 110 hinges; the leading door rides the top track. Below bottom: the doors must hang 55 under the cabinet bottom.'
+                  : 'Two doors fold and slide as a pair (Lincoln Sentry Finista BF-05).'}
+              </p>
+            </div>
+          )
+        })()}
+
         <div>
           <p className={lbl}>Modules</p>
           <div className="space-y-1">
