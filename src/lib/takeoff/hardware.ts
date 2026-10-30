@@ -6,12 +6,15 @@
 //
 // Hardware = what the resolver places: hinges + plates, runners (pairs, by
 // product + length, inner drawers on their own lines), pull-out bins, handles
-// (knobs/pulls, push-to-open, linear strips), hanging rails + supports. Finger
+// (knobs/pulls, push-to-open, linear strips), hanging rails + supports, and
+// joint connectors (one per set of a fitting-carrying joint op, e.g. the Lamello
+// Cabineo — z_joints C4; Mark 2026-10-30, lifting D3 for these). Finger
 // pulls (sharknose / rail / routed / channel) are worked into the fronts — they
 // are counted for the takeoff, not picked.
 // ============================================================
 
 import type { ResolvedCabinet, GripKind } from '../resolver/types'
+import { cabinetSeamDrills } from '../jointDrilling'
 
 // ── Cabinet classification ───────────────────────────────────────────────────
 
@@ -73,8 +76,8 @@ export function countKinds(cabs: TakeoffCab[], codeOf: (c: TakeoffCab) => string
 
 // ── Hardware ─────────────────────────────────────────────────────────────────
 
-export type HardwareGroup = 'Hinges' | 'Hinge plates' | 'Runners' | 'Inner drawer runners' | 'Bins' | 'Handles' | 'Push to open' | 'Linear handles' | 'Hanging rails' | 'Rail supports'
-export const HARDWARE_GROUPS: HardwareGroup[] = ['Hinges', 'Hinge plates', 'Runners', 'Inner drawer runners', 'Bins', 'Handles', 'Push to open', 'Linear handles', 'Hanging rails', 'Rail supports']
+export type HardwareGroup = 'Hinges' | 'Hinge plates' | 'Runners' | 'Inner drawer runners' | 'Bins' | 'Handles' | 'Push to open' | 'Linear handles' | 'Hanging rails' | 'Rail supports' | 'Connectors'
+export const HARDWARE_GROUPS: HardwareGroup[] = ['Hinges', 'Hinge plates', 'Runners', 'Inner drawer runners', 'Bins', 'Handles', 'Push to open', 'Linear handles', 'Hanging rails', 'Rail supports', 'Connectors']
 
 export interface HardwareProduct { name: string; brand?: string | null; code?: string | null }
 export interface HardwareProducts {
@@ -170,6 +173,15 @@ function cabinetHardware(r: ResolvedCabinet, label: string, P: HardwareProducts,
     if (!p.accessory) continue
     if (p.part_type === 'accessory') acc.add('Hanging rails', p.accessory.product_id, '', P.accessories.get(p.accessory.product_id), p.accessory.name, label, 1, 'ea', p.DY)
     else if (p.part_type === 'rail_support') acc.add('Rail supports', p.accessory.product_id, '', P.accessories.get(p.accessory.product_id), p.accessory.name, label, 1, 'ea')
+  }
+
+  // Joint connectors: the drills tag one hole per set with its fitting (the
+  // same sets the CNC machines and 3D draws; removed parts' seams skipped).
+  if ((r.seam_joints ?? []).some(sj => sj.ops.some(o => o.fitting))) {
+    for (const d of cabinetSeamDrills(r)) {
+      const f = d.fitting?.item
+      if (f) acc.add('Connectors', f.id, '', P.accessories.get(f.id), f.name, label, 1, 'ea')
+    }
   }
 }
 

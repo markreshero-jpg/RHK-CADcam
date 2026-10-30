@@ -27,6 +27,10 @@ Checks: `src/lib/takeoff/__tests__/hardware.test.ts`; real-job dry run
   runners, pull-out bins, handles (knobs / pulls, push-to-open, linear strips),
   hanging rails + rail supports. No derived items (shelf pins, legs, joint
   fasteners) for now.
+- **D3a Joint connectors (Mark, 2026-10-30).** Bought-in connectors a joint
+  places (Lamello Cabineo, z_joints C4) are counted: group **Connectors**, one per
+  set of the joint op that carries the fitting (same sets as the CNC + 3D),
+  named from Materials → Accessories. Other fasteners still not counted.
 - **D4 Pick list layout.** Room → product totals (qty + tick + which cabinets), not per cabinet.
 
 ## Rules (as built)

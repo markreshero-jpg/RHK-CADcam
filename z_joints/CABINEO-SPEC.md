@@ -69,8 +69,8 @@ it butts into (gable).
 - **Real model**: Lamello's zips are the *pocket* solids, not the connector.
   Upload the Cabineo 12 connector model (STEP → GLB/STL) to the accessory row's
   model_url, oriented as above.
-- Takeoff / pick list: not counted (TAKEOFF-SPEC D3 says no joint fasteners) —
-  ask Mark.
+- **Takeoff / pick list** (Mark 2026-10-30): counted under **Connectors**, one
+  per set (`buildHardware` via `cabinetSeamDrills`; TAKEOFF-SPEC D3a).
 
 ## Phases
 
@@ -79,5 +79,5 @@ it butts into (gable).
 | C1 | Engine (inside/outside, IN, stopped) + 2 joint types + tutorial | built 2026-10-30 |
 | C2 | In-app check: swap a bottom / back joint, look at 3D + Edge joints, run the optimiser on it | pending (Mark OK'd the plan 2026-10-30) |
 | C3 | Nest check: the first circle runs 3.9 past the part edge, 11 deep — must land in the part gap (no bounds check in the optimiser). Check the router pick (≥ Ø10) + the warnings | pending |
-| C4 | Hardware: Cabineo 12 in Accessories (connector), joint op fitting link, 3D (stand-in until the real model) | built 2026-10-30, check pending; real model + takeoff open |
+| C4 | Hardware: Cabineo 12 in Accessories (connector), joint op fitting link, 3D (stand-in until the real model) | built 2026-10-30 + counted on Hardware Pick List / Takeoff; check pending; real model open |
 | C5 | Optional: back:bottom seam support, construction-method default | when needed |
