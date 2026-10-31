@@ -1,0 +1,33 @@
+{
+  "_source": "SynologyDrive/.../SITE CHECK MEASURES/Site measure 22.10.26.pdf p3 (D/S Hallway, next to Pdr) + Mark Q&A 2026-11-01",
+  "_notes": [
+    "Site: 483 between 605 returns, CH 2419 off slab. Floor allowance 20 (TBC) -> 2399 finished ceiling, 18 shadowline -> 2381 top.",
+    "TFFW 30 | T2D 423 single door | TFFW 30 = 483. 600 OA incl doors (580 carcass).",
+    "No kick, no bottom (robot vacuum drives in under the bottom shelf), door 150 off the floor (open 150 face row), gable bottoms edged. Fillers to the floor.",
+    "All shelves adjustable. Tundish 1652-1722 high, 45-180 in (from the left, per the sketch) - CAD on the elevation; back cut-out once Mark confirms."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "DS Linen",
+  "roomHeight": 2399,
+  "wallCabinetTop": 2381,
+  "roomRules": { "TOEH": 100 },
+  "walls": [
+    { "x": 0, "y": 605, "length": 605, "angle": 270, "_": "1 left return, S->N" },
+    { "x": 0, "y": 0, "length": 483, "angle": 0, "_": "2 back wall, W->E = elevation" },
+    { "x": 483, "y": 0, "length": 605, "angle": 90, "_": "3 right return, N->S" }
+  ],
+  "cabinets": [
+    { "def": "TFFW", "wall": 2, "offset": 0, "dx": 30, "dy": 2381, "dz": 580, "note": "# 1 30 filler at the wall, to the floor (no kick)" },
+    { "def": "T2D", "wall": 2, "offset": 30, "dx": 423, "dy": 2381, "dz": 580, "note": "# 2 linen, single door 150 off the floor, no bottom, no kick, all adj shelves",
+      "set": {
+        "has_toekick": false,
+        "part_hide_views": { "case_bottom": ["plan", "elevation", "3d"] },
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height": 150, "height_locked": true }, { "row_index": 1, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "open" }, { "col_index": 0, "row_index": 1, "face_type": "door", "hinge_side": "left" } ] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } }
+        ] } } } },
+    { "def": "TFFW", "wall": 2, "offset": 453, "dx": 30, "dy": 2381, "dz": 580, "note": "# 3 30 filler at the wall, to the floor (no kick)" }
+  ]
+}
