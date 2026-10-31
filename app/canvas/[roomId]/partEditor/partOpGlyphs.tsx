@@ -31,7 +31,8 @@ export function opFaceGlyph(op: PartOp, u: number, v: number): FaceGlyph {
     }
   } else if (op.operation_type === 'groove') {
     const len = op.length ?? 0, w = Math.max(op.width ?? 4, 0.5)
-    g.slots.push({ x1: px, y1: py, x2: px + len, y2: py, w })
+    const t = ((op.angle_az ?? 0) * Math.PI) / 180   // groove direction, 90 = along v
+    g.slots.push({ x1: px, y1: py, x2: px + len * Math.cos(t), y2: py + len * Math.sin(t), w })
   } else {
     // Area op (pocket / outline / square_off / profile / route).
     if (op.size_dx != null && op.size_dy != null) {

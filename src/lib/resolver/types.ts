@@ -1165,6 +1165,14 @@ export interface RawProfileOp {
   face:                'front' | 'back'
   expressions:         Record<string, string> | null
   sort_order:          number
+  // Machining (face routes, Phase B step 1): the bit or tool-set recipe, and
+  // per-edge offsets that override offset_from_edge_mm on that edge.
+  router_tool_id?:     string | null
+  tool_set_id?:        string | null
+  offset_top_mm?:      number | null
+  offset_bottom_mm?:   number | null
+  offset_left_mm?:     number | null
+  offset_right_mm?:    number | null
 }
 export interface ResolvedDoorStyleInput {
   style_id:            string
@@ -1647,6 +1655,12 @@ export interface ResolvedProfileOp {
   repeat_axis:         'none' | 'x' | 'y'
   spacing_mm:          number | null
   face:                'front' | 'back'
+  router_tool_id?:     string | null
+  tool_set_id?:        string | null
+  offset_top_mm?:      number | null
+  offset_bottom_mm?:   number | null
+  offset_left_mm?:     number | null
+  offset_right_mm?:    number | null
 }
 export interface ResolvedDoorProfile {
   profile_type: 'perimeter_route' | 'vj_lines' | 'panel_raise' | 'bead' | 'custom'

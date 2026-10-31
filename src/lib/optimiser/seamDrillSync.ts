@@ -377,7 +377,7 @@ const NOTCH_OVERRUN = 5
 const NOTCH_TOOL_DIA = 10
 
 interface GeneratedRoute {
-  source_table: 'case_parts' | 'internal_parts' | 'drawer_box_parts'
+  source_table: 'case_parts' | 'internal_parts' | 'drawer_box_parts' | 'face_zones'
   source_cabinet_id: string
   source_part_key: string
   operation_type: 'route' | 'groove'
@@ -386,11 +386,73 @@ interface GeneratedRoute {
   pos_x: number; pos_y: number
   size_dx: number | null; size_dy: number | null
   length: number | null; width: number | null
+  angle_az?: number                 // groove direction (90 = along the part's v)
   depth: number
   output_face: string
+  plane_kind?: string | null
   output_to_cnc: boolean
-  router_tool_id: string
+  router_tool_id: string | null
+  tool_set_id?: string | null
   parameters: Record<string, unknown>
+}
+
+// Door profile face routes (two-sided spec §0, build step 1): each styled front's
+// profile ops — shaker / bead outlines, pockets, VJ lines — as generated route and
+// groove rows, worked in the front view (origin bottom-left, x across, y up) like
+// doorProfilePrimitives draws them. A line at `offset` from the edge is the groove
+// centre; an outline route's rectangle is inset offset − width/2 so its tool path
+// (a radius inside) runs on that line; a pocket clears everything inside it.
+// Doors nest back face up (zoneFrame upSign '+'), so front-face ops are stored
+// mirrored across the width, entering from the 'back' like a front-face bore.
+// The tool is the op's own bit or tool set; none → the loader warns and skips it.
+export function collectDoorProfileRoutes(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedRoute[] } {
+  rp = filterRemovedParts(rp)
+  const rows: GeneratedRoute[] = []
+  const EPS = 0.001
+  for (const z of rp.face_zones) {
+    const prof = z.door_profile
+    if (!prof?.ops.length || z.facet || z.AY) continue
+    const W = z.DX, H = z.DY
+    prof.ops.forEach((op, i) => {
+      if (op.operation_type === 'drill' || !(op.depth_mm && op.depth_mm > 0)) return
+      const front = op.face !== 'back'
+      const mx = (x: number) => front ? W - x : x
+      const base = {
+        source_table: 'face_zones' as const, source_cabinet_id: cabinetId, source_part_key: `zone_${z.row_index}_${z.col_index}`,
+        depth: round(op.depth_mm),
+        output_face: front ? 'back' : 'front', plane_kind: front ? 'face_front' : 'face_back',
+        output_to_cnc: true, router_tool_id: op.router_tool_id ?? null, tool_set_id: op.tool_set_id ?? null,
+        parameters: { generated: GENERATED_MARK, kind: 'door_profile' },
+      }
+      const off = op.offset_from_edge_mm ?? 0
+      const sp = op.spacing_mm ?? 0
+      if ((prof.profile_type === 'vj_lines' || op.repeat_axis === 'x' || op.repeat_axis === 'y') && sp > 0) {
+        const width = op.width_mm ?? null
+        let n = 0
+        if (op.repeat_axis === 'y') {
+          for (let y = off + sp; y < H - off - EPS; y += sp) rows.push({ ...base, operation_type: 'groove', operation_action: null,
+            operation_key: `door_profile_${i}_${n++}`, pos_x: round(off), pos_y: round(y), size_dx: null, size_dy: null,
+            length: round(W - 2 * off), width })
+        } else {
+          for (let x = off + sp; x < W - off - EPS; x += sp) rows.push({ ...base, operation_type: 'groove', operation_action: null,
+            operation_key: `door_profile_${i}_${n++}`, pos_x: round(mx(x)), pos_y: round(off), size_dx: null, size_dy: null,
+            length: round(H - 2 * off), width, angle_az: 90 })
+        }
+        return
+      }
+      // Outline / pocket rectangle: per-edge offsets override the common one.
+      const pocket = op.operation_type === 'pocket'
+      const half = pocket ? 0 : (op.width_mm ?? 0) / 2
+      const l = (op.offset_left_mm ?? off) - half, r = (op.offset_right_mm ?? off) - half
+      const b = (op.offset_bottom_mm ?? off) - half, t = (op.offset_top_mm ?? off) - half
+      const w = W - l - r, h = H - b - t
+      if (!(w > 0) || !(h > 0)) return
+      rows.push({ ...base, operation_type: 'route', operation_action: pocket ? 'pocket' : null,
+        operation_key: `door_profile_${i}`, pos_x: round(mx(l + w / 2)), pos_y: round(b + h / 2),
+        size_dx: round(w), size_dy: round(h), length: null, width: null })
+    })
+  }
+  return { rows }
 }
 
 // Exported for tests.
@@ -652,6 +714,7 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
   notch.rows.push(...slots.rows)
   const rebates = collectDrawerBottomRebateRoutes(rp, cabinetId, cutter)
   notch.rows.push(...rebates.rows)
+  notch.rows.push(...collectDoorProfileRoutes(rp, cabinetId).rows)
   if (hasRebates && rebates.skipped) console.warn(`[seamDrillSync] ${rebates.skipped} drawer bottom rebate pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasSlots && slots.skipped) console.warn(`[seamDrillSync] ${slots.skipped} floating shelf slot pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasBends && bends.skipped) console.warn(`[seamDrillSync] ${bends.skipped} curved end bend pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
@@ -668,7 +731,8 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
   if (delErr) { console.error('[seamDrillSync] delete', delErr); throw delErr }
   const [ins, insR] = await Promise.all([
     rows.length ? supabase.from('part_operations').insert(rows) : null,
-    notch.rows.length ? supabase.from('part_operations').insert(notch.rows) : null,
+    // Every row carries the same columns (door profile rows add a few), so one insert works.
+    notch.rows.length ? supabase.from('part_operations').insert(notch.rows.map(r => ({ angle_az: 0, plane_kind: null, tool_set_id: null, ...r }))) : null,
   ])
   if (ins?.error) { console.error('[seamDrillSync] insert', ins.error); throw ins.error }
   if (insR?.error) { console.error('[seamDrillSync] insert routes', insR.error); throw insR.error }

@@ -32,6 +32,7 @@ export interface RouteOpRaw {
   offset_top_mm: number | null; offset_bottom_mm: number | null
   offset_left_mm: number | null; offset_right_mm: number | null
   length: number | null; width: number | null
+  angle_az?: number | null        // groove direction in the face, degrees from +x (90 = along +y)
   depth: number | null; size_dz: number | null
   // Clearing strategy (area/pocket ops): raster | spiral_in | spiral_out, with a
   // lane angle and stepover (% of tool diameter). Null → raster default.
@@ -145,7 +146,8 @@ export function buildSheetRoutes(
         const len = op.length ?? 0, w = Math.max(op.width ?? op.toolDiameter, 0.5)
         if (!(len > 0)) continue
         const px = op.pos_x ?? 0, py = op.pos_y ?? 0
-        const a = map(px, py), b = map(px + len, py)
+        const t = ((op.angle_az ?? 0) * Math.PI) / 180
+        const a = map(px, py), b = map(px + len * Math.cos(t), py + len * Math.sin(t))
         out.push({
           kind: 'groove', label: pl.label, x1: a.x, y1: a.y, x2: b.x, y2: b.y,
           width: w, depth, toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,

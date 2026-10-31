@@ -76,7 +76,8 @@ async function resolveDoorStyles(
       catalogue:door_catalogue ( thickness_mm, edge_band_top, edge_band_bottom, edge_band_left, edge_band_right ),
       profile:door_profiles (
         id, profile_type,
-        ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order )
+        ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
+          router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm )
       )
     `)
     .in('id', distinctIds))
@@ -122,6 +123,12 @@ async function resolveDoorStyles(
       face:                (o.face as RawProfileOp['face']) ?? 'front',
       expressions:         (o.expressions as Record<string, string> | null) ?? null,
       sort_order:          (o.sort_order as number) ?? 0,
+      router_tool_id:      (o.router_tool_id as string | null) ?? null,
+      tool_set_id:         (o.tool_set_id as string | null) ?? null,
+      offset_top_mm:       o.offset_top_mm != null ? Number(o.offset_top_mm) : null,
+      offset_bottom_mm:    o.offset_bottom_mm != null ? Number(o.offset_bottom_mm) : null,
+      offset_left_mm:      o.offset_left_mm != null ? Number(o.offset_left_mm) : null,
+      offset_right_mm:     o.offset_right_mm != null ? Number(o.offset_right_mm) : null,
     }))
     const cat = row.catalogue
     const edgeSides: EdgeSides | null = cat

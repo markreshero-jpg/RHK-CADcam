@@ -173,7 +173,7 @@ export async function loadResolvedDrillOps(
   // material-up pass for now — plane_kind is loaded but not yet acted on.
   const routesByKey = new Map<string, RouteOpRaw[]>()
   if (cabIds.length) {
-    const rRows = await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,output_to_cnc',
+    const rRows = await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,angle_az,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,output_to_cnc',
       cabIds, ['route', 'groove'])
     type RouteRow = RouteGeom & { router_tool_id: string | null; tool_set_id: string | null; output_to_cnc: boolean | null }
     // Finger-pull notches + reliefs are already in a gable's resolver outline, so

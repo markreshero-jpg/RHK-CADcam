@@ -59,6 +59,12 @@ export function evaluateProfileOps(raw: RawProfileOp[], panel: DoorPanelDims): R
       repeat_axis:         op.repeat_axis,
       spacing_mm:          ev(op, 'spacing_mm', op.spacing_mm),
       face:                op.face,
+      router_tool_id:      op.router_tool_id ?? null,
+      tool_set_id:         op.tool_set_id ?? null,
+      offset_top_mm:       ev(op, 'offset_top_mm', op.offset_top_mm ?? null),
+      offset_bottom_mm:    ev(op, 'offset_bottom_mm', op.offset_bottom_mm ?? null),
+      offset_left_mm:      ev(op, 'offset_left_mm', op.offset_left_mm ?? null),
+      offset_right_mm:     ev(op, 'offset_right_mm', op.offset_right_mm ?? null),
     }))
 }
 
