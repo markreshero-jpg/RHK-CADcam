@@ -42,6 +42,7 @@ import { handleShapes } from '@/src/lib/handleGeometry'
 import { markerHoleShapes } from '@/src/lib/resolver/resolveDrawerMarkers'
 import { bifoldHoleShapes } from '@/src/lib/resolver/resolveBifold'
 import { binOutlines } from '@/src/lib/binGeometry'
+import { wallTopPoints } from '@/src/lib/wallProfile'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG, DrawerMarkersSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
@@ -405,6 +406,8 @@ export default function ElevationSVG({
   const triMap = useSlideTriangles([...allWallSlides, ...wallAccModels])
 
   const roomH = wall?.height ?? room.room_dy ?? 2400
+  // Raked / vaulted wall top as drawn on this side (x left to right), or null when flat.
+  const wallTop = wall ? wallTopPoints(wall)?.map(p => ({ x: isBack ? wall.length - p.t : p.t, h: p.h })).sort((a, b) => a.x - b.x) ?? null : null
   // Return cabinet sections (z_section_view R1): the return walls' cabinets cut
   // side-on as part outlines, up to this wall's cabinet depth.
   const showReturns = !!wall && layers.show('return_sections')
@@ -1168,6 +1171,17 @@ export default function ElevationSVG({
                   style={{ cursor: 'pointer' }}
                   onClick={wallClick}
                   onContextMenu={cmHandler} />
+              ) : wallTop ? (
+                // Raked / vaulted top (src/lib/wallProfile.ts)
+                <path d={`M 0 ${roomH} ${wallTop.map(p => `L ${p.x} ${roomH - p.h}`).join(' ')} L ${wall.length} ${roomH} Z`}
+                  fill={isLineDrawing ? 'none' : '#1f2937'}
+                  stroke={isWallSel ? '#3b82f6' : layers.show('walls') ? layers.color('walls', '#374151') : 'none'}
+                  strokeWidth={isWallSel ? 2 / lz : layers.w('walls', 1) / lz}
+                  strokeOpacity={isWallSel ? 1 : layers.props('walls', z).opacity}
+                  strokeDasharray={isWallSel ? undefined : layers.props('walls', z).strokeDasharray}
+                  style={{ cursor: 'pointer' }}
+                  onClick={wallClick}
+                  onContextMenu={cmHandler} />
               ) : (
                 <rect x={0} y={0} width={wall.length} height={roomH}
                   fill={isLineDrawing ? 'none' : '#1f2937'}
@@ -1201,9 +1215,9 @@ export default function ElevationSVG({
                 : null
               const wcTop   = showSoffit && soffitDrop == null ? room.wall_cabinet_top ?? null : null  // a soffit overrides it
               return (<>
-                <line x1={0} y1={0} x2={wall.length} y2={0}
+                {!wallTop && <line x1={0} y1={0} x2={wall.length} y2={0}
                   stroke="#374151" strokeWidth={1 / lz}
-                  strokeDasharray={`${8 / z} ${4 / z}`} />
+                  strokeDasharray={`${8 / z} ${4 / z}`} />}
                 {soffitH != null && (
                   <line x1={0} y1={roomH - soffitH} x2={wall.length} y2={roomH - soffitH}
                     stroke="#78350f" strokeWidth={0.5 / lz} strokeDasharray={`${6 / z} ${3 / z}`} />

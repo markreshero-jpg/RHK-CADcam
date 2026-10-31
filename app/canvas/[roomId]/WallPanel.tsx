@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { Wall, WallType } from '@/src/lib/types'
 import { wallEnd } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
+import { parseWallProfile, formatWallProfile } from '@/src/lib/wallProfile'
 
 export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClose }: {
   wall: Wall
@@ -85,6 +86,23 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
             onClear={() => onUpdate(wall.id, { soffit_height: null as unknown as number })}
             className={inp + ' text-right'} />
         </div>
+        {wall.wall_type !== 'island' && (
+          <div>
+            <label className={lbl}>Raked top (along:height, …)</label>
+            <input key={formatWallProfile(wall.top_profile)} defaultValue={formatWallProfile(wall.top_profile)}
+              placeholder="Flat — e.g. 0:2614, 5225:3900"
+              onBlur={e => {
+                const pts = e.target.value.trim() ? parseWallProfile(e.target.value) : null
+                if (e.target.value.trim() && !pts) { e.target.value = formatWallProfile(wall.top_profile); return }
+                if (formatWallProfile(pts) === formatWallProfile(wall.top_profile)) return
+                // wall.height follows the highest point so the elevation frame fits the rake.
+                onUpdate(wall.id, pts ? { top_profile: pts, height: Math.max(...pts.map(p => p.h)) } : { top_profile: null })
+              }}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+              className={inp} />
+            <p className="text-[10px] text-gray-600 mt-0.5">Distance from the wall start : height. Flat past the first and last point. Blank = flat.</p>
+          </div>
+        )}
         <div>
           <label className={lbl}>Start position (mm)</label>
           <div className="grid grid-cols-2 gap-2">

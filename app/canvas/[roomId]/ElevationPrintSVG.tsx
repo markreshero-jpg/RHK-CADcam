@@ -45,6 +45,7 @@ import { GrainMatchFrontSVG, GrainMatchTagSVG, unionRect } from './GrainMatchSVG
 import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
 import { grainMatchColour, grainMatchTag, grainMatchTagCabs } from '@/src/lib/grainMatch'
 import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
+import { wallTopPoints } from '@/src/lib/wallProfile'
 import { FillPatternDef, fillPaint } from './FillPattern'
 
 /** Report-only page extras (not drawing layers). */
@@ -181,6 +182,8 @@ export default function ElevationPrintSVG({
   const roomH = wall.height ?? room.room_dy ?? 2400
   const isBack = side === 'back'
   const mirrorX = (t: number, dx: number) => (isBack ? wall.length - t - dx : t)
+  // Raked / vaulted wall top as drawn on this side, or null when flat (src/lib/wallProfile.ts).
+  const wallTop = wallTopPoints(wall)?.map(p => ({ x: isBack ? wall.length - p.t : p.t, h: p.h })).sort((a, b) => a.x - b.x) ?? null
   const elevX = (c: CabinetInstance) => mirrorX(cabT(c, wall), c.dx)
   // Doors / windows in this wall, on the side drawn (z_fixtures P5).
   const openings = !layers.show('fixture_openings') ? [] : fixtures.flatMap(fx => {
@@ -607,11 +610,11 @@ export default function ElevationPrintSVG({
       <g pointerEvents="none">
         {/* Wall outline: ceiling + both wall ends, solid at the 'walls' pen (Mark, 2026-10-27) */}
         {layers.show('walls') && (
-          <path d={`M 0 ${roomH} V 0 H ${wall.length} V ${roomH}`} fill="none" stroke={INK}
+          <path d={wallTop ? `M 0 ${roomH} ${wallTop.map(p => `L ${p.x} ${roomH - p.h}`).join(' ')} L ${wall.length} ${roomH}` : `M 0 ${roomH} V 0 H ${wall.length} V ${roomH}`} fill="none" stroke={INK}
             strokeWidth={atLeastMin(layers.w('walls', thinSW), P)} strokeOpacity={lp('walls').opacity} />
         )}
-        <text x={wall.length + 1 * P} y={0} textAnchor="start" dominantBaseline="middle"
-          fontSize={dimFs * 0.85} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">C {roundMm(roomH)}</text>
+        <text x={wall.length + 1 * P} y={wallTop ? roomH - wallTop[wallTop.length - 1].h : 0} textAnchor="start" dominantBaseline="middle"
+          fontSize={dimFs * 0.85} fill={INK2} fontFamily="Arial, Helvetica, sans-serif">C {roundMm(wallTop ? wallTop[wallTop.length - 1].h : roomH)}</text>
         {soffitH != null && soffitH < roomH - 20 && (
           <>
             <line x1={0} y1={roomH - soffitH} x2={wall.length} y2={roomH - soffitH} stroke={INK3} strokeWidth={thinSW} strokeDasharray={`${1.2 * P} ${0.8 * P}`} />

@@ -1264,6 +1264,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Reports → Room Reports… → Cabinet Sheets: each cabinet’s Front, Side and Plan views print their CAD notes (the CAD notes button at the top turns them off). The notes print at their paper size whatever the view’s scale.',
       canvas: true, done: c => c.report === 'cabinet_sheets' },
   ]},
+
+  // Appended 2026-10-31 (raked / vaulted wall tops, walls.top_profile — RHK9999 BBQ wall).
+  { id: 'raked_wall', level: 'intermediate', topic: 'room', title: 'Raked (vaulted) wall tops',
+    blurb: 'Make a wall’s top slope, e.g. 2614 at one end rising to 3900, instead of one flat height.',
+    keywords: 'raked vaulted sloped slope pitched cathedral ceiling wall top height profile gable', steps: [
+    { id: 'select', title: 'Select the wall',
+      body: 'In Plan, click the wall. Its panel opens on the right.',
+      canvas: true, done: c => c.selected?.type === 'wall' },
+    { id: 'profile', title: 'Type the raked top',
+      body: 'In Raked top, type each point as distance from the wall start : height, with commas between, e.g. 0:2614, 5225:3900. The top runs straight between the points and stays flat past the first and last one, so that example rises from 2614 at the start to 3900 at 5225, then runs flat to the end. Press Enter. The wall’s Height becomes the highest point. Clear the box to make it flat again.',
+      canvas: true, done: c => c.walls.some(w => (w.top_profile?.length ?? 0) >= 2) },
+    { id: 'see', title: 'Check it',
+      body: 'Click Elevation: the wall outline follows the slope, on the screen and on the printed elevations. Click 3D to see the wall cut to the same shape.',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

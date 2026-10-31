@@ -4,7 +4,7 @@ import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { useLongPressMenu } from './useLongPressMenu'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
-import { Shape, ExtrudeGeometry, Vector3 } from 'three'
+import { Shape, ExtrudeGeometry, Vector3, Matrix4 } from 'three'
 import type { Wall, CabinetInstance, Room, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -13,6 +13,7 @@ import {
   wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad,
 } from '@/src/lib/geometry'
 import { openingOnWall } from '@/src/lib/fixtureGeometry'
+import { wallTopPoints } from '@/src/lib/wallProfile'
 import type { Pt, RoomRef } from '@/src/lib/geometry'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { PassivePartsContext, WireColorContext, alphaMat, type PartEdge, type MatColMap } from '@/src/components/three/PartViewer'
@@ -112,8 +113,32 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
   }, [holesKey, wall, walls.map(w => w.id).join(), rc, height])
   useEffect(() => () => { holed?.forEach(g => g.dispose()) }, [holed])
 
+  // Raked / vaulted top (src/lib/wallProfile.ts): the elevation outline pushed
+  // through the wall thickness. Ends stay square (no mitre) — fine for a rake.
+  const topKey = JSON.stringify(wall.top_profile ?? null)
+  const raked = useMemo(() => {
+    const top = wall.wall_type === 'island' ? null : wallTopPoints(wall)
+    if (!top) return null
+    const shape = new Shape()
+    shape.moveTo(0, 0)
+    for (const p of top) shape.lineTo(p.t, p.h)
+    shape.lineTo(wall.length, 0)
+    shape.closePath()
+    const geo = new ExtrudeGeometry(shape, { depth: wall.thickness, bevelEnabled: false })
+    // Shape x → along the wall, y → up, extrusion → through the wall (kept right-handed).
+    const d = wallDir(wall), inw = wallInwardNormal(wall, rc)
+    const outFirst = d.x * -inw.y - d.y * -inw.x > 0
+    const n = outFirst ? { x: -inw.x, y: -inw.y } : inw
+    const o = outFirst ? { x: wall.pos_x, y: wall.pos_y } : { x: wall.pos_x - inw.x * wall.thickness, y: wall.pos_y - inw.y * wall.thickness }
+    geo.applyMatrix4(new Matrix4().makeBasis(new Vector3(d.x, 0, d.y), new Vector3(0, 1, 0), new Vector3(n.x, 0, n.y)).setPosition(o.x, 0, o.y))
+    geo.computeVertexNormals()
+    return geo
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topKey, wall.length, wall.thickness, wall.pos_x, wall.pos_y, wall.angle, wall.wall_type, rc])
+  useEffect(() => () => { raked?.dispose() }, [raked])
+
   const geometry = useMemo(() => {
-    if (!corners) return null
+    if (!corners || raked) return null
     const [s, e, pEO, pSO] = corners
     const shape = new Shape()
     shape.moveTo(s.x,   -s.y)
@@ -125,7 +150,7 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
     geo.rotateX(-Math.PI / 2)
     geo.computeVertexNormals()
     return geo
-  }, [corners, height])
+  }, [corners, height, raked])
 
   useEffect(() => () => { geometry?.dispose() }, [geometry])
 
@@ -141,10 +166,10 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
     ))}</>
   }
 
-  if (!geometry) return null
+  if (!geometry && !raked) return null
 
   return (
-    <mesh key={alpha < 1 || wire ? 't' : 'o'} geometry={geometry}>
+    <mesh key={alpha < 1 || wire ? 't' : 'o'} geometry={(raked ?? geometry)!}>
       <meshStandardMaterial color={color} roughness={0.85} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
       <Edges threshold={25} color={wire ? WIRE_EDGE : '#94a3b8'} transparent opacity={wire ? Math.max(alpha, 0.6) : alpha} />
     </mesh>

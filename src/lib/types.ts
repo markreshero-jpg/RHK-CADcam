@@ -131,6 +131,8 @@ export interface Wall {
   length: number            // mm
   height: number | null       // mm (inherits from room if null)
   soffit_height: number | null  // mm; overrides room.soffit_height for wall cabinet top on this wall
+  /** Raked / vaulted top: points along the wall (t mm from start) with the height there (h mm). Null = flat. src/lib/wallProfile.ts */
+  top_profile?: { t: number; h: number }[] | null
   angle: number             // degrees from east (0=right, 90=down in screen/SVG coords)
   pos_x: number             // room X of wall start mm
   pos_y: number             // room Y of wall start mm
