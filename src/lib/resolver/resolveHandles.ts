@@ -23,6 +23,9 @@ type ZoneLike = Pick<FaceZoneInput, 'row_index' | 'col_index' | 'face_type' | 'h
 
 const POSITIONED = new Set(['hardware', 'routed'])
 
+/** Zone handle_id meaning "no handle" (D23): the front opens from below / behind. */
+export const NO_HANDLE = 'none'
+
 export function handleRole(cab: CabinetInput, zone: ZoneLike): HandleRole | null {
   if (zone.face_type === 'drawer_face') return 'drawer'
   if (zone.face_type !== 'door') return null
@@ -57,6 +60,7 @@ export function zoneGrip(cab: CabinetInput, zone: ZoneLike): ZoneGrip | null {
   if (!role) return null
   const entry = cab.handle_schedule?.[role]
   const zoneIn = zoneGrid(cab, zone)?.zones.find(z => z.row_index === zone.row_index && z.col_index === zone.col_index)
+  if (zoneIn?.handle_id === NO_HANDLE) return null      // D23: no grip, no gap, no hardware
   const override = zoneIn?.handle_id ? cab.handle_products?.[zoneIn.handle_id] : undefined
   const product = override ?? entry?.handle ?? null
   if (!product) return null

@@ -468,6 +468,14 @@ is, and which edge is the bottom, once the label is off.
     (`markersStale` in `dbLoadResolvedParts`).
   - Tests: `drawerMarkers.test.ts`.
 
+**D23. "No handle" on a front (Mark, 2026-10-31 — RHK6586 study drawer, opened from underneath).**
+- A zone's `handle_id` can be the sentinel `'none'` (`NO_HANDLE` in
+  resolveHandles.ts). `zoneGrip` then returns null, so the front gets no grip,
+  no finger gap, no holes and nothing on the hardware takeoff, whatever the
+  schedule says. Unset still means "use the schedule".
+- UI: Face Grid → Handle → "No handle".
+- Tests: `handles.test.ts`.
+
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
 - **Reuse, don't rebuild.** Same loader as slides and fixtures

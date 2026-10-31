@@ -15,6 +15,7 @@ import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { mergeRules, resolveReveal } from '@/src/lib/resolver/mergeRules'
 import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { handleShapes } from '@/src/lib/handleGeometry'
+import { NO_HANDLE } from '@/src/lib/resolver/resolveHandles'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { addBinDivisions } from './binDivisionsAction'
 import { drawerBoundaries, planAutoDivider, AUTO_DIVIDER_NOTE, type SeamGeometry } from '@/src/lib/dividers/autoDivider'
@@ -1126,6 +1127,7 @@ export default function FaceGridEditor({
                         className={sel}
                       >
                         <option value="">— schedule{rh && !gz.handle_id ? ` (${rh.name})` : ''} —</option>
+                        <option value={NO_HANDLE}>No handle</option>
                         {handles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                       </select>
                       <div className="flex items-center gap-1">

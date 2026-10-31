@@ -89,6 +89,13 @@ describe('resolveHandles', () => {
     expect(right.handle).toMatchObject({ handle_id: 'h160', source: 'schedule' })
   })
 
+  it("a zone handle_id of 'none' = no handle, whatever the schedule says (D23)", () => {
+    const grid = { ...twoDoors, zones: [{ ...twoDoors.zones[0], handle_id: 'none' }, twoDoors.zones[1]] }
+    const [left, right] = resolveCabinet(cab({ face_grid: grid })).face_zones
+    expect(left.handle ?? null).toBeNull()
+    expect(right.handle).toMatchObject({ handle_id: 'h160' })
+  })
+
   it('holes: bar = two holes at the bore centres along the handle; push = none', () => {
     const [left] = resolveCabinet(cab()).face_zones
     const h = left.handle!
