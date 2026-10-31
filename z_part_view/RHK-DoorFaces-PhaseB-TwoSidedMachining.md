@@ -1,13 +1,42 @@
-# Phase B — Two-Sided Machining (decorative-front ops)
+# Phase B — Two-Sided Machining (6th face nesting)
 
 **Status:** NOT STARTED. Design/spec only. Phase A (editor + tagging) is done — see
-"Phase A recap" below and `memory/door-face-front-back.md`.
+"Phase A recap" below and `memory/door-face-front-back.md`. Method locked with Mark
+2026-10-31 (§0) — it follows Cabinet Vision's 6th face nesting.
 
-**Goal:** operations placed on the **decorative front face** of a door / drawer
-front / false panel (`plane_kind = 'face_front'`) must be **machined on that
-front face** — a second, mirrored setup — while everything else keeps machining
-on the back (as today). This makes the Part Editor's front/back distinction real
-all the way to G-code.
+**Goal:** any part with machining on **both faces** gets it — not just doors. Each
+sheet that needs it runs as **two programs with a whole-sheet flip between**.
+
+---
+
+## 0. Locked method (Mark, 2026-10-31 — supersedes §3b's pause/separator idea)
+
+- **Two separate programs per sheet**, not one program with an `M00`:
+  - **Program A (first):** the drilling on the **back** of the panels — hinge cups,
+    drawer front fixings, handle holes etc. — **plus clean reference edges**: a
+    trim along the sheet's **outside long edge** and along the **end nearest X0**.
+  - **Flip** the whole sheet; push the two trimmed edges into **X0 / Y0**.
+  - **Program Z (second):** the **face machining** — shaker routes, VJ grooves etc.
+    — **and the part outlines** (cut-out). Program Z is datumed off the trimmed
+    edges, so its coordinates are measured from true edges, not the raw sheet.
+- **Scope:** every part with machining on both faces (doors, gables, drawer backs,
+  panels …). Parts whose work is all on one face just appear in the one program.
+- A sheet with no A-face work anywhere gets **only program Z** (= today's single
+  program) — no trims, no flip.
+- **Flip direction — TO CONFIRM with Mark:** for both trimmed edges to land on the
+  datum the sheet must flip **over its long axis** (the far long edge comes to Y0,
+  the X0 end stays at X0). End-over-end would send the trimmed end to the far end.
+  Program Z = program-A frame mirrored in Y about the sheet's trimmed width.
+- Answers §5 Q1 (two programs) and Q4 (registration = trimmed edges into X0/Y0).
+
+### Still to decide
+- **Which face is A for non-door parts.** Doors: back (hinge side) = A, decorative
+  front = Z (Phase A tags). Proposal for everything else: the face the part is
+  cut out from (most work / through-cuts) is Z; ops tagged on the other face are A.
+- Trim depth/width and tool for the reference edges (full depth, 10mm bit, how much
+  off the raw edge — needs the sheet trim allowance).
+- File naming for the pair (e.g. `…_01A.anc` / `…_01Z.anc`) and labels: which program
+  prints labels (Z, since it cuts the parts out).
 
 ---
 
@@ -136,13 +165,12 @@ real route emitter:
 
 ## 5. Open questions / decisions before starting
 
-1. **Does the target machine actually do two-sided in one program (pause + flip),
-   or two separate programs?** Drives §3b structure.
-2. **Flip axis** (left-right about Y, or end-over-end about X)? Machine/operator convention.
+1. ~~One program or two?~~ **Two programs, A then Z (§0).**
+2. **Flip axis** — assumed over the long axis (§0), to confirm with Mark.
 3. **Front-face tooling:** which router bit / tool number for front profiles &
    grooves — per material, per op, or a fixed "front profile" tool?
-4. **Registration:** how is the part re-datumed after flip (fixed fence corner,
-   dowels)? Determines the mirror datum and any offset.
+4. ~~Registration~~ **Program A trims the outside long edge + X0 end; flipped
+   sheet pushed into X0/Y0 (§0).**
 5. **Do front ops need onion-skin/tabs** like the perimeter, or full-depth?
 6. **Scope of route emit:** only grooves/pockets, or also arbitrary drawn paths
    (Phase 3 "stored outline" territory)?
