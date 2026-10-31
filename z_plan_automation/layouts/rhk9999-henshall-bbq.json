@@ -1,5 +1,5 @@
 {
-  "_source": "G:/My Drive/1. Properties/2. 23 Arkana Drive/3. Plans/Cabinet Vision Drawings/House Plan - BBQ outdoor area.pdf (Elev 3 + Plan, 31/10/26). Mark 2026-10-31: 100 apron top (20 slab, 900 top), #1 = 3 separate cupboards, 100 stone panels = blocks No CNC butted under the apron, 650 OA (630 carcass + 18 + 2), Stylelex 18 fronts, 16mm CPP White carcass, 50 filler on the kick.",
+  "_source": "G:/My Drive/1. Properties/2. 23 Arkana Drive/3. Plans/Cabinet Vision Drawings/House Plan - BBQ outdoor area.pdf (Elev 3 + Plan, 31/10/26). Mark 2026-10-31: 100 apron top (20 slab, 900 top), #1 = 3 separate cupboards, 100 stone panels = blocks No CNC butted under the apron, 650 OA (630 carcass + 18 + 2), Stylelex 18 fronts, 16mm CPP White carcass, 50 filler on the kick. Rev 2 (Mark 2026-10-31): BC-03 -> BBIN, single bowl U/M sink in BC-04, drawers (#10) replaced by a 600 glass-door bar fridge opening between BEPFs, everything after moved along 444.",
   "projectName": "RHK9999 Mark Henshall - BBQ Cabinet",
   "roomName": "Outdoor BBQ Area",
   "roomHeight": 2614,
@@ -9,16 +9,17 @@
     { "x": 0, "y": 0, "length": 5830, "angle": 0, "_": "Wall 2 = plan wall 3 (Elev 3), drawn east" }
   ],
   "cabinets": [
-    { "def": "BFK",  "wall": 2, "offset": 0.6,    "dx": 50,     "dy": 880, "dz": 630, "note": "# 5 filler 50 at the wall, on the kick" },
-    { "def": "B1D",  "wall": 2, "offset": 50.6,   "dx": 180,    "dy": 880, "dz": 630, "note": "# 1 / # 6 180 door, hinged left" },
-    { "def": "B1D",  "wall": 2, "offset": 230.6,  "dx": 454.4,  "dy": 880, "dz": 630, "note": "# 7 450 door (+4.4 from the chain taken up here)" },
-    { "def": "B2D",  "wall": 2, "offset": 685,    "dx": 900,    "dy": 880, "dz": 630, "note": "# 8 900 door pair" },
-    { "def": "BEPF", "wall": 2, "offset": 1585,   "dx": 100,    "dy": 800, "dz": 630, "note": "# 9 STONE PANEL 100, by stonemason, butts under the apron" },
-    { "def": "D3-SLL", "wall": 2, "offset": 1685, "dx": 1080,   "dy": 880, "dz": 630, "note": "# 2 / # 10 3 drawers" },
-    { "def": "BEPF", "wall": 2, "offset": 2765,   "dx": 100,    "dy": 800, "dz": 630, "note": "# 11 STONE PANEL 100, by stonemason, butts under the apron" },
-    { "def": "B2D",  "wall": 2, "offset": 2865,   "dx": 1080,   "dy": 880, "dz": 630, "note": "# 3 / # 12 door pair" },
-    { "def": "BEPF", "wall": 2, "offset": 3945.6, "dx": 100,    "dy": 800, "dz": 630, "note": "# 13 STONE PANEL 100, by stonemason, butts under the apron" },
-    { "def": "B2D",  "wall": 2, "offset": 4045.6, "dx": 1080,   "dy": 880, "dz": 630, "note": "# 4 / # 14 door pair" },
-    { "def": "BEPF", "wall": 2, "offset": 5125.6, "dx": 100,    "dy": 800, "dz": 630, "note": "# 15 STONE PANEL 100 at the open end, by stonemason, butts under the apron" }
+    { "def": "BFK",  "wall": 2, "offset": 0.6,    "dx": 50,    "dy": 880, "dz": 630, "note": "# 5 filler 50 at the wall, on the kick" },
+    { "def": "B1D",  "wall": 2, "offset": 50.6,   "dx": 180,   "dy": 880, "dz": 630, "note": "# 1 / # 6 180 door, hinged left" },
+    { "def": "BBIN", "wall": 2, "offset": 230.6,  "dx": 454.4, "dy": 880, "dz": 630, "note": "# 7 pull-out bin (+4.4 from the chain taken up here)" },
+    { "def": "B2D",  "wall": 2, "offset": 685,    "dx": 900,   "dy": 880, "dz": 630, "rules": { "RAIL_ORIENT": "vertical" }, "note": "# 8 900 door pair, single bowl U/M sink" },
+    { "def": "BEPF", "wall": 2, "offset": 1585,   "dx": 100,   "dy": 800, "dz": 630, "note": "# 9 STONE PANEL 100, by stonemason, butts under the apron" },
+    { "def": "BEPF", "wall": 2, "offset": 1685,   "dx": 18,    "dy": 880, "dz": 630, "note": "Bar fridge panel (left)" },
+    { "def": "BEPF", "wall": 2, "offset": 2303,   "dx": 18,    "dy": 880, "dz": 630, "note": "Bar fridge panel (right). Glass door bar fridge opening 600 between the panels." },
+    { "def": "BEPF", "wall": 2, "offset": 2321,   "dx": 100,   "dy": 800, "dz": 630, "note": "# 11 STONE PANEL 100, by stonemason, butts under the apron" },
+    { "def": "B2D",  "wall": 2, "offset": 2421,   "dx": 1080,  "dy": 880, "dz": 630, "note": "# 3 / # 12 door pair" },
+    { "def": "BEPF", "wall": 2, "offset": 3501.6, "dx": 100,   "dy": 800, "dz": 630, "note": "# 13 STONE PANEL 100, by stonemason, butts under the apron" },
+    { "def": "B2D",  "wall": 2, "offset": 3601.6, "dx": 1080,  "dy": 880, "dz": 630, "note": "# 4 / # 14 door pair" },
+    { "def": "BEPF", "wall": 2, "offset": 4681.6, "dx": 100,   "dy": 800, "dz": 630, "note": "# 15 STONE PANEL 100 at the open end, by stonemason, butts under the apron" }
   ]
 }
