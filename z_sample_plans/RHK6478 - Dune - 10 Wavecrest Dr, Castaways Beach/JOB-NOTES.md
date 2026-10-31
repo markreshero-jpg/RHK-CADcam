@@ -1,6 +1,6 @@
 # RHK6478 Dune - 10 Wavecrest Dr, Castaways Beach
 
-Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 Pac Flat 18mm, placeholder colour).
+Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 Pac Flat 18mm). 2pac colour = "2 Pac - Colour TBC" (new row on the 2 Pac Satin 18mm range, 2026-10-31) until the client picks — swap the project base/wall/tall colour ids then.
 
 ## Sources
 - Client markups 26.10.26: `G:/My Drive/6. Resident Hero Work/3. JOBS/Res hero - Biggie/RHK6478 - Dune - 10 Wavecrest Dr, Castaways Beach/Mark ups with Cleint 26.10.26/` (4 scans, 32 pages + DS TV Unit)
