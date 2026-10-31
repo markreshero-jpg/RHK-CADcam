@@ -80,10 +80,26 @@ export function resolveShapedKick(
   const errors: ResolverError[] = []
   const segs0 = canonicalSegments(cab.footprint!, cab.DX, cab.DZ)
   // Arcs → chords (the kick runs straight across a curved end).
-  const edges: KEdge[] = segs0.map(s => ({
+  const edges0: KEdge[] = segs0.map(s => ({
     kind: kindOf(s),
     seg: s.type === 'arc' ? { type: 'line', p0: s.p0, p1: s.p1, edge: s.edge } as FootprintSegment : s,
   }))
+  // Straight-on front edges (a face filler beside an open front) take one kick
+  // board — their offset lines are (near enough) one line, so the inset can't
+  // corner them (a hair off in line throws the corner hundreds of metres out).
+  const inLine = (a: KEdge, b: KEdge) => {
+    if (a.kind !== 'front' || b.kind !== 'front') return false
+    const fa = edgeFrame(a.seg), fb = edgeFrame(b.seg)
+    return Math.abs(fa.u.x * fb.u.y - fa.u.y * fb.u.x) < 1e-3 && fa.u.x * fb.u.x + fa.u.y * fb.u.y > 0
+  }
+  const edges: KEdge[] = []
+  for (const e of edges0) {
+    const last = edges[edges.length - 1]
+    if (last && inLine(last, e)) last.seg = { ...last.seg, p1: e.seg.p1 } as FootprintSegment
+    else edges.push({ ...e })
+  }
+  if (edges.length > 2 && inLine(edges[edges.length - 1], edges[0]))
+    edges[0].seg = { ...edges[0].seg, p0: edges.pop()!.seg.p0 } as FootprintSegment
   const lines = edges.map(e => e.seg)
   const n = edges.length
   const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }

@@ -98,3 +98,21 @@ describe('open front facet (z_cabinet_shape_edit E1)', () => {
     expect(doors.face_zones.some(z => z.bevel_l || z.bevel_r)).toBe(true)
   })
 })
+
+describe('face filler beside an open front in line', () => {
+  it('the filler is one false panel filler.width wide, on its edge', () => {
+    const t = 25.46, s = 40 / Math.SQRT2
+    const fp = { params: {}, segments: [
+      { type: 'line' as const, p0: { x: t, y: 0 }, p1: { x: 507.5, y: 0 }, edge: { id: 'back', role: 'back' as const } },
+      { type: 'line' as const, p0: { x: 507.5, y: 0 }, p1: { x: 507.5, y: 482 }, edge: { id: 'right', role: 'side' as const } },
+      { type: 'line' as const, p0: { x: 507.5, y: 482 }, p1: { x: t + s, y: s }, edge: { id: 'front', role: 'front' as const, sub: 'open' as const } },
+      { type: 'line' as const, p0: { x: t + s, y: s }, p1: { x: t, y: 0 }, edge: { id: 'filler', role: 'front' as const, filler: { width: 40, cleat: 60 } } },
+    ] }
+    const res = resolveCabinet(cab({ DX: 507.5, DZ: 482, footprint: fp }))
+    expect(res.face_zones).toHaveLength(1)
+    const z = res.face_zones[0]
+    expect(z.face_type).toBe('false_panel')
+    expect(z.DX).toBeCloseTo(40, 6)
+    expect(Math.hypot(z.X - t, z.Z)).toBeLessThan(100)
+  })
+})

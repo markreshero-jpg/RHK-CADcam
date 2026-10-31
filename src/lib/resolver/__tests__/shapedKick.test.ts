@@ -76,6 +76,21 @@ describe('shaped toe kick (4b)', () => {
     expect(outer.length).toBe(2)
   })
 
+  it('two front edges in line (face filler + open front) share one kick board', () => {
+    const t = 25.46, s = 40 / Math.SQRT2
+    const fp = { params: {}, segments: [
+      { type: 'line' as const, p0: { x: t, y: 0 }, p1: { x: 507.5, y: 0 }, edge: { id: 'back', role: 'back' as const } },
+      { type: 'line' as const, p0: { x: 507.5, y: 0 }, p1: { x: 507.5, y: 482 }, edge: { id: 'right', role: 'side' as const } },
+      { type: 'line' as const, p0: { x: 507.5, y: 482 }, p1: { x: t + s, y: s }, edge: { id: 'front', role: 'front' as const, sub: 'open' as const } },
+      { type: 'line' as const, p0: { x: t + s, y: s }, p1: { x: t, y: 0 }, edge: { id: 'filler', role: 'front' as const } },
+    ] }
+    const rp = resolveCabinet(cab({ DX: 507.5, DZ: 482, footprint: fp }))
+    const faces = rp.toekick_parts.filter(p => p.part_key === 'kick_front_face')
+    expect(faces).toHaveLength(1)
+    expect(faces[0].DY).toBeLessThan(Math.hypot(482, 482))
+    for (const p of rp.toekick_parts) expect(Math.abs(p.X) + Math.abs(p.Z)).toBeLessThan(1100)
+  })
+
   it('leg kick: front faces only', () => {
     const fp = buildPresetFootprint('clipped_corner', {}, { w: 900, d: 580 })
     const rp = resolveCabinet(cab({ footprint: fp }, { TOE_TYPE: 'leg' }))

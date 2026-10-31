@@ -73,7 +73,7 @@ function endReveal(cab: CabinetInput, r: ConstructionRules, nb: FootprintSegment
 function doorRun(rev: number, f: EdgeFrame, nb: FootprintSegment, away: { x: number; y: number }, backOff: number, ft: number) {
   const g = edgeFrame(nb)
   const k = away.x * g.n.x + away.y * g.n.y
-  if (k <= 1e-9) return rev
+  if (k < 1e-3) return rev               // (near) in line, e.g. a face filler beside an open front
   const lean = f.n.x * g.n.x + f.n.y * g.n.y
   return Math.max(...[backOff, backOff + ft].map(off => (rev + off * lean) / k))
 }
