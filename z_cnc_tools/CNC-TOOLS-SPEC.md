@@ -12,7 +12,23 @@ CV stores lengths in **inches** (× 25.4); feeds/speeds are as entered (mm/min, 
 | T1 | 4 new columns on `cnc_tools` + `cnc_drills`, wired into resolver/G-code, editor cards with diagrams | **built 01/11/26**, in-app check pending |
 | T1 import | CV tools 103, 104, 106, 107, 108, 110, 111, 112 imported (101/102/109 already existed) | **done 01/11/26** |
 | T2 | Tool-set steps to match CV: square-out corners, centre-on-line, step depth wins, ring rebate, through cut, per-tool feeds/rpm; Shaker Door set rebuilt to CV; Glass door profile + Glass Door set | **built 01/11/26**, machine test pending |
-| T3 | Glass size for ordering (opening + rebate − clearance) | not started |
+| T3 | Glass size for ordering: Reports → Glass Order | **built 01/11/26**, in-app check pending |
+| T3b | Tool set section view (sample door section + corner plan) in Settings → CNC Tool Sets | **built 01/11/26**, in-app check pending |
+
+## Locked decisions (T3, 01/11/26)
+
+1. A tool set with `glass_thickness_mm` set is a **glass recipe**; any front whose
+   door profile op uses it is a glass door (no resolver change needed).
+2. Glass = opening (door − the op's frame offsets) + the ring step's outward
+   offsets − 2 × `glass_clearance_mm` (default 1.5 per side). R3 rebate corners
+   need ≥ 0.88 clearance for a square glass corner — 1.5 clears.
+3. Report = glazier's order (grouped by size + thickness, with cabinets) then each
+   room's panes (door / opening / glass sizes). Printable.
+4. Section view: sample door, line 60 in, board thickness editable (default 18);
+   steps shaded in order, tools from `shape_profile`; square_off shown on a corner
+   plan (it doesn't touch a straight edge). Step without depth drawn at 5.
+5. `buildProfile` closing bug fixed (straight bits drew as triangles in every tool
+   preview). T109 corrected to a plain flat 40mm (CV profile), was 'rebate'.
 
 ## Locked decisions (T2, 01/11/26)
 

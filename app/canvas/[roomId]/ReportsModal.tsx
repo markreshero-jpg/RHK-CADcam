@@ -34,6 +34,7 @@ import { zoneBlank } from '@/src/lib/jointDrilling'
 import { EdgebandSheet, edgebandPrintHtml } from './EdgebandReport'
 import { useTakeoff, HardwarePickSheet, TakeoffSheet } from './TakeoffReport'
 import { hardwarePickPrintHtml, takeoffPrintHtml } from './TakeoffPrint'
+import { useGlassOrder, GlassOrderSheet, glassOrderPrintHtml } from './GlassOrderReport'
 import { buildCutStickers, cutStickersPdf } from '@/src/lib/takeoff/cutStickers'
 import { loadLabelSettings } from '@/src/lib/optimiser/labels'
 import { buildEdgebandReport, type EdgebandProduct, type EdgebandBoard } from '@/src/lib/optimiser/edgebandLength'
@@ -41,7 +42,7 @@ import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { OptiPart } from '@/src/lib/optimiser/types'
 
 export type ReportScope = 'job' | 'room'
-export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length' | 'benchtop_quote' | 'hardware_pick' | 'takeoff'
+export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length' | 'benchtop_quote' | 'hardware_pick' | 'takeoff' | 'glass_order'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'shop_drawings',      label: 'Shop Drawings',       desc: 'One PDF per room: plan + elevations, one scale' },
@@ -51,6 +52,7 @@ const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'edgeband_length',    label: 'Edgeband Length',     desc: 'Tape metres by product · waste · cost' },
   { id: 'hardware_pick',      label: 'Hardware Pick List',  desc: 'Per room: hinges, runners, handles … qty + tick box' },
   { id: 'takeoff',            label: 'Takeoff',             desc: 'Per room: cabinets, sheets (nested), tape, hardware' },
+  { id: 'glass_order',        label: 'Glass Order',         desc: 'Glass doors: glass sizes to order from the glazier' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'opening_schedule',   label: 'Door & Window Schedule', desc: 'Doors, windows, openings · size · sill · head' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
@@ -505,6 +507,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
 
   // Hardware Pick List + Takeoff (z_takeoff): loads + nests only while one is open.
   const takeoff = useTakeoff({ active: selectedReport === 'hardware_pick' || selectedReport === 'takeoff', project, rooms, cabinets: allCabinets, resolved: allResolved })
+  const glassOrder = useGlassOrder({ active: selectedReport === 'glass_order', rooms, cabinets: allCabinets, resolved: allResolved })
 
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
 
@@ -534,6 +537,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
       : selectedReport === 'edgeband_length' ? [edgebandPrintHtml(ebReport, ebWaste / 100)]
       : selectedReport === 'hardware_pick' ? [hardwarePickPrintHtml(takeoff.data)]
       : selectedReport === 'takeoff' ? [takeoffPrintHtml(takeoff.data)]
+      : selectedReport === 'glass_order' ? [glassOrderPrintHtml(glassOrder)]
       : selectedReport === 'appliance_schedule' ? [schedulePrintHtml(scheduleData)]
       : selectedReport === 'opening_schedule' ? [openingSchedulePrintHtml(openingData)] : reportData.flatMap(({ room: rm, materialGroups }) =>
       materialGroups.length === 0 ? [] : [`
@@ -582,7 +586,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
         <h1>${reportTitle}</h1>
         <p>${scopeLabel} &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString()}</p>
       </div>
-      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : selectedReport === 'edgeband_length' ? 'No edgebanded parts.' : selectedReport === 'hardware_pick' ? 'No hardware.' : selectedReport === 'takeoff' ? 'Nothing to take off yet.' : selectedReport === 'appliance_schedule' ? 'No appliances placed.' : selectedReport === 'opening_schedule' ? 'No doors or windows placed.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
+      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : selectedReport === 'edgeband_length' ? 'No edgebanded parts.' : selectedReport === 'hardware_pick' ? 'No hardware.' : selectedReport === 'takeoff' ? 'Nothing to take off yet.' : selectedReport === 'glass_order' ? 'No glass doors.' : selectedReport === 'appliance_schedule' ? 'No appliances placed.' : selectedReport === 'opening_schedule' ? 'No doors or windows placed.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
     </body></html>`)
     win.document.close()
     win.focus()
@@ -846,6 +850,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 />
               ) : selectedReport === 'hardware_pick' ? (
                 <HardwarePickSheet data={takeoff.data} />
+              ) : selectedReport === 'glass_order' ? (
+                <GlassOrderSheet data={glassOrder} />
               ) : selectedReport === 'takeoff' ? (
                 <TakeoffSheet data={takeoff.data} nesting={takeoff.nesting} />
               ) : selectedReport === 'edgeband_length' ? (

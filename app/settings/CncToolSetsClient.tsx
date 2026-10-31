@@ -14,6 +14,8 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import ToolSetSectionDiagram from '@/src/components/cnc/ToolSetSectionDiagram'
+import type { ToolShape } from '@/src/lib/cnc/toolProfile'
 
 const OP_TYPES = ['pocket', 'outline', 'square_off', 'profile', 'drill', 'groove', 'raster'] as const
 const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
@@ -21,6 +23,8 @@ const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
 interface ToolSet {
   id: string; name: string; description: string | null
   is_active: boolean; sort_order: number
+  glass_thickness_mm: number | null   // set = glass door recipe (Reports → Glass Order)
+  glass_clearance_mm: number | null
 }
 interface ToolSetOp {
   id: string; tool_set_id: string; sort_order: number; operation_type: string
@@ -35,7 +39,7 @@ interface ToolSetOp {
   ring_width_mm: number | null     // pocket: clear only this wide a band
   cleanup_radius_mm: number | null // square_off: corner radius to clean (blank = previous step's tool)
 }
-interface ToolItem { id: string; name: string; tool_number: string | null }
+interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null; tool_type: string | null; cutting_length: number | null; shape_profile: ToolShape | null }
 
 const inp = 'bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent w-full'
 const lbl = 'text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block'
@@ -47,6 +51,7 @@ export default function CncToolSetsClient() {
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [expandedOp, setExpandedOp] = useState<string | null>(null)
+  const [sampleT, setSampleT] = useState(18)   // section view sample board thickness
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
   useEffect(() => { useTutorial.getState().emit('tool_sets_view') }, [])   // tutorial tool_set_steps
@@ -57,7 +62,7 @@ export default function CncToolSetsClient() {
       const [setR, opR, toolR] = await Promise.all([
         supabase.from('cnc_tool_sets').select('*').order('sort_order').order('name'),
         supabase.from('cnc_tool_set_operations').select('*').order('sort_order'),
-        supabase.from('cnc_tools').select('id,name,tool_number').eq('active', true).order('tool_number', { nullsFirst: false }),
+        supabase.from('cnc_tools').select('id,name,tool_number,diameter,tool_type,cutting_length,shape_profile').eq('active', true).order('tool_number', { nullsFirst: false }),
       ])
       if (cancelled) return
       setSets((setR.data ?? []) as ToolSet[])
@@ -179,6 +184,17 @@ export default function CncToolSetsClient() {
                 <input className={inp} defaultValue={selected.description ?? ''} key={selected.description ?? ''}
                   onBlur={e => patchSet(selected.id, { description: e.target.value.trim() || null })} />
               </div>
+              <Num label="Glass thickness (blank = not glass)" value={selected.glass_thickness_mm}
+                onSave={v => patchSet(selected.id, { glass_thickness_mm: v != null && v > 0 ? v : null })} />
+              {selected.glass_thickness_mm != null && (
+                <Num label="Glass clearance each side (blank = 1.5)" value={selected.glass_clearance_mm}
+                  onSave={v => patchSet(selected.id, { glass_clearance_mm: v != null && v >= 0 ? v : null })} />
+              )}
+              {selected.glass_thickness_mm != null && (
+                <p className="col-span-2 text-[10px] text-ink-subtle -mt-2">
+                  Doors whose profile uses this set go on Reports → Glass Order. Glass = opening + the ring step’s outward offsets − 2 × clearance.
+                </p>
+              )}
             </div>
             <button onClick={() => patchSet(selected.id, { is_active: !selected.is_active })}
               className={`mt-5 px-2.5 py-1 rounded border text-[10px] transition-colors ${
@@ -186,6 +202,23 @@ export default function CncToolSetsClient() {
               {selected.is_active ? 'Active' : 'Inactive'}
             </button>
           </div>
+
+          {/* Section view: what the steps do to a sample door (z_cnc_tools T3b) */}
+          {selectedOps.length > 0 && (
+            <div className="mb-5">
+              <div className="flex items-center gap-3 mb-2">
+                <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider">Section through a sample door</p>
+                <label className="flex items-center gap-1.5 text-[10px] text-ink-subtle">
+                  Board
+                  <input type="number" min={3} max={60} step={0.5} className={`${inp} w-16`} value={sampleT}
+                    onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v) && v > 0) setSampleT(v) }} />
+                  mm
+                </label>
+                <span className="text-[10px] text-ink-subtle">Click ▸ on a step to highlight its tool.</span>
+              </div>
+              <ToolSetSectionDiagram steps={selectedOps} tools={tools} thickness={sampleT} activeId={expandedOp} />
+            </div>
+          )}
 
           {/* Operations */}
           <div className="flex items-center justify-between mb-1">

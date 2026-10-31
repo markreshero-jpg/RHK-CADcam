@@ -1320,6 +1320,12 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'glass', title: 'Glass doors',
       body: 'The Glass door profile (Settings → Doors) cuts everything from the back with the Glass Door tool set: a 15.9 × 6.35 rebate for 6mm glass, the rebate corners squared with the 6mm, then the opening cut right through. Glass-only sheets cut face down like any other sheet. If a sheet also has shaker or VJ doors (front face), the optimiser warns: nest them on separate sheets until the two-sided program is built.',
       done: (c, s) => ev(c, 'tool_sets_view') > ev(s, 'tool_sets_view') },
+    { id: 'section', title: 'See it in section',
+      body: 'Above the steps, Section through a sample door shows what the set does: the door edge on the left, the line 60 in, each step’s cut shaded in its colour with its tool drawn in place. Click ▸ on a step to draw its tool solid. Change Board to see a different thickness (a through cut follows it). The corner plan beside it shows the radius each step leaves in an inside corner, e.g. R20 → R3 → R1 for the shaker.',
+      done: (c, s) => ev(c, 'tool_sets_view') > ev(s, 'tool_sets_view') },
+    { id: 'glass_order', title: 'Order the glass',
+      body: 'A tool set with a Glass thickness (Glass Door: 6mm, 1.5 clearance each side) marks its doors as glass doors. Reports → Glass Order lists the glass to order — panes grouped by size and thickness with their cabinets — then each room’s glass doors with door, opening and glass sizes. Glass = opening + the rebate both sides − 2 × clearance. Print it for the glazier.',
+      canvas: true, done: c => c.report === 'glass_order' },
   ]},
 ]
 

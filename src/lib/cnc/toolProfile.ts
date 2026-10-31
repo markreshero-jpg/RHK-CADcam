@@ -142,7 +142,10 @@ export function buildProfile(shape: ToolShape): ProfileGeometry {
 
   const right = rightEdge(shape.type, p, body)
   // Close the loop: right edge up, across the top, mirror back down.
-  const left = right.slice(0, -1).reverse().map(pt => ({ x: -pt.x, y: pt.y }))
+  // Mirror the WHOLE right edge back down (top-left first). Dropping its last
+  // point here used to cut straight from the top-right corner to the tip —
+  // every straight bit drew as a triangle.
+  const left = right.slice().reverse().map(pt => ({ x: -pt.x, y: pt.y }))
   const outline = [...right, ...left]
 
   const shankHalf = num(p.shank_diameter, width * 0.55) / 2
