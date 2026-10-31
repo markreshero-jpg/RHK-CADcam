@@ -59,7 +59,7 @@ Shaker Door set (= CV 2ndTest27.01): 1 pocket T109 spiral-out 50% d5 → 2 outli
 T107 d5 → 3 square_off T108 d5.4 → 4 outline T104 d1 centre-on-line.
 Glass profile (back, frame 60) + Glass Door set: 1 pocket T102 ring 15.9 d6.35
 offsets −15.9 → 2 square_off T107 d6.35 offsets −15.9 → 3 outline T102 d99 (through).
-6mm glass default (CV rebate 15.9 × 6.35).
+6mm glass default (CV rebate 15.9 × 6.35). Door style **Glass — 2pac** (01/11/26): Shaker — 2pac's blank, colour range + default colour with the Glass profile.
 
 ## Locked decisions (T1)
 
