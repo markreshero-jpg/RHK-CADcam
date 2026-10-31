@@ -17,7 +17,7 @@ import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { cabinetSeamDrills, caseBox } from '@/src/lib/jointDrilling'
 import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type FootprintFrame } from './partFootprint'
 import { coalesceByKey } from './coalesce'
-import type { ResolvedCabinet, ResolvedCasePart } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedCasePart, ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import { dbPartId, zoneKey, zonePartId, stackKey, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 import { filterRemovedParts } from '@/src/lib/resolver/filterHidden'
@@ -26,6 +26,17 @@ import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 import { MARKER_DIA, MARKER_DEPTH } from '@/src/lib/resolver/resolveDrawerMarkers'
 
 const GENERATED_MARK = 'seam_joint'
+
+// Drawer back top marker (Mark, 2026-10-31): the back's fixing holes are close
+// together, so a 2-deep prick 6 below the top one shows which edge is up.
+export const BACK_MARKER_DEPTH = 2
+export const BACK_MARKER_DROP  = 6
+export function backTopMarker(drills: ResolvedSlideDrill[]): ResolvedSlideDrill | null {
+  const back = drills.filter(d => d.surface === 'drawer_back' && d.machine_operation === 'drill')
+  if (!back.length) return null
+  const top = back.reduce((a, b) => b.y > a.y ? b : a)
+  return { ...top, y: top.y - BACK_MARKER_DROP, depthLen: BACK_MARKER_DEPTH }
+}
 
 interface GeneratedDrill {
   source_table: string
@@ -236,6 +247,11 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
           default:
             skipped++
         }
+      }
+      const mark = backTopMarker(sl.drills)
+      if (mark) {
+        const bp = boxByType.get('db_back')
+        add('drawer_box_parts', dboxKey('db_back'), bp ? boxFrame(bp) : null, mark, 'db_back_marker', `${opKey}_back_marker`, AUTO_TOOL)
       }
     }
   }
