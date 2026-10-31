@@ -1,0 +1,36 @@
+{
+  "_source": "G:/My Drive/.../RHK6478 - Dune/Mark ups with Cleint 26.10.26/img_261026111626.pdf p4 (US Hallway Storage) + SynologyDrive/.../SITE CHECK MEASURES/Site measure 22.10.26.pdf p7 (U/S Hallway Linen) + Mark Q&A 2026-10-31",
+  "_notes": [
+    "Site: 1597 between 604 returns, CH 2712 off slab. Floor allowance 20 (Mark, TBC) -> 2692 finished ceiling.",
+    "TFKW 30 | T2D 1025 pair | T2D 512 single (hinged right, PTO left) | TFKW 30 = 1597. Drawing was 1040 + 520 in 1620; fillers kept at 30, cupboards shrunk.",
+    "2674 incl 100 kick (2574 carcass), 18 shadowline to the ceiling. 600 OA (580 carcass). Per section bottom->top: adj, FIX (top ~1000 AFFL), adj x3.",
+    "18 2pac (placeholder Resene White, colour TBC), PTO - room handle schedule 'Push To Open'. Blum soft close hinges."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "US Hallway Linen",
+  "roomHeight": 2692,
+  "wallCabinetTop": 2674,
+  "roomRules": { "TOEH": 100 },
+  "walls": [
+    { "x": 0, "y": 604, "length": 604, "angle": 270, "_": "1 left return, S->N" },
+    { "x": 0, "y": 0, "length": 1597, "angle": 0, "_": "2 back wall, W->E = elevation" },
+    { "x": 1597, "y": 0, "length": 604, "angle": 90, "_": "3 right return, N->S" }
+  ],
+  "cabinets": [
+    { "def": "TFKW", "wall": 2, "offset": 0, "dx": 30, "dy": 2674, "dz": 580, "note": "# 1 30 filler at the wall" },
+    { "def": "T2D", "wall": 2, "offset": 30, "dx": 1025, "dy": 2674, "dz": 580, "note": "# 2 linen pair, PTO. adj / fix / adj x3",
+      "set": { "internal_grid": { "tree": { "type": "hsplit", "children": [
+        { "size": 868, "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false } ] }, "separator": "fixed_shelf" },
+        { "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } }
+      ] } } } },
+    { "def": "T2D", "wall": 2, "offset": 1055, "dx": 512, "dy": 2674, "dz": 580, "note": "# 3 linen single door, hinged right, PTO. adj / fix / adj x3",
+      "set": {
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "right" } ] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 868, "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false } ] }, "separator": "fixed_shelf" },
+          { "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } }
+        ] } } } },
+    { "def": "TFKW", "wall": 2, "offset": 1567, "dx": 30, "dy": 2674, "dz": 580, "note": "# 4 30 filler at the wall" }
+  ]
+}
