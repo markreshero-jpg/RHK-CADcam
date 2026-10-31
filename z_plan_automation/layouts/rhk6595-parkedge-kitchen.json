@@ -229,7 +229,7 @@
       "dx": 711,
       "dy": 1000,
       "dz": 500,
-      "note": "Appliance / microwave cupboard on the stone: no bottom, 1000 sliding bi-fold doors (Finista BF-05, hung left, no bottom guide) with 1 adj shelf (min 500 clear for the coffee machine). Microwave sits inside. Rev 3: the 390 PTO doors over are their own cabinet (last entry).",
+      "note": "Appliance / microwave cupboard on the stone: no bottom, 1000 sliding bi-fold doors (Finista BF-05, hung left, no bottom guide) with 1 adj shelf (min 500 clear for the coffee machine). Microwave sits inside. Rev 3: the 390 PTO doors over are their own cabinet (last entry). Stands on the 950 bench (WALLZ 950) — wall units otherwise hang from the 2340 top line.",
       "set": {
         "face_grid": {
           "cols": [
@@ -293,7 +293,8 @@
         },
         "rule_overrides": {
           "BIFOLD": "L",
-          "BIFOLD_BOTTOM": "none"
+          "BIFOLD_BOTTOM": "none",
+          "WALLZ": 950
         }
       }
     },
@@ -780,9 +781,8 @@
       "dx": 711,
       "dy": 390,
       "dz": 500,
-      "note": "390 PTO doors over the bi-fold appliance cupboard (split from it 2026-10-31, easier to fit). Bottom reveal 2 keeps the 2 gap over the bi-fold doors.",
+      "note": "390 PTO doors over the bi-fold appliance cupboard (split from it 2026-10-31, easier to fit). Hangs from the 2340 top line (1950–2340). Bottom reveal 2 keeps the 2 gap over the bi-fold doors.",
       "set": {
-        "pos_z": 1000,
         "face_grid": {
           "cols": [
             {

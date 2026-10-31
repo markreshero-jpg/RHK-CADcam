@@ -73,3 +73,6 @@ elevations, 3D, appliance list).
     with the 2 gap over the bi-fold doors, as before.
   - The fixed shelf is gone: the top of WC-02 + the bottom of WC-14 take its place.
 - Applied in the DB + re-resolved (`_tmp-6595-split.mjs`), no warnings. The layout JSON carries the split (WC-14 = last entry).
+- Fix (same day): wall units hang from the 2340 top line, so the 1000 WC-02 first sat at 1340–2340, over WC-14. New rule
+  WALLZ (f7ec94e: a wall unit's own height, set from "Elevation from floor" in the sidebar) — WC-02 WALLZ 950 stands on the
+  bench (950–1950); WC-14 hangs from the top line (1950–2340).
