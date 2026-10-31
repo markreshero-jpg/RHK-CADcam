@@ -14,6 +14,10 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import { useTutorial } from '@/src/lib/tutorial/store'
+import {
+  FieldCard, RotationDiagram, ThroughDiagram, TipDiagram, AutoSelectDiagram,
+} from '@/src/components/cnc/ToolFieldDiagrams'
 
 const DRILL_TYPES = ['through', 'blind', 'countersink'] as const
 const ROTATIONS = ['clockwise', 'anticlockwise'] as const
@@ -31,7 +35,14 @@ interface Drill {
   notes: string | null
   passes: number
   is_active: boolean
+  // z_cnc_tools T1 — Cabinet Vision tool fields
+  through_depth_adj: number | null
+  depth_to_shoulder: boolean
+  auto_select: boolean
+  select_tolerance: number | null
 }
+
+const SNAP_TOL_DEFAULT = 0.5   // resolveDrillTools SNAP_TOL
 
 const inp = 'bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent w-full'
 const lbl = 'text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block'
@@ -41,9 +52,14 @@ export default function DrillLibraryClient() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [machineOvershoot, setMachineOvershoot] = useState(0.2)
+  useEffect(() => { useTutorial.getState().emit('cnc_drills_view') }, [])   // tutorial cnc_tool_fields
 
   useEffect(() => {
     let cancelled = false
+    supabase.from('cnc_machine_profiles').select('drill_through_overshoot,is_default')
+      .order('is_default', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => { if (!cancelled && data?.drill_through_overshoot != null) setMachineOvershoot(Number(data.drill_through_overshoot)) })
     supabase.from('cnc_drills').select('*').order('diameter', { nullsFirst: false }).order('name')
       .then(({ data }) => {
         if (cancelled) return
@@ -159,18 +175,54 @@ export default function DrillLibraryClient() {
                               onBlur={e => { const v = Math.round(parseFloat(e.target.value)); patch(d.id, { passes: Number.isFinite(v) ? Math.max(1, Math.min(5, v)) : 1 }) }} />
                             <p className="text-[10px] text-ink-subtle mt-1">Plunges per hole — set 2 to drill twice in hard board.</p>
                           </div>
-                          <div>
-                            <label className={lbl}>Rotation</label>
-                            <select className={inp} value={d.rotation} onChange={e => patch(d.id, { rotation: e.target.value })}>
-                              {ROTATIONS.map(r => <option key={r} value={r}>{r}</option>)}
-                            </select>
-                          </div>
                           <TextField label="Supplier code" value={d.supplier_code ?? ''} onSave={v => patch(d.id, { supplier_code: v || null })} />
                           <div className="col-span-3">
                             <label className={lbl}>Notes</label>
                             <input className={inp} defaultValue={d.notes ?? ''}
                               onBlur={e => patch(d.id, { notes: e.target.value.trim() || null })} />
                           </div>
+                        </div>
+
+                        {/* Cabinet Vision tool fields (z_cnc_tools T1) */}
+                        <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mt-5 mb-2">Machining behaviour</p>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 max-w-5xl">
+                          <FieldCard title="Spin direction"
+                            control={
+                              <select className={inp} value={d.rotation} onChange={e => patch(d.id, { rotation: e.target.value })}>
+                                {ROTATIONS.map(r => <option key={r} value={r}>{r}</option>)}
+                              </select>
+                            }
+                            diagram={<RotationDiagram dir={d.rotation} />}
+                            help="Drill-block bits come in left-hand and right-hand versions, alternating along the bank. Match this to the bit you fit in the spindle." />
+                          <FieldCard title="Through-hole extra depth"
+                            control={
+                              <NumField label={`mm past the board (blank = machine ${machineOvershoot})`} value={d.through_depth_adj}
+                                onSave={v => patch(d.id, { through_depth_adj: v == null ? null : Math.max(0, v) })} />
+                            }
+                            diagram={<ThroughDiagram adj={d.through_depth_adj ?? machineOvershoot} fromMachine={d.through_depth_adj == null} kind="drill" />}
+                            help="How far this bit pushes past the bottom of the board on a through hole, so the slug comes clean out. Blind holes are not affected." />
+                          <FieldCard title="Depth measured to"
+                            control={
+                              <select className={inp} value={d.depth_to_shoulder ? 'shoulder' : 'tip'} onChange={e => patch(d.id, { depth_to_shoulder: e.target.value === 'shoulder' })}>
+                                <option value="tip">tip (default)</option>
+                                <option value="shoulder">shoulder (full ⌀)</option>
+                              </select>
+                            }
+                            diagram={<TipDiagram diameter={d.diameter ?? 5} pointAngle={d.point_angle} toShoulder={d.depth_to_shoulder} />}
+                            help="Shoulder: a blind hole drills deeper by the point length, so the full diameter reaches the depth you asked for. Uses the point angle. Through holes are not affected." />
+                          <FieldCard title="Auto-select"
+                            control={
+                              <div className="space-y-2">
+                                <label className="flex items-center gap-2 text-xs text-ink cursor-pointer">
+                                  <input type="checkbox" checked={d.auto_select !== false} onChange={e => patch(d.id, { auto_select: e.target.checked })} />
+                                  Pick by hole diameter
+                                </label>
+                                <NumField label={`Tolerance ± mm (blank = ${SNAP_TOL_DEFAULT})`} value={d.select_tolerance}
+                                  onSave={v => patch(d.id, { select_tolerance: v == null ? null : Math.max(0, v) })} />
+                              </div>
+                            }
+                            diagram={<AutoSelectDiagram diameter={d.diameter ?? 0} tolerance={d.select_tolerance ?? SNAP_TOL_DEFAULT} on={d.auto_select !== false} />}
+                            help="A hole with no drill assigned uses this bit if its size falls inside the band. Untick it and the bit is only used when a hole names it." />
                         </div>
                       </td>
                     </tr>

@@ -21,6 +21,12 @@ export interface DrillLibItem {
   rotation?: string | null
   drill_type?: string | null
   passes?: number | null     // plunges per hole (2 = "drill twice" for hard board)
+  // z_cnc_tools T1 (Cabinet Vision tool fields)
+  point_angle?: number | null
+  depth_to_shoulder?: boolean | null   // blind depth measured to the shoulder → add the point length
+  through_depth_adj?: number | null    // through-hole overshoot for this bit (null = machine profile)
+  auto_select?: boolean | null         // false = only used when a hole names this drill
+  select_tolerance?: number | null     // auto-select snap window, mm (null = SNAP_TOL)
 }
 
 export interface DrillOpToolInput {
@@ -36,6 +42,7 @@ export interface RouterToolItem {
   diameter: number
   tool_number: number
   name?: string | null
+  auto_select?: boolean | null   // false = never picked for a pocket unless it is the preferred tool
 }
 
 export interface ResolvedDrillTool {
@@ -46,6 +53,8 @@ export interface ResolvedDrillTool {
   diameter: number            // the hole's nominal diameter (pocket target for routed holes)
   depth: number
   passes: number              // plunges per hole from the chosen bit (1 = normal, 2 = drill twice)
+  tip_extra: number           // mm added to a BLIND hole's depth (depth-to-shoulder bits), else 0
+  through_adj: number | null  // the bit's own through-hole overshoot (null = machine profile)
   drill_id: string | null     // the bit actually chosen (null = unresolved or pocket-routed)
   drill_name: string | null
   router_tool_id: string | null     // set when mode = 'pocket'
@@ -69,7 +78,16 @@ export interface ResolveDrillOpts {
 }
 
 const DIA_TOL = 0.1     // mm — treat as the same nominal diameter
-const SNAP_TOL = 0.5    // mm — auto-select may snap a typed Ø to a real bit within this
+const SNAP_TOL = 0.5    // mm — auto-select may snap a typed Ø to a real bit within this (default)
+
+// Point length of a drill whose depth is measured to the shoulder (full Ø):
+// r / tan(half the point angle). 0 for flat bits or depth-to-tip bits.
+export function drillTipExtra(bit: Pick<DrillLibItem, 'diameter' | 'point_angle' | 'depth_to_shoulder'>): number {
+  if (!bit.depth_to_shoulder) return 0
+  const pa = Number(bit.point_angle)
+  if (!Number.isFinite(pa) || pa <= 0 || pa >= 180) return 0
+  return Math.round(((bit.diameter / 2) / Math.tan((pa / 2) * Math.PI / 180)) * 100) / 100
+}
 
 const nearlyEq = (a: number, b: number, tol = DIA_TOL) => Math.abs(a - b) < tol
 const fitsBlock = (dia: number, block?: number[]) => !block || block.some(b => nearlyEq(b, dia))
@@ -95,7 +113,9 @@ function pickByDiameter(
     const reaches = b.max_depth == null || b.max_depth + 1e-6 >= depth ? 0 : 1
     return [diaDiff, inBlock, reaches] as const
   }
-  const sorted = [...lib].sort((a, b) => {
+  // Bits switched off for auto-select are only used when a hole names them.
+  const pool = lib.filter(b => b.auto_select !== false)
+  const sorted = [...pool].sort((a, b) => {
     const [da, ba, ra] = score(a), [db, bb, rb] = score(b)
     return da - db || ba - bb || ra - rb || a.name.localeCompare(b.name)
   })
@@ -103,7 +123,8 @@ function pickByDiameter(
   if (!best) return null
   const diff = Math.abs(best.diameter - targetDia)
   if (diff < DIA_TOL) return { bit: best, snapped: false }
-  if (diff <= SNAP_TOL) return { bit: best, snapped: true }
+  const tol = best.select_tolerance != null && Number(best.select_tolerance) >= 0 ? Number(best.select_tolerance) : SNAP_TOL
+  if (diff <= tol) return { bit: best, snapped: true }
   return null
 }
 
@@ -115,7 +136,10 @@ function pickRouterForPocket(
 ): RouterToolItem | null {
   if (!tools?.length) return null
   const max = holeDia - clearance
-  const eligible = tools.filter(t => t.diameter > 0 && t.diameter <= max + 1e-6)
+  // The machine's preferred pocket tool is always eligible; any other bit only
+  // when it is allowed to be auto-selected (keeps ball / V / shaker bits out).
+  const eligible = tools.filter(t => t.diameter > 0 && t.diameter <= max + 1e-6
+    && (t.auto_select !== false || (preferredToolNumber != null && t.tool_number === preferredToolNumber)))
   if (!eligible.length) return null
   if (preferredToolNumber != null) {
     const pref = eligible.find(t => t.tool_number === preferredToolNumber)
@@ -124,8 +148,11 @@ function pickRouterForPocket(
   return eligible.sort((a, b) => b.diameter - a.diameter)[0]
 }
 
-const drillResult = (diameter: number, depth: number, drill_id: string | null, drill_name: string | null, warnings: string[], passes = 1): ResolvedDrillTool =>
-  ({ mode: 'drill', diameter, depth, passes: Math.max(1, Math.round(passes)), drill_id, drill_name, router_tool_id: null, router_tool_number: null, router_diameter: null, warnings })
+const drillResult = (diameter: number, depth: number, drill_id: string | null, drill_name: string | null, warnings: string[], passes = 1, bit?: DrillLibItem): ResolvedDrillTool =>
+  ({ mode: 'drill', diameter, depth, passes: Math.max(1, Math.round(passes)),
+     tip_extra: bit ? drillTipExtra(bit) : 0,
+     through_adj: bit?.through_depth_adj != null ? Number(bit.through_depth_adj) : null,
+     drill_id, drill_name, router_tool_id: null, router_tool_number: null, router_diameter: null, warnings })
 
 // Resolve ONE drilling op to a concrete bit + effective diameter/depth, or a
 // router-pocket fallback when no drill matches.
@@ -142,7 +169,7 @@ export function resolveDrillTool(
     const bit = lib.find(d => d.id === op.drill_id)
     if (bit) {
       if (!fitsBlock(bit.diameter, block)) warnings.push(`${bit.name} (⌀${bit.diameter}) is not loaded on the drill block`)
-      return drillResult(bit.diameter, clampDepth(typedDepth, bit, warnings), bit.id, bit.name, warnings, bit.passes ?? 1)
+      return drillResult(bit.diameter, clampDepth(typedDepth, bit, warnings), bit.id, bit.name, warnings, bit.passes ?? 1, bit)
     }
     warnings.push('Assigned drill not found / inactive — auto-selecting by diameter')
     // fall through to auto
@@ -155,7 +182,7 @@ export function resolveDrillTool(
   }
   const clearance = opts.pocketClearanceMm ?? 2
   const pocketWith = (router: RouterToolItem): ResolvedDrillTool => ({
-    mode: 'pocket', diameter: typedDia, depth: typedDepth, passes: 1, drill_id: null, drill_name: null,
+    mode: 'pocket', diameter: typedDia, depth: typedDepth, passes: 1, tip_extra: 0, through_adj: null, drill_id: null, drill_name: null,
     router_tool_id: router.id, router_tool_number: router.tool_number, router_diameter: router.diameter, warnings,
   })
 
@@ -164,7 +191,7 @@ export function resolveDrillTool(
     if (pick.snapped) warnings.push(`⌀${round(typedDia)} snapped to nearest bit ${pick.bit.name} (⌀${pick.bit.diameter})`)
     // A matching drill that's actually fitted on the gang head → drill it.
     if (fitsBlock(pick.bit.diameter, block)) {
-      return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings, pick.bit.passes ?? 1)
+      return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings, pick.bit.passes ?? 1, pick.bit)
     }
     // 3a. Matched a drill the head can't fire — pocket-route instead of dropping it.
     const router = pickRouterForPocket(typedDia, clearance, opts.routerTools, opts.preferredPocketToolNumber)
@@ -173,7 +200,7 @@ export function resolveDrillTool(
       return pocketWith(router)
     }
     warnings.push(`⌀${pick.bit.diameter} has no matching spindle on the drill block`)
-    return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings, pick.bit.passes ?? 1)
+    return drillResult(pick.bit.diameter, clampDepth(typedDepth, pick.bit, warnings), pick.bit.id, pick.bit.name, warnings, pick.bit.passes ?? 1, pick.bit)
   }
 
   // 3b. No drill matches at all — pocket-route with a router bit.

@@ -96,7 +96,7 @@ export default function Stage6Gcode() {
 
       // Routing tool per material: materials.cnc_tool_id → cnc_tools (depth/feed/speed).
       const { data: toolRows } = await supabase.from('cnc_tools')
-        .select('id,name,tool_number,diameter,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_rate').eq('active', true)
+        .select('id,name,tool_number,diameter,max_depth_per_pass,base_feed_rate,base_spindle_speed,plunge_feed_rate,through_depth_adj,auto_select').eq('active', true)
       const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
       const matById = new Map(snap.materials.map(m => [m.id, m]))
       const toolNum = (tn: unknown) => { const d = String(tn ?? '').replace(/\D/g, ''); return d ? Number(d) : 1 }
@@ -176,7 +176,7 @@ export default function Stage6Gcode() {
       // machine's preferred pocket tool (e.g. T102).
       const routerTools = (toolRows ?? [])
         .filter(t => t.diameter != null && Number(t.diameter) > 0)
-        .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number), name: (t.name as string | null) ?? null }))
+        .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number), name: (t.name as string | null) ?? null, auto_select: (t.auto_select as boolean | null) ?? null }))
       const preferredPocketToolNumber = profile?.pocket_router_tool_number != null ? Number(profile.pocket_router_tool_number) : null
       // Nest was laid out at cut size when the profile deducts edgebanding —
       // holes must shift onto the deducted blanks to match.
@@ -241,6 +241,7 @@ export default function Stage6Gcode() {
           toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
           toolDiameter: tool?.diameter != null ? Number(tool.diameter) : undefined,
           maxDepthPerPass: tool?.max_depth_per_pass != null ? Number(tool.max_depth_per_pass) : undefined,
+          throughDepthAdj: tool?.through_depth_adj != null ? Number(tool.through_depth_adj) : null,
           jobNumber: snap.jobNumber, materialName: mat?.name ?? null,
           toolName: (tool?.name as string | null) ?? null, toolNames,
           programNumber: `O${String(oBase + i).padStart(4, '0')}`,

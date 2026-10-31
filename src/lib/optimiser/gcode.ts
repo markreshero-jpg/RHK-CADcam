@@ -179,6 +179,11 @@ export const DEFAULT_POST: PostProfile = {
 export interface SheetDrill {
   x: number; y: number; diameter: number; depth: number
   passes?: number   // plunges at this hole (2 = "drill twice" for hard board); default 1
+  // From the bit (z_cnc_tools T1): mm added when the hole is BLIND (a bit whose
+  // depth is measured to the shoulder), and the bit's own through-hole overshoot
+  // (replaces the profile's drill_through_overshoot when set).
+  tipExtra?: number
+  throughAdj?: number | null
   // When set, this hole can't be drilled (no matching bit) and is routed as a
   // circular pocket with the given router bit (helical ram-in).
   pocket?: { toolNumber: number; toolDiameter: number }
@@ -209,6 +214,7 @@ export interface GcodeInput {
   toolDiameter?: number    // routing bit diameter (mm) — needed for cutter compensation
   drillToolNumber?: number
   maxDepthPerPass?: number // routing tool's max cut depth per pass (mm); falls back to rough_pass_z_step
+  throughDepthAdj?: number | null // routing tool's own break-through below the board (mm); null = profile |through_cut_z|
   // Template substitution values for header_template / footer_template.
   jobNumber?: string | null
   // Saved run comment, e.g. "RUN RHK6570-R3 Bed 2 Ensuite 30/10/26" (savedRuns.ts) —
@@ -475,7 +481,8 @@ export function generateSheetGcode(input: GcodeInput): string {
   // dips |thru-cut| into the spoilboard so parts release cleanly.
   const hasSkin = p.onion_skin_z > 0
   const roughDepth = thickness - Math.max(0, p.onion_skin_z)
-  const throughDepth = thickness + Math.abs(p.through_cut_z)
+  // The routing tool may carry its own break-through (z_cnc_tools T1); else the profile.
+  const throughDepth = thickness + (input.throughDepthAdj != null && Number.isFinite(input.throughDepthAdj) ? Math.max(0, input.throughDepthAdj) : Math.abs(p.through_cut_z))
   // Step-down per pass comes from the routing tool's max depth per pass; if no tool
   // value is supplied, fall back to the machine profile's rough Z step.
   const stepDown = input.maxDepthPerPass && input.maxDepthPerPass > 0 ? input.maxDepthPerPass : p.rough_pass_z_step
@@ -1002,13 +1009,29 @@ function emitGangDrilling(
   // A hole asked to go the full thickness is a THROUGH hole: add the overshoot
   // so the slug releases instead of hanging on a whisker. Blind holes (dowel,
   // hinge, shelf pin) keep their exact depth.
-  const effectiveDepth = (depth: number) => {
-    const d = Math.abs(depth)
-    return d >= thickness - 0.01 ? thickness + Math.max(0, p.drill_through_overshoot) : d
+  // Per-bit extras (z_cnc_tools T1), keyed by diameter like passes below — a
+  // gang fires one bit size, so every hole in it shares the bit's values:
+  //   throughAdj — the bit's own overshoot instead of the profile's
+  //   tipExtra   — point length added to BLIND holes on depth-to-shoulder bits
+  const bitKey = (dia: number) => Math.round(dia * 10) / 10
+  const tipByDia = new Map<number, number>()
+  const thruByDia = new Map<number, number>()
+  for (const d of drills) {
+    const k = bitKey(d.diameter)
+    if (d.tipExtra && d.tipExtra > 0) tipByDia.set(k, Math.max(tipByDia.get(k) ?? 0, d.tipExtra))
+    if (d.throughAdj != null && Number.isFinite(d.throughAdj)) thruByDia.set(k, d.throughAdj)
   }
-  const depthZ = (depth: number) => derivedRetract
-    ? fz(-effectiveDepth(depth))
-    : f(p.drill_rapid_z - effectiveDepth(depth))
+  const effectiveDepth = (depth: number, dia: number) => {
+    const d = Math.abs(depth)
+    const k = bitKey(dia)
+    if (d >= thickness - 0.01) return thickness + Math.max(0, thruByDia.get(k) ?? p.drill_through_overshoot)
+    // A blind hole lengthened by the tip must still stop short of breaking through.
+    const tip = tipByDia.get(k) ?? 0
+    return tip > 0 ? Math.max(d, Math.min(d + tip, thickness - 0.5)) : d
+  }
+  const depthZ = (depth: number, dia: number) => derivedRetract
+    ? fz(-effectiveDepth(depth, dia))
+    : f(p.drill_rapid_z - effectiveDepth(depth, dia))
   // One machine-level drill feed: the block runs off a single drive, and the
   // gold reference uses F3000. for every cycle whatever the bit or the depth.
   // Previously this was the ROUTING tool's feed scaled by plunge_feed_pct,
@@ -1033,7 +1056,7 @@ function emitGangDrilling(
     lastMaster = masters[masters.length - 1]
     const mcode = g.bank === 'x' ? block.xBankMcode : block.yBankMcode
     const passes = passesByDia.get(diaKey(g.diameter)) ?? 1
-    const dz = depthZ(g.depth)
+    const dz = depthZ(g.depth, g.diameter)
     c(`DRILL TOOL: V ${fPlain(g.diameter)}MM`)
     c(`DRILL MASTER: ${g.masterSpindle}, SLAVE: ${g.slaveSpindles.join(',') || '-'}`)
     c(`DIAMETER: ${f(g.diameter)}${passes > 1 ? ` x${passes} passes` : ''}`)

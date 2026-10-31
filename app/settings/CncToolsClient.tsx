@@ -17,6 +17,10 @@ import {
   type ToolShape,
 } from '@/src/lib/cnc/toolProfile'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import { useTutorial } from '@/src/lib/tutorial/store'
+import {
+  FieldCard, RotationDiagram, ThroughDiagram, HRegisterDiagram, AutoSelectDiagram,
+} from '@/src/components/cnc/ToolFieldDiagrams'
 
 // tool_type values mirror the DB check constraint.
 const TOOL_TYPES = [
@@ -40,7 +44,14 @@ interface Tool {
   cutting_length: number | null
   shank_diameter: number | null
   shape_profile: ToolShape | null
+  // z_cnc_tools T1 — Cabinet Vision tool fields
+  rotation: string
+  through_depth_adj: number | null
+  auto_select: boolean
 }
+
+// Default machine profile values the per-tool fields fall back to / derive from.
+interface ProfileDefaults { throughCut: number; hDelta: number; emitH: boolean }
 
 const inp = 'bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent w-full'
 const lbl = 'text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block'
@@ -65,9 +76,22 @@ export default function CncToolsClient() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
+  const [prof, setProf] = useState<ProfileDefaults>({ throughCut: 0.2, hDelta: 0, emitH: false })
+  useEffect(() => { useTutorial.getState().emit('cnc_tools_view') }, [])   // tutorial cnc_tool_fields
 
   useEffect(() => {
     let cancelled = false
+    // The default machine profile: through-cut fallback + the H-register rule.
+    supabase.from('cnc_machine_profiles').select('through_cut_z,tool_h_offset_delta,emit_tool_length_offset,is_default')
+      .order('is_default', { ascending: false }).limit(1).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data) return
+        setProf({
+          throughCut: Math.abs(Number(data.through_cut_z ?? 0.2)),
+          hDelta: Number(data.tool_h_offset_delta ?? 0),
+          emitH: data.emit_tool_length_offset === true,
+        })
+      })
     supabase.from('cnc_tools').select('*').order('tool_number', { nullsFirst: false }).order('name')
       .then(({ data }) => {
         if (cancelled) return
@@ -86,7 +110,8 @@ export default function CncToolsClient() {
   async function addTool() {
     if (creating) return
     setCreating(true)
-    const nextNum = `T${100 + tools.length + 1}`
+    // Next free number above the highest in use (counting rows collides once there are gaps).
+    const nextNum = `T${Math.max(100, ...tools.map(x => toolNum(x.tool_number) ?? 0)) + 1}`
     const shape = composeShape('compression', 8, 32)
     const payload = { name: 'New tool', tool_number: nextNum, tool_type: 'compression', diameter: 8, cutting_length: 32, shape_profile: shape, active: true }
     const { data, error } = await supabase.from('cnc_tools').insert(payload).select().single()
@@ -233,6 +258,45 @@ export default function CncToolsClient() {
                             <ToolProfilePreview shape={previewShape(t)} />
                           </div>
                         </div>
+
+                        {/* Cabinet Vision tool fields (z_cnc_tools T1) */}
+                        <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mt-5 mb-2">Machining behaviour</p>
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 max-w-5xl">
+                          <FieldCard title="Spin direction"
+                            control={
+                              <select className={inp} value={t.rotation ?? 'clockwise'} onChange={e => patch(t.id, { rotation: e.target.value })}>
+                                <option value="clockwise">clockwise</option>
+                                <option value="anticlockwise">anticlockwise</option>
+                              </select>
+                            }
+                            diagram={<RotationDiagram dir={t.rotation ?? 'clockwise'} />}
+                            help="Which way the bit is ground to cut. Router bits are almost always clockwise. For your reference only: it doesn't change the G-code." />
+                          <FieldCard title="Through-cut extra depth"
+                            control={
+                              <NumField label={`mm past the board (blank = machine ${prof.throughCut})`} value={t.through_depth_adj} step={0.05}
+                                onSave={v => patch(t.id, { through_depth_adj: v == null ? null : Math.max(0, v) })} />
+                            }
+                            diagram={<ThroughDiagram adj={t.through_depth_adj ?? prof.throughCut} fromMachine={t.through_depth_adj == null} />}
+                            help="How far this tool goes into the spoilboard when cutting parts out, so they come free. Used when this is a material's routing tool." />
+                          <FieldCard title="Length offset (H)"
+                            control={
+                              <p className="text-xs font-mono text-ink">
+                                {(() => { const n = toolNum(t.tool_number); return n != null ? `H${n + prof.hDelta}` : '—' })()}
+                                <span className="text-ink-subtle"> = tool no. {prof.hDelta >= 0 ? '+' : '−'} {Math.abs(prof.hDelta)}</span>
+                              </p>
+                            }
+                            diagram={<HRegisterDiagram toolNumber={toolNum(t.tool_number)} delta={prof.hDelta} emitted={prof.emitH} />}
+                            help="The controller register holding this tool's measured length. Always worked out from the tool number by the machine profile's rule (Settings → CNC Machines). It can't be typed per tool, so a wrong number never reaches the machine." />
+                          <FieldCard title="Auto-select"
+                            control={
+                              <label className="flex items-center gap-2 text-xs text-ink cursor-pointer">
+                                <input type="checkbox" checked={t.auto_select !== false} onChange={e => patch(t.id, { auto_select: e.target.checked })} />
+                                May be picked automatically
+                              </label>
+                            }
+                            diagram={<AutoSelectDiagram diameter={t.diameter ?? 0} tolerance={0} on={t.auto_select !== false} kind="router" />}
+                            help="When a hole has no drill to match, the optimiser routes it out as a pocket. Only ticked tools are used for this, plus the machine's preferred pocket tool. Untick ball, V and shaker bits." />
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -244,6 +308,12 @@ export default function CncToolsClient() {
       </div>
     </div>
   )
+}
+
+// 'T101' → 101 (same parse as the optimiser's toolNum); null when no digits.
+function toolNum(tn: string | null): number | null {
+  const d = String(tn ?? '').replace(/\D/g, '')
+  return d ? Number(d) : null
 }
 
 // React needs a keyed wrapper for the two-row-per-tool layout.

@@ -24,6 +24,10 @@ export interface DrillOpRaw {
   drill_id?: string | null; auto_tool?: boolean | null
   // Plunges per hole from the resolved bit (2 = "drill twice" for hard board).
   passes?: number | null
+  // From the resolved bit (z_cnc_tools T1): mm added to a blind hole's depth
+  // (depth-to-shoulder bits) and the bit's own through-hole overshoot.
+  tipExtra?: number
+  throughAdj?: number | null
   // Set by the resolver when a hole can't be drilled and is pocket-routed instead.
   pocket?: { toolNumber: number; toolDiameter: number } | null
 }
@@ -113,7 +117,11 @@ export function buildSheetDrills(
       const { sx, sy } = ebShift(part, op.output_face)
       for (const hole of expand(op)) {
         const p = toSheet(hole.ox - sx, hole.oy - sy, pl)
-        drills.push({ x: p.x, y: p.y, diameter: hole.d, depth: hole.depth ?? defaultDepth, passes: hole.passes, pocket: hole.pocket ?? undefined })
+        drills.push({
+          x: p.x, y: p.y, diameter: hole.d, depth: hole.depth ?? defaultDepth, passes: hole.passes, pocket: hole.pocket ?? undefined,
+          ...(op.tipExtra ? { tipExtra: op.tipExtra } : {}),
+          ...(op.throughAdj != null ? { throughAdj: op.throughAdj } : {}),
+        })
       }
     }
   }

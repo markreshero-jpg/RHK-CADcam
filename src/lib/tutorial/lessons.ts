@@ -1279,6 +1279,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Elevation: the wall outline follows the slope, on the screen and on the printed elevations. Click 3D to see the wall cut to the same shape.',
       target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' },
   ]},
+
+  // Appended 2026-11-01 (z_cnc_tools T1 — Cabinet Vision tool fields + diagrams).
+  { id: 'cnc_tool_fields', level: 'advanced', topic: 'production', title: 'Tool and drill machining settings',
+    blurb: 'Spin direction, through-cut depth, drill depth to shoulder, the H length offset and auto-select, each with a diagram.',
+    keywords: 'cnc tool drill router spin direction rotation clockwise anticlockwise through depth overshoot break through spoilboard shoulder tip point angle h register length offset g43 auto select tolerance pocket cabinet vision', steps: [
+    { id: 'tools', title: 'Settings → CNC Tool Setup',
+      body: 'Open Settings, then CNC Tool Setup, and click a tool to open it. Under Machining behaviour each setting has a diagram that redraws as you change it. Spin direction is for reference only. Through-cut extra depth is how far the tool goes into the spoilboard when it cuts parts out (leave it blank to use the machine setting). Length offset (H) shows the register the program will call; it comes from the tool number and can’t be typed. Auto-select: untick ball, V and shaker bits so they are never used to rout out a hole the drills can’t make.',
+      done: (c, s) => ev(c, 'cnc_tools_view') > ev(s, 'cnc_tools_view') },
+    { id: 'drills', title: 'Settings → Drill Library',
+      body: 'Open Drill Library and click a drill. Through-hole extra depth is how far the bit goes past the board on a through hole. Depth measured to shoulder drills a blind hole deeper by the point length, so the full diameter reaches the depth (it uses the point angle). Auto-select picks this bit for any hole within ± the tolerance of its size; untick it and the bit is only used when a hole names it.',
+      done: (c, s) => ev(c, 'cnc_drills_view') > ev(s, 'cnc_drills_view') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
