@@ -4,7 +4,7 @@ import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
-import { cabT, findFreeSlot, cabsBlock, cabBottomZ, slideAlongWall, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
+import { cabT, findFreeSlot, cabsBlock, cabBottomZ, wallZOf, slideAlongWall, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveReveal } from '@/src/lib/resolver/mergeRules'
 import { DEFAULT_RULES, type ConstructionRules } from '@/src/lib/resolver/types'
@@ -100,11 +100,31 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
 
         <div>
           <label className={lbl}>Elevation from floor (mm)</label>
-          <CalcInput
-            value={elevFromFloor}
-            decimals={1}
-            onCommit={v => onUpdate(cabinet.id, { pos_z: v })}
-            className={inp + ' text-right'} />
+          {(cabinet.assembly_class === 'wall' || cabinet.assembly_class === 'wall_corner') && !cabinet.bulkhead ? (() => {
+            // Wall units hang from the wall-cabinet-top line; typing a height sets the
+            // cabinet's own (rule WALLZ), e.g. a cupboard standing on the bench.
+            const own = wallZOf(cabinet)
+            const setZ = (v: number | null) => {
+              const next = { ...(cabinet.rule_overrides ?? {}) } as Record<string, unknown>
+              if (v == null) delete next.WALLZ
+              else next.WALLZ = v
+              void onUpdate(cabinet.id, { rule_overrides: next as typeof cabinet.rule_overrides })
+            }
+            return (
+              <div className="flex items-center gap-1">
+                <CalcInput value={elevFromFloor} decimals={1} onCommit={v => setZ(v)}
+                  className={inp + ' text-right' + (own != null ? ' border-amber-600' : '')} />
+                {own != null && <button onClick={() => setZ(null)} title="Hang from the wall-cabinet top line again"
+                  className="px-1.5 text-xs text-amber-400 hover:text-amber-200">↺</button>}
+              </div>
+            )
+          })() : (
+            <CalcInput
+              value={elevFromFloor}
+              decimals={1}
+              onCommit={v => onUpdate(cabinet.id, { pos_z: v })}
+              className={inp + ' text-right'} />
+          )}
         </div>
 
         {meas && wall && !hideWallPosition && (

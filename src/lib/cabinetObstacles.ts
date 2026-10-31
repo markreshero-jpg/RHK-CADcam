@@ -9,7 +9,7 @@
 
 import type { CabinetInstance, Wall, Room, RoomFixture } from './types'
 import { fixtureCorners, sitsOnCabinets } from './fixtureGeometry'
-import { cabVExtent, cabWallPerp, cabinetCornerPts, wallInwardNormal, type Pt } from './geometry'
+import { cabVExtent, wallZOf, cabWallPerp, cabinetCornerPts, wallInwardNormal, type Pt } from './geometry'
 import { wallFrame, alongOf, offOf, type WallSide } from './benchtopAnchor'
 import { clipToRect } from './cabinetShape/construct'
 
@@ -49,9 +49,9 @@ export function solidFixtures(fixtures: RoomFixture[], excludeId?: string): Room
  */
 export function fixtureOccupancy(
   fixtures: RoomFixture[], wall: Wall, side: WallSide, cx: Pt, room: Room,
-  mover: { assembly_class: string; dy: number; dz?: number; bulkhead?: unknown },
+  mover: { assembly_class: string; dy: number; dz?: number; bulkhead?: unknown; rule_overrides?: unknown },
 ): { t: number; dx: number }[] {
-  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
+  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead, null, wallZOf(mover))
   const items = solidFixtures(fixtures).map(f => ({ pts: fixtureCorners(f), z0: Number(f.z) || 0, z1: (Number(f.z) || 0) + Number(f.height) }))
   return bandOccupancy(items, wall, side, cx, mB, mT, mover.dz ?? 600)
 }
@@ -63,11 +63,11 @@ export function crossWallCabinetOccupancy(
   side: WallSide,
   cx: Pt,
   room: Room,
-  mover: { id?: string; assembly_class: string; dy: number; dz?: number; bulkhead?: unknown; float_shelf?: unknown },
+  mover: { id?: string; assembly_class: string; dy: number; dz?: number; bulkhead?: unknown; float_shelf?: unknown; rule_overrides?: unknown },
 ): { t: number; dx: number }[] {
   // Floating shelves (z_floating_shelf) don't block across walls, as cabsBlock.
   if (mover.float_shelf) return []
-  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
+  const [mB, mT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead, null, wallZOf(mover))
   const depth = mover.dz ?? 600
   const f = wallFrame(wall, side, cx)
   const out: { t: number; dx: number }[] = []
@@ -76,7 +76,7 @@ export function crossWallCabinetOccupancy(
     const cw = walls.find(w => w.id === c.wall_id)
     if (!cw) continue
     // Vertical: wall units clear base units, as cabsBlock.
-    const [oB, oT] = cabVExtent(c.assembly_class, c.dy, cw, room, c.bulkhead)
+    const [oB, oT] = cabVExtent(c.assembly_class, c.dy, cw, room, c.bulkhead, null, wallZOf(c))
     if (!(mB < oT - 1 && oB < mT - 1)) continue
     const pts = cabinetCornerPts(c, cw, cabWallPerp(c, cw, wallInwardNormal(cw, cx)))
     // Into this face's frame (x = along, y = off), cut to the mover's depth band.

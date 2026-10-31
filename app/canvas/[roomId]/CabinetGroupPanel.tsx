@@ -1,7 +1,7 @@
 'use client'
 
 import { Room, Wall, CabinetInstance } from '@/src/lib/types'
-import { cabT, cabVExtent, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
+import { cabT, cabVExtent, wallZOf, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
 
 // Right-hand panel shown when 2+ cabinets are selected. Reads size as a group:
@@ -48,7 +48,7 @@ export default function CabinetGroupPanel({ cabinets, wallCabinets, walls, room,
   const box = (wall && room) ? (() => {
     const sel = cabinets
     const tL = (c: CabinetInstance) => cabT(c, wall)
-    const vEx = (c: CabinetInstance) => cabVExtent(c.assembly_class, c.dy, wall, room, c.bulkhead)
+    const vEx = (c: CabinetInstance) => cabVExtent(c.assembly_class, c.dy, wall, room, c.bulkhead, null, wallZOf(c))
     const gLeft   = Math.min(...sel.map(tL))
     const gRight  = Math.max(...sel.map(c => tL(c) + c.dx))
     const gBottom = Math.min(...sel.map(c => vEx(c)[0]))

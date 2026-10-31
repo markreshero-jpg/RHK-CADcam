@@ -40,9 +40,18 @@ export function wallCabTop(wall: Wall | null | undefined, room: Room): number {
   return room.wall_cabinet_top ?? 2100
 }
 
+/** A wall unit's own underside height (rule WALLZ, mm from the floor), when it
+ *  doesn't hang from the wall-cabinet-top line — e.g. a cupboard standing on the
+ *  bench under another wall unit (RHK6595 WC-02, 2026-10-31). */
+export const wallZOf = (c: { rule_overrides?: unknown }): number | null => {
+  const v = (c.rule_overrides as { WALLZ?: unknown } | null | undefined)?.WALLZ
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+
 // Height (mm from floor) of a cabinet's underside — the one rule every view
 // (elevation, print, section, 3D, object tree, panels) uses. Wall units hang
-// down from the wall-cabinet-top line (their pos_z is only a cache of this);
+// down from the wall-cabinet-top line (their pos_z is only a cache of this),
+// unless their WALLZ rule sets their own underside;
 // floor units sit at pos_z (0 unless raised — a kick-detached member is lifted
 // by the kick height). Bulkheads (z_bulkhead) hang from the ceiling instead.
 export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null): number {
@@ -50,22 +59,23 @@ export function cabBottomZ(cab: CabinetInstance, room: Room, wall?: Wall | null)
   if (cab.rule_overrides?.UNDER_PANEL) return cab.pos_z ?? 0
   // So does a floating shelf (FLSHLF, z_floating_shelf): pos_z = its underside.
   if (cab.float_shelf) return cab.pos_z ?? 0
-  return cabVExtent(cab.assembly_class, cab.dy, wall, room, cab.bulkhead, cab.pos_z)[0]
+  return cabVExtent(cab.assembly_class, cab.dy, wall, room, cab.bulkhead, cab.pos_z, wallZOf(cab))[0]
 }
 
 // Vertical extent [bottomZ, topZ] of a cabinet given its class + height. Base and
 // tall units sit on the floor (at pos_z when given); wall units hang down from the
-// wall-cabinet-top line; a bulkhead's top is the ceiling.
+// wall-cabinet-top line, or sit at their own underside `wallZ` (rule WALLZ, see
+// wallZOf); a bulkhead's top is the ceiling.
 export function cabVExtent(
   cls: string, dy: number, wall: Wall | null | undefined, room: Room,
-  bulkhead: unknown = null, posZ?: number | null,
+  bulkhead: unknown = null, posZ?: number | null, wallZ?: number | null,
 ): [number, number] {
   // `bulkhead` = the cabinet's bulkhead settings: a bulkhead hangs from the
   // ceiling; a shadowline (z_bulkhead) lies on the overhead tops.
   const shadowline = !!bulkhead && (bulkhead as { kind?: unknown }).kind === 'shadowline'
   const bottom = shadowline ? wallCabTop(wall, room)
     : bulkhead ? (wall?.height ?? room.room_dy ?? 2400) - dy
-    : (cls === 'wall' || cls === 'wall_corner') ? wallCabTop(wall, room) - dy
+    : (cls === 'wall' || cls === 'wall_corner') ? (wallZ ?? wallCabTop(wall, room) - dy)
     : posZ ?? 0
   return [bottom, bottom + dy]
 }
@@ -90,8 +100,8 @@ export function cabsBlock(
     const a = mover.pos_z ?? 0, b = obstacle.pos_z ?? 0
     return a < b + obstacle.dy - eps && b < a + mover.dy - eps
   }
-  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
-  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, obstacle.bulkhead)
+  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead, null, wallZOf(mover))
+  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, obstacle.bulkhead, null, wallZOf(obstacle))
   return aB < bT - eps && bB < aT - eps
 }
 

@@ -6,7 +6,7 @@ import { ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeS
 // HANDLE_DRILL / DF_MARKER are job / room / cabinet switches (z_handles D13 / D22), not method rules;
 // FLOAT / UNDER_PANEL are cabinet-layer switches (z_floating), TOERETL / TOERETR / TOEGRAIN too (kick returns + grain), BIFOLD* (z_bifold_slide),
 // and NBRL / NBRR / REVSL / REVSR (face neighbour locks + side reveals, z_doorFace_module).
-export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'DF_MARKER' | 'FPRAIL' | 'RAILGRAIN' | 'FLOAT' | 'UNDER_PANEL' | 'TOERETL' | 'TOERETR' | 'TOEGRAIN' | 'BIFOLD' | 'BIFOLD_BOTTOM' | 'BIFOLD_CENTRE' | 'NBRL' | 'NBRR' | 'REVSL' | 'REVSR'>
+export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'DF_MARKER' | 'FPRAIL' | 'RAILGRAIN' | 'FLOAT' | 'UNDER_PANEL' | 'TOERETL' | 'TOERETR' | 'TOEGRAIN' | 'BIFOLD' | 'BIFOLD_BOTTOM' | 'BIFOLD_CENTRE' | 'WALLZ' | 'NBRL' | 'NBRR' | 'REVSL' | 'REVSR'>
 export type EdgingKey  = keyof Required<EdgingDefaults>
 
 export const RULE_LABELS: Record<RuleKey, string> = {

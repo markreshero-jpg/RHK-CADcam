@@ -152,6 +152,10 @@ export interface ConstructionRules {
   BIFOLD?:        'L' | 'R'
   BIFOLD_BOTTOM?: 'above' | 'below' | 'none'
   BIFOLD_CENTRE?: 'standard' | 'cup'
+  // A wall unit's own underside, mm from the floor (geometry.ts wallZOf), instead of
+  // hanging from the wall-cabinet-top line — e.g. a cupboard on the bench under
+  // another wall unit. Cabinet layer, placement only.
+  WALLZ?: number
 
   // Case scribes
   SCRBK:    number   // scribe back

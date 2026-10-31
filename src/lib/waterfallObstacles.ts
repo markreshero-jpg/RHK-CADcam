@@ -8,7 +8,7 @@
 // `occupied` list, the same { t, dx } shape cabinets use.
 
 import type { Wall, Room, BenchtopInstance, BenchtopEdgeProfile } from './types'
-import { cabVExtent, type Pt } from './geometry'
+import { cabVExtent, wallZOf, type Pt } from './geometry'
 import { btSegments, outwardNormal, effectiveProfileId, waterfallBuildUp } from './benchtopGeometry'
 import { wallFrame, alongOf, offOf, type WallSide } from './benchtopAnchor'
 
@@ -54,10 +54,10 @@ export function waterfallOccupancy(
   side: WallSide,
   cx: Pt,
   room: Room,
-  mover: { assembly_class: string; dy: number; dz?: number; bulkhead?: unknown },
+  mover: { assembly_class: string; dy: number; dz?: number; bulkhead?: unknown; rule_overrides?: unknown },
 ): { t: number; dx: number }[] {
   if (!legs.length) return []
-  const [bottom] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead)
+  const [bottom] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead, null, wallZOf(mover))
   const depth = mover.dz ?? 600
   const f = wallFrame(wall, side, cx)
   const out: { t: number; dx: number }[] = []
