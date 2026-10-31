@@ -21,4 +21,4 @@ Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 
 ## Rooms
 | Room | Room id | Status |
 |---|---|---|
-| US Hallway Linen | b6377e60-bed3-4e5c-af80-7ea320db6ff5 | Drawn 2026-10-31, 0 errors. 1597 site: TFKW 30 / T2D 1025 pair / T2D 512 single (hinge R) / TFKW 30. 2674 incl 100 kick, 18 shadowline to 2692. adj / fix (top 1000 AFFL) / adj x3. Hinges [2474, 1880.5, 1000, 693.5, 100]. Check pending. |
+| US Hallway Linen | b6377e60-bed3-4e5c-af80-7ea320db6ff5 | Drawn 2026-10-31, 0 errors. 1597 site: TFKW 30 / T2D 1025 pair / T2D 512 single (hinge R) / TFKW 30. 2674 incl 100 kick, 18 shadowline to 2692. adj / fix (top 1000 AFFL) / adj x3. 4 hinges per door [2474, 1880.5, 1000, 100] (Mark). Both T2Ds split in height at 898 (3 under the fixed shelf top 901, split tool rule): sides + back in two, doors whole. Check pending. |
