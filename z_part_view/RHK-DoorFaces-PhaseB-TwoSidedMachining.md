@@ -23,18 +23,25 @@ sheet that needs it runs as **two programs with a whole-sheet flip between**.
   panels …). Parts whose work is all on one face just appear in the one program.
 - A sheet with no A-face work anywhere gets **only program Z** (= today's single
   program) — no trims, no flip.
-- **Flip direction — TO CONFIRM with Mark:** for both trimmed edges to land on the
-  datum the sheet must flip **over its long axis** (the far long edge comes to Y0,
-  the X0 end stays at X0). End-over-end would send the trimmed end to the far end.
-  Program Z = program-A frame mirrored in Y about the sheet's trimmed width.
-- Answers §5 Q1 (two programs) and Q4 (registration = trimmed edges into X0/Y0).
+- **Flip over the long edge** (confirmed): the far long edge comes to Y0, the X0
+  end stays at X0. Program Z = program-A frame mirrored in Y about the sheet's
+  trimmed width.
+- **Face A = the back face of the material** for every part (doors: hinge side),
+  so after the flip the face is up for program Z.
+- **Trim cut = 5mm** off each of the two edges, with the material's **outline
+  (part cut-out) tool**.
+- Answers §5 Q1 (two programs), Q2 (flip axis) and Q4 (registration).
+
+### Build order (agreed 2026-10-31)
+1. **Face routes first** — shaker, VJ etc. machined in today's single program. The
+   route/groove emitter already exists (`routes.ts`, 6816dd7, reads `route`/`groove`
+   part_operations), but **door profile ops never become part_operations**: they
+   are evaluated in `resolveFace.ts` (`evaluateProfileOps`) for drawing only. So
+   step 1 = write door-profile ops as `face_front` route/groove part_operations and
+   check they cut right on a test door.
+2. **Then 6th face** — split A/Z programs, trims, flip mirror.
 
 ### Still to decide
-- **Which face is A for non-door parts.** Doors: back (hinge side) = A, decorative
-  front = Z (Phase A tags). Proposal for everything else: the face the part is
-  cut out from (most work / through-cuts) is Z; ops tagged on the other face are A.
-- Trim depth/width and tool for the reference edges (full depth, 10mm bit, how much
-  off the raw edge — needs the sheet trim allowance).
 - File naming for the pair (e.g. `…_01A.anc` / `…_01Z.anc`) and labels: which program
   prints labels (Z, since it cuts the parts out).
 
@@ -127,7 +134,7 @@ as today, and add a **front pass** that is the same sheet mirrored about one axi
   (default `M00`), optional `front_work_offset`, and whether front is a
   separate program file.
 
-### 3c. Routing / groove / pocket emit path (NEW — biggest piece)
+### 3c. Routing / groove / pocket emit path — BUILT (6816dd7, routes.ts); door-profile ops not fed in yet (§0 build order)
 Today only drills + auto-perimeter are emitted. Front-face profiles/grooves need a
 real route emitter:
 - Read `operation_type IN ('route','groove')` in `sheetDrills.ts` (currently drill-only).
