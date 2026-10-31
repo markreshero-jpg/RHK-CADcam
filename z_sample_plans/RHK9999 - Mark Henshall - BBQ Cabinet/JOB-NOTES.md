@@ -14,7 +14,7 @@ Source: `G:\My Drive\1. Properties\2. 23 Arkana Drive\3. Plans\Cabinet Vision Dr
   kick interior: new board **CPP White 16mm** (cloned from Whiteboard 16.5mm; check sheet size + edgeband).
 
 ## App
-- Project `f187ed5f-6ec8-427e-937c-b09092aaa6d4`, room **Outdoor BBQ Area** `bcf2b6fb-bab9-4348-8617-c8688f538262` (rev 2 redraw),
+- Project `f187ed5f-6ec8-427e-937c-b09092aaa6d4`, room **Outdoor BBQ Area** `b2ed87d8-59e8-4ad7-932d-11a1ef320061` (rev 4 redraw),
   layout `z_plan_automation/layouts/rhk9999-henshall-bbq.json`. 0 errors / 0 warnings.
 - Walls: Wall 1 = left return 1315, Wall 2 = back wall 5830. The short step wall + the 1500 wall are not drawn.
 - CAD: spec block (plan), stone panel note (Wall 2 elevation).
@@ -35,3 +35,11 @@ Source: `G:\My Drive\1. Properties\2. 23 Arkana Drive\3. Plans\Cabinet Vision Dr
 - Sink centred on BC-04 (link 450 / 335), 110 off the wall. Tap behind it on the same centreline.
 - Wall 2 raked top: 2614 at the left rising to 3900 at 5225 (605 in from the right end), flat to the end
   (`walls.top_profile`, new feature 08a7ee9). Wall 2 height 3900. The screen on top is not drawn.
+
+## Rev 4 (Mark 2026-10-31) — current
+- Whole kitchen 1000 off Wall 1. 100 waterfall ends both ends (WF mitred, built up with the MA100 apron:
+  face piece + return), legs 1000–1100 and 5246–5346. Top 4346 x 670.
+- L→R: BC-01 B2D 900 sink (Seba 550 U/M, rails on edge) | BC-02 BBIN 450 | BC-03 BEPF | 600 bar fridge | BC-04 BEPF |
+  BC-05 B2D 1080 | BC-06 B2D 1080. KICK 1 under BC-01/02, KICK 2 under BC-05/06.
+- 100 stone panels, 50 filler and the 180 cupboard left out for now (Mark). Wall 2 rake re-set after the redraw.
+- Post-steps: `_tmp-9999-post.mjs <roomId>` then `_tmp-9999-join.mjs <roomId>` (rename the 2nd KICK 1 → KICK 2).
