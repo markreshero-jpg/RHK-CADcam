@@ -235,9 +235,21 @@ export function slideDrillOps(
   return out
 }
 
+// Drawer back top marker (Mark, 2026-10-31): the back's fixing holes are close
+// together, so a 2-deep prick 6 below the top one shows which edge is up.
+// Drilled by seamDrillSync; drawn with the runner holes by cabinetSlideDrills.
+export const BACK_MARKER_DEPTH = 2
+export const BACK_MARKER_DROP  = 6
+export function backTopMarker(drills: ResolvedSlideDrill[]): ResolvedSlideDrill | null {
+  const back = drills.filter(d => d.surface === 'drawer_back' && d.machine_operation === 'drill')
+  if (!back.length) return null
+  const top = back.reduce((a, b) => b.y > a.y ? b : a)
+  return { ...top, y: top.y - BACK_MARKER_DROP, depthLen: BACK_MARKER_DEPTH }
+}
+
 // All slide drills for a resolved cabinet, flattened — face-drawer stack slides
-// plus the inner-drawer / pull-out rails (rp.internal_slides), which carry their
-// own resolved drills the same way.
+// (plus each one's drawer back top marker) and the inner-drawer / pull-out rails
+// (rp.internal_slides), which carry their own resolved drills the same way.
 export function cabinetSlideDrills(
   stacks: ResolvedDrawerStack[],
   internalSlides: ResolvedDrawerSlide[] = [],
@@ -245,7 +257,10 @@ export function cabinetSlideDrills(
   const out: ResolvedSlideDrill[] = []
   // A turned facet's drills are zone-frame — return cabinet coords.
   for (const stack of stacks) {
-    for (const slide of stack.slides) out.push(...slide.drills.map(d => turnDrill(stack.turn, d)))
+    for (const slide of stack.slides) {
+      const mark = backTopMarker(slide.drills)
+      out.push(...[...slide.drills, ...(mark ? [mark] : [])].map(d => turnDrill(stack.turn, d)))
+    }
   }
   for (const slide of internalSlides) out.push(...slide.drills)
   return out

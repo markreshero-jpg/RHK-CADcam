@@ -1,6 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-vi.mock('@/src/lib/supabase', () => ({ supabase: {} }))
-import { backTopMarker } from '../seamDrillSync'
+import { describe, it, expect } from 'vitest'
+import { backTopMarker } from '../../slideDrilling'
 import type { ResolvedSlideDrill } from '../../resolver/types'
 
 // Drawer back top marker (Mark 2026-10-31): a 2-deep prick 6 below the top
