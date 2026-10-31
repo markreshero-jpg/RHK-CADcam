@@ -30,3 +30,8 @@ Source: `G:\My Drive\1. Properties\2. 23 Arkana Drive\3. Plans\Cabinet Vision Dr
 - Bar fridge: only 800 clear under the 100 apron at the front (880 behind it) — check the fridge height.
   No glass-door bar fridge in the fixture catalogue; drawn as a CAD note.
 - Post-steps script: `z_plan_automation/_tmp-9999-post.mjs <roomId>` then `_tmp-9999-join.mjs <roomId>`.
+
+## Rev 3 (Mark 2026-10-31)
+- Sink centred on BC-04 (link 450 / 335), 110 off the wall. Tap behind it on the same centreline.
+- Wall 2 raked top: 2614 at the left rising to 3900 at 5225 (605 in from the right end), flat to the end
+  (`walls.top_profile`, new feature 08a7ee9). Wall 2 height 3900. The screen on top is not drawn.
