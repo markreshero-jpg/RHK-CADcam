@@ -18,7 +18,7 @@ import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/
 import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
 import { floatShelfPartLabel, floatShelfPartNote } from '@/src/lib/floatShelf'
 import { backPanelPartLabel } from '@/src/lib/backPanel'
-import { splitBaseKey, splitPieceSuffix } from '@/src/lib/cabinetSplit'
+import { cutBaseKeys, splitBaseKey, splitPieceNote, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -260,10 +260,12 @@ export function normalizeProject(
     return { t: tFor(r) ?? (r.material_id ? matEb.get(r.material_id as string) : undefined), flags: flagsOf(r) }
   }
 
-  // Height-split cabinets (z_cabinet_split): which sides / backs were cut, so the
-  // lowest piece reads "(lower)" and the ones above "(upper)".
-  const cutParts = new Set(cp.filter(r => String(r.part_key).startsWith('split:'))
-    .map(r => `${r.cabinet_instance_id}|${splitBaseKey(String(r.part_key))}`))
+  // Height-split cabinets (z_cabinet_split): per cabinet, which sides / backs were
+  // cut and into how many pieces, so each piece reads "(split bottom / mid / top)"
+  // and carries a "SPLIT - BOTTOM / MID / TOP" comment (Mark, 2026-10-31).
+  const keysByCab = new Map<string, string[]>()
+  for (const r of cp) keysByCab.set(String(r.cabinet_instance_id), [...(keysByCab.get(String(r.cabinet_instance_id)) ?? []), String(r.part_key)])
+  const cutByCab = new Map([...keysByCab].map(([cab, keys]) => [cab, cutBaseKeys(keys)]))
 
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
   for (const r0 of cp) {
@@ -293,14 +295,16 @@ export function normalizeProject(
       ? fingerRailStrip(Number(r.dx), Number(r.dy), Number(r.dz), flagsOf(r), tFor(r), !!turned) : null
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
-    const cutHere = new Set(cutParts.has(`${r.cabinet_instance_id}|${pieceOf}`) ? [pieceOf] : [])
+    const cutHere = cutByCab.get(String(r.cabinet_instance_id)) ?? new Map<string, number>()
     const piece = splitPieceSuffix(key, cutHere).trim().replace(/[()]/g, '') || null
+    const splitNote = splitPieceNote(key, cutHere)
     push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : key.startsWith('lh:') ? `Linear Handle ${Number(key.slice(3)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
       ...(bevel || piece || key.startsWith('lh:') ? { suffix: [bevel, piece, key.startsWith('lh:') ? 'sharknose edge, saw' : null].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), railStrip?.dims ?? turned,
       railStrip ? { ...eb, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0 } : eb, base)
     const last = parts[parts.length - 1]
     if (railStrip && last?.source_part_id === r.id) last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
+    if (splitNote && last?.source_part_id === r.id) last.comment = last.comment ? `${splitNote} · ${last.comment}` : splitNote
   }
   for (const r0 of ip) {
     const type = String(r0.part_type)

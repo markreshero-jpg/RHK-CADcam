@@ -112,15 +112,39 @@ export function splitSuggestions(internal: ResolvedInternalPart[]): { shelf: num
     .map((at, i) => ({ shelf: i + 1, at: Math.round(at * 10) / 10 }))
 }
 
-/** The parts a set of pieces was cut from (`left_side` when `split:left_side:1` is there). */
-export function cutBaseKeys(keys: string[]): Set<string> {
-  return new Set(keys.filter(k => k.startsWith('split:')).map(splitBaseKey))
+/** The parts a set of pieces was cut from, with how many pieces each was cut
+ *  into (`left_side` → 2 when `split:left_side:1` is there). */
+export function cutBaseKeys(keys: string[]): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const k of keys) {
+    if (!k.startsWith('split:')) continue
+    const base = splitBaseKey(k), n = Number(k.slice(-1)) + 1
+    out.set(base, Math.max(out.get(base) ?? 0, n))
+  }
+  return out
 }
 
-/** Name suffix for a piece: " (lower)" on the bottom piece of a cut part,
- *  " (upper)" / " (upper 2)" above it, "" for a part that wasn't cut. */
-export function splitPieceSuffix(key: string, cut: Set<string>): string {
+/** Where a piece sits in its cut part: 'bottom' (the part's own key), 'top'
+ *  (the highest piece), 'mid' (between, on a two-cut part); null when the part
+ *  wasn't cut. `cut` is cutBaseKeys over the cabinet's piece keys. */
+export function splitPiecePosition(key: string, cut: Map<string, number>): 'bottom' | 'mid' | 'top' | null {
   const base = splitBaseKey(key)
-  if (base !== key) return key.endsWith(':1') ? ' (upper)' : ` (upper ${key.slice(-1)})`
-  return cut.has(base) ? ' (lower)' : ''
+  const count = cut.get(base)
+  if (!count) return null
+  if (base === key) return 'bottom'
+  return Number(key.slice(-1)) === count - 1 ? 'top' : 'mid'
+}
+
+/** Name suffix for a piece: " (split bottom)" / " (split mid)" / " (split top)"
+ *  on the pieces of a cut part (Mark, 2026-10-31), "" for a part that wasn't cut. */
+export function splitPieceSuffix(key: string, cut: Map<string, number>): string {
+  const pos = splitPiecePosition(key, cut)
+  return pos ? ` (split ${pos})` : ''
+}
+
+/** The part comment on a cut piece — "SPLIT - BOTTOM" / "- MID" / "- TOP" — so
+ *  the label and cut list say which piece it is; null for a part that wasn't cut. */
+export function splitPieceNote(key: string, cut: Map<string, number>): string | null {
+  const pos = splitPiecePosition(key, cut)
+  return pos ? `SPLIT - ${pos.toUpperCase()}` : null
 }

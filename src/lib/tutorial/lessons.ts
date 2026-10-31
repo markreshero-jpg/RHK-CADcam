@@ -769,7 +769,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'With the cabinet selected, the sidebar’s Height split section lists the cut (height from the cabinet bottom and off the floor). Click a Shelf button to cut at another fixed shelf, type a height, or drag the red line in elevation — it snaps to the shelves. + Add cut makes a third section; Remove split joins it back up.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.split?.at?.length) },
     { id: 'parts', title: 'Check the pieces',
-      body: 'The cut list and the cabinet sheet show the sides and back as (lower) and (upper) pieces, and each piece keeps its own shelf and top holes. Nothing is drilled across the cut — it’s fixed by hand.',
+      body: 'The cut list and the cabinet sheet show the sides and back as (split bottom) and (split top) pieces — (split mid) between two cuts — and the labels carry a SPLIT - BOTTOM / MID / TOP comment. Each piece keeps its own shelf and top holes. Nothing is drilled across the cut — it’s fixed by hand.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.split?.at?.length) },
   ]},
 

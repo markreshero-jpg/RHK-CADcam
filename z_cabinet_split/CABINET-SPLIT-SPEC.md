@@ -72,3 +72,7 @@
   as the sides) and back pieces store Y = cut − DZ. A shaped cabinet's per-edge `side:<edge>` / `back:<edge>`
   panels (e.g. TC-08's angled back:back2) are cut too (height along DX from Y); piece key
   `split:back:back2:1`, DB constraint widened (`migration_s1b_shaped_pieces.sql`, applied).
+- [x] **S5** (2026-10-31, Mark: "write split on the parts … indicate top, mid or bottom") Piece names are
+  now `(split bottom)` / `(split mid)` / `(split top)` (was (lower) / (upper)) in the cut list, cabinet sheet and
+  Parts tab, and the optimiser part comment (labels) leads with `SPLIT - BOTTOM` / `- MID` / `- TOP`, ahead of
+  any user comment. `cutBaseKeys` returns base → piece count; `splitPiecePosition` / `splitPieceNote`.

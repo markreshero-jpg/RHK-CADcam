@@ -585,7 +585,7 @@ export default function PartsView({
   const rows = useMemo((): FlatRow[] => {
     const result: FlatRow[] = []
 
-    // Height split (z_cabinet_split): cut sides / back listed as their (lower) / (upper) pieces.
+    // Height split (z_cabinet_split): cut sides / back listed as their (split bottom / mid / top) pieces.
     const pieces = splitCaseParts(rp.case_parts, rp.split_at)
     const cutBases = cutBaseKeys(pieces.map(q => q.part_key))
     for (const p of pieces) {
