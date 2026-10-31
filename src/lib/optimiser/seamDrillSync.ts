@@ -25,6 +25,7 @@ import { splitCaseParts, splitPieceFor, isSplitKey } from '@/src/lib/cabinetSpli
 import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 import { MARKER_DIA, MARKER_DEPTH } from '@/src/lib/resolver/resolveDrawerMarkers'
 import { backTopMarker } from '@/src/lib/slideDrilling'
+import { doorProfileCuts } from '@/src/lib/doorProfile'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -398,61 +399,42 @@ interface GeneratedRoute {
 
 // Door profile face routes (two-sided spec §0, build step 1): each styled front's
 // profile ops — shaker / bead outlines, pockets, VJ lines — as generated route and
-// groove rows, worked in the front view (origin bottom-left, x across, y up) like
-// doorProfilePrimitives draws them. A line at `offset` from the edge is the groove
-// centre; an outline route's rectangle is inset offset − width/2 so its tool path
-// (a radius inside) runs on that line; a pocket clears everything inside it.
-// Doors nest back face up (zoneFrame upSign '+'), so front-face ops are stored
+// groove rows, from doorProfileCuts — the same geometry the previews, elevations
+// and 3D draw. An area's rectangle goes as-is: a pocket clears it; an outline's
+// tool path runs a radius inside it, so on the offset line when the op's width
+// is the bit's diameter.
+// Doors nest back face up (zoneFrame upSign '+'), so front-face cuts are stored
 // mirrored across the width, entering from the 'back' like a front-face bore.
 // The tool is the op's own bit or tool set; none → the loader warns and skips it.
 export function collectDoorProfileRoutes(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedRoute[] } {
   rp = filterRemovedParts(rp)
   const rows: GeneratedRoute[] = []
-  const EPS = 0.001
   for (const z of rp.face_zones) {
-    const prof = z.door_profile
-    if (!prof?.ops.length || z.facet || z.AY) continue
-    const W = z.DX, H = z.DY
-    prof.ops.forEach((op, i) => {
-      if (op.operation_type === 'drill' || !(op.depth_mm && op.depth_mm > 0)) return
-      const front = op.face !== 'back'
+    if (!z.door_profile?.ops.length || z.facet || z.AY) continue
+    const W = z.DX
+    for (const c of doorProfileCuts(z.door_profile, { w: W, h: z.DY, thickness: z.DZ })) {
+      const front = c.face === 'front'
       const mx = (x: number) => front ? W - x : x
       const base = {
         source_table: 'face_zones' as const, source_cabinet_id: cabinetId, source_part_key: `zone_${z.row_index}_${z.col_index}`,
-        depth: round(op.depth_mm),
+        depth: round(c.depth),
         output_face: front ? 'back' : 'front', plane_kind: front ? 'face_front' : 'face_back',
-        output_to_cnc: true, router_tool_id: op.router_tool_id ?? null, tool_set_id: op.tool_set_id ?? null,
+        output_to_cnc: true, router_tool_id: c.router_tool_id, tool_set_id: c.tool_set_id,
         parameters: { generated: GENERATED_MARK, kind: 'door_profile' },
       }
-      const off = op.offset_from_edge_mm ?? 0
-      const sp = op.spacing_mm ?? 0
-      if ((prof.profile_type === 'vj_lines' || op.repeat_axis === 'x' || op.repeat_axis === 'y') && sp > 0) {
-        const width = op.width_mm ?? null
-        let n = 0
-        if (op.repeat_axis === 'y') {
-          for (let y = off + sp; y < H - off - EPS; y += sp) rows.push({ ...base, operation_type: 'groove', operation_action: null,
-            operation_key: `door_profile_${i}_${n++}`, pos_x: round(off), pos_y: round(y), size_dx: null, size_dy: null,
-            length: round(W - 2 * off), width })
-        } else {
-          for (let x = off + sp; x < W - off - EPS; x += sp) rows.push({ ...base, operation_type: 'groove', operation_action: null,
-            operation_key: `door_profile_${i}_${n++}`, pos_x: round(mx(x)), pos_y: round(off), size_dx: null, size_dy: null,
-            length: round(H - 2 * off), width, angle_az: 90 })
-        }
-        return
+      if (c.kind === 'groove') {
+        // A groove runs +x from its start, or +y (angle 90) when it runs up the door.
+        const vertical = Math.abs(c.x2 - c.x1) < 0.001
+        const x0 = Math.min(c.x1, c.x2), x1 = Math.max(c.x1, c.x2)
+        rows.push({ ...base, operation_type: 'groove', operation_action: null, operation_key: `door_profile_${c.opIndex}_${c.lineIndex}`,
+          pos_x: round(vertical ? mx(x0) : front ? W - x1 : x0), pos_y: round(Math.min(c.y1, c.y2)),
+          size_dx: null, size_dy: null, length: round(Math.hypot(c.x2 - c.x1, c.y2 - c.y1)), width: c.width,
+          ...(vertical ? { angle_az: 90 } : {}) })
+      } else {
+        rows.push({ ...base, operation_type: 'route', operation_action: c.clear ? 'pocket' : null, operation_key: `door_profile_${c.opIndex}`,
+          pos_x: round(mx(c.x + c.w / 2)), pos_y: round(c.y + c.h / 2), size_dx: round(c.w), size_dy: round(c.h), length: null, width: null })
       }
-      // Outline / pocket rectangle: per-edge offsets override the common one.
-      // pocket / raster clear the area; route / outline / profile / square_off / a
-      // single groove run a path on the line.
-      const pocket = op.operation_type === 'pocket' || op.operation_type === 'raster'
-      const half = pocket ? 0 : (op.width_mm ?? 0) / 2
-      const l = (op.offset_left_mm ?? off) - half, r = (op.offset_right_mm ?? off) - half
-      const b = (op.offset_bottom_mm ?? off) - half, t = (op.offset_top_mm ?? off) - half
-      const w = W - l - r, h = H - b - t
-      if (!(w > 0) || !(h > 0)) return
-      rows.push({ ...base, operation_type: 'route', operation_action: pocket ? 'pocket' : null,
-        operation_key: `door_profile_${i}`, pos_x: round(mx(l + w / 2)), pos_y: round(b + h / 2),
-        size_dx: round(w), size_dy: round(h), length: null, width: null })
-    })
+    }
   }
   return { rows }
 }

@@ -4,7 +4,7 @@
 // DoorStylePreview — live SVG preview of a door front.
 //
 // Draws a sample door (default 450×720mm) straight from the profile
-// geometry (evaluateProfileOps → doorProfilePrimitives), filled with the
+// geometry (evaluateProfileOps → doorProfileCuts, the same cuts the CNC machines), filled with the
 // linked board's face_colour and hatched with its grain direction. No
 // stored images: previews always match what the resolver will cut.
 //
@@ -17,7 +17,7 @@
 import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { supabase } from '@/src/lib/supabase'
-import { evaluateProfileOps, doorProfilePrimitives } from '@/src/lib/doorProfile'
+import { evaluateProfileOps, doorProfileCuts } from '@/src/lib/doorProfile'
 import type { RawProfileOp, ResolvedDoorProfile } from '@/src/lib/resolver/types'
 
 // Enlarged view reuses the Part Editor's 3D/ortho components (three.js) —
@@ -51,6 +51,12 @@ export function dbOpsToRawProfileOps(rows: Array<Record<string, unknown>>): RawP
     face:                (o.face as RawProfileOp['face']) ?? 'front',
     expressions:         (o.expressions as Record<string, string> | null) ?? null,
     sort_order:          (o.sort_order as number) ?? 0,
+    router_tool_id:      (o.router_tool_id as string | null) ?? null,
+    tool_set_id:         (o.tool_set_id as string | null) ?? null,
+    offset_top_mm:       o.offset_top_mm != null ? Number(o.offset_top_mm) : null,
+    offset_bottom_mm:    o.offset_bottom_mm != null ? Number(o.offset_bottom_mm) : null,
+    offset_left_mm:      o.offset_left_mm != null ? Number(o.offset_left_mm) : null,
+    offset_right_mm:     o.offset_right_mm != null ? Number(o.offset_right_mm) : null,
   }))
 }
 
@@ -65,18 +71,14 @@ export function DoorStylePreview({
   const resolved = evaluateProfileOps(ops ?? [], {
     w, h, thickness, toolDiameter: ops?.[0]?.tool_diameter_mm ?? 0,
   })
-  const prims = doorProfilePrimitives(
-    { profile_type: profileType ?? 'custom', ops: resolved },
-    { w, h, thickness },
-  )
+  // The same cuts the CNC machines (doorProfileCuts): pockets as a recess,
+  // outline bands and grooves at their real width.
+  const cuts = doorProfileCuts({ profile_type: profileType ?? 'custom', ops: resolved }, { w, h, thickness })
   // Face-local mm (origin bottom-left, +y up) → SVG (origin top-left, +y down).
   const mx = (lx: number) => pad + lx
   const my = (ly: number) => pad + h - ly
 
   const fill = faceColour || '#7b8494'
-  // Route stroke width ≈ the cutter width of the first op so a 12mm shaker
-  // groove visibly differs from a 4mm bead.
-  const routeW = Math.max(4, resolved.find(o => o.width_mm != null)?.width_mm ?? 8)
 
   // Grain hatching — sparse translucent lines in the board's grain direction.
   const grainLines: React.ReactNode[] = []
@@ -118,26 +120,42 @@ export function DoorStylePreview({
           </linearGradient>
         </defs>
         {grainLines}
-        {/* Routed frame(s): groove at cutter width + a thin highlight so the
-            profile reads as a recess, not a printed border */}
-        {prims.insetRects.map((ir, i) => (
-          <g key={`ir${i}`}>
-            <rect x={mx(ir.x)} y={my(ir.y + ir.h)} width={ir.w} height={ir.h}
-              fill="none" stroke="rgba(0,0,0,0.40)" strokeWidth={routeW} />
-            <rect x={mx(ir.x) + routeW / 2} y={my(ir.y + ir.h) + routeW / 2}
-              width={Math.max(0, ir.w - routeW)} height={Math.max(0, ir.h - routeW)}
-              fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} />
-          </g>
-        ))}
-        {/* Repeating grooves (VJ etc.) */}
-        {prims.grooveLines.map((gl, i) => (
-          <g key={`gl${i}`}>
-            <line x1={mx(gl.x1)} y1={my(gl.y1)} x2={mx(gl.x2)} y2={my(gl.y2)}
-              stroke="rgba(0,0,0,0.35)" strokeWidth={routeW} />
-            <line x1={mx(gl.x1) + 1.5} y1={my(gl.y1)} x2={mx(gl.x2) + 1.5} y2={my(gl.y2)}
-              stroke="rgba(255,255,255,0.15)" strokeWidth={1.5} />
-          </g>
-        ))}
+        {/* Cuts, each with a thin highlight so it reads as a recess, not a printed border */}
+        {cuts.map((c, i) => {
+          if (c.kind === 'groove') {
+            const gw = Math.max(2, c.width ?? 6)
+            return (
+              <g key={`c${i}`}>
+                <line x1={mx(c.x1)} y1={my(c.y1)} x2={mx(c.x2)} y2={my(c.y2)}
+                  stroke="rgba(0,0,0,0.35)" strokeWidth={gw} />
+                <line x1={mx(c.x1) + 1.5} y1={my(c.y1)} x2={mx(c.x2) + 1.5} y2={my(c.y2)}
+                  stroke="rgba(255,255,255,0.15)" strokeWidth={1.5} />
+              </g>
+            )
+          }
+          if (c.clear) {
+            // Pocket: the whole area sits lower — shade it, highlight its bottom-left lip.
+            return (
+              <g key={`c${i}`}>
+                <rect x={mx(c.x)} y={my(c.y + c.h)} width={c.w} height={c.h}
+                  fill="rgba(0,0,0,0.22)" stroke="rgba(0,0,0,0.45)" strokeWidth={2} />
+                <polyline points={`${mx(c.x) + 2},${my(c.y + c.h) + 2} ${mx(c.x) + 2},${my(c.y) - 2} ${mx(c.x + c.w) - 2},${my(c.y) - 2}`}
+                  fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} />
+              </g>
+            )
+          }
+          // Outline band: c.band wide, just inside the rectangle.
+          const k = c.band / 2
+          return (
+            <g key={`c${i}`}>
+              <rect x={mx(c.x + k)} y={my(c.y + c.h - k)} width={Math.max(0, c.w - c.band)} height={Math.max(0, c.h - c.band)}
+                fill="none" stroke="rgba(0,0,0,0.40)" strokeWidth={c.band} />
+              <rect x={mx(c.x + c.band)} y={my(c.y + c.h - c.band)}
+                width={Math.max(0, c.w - 2 * c.band)} height={Math.max(0, c.h - 2 * c.band)}
+                fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth={1.5} />
+            </g>
+          )
+        })}
       </svg>
       {caption && <span className="text-[9px] text-ink-subtle leading-tight text-center">{caption}</span>}
       {enlarged && (

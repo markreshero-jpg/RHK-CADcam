@@ -68,7 +68,58 @@ export function evaluateProfileOps(raw: RawProfileOp[], panel: DoorPanelDims): R
     }))
 }
 
-// ── Rendering primitives ────────────────────────────────────────────────────
+// ── Cuts — the ONE geometry every view and the CNC use ──────────────────────
+// Face-local front view (origin bottom-left, x across, y up), before any
+// machine mirroring. A line at `offset` from the edge is a groove centre.
+//   groove — a straight slot of `width` (VJ lines, repeated grooves)
+//   area   — a rectangle: `clear` = pocket / raster, everything inside is cut
+//            (the edge sits at the offset); else a band `band` wide running
+//            just inside the rectangle (route / outline / profile / square_off
+//            / single groove), its centre on the offset line.
+// Per-edge offsets override the common edge offset on that edge. Drills and
+// ops without a depth cut nothing.
+
+export interface DoorCutBase { opIndex: number; depth: number; face: 'front' | 'back'; router_tool_id: string | null; tool_set_id: string | null }
+export type DoorCut =
+  | (DoorCutBase & { kind: 'groove'; x1: number; y1: number; x2: number; y2: number; width: number | null; lineIndex: number })
+  | (DoorCutBase & { kind: 'area'; x: number; y: number; w: number; h: number; clear: boolean; band: number })
+
+const EPS = 0.001
+const CLEAR_OPS = new Set(['pocket', 'raster'])
+const DEFAULT_BAND = 8   // outline width when the op gives none (preview only — the CNC uses the real bit)
+
+export function doorProfileCuts(profile: ResolvedDoorProfile, panel: DoorPanelDims): DoorCut[] {
+  const W = panel.w, H = panel.h
+  const cuts: DoorCut[] = []
+  profile.ops.forEach((op, opIndex) => {
+    if (op.operation_type === 'drill' || !(op.depth_mm && op.depth_mm > 0)) return
+    const base: DoorCutBase = { opIndex, depth: op.depth_mm, face: op.face === 'back' ? 'back' : 'front', router_tool_id: op.router_tool_id ?? null, tool_set_id: op.tool_set_id ?? null }
+    const off = op.offset_from_edge_mm ?? 0
+    const sp = op.spacing_mm ?? 0
+    const lines = profile.profile_type === 'vj_lines' || op.repeat_axis === 'x' || op.repeat_axis === 'y'
+    if (lines && sp > 0) {
+      let n = 0
+      if (op.repeat_axis === 'y') {
+        for (let y = off + sp; y < H - off - EPS; y += sp) cuts.push({ ...base, kind: 'groove', x1: off, y1: y, x2: W - off, y2: y, width: op.width_mm, lineIndex: n++ })
+      } else {
+        for (let x = off + sp; x < W - off - EPS; x += sp) cuts.push({ ...base, kind: 'groove', x1: x, y1: off, x2: x, y2: H - off, width: op.width_mm, lineIndex: n++ })
+      }
+      return
+    }
+    const clear = CLEAR_OPS.has(op.operation_type)
+    const band = clear ? 0 : (op.width_mm ?? panel.toolDiameter ?? DEFAULT_BAND) || DEFAULT_BAND
+    const half = band / 2
+    const l = (op.offset_left_mm ?? off) - half, r = (op.offset_right_mm ?? off) - half
+    const b = (op.offset_bottom_mm ?? off) - half, t = (op.offset_top_mm ?? off) - half
+    const w = W - l - r, h = H - b - t
+    if (w > EPS && h > EPS) cuts.push({ ...base, kind: 'area', x: l, y: b, w, h, clear, band })
+  })
+  return cuts
+}
+
+// ── Line primitives (thin-line views: elevation, cabinet edit, 3D overlay) ──
+// Drawn from doorProfileCuts: an outline band → its centre line, a pocket →
+// its edge, a groove → its centre line.
 
 export interface ProfileRect { x: number; y: number; w: number; h: number; depth: number | null }
 export interface ProfileLine { x1: number; y1: number; x2: number; y2: number; depth: number | null }
@@ -77,40 +128,18 @@ export interface DoorProfilePrims {
   grooveLines: ProfileLine[]   // parallel grooves (VJ board, custom repeats)
 }
 
-const EPS = 0.001
-
 export function doorProfilePrimitives(
   profile: ResolvedDoorProfile,
   panel: DoorPanelDims,
 ): DoorProfilePrims {
-  const W = panel.w
-  const H = panel.h
   const insetRects: ProfileRect[] = []
   const grooveLines: ProfileLine[] = []
-
-  for (const op of profile.ops) {
-    const off = op.offset_from_edge_mm ?? 0
-    const repeats = op.repeat_axis === 'x' || op.repeat_axis === 'y'
-    const isLines = profile.profile_type === 'vj_lines' || repeats
-
-    if (isLines && op.spacing_mm && op.spacing_mm > 0) {
-      const axis = op.repeat_axis === 'y' ? 'y' : 'x'
-      if (axis === 'x') {
-        for (let x = off + op.spacing_mm; x < W - off - EPS; x += op.spacing_mm) {
-          grooveLines.push({ x1: x, y1: off, x2: x, y2: H - off, depth: op.depth_mm })
-        }
-      } else {
-        for (let y = off + op.spacing_mm; y < H - off - EPS; y += op.spacing_mm) {
-          grooveLines.push({ x1: off, y1: y, x2: W - off, y2: y, depth: op.depth_mm })
-        }
-      }
-    } else {
-      // perimeter_route / bead / panel_raise / non-repeating custom → inset frame
-      if (W - 2 * off > EPS && H - 2 * off > EPS) {
-        insetRects.push({ x: off, y: off, w: W - 2 * off, h: H - 2 * off, depth: op.depth_mm })
-      }
+  for (const c of doorProfileCuts(profile, panel)) {
+    if (c.kind === 'groove') grooveLines.push({ x1: c.x1, y1: c.y1, x2: c.x2, y2: c.y2, depth: c.depth })
+    else {
+      const k = c.band / 2
+      insetRects.push({ x: c.x + k, y: c.y + k, w: c.w - 2 * k, h: c.h - 2 * k, depth: c.depth })
     }
   }
-
   return { insetRects, grooveLines }
 }

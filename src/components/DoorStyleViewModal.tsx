@@ -20,7 +20,7 @@ import { Part, PreviewCanvas, type PartMeta } from '@/src/components/three/PartV
 import PartOrthoView from '@/app/canvas/[roomId]/partEditor/PartOrthoView'
 import { buildOpSubtractions } from '@/app/canvas/[roomId]/partEditor/partOpGlyphs'
 import type { PartOp } from '@/app/canvas/[roomId]/CabinetRoutesPanel'
-import { evaluateProfileOps, doorProfilePrimitives } from '@/src/lib/doorProfile'
+import { evaluateProfileOps, doorProfileCuts } from '@/src/lib/doorProfile'
 import { fmtMm } from '@/src/lib/format'
 import type { DoorStylePreviewProps } from './DoorStylePreview'
 
@@ -49,30 +49,30 @@ function stripOp(i: number, cx: number, cy: number, dx: number, dy: number, dept
   }
 }
 
-// Resolved door-profile ops → synthetic PartOps. Frames become four strips
-// centred on the routed path (so corners meet); repeated grooves one strip each.
+// Door profile cuts (doorProfileCuts — what the CNC machines) → synthetic PartOps.
+// A pocket is one recess; an outline band four strips (so corners meet); each
+// groove one strip.
 export function doorOpsToPartOps(
   profileType: DoorStylePreviewProps['profileType'],
   ops: NonNullable<DoorStylePreviewProps['ops']>,
   W: number, H: number, thickness: number,
 ): PartOp[] {
-  const resolved = evaluateProfileOps(ops, { w: W, h: H, thickness, toolDiameter: ops[0]?.tool_diameter_mm ?? 0 })
+  const resolved = evaluateProfileOps(ops, { w: W, h: H, thickness })
   const out: PartOp[] = []
   let i = 0
-  for (const op of resolved) {
-    const cw    = Math.max(op.width_mm ?? 8, 1)          // cutter width
-    const depth = Math.max(op.depth_mm ?? 4, 0.5)
-    const prims = doorProfilePrimitives({ profile_type: profileType ?? 'custom', ops: [op] }, { w: W, h: H, thickness })
-    for (const r of prims.insetRects) {
-      const cx = r.x + r.w / 2, cy = r.y + r.h / 2
-      out.push(stripOp(i++, cx, r.y,       r.w + cw, cw, depth))   // bottom rail
-      out.push(stripOp(i++, cx, r.y + r.h, r.w + cw, cw, depth))   // top rail
-      out.push(stripOp(i++, r.x,       cy, cw, r.h + cw, depth))   // left stile
-      out.push(stripOp(i++, r.x + r.w, cy, cw, r.h + cw, depth))   // right stile
-    }
-    for (const l of prims.grooveLines) {
-      const cx = (l.x1 + l.x2) / 2, cy = (l.y1 + l.y2) / 2
-      out.push(stripOp(i++, cx, cy, Math.max(Math.abs(l.x2 - l.x1), cw), Math.max(Math.abs(l.y2 - l.y1), cw), depth))
+  for (const c of doorProfileCuts({ profile_type: profileType ?? 'custom', ops: resolved }, { w: W, h: H, thickness })) {
+    const depth = Math.max(c.depth, 0.5)
+    if (c.kind === 'groove') {
+      const gw = Math.max(c.width ?? 6, 1)
+      out.push(stripOp(i++, (c.x1 + c.x2) / 2, (c.y1 + c.y2) / 2, Math.max(Math.abs(c.x2 - c.x1), gw), Math.max(Math.abs(c.y2 - c.y1), gw), depth))
+    } else if (c.clear) {
+      out.push(stripOp(i++, c.x + c.w / 2, c.y + c.h / 2, c.w, c.h, depth))
+    } else {
+      const b = c.band, cx = c.x + c.w / 2, cy = c.y + c.h / 2
+      out.push(stripOp(i++, cx, c.y + b / 2,       c.w, b, depth))   // bottom rail
+      out.push(stripOp(i++, cx, c.y + c.h - b / 2, c.w, b, depth))   // top rail
+      out.push(stripOp(i++, c.x + b / 2,       cy, b, c.h, depth))   // left stile
+      out.push(stripOp(i++, c.x + c.w - b / 2, cy, b, c.h, depth))   // right stile
     }
   }
   return out
