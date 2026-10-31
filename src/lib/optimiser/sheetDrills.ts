@@ -161,7 +161,7 @@ export async function loadResolvedDrillOps(
     op.tipExtra = r.tip_extra || undefined
     op.throughAdj = r.through_adj
     op.pocket = r.mode === 'pocket' && r.router_tool_number != null && r.router_diameter != null
-      ? { toolNumber: r.router_tool_number, toolDiameter: r.router_diameter }
+      ? { toolNumber: r.router_tool_number, toolDiameter: r.router_diameter, ...(r.router_cut ?? {}) }
       : null
     r.warnings.forEach(w => warnings.add(w))
   }
@@ -188,15 +188,22 @@ export async function loadResolvedDrillOps(
     const rawRoutes = (rRows as unknown as (RouteRow & { operation_key?: string | null })[]).filter(o => o.output_to_cnc !== false && !notchCut(o))
     if (rawRoutes.length) {
       const { data: toolRows } = await supabase.from('cnc_tools')
-        .select('id,tool_number,diameter,max_depth_per_pass').eq('active', true)
+        .select('id,tool_number,diameter,max_depth_per_pass,base_feed_rate,plunge_feed_rate,base_spindle_speed').eq('active', true)
       const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
       // Resolve a cnc_tools id → concrete router bit, or null (with a warning).
-      const bit = (toolId: string | null, label: string): { toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null } | null => {
+      type Bit = { toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null; feed: number | null; plunge: number | null; rpm: number | null }
+      const numOrNull = (v: unknown) => v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null
+      const bit = (toolId: string | null, label: string): Bit | null => {
         const t = toolId ? toolById.get(toolId) : undefined
         const num = toolNum(t?.tool_number)
         const dia = t?.diameter != null ? Number(t.diameter) : NaN
         if (!Number.isFinite(num) || !Number.isFinite(dia) || dia <= 0) { warnings.add(`Route on ${label}: router tool has no number/diameter — skipped`); return null }
-        return { toolNumber: num, toolDiameter: dia, maxDepthPerPass: t?.max_depth_per_pass != null ? Number(t.max_depth_per_pass) : null }
+        // Each bit cuts at its OWN feed / plunge / spindle (cnc_tools), not the
+        // material routing tool's (a 40mm shaker bit at T101's 18000rpm).
+        return {
+          toolNumber: num, toolDiameter: dia, maxDepthPerPass: t?.max_depth_per_pass != null ? Number(t.max_depth_per_pass) : null,
+          feed: numOrNull(t?.base_feed_rate), plunge: numOrNull(t?.plunge_feed_rate), rpm: numOrNull(t?.base_spindle_speed),
+        }
       }
 
       // Tool-set members for every referenced set, grouped + ordered.
@@ -204,7 +211,7 @@ export async function loadResolvedDrillOps(
       const membersBySet = new Map<string, ToolSetMember[]>()
       if (setIds.length) {
         const { data: memRows } = await supabase.from('cnc_tool_set_operations')
-          .select('tool_set_id,sort_order,operation_type,tool_id,depth_mm,width_mm,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,fill_strategy,raster_angle_deg,raster_stepover_pct')
+          .select('tool_set_id,sort_order,operation_type,tool_id,depth_mm,width_mm,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,fill_strategy,raster_angle_deg,raster_stepover_pct,tool_position,ring_width_mm,cleanup_radius_mm,feed_rate_override,spindle_speed_override')
           .in('tool_set_id', setIds).order('sort_order')
         for (const m of (memRows ?? []) as ({ tool_set_id: string } & ToolSetMember)[]) {
           const arr = membersBySet.get(m.tool_set_id) ?? []; arr.push(m); membersBySet.set(m.tool_set_id, arr)
@@ -217,11 +224,19 @@ export async function loadResolvedDrillOps(
         if (o.tool_set_id) {
           const members = membersBySet.get(o.tool_set_id) ?? []
           if (!members.length) { warnings.add(`Route on ${label}: tool set is empty — nothing to machine`); continue }
+          let prevRadius: number | null = null                  // last area step's bit radius
           for (const m of members) {
             const geom = expandToolSetMember(o, m)
             if (!geom) continue                                  // e.g. a drill member — not a routing feature
             const b = bit(m.tool_id, label)
             if (!b) continue
+            // Square-out cleans the corners the step before it left (its radius),
+            // unless the step names its own clean-up radius.
+            if (geom.corners_cleanup_r != null && !(geom.corners_cleanup_r > 0)) geom.corners_cleanup_r = prevRadius ?? 0
+            if (geom.operation_type === 'route' && geom.corners_cleanup_r == null && !geom.on_line) prevRadius = b.toolDiameter / 2
+            // A step may override its tool's feed / spindle.
+            if (m.feed_rate_override != null && m.feed_rate_override > 0) b.feed = Number(m.feed_rate_override)
+            if (m.spindle_speed_override != null && m.spindle_speed_override > 0) b.rpm = Number(m.spindle_speed_override)
             resolved.push({ ...geom, ...b })
           }
         } else if (o.router_tool_id) {
@@ -268,5 +283,26 @@ export async function loadSheetDrills(
   opts: { sync?: boolean | 'force'; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
 ): Promise<SheetDrillsResult> {
   const ops = await loadResolvedDrillOps(parts, opts)
-  return { bySheet: projectSheetDrills(sheets, ops), routesBySheet: projectSheetRoutes(sheets, ops), warnings: ops.warnings }
+  return { bySheet: projectSheetDrills(sheets, ops), routesBySheet: projectSheetRoutes(sheets, ops), warnings: [...ops.warnings, ...mixedFaceWarnings(sheets, ops)] }
+}
+
+// One program machines one face. A sheet whose parts need routing on BOTH faces
+// (a shaker / VJ front with a glass door's back rebate) needs the 6th-face flip
+// (two-sided spec, step 2 — not built), so say so instead of cutting one face wrong.
+// Back-only sheets (glass doors) cut face down like every other sheet.
+export function mixedFaceWarnings(sheets: NestedSheet[], ops: ResolvedDrillOps): string[] {
+  const out: string[] = []
+  sheets.forEach((sheet, i) => {
+    let front = false, back = false
+    for (const pl of sheet.placements) {
+      const part = ops.partByUid.get(pl.baseUid)
+      if (!part) continue
+      for (const r of ops.routesByKey.get(drillKey(part.source_table, part.cabinet_instance_id, part.source_part_key)) ?? []) {
+        if (r.plane_kind === 'face_front') front = true
+        else if (r.plane_kind === 'face_back') back = true
+      }
+    }
+    if (front && back) out.push(`Sheet ${i + 1}: front-face routing (shaker / VJ) and back-face routing (glass rebate) on one sheet needs the 6th-face flip, which isn't built yet. Nest those doors on separate sheets.`)
+  })
+  return out
 }

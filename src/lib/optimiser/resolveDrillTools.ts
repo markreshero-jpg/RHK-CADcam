@@ -43,6 +43,7 @@ export interface RouterToolItem {
   tool_number: number
   name?: string | null
   auto_select?: boolean | null   // false = never picked for a pocket unless it is the preferred tool
+  feed?: number | null; plunge?: number | null; rpm?: number | null   // the bit's own cutting data
 }
 
 export interface ResolvedDrillTool {
@@ -60,6 +61,7 @@ export interface ResolvedDrillTool {
   router_tool_id: string | null     // set when mode = 'pocket'
   router_tool_number: number | null
   router_diameter: number | null
+  router_cut?: { feed?: number | null; plunge?: number | null; rpm?: number | null }   // pocket bit's own cutting data
   warnings: string[]
 }
 
@@ -183,7 +185,8 @@ export function resolveDrillTool(
   const clearance = opts.pocketClearanceMm ?? 2
   const pocketWith = (router: RouterToolItem): ResolvedDrillTool => ({
     mode: 'pocket', diameter: typedDia, depth: typedDepth, passes: 1, tip_extra: 0, through_adj: null, drill_id: null, drill_name: null,
-    router_tool_id: router.id, router_tool_number: router.tool_number, router_diameter: router.diameter, warnings,
+    router_tool_id: router.id, router_tool_number: router.tool_number, router_diameter: router.diameter,
+    router_cut: { feed: router.feed ?? null, plunge: router.plunge ?? null, rpm: router.rpm ?? null }, warnings,
   })
 
   const pick = pickByDiameter(typedDia, typedDepth, lib, block)

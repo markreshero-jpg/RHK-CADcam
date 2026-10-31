@@ -40,11 +40,17 @@ export interface RouteOpRaw {
   // Resolved router bit (filled by the loader from cnc_tools). A route with no
   // resolvable tool is dropped by the loader with a warning — never defaulted.
   toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null
+  // The bit's own cutting data (cnc_tools) — null → profile / material tool values.
+  feed?: number | null; plunge?: number | null; rpm?: number | null
+  // Tool-set step options (z_cnc_tools T2), carried onto the sheet route:
+  on_line?: boolean                 // outline with the tool centre on the rectangle
+  ring_width?: number | null        // pocket only this wide a band in from the edge
+  corners_cleanup_r?: number | null // square_off: clean corners left at this radius
 }
 
 // Geometry + strategy of a route op WITHOUT its resolved tool — what a tool-set
 // member expands to before the loader attaches the member's bit.
-export type RouteGeom = Omit<RouteOpRaw, 'toolNumber' | 'toolDiameter' | 'maxDepthPerPass'>
+export type RouteGeom = Omit<RouteOpRaw, 'toolNumber' | 'toolDiameter' | 'maxDepthPerPass' | 'feed' | 'plunge' | 'rpm'>
 
 // One step of a cnc_tool_set recipe (cnc_tool_set_operations row).
 export interface ToolSetMember {
@@ -54,6 +60,12 @@ export interface ToolSetMember {
   offset_top_mm: number | null; offset_bottom_mm: number | null
   offset_left_mm: number | null; offset_right_mm: number | null
   fill_strategy: string | null; raster_angle_deg: number | null; raster_stepover_pct: number | null
+  // z_cnc_tools T2
+  tool_position?: string | null      // 'inside' (edge on the line, default) | 'centre' (centre on the line)
+  ring_width_mm?: number | null      // pocket: clear only this wide a band (glass rebate)
+  cleanup_radius_mm?: number | null  // square_off: corner radius to clean (null = previous step's tool radius)
+  feed_rate_override?: number | null       // this step's feed instead of the tool's
+  spindle_speed_override?: number | null   // this step's rpm instead of the tool's
 }
 
 const CLEAR_MEMBER_TYPES = new Set(['pocket', 'raster'])
@@ -90,13 +102,18 @@ export function expandToolSetMember(parent: RouteGeom, m: ToolSetMember): RouteG
     pos_x, pos_y, size_dx, size_dy,
     offset_left_mm, offset_right_mm, offset_top_mm, offset_bottom_mm,
     width: isGroove ? (m.width_mm ?? parent.width) : parent.width,
-    // The operation's own depth wins (a door profile says 8, the set's step says 5 → 8);
-    // a step's depth only fills in when the operation has none.
-    depth: parent.depth ?? parent.size_dz ?? m.depth_mm,
+    // Each STEP's own depth wins (as in Cabinet Vision: 40mm pocket 5, 2mm corners
+    // 5.4, V chamfer 1); the operation's depth only fills in for a step with none.
+    depth: m.depth_mm != null && m.depth_mm > 0 ? m.depth_mm : (parent.depth ?? parent.size_dz),
     size_dz: null,
     fill_strategy: fill,
     raster_angle_deg: m.raster_angle_deg ?? parent.raster_angle_deg,
     raster_stepover_pct: m.raster_stepover_pct ?? parent.raster_stepover_pct,
+    on_line: m.tool_position === 'centre',
+    ring_width: clear && m.ring_width_mm != null && m.ring_width_mm > 0 ? m.ring_width_mm : null,
+    // square_off is a corner clean-up; the loader fills the radius from the previous
+    // step's bit when the step doesn't give one (cleanup_radius_mm).
+    corners_cleanup_r: m.operation_type === 'square_off' ? (m.cleanup_radius_mm ?? 0) : null,
   }
 }
 
@@ -153,6 +170,7 @@ export function buildSheetRoutes(
         out.push({
           kind: 'groove', label: pl.label, x1: a.x, y1: a.y, x2: b.x, y2: b.y,
           width: w, depth, toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
+          feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid,
         })
         continue
       }
@@ -171,6 +189,11 @@ export function buildSheetRoutes(
         rasterAngleDeg: op.raster_angle_deg ?? 0,
         stepoverPct: op.raster_stepover_pct ?? 0,
         toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
+        feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid,
+        onLine: !!op.on_line,
+        ringWidth: op.ring_width ?? null,
+        // A square_off never falls back to a full lap: no radius → gcode warns + skips.
+        corners: op.corners_cleanup_r != null ? { cleanupR: op.corners_cleanup_r } : null,
       })
     }
   }

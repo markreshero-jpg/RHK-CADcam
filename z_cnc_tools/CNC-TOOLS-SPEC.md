@@ -11,7 +11,39 @@ CV stores lengths in **inches** (× 25.4); feeds/speeds are as entered (mm/min, 
 |---|---|---|
 | T1 | 4 new columns on `cnc_tools` + `cnc_drills`, wired into resolver/G-code, editor cards with diagrams | **built 01/11/26**, in-app check pending |
 | T1 import | CV tools 103, 104, 106, 107, 108, 110, 111, 112 imported (101/102/109 already existed) | **done 01/11/26** |
-| T2 | Tool-set parameters from CV (see below) | not started — Mark to choose |
+| T2 | Tool-set steps to match CV: square-out corners, centre-on-line, step depth wins, ring rebate, through cut, per-tool feeds/rpm; Shaker Door set rebuilt to CV; Glass door profile + Glass Door set | **built 01/11/26**, machine test pending |
+| T3 | Glass size for ordering (opening + rebate − clearance) | not started |
+
+## Locked decisions (T2, 01/11/26)
+
+Matched against CV's posted shaker program `z_panel_optimizer/R300301A.anc`.
+
+1. **Each step's own depth wins**; the operation's depth only fills in for a step
+   with none (reverses e774351 — Mark: "in CV operation depth was 0 and each tool
+   had its own depth"). A depth ≥ the board thickness = right through
+   (+ profile |through_cut_z|).
+2. **square_off = corners only** (CV corner clean-up): wall → corner → wall, arc back
+   round the previous tool's fillet. Cleans the radius left by the previous area
+   step's bit (`cleanup_radius_mm` overrides). Never falls back to a full lap.
+3. **Tool on the line** per step: `inside` (edge on the line, default) or `centre`
+   (V chamfer, VJ).
+4. **Ring width** on a pocket step clears only that band in from the edge
+   (glass rebate); laps from the inside of the band out, so the last lap finishes the wall.
+5. **Every router bit cuts at its own feed / plunge / rpm** (cnc_tools), and a step's
+   feed/spindle override beats that. Before this, every internal route ran at the
+   material routing tool's values (40mm shaker at T101's 18000rpm).
+6. **Step order is kept per part** across tool groups (a tool may be called twice
+   rather than run a part's steps out of order).
+7. **Glass doors: everything from the back** — rebate, squared corners, opening cut
+   through — so a glass-only sheet cuts face down like every other sheet. A sheet
+   with front-face routing (shaker/VJ) AND back-face routing warns: needs the 6th-face
+   flip (not built).
+
+Shaker Door set (= CV 2ndTest27.01): 1 pocket T109 spiral-out 50% d5 → 2 outline
+T107 d5 → 3 square_off T108 d5.4 → 4 outline T104 d1 centre-on-line.
+Glass profile (back, frame 60) + Glass Door set: 1 pocket T102 ring 15.9 d6.35
+offsets −15.9 → 2 square_off T107 d6.35 offsets −15.9 → 3 outline T102 d99 (through).
+6mm glass default (CV rebate 15.9 × 6.35).
 
 ## Locked decisions (T1)
 

@@ -176,7 +176,7 @@ export default function Stage6Gcode() {
       // machine's preferred pocket tool (e.g. T102).
       const routerTools = (toolRows ?? [])
         .filter(t => t.diameter != null && Number(t.diameter) > 0)
-        .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number), name: (t.name as string | null) ?? null, auto_select: (t.auto_select as boolean | null) ?? null }))
+        .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number), name: (t.name as string | null) ?? null, auto_select: (t.auto_select as boolean | null) ?? null, feed: (t.base_feed_rate as number | null) ?? null, plunge: (t.plunge_feed_rate as number | null) ?? null, rpm: (t.base_spindle_speed as number | null) ?? null }))
       const preferredPocketToolNumber = profile?.pocket_router_tool_number != null ? Number(profile.pocket_router_tool_number) : null
       // Nest was laid out at cut size when the profile deducts edgebanding —
       // holes must shift onto the deducted blanks to match.

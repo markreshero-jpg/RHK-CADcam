@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 const OP_TYPES = ['pocket', 'outline', 'square_off', 'profile', 'drill', 'groove', 'raster'] as const
 const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
@@ -29,6 +30,10 @@ interface ToolSetOp {
   offset_left_mm: number | null; offset_right_mm: number | null
   fill_strategy: string | null; raster_angle_deg: number | null; raster_stepover_pct: number | null
   feed_rate_override: number | null; spindle_speed_override: number | null
+  // z_cnc_tools T2
+  tool_position: string            // 'inside' (edge on the line) | 'centre' (centre on the line)
+  ring_width_mm: number | null     // pocket: clear only this wide a band
+  cleanup_radius_mm: number | null // square_off: corner radius to clean (blank = previous step's tool)
 }
 interface ToolItem { id: string; name: string; tool_number: string | null }
 
@@ -44,6 +49,7 @@ export default function CncToolSetsClient() {
   const [expandedOp, setExpandedOp] = useState<string | null>(null)
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
+  useEffect(() => { useTutorial.getState().emit('tool_sets_view') }, [])   // tutorial tool_set_steps
 
   useEffect(() => {
     let cancelled = false
@@ -189,10 +195,13 @@ export default function CncToolSetsClient() {
           </div>
           {/* How the recipe maps to routing (see optimiser routing emit). */}
           <p className="text-[10px] text-ink-subtle mb-2 leading-relaxed max-w-2xl">
-            Each step runs in order over the op’s area. <b>pocket</b>/<b>raster</b> clear the area (raster or spiral by Fill strategy);
-            <b> outline</b>/<b>profile</b>/<b>square_off</b> cut the boundary; <b>groove</b> cuts a slot (uses Width).
-            <b> Offsets</b> inset that step from the op’s edges — use them to leave stock for a later finish pass.
-            Depth defaults to the op’s depth. <b>drill</b> steps are ignored by routing.
+            Each step runs in order over the op’s area. <b>pocket</b>/<b>raster</b> clear the area (raster or spiral by Fill strategy),
+            or just a band in from the edge when Ring width is set (glass rebate); <b>outline</b>/<b>profile</b> run one lap of the boundary;
+            <b> square_off</b> squares out the 4 corners only, cleaning the radius the step before it left; <b>groove</b> cuts a slot (uses Width).
+            <b> Tool on the line</b>: edge inside the line (normal) or centre on it (V chamfer, VJ).
+            <b> Offsets</b> inset that step from the op’s edges (negative = outward).
+            <b> Each step’s own depth wins</b>; the operation’s depth is only used by a step with no depth. A depth over the board thickness cuts right through.
+            Feed / spindle default to the tool’s own (Settings → CNC Tool Setup). <b>drill</b> steps are ignored by routing.
           </p>
 
           <div className="border border-edge-strong rounded-lg overflow-hidden">
@@ -232,7 +241,19 @@ export default function CncToolSetsClient() {
                           {FILL_STRATEGIES.map(f => <option key={f} value={f}>{f}</option>)}
                         </select>
                       </div>
-                      <div /> {/* spacer */}
+                      <div>
+                        <label className={lbl}>Tool on the line</label>
+                        <select className={inp} value={op.tool_position ?? 'inside'} onChange={e => patchOp(op.id, { tool_position: e.target.value })}>
+                          <option value="inside">edge inside the line</option>
+                          <option value="centre">centre on the line</option>
+                        </select>
+                      </div>
+                      {(op.operation_type === 'pocket' || op.operation_type === 'raster') && (
+                        <Num label="Ring width (mm, blank = whole area)" value={op.ring_width_mm} onSave={v => patchOp(op.id, { ring_width_mm: v != null && v > 0 ? v : null })} />
+                      )}
+                      {op.operation_type === 'square_off' && (
+                        <Num label="Clean-up radius (blank = previous tool)" value={op.cleanup_radius_mm} onSave={v => patchOp(op.id, { cleanup_radius_mm: v != null && v > 0 ? v : null })} />
+                      )}
                       <Num label="Offset top (mm)" value={op.offset_top_mm} onSave={v => patchOp(op.id, { offset_top_mm: v })} />
                       <Num label="Offset bottom (mm)" value={op.offset_bottom_mm} onSave={v => patchOp(op.id, { offset_bottom_mm: v })} />
                       <Num label="Offset left (mm)" value={op.offset_left_mm} onSave={v => patchOp(op.id, { offset_left_mm: v })} />

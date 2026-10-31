@@ -577,17 +577,18 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
                         </div>
                       )}
                     </div>
-                    {/* What the tool set will actually run on this operation. The operation's
-                        depth wins; a step's own depth only fills in when the operation has none. */}
+                    {/* What the tool set will actually run on this operation. Each step's
+                        own depth wins; the operation's depth only fills in for a step with none. */}
                     {o.tool_set_id && (
                       <div className="text-[10px] text-ink-muted space-y-0.5">
                         {toolSetSteps.filter(s => s.tool_set_id === o.tool_set_id).map((s, k) => {
                           const t = s.tool_id ? cncTools.find(c => c.id === s.tool_id) : undefined
-                          const depth = o.depth_mm ?? s.depth_mm
+                          const depth = s.depth_mm != null && s.depth_mm > 0 ? s.depth_mm : o.depth_mm
+                          const tn = t?.tool_number ? (/^t/i.test(t.tool_number) ? t.tool_number : `T${t.tool_number}`) : null
                           return (
                             <div key={k} className={t ? '' : 'text-amber-400'}>
-                              {k + 1}. {s.operation_type} — {t ? `${t.name}${t.tool_number ? ` (T${t.tool_number})` : ''}${t.diameter ? ` ⌀${t.diameter}` : ''}` : 'no tool — skipped'}
-                              {t && depth != null ? ` · ${depth} deep` : ''}
+                              {k + 1}. {s.operation_type} — {t ? `${t.name}${tn ? ` (${tn})` : ''}${t.diameter ? ` ⌀${t.diameter}` : ''}` : 'no tool — skipped'}
+                              {t && depth != null ? (depth >= 40 ? ' · right through' : ` · ${depth} deep`) : ''}
                             </div>
                           )
                         })}

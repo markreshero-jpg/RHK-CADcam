@@ -1306,6 +1306,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double-click the cabinet, open the Face Grid tab and click a VJ door. VJ lines (this front) overrides just that door. Qty and spacing go together: a door with only Qty set gets equal boards even if the job set a spacing. The CNC, the elevation and the 3D all use the same lines. To line boards up across a pair of doors, use grain match.',
       canvas: true, done: (c, s) => ev(c, 'vj_layout_set') > ev(s, 'vj_layout_set') },
   ]},
+
+  // Appended 2026-11-01 (z_cnc_tools T2 — tool-set steps to match Cabinet Vision; glass doors).
+  { id: 'tool_set_steps', level: 'advanced', topic: 'production', title: 'Tool sets: shaker and glass doors',
+    blurb: 'Build a tool set step by step like Cabinet Vision: own depth per step, square out corners, tool centre on the line, glass rebate band, cut right through.',
+    keywords: 'tool set step shaker glass door rebate square off out corner clean up centre line v chamfer vj depth through cut ring band cabinet vision cnc', steps: [
+    { id: 'shaker', title: 'Settings → CNC Tool Sets → Shaker Door',
+      body: 'Open Settings, CNC Tool Sets and pick Shaker Door. It runs like the Cabinet Vision shaker: 1 the 40mm bit clears the panel (spiral out), 2 the 6mm runs one lap on the line, 3 square_off with the 2mm squares out just the four corners (0.4 deeper), 4 the V bit chamfers 1mm with its centre on the line. Click ▸ on a step to see its settings. Each step’s own Depth wins over the door profile’s depth.',
+      done: (c, s) => ev(c, 'tool_sets_view') > ev(s, 'tool_sets_view') },
+    { id: 'options', title: 'The step options',
+      body: 'Tool on the line: edge inside the line (normal) or centre on it (V chamfer, VJ). square_off cleans the corner radius the step before it left; type a Clean-up radius to set it yourself. Ring width on a pocket clears only that band in from the edge. Offsets inset the step (negative grows it outward). A depth over the board thickness cuts right through. Each tool uses its own feed and rpm from CNC Tool Setup, unless the step has a Feed or Spindle override.',
+      done: (c, s) => ev(c, 'tool_sets_view') > ev(s, 'tool_sets_view') },
+    { id: 'glass', title: 'Glass doors',
+      body: 'The Glass door profile (Settings → Doors) cuts everything from the back with the Glass Door tool set: a 15.9 × 6.35 rebate for 6mm glass, the rebate corners squared with the 6mm, then the opening cut right through. Glass-only sheets cut face down like any other sheet. If a sheet also has shaker or VJ doors (front face), the optimiser warns: nest them on separate sheets until the two-sided program is built.',
+      done: (c, s) => ev(c, 'tool_sets_view') > ev(s, 'tool_sets_view') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

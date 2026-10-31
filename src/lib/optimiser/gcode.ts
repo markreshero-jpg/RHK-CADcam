@@ -186,8 +186,13 @@ export interface SheetDrill {
   throughAdj?: number | null
   // When set, this hole can't be drilled (no matching bit) and is routed as a
   // circular pocket with the given router bit (helical ram-in).
-  pocket?: { toolNumber: number; toolDiameter: number }
+  pocket?: { toolNumber: number; toolDiameter: number } & ToolCutData
 }
+
+// A router bit's own cutting data (cnc_tools feed / plunge / spindle). Absent or
+// null → the machine profile / material routing tool values. `partKey` (the
+// placement) keeps each part's tool-set steps in their order across tool groups.
+export interface ToolCutData { feed?: number | null; plunge?: number | null; rpm?: number | null; partKey?: string }
 
 // An internal routing feature projected into sheet space (bottom-left origin),
 // carrying its own resolved router bit. `groove` = a straight slot along a line;
@@ -195,14 +200,21 @@ export interface SheetDrill {
 // cleared (clear=true → pocket). Emitted BEFORE the part perimeter so the part is
 // still fully held. Face/flip is deliberately ignored for now — every route runs
 // on the back / material-up pass (Phase B §3c without the two-sided flip).
+// A depth ≥ the panel thickness is a THROUGH cut (+ the profile's |through_cut_z|).
 export type SheetRoute =
-  | { kind: 'groove'; label: string; x1: number; y1: number; x2: number; y2: number
-      width: number; depth: number; toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null }
-  | { kind: 'area'; label: string; x: number; y: number; w: number; h: number
+  | ({ kind: 'groove'; label: string; x1: number; y1: number; x2: number; y2: number
+      width: number; depth: number; toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null } & ToolCutData)
+  | ({ kind: 'area'; label: string; x: number; y: number; w: number; h: number
       depth: number; clear: boolean
       // Clear strategy (clear=true): 'raster' | 'spiral_in' | 'spiral_out' (null → raster).
       fillStrategy: string | null; rasterAngleDeg: number; stepoverPct: number
-      toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null }
+      toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null
+      // Tool-set step options (z_cnc_tools T2):
+      onLine?: boolean            // outline with the tool CENTRE on the rectangle (else its edge, inside)
+      ringWidth?: number | null   // clear only this wide a band in from the edge (glass rebate)
+      // Square out the 4 corners only: `cleanupR` = the corner radius the previous
+      // step's tool left (its radius); this tool takes it down to its own radius.
+      corners?: { cleanupR: number } | null } & ToolCutData)
 
 export interface GcodeInput {
   sheet: NestedSheet
@@ -513,6 +525,7 @@ export function generateSheetGcode(input: GcodeInput): string {
     toolNumber: number,
     toolDiameter: number | null | undefined,
     body: (e: (s: string) => void, cc: (s: string) => void) => void,
+    rpm?: number | null,   // the tool's own spindle speed (else the profile/material tool's)
   ) => {
     const buf: string[] = []
     const e = (s: string) => { buf.push(s) }
@@ -553,7 +566,7 @@ export function generateSheetGcode(input: GcodeInput): string {
 
     if (headAt) emit(`G0 ${rOff}X${headAt.x} Y${headAt.y}`)
     emit(p.tool_change_code.replace('{n}', String(toolNumber)))
-    const spindle = `${p.spindle_on_code} S${fInt(p.base_spindle_speed)}`
+    const spindle = `${p.spindle_on_code} S${fInt(rpm != null && rpm > 0 ? rpm : p.base_spindle_speed)}`
     if (leadIn) emit(`G0 ${rOff}X${leadIn.x} Y${leadIn.y} ${spindle}`)
     else {
       if (rOff) emit(p.router_work_offset)
@@ -726,6 +739,7 @@ type RouterSection = (
   toolNumber: number,
   toolDiameter: number | null | undefined,
   body: (emit: (s: string) => void, c: (s: string) => void) => void,
+  rpm?: number | null,
 ) => void
 
 // Boustrophedon stripe ordering (spec §5.8.2 default). Other strategies fall
@@ -776,8 +790,6 @@ function emitCircularPockets(
   holes: SheetDrill[], p: PostProfile,
   mapX: (x: number) => number, mapY: (y: number) => number, safeZ: number, stepDown: number,
 ) {
-  const helicalFeed = f(Math.round(p.base_feed_rate * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
-  const cutFeed = f(p.base_feed_rate)
   const clearZ = p.clearance_z
 
   // Group by router tool so one tool change covers all its pockets.
@@ -785,6 +797,10 @@ function emitCircularPockets(
   for (const h of holes) { const t = h.pocket!.toolNumber; (byTool.get(t) ?? byTool.set(t, []).get(t)!).push(h) }
 
   for (const [toolN, hs] of byTool) {
+    // The pocket bit's own feed (cnc_tools), else the profile/material tool's.
+    const base = hs[0].pocket!.feed != null && hs[0].pocket!.feed > 0 ? hs[0].pocket!.feed : p.base_feed_rate
+    const helicalFeed = f(Math.round(base * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
+    const cutFeed = f(base)
     section(toolN, hs[0].pocket!.toolDiameter, (emit, c) => {
     c(`Pocket-route ${hs.length} holes - no drill match`)
 
@@ -824,7 +840,7 @@ function emitCircularPockets(
       }
       emit(`G0 Z${fz(safeZ)}`)
     }
-    })
+    }, hs[0].pocket!.rpm)
   }
 }
 
@@ -848,16 +864,28 @@ function emitRoutes(
   // section fills in before running. Assigned synchronously inside section().
   let emit: (s: string) => void = () => {}
   let c: (s: string) => void = () => {}
-  const cutFeed = f(p.base_feed_rate)
-  const plungeFeed = f(p.plunge_feed_rate > 0 ? p.plunge_feed_rate : p.base_feed_rate)
-  const helicalFeed = f(Math.round(p.base_feed_rate * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
+  // Feeds are per TOOL: each section sets them from its bit's own cnc_tools data
+  // (falling back to the profile / material routing tool) before its body runs.
+  let cutFeed = f(p.base_feed_rate)
+  let plungeFeed = f(p.plunge_feed_rate > 0 ? p.plunge_feed_rate : p.base_feed_rate)
+  let helicalFeed = f(Math.round(p.base_feed_rate * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
+  let rampFeed = f(Math.round(p.base_feed_rate * (p.ramp_in_feed_pct > 0 ? p.ramp_in_feed_pct : 50) / 100))
+  const setFeeds = (r: ToolCutData) => {
+    const base = r.feed != null && r.feed > 0 ? r.feed : p.base_feed_rate
+    const plunge = r.plunge != null && r.plunge > 0 ? r.plunge : (r.feed != null && r.feed > 0 ? base : (p.plunge_feed_rate > 0 ? p.plunge_feed_rate : base))
+    cutFeed = f(base)
+    plungeFeed = f(plunge)
+    helicalFeed = f(Math.round(base * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
+    rampFeed = f(Math.round(base * (p.ramp_in_feed_pct > 0 ? p.ramp_in_feed_pct : 50) / 100))
+  }
+  // One axis mirrored by the datum map reverses arc direction (G2 ↔ G3).
+  const flipArcs = Math.sign(mapX(1) - mapX(0)) * Math.sign(mapY(1) - mapY(0)) < 0
   const clearZ = p.clearance_z
   // Walk a tool-centre polyline at a fixed depth (first point is where the tool
   // already sits after entry). Coords are datum-mapped here.
   const runPath = (pts: Pt2[], z: number, from = 1) => {
     for (let i = from; i < pts.length; i++) emit(`G1 X${f(mapX(pts[i].x))} Y${f(mapY(pts[i].y))} Z${fz(z)} F${cutFeed}`)
   }
-  const rampFeed = f(Math.round(p.base_feed_rate * (p.ramp_in_feed_pct > 0 ? p.ramp_in_feed_pct : 50) / 100))
   // Enter a pocket AT ITS CENTRE down to zTarget, per the machine profile's POCKET
   // entry strategy (cnc_machine_profiles.pocket_entry_strategy + helical_/ramp_ params;
   // separate from the perimeter's entry_strategy so a helical pocket entry doesn't
@@ -895,16 +923,36 @@ function emitRoutes(
     return { x: cx, y: cy }
   }
 
-  const byTool = new Map<number, SheetRoute[]>()
-  for (const r of routes) (byTool.get(r.toolNumber) ?? byTool.set(r.toolNumber, []).get(r.toolNumber)!).push(r)
+  // Tool groups, in an order that keeps every PART's steps in sequence (a shaker's
+  // 6mm clean-up can never run before its 40mm pocket because another part used
+  // the 6mm first). Greedy: take the earliest route still at the head of a part's
+  // queue, then every queue head with that same tool. Routes without a partKey
+  // each queue alone, which reduces to plain group-by-tool in first-seen order.
+  const order = new Map(routes.map((r, i) => [r, i]))
+  const queueMap = new Map<string, SheetRoute[]>()
+  routes.forEach((r, i) => { const k = r.partKey ?? `#${i}`; (queueMap.get(k) ?? queueMap.set(k, []).get(k)!).push(r) })
+  const queues = [...queueMap.values()]
+  const groups: [number, SheetRoute[]][] = []
+  while (queues.some(q => q.length)) {
+    let head: SheetRoute | null = null
+    for (const q of queues) if (q.length && (!head || order.get(q[0])! < order.get(head)!)) head = q[0]
+    const tool = head!.toolNumber
+    const rs: SheetRoute[] = []
+    for (const q of queues) while (q.length && q[0].toolNumber === tool) rs.push(q.shift()!)
+    rs.sort((a, b) => order.get(a)! - order.get(b)!)
+    groups.push([tool, rs])
+  }
 
-  for (const [toolN, rs] of byTool) {
+  for (const [toolN, rs] of groups) {
     section(toolN, rs[0].toolDiameter, (e, cc) => {
     emit = e; c = cc
+    setFeeds(rs[0])
     c(`Routing ${rs.length} internal features`)
 
     for (const r of rs) {
-      const depth = Math.min(r.depth, thickness)   // never past the panel back
+      // Never past the panel back — unless asked for the full thickness, which is a
+      // THROUGH cut (glass door opening): break through by the profile's overshoot.
+      const depth = r.depth >= thickness - 0.01 ? thickness + Math.abs(p.through_cut_z) : Math.min(r.depth, thickness)
       const step = r.maxDepthPerPass && r.maxDepthPerPass > 0 ? r.maxDepthPerPass : p.rough_pass_z_step
       const passes = Math.max(1, Math.ceil(depth / Math.max(0.5, step)))
       const toolR = r.toolDiameter / 2
@@ -934,9 +982,65 @@ function emitRoutes(
       }
 
       // Area op — tool-centre path stays inside the nominal rectangle (inset by the
-      // tool radius). Clear = pocket (raster / spiral by fillStrategy); else outline.
-      const x0 = r.x + toolR, y0 = r.y + toolR, x1 = r.x + r.w - toolR, y1 = r.y + r.h - toolR
+      // tool radius), or ON it for a centre-line step. Clear = pocket (raster /
+      // spiral by fillStrategy, or a ring band); else outline; corners = square out.
+      const ins = r.onLine ? 0 : toolR
+      const x0 = r.x + ins, y0 = r.y + ins, x1 = r.x + r.w - ins, y1 = r.y + r.h - ins
       if (!(x1 > x0) || !(y1 > y0)) { c('WARN: route feature smaller than its tool - skipped'); continue }
+
+      if (r.corners) {
+        // Square out the corners only (CV "corner clean-up"): the previous tool left
+        // radius R; this tool (radius t) runs wall → corner → wall and arcs back
+        // round R's fillet, leaving radius t. Nothing to do when R ≤ t.
+        const R = r.corners.cleanupR, s = R - toolR
+        if (!(s > 0.01)) { c(R > 0 ? `WARN: corner clean-up needs a smaller tool than the R${f(R)} it cleans - skipped` : 'WARN: corner clean-up has no previous step to clean after - skipped'); continue }
+        const corners = [
+          { cx: x1, cy: y0, px: r.x + r.w - R, py: r.y + R },   // bottom-right
+          { cx: x1, cy: y1, px: r.x + r.w - R, py: r.y + r.h - R },  // top-right
+          { cx: x0, cy: y1, px: r.x + R, py: r.y + r.h - R },   // top-left
+          { cx: x0, cy: y0, px: r.x + R, py: r.y + R },         // bottom-left
+        ]
+        for (const k of corners) {
+          const p1 = { x: k.px, y: k.cy }, p2 = { x: k.cx, y: k.py }   // tangent points on the two wall lines
+          // Arc p2 → p1 about the old fillet centre; cw when the turn is negative.
+          const cross = (p2.x - k.px) * (p1.y - k.py) - (p2.y - k.py) * (p1.x - k.px)
+          const g = (cross < 0) !== flipArcs ? 'G2' : 'G3'
+          for (let i = 1; i <= passes; i++) {
+            const z = -Math.min(depth, i * step)
+            emit(`G0 X${f(mapX(p1.x))} Y${f(mapY(p1.y))} Z${fz(safeZ)}`)
+            emit(`G1 Z${fz(z)} F${plungeFeed}`)
+            emit(`G1 X${f(mapX(k.cx))} Y${f(mapY(k.cy))} F${cutFeed}`)
+            emit(`G1 X${f(mapX(p2.x))} Y${f(mapY(p2.y))}`)
+            emit(`${g} X${f(mapX(p1.x))} Y${f(mapY(p1.y))} I${f(mapX(k.px) - mapX(p2.x))} J${f(mapY(k.py) - mapY(p2.y))}`)
+          }
+          emit(`G0 Z${fz(safeZ)}`)
+        }
+        continue
+      }
+
+      if (r.clear && r.ringWidth != null && r.ringWidth > 0) {
+        // Ring band (glass rebate): concentric laps from the inside of the band out
+        // to the wall, so the last lap finishes the wall. The middle is left alone.
+        const stepoverR = Math.max(0.5, r.toolDiameter * (r.stepoverPct > 0 ? r.stepoverPct : 70) / 100)
+        const inner = Math.max(toolR, r.ringWidth - toolR)        // deepest tool-centre inset
+        const insets: number[] = []
+        for (let d = inner; d > toolR + 1e-6; d -= stepoverR) insets.push(d)
+        insets.push(toolR)
+        const laps = insets.map(d => outlinePath(r.x + d, r.y + d, r.x + r.w - d, r.y + r.h - d)).filter(l => l.length >= 2)
+        if (!laps.length) { c('WARN: rebate band smaller than its tool - skipped'); continue }
+        for (let i = 1; i <= passes; i++) {
+          const z = -Math.min(depth, i * step)
+          laps.forEach((lap, li) => {
+            if (li === 0) {
+              emit(`G0 X${f(mapX(lap[0].x))} Y${f(mapY(lap[0].y))} Z${fz(safeZ)}`)
+              emit(`G1 Z${fz(z)} F${plungeFeed}`)
+            } else emit(`G1 X${f(mapX(lap[0].x))} Y${f(mapY(lap[0].y))} Z${fz(z)} F${cutFeed}`)
+            runPath(lap, z, 1)
+          })
+          emit(`G0 Z${fz(safeZ)}`)
+        }
+        continue
+      }
       const stepover = Math.max(0.5, r.toolDiameter * (r.stepoverPct > 0 ? r.stepoverPct : 70) / 100)
       const pts = r.clear ? clearPath(r.fillStrategy, x0, y0, x1, y1, stepover, r.rasterAngleDeg) : outlinePath(x0, y0, x1, y1)
       if (pts.length < 2) continue
@@ -958,7 +1062,7 @@ function emitRoutes(
         emit(`G0 Z${fz(safeZ)}`)
       }
     }
-    })
+    }, rs[0].rpm)
   }
 }
 
