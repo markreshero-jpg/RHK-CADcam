@@ -1,19 +1,89 @@
 {
-  "_source": "G:/My Drive/1. Properties/2. 23 Arkana Drive/3. Plans/Cabinet Vision Drawings/House Plan - BBQ outdoor area.pdf (Elev 3 + Plan, 31/10/26). Mark 2026-10-31: 20 stone + 100 mitred apron top (900), 650 OA (630 carcass + 18 + 2), Stylelex 18 fronts, 16mm CPP White carcass. Rev 4 (Mark 2026-10-31): whole kitchen 1000 off Wall 1; 100 waterfall ends both ends (legs 1000-1100 and 5246-5346); L->R sink cupboard, bin, 600 bar fridge opening between BEPFs, cupboard, cupboard; 100 stone panels left out for now. Wall 2 raked top 0:2614, 5225:3900 set after drawing.",
+  "_source": "G:/My Drive/1. Properties/2. 23 Arkana Drive/3. Plans/Cabinet Vision Drawings/House Plan - BBQ outdoor area.pdf (Elev 3 + Plan, 31/10/26). Mark 2026-10-31: 20 stone + 100 mitred apron top (900), 650 OA (630 carcass + 18 + 2), Stylelex 18 fronts, 16mm CPP White carcass. Rev 4 (Mark 2026-10-31): whole kitchen 1000 off Wall 1; 100 waterfall ends both ends (legs 1000-1100 and 5246-5346); L->R sink cupboard, bin, 600 bar fridge opening between BEPFs, cupboard, cupboard; 100 stone panels left out for now. Wall 2 raked top 0:2614, 5225:3900 set after drawing. Rev 5 (Mark 2026-10-31): right waterfall outside face 1605 from the Wall 2 end (4225); sink cupboard 600 single door; run slid left; BC-05 / BC-06 669 / 670.",
   "projectName": "RHK9999 Mark Henshall - BBQ Cabinet",
   "roomName": "Outdoor BBQ Area",
   "roomHeight": 2614,
-  "roomRules": { "TOEH": 140, "BY_CLASS": { "base": { "REVT": 100 } } },
+  "roomRules": {
+    "TOEH": 140,
+    "BY_CLASS": {
+      "base": {
+        "REVT": 100
+      }
+    }
+  },
   "walls": [
-    { "x": 0, "y": 1315, "length": 1315, "angle": 270, "_": "Wall 1 = plan wall 2, left return, drawn north" },
-    { "x": 0, "y": 0, "length": 5830, "angle": 0, "_": "Wall 2 = plan wall 3 (Elev 3), drawn east" }
+    {
+      "x": 0,
+      "y": 1315,
+      "length": 1315,
+      "angle": 270,
+      "_": "Wall 1 = plan wall 2, left return, drawn north"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 5830,
+      "angle": 0,
+      "_": "Wall 2 = plan wall 3 (Elev 3), drawn east"
+    }
   ],
   "cabinets": [
-    { "def": "B2D",  "wall": 2, "offset": 1100, "dx": 900,  "dy": 880, "dz": 630, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink cupboard, single bowl U/M sink. 100 waterfall on the left." },
-    { "def": "BBIN", "wall": 2, "offset": 2000, "dx": 450,  "dy": 880, "dz": 630, "note": "Pull-out bin" },
-    { "def": "BEPF", "wall": 2, "offset": 2450, "dx": 18,   "dy": 880, "dz": 630, "note": "Bar fridge panel (left)" },
-    { "def": "BEPF", "wall": 2, "offset": 3068, "dx": 18,   "dy": 880, "dz": 630, "note": "Bar fridge panel (right). Glass door bar fridge opening 600 between the panels." },
-    { "def": "B2D",  "wall": 2, "offset": 3086, "dx": 1080, "dy": 880, "dz": 630, "note": "Door pair" },
-    { "def": "B2D",  "wall": 2, "offset": 4166, "dx": 1080, "dy": 880, "dz": 630, "note": "Door pair. 100 waterfall on the right." }
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 1100,
+      "dx": 600,
+      "dy": 880,
+      "dz": 630,
+      "rules": {
+        "RAIL_ORIENT": "vertical"
+      },
+      "note": "Sink cupboard, single door, single bowl U/M sink. 100 waterfall on the left."
+    },
+    {
+      "def": "BBIN",
+      "wall": 2,
+      "offset": 1700,
+      "dx": 450,
+      "dy": 880,
+      "dz": 630,
+      "note": "Pull-out bin"
+    },
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 2150,
+      "dx": 18,
+      "dy": 880,
+      "dz": 630,
+      "note": "Bar fridge panel (left)"
+    },
+    {
+      "def": "BEPF",
+      "wall": 2,
+      "offset": 2768,
+      "dx": 18,
+      "dy": 880,
+      "dz": 630,
+      "note": "Bar fridge panel (right). Glass door bar fridge opening 600 between the panels."
+    },
+    {
+      "def": "B2D",
+      "wall": 2,
+      "offset": 2786,
+      "dx": 669,
+      "dy": 880,
+      "dz": 630,
+      "note": "Door pair"
+    },
+    {
+      "def": "B2D",
+      "wall": 2,
+      "offset": 3455,
+      "dx": 670,
+      "dy": 880,
+      "dz": 630,
+      "note": "Door pair. 100 waterfall on the right (outside face 4225 = 1605 from the wall end)."
+    }
   ]
 }

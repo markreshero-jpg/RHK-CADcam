@@ -36,10 +36,16 @@ Source: `G:\My Drive\1. Properties\2. 23 Arkana Drive\3. Plans\Cabinet Vision Dr
 - Wall 2 raked top: 2614 at the left rising to 3900 at 5225 (605 in from the right end), flat to the end
   (`walls.top_profile`, new feature 08a7ee9). Wall 2 height 3900. The screen on top is not drawn.
 
-## Rev 4 (Mark 2026-10-31) — current
+## Rev 4 (Mark 2026-10-31)
 - Whole kitchen 1000 off Wall 1. 100 waterfall ends both ends (WF mitred, built up with the MA100 apron:
   face piece + return), legs 1000–1100 and 5246–5346. Top 4346 x 670.
 - L→R: BC-01 B2D 900 sink (Seba 550 U/M, rails on edge) | BC-02 BBIN 450 | BC-03 BEPF | 600 bar fridge | BC-04 BEPF |
   BC-05 B2D 1080 | BC-06 B2D 1080. KICK 1 under BC-01/02, KICK 2 under BC-05/06.
 - 100 stone panels, 50 filler and the 180 cupboard left out for now (Mark). Wall 2 rake re-set after the redraw.
 - Post-steps: `_tmp-9999-post.mjs <roomId>` then `_tmp-9999-join.mjs <roomId>` (rename the 2nd KICK 1 → KICK 2).
+
+## Rev 5 (Mark 2026-10-31) — current
+- Right waterfall outside face 1605 from the Wall 2 end (4225); top 3225 x 670.
+- BC-01 600 single-door sink cupboard (Seba 550 U/M, 567 inside the carcass), run slid left 300:
+  BC-02 BBIN 1700 | BC-03 BEPF 2150 | bar fridge 2168–2768 | BC-04 BEPF 2768 | BC-05 B2D 669 @2786 | BC-06 B2D 670 @3455 (to 4125).
+- Changed in place (room id unchanged). KICK 1 1050, KICK 2 1339.
