@@ -342,6 +342,14 @@ Esc cancels; one undo step.
     hangs 46.5 below), raised cut-out 358 × 500 kept, scale 1000, no rotation. The one placed copy
     (RHK6586 Kitchenette) got the model + sizes too, since it was only a placeholder. Served from
     `/fixture-models/Miele_CS7612FL_Induction_CombiSet.glb`, shapes traced headless. Not checked in-app.
+  - 2026-10-31 (user): **Big Green Egg Large** (built-in package) + **Weber Q QX2800N+** Smart LPG
+    dropped in the import folder (for RHK9999 BBQ), filed to new `BBQ/`. New group **BBQs**
+    (appliance, icon ChefHat, sort 75), kind BBQ, **benchtop**, no benchtop cut, bench_drop 0,
+    scale 1000, no rotation; sizes from the bbox. Colours set in the GLB materials (GLB ignores the
+    row colour): Egg body BGE green #1F5A32 (glossy glaze, steel bands kept); Weber Midnight Black
+    (lid/cookbox #141414, frames #1E1E20, side tables #1A1A1A, knobs #2A2A2A; grate kept).
+    Egg 506 × 590.5 × 826 (incl. rear hinge); Weber 1260 (both side tables) × 520 × 420, lid
+    closed. Egg built-in drop left at 0 — set per install. Shapes traced headless. Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
