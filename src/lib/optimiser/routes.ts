@@ -59,7 +59,7 @@ export interface ToolSetMember {
 const CLEAR_MEMBER_TYPES = new Set(['pocket', 'raster'])
 
 // Expand one tool-set member over a parent route op's placement. The parent supplies
-// WHERE (position + area); the member supplies HOW (its verb, depth, strategy) and may
+// WHERE (position + area); the member supplies HOW (its verb, strategy, a depth if the op has none) and may
 // inset the area via its own offsets (e.g. a finish pass leaving stock). Returns null
 // for members that aren't routing features (drills are handled by the drill path).
 export function expandToolSetMember(parent: RouteGeom, m: ToolSetMember): RouteGeom | null {
@@ -90,7 +90,9 @@ export function expandToolSetMember(parent: RouteGeom, m: ToolSetMember): RouteG
     pos_x, pos_y, size_dx, size_dy,
     offset_left_mm, offset_right_mm, offset_top_mm, offset_bottom_mm,
     width: isGroove ? (m.width_mm ?? parent.width) : parent.width,
-    depth: m.depth_mm ?? parent.depth ?? parent.size_dz,
+    // The operation's own depth wins (a door profile says 8, the set's step says 5 → 8);
+    // a step's depth only fills in when the operation has none.
+    depth: parent.depth ?? parent.size_dz ?? m.depth_mm,
     size_dz: null,
     fill_strategy: fill,
     raster_angle_deg: m.raster_angle_deg ?? parent.raster_angle_deg,

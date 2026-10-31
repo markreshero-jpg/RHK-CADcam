@@ -441,7 +441,9 @@ export function collectDoorProfileRoutes(rp: ResolvedCabinet, cabinetId: string)
         return
       }
       // Outline / pocket rectangle: per-edge offsets override the common one.
-      const pocket = op.operation_type === 'pocket'
+      // pocket / raster clear the area; route / outline / profile / square_off / a
+      // single groove run a path on the line.
+      const pocket = op.operation_type === 'pocket' || op.operation_type === 'raster'
       const half = pocket ? 0 : (op.width_mm ?? 0) / 2
       const l = (op.offset_left_mm ?? off) - half, r = (op.offset_right_mm ?? off) - half
       const b = (op.offset_bottom_mm ?? off) - half, t = (op.offset_top_mm ?? off) - half

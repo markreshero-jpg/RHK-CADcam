@@ -1154,8 +1154,11 @@ export interface FaceGridInput {
 // Raw door_profile_operations rows: fixed numeric columns + the expressions
 // jsonb (formula override per field, joints pattern). resolveFace evaluates
 // these against the resolved panel dimensions.
+// door_profile_operations.operation_type (DB CHECK). pocket / raster clear an area;
+// route / outline / profile / square_off / groove cut a path; drill is not machined yet.
+export type ProfileOpType = 'route' | 'drill' | 'pocket' | 'outline' | 'square_off' | 'profile' | 'groove' | 'raster'
 export interface RawProfileOp {
-  operation_type:      'route' | 'drill' | 'pocket'
+  operation_type:      ProfileOpType
   depth_mm:            number | null
   width_mm:            number | null
   offset_from_edge_mm: number | null
@@ -1648,7 +1651,7 @@ export interface ResolvedFaceCol {
 // to face_zones.door_profile (jsonb) so every renderer can draw it without
 // re-querying the door library.
 export interface ResolvedProfileOp {
-  operation_type:      'route' | 'drill' | 'pocket'
+  operation_type:      ProfileOpType
   depth_mm:            number | null
   width_mm:            number | null
   offset_from_edge_mm: number | null

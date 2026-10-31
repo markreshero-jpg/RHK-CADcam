@@ -85,9 +85,10 @@ interface ProfileOp {
   offset_left_mm: number | null; offset_right_mm: number | null
   fill_strategy: string | null; raster_angle_deg: number | null; raster_stepover_pct: number | null
 }
-interface CncToolItem { id: string; name: string; tool_number: string | null }
+interface CncToolItem { id: string; name: string; tool_number: string | null; diameter: number | null }
 interface CncDrillItem { id: string; name: string; diameter: number | null }
 interface ToolSetItem { id: string; name: string }
+interface ToolSetStep { tool_set_id: string; sort_order: number; operation_type: string; tool_id: string | null; depth_mm: number | null }
 interface Style {
   id: string; name: string; door_catalogue_id: string
   door_material_schedule_id: string | null; default_material_id: string | null
@@ -136,12 +137,13 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   const [cncTools, setCncTools]     = useState<CncToolItem[]>([])
   const [cncDrills, setCncDrills]   = useState<CncDrillItem[]>([])
   const [toolSets, setToolSets]     = useState<ToolSetItem[]>([])
+  const [toolSetSteps, setToolSetSteps] = useState<ToolSetStep[]>([])
 
   // ── Load everything (small tables) ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [catR, schR, smR, prR, opR, stR, matR, ebR, toolR, drillR, tsR] = await Promise.all([
+      const [catR, schR, smR, prR, opR, stR, matR, ebR, toolR, drillR, tsR, tssR] = await Promise.all([
         supabase.from('door_catalogue').select('*').order('sort_order').order('name'),
         supabase.from('door_material_schedules').select('*').order('sort_order').order('name'),
         supabase.from('door_schedule_materials').select('*').order('sort_order').order('colour_name'),
@@ -150,9 +152,10 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
         supabase.from('door_styles').select('*').order('sort_order').order('name'),
         supabase.from('materials').select('id,name,dz,face_colour').eq('active', true).order('name'),
         supabase.from('edge_banding').select('id,name,thickness,color').eq('active', true).order('name'),
-        supabase.from('cnc_tools').select('id,name,tool_number').eq('active', true).order('tool_number', { nullsFirst: false }),
+        supabase.from('cnc_tools').select('id,name,tool_number,diameter').eq('active', true).order('tool_number', { nullsFirst: false }),
         supabase.from('cnc_drills').select('id,name,diameter').eq('is_active', true).order('diameter'),
         supabase.from('cnc_tool_sets').select('id,name').eq('is_active', true).order('sort_order').order('name'),
+        supabase.from('cnc_tool_set_operations').select('tool_set_id,sort_order,operation_type,tool_id,depth_mm').order('sort_order'),
       ])
       if (cancelled) return
       setCatalogue((catR.data ?? []) as Catalogue[])
@@ -166,6 +169,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
       setCncTools((toolR.data ?? []) as CncToolItem[])
       setCncDrills((drillR.data ?? []) as CncDrillItem[])
       setToolSets((tsR.data ?? []) as ToolSetItem[])
+      setToolSetSteps((tssR.data ?? []) as ToolSetStep[])
       setLoading(false)
     }
     load()
@@ -531,11 +535,11 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
                       <span className="text-[10px] text-ink-subtle">#{i + 1}</span>
                       <button onClick={() => delOp(o.id)} className="text-ink-subtle hover:text-red-400 text-base leading-none">×</button>
                     </div>
-                    <div className="grid grid-cols-4 gap-2">
+                    {/* The cutter's diameter comes from the chosen tool (no separate ⌀ box). */}
+                    <div className="grid grid-cols-3 gap-2">
                       <OpSelect label="Type"   value={o.operation_type} opts={OP_TYPES as readonly string[]} onChange={v => patchOp(o.id, { operation_type: v })} />
                       <OpSelect label="Face"   value={o.face}           opts={FACES as readonly string[]}    onChange={v => patchOp(o.id, { face: v })} />
                       <OpSelect label="Repeat" value={o.repeat_axis ?? 'none'} opts={REPEAT_AXES as readonly string[]} onChange={v => patchOp(o.id, { repeat_axis: v })} />
-                      <OpNumPlain label="Tool ⌀" value={o.tool_diameter_mm} onChange={v => patchOp(o.id, { tool_diameter_mm: v })} />
                     </div>
                     <div className="grid grid-cols-4 gap-2">
                       <OpNumFx op={o} label="Depth"  field="depth_mm"            value={o.depth_mm}            onValue={v => patchOp(o.id, { depth_mm: v })}            onFx={patchFormula} />
@@ -573,6 +577,22 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
                         </div>
                       )}
                     </div>
+                    {/* What the tool set will actually run on this operation. The operation's
+                        depth wins; a step's own depth only fills in when the operation has none. */}
+                    {o.tool_set_id && (
+                      <div className="text-[10px] text-ink-muted space-y-0.5">
+                        {toolSetSteps.filter(s => s.tool_set_id === o.tool_set_id).map((s, k) => {
+                          const t = s.tool_id ? cncTools.find(c => c.id === s.tool_id) : undefined
+                          const depth = o.depth_mm ?? s.depth_mm
+                          return (
+                            <div key={k} className={t ? '' : 'text-amber-400'}>
+                              {k + 1}. {s.operation_type} — {t ? `${t.name}${t.tool_number ? ` (T${t.tool_number})` : ''}${t.diameter ? ` ⌀${t.diameter}` : ''}` : 'no tool — skipped'}
+                              {t && depth != null ? ` · ${depth} deep` : ''}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
 
                     {/* Per-side offsets for area ops. Blank fields fall back to the
                         single Edge offset above (square inset). */}
