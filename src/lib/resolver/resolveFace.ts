@@ -10,7 +10,7 @@ import {
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
 import { resolveReveal, resolveFaceZ } from './mergeRules'
-import { evaluateProfileOps } from '../doorProfile'
+import { evaluateProfileOps, mergeVjLayout } from '../doorProfile'
 import { fingerGap } from './resolveHandles'
 
 export interface FaceResolution {
@@ -263,6 +263,11 @@ export function resolveFace(
           w: zoneW, h: zoneH, thickness: ft,
           toolDiameter: door.ops[0]?.tool_diameter_mm ?? 0,
         }),
+      }
+      // VJ line layout: job → room → cabinet (cab.vj_layout) → this door.
+      if (door.profile_type === 'vj_lines') {
+        const vj = mergeVjLayout(cab.vj_layout, zone.vj)
+        if (vj) doorProfile.vj = vj
       }
     }
 

@@ -10,6 +10,8 @@ import CalcInput from '@/src/components/CalcInput'
 import ClassRulesTable, { CLASS_RULE_KEYS, readClassOverrides, writeClassOverrides, useBuilderRules, classOverrideCount, type ClassRuleKey } from './ClassRulesTable'
 import { RULE_CLASSES } from '@/src/lib/resolver/mergeRules'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import VjLayoutFields, { cleanVjLayout } from '@/src/components/VjLayoutFields'
+import type { VjLayout } from '@/src/lib/resolver/types'
 
 export type JobPropertiesTab = 'details' | 'cabinet_standards' | 'overrides'
 type CabinetStandardsTab = 'construction' | 'materials' | 'hardware' | 'doors'
@@ -161,6 +163,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [constructionScheds,   setConstructionScheds]   = useState<SchedItem[]>([])
   const [drawerBoxMethods,     setDrawerBoxMethods]     = useState<SchedItem[]>([])
   const [doorStyle,            setDoorStyle]            = useState(project.default_door_style_id ?? '')
+  const [vjLayout, setVjLayout] = useState<VjLayout | null>((project.vj_layout as VjLayout | null | undefined) ?? null)   // VJ line layout, job level
   // Per-class door style overrides (blank = inherit the job default style).
   const [baseDoorStyle,        setBaseDoorStyle]        = useState(project.base_door_style_id ?? '')
   const [wallDoorStyle,        setWallDoorStyle]        = useState(project.wall_door_style_id ?? '')
@@ -288,6 +291,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       drawer_box_method_id:         drawerBoxMethod       || null,
       inner_drawer_box_method_id:   innerDrawerBoxMethod  || null,
       default_door_style_id:        doorStyle             || null,
+      vj_layout:                    cleanVjLayout(vjLayout),
       base_door_style_id:           baseDoorStyle         || null,
       wall_door_style_id:           wallDoorStyle         || null,
       tall_door_style_id:           tallDoorStyle         || null,
@@ -759,7 +763,13 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
 
               {/* Doors */}
               {csTab === 'doors' && (
-                <DoorStandardsPanel mode="job" defaultStyle={doorStyle} setDefaultStyle={setDoorStyle} rows={doorClassRows} />
+                <>
+                  <DoorStandardsPanel mode="job" defaultStyle={doorStyle} setDefaultStyle={setDoorStyle} rows={doorClassRows} />
+                  <div className="mt-5 max-w-xl" data-tour="vj-layout-job">
+                    <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mb-2">VJ lines (job default)</p>
+                    <VjLayoutFields value={vjLayout} onChange={setVjLayout} />
+                  </div>
+                </>
               )}
             </div>
           )}

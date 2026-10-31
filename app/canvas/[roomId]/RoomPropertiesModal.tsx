@@ -9,6 +9,8 @@ import CalcInput from '@/src/components/CalcInput'
 import ClassRulesTable, { CLASS_RULE_KEYS, readClassOverrides, writeClassOverrides, useBuilderRules, classOverrideCount, type ClassRuleKey } from './ClassRulesTable'
 import { RULE_CLASSES, rulesForClass } from '@/src/lib/resolver/mergeRules'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import VjLayoutFields, { cleanVjLayout } from '@/src/components/VjLayoutFields'
+import type { VjLayout } from '@/src/lib/resolver/types'
 
 type DrawerBoxMethodItem = { id: string; name: string; is_default: boolean; kind?: 'external' | 'internal' | null }
 
@@ -148,6 +150,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
   const [drawerBoxMethods, setDrawerBoxMethods] = useState<DrawerBoxMethodItem[]>([])
   const [methodsLoading, setMethodsLoading] = useState(true)
   const [doorStyleOverride, setDoorStyleOverride] = useState(room.door_style_override_id ?? '')
+  const [vjLayout, setVjLayout] = useState<VjLayout | null>((room.vj_layout as VjLayout | null | undefined) ?? null)   // VJ line layout, room level
   // Handle holes (z_handles D13): '' = inherit the job, else 'on' / 'off'.
   // Stored as rule_overrides.HANDLE_DRILL (outside the construction rule keys).
   const [handleDrill, setHandleDrill] = useState<'' | 'on' | 'off'>(() => {
@@ -266,6 +269,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
       rule_overrides: newOverrides as Record<string, unknown>,
       inner_drawer_box_method_id: innerDrawerBoxMethod || null,
       door_style_override_id: doorStyleOverride || null,
+      vj_layout: cleanVjLayout(vjLayout),
       base_door_style_id:  baseDoorStyle  || null,
       wall_door_style_id:  wallDoorStyle  || null,
       tall_door_style_id:  tallDoorStyle  || null,
@@ -491,8 +495,14 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
           )}
 
           {tab === 'doors' && (
+            <>
             <DoorStandardsPanel mode="room" defaultStyle={doorStyleOverride} setDefaultStyle={setDoorStyleOverride}
               rows={doorClassRows} inherit={doorInherit} />
+              <div className="mt-5 max-w-xl" data-tour="vj-layout-room">
+                <p className="text-[10px] font-semibold text-ink-muted uppercase tracking-wider mb-2">VJ lines (room)</p>
+                <VjLayoutFields value={vjLayout} inherited={(project?.vj_layout as VjLayout | null | undefined) ?? null} onChange={setVjLayout} />
+              </div>
+            </>
           )}
 
           {tab === 'overrides' && (

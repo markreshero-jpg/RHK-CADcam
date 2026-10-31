@@ -10,6 +10,8 @@ import {
 } from './types'
 import { mergeRules, rulesForClass } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
+import { mergeVjLayout } from '../doorProfile'
+import type { VjLayout } from './types'
 import { normaliseBulkhead } from '../bulkhead'
 import { normaliseSplit } from '../cabinetSplit'
 import { normaliseFloatShelf } from '../floatShelf'
@@ -203,7 +205,7 @@ interface RoomCascadeConfig {
 function loadRoomCascadeConfig(roomId: string): Promise<RoomCascadeConfig> {
   return cachedCascade(`cfg:${roomId}`, async () => {
     const [roomRes, shopAsmRes, shopTkRes, shopFrontRes, shopSettingsRes, shopSlideRes, shopDbSchedRes] = await Promise.all([
-      supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, hinge_schedule_id, rule_overrides').eq('id', roomId).single(),
+      supabase.from('rooms').select('project_id, assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, slide_schedule_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, inner_drawer_box_method_id, door_style_override_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, hinge_schedule_id, rule_overrides, vj_layout').eq('id', roomId).single(),
       supabase.from('assembly_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
       supabase.from('toekick_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
       supabase.from('front_schedules').select('id').eq('is_default', true).limit(1).maybeSingle(),
@@ -220,7 +222,7 @@ function loadRoomCascadeConfig(roomId: string): Promise<RoomCascadeConfig> {
     if (projectId) {
       const { data } = await supabase
         .from('projects')
-        .select('assembly_schedule_id, base_assembly_schedule_id, wall_assembly_schedule_id, tall_assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, inner_drawer_box_method_id, hinge_schedule_id, rule_overrides')
+        .select('assembly_schedule_id, base_assembly_schedule_id, wall_assembly_schedule_id, tall_assembly_schedule_id, toekick_schedule_id, front_schedule_id, construction_schedule_id, drawer_box_method_id, drawerbox_schedule_id, inner_drawerbox_schedule_id, slide_schedule_id, default_door_style_id, base_door_style_id, wall_door_style_id, tall_door_style_id, base_door_colour_id, wall_door_colour_id, tall_door_colour_id, inner_drawer_box_method_id, hinge_schedule_id, rule_overrides, vj_layout')
         .eq('id', projectId)
         .single()
       projRow = data as Record<string, string | null> | null
@@ -964,6 +966,12 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     face_grid:     faceGridInput,
     faces:         facesInput,
     resolved_doors: resolvedDoors,
+    // VJ line layout job → room → cabinet (the door's own zone.vj is added in resolveFace).
+    vj_layout: mergeVjLayout(
+      (projRow as Record<string, unknown> | null)?.vj_layout as VjLayout | null | undefined,
+      (room as Record<string, unknown> | null)?.vj_layout as VjLayout | null | undefined,
+      (cab as Record<string, unknown>).vj_layout as VjLayout | null | undefined,
+    ),
     // Internal layout: recursive section tree stored as internal_grid = { tree }.
     // Anything without a tree (e.g. legacy flat grids) resolves to an empty interior.
     internal_tree: internalTree,

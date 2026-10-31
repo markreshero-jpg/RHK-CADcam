@@ -486,3 +486,37 @@ GAPC between doors side by side; GAPR between rows; FPGAP at a finger-pull grip 
   (cabinet drawn earlier) an amber line offers **Apply** for that cabinet (one undo step).
 - FaceGridEditor's preview uses the same merged rules + neighbours as resolveFace (finger
   gaps not shown); its kick follows has_toekick / FLOAT / TOEH like the resolver.
+
+## 13. VJ LINE LAYOUT CASCADE (built 2026-11-01, in-app check pending)
+
+Mark: VJ lines are spread differently job to job / door to door, so the layout is
+editable at every level. Continuity across a pair of doors is NOT built — use grain match.
+
+**Fields** (`VjLayout`, `src/lib/resolver/types.ts`): `qty`, `spacing`, `edge_gap`,
+`direction` ('vertical' | 'horizontal'). All optional; blank = inherit.
+
+**Storage** — migration `z_doorFace_module/migration_vj_layout.sql` (applied as
+`vj_layout_cascade`): `projects.vj_layout`, `rooms.vj_layout`,
+`cabinet_instances.vj_layout` (jsonb). Door level = `face_grid` zone `vj` (JSONB, like
+the handle overrides — survives re-resolve).
+
+**Locked decisions**
+1. Cascade job → room → cabinet → door (`mergeVjLayout`, `src/lib/doorProfile.ts`).
+   `edge_gap` and `direction` inherit key by key; **qty + spacing inherit as a pair**
+   (the lowest level that sets either supplies both — a door with "qty 5" gets 5 equal
+   boards, not 5 lines at a spacing the job set).
+2. Layout rules (`vjLinePositions`), along the spread axis between the edge gaps:
+   - spacing only → as many full boards as fit; the leftover is split between the two
+     end boards (each 1–1.5 boards wide) → centred and stable as the size changes
+   - qty only → qty lines, equal boards
+   - qty + spacing → qty lines at that spacing, centred (lines past the edge gaps dropped)
+   - neither → the profile op's own spacing (direction / edge gap still apply)
+3. Only `vj_lines` profiles take the layout. Everything goes through `doorProfileCuts`,
+   so the CNC (collectDoorProfileRoutes), previews, 3D and elevations agree. The
+   cascade is resolved in loadCabinetInput (`cab.vj_layout` = job → room → cabinet) and
+   resolveFace (+ zone.vj) onto `door_profile.vj`.
+4. Blank everywhere = exactly the old behaviour (lines every op spacing from the edge).
+
+**UI**: Job Properties → Doors and Room Properties → Doors (VJ lines); cabinet sidebar
+(VJ lines, only on cabinets with a VJ front); Cabinet Edit → Face Grid → a VJ door →
+VJ lines (this front). Tutorial `vj_layout`.

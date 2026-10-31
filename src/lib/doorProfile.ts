@@ -17,7 +17,55 @@
 //   T  = panel thickness (mm)  TD = tool diameter (mm)
 // ============================================================
 
-import type { RawProfileOp, ResolvedProfileOp, ResolvedDoorProfile } from './resolver/types'
+import type { RawProfileOp, ResolvedProfileOp, ResolvedDoorProfile, VjLayout } from './resolver/types'
+
+// ── VJ line layout cascade ──────────────────────────────────────────────────
+// Levels from the top (job) down (door). direction and edge_gap inherit key by
+// key. qty + spacing inherit as a PAIR: the lowest level that sets either one
+// supplies both — so a door that says "qty 5" means 5 equal boards, not 5 lines
+// at a spacing the job happened to set.
+const pos = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null)
+const nonNeg = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : null)
+
+export function mergeVjLayout(...levels: (VjLayout | null | undefined)[]): VjLayout | null {
+  let qty: number | null = null, spacing: number | null = null
+  let edge_gap: number | null = null, direction: VjLayout['direction'] = null
+  for (const l of levels) {
+    if (!l) continue
+    const q = pos(l.qty), s = pos(l.spacing)
+    if (q != null || s != null) { qty = q != null ? Math.round(q) : null; spacing = s }
+    const g = nonNeg(l.edge_gap)
+    if (g != null) edge_gap = g
+    if (l.direction === 'vertical' || l.direction === 'horizontal') direction = l.direction
+  }
+  if (qty == null && spacing == null && edge_gap == null && direction == null) return null
+  return { qty, spacing, edge_gap, direction }
+}
+
+// Line positions along the spread axis (length L, edge gap g), or null when the
+// layout sets neither qty nor spacing (→ the op's own spacing).
+export function vjLinePositions(L: number, g: number, layout: VjLayout): number[] | null {
+  const qty = pos(layout.qty), sp = pos(layout.spacing)
+  if (qty == null && sp == null) return null
+  const span = L - 2 * g
+  if (!(span > EPS)) return []
+  const inside = (x: number) => x > g + EPS && x < L - g - EPS
+  if (qty != null && sp != null) {
+    const n = Math.round(qty), start = L / 2 - ((n - 1) * sp) / 2
+    return Array.from({ length: n }, (_, i) => start + i * sp).filter(inside)
+  }
+  if (qty != null) {
+    const n = Math.round(qty), b = span / (n + 1)
+    return Array.from({ length: n }, (_, i) => g + (i + 1) * b)
+  }
+  // Spacing only: as many full boards as fit; the leftover is split between the
+  // two end boards (each between 1 and 1.5 boards wide) → centred, and stable as
+  // the door size changes.
+  const boards = Math.floor(span / sp! + EPS)
+  const n = Math.max(0, boards - 1)
+  const start = L / 2 - ((n - 1) * sp!) / 2
+  return Array.from({ length: n }, (_, i) => start + i * sp!).filter(inside)
+}
 
 export interface DoorPanelDims {
   w: number
@@ -97,6 +145,27 @@ export function doorProfileCuts(profile: ResolvedDoorProfile, panel: DoorPanelDi
     const off = op.offset_from_edge_mm ?? 0
     const sp = op.spacing_mm ?? 0
     const lines = profile.profile_type === 'vj_lines' || op.repeat_axis === 'x' || op.repeat_axis === 'y'
+    // VJ cascade layout (job → room → cabinet → door) replaces the op's own spacing.
+    const vj = profile.profile_type === 'vj_lines' ? profile.vj : null
+    if (lines && vj) {
+      const axis: 'x' | 'y' = vj.direction === 'horizontal' ? 'y' : vj.direction === 'vertical' ? 'x' : (op.repeat_axis === 'y' ? 'y' : 'x')
+      const g = vj.edge_gap ?? off
+      const L = axis === 'x' ? W : H
+      const at = vjLinePositions(L, g, vj)
+      if (at) {
+        at.forEach((p, n) => cuts.push(axis === 'x'
+          ? { ...base, kind: 'groove', x1: p, y1: off, x2: p, y2: H - off, width: op.width_mm, lineIndex: n }
+          : { ...base, kind: 'groove', x1: off, y1: p, x2: W - off, y2: p, width: op.width_mm, lineIndex: n }))
+        return
+      }
+      // direction / edge gap only → the op's own spacing along the chosen axis
+      if (sp > 0) {
+        let n = 0
+        if (axis === 'y') for (let y = g + sp; y < H - g - EPS; y += sp) cuts.push({ ...base, kind: 'groove', x1: off, y1: y, x2: W - off, y2: y, width: op.width_mm, lineIndex: n++ })
+        else for (let x = g + sp; x < W - g - EPS; x += sp) cuts.push({ ...base, kind: 'groove', x1: x, y1: off, x2: x, y2: H - off, width: op.width_mm, lineIndex: n++ })
+        return
+      }
+    }
     if (lines && sp > 0) {
       let n = 0
       if (op.repeat_axis === 'y') {

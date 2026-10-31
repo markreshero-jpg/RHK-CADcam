@@ -6,7 +6,11 @@ export type TopType = 'full_top' | 'front_rail' | 'double_rail' | 'none'
 export type ToeType = 'ladder' | 'leg' | 'none'
 export type ProjectStatus = 'draft' | 'quoted' | 'approved' | 'in_production' | 'completed' | 'archived'
 
+// VJ line layout (z_doorFace_module VJ cascade) — see resolver/types VjLayout.
+export type VjLayoutValue = { qty?: number | null; spacing?: number | null; edge_gap?: number | null; direction?: "vertical" | "horizontal" | null }
+
 export interface Project {
+  vj_layout?: VjLayoutValue | null   // VJ line layout, job level
   id: string
   name: string
   client_id: string | null
@@ -56,6 +60,7 @@ export interface Project {
 }
 
 export interface Room {
+  vj_layout?: VjLayoutValue | null   // VJ line layout, room level (blank keys inherit the job)
   id: string
   project_id: string
   name: string
@@ -142,6 +147,7 @@ export interface Wall {
 }
 
 export interface CabinetInstance {
+  vj_layout?: VjLayoutValue | null   // VJ line layout, cabinet level (blank keys inherit the room)
   id: string
   room_id: string
   wall_id: string | null

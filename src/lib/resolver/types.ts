@@ -880,6 +880,9 @@ export interface CabinetInput {
   // resolveFace consumes this to override the door panel thickness and evaluate
   // the profile geometry. Absent key = no door style on that zone.
   resolved_doors?: Record<string, ResolvedDoorStyleInput>
+  // VJ line layout merged job → room → cabinet (mergeVjLayout); resolveFace
+  // adds the zone's own `vj` on top. Null = nothing set above the door.
+  vj_layout?: VjLayout | null
 
   // Internal layout — recursive section tree (structural splits + compartment fittings)
   internal_tree:   Section
@@ -1235,6 +1238,9 @@ export interface FaceZoneInput {
   handle_inset?:  number             // doors: non-hinged side → hole line (else the schedule row)
   finger_gap?:    number             // mm at the grip edge, for grips that need one (else FPGAP)
   handle_length?: number             // linear strip (D17): its length (else the front's full width / height)
+  // Per-front VJ line layout — lowest level of the job → room → cabinet → door
+  // cascade. Undefined / blank keys = inherit.
+  vj?: VjLayout
 }
 
 // ── Internal Part Inputs ──────────────────────────────────────
@@ -1668,6 +1674,20 @@ export interface ResolvedProfileOp {
 export interface ResolvedDoorProfile {
   profile_type: 'perimeter_route' | 'vj_lines' | 'panel_raise' | 'bead' | 'custom'
   ops:          ResolvedProfileOp[]
+  // VJ line layout from the job → room → cabinet → door cascade (vj_lines
+  // profiles only). Absent / all blank = the profile ops' own spacing.
+  vj?:          VjLayout | null
+}
+
+// VJ line layout (z_doorFace_module VJ cascade). Every key optional; blank = inherit.
+//   spacing only     → as many full boards as fit, leftover split to the two end boards
+//   qty only         → qty lines, equal boards
+//   qty + spacing    → qty lines at that spacing, group centred
+export interface VjLayout {
+  qty?:       number | null
+  spacing?:   number | null
+  edge_gap?:  number | null
+  direction?: 'vertical' | 'horizontal' | null
 }
 
 export interface ResolvedFaceZone extends ResolvedPart {

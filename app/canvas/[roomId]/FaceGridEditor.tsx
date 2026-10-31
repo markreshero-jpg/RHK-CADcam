@@ -16,6 +16,8 @@ import { mergeRules, resolveReveal } from '@/src/lib/resolver/mergeRules'
 import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { NO_HANDLE } from '@/src/lib/resolver/resolveHandles'
+import VjLayoutFields from '@/src/components/VjLayoutFields'
+import type { VjLayout } from '@/src/lib/resolver/types'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { addBinDivisions } from './binDivisionsAction'
 import { drawerBoundaries, planAutoDivider, AUTO_DIVIDER_NOTE, type SeamGeometry } from '@/src/lib/dividers/autoDivider'
@@ -417,6 +419,19 @@ export default function FaceGridEditor({
       }),
     })
     if (key === 'handle_length' && value !== null) useTutorial.getState().emit('handle_length_set')   // tutorial linear_handles
+  }
+
+  // Per-front VJ line layout (z_doorFace_module VJ cascade). null = inherit.
+  function setZoneVj(rowIdx: number, colIdx: number, vj: VjLayout | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const rest = { ...z }; delete rest.vj
+        return vj ? { ...rest, vj } : rest
+      }),
+    })
+    if (vj) useTutorial.getState().emit('vj_layout_set')   // tutorial vj_layout
   }
 
   function setDrawerType(rowIdx: number, colIdx: number, type: DrawerFrontType | null) {
@@ -1081,6 +1096,16 @@ export default function FaceGridEditor({
                       <option value="">— inherit (room / job) —</option>
                       {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                  </div>
+                )}
+
+                {/* VJ lines — per-front layout, only on fronts with a VJ profile.
+                    Blank = inherit (job → room → cabinet). */}
+                {rp?.face_zones.find(z => z.row_index === gz.row_index && z.col_index === gz.col_index)?.door_profile?.profile_type === 'vj_lines' && (
+                  <div data-tour="vj-layout-door">
+                    <p className="text-gray-600 mb-1">VJ lines (this front)</p>
+                    <VjLayoutFields compact value={gz.vj} inherited={getCachedInput(cabinet.id)?.vj_layout ?? null}
+                      onChange={next => setZoneVj(gz.row_index, gz.col_index, next)} />
                   </div>
                 )}
 

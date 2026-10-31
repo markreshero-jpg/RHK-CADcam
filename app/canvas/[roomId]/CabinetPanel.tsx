@@ -11,6 +11,8 @@ import { DEFAULT_RULES, type ConstructionRules } from '@/src/lib/resolver/types'
 import type { NeighbourPair } from '@/src/lib/neighbours'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import CalcInput from '@/src/components/CalcInput'
+import VjLayoutFields from '@/src/components/VjLayoutFields'
+import type { VjLayout } from '@/src/lib/resolver/types'
 import CabinetShapeSection from './CabinetShapeSection'
 import BulkheadSection from './BulkheadSection'
 import CurvedEndSection from './CurvedEndSection'
@@ -580,6 +582,22 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
             </div>
           </div>
         )}
+        {/* VJ lines (z_doorFace_module VJ cascade) — cabinet level; only on cabinets with a VJ front. */}
+        {(() => {
+          const ci = getCachedInput(cabinet.id)
+          const hasVj = Object.values(ci?.resolved_doors ?? {}).some(d => d?.profile_type === 'vj_lines')
+          if (!hasVj) return null
+          // The cached input's vj_layout is job → room → this cabinet; for every key this
+          // cabinet leaves blank it equals what's inherited, so it works as the placeholder.
+          return (
+            <div data-tour="vj-layout-cabinet">
+              <p className={lbl}>VJ lines</p>
+              <VjLayoutFields compact value={cabinet.vj_layout as VjLayout | null | undefined}
+                inherited={ci?.vj_layout ?? (room?.vj_layout as VjLayout | null | undefined) ?? null}
+                onChange={next => { void onUpdate(cabinet.id, { vj_layout: next }) }} />
+            </div>
+          )
+        })()}
         <div>
           <p className={lbl}>Scribes (mm)</p>
           <div className="grid grid-cols-3 gap-1">

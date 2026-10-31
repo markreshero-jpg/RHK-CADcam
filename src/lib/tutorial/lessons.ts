@@ -1291,6 +1291,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open Drill Library and click a drill. Through-hole extra depth is how far the bit goes past the board on a through hole. Depth measured to shoulder drills a blind hole deeper by the point length, so the full diameter reaches the depth (it uses the point angle). Auto-select picks this bit for any hole within ± the tolerance of its size; untick it and the bit is only used when a hole names it.',
       done: (c, s) => ev(c, 'cnc_drills_view') > ev(s, 'cnc_drills_view') },
   ]},
+
+  // Appended 2026-11-01 (z_doorFace_module VJ cascade — VJ qty / spacing per job, room, cabinet, door).
+  { id: 'vj_layout', level: 'intermediate', topic: 'cabinets', title: 'Spread VJ lines your way',
+    blurb: 'Set how many VJ lines a door gets and how far apart, for the whole job, a room, a cabinet or one door.',
+    keywords: 'vj v-joint v groove lines boards board spacing qty quantity count pitch edge gap direction vertical horizontal door profile spread', steps: [
+    { id: 'job', title: 'Job or room default',
+      body: 'Open Job Properties (or Room Properties) → Doors. Under VJ lines: type Spacing only for as many boards as fit, centred (the leftover goes to the two end boards). Type Qty only for that many lines with equal boards. Type both for that many lines at that spacing, centred. Edge gap keeps lines away from the door edges; Direction turns them vertical or horizontal. Blank = the door profile’s own (100 apart from the edge). Save.',
+      done: (c, s) => ev(c, 'props_saved') > ev(s, 'props_saved') },
+    { id: 'cabinet', title: 'One cabinet',
+      body: 'Click a cabinet with VJ doors. In its panel on the right, VJ lines works the same way; blank boxes show what the room / job gives it in grey.',
+      canvas: true, done: c => c.selected?.type === 'cabinet' },
+    { id: 'door', title: 'One door',
+      body: 'Double-click the cabinet, open the Face Grid tab and click a VJ door. VJ lines (this front) overrides just that door. Qty and spacing go together: a door with only Qty set gets equal boards even if the job set a spacing. The CNC, the elevation and the 3D all use the same lines. To line boards up across a pair of doors, use grain match.',
+      canvas: true, done: (c, s) => ev(c, 'vj_layout_set') > ev(s, 'vj_layout_set') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
