@@ -198,5 +198,7 @@ describe('set back rail notches (D24)', () => {
     const r = collectNotchRoutes(rp, 'c1', 'tool10').rows.find(o => o.source_part_key === 'case_right_side' && o.operation_key === 'fprail_notch_0')!
     expect(r.pos_x - r.size_dx! / 2).toBeCloseTo(sideFront - 16.5 - 18)
     expect(r.pos_x + r.size_dx! / 2).toBeCloseTo(sideFront + 5)
+    const rail = rp.case_parts.find(p => p.part_key === 'fprail:0')!
+    expect(r.size_dy).toBeCloseTo(rail.DX + 18)                   // covers the base the rail stands on
   })
 })

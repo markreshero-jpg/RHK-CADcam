@@ -396,19 +396,21 @@ describe('set back SQ edge finger pull (D24)', () => {
 
   it('rails 10 taller than sharknose (55 between drawers, 50 at the top) and 16.5 further back', () => {
     expect(rails).toHaveLength(3)
-    expect(rails[0].DX).toBeCloseTo(55)
-    expect(rails[0].Y).toBeCloseTo(zones[0].Y + zones[0].DY - 30)    // 30 down behind the square front
-    expect(rails[2].DX).toBeCloseTo(50)
+    expect(rails[0].DX + 18).toBeCloseTo(55)                       // upright stands on the 18 base
+    expect(rails[0].Y - 18).toBeCloseTo(zones[0].Y + zones[0].DY - 30)    // 30 down behind the square front
+    expect(rails[2].DX + 18).toBeCloseTo(50)
     expect(rails[2].Y + rails[2].DX).toBeCloseTo(900)
+    expect(rails[0].edge_band).toMatchObject({ top: true, bottom: false })
     expect(rails[0].Z + rails[0].DZ).toBeCloseTo(frontZ - 16.5)
     expect(rails[0].fprail!.setback).toBe(16.5)
   })
 
-  it('a flat base piece closes each pocket, out to the sides\' front edge', () => {
+  it('a flat base piece runs through under the upright, out to the sides\' front edge', () => {
     expect(bases).toHaveLength(3)
     const b = bases[0]
-    expect(b.Y).toBeCloseTo(rails[0].Y)                             // at the pocket bottom (behind the front below)
-    expect(b.DX).toBeCloseTo(16.5)                                  // depth = the setback
+    expect(b.Y + b.DZ).toBeCloseTo(rails[0].Y)                      // the upright sits on it
+    expect(b.DX).toBeCloseTo(16.5 + 18)                             // runs through: setback + rail thickness
+    expect(b.Z).toBeCloseTo(rails[0].Z)
     expect(b.DZ).toBe(18)
     expect(b.Z + b.DX).toBeCloseTo(frontZ)
     expect(b.DY).toBe(900)

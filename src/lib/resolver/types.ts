@@ -1545,8 +1545,9 @@ export interface ResolvedCasePart extends ResolvedPart {
   // noBlocks: the top rail against an on-edge front rail — that rail fixes it, so no
   // knock-in blocks / holes (z_handles D20).
   // setback: a set back SQ edge rail (D24) — its front face sits this far behind the
-  // sides' front edge, so the side notch runs that much further forward.
-  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true; noBlocks?: true; setback?: number }
+  // sides' front edge, so the side notch runs that much further forward; base = the
+  // end the flat base piece runs through under / over it (the notch covers it too).
+  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true; noBlocks?: true; setback?: number; base?: 'top' | 'bottom' }
   // Linear strip handle (z_handles D17): the sharknose edge (face-kind frame:
   // top / bottom = ends of DX, left / right = ends of DY) and its bevel.
   lh?: { bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number }

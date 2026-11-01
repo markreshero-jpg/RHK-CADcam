@@ -487,14 +487,16 @@ is, and which edge is the bottom, once the label is off.
     down behind the square front;
   - it sits **RAILSB (16.5) further back**: its front face is 16.5 behind the sides'
     front edge, so there's ~18.5 behind the front for fingers;
-  - a **flat base piece** (`fpbase:<n>`, same board, RAILSB deep × rail length,
-    front edge taped) sits in front of the rail at the pocket's closed end (the end
-    behind the front: the bottom for a grip-edge-top front, the top for a wall
-    door), out to the sides' front edge, so the pocket is closed.
+  - a **flat base piece** (`fpbase:<n>`, same board, RAILSB + rail thickness deep
+    × rail length, front edge taped) at the pocket's closed end (the end behind the
+    front: the bottom for a grip-edge-top front, the top for a wall door) **runs
+    through under the upright, which sits on top of it** (Mark, 2026-11-01). The
+    rail height (55 / 50) includes the base; the upright is that much shorter and
+    its edge on the base isn't taped.
 - **Fixing (answer 2: yes):** both pieces sit in one notch through the sides,
   RAILSB + rail thickness deep (33 for 16.5 board) for the rail's height; the
   generated notch pocket (seamDrillSync) runs from the rail's back face out
-  through the front edge. Knock-in blocks as D20.
+  through the front edge, over the upright and its base (`fprail.base`). Knock-in blocks as D20.
 - **Front rail:** an on-edge carcass front rail behind the top set back rail is pushed
   back by rail thickness + RAILSB and **cut down to RAILSBFR (50)** ("the vertical
   front rails get cut down to 50mm", Mark), keeping its top.

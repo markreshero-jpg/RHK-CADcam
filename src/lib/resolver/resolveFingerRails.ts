@@ -181,35 +181,42 @@ export function fingerRails(
 export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails: FingerRail[], caseParts: ResolvedCasePart[] = []): ResolvedCasePart[] {
   const front = caseParts.find(p => p.part_key === 'front_rail')
   const fixedByFront = front?.upright ? topRail(front, rails) : undefined
-  const uprights = rails.map(rl => ({
-    grain_direction: r.RAILGRAIN ?? 'horizontal',
-    fprail: {
-      cut: r.RAILCUT, blockSetback: r.RAILBLK, blockDia: r.RAILBLKD, blockDepth: r.RAILBLKZ,
-      ...(rl === fixedByFront ? { noBlocks: true as const } : {}),
-      ...(rl.setback ? { setback: rl.setback } : {}),
-    },
-    part_key: rl.key,
-    DX: rl.top - rl.bottom, DY: rl.x1 - rl.x0, DZ: rl.thickness,
-    X: rl.x0, Y: rl.bottom, Z: rl.frontZ - (rl.setback ?? 0) - rl.thickness,
-    AX: 0, AY: 0, AZ: 0,
-    material_id: rl.material_id,
-    // Long edges taped after the shop trims the CNC strip (Mark, 2026-10-29): the rail
-    // at the carcass top / bottom gap on its one long edge away from the carcass
-    // edge, every other rail on both. Face-kind frame: top / bottom = ends of DX.
-    edge_band: {
-      top: rl.at !== 'top', bottom: rl.at !== 'bottom', left: false, right: false,
-      id: rl.edgeband_id,
-    },
-  }) as ResolvedCasePart)
-  // Set back SQ edge (D24): a flat strip of the same board in front of the rail at
-  // the pocket's closed end (behind the front), out to the sides' front edge, in
-  // the same notch. Horizontal frame: DX = depth, DY = length, DZ = thickness;
-  // its front edge (top) taped.
+  const uprights = rails.map(rl => {
+    // Set back rail (D24): the base runs through under (or over) it, so the
+    // upright stands on the base and is that much shorter.
+    const onBase = rl.setback ? rl.baseAt : undefined
+    return {
+      grain_direction: r.RAILGRAIN ?? 'horizontal',
+      fprail: {
+        cut: r.RAILCUT, blockSetback: r.RAILBLK, blockDia: r.RAILBLKD, blockDepth: r.RAILBLKZ,
+        ...(rl === fixedByFront ? { noBlocks: true as const } : {}),
+        ...(rl.setback ? { setback: rl.setback, base: onBase } : {}),
+      },
+      part_key: rl.key,
+      DX: rl.top - rl.bottom - (onBase ? rl.thickness : 0), DY: rl.x1 - rl.x0, DZ: rl.thickness,
+      X: rl.x0, Y: rl.bottom + (onBase === 'bottom' ? rl.thickness : 0), Z: rl.frontZ - (rl.setback ?? 0) - rl.thickness,
+      AX: 0, AY: 0, AZ: 0,
+      material_id: rl.material_id,
+      // Long edges taped after the shop trims the CNC strip (Mark, 2026-10-29): the rail
+      // at the carcass top / bottom gap on its one long edge away from the carcass
+      // edge, every other rail on both — not the edge standing on a set back base.
+      // Face-kind frame: top / bottom = ends of DX.
+      edge_band: {
+        top: rl.at !== 'top' && onBase !== 'top', bottom: rl.at !== 'bottom' && onBase !== 'bottom', left: false, right: false,
+        id: rl.edgeband_id,
+      },
+    } as ResolvedCasePart
+  })
+  // Set back SQ edge (D24): a flat strip of the same board at the pocket's closed
+  // end (behind the front), running through under the upright — rail thickness +
+  // setback deep, out to the sides' front edge — in the same notch (Mark,
+  // 2026-11-01: "run bottom through and vertical piece sits on top").
+  // Horizontal frame: DX = depth, DY = length, DZ = thickness; front edge (top) taped.
   const bases = rails.filter(rl => rl.setback).map((rl, i) => ({
     grain_direction: 'horizontal',
     part_key: `fpbase:${i}`,
-    DX: rl.setback!, DY: rl.x1 - rl.x0, DZ: rl.thickness,
-    X: rl.x0, Y: rl.baseAt === 'top' ? rl.top - rl.thickness : rl.bottom, Z: rl.frontZ - rl.setback!,
+    DX: rl.setback! + rl.thickness, DY: rl.x1 - rl.x0, DZ: rl.thickness,
+    X: rl.x0, Y: rl.baseAt === 'top' ? rl.top - rl.thickness : rl.bottom, Z: rl.frontZ - rl.setback! - rl.thickness,
     AX: 0, AY: 0, AZ: 0,
     material_id: rl.material_id,
     edge_band: { top: true, bottom: false, left: false, right: false, id: rl.edgeband_id },

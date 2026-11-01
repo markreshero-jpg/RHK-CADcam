@@ -467,7 +467,10 @@ export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolI
       // its notch still runs out through the front (the base piece fills it).
       const back = rail.Z - side.Z
       const front = back + rail.DZ + (rail.fprail!.setback ?? 0)
-      const bot = rail.Y - side.Y, top = bot + rail.DX
+      // A set back rail stands on its base piece (D24): the notch covers that too.
+      const baseT = rail.fprail!.base ? rail.DZ : 0
+      const bot = rail.Y - side.Y - (rail.fprail!.base === 'bottom' ? baseT : 0)
+      const top = rail.Y - side.Y + rail.DX + (rail.fprail!.base === 'top' ? baseT : 0)
       const openBot = bot <= EPS, openTop = top >= side.DY - EPS
       const u0 = back, u1 = front + NOTCH_OVERRUN
       const v0 = openBot ? bot - NOTCH_OVERRUN : bot, v1 = openTop ? top + NOTCH_OVERRUN : top
