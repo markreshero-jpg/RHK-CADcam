@@ -152,16 +152,22 @@ export function outlineBounds(segs: BenchtopSegment[]) {
   return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
 }
 
+// Unit direction of the longest straight edge (plan x when there is none).
+export function longAxis(segs: BenchtopSegment[]): P {
+  let u = { x: 1, y: 0 }, best = 0
+  for (const s of segs) {
+    const l = s.type === 'line' ? dist(s.p0, s.p1) : 0
+    if (l > best) { best = l; u = { x: (s.p1.x - s.p0.x) / l, y: (s.p1.y - s.p0.y) / l } }
+  }
+  return u
+}
+
 // Overall length × depth, measured square to the longest straight edge (an L or
 // angled top gives its bounding size that way); length is the larger of the two.
 export function overallSize(segs: BenchtopSegment[]): { length: number; depth: number } {
   const pts = outlinePoints(segs)
   if (!pts.length) return { length: 0, depth: 0 }
-  let ux = 1, uy = 0, best = 0
-  for (const s of segs) {
-    const l = s.type === 'line' ? dist(s.p0, s.p1) : 0
-    if (l > best) { best = l; ux = (s.p1.x - s.p0.x) / l; uy = (s.p1.y - s.p0.y) / l }
-  }
+  const { x: ux, y: uy } = longAxis(segs)
   let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity
   for (const p of pts) {
     const a = p.x * ux + p.y * uy, b = p.y * ux - p.x * uy

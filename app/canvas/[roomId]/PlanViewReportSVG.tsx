@@ -14,7 +14,7 @@ import { btSegments, outlinePath, outlinePoints, effectiveProfileId } from '@/sr
 import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
-import { OpeningSymbol, FixturesPlanPrint } from './FixturesPlan'
+import { OpeningSymbol, FixturesPlanPrint, fixturePrintBoxes } from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
 import { IDENTITY_FRAME, annotLayerItem, annotationFramePoints } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
@@ -127,6 +127,8 @@ export default function PlanViewReportSVG({
   const openingsByWall = openingSpans(openings, walls, cx)
   // Free-standing appliances take their place in the base / wall-cabinet rows.
   const chainFixtures = fixtures.filter(f => layers.show(fixtureLayer(f.category, f.kind)))
+  // Sinks, taps … with their labels: benchtop names move clear of them.
+  const fixtureBoxes = fixturePrintBoxes(fixtures, layers, P)
 
   // ── Content bounds (includes wall thickness corners) ──────────────────────
   const pts = walls.flatMap(w => {
@@ -636,7 +638,7 @@ export default function PlanViewReportSVG({
                   const prof = pid ? btProfiles[pid] : undefined
                   return prof ? (prof.code ?? prof.name) : null
                 } : undefined}
-                fs={layers.w('benchtop_sizes', 2.2 * P)} gap={2.2 * P} fill={INK} opacity={layers.op('benchtop_sizes')} />
+                fs={layers.w('benchtop_sizes', 2.2 * P)} gap={2.2 * P} fill={INK} opacity={layers.op('benchtop_sizes')} avoid={fixtureBoxes} />
             )}
           </g>
         )

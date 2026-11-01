@@ -424,7 +424,8 @@ Started on Mark's go ("start phase 4"). Rules Q-a…Q-h are Claude's defaults �
   `BenchtopQuoteSchedule.tsx`, `BenchtopEdgeLabels.tsx`; PlanViewReport `quote` prop. In-app check pending.
   2026-11-02 (Mark): overall size (length × depth, square to the longest straight edge — `overallSize` in
   benchtopGeometry) under each top's name on the plan (`benchtop_sizes`; after the name on a shallow top) and a
-  Size (L × D) column in the schedule.
+  Size (L × D) column in the schedule. On prints the name + size slide along the top to clear sinks, taps
+  and their labels (`fixturePrintBoxes` in FixturesPlan.tsx → BenchtopEdgeLabels `avoid`).
 - **R-b Parts List Summary** — supply items removed (the interim "— supply"
   tag is gone); it lists only cut parts.
 - **R-c Optimiser** — in-house parts (rows with a board `material_id`, not

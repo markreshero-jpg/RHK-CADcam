@@ -9,7 +9,7 @@
 
 import type { RoomFixture } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
-import { fixtureLayer } from '@/src/lib/fixtureGeometry'
+import { fixtureLayer, fixtureCorners } from '@/src/lib/fixtureGeometry'
 import { wrapLabel } from '@/src/lib/textWrap'
 import { fixtureDisplayName } from '@/src/lib/fixtureDisplayName'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
@@ -313,6 +313,27 @@ export default function FixturesPlan({
       )}
     </g>
   )
+}
+
+/** Plan-print fixtures' footprints with their labels, as plan boxes (model mm) —
+ *  for other print labels (benchtop names) to keep clear of. Matches FixturesPlanPrint. */
+export function fixturePrintBoxes(fixtures: RoomFixture[], layers: LayerView, P: number) {
+  const fs = 2.5 * P
+  return fixtures.flatMap(f => {
+    if (f.category === 'opening' || !layers.show(fixtureLayer(f.category, f.kind))) return []
+    const pts = [...fixtureCorners(f)]
+    const lines = layers.show('fixture_labels') ? wrapLabel(fixtureDisplayName(f), f.width * 0.9, fs) : []
+    if (lines.length) {
+      // The label block in the fixture's frame (Arial ≈ 0.55 em a character), then into plan.
+      const w = Math.max(...lines.map(l => l.length)) * fs * 0.55, h = lines.length * fs * 1.15
+      const cx = f.width / 2 + (f.label_offsets?.plan?.x ?? 0), cy = f.depth / 2 + (f.label_offsets?.plan?.y ?? 0)
+      const a = f.rotation * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a)
+      for (const [lx, ly] of [[cx - w / 2, cy - h / 2], [cx + w / 2, cy - h / 2], [cx + w / 2, cy + h / 2], [cx - w / 2, cy + h / 2]])
+        pts.push({ x: f.x + lx * ca - ly * sa, y: f.y + lx * sa + ly * ca })
+    }
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y)
+    return [{ minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }]
+  })
 }
 
 // Shop drawings (z_shop_drawings): fixtures on the printed plan — same shapes and
