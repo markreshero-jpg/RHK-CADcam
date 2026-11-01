@@ -11,11 +11,11 @@
 
 import type { ReactNode } from 'react'
 
-const W = 168, H = 112
-const BG = '#0f172a', TOOL = '#60a5fa', LINE = '#94a3b8', HI = '#fbbf24', BOARD = '#a16207', SPOIL = '#334155'
-const txt = { fill: LINE, fontSize: 9, fontFamily: 'monospace' } as const
+export const W = 168, H = 112
+export const BG = '#0f172a', TOOL = '#60a5fa', LINE = '#94a3b8', HI = '#fbbf24', BOARD = '#a16207', SPOIL = '#334155'
+export const txt = { fill: LINE, fontSize: 9, fontFamily: 'monospace' } as const
 
-function Frame({ children, label }: { children: ReactNode; label: string }) {
+export function Frame({ children, label }: { children: ReactNode; label: string }) {
   return (
     <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label} className="shrink-0">
       <rect width={W} height={H} rx={6} fill={BG} />

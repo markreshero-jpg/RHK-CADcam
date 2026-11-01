@@ -16,6 +16,8 @@ import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import ToolSetSectionDiagram from '@/src/components/cnc/ToolSetSectionDiagram'
 import type { ToolShape } from '@/src/lib/cnc/toolProfile'
+import { FieldCard } from '@/src/components/cnc/ToolFieldDiagrams'
+import { StepTypeDiagram, DepthDiagram, ToolPositionDiagram, FillDiagram, RingDiagram, CleanupDiagram, OffsetsDiagram, WidthDiagram, RasterDiagram, FeedOverrideDiagram } from '@/src/components/cnc/ToolSetStepDiagrams'
 
 const OP_TYPES = ['pocket', 'outline', 'square_off', 'profile', 'drill', 'groove', 'raster'] as const
 const FILL_STRATEGIES = ['raster', 'spiral_in', 'spiral_out'] as const
@@ -39,7 +41,7 @@ interface ToolSetOp {
   ring_width_mm: number | null     // pocket: clear only this wide a band
   cleanup_radius_mm: number | null // square_off: corner radius to clean (blank = previous step's tool)
 }
-interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null; tool_type: string | null; cutting_length: number | null; shape_profile: ToolShape | null }
+interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null; tool_type: string | null; cutting_length: number | null; shape_profile: ToolShape | null; base_feed_rate: number | null; base_spindle_speed: number | null }
 
 const inp = 'bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent w-full'
 const lbl = 'text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block'
@@ -62,7 +64,7 @@ export default function CncToolSetsClient() {
       const [setR, opR, toolR] = await Promise.all([
         supabase.from('cnc_tool_sets').select('*').order('sort_order').order('name'),
         supabase.from('cnc_tool_set_operations').select('*').order('sort_order'),
-        supabase.from('cnc_tools').select('id,name,tool_number,diameter,tool_type,cutting_length,shape_profile').eq('active', true).order('tool_number', { nullsFirst: false }),
+        supabase.from('cnc_tools').select('id,name,tool_number,diameter,tool_type,cutting_length,shape_profile,base_feed_rate,base_spindle_speed').eq('active', true).order('tool_number', { nullsFirst: false }),
       ])
       if (cancelled) return
       setSets((setR.data ?? []) as ToolSet[])
@@ -261,42 +263,8 @@ export default function CncToolSetsClient() {
                       className="text-ink-subtle hover:text-red-400 cursor-pointer text-base leading-none px-1">×</span>
                   </div>
 
-                  {/* Expanded params */}
-                  {isOpen && (
-                    <div className="px-9 py-3 bg-surface-2/40 grid grid-cols-4 gap-x-4 gap-y-3">
-                      <NumFx label="Depth (mm)" value={op.depth_mm} formula={op.depth_eq}
-                        onValue={v => patchOp(op.id, { depth_mm: v })} onFormula={f => patchOp(op.id, { depth_eq: f })} />
-                      <Num label="Width (mm)" value={op.width_mm} onSave={v => patchOp(op.id, { width_mm: v })} />
-                      <div>
-                        <label className={lbl}>Fill strategy</label>
-                        <select className={inp} value={op.fill_strategy ?? ''} onChange={e => patchOp(op.id, { fill_strategy: e.target.value || null })}>
-                          <option value="">—</option>
-                          {FILL_STRATEGIES.map(f => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                      </div>
-                      <div>
-                        <label className={lbl}>Tool on the line</label>
-                        <select className={inp} value={op.tool_position ?? 'inside'} onChange={e => patchOp(op.id, { tool_position: e.target.value })}>
-                          <option value="inside">edge inside the line</option>
-                          <option value="centre">centre on the line</option>
-                        </select>
-                      </div>
-                      {(op.operation_type === 'pocket' || op.operation_type === 'raster') && (
-                        <Num label="Ring width (mm, blank = whole area)" value={op.ring_width_mm} onSave={v => patchOp(op.id, { ring_width_mm: v != null && v > 0 ? v : null })} />
-                      )}
-                      {op.operation_type === 'square_off' && (
-                        <Num label="Clean-up radius (blank = previous tool)" value={op.cleanup_radius_mm} onSave={v => patchOp(op.id, { cleanup_radius_mm: v != null && v > 0 ? v : null })} />
-                      )}
-                      <Num label="Offset top (mm)" value={op.offset_top_mm} onSave={v => patchOp(op.id, { offset_top_mm: v })} />
-                      <Num label="Offset bottom (mm)" value={op.offset_bottom_mm} onSave={v => patchOp(op.id, { offset_bottom_mm: v })} />
-                      <Num label="Offset left (mm)" value={op.offset_left_mm} onSave={v => patchOp(op.id, { offset_left_mm: v })} />
-                      <Num label="Offset right (mm)" value={op.offset_right_mm} onSave={v => patchOp(op.id, { offset_right_mm: v })} />
-                      <Num label="Raster angle°" value={op.raster_angle_deg} onSave={v => patchOp(op.id, { raster_angle_deg: v })} />
-                      <Num label="Raster stepover %" value={op.raster_stepover_pct} onSave={v => patchOp(op.id, { raster_stepover_pct: v })} />
-                      <Num label="Feed override" value={op.feed_rate_override} onSave={v => patchOp(op.id, { feed_rate_override: v })} />
-                      <Num label="Spindle override" value={op.spindle_speed_override} integer onSave={v => patchOp(op.id, { spindle_speed_override: v })} />
-                    </div>
-                  )}
+                  {/* Expanded params — each field with a live diagram (z_cnc_tools T3c) */}
+                  {isOpen && <StepFields op={op} ops={selectedOps} tools={tools} thickness={sampleT} patchOp={patchOp} />}
                 </div>
               )
             })}
@@ -307,10 +275,10 @@ export default function CncToolSetsClient() {
   )
 }
 
-function Num({ label, value, onSave, integer }: { label: string; value: number | null; onSave: (v: number | null) => void; integer?: boolean }) {
+function Num({ label, value, onSave, integer }: { label?: string; value: number | null; onSave: (v: number | null) => void; integer?: boolean }) {
   return (
     <div>
-      <label className={lbl}>{label}</label>
+      {label && <label className={lbl}>{label}</label>}
       <input type="number" step={integer ? 1 : 'any'} className={inp} defaultValue={value ?? ''} key={String(value)}
         onBlur={e => {
           const raw = e.target.value.trim()
@@ -326,17 +294,115 @@ function Num({ label, value, onSave, integer }: { label: string; value: number |
 // When a formula is present the numeric input is disabled, mirroring the door
 // builder's value/ƒ-override convention.
 function NumFx({ label, value, formula, onValue, onFormula }: {
-  label: string; value: number | null; formula: string | null
+  label?: string; value: number | null; formula: string | null
   onValue: (v: number | null) => void; onFormula: (f: string | null) => void
 }) {
   return (
     <div>
-      <label className={lbl}>{label}</label>
+      {label && <label className={lbl}>{label}</label>}
       <input type="number" step="any" className={inp} defaultValue={value ?? ''} key={String(value)} disabled={!!formula}
         onBlur={e => { const raw = e.target.value.trim(); onValue(raw === '' ? null : (Number.isFinite(parseFloat(raw)) ? parseFloat(raw) : null)) }} />
       <input className="bg-surface-2/60 border border-edge-strong/60 rounded px-1.5 py-0.5 text-[10px] text-ink-muted focus:outline-none focus:border-purple-600 focus:text-purple-300 w-full font-mono mt-1"
         defaultValue={formula ?? ''} placeholder="ƒ e.g. @part.DZ*0.4" key={`fx-${formula ?? ''}`}
         onBlur={e => onFormula(e.target.value.trim() || null)} />
+    </div>
+  )
+}
+
+// ---- Step fields: each control in a card with a live diagram ----
+// Only the fields that matter for this step's type are shown.
+function StepFields({ op, ops, tools, thickness, patchOp }: {
+  op: ToolSetOp; ops: ToolSetOp[]; tools: ToolItem[]; thickness: number
+  patchOp: (id: string, changes: Partial<ToolSetOp>) => void
+}) {
+  const tool = tools.find(t => t.id === op.tool_id)
+  const d = tool?.diameter ?? 10
+  const t = op.operation_type
+  const clear = t === 'pocket' || t === 'raster'
+  const drill = t === 'drill'
+  const ring = clear && op.ring_width_mm != null && op.ring_width_mm > 0
+  // square_off cleans the radius the previous step's tool left (unless typed).
+  const idx = ops.findIndex(o => o.id === op.id)
+  const prevTool = idx > 0 ? tools.find(x => x.id === ops[idx - 1].tool_id) : undefined
+  const cleanR = op.cleanup_radius_mm ?? (prevTool?.diameter != null ? prevTool.diameter / 2 : null)
+  const help: Record<string, string> = {
+    pocket: 'Clears everything inside the line (or just a band, with Ring width).',
+    raster: 'Clears inside the line in straight lanes.',
+    outline: 'Runs one lap just inside the line.',
+    profile: 'Runs one lap just inside the line, like outline.',
+    square_off: 'Squares out the 4 corners only, cleaning the round corner the step before left.',
+    groove: 'Cuts a slot, as wide as Width.',
+    drill: 'Drill steps are ignored by routing.',
+  }
+  return (
+    <div className="px-6 py-3 bg-surface-2/40 grid grid-cols-1 xl:grid-cols-2 gap-3">
+      <FieldCard title="Step type" diagram={<StepTypeDiagram type={t} />} help={help[t] ?? ''}
+        control={<select className={inp} value={t} onChange={e => patchOp(op.id, { operation_type: e.target.value })}>
+          {OP_TYPES.map(x => <option key={x} value={x}>{x}</option>)}
+        </select>} />
+      {!drill && (
+        <FieldCard title="Depth (mm)" diagram={<DepthDiagram depth={op.depth_mm} thickness={thickness} />}
+          help={<>How deep this step cuts. It wins over the operation’s depth; blank uses the operation’s. The board thickness or more cuts right through. Drawn on the {thickness} board set above.</>}
+          control={<NumFx value={op.depth_mm} formula={op.depth_eq}
+            onValue={v => patchOp(op.id, { depth_mm: v })} onFormula={f => patchOp(op.id, { depth_eq: f })} />} />
+      )}
+      {!drill && !ring && (
+        <FieldCard title="Tool on the line" diagram={<ToolPositionDiagram position={op.tool_position ?? 'inside'} diameter={d} />}
+          help="Edge on the line cuts inside it (pockets, outlines). Centre on the line is for V-grooves like VJ and chamfers."
+          control={<select className={inp} value={op.tool_position ?? 'inside'} onChange={e => patchOp(op.id, { tool_position: e.target.value })}>
+            <option value="inside">edge inside the line</option>
+            <option value="centre">centre on the line</option>
+          </select>} />
+      )}
+      {clear && (
+        <FieldCard title="Fill strategy" diagram={<FillDiagram strategy={op.fill_strategy} angle={op.raster_angle_deg} />}
+          help="The order the pocket is cleared in. Spiral out starts in the middle and finishes on the wall."
+          control={<select className={inp} value={op.fill_strategy ?? ''} onChange={e => patchOp(op.id, { fill_strategy: e.target.value || null })}>
+            <option value="">—</option>
+            {FILL_STRATEGIES.map(x => <option key={x} value={x}>{x}</option>)}
+          </select>} />
+      )}
+      {clear && (
+        <FieldCard title="Ring width (mm)" diagram={<RingDiagram ring={op.ring_width_mm} />}
+          help="Clear only a band this wide in from the line, e.g. the glass rebate. Blank clears the whole area."
+          control={<Num value={op.ring_width_mm} onSave={v => patchOp(op.id, { ring_width_mm: v != null && v > 0 ? v : null })} />} />
+      )}
+      {clear && (
+        <FieldCard title="Raster angle° · stepover %" diagram={<RasterDiagram angle={op.raster_angle_deg} stepover={op.raster_stepover_pct} />}
+          help="Angle turns the lanes (raster fill only). Stepover is the gap between lanes or laps as a % of the tool width; blank = 70%."
+          control={<div className="grid grid-cols-2 gap-2">
+            <Num label="Angle°" value={op.raster_angle_deg} onSave={v => patchOp(op.id, { raster_angle_deg: v })} />
+            <Num label="Stepover %" value={op.raster_stepover_pct} onSave={v => patchOp(op.id, { raster_stepover_pct: v })} />
+          </div>} />
+      )}
+      {t === 'groove' && (
+        <FieldCard title="Width (mm)" diagram={<WidthDiagram width={op.width_mm} diameter={d} />}
+          help="How wide the slot is. Wider than the tool takes more than one pass."
+          control={<Num value={op.width_mm} onSave={v => patchOp(op.id, { width_mm: v })} />} />
+      )}
+      {t === 'square_off' && (
+        <FieldCard title="Clean-up radius (mm)" diagram={<CleanupDiagram radius={cleanR} toolDiameter={d} />}
+          help={<>The round corner to clean out. Blank = the previous step’s tool radius{prevTool?.diameter != null ? ` (R${prevTool.diameter / 2})` : ''}. This step’s tool must be smaller.</>}
+          control={<Num value={op.cleanup_radius_mm} onSave={v => patchOp(op.id, { cleanup_radius_mm: v != null && v > 0 ? v : null })} />} />
+      )}
+      {!drill && (
+        <FieldCard title="Offsets from the line (mm)" diagram={<OffsetsDiagram top={op.offset_top_mm} bottom={op.offset_bottom_mm} left={op.offset_left_mm} right={op.offset_right_mm} />}
+          help="Moves this step off the line on each side: + moves it in, − moves it out (the glass rebate uses −15.9). The line itself is the door profile’s Edge offset."
+          control={<div className="grid grid-cols-2 gap-2">
+            <Num label="Top" value={op.offset_top_mm} onSave={v => patchOp(op.id, { offset_top_mm: v })} />
+            <Num label="Bottom" value={op.offset_bottom_mm} onSave={v => patchOp(op.id, { offset_bottom_mm: v })} />
+            <Num label="Left" value={op.offset_left_mm} onSave={v => patchOp(op.id, { offset_left_mm: v })} />
+            <Num label="Right" value={op.offset_right_mm} onSave={v => patchOp(op.id, { offset_right_mm: v })} />
+          </div>} />
+      )}
+      {!drill && (
+        <FieldCard title="Feed / spindle override" diagram={<FeedOverrideDiagram feed={op.feed_rate_override} toolFeed={tool?.base_feed_rate ?? null} rpm={op.spindle_speed_override} toolRpm={tool?.base_spindle_speed ?? null} />}
+          help="Blank runs at the tool’s own feed and rpm (Settings → CNC Tool Setup). Only fill in to run this step differently."
+          control={<div className="grid grid-cols-2 gap-2">
+            <Num label="Feed mm/min" value={op.feed_rate_override} onSave={v => patchOp(op.id, { feed_rate_override: v })} />
+            <Num label="Spindle rpm" value={op.spindle_speed_override} integer onSave={v => patchOp(op.id, { spindle_speed_override: v })} />
+          </div>} />
+      )}
     </div>
   )
 }

@@ -14,6 +14,7 @@ CV stores lengths in **inches** (× 25.4); feeds/speeds are as entered (mm/min, 
 | T2 | Tool-set steps to match CV: square-out corners, centre-on-line, step depth wins, ring rebate, through cut, per-tool feeds/rpm; Shaker Door set rebuilt to CV; Glass door profile + Glass Door set | **built 01/11/26**, machine test pending |
 | T3 | Glass size for ordering: Reports → Glass Order | **built 01/11/26**, in-app check pending |
 | T3b | Tool set section view (sample door section + corner plan) in Settings → CNC Tool Sets | **built 01/11/26**, in-app check pending |
+| T3c | Tool set step fields as cards, each with a live diagram (type, depth, tool on the line, fill, ring, raster, width, clean-up radius, offsets, feed/spindle); only the fields that matter for the step type are shown | **built 01/11/26**, in-app check pending |
 
 ## Locked decisions (T3, 01/11/26)
 
