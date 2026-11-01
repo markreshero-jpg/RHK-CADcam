@@ -123,3 +123,5 @@ the carcass, 16s against walls = fillers on the kick, seen vanity panels to the 
   from the opening edge (centre of the stile), nearest hole 30 from the grip edge — top on base doors, bottom on
   overheads. Checked resolved: BC-02 drawer x 223.5 / y 332 on 447 x 362; BC-06 door x 30 / centre 632 on 726.
 - Job Handle Holes = Don't drill (rule_overrides.HANDLE_DRILL false, set 2026-10-29), so no holes are machined.
+- BC-11 top two drawer fronts 170 -> 180 (locked rows 1 + 2) to line up with BC-08's 4 x 180; bottom drawer
+  382 -> 362 (`_tmp-6592-dr.mjs go 180`). Resolver clean.
