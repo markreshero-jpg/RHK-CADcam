@@ -1,0 +1,36 @@
+{
+  "_source": "G:/My Drive/.../Mark ups with Cleint 26.10.26/img_261026111543.pdf p3-4 (US Main Ensuite) + Site measure 22.10.26.pdf p7 (Bed 1 Ens 1662 x 800) + Mark Q&A 2026-11-01",
+  "_notes": [
+    "Site: 1662 between 800 returns. CH not measured - 2692 (as US Hallway: 2712 off slab - 20 floor) TBC.",
+    "TEPF 30 | D 801 | D 801 | TEPF 30 = 1662. End panels floor to ceiling, 500 deep.",
+    "Wall hung, no kick: carcass 460-800 (pos_z 460, dy 340) under a 60 finished top (20 YDL Bella Oro slab at 800 + 60 mitred apron, top 820 AFFL). Fronts 5 back from the 500 top -> 476.5 carcass. Top drawers: finger gap 60 under the apron (room base REVT 44). Finger pulls for now (Mark) - 'set back SQ edge' finger pull to come.",
+    "Each bay: one 300ish drawer (inner drawer behind per markup - CAD note, detail TBC). Rails on edge (basins).",
+    "Floating shelf 33 x 250 under, top 246.5 AFFL, LED strip at the back, 250d centre support (TBC). Taps 407 / 414 in, wastes 408 / 398 in (heights TBC: 1110 / 640 as US Bath)."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "US Main Ensuite",
+  "roomHeight": 2692,
+  "wallCabinetTop": 2692,
+  "roomRules": { "TOEH": 100, "BY_CLASS": { "base": { "REVT": 44 } } },
+  "walls": [
+    { "x": 0, "y": 800, "length": 800, "angle": 270, "_": "1 left return, S->N" },
+    { "x": 0, "y": 0, "length": 1662, "angle": 0, "_": "2 back wall, W->E = elevation" },
+    { "x": 1662, "y": 0, "length": 800, "angle": 90, "_": "3 right return, N->S" }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 2, "offset": 0, "dx": 30, "dy": 2692, "dz": 500, "note": "# 1 30 end panel, floor to ceiling" },
+    { "def": "D2-LL", "wall": 2, "offset": 30, "dx": 801, "dy": 340, "dz": 476.5, "note": "# 2 drawer (inner drawer behind, TBC), basin over",
+      "rules": { "FLOAT": true, "RAIL_ORIENT": "vertical" },
+      "set": { "has_toekick": false, "pos_z": 460,
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "drawer_face", "hinge_side": "left", "finger_gap": 60 } ] } } },
+    { "def": "D2-LL", "wall": 2, "offset": 831, "dx": 801, "dy": 340, "dz": 476.5, "note": "# 3 drawer (inner drawer behind, TBC), basin over",
+      "rules": { "FLOAT": true, "RAIL_ORIENT": "vertical" },
+      "set": { "has_toekick": false, "pos_z": 460,
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "drawer_face", "hinge_side": "left", "finger_gap": 60 } ] } } },
+    { "def": "TEPF", "wall": 2, "offset": 1632, "dx": 30, "dy": 2692, "dz": 500, "note": "# 4 30 end panel, floor to ceiling" },
+    { "def": "FLSHLF", "wall": 2, "offset": 30, "dx": 1602, "dy": 33, "dz": 250, "note": "# 5 floating shelf 33 x 250, top 246.5 AFFL, LED strip at the back",
+      "set": { "pos_z": 213.5 } }
+  ]
+}
