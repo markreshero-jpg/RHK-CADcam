@@ -5,9 +5,9 @@
 // the middle hole of the set, as seamDrillOps tags it. Model axes (cabinet mm
 // after the row's model_scale): origin = middle pocket centre on the face,
 // +Y out of the face, −X towards the seam edge (the screw runs that way).
-// No model / loading / failed → the built-in Lamello Cabineo 12 stand-in
-// (housing filling the 3 × Ø15 pocket, collar on the surface, Ø5 screw 12
-// into the other panel).
+// No model / loading / failed → the built-in Lamello Cabineo 12 stand-in at
+// its catalogue size, 33.8 × 16.5 × 10.8 (Lincoln Sentry 7102676): 10 body in
+// the 3 × Ø15 pocket, 0.8 collar on the surface, Ø5 screw 12 into the other panel.
 
 import { Suspense, useMemo } from 'react'
 import * as THREE from 'three'
@@ -48,15 +48,15 @@ function lobes(grow: number, depth: number): THREE.ExtrudeGeometry {
 }
 
 function StandIn({ colour }: { colour: string }) {
-  const housing = useMemo(() => lobes(-0.1, 10.8), [])
-  const collar  = useMemo(() => lobes(1.5, 1), [])
+  const housing = useMemo(() => lobes(-0.1, 10), [])
+  const collar  = useMemo(() => lobes(0.75, 0.8), [])
   return (
     <group>
       {/* Shapes lie in X/Z: turn the extrude axis (+Z) to −Y (into the panel). */}
       <mesh geometry={housing} rotation={[Math.PI / 2, 0, 0]}>
         <meshStandardMaterial color={colour} />
       </mesh>
-      <mesh geometry={collar} rotation={[Math.PI / 2, 0, 0]} position={[0, 1, 0]}>
+      <mesh geometry={collar} rotation={[Math.PI / 2, 0, 0]} position={[0, 0.8, 0]}>
         <meshStandardMaterial color={colour} />
       </mesh>
       {/* Screw: shank from inside the housing out through the edge, 12 into the other panel. */}

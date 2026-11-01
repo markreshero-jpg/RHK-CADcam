@@ -53,8 +53,10 @@ it butts into (gable).
 ## Hardware + 3D (C4)
 
 - **Accessories → category `connector`** (constraint widened): row
-  *Lamello Cabineo 12, collar on surface* (brand Lamello, colour #3a3a3a).
-  Supplier code + $/ea left for Mark.
+  *Lamello Cabineo 12, collar on surface, white* — Lincoln Sentry **7102676**
+  (= Lamello 186320, box of 500, 33.8 × 16.5 × 10.8; list $449.77/box inc GST
+  2026-11-01, page says clearance / discontinued). $/ea left blank like the
+  other accessories.
 - **`joint_type_operations.fitting_id`** → hardware_accessories: the fitting in each
   set of that op (one per first-axis step). Set on both Cabineo pocket ops.
   Library editor: **Fitting** column (connectors only).
@@ -64,8 +66,8 @@ it butts into (gable).
 - **3D**: `JointFittingModel` draws each set, layer item **Joint fittings**
   (hardware, 3D, default on). Model axes (after model_scale → cabinet mm):
   origin = middle pocket centre on the face, +Y out of the face, −X toward the
-  seam edge. No model_url → built-in stand-in (housing filling the pocket,
-  1 mm collar 1.5 wider, Ø5 screw 12 into part B at 5 below the face).
+  seam edge. No model_url → built-in stand-in at the catalogue size (10 body in
+  the pocket, 0.8 collar 16.5 wide, Ø5 screw 12 into part B at 5 below the face).
 - **Real model**: Lamello's zips are the *pocket* solids, not the connector.
   Upload the Cabineo 12 connector model (STEP → GLB/STL) to the accessory row's
   model_url, oriented as above.
