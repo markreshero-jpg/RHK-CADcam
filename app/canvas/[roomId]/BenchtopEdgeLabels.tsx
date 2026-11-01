@@ -1,11 +1,11 @@
 // Benchtop edge text along each edge of one top (plan canvas + plan prints):
 // edge length just inside the edge (layer item benchtop_sizes), profile code just
 // outside it (benchtop_edges, prints only — the canvas draws its own coloured codes),
-// and the top's name at its centre (benchtop_sizes). Text reads along the edge,
+// and the top's name at its centre with its overall length × depth under it (benchtop_sizes). Text reads along the edge,
 // never upside down. Sizes are model mm; the caller scales them for zoom / 1:P.
 'use client'
 import type { BenchtopSegment } from '@/src/lib/types'
-import { segMid, segLength, outwardNormal, outlineCentroid } from '@/src/lib/benchtopGeometry'
+import { segMid, segLength, outwardNormal, outlineCentroid, overallSize } from '@/src/lib/benchtopGeometry'
 
 const FONT = 'Arial, Helvetica, sans-serif'
 
@@ -18,7 +18,7 @@ function upright(s: BenchtopSegment) {
 
 export default function BenchtopEdgeLabels({ segs, name, sizes, codes, fs, gap, fill, opacity }: {
   segs: BenchtopSegment[]
-  /** Top name at the centre (with sizes). */
+  /** Top name at the centre, overall size under it (with sizes). */
   name?: string | null
   /** Edge lengths inside each edge. */
   sizes: boolean
@@ -31,6 +31,7 @@ export default function BenchtopEdgeLabels({ segs, name, sizes, codes, fs, gap, 
   opacity?: number
 }) {
   const c = outlineCentroid(segs)
+  const size = overallSize(segs)
   return (
     <g opacity={opacity} fontFamily={FONT} style={{ pointerEvents: 'none', userSelect: 'none' }}>
       {segs.map((s, i) => {
@@ -58,9 +59,21 @@ export default function BenchtopEdgeLabels({ segs, name, sizes, codes, fs, gap, 
         )
       })}
       {sizes && name && (
-        <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="middle" fontSize={fs * 1.25} fontWeight={700} fill={fill}>
-          {name}
-        </text>
+        // A shallow top has no room for a second line: the size goes after the name.
+        size.depth < fs * 10 ? (
+          <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="middle" fontSize={fs * 1.25} fontWeight={700} fill={fill}>
+            {name}<tspan dx={fs * 0.6} fontSize={fs} fontWeight={400}>{`${Math.round(size.length)} × ${Math.round(size.depth)}`}</tspan>
+          </text>
+        ) : (
+          <>
+            <text x={c.x} y={c.y} textAnchor="middle" dominantBaseline="middle" fontSize={fs * 1.25} fontWeight={700} fill={fill}>
+              {name}
+            </text>
+            <text x={c.x} y={c.y + fs * 1.6} textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={fill}>
+              {Math.round(size.length)} × {Math.round(size.depth)}
+            </text>
+          </>
+        )
       )}
     </g>
   )

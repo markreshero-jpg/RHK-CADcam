@@ -1006,7 +1006,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Reports in the menu bar and choose Room Reports…',
       target: 'menu-Reports', canvas: true, done: c => c.report !== null },
     { id: 'pick', title: 'Choose Benchtop Quote',
-      body: 'In the list on the left, click Benchtop Quote. It starts on the Benchtops layer set; the schedule (area, edges per profile, cutouts) is under the drawing.',
+      body: 'In the list on the left, click Benchtop Quote. It starts on the Benchtops layer set; each top shows its name, overall size (length × depth) and edge lengths; the schedule (size, area, edges per profile, cutouts) is under the drawing.',
       target: 'report-benchtop_quote', canvas: true, done: c => c.report === 'benchtop_quote' },
     { id: 'download', title: 'Download and send',
       body: 'Set the paper and scale, then Download PDF. Page 1 is the plan, page 2 the schedule. Email it to the stonemason.',

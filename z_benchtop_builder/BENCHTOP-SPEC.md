@@ -422,6 +422,9 @@ Started on Mark's go ("start phase 4"). Rules Q-a…Q-h are Claude's defaults �
   supply rows if resolved, thickness, m² less cutouts, exposed edge lm per profile, wall / joint lm, cutouts,
   waterfalls) + totals + code legend. Built from the drawing, no Resolve needed. `src/lib/benchtopQuote.ts`,
   `BenchtopQuoteSchedule.tsx`, `BenchtopEdgeLabels.tsx`; PlanViewReport `quote` prop. In-app check pending.
+  2026-11-02 (Mark): overall size (length × depth, square to the longest straight edge — `overallSize` in
+  benchtopGeometry) under each top's name on the plan (`benchtop_sizes`; after the name on a shallow top) and a
+  Size (L × D) column in the schedule.
 - **R-b Parts List Summary** — supply items removed (the interim "— supply"
   tag is gone); it lists only cut parts.
 - **R-c Optimiser** — in-house parts (rows with a board `material_id`, not

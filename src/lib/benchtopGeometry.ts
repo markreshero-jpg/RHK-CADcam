@@ -152,6 +152,24 @@ export function outlineBounds(segs: BenchtopSegment[]) {
   return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) }
 }
 
+// Overall length × depth, measured square to the longest straight edge (an L or
+// angled top gives its bounding size that way); length is the larger of the two.
+export function overallSize(segs: BenchtopSegment[]): { length: number; depth: number } {
+  const pts = outlinePoints(segs)
+  if (!pts.length) return { length: 0, depth: 0 }
+  let ux = 1, uy = 0, best = 0
+  for (const s of segs) {
+    const l = s.type === 'line' ? dist(s.p0, s.p1) : 0
+    if (l > best) { best = l; ux = (s.p1.x - s.p0.x) / l; uy = (s.p1.y - s.p0.y) / l }
+  }
+  let a0 = Infinity, a1 = -Infinity, b0 = Infinity, b1 = -Infinity
+  for (const p of pts) {
+    const a = p.x * ux + p.y * uy, b = p.y * ux - p.x * uy
+    a0 = Math.min(a0, a); a1 = Math.max(a1, a); b0 = Math.min(b0, b); b1 = Math.max(b1, b)
+  }
+  return { length: Math.max(a1 - a0, b1 - b0), depth: Math.min(a1 - a0, b1 - b0) }
+}
+
 // Unit normal of edge i pointing OUT of the shape (works for either winding).
 export function outwardNormal(segs: BenchtopSegment[], i: number): P {
   const s = segs[i]

@@ -27,6 +27,7 @@ describe('benchtop quote', () => {
   it('area less cutouts, edges by profile, wall + joint lengths', () => {
     const [t] = quoteTops([bt], { profiles, defaultProfileId: () => 'pe', thickness: () => 20 })
     expect(t.area_m2).toBe(1.6)   // 1.8 − 0.2
+    expect([t.length, t.depth]).toEqual([3000, 600])
     expect(t.profiles).toEqual({ PE: 3000, SQ: 600 })
     expect(t.wallMm).toBe(3000)
     expect(t.jointMm).toBe(600)

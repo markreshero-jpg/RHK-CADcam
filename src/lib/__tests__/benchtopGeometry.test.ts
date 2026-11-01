@@ -4,7 +4,7 @@ import {
   toggleCurve, filletVertex, chamferVertex, offsetSegments, mapSegments, transformBenchtop,
   outwardNormal, outlineBounds, signedArea, outlinePoints, segMid, segLength,
   nearestOnOutline, lineHitOnOutline, effectiveProfileId, translateFn,
-  pushPullEdge, setEdgeLength, splitSegmentAt, resnapJoins, sizeAcross,
+  pushPullEdge, setEdgeLength, splitSegmentAt, resnapJoins, sizeAcross, overallSize,
 } from '../benchtopGeometry'
 import type { BenchtopSegment } from '../types'
 
@@ -217,5 +217,19 @@ describe('in-plan shape editing (Phase 6)', () => {
     expect(j.p1).toEqual({ x: 500, y: 640 })
     const [far] = resnapJoins(out, [{ p0: { x: 500, y: 0 }, p1: { x: 500, y: 900 }, type: 'butt' }])
     expect(far.p1).toEqual({ x: 500, y: 900 })   // beyond tolerance → left alone
+  })
+})
+
+describe('overallSize', () => {
+  const ring = (pts: { x: number; y: number }[]) => pts.map((p, i) => ({ type: 'line' as const, p0: p, p1: pts[(i + 1) % pts.length] }))
+  it('measures square to the longest straight edge, even on an angle', () => {
+    const c = Math.cos(Math.PI / 6), s = Math.sin(Math.PI / 6)
+    const rot = (x: number, y: number) => ({ x: x * c - y * s, y: x * s + y * c })
+    const o = overallSize(ring([rot(0, 0), rot(2400, 0), rot(2400, 600), rot(0, 600)]) as BenchtopSegment[])
+    expect(o.length).toBeCloseTo(2400); expect(o.depth).toBeCloseTo(600)
+  })
+  it('an L top gives its bounding length × depth', () => {
+    const o = overallSize(ring([{ x: 0, y: 0 }, { x: 3000, y: 0 }, { x: 3000, y: 1800 }, { x: 2400, y: 1800 }, { x: 2400, y: 600 }, { x: 0, y: 600 }]) as BenchtopSegment[])
+    expect(o).toEqual({ length: 3000, depth: 1800 })
   })
 })

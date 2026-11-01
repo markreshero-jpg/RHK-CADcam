@@ -1,12 +1,13 @@
 // ============================================================
 // Benchtop quote (Reports → "Benchtop Quote", for stonemasons).
 // Straight from the drawn tops — no "Resolve Parts" needed: per top its area,
-// exposed edge lineal mm per profile code, wall / joint edge lengths, cutouts
-// and waterfall legs. Material comes from the supply rows when they exist.
+// overall length × depth, exposed edge lineal mm per profile code, wall / joint
+// edge lengths, cutouts and waterfall legs. Material comes from the supply rows
+// when they exist.
 // ============================================================
 
 import type { BenchtopInstance, BenchtopEdgeProfile } from './types'
-import { btSegments, outlinePoints, signedArea, segLength, effectiveProfileId } from './benchtopGeometry'
+import { btSegments, outlinePoints, signedArea, segLength, effectiveProfileId, overallSize } from './benchtopGeometry'
 
 export interface QuoteTop {
   id:         string
@@ -14,6 +15,9 @@ export interface QuoteTop {
   material:   string | null
   thickness:  number | null
   area_m2:    number
+  /** Overall size, mm (square to the longest straight edge). */
+  length:     number
+  depth:      number
   /** Exposed edges: profile code → lineal mm. Edges with no profile go under '—'. */
   profiles:   Record<string, number>
   wallMm:     number
@@ -58,8 +62,9 @@ export function quoteTops(
       profiles[code] = (profiles[code] ?? 0) + len
       if (prof?.generates === 'waterfall') waterfalls++
     }
+    const size = overallSize(segs)
     return [{
-      id: bt.id, name: bt.label ?? 'Benchtop',
+      id: bt.id, name: bt.label ?? 'Benchtop', length: Math.round(size.length), depth: Math.round(size.depth),
       material: opts.material?.(bt) ?? null, thickness: opts.thickness?.(bt) ?? null,
       area_m2: r2(area), profiles, wallMm, jointMm,
       cutouts: (bt.cutout_polygons ?? []).length, waterfalls,
