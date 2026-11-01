@@ -434,6 +434,7 @@ export default function FaceGridEditor({
       }),
     })
     if (key === 'handle_length' && value !== null) useTutorial.getState().emit('handle_length_set')   // tutorial linear_handles
+    if (key === 'handle_id' && value === NO_HANDLE) useTutorial.getState().emit('no_handle_set')   // tutorial no_handle
   }
 
   // Per-front VJ line layout (z_doorFace_module VJ cascade). null = inherit.
@@ -529,6 +530,7 @@ export default function FaceGridEditor({
         return mm ? { ...rest, box_raise: mm } : rest
       }),
     })
+    if (mm) useTutorial.getState().emit('box_raise_set')   // tutorial drawer_box_raise
   }
 
   // The resolved stack for a zone — carries the effective drawer type and the box

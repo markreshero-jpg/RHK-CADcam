@@ -1339,6 +1339,29 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Under Door style, set Profile to Glass. The door keeps its style’s board, colour and edge tape (Laminex, Polytec, 2pac…) and gets the glass machining from the back: rebate, squared corners, opening cut through. Click Same on every door of this cabinet to do the pair. Blank = the style’s own profile. The glass size goes on Reports → Glass Order. Board doors: the routed opening and rebate are bare board — edge or paint them by hand.',
       canvas: true, done: (c, s) => ev(c, 'door_profile_set') > ev(s, 'door_profile_set') },
   ]},
+
+  // Appended 2026-11-01 (z_handles D23 "No handle" + per-drawer Box raise).
+  { id: 'no_handle', level: 'intermediate', topic: 'cabinets', title: 'A front with no handle',
+    blurb: 'For a front opened from underneath or behind: no grip, no finger gap, no holes.',
+    keywords: 'no handle handleless finger pull grip open from underneath desk drawer face grid', steps: [
+    { id: 'open', title: 'Open the front',
+      body: 'Double-click the cabinet, open the Face Grid tab and click the drawer front or door.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'none', title: 'Handle → No handle',
+      body: 'Under Handle pick No handle. That front gets no grip, no finger gap and no handle holes, and nothing goes on the hardware list for it. The cabinet’s other fronts keep the schedule handle. Pick “— schedule —” to put the handle back.',
+      canvas: true, done: (c, s) => ev(c, 'no_handle_set') > ev(s, 'no_handle_set') },
+  ]},
+
+  { id: 'drawer_box_raise', level: 'intermediate', topic: 'cabinets', title: 'Raise or drop one drawer box',
+    blurb: 'Move one drawer’s runners and box up or down, e.g. down 16.5 when the cabinet has no bottom.',
+    keywords: 'drawer box raise drop lower runner height no bottom carcass removed face grid', steps: [
+    { id: 'open', title: 'Open the drawer',
+      body: 'Double-click the cabinet, open the Face Grid tab and click the drawer front.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'raise', title: 'Box raise',
+      body: 'Under Runner, type into Box raise (mm) and press Enter: + lifts, − drops. The runners, the box and the front-fixing holes all move together, so the front still lines up. A drop can take the box below the cabinet floor, which is meant for a cabinet whose bottom you have removed (−16.5 for a 16.5 bottom). A raise uses up front height, so a taller box may stop fitting (see the Errors tab). Clear the box to go back to 0.',
+      canvas: true, done: (c, s) => ev(c, 'box_raise_set') > ev(s, 'box_raise_set') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
