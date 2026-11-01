@@ -26,6 +26,7 @@ import { mergeRules } from '@/src/lib/resolver/mergeRules'
 import { normaliseBulkhead } from '@/src/lib/bulkhead'
 import { normaliseSplit } from '@/src/lib/cabinetSplit'
 import { normaliseFloatShelf } from '@/src/lib/floatShelf'
+import { normalisePartCutouts } from '@/src/lib/partCutouts'
 import { normaliseBackPanel } from '@/src/lib/backPanel'
 import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
 import { FLOAT_Z } from '@/src/lib/floating'
@@ -534,6 +535,7 @@ export function buildInstanceFromDefinition(
     bulkhead: def.bulkhead ?? null,
     curved_end: curvedEnd,
     float_shelf: normaliseFloatShelf(def.float_shelf),
+    part_cutouts: normalisePartCutouts(def.part_cutouts),
     back_panel: normaliseBackPanel(def.back_panel),
     faces: def.faces ?? null,
     part_hide_views: def.part_hide_views ?? {},
@@ -783,6 +785,7 @@ export async function saveCabinetToLibrary(
     bulkhead: inst.bulkhead ?? null,
     curved_end: inst.curved_end ?? null,
     float_shelf: inst.float_shelf ?? null,
+    part_cutouts: inst.part_cutouts ?? {},
     back_panel: inst.back_panel ?? null,
     faces: inst.faces ?? null,
     custom_parts: cps,

@@ -54,7 +54,9 @@ rangehood model is drawn (Mark: "noone sees them … i'm happy just to have a ho
 4. **Rangehood hole** through the cabinet bottom (and the WUP under it).
    Width, depth, set-back from the front, left/right offset (default centred),
    corner radius. Edges bare (the rangehood flange covers them).
-5. **First fixed shelf, default 350 up, adjustable**, a normal fixed shelf (its
+5. **First fixed shelf, default 350 up, adjustable** — measured from the bottom
+   of the cabinet **including the under panel** (WUP underside) to the underside
+   of the shelf — a normal fixed shelf (its
    usual drilling / joints), with a **flue notch 200 wide × 250 deep from its
    back edge**, centred (offset editable).
 6. **Top gets the same notch as the shelf** — same width, depth and X, lined up
@@ -67,7 +69,8 @@ rangehood model is drawn (Mark: "noone sees them … i'm happy just to have a ho
    - **Front piece**, 200 + 2 × board wide, in front of the sides, covering
      their front edges. **Both side edges taped.**
    - **Screwed through the top and the shelf** — the existing **5mm Dynamic
-     Holes** joint, no new joint type.
+     Holes** joint, no new joint type. The **front piece also gets screw holes
+     into the sides' front edges** (5mm Dynamic Holes front → each side).
 9. **Code `WRH`** (already reserved in the cabinet-codes convention for the
    wall rangehood cabinet). Wall › Appliances.
 
@@ -137,9 +140,5 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 
 ## Open
 
-- **Shelf 350** — assumed = top of the bottom → underside of the shelf (clear
-  space for the rangehood). Confirm.
-- **Front piece → sides** — only screwed through the top and shelf (decision 8),
-  or also into the sides?
 - **Default hole size** — from the Sirius SM927EL520 specs when they come; until
-  then the WRH warns while the hole is unset.
+  then the WRH warns while the hole is unset (Mark OK'd, 2026-11-01).

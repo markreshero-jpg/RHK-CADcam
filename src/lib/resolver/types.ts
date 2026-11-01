@@ -765,6 +765,8 @@ export interface CabinetInput {
   curved_end?:    import('../curvedEnd/settings').CurvedEndSettings | null
   // Floating shelf (z_floating_shelf): boards, strips + cleats from resolveFloatShelf.
   float_shelf?:   import('../floatShelf').FloatShelfSettings | null
+  // Part cut-outs (z_rangehood R1): holes added to the resolved parts by applyPartCutouts.
+  part_cutouts?:  import('../partCutouts').PartCutouts | null
   // Height split (z_cabinet_split): sides + back cut at these heights (cabinet frame).
   split?:         import('../cabinetSplit').CabinetSplit | null
   // Island back panel (z_island_back_panel): sheet-width pieces from resolveBackPanel.

@@ -203,6 +203,8 @@ export interface CabinetInstance {
   curved_end?: import('./curvedEnd/settings').CurvedEndSettings | null
   // Floating shelf settings (z_floating_shelf); non-null = a floating shelf (FLSHLF).
   float_shelf?: import('./floatShelf').FloatShelfSettings | null
+  // Part cut-outs (z_rangehood R1): part key → holes / notches cut in that part.
+  part_cutouts?: import('./partCutouts').PartCutouts | null
   // Island back panel settings (z_island_back_panel); non-null = IBPF / IBPK.
   back_panel?: import('./backPanel').BackPanelSettings | null
   // Height split (z_cabinet_split): sides + back cut at these heights.
@@ -291,6 +293,8 @@ export interface CabinetDefinition {
   curved_end?: import('./curvedEnd/settings').CurvedEndSettings | null
   // Floating shelf defaults (z_floating_shelf), copied to the instance at placement.
   float_shelf?: import('./floatShelf').FloatShelfSettings | null
+  // Part cut-out defaults (z_rangehood), copied to the instance at placement.
+  part_cutouts?: import('./partCutouts').PartCutouts | null
   // Island back panel settings (z_island_back_panel); non-null = IBPF / IBPK.
   back_panel?: import('./backPanel').BackPanelSettings | null
   // Per-view part hides, copied to the instance at placement (PART-HIDE-SPEC).
