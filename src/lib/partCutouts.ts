@@ -1,17 +1,18 @@
 // ============================================================
 // Part cut-outs (z_rangehood/RANGEHOOD-SPEC.md, R1).
 //
-// Any part on a cabinet can carry cut-outs, keyed by its part key on the
-// cabinet (`cabinet_instances.part_cutouts`, part key → Cutout[]):
+// Any part on a cabinet can carry cut-outs, keyed by its part id on the
+// cabinet (`cabinet_instances.part_cutouts`, `case_bottom` / `int_fixed_shelf_0`
+// → Cutout[], the ids partShapes and the formula engine use):
 //   hole   a closed loop inside the part (rect / rounded rect / circle),
 //          through or a pocket `depth` deep — becomes the resolved part's
 //          `cutouts` (the same loops the curved-end rib cut-outs use), so
 //          nesting, G-code, 3D and the cabinet views pick it up unchanged.
-//   notch  open to an edge, cut into the part's outline (R2 — not yet).
+//   notch  a rectangle open to an edge, cut into the part's outline (R2).
 //
-// R1 covers the carcass's horizontal parts (bottom, top, rails): positions
-// are in the horizontal shape frame — x across from the part's left end
-// (0..DY), y back from its front edge (0..DX).
+// So far: the carcass's horizontal parts (bottom, top, rails) and shelves.
+// Positions are in the horizontal shape frame — x across from the part's left
+// end (0..DY), y back from its front edge (0..DX).
 // ============================================================
 
 import type { OutlinePt } from './shapePath'
@@ -120,37 +121,169 @@ export function holeLoop(x0: number, y0: number, w: number, d: number, shape: Cu
     .map(p => ({ ...p, x: r2(p.x), y: r2(p.y) }))
 }
 
-/** The carcass parts R1 cuts: horizontal ones (shape frame x along the width). */
-export const HORIZONTAL_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail'])
+// ── Notches (R2) ──────────────────────────────────────────────────────────────
 
-type CutPart = { part_key: string; DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }
-type Issue = { code: string; message: string; part?: string }
+type Rect = { x0: number; x1: number; y0: number; y1: number }
+const EPS = 0.01
+
+/** Square-cornered (axis-aligned, no arcs) outline — the only kind R2 notches. */
+function isRectilinear(pts: OutlinePt[]): boolean {
+  return pts.every((p, i) => {
+    const q = pts[(i + 1) % pts.length]
+    return !(typeof p.b === 'number' && Math.abs(p.b) > 1e-9) && (Math.abs(p.x - q.x) < EPS || Math.abs(p.y - q.y) < EPS)
+  })
+}
+
+function insidePoly(pts: OutlinePt[], x: number, y: number): boolean {
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j]
+    if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
 
 /**
- * Add each part's holes to the resolved case parts. A plain part gains a
- * rectangle outline (the optimiser cuts holes only on a resolver outline).
- * Returns warnings for cut-outs it couldn't place.
+ * `base` (a W × D rectangle when absent) less the notch rects, traced back to
+ * one counter-clockwise outline. Square outlines only, so it works on a grid of
+ * every x / y the shapes use: a cell is solid when its centre is inside the base
+ * and in no notch. Edge tags on the base carry over to the edges left on them.
+ * Null when the notches split the part (or leave nothing).
  */
-export function applyPartCutouts(parts: CutPart[], cutouts: PartCutouts | null | undefined, scope?: FormulaScope): Issue[] {
+export function notchOutline(W: number, D: number, base: OutlinePt[] | undefined, notches: Rect[]): OutlinePt[] | null {
+  const poly = base ?? [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }, { x: 0, y: D }]
+  const uniq = (vs: number[]) => [...new Set(vs.map(r2))].sort((a, b) => a - b)
+  const xs = uniq([...poly.map(p => p.x), ...notches.flatMap(n => [n.x0, n.x1])])
+  const ys = uniq([...poly.map(p => p.y), ...notches.flatMap(n => [n.y0, n.y1])])
+  const solid = (i: number, j: number) => {
+    if (i < 0 || j < 0 || i >= xs.length - 1 || j >= ys.length - 1) return false
+    const cx = (xs[i] + xs[i + 1]) / 2, cy = (ys[j] + ys[j + 1]) / 2
+    return insidePoly(poly, cx, cy) && !notches.some(n => cx > n.x0 && cx < n.x1 && cy > n.y0 && cy < n.y1)
+  }
+  // Boundary edges of the solid cells, each running with the solid on its left.
+  const next = new Map<string, { x: number; y: number }[]>()
+  const key = (x: number, y: number) => `${x},${y}`
+  let edges = 0
+  const add = (ax: number, ay: number, bx: number, by: number) => {
+    const k = key(ax, ay)
+    next.set(k, [...(next.get(k) ?? []), { x: bx, y: by }])
+    edges++
+  }
+  for (let i = 0; i < xs.length - 1; i++) for (let j = 0; j < ys.length - 1; j++) {
+    if (!solid(i, j)) continue
+    const x0 = xs[i], x1 = xs[i + 1], y0 = ys[j], y1 = ys[j + 1]
+    if (!solid(i, j - 1)) add(x0, y0, x1, y0)
+    if (!solid(i + 1, j)) add(x1, y0, x1, y1)
+    if (!solid(i, j + 1)) add(x1, y1, x0, y1)
+    if (!solid(i - 1, j)) add(x0, y1, x0, y0)
+  }
+  if (!edges) return null
+  const first = next.keys().next().value as string
+  const [sx, sy] = first.split(',').map(Number)
+  const loop: { x: number; y: number }[] = []
+  let cur = { x: sx, y: sy }
+  for (let guard = 0; guard <= edges; guard++) {
+    loop.push(cur)
+    const outs = next.get(key(cur.x, cur.y))
+    if (!outs?.length) return null
+    cur = outs.shift()!
+    if (cur.x === sx && cur.y === sy) break
+  }
+  if (loop.length !== edges) return null   // more than one loop: the part is split
+  // Drop the grid points that sit mid-run.
+  const pts = loop.filter((p, i) => {
+    const a = loop[(i + loop.length - 1) % loop.length], b = loop[(i + 1) % loop.length]
+    return !((a.x === p.x && p.x === b.x) || (a.y === p.y && p.y === b.y))
+  })
+  // Edge tags: an edge lying along a tagged base edge keeps its tag.
+  const on = (a: OutlinePt, b: OutlinePt, u: { x: number; y: number }) =>
+    Math.abs((b.x - a.x) * (u.y - a.y) - (b.y - a.y) * (u.x - a.x)) < EPS * Math.hypot(b.x - a.x, b.y - a.y)
+    && u.x >= Math.min(a.x, b.x) - EPS && u.x <= Math.max(a.x, b.x) + EPS
+    && u.y >= Math.min(a.y, b.y) - EPS && u.y <= Math.max(a.y, b.y) + EPS
+  return pts.map((p, i) => {
+    const q = pts[(i + 1) % pts.length]
+    const src = poly.find((a, k) => !!a.e && on(a, poly[(k + 1) % poly.length], p) && on(a, poly[(k + 1) % poly.length], q))
+    return src?.e ? { x: p.x, y: p.y, e: src.e } : { x: p.x, y: p.y }
+  })
+}
+
+// ── Applying them ─────────────────────────────────────────────────────────────
+
+/** Parts that take cut-outs so far (horizontal shape frame: x along the width
+ *  0..DY, y back from the front edge 0..DX). Holes: carcass parts only — the
+ *  optimiser reads `cutouts` from case_parts. */
+export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail'])
+export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
+
+type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }
+export type CutTarget = { id: string; part: CutPart; holes: boolean }
+type Issue = { code: string; message: string; part?: string }
+
+/** The cut-out targets on a resolved cabinet, by part id (`case_bottom`, `int_fixed_shelf_0`). */
+export function cutoutTargets(
+  caseParts: (CutPart & { part_key: string })[],
+  internalParts: (CutPart & { part_type: string; sort_order: number })[],
+): CutTarget[] {
+  return [
+    ...caseParts.filter(p => CUTOUT_CASE_KEYS.has(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true })),
+    ...internalParts.filter(p => CUTOUT_INTERNAL_TYPES.has(p.part_type)).map(p => ({ id: `int_${p.part_type}_${p.sort_order}`, part: p, holes: false })),
+  ]
+}
+
+/**
+ * Cut each part's notches into its outline, then add its holes (a plain part
+ * gains a rectangle outline — the optimiser cuts holes only on a resolver
+ * outline). Returns warnings for cut-outs it couldn't make.
+ */
+export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | null | undefined, scope?: FormulaScope): Issue[] {
   const warnings: Issue[] = []
   if (!cutouts) return warnings
-  for (const p of parts) {
-    const list = cutouts[p.part_key]
-    if (!list?.length) continue
-    const warn = (c: Cutout, why: string) => warnings.push({ code: 'CUTOUT_SKIPPED', message: `Cut-out ${c.id} on ${p.part_key}: ${why}`, part: p.part_key })
-    if (!HORIZONTAL_CASE_KEYS.has(p.part_key)) { list.forEach(c => warn(c, 'cut-outs on this part are not supported yet')); continue }
-    const W = p.DY, D = p.DX
-    for (const c of list) {
-      if (c.kind === 'notch') { warn(c, 'notches come in R2'); continue }
+  const byId = new Map(targets.map(t => [t.id, t]))
+  for (const [id, list] of Object.entries(cutouts)) {
+    const warn = (c: Cutout, why: string) => warnings.push({ code: 'CUTOUT_SKIPPED', message: `Cut-out ${c.id} on ${id}: ${why}`, part: id })
+    const t = byId.get(id)
+    if (!t) { list.forEach(c => warn(c, 'no such part, or cut-outs on it are not supported yet')); continue }
+    const p = t.part, W = p.DY, D = p.DX
+    const sized = (c: Cutout) => {
       const n = cutoutNumbers(c, scope)
-      if ('error' in n) { warn(c, n.error); continue }
-      if (!(n.w > 0) || !(n.d > 0)) { warn(c, 'size must be more than 0'); continue }
-      const { x0, y0 } = place(c, W, D, n.w, n.d, n.xOff, n.yOff)
-      if (x0 < -0.01 || y0 < -0.01 || x0 + n.w > W + 0.01 || y0 + n.d > D + 0.01) { warn(c, 'runs off the part'); continue }
+      if ('error' in n) { warn(c, n.error); return null }
+      if (!(n.w > 0) || !(n.d > 0)) { warn(c, 'size must be more than 0'); return null }
+      return { n, ...place(c, W, D, n.w, n.d, n.xOff, n.yOff) }
+    }
+    // Notches first: they change the outline the holes sit in. Each butts
+    // against its edge (whatever its anchor says that way) and runs 1 past it.
+    const OVER = 1
+    const notchList = list.filter(c => c.kind === 'notch')
+    const notches: Rect[] = []
+    for (const c of notchList) {
+      if (c.shape !== 'rect') { warn(c, 'notches are rectangles'); continue }
+      if (!c.edge) { warn(c, 'pick the edge it opens to'); continue }
+      const s = sized(c); if (!s) continue
+      const w = s.n.w, d = s.n.d
+      const r: Rect = c.edge === 'front' ? { x0: s.x0, x1: s.x0 + w, y0: -OVER, y1: d }
+        : c.edge === 'back' ? { x0: s.x0, x1: s.x0 + w, y0: D - d, y1: D + OVER }
+        : c.edge === 'left' ? { x0: -OVER, x1: w, y0: s.y0, y1: s.y0 + d }
+        : { x0: W - w, x1: W + OVER, y0: s.y0, y1: s.y0 + d }
+      if (r.x0 < -OVER - EPS || r.x1 > W + OVER + EPS || r.y0 < -OVER - EPS || r.y1 > D + OVER + EPS) { warn(c, 'runs off the part'); continue }
+      notches.push(r)
+    }
+    if (notches.length) {
+      if (p.outline && !isRectilinear(p.outline)) notchList.forEach(c => warn(c, 'notches need a square-cornered part'))
+      else {
+        const o = notchOutline(W, D, p.outline, notches)
+        if (o) p.outline = o
+        else notchList.forEach(c => warn(c, 'the notches cut the part in two'))
+      }
+    }
+    for (const c of list.filter(c => c.kind === 'hole')) {
+      if (!t.holes) { warn(c, 'holes on this part are not supported yet'); continue }
+      const s = sized(c); if (!s) continue
+      if (s.x0 < -EPS || s.y0 < -EPS || s.x0 + s.n.w > W + EPS || s.y0 + s.n.d > D + EPS) { warn(c, 'runs off the part'); continue }
       if (!p.outline) p.outline = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }, { x: 0, y: D }]
       const skin = c.depth != null && c.depth < p.DZ ? r2(p.DZ - c.depth) : 0
-      p.cutouts = [...(p.cutouts ?? []), { pts: holeLoop(x0, y0, n.w, n.d, c.shape, c.radius), skin }]
+      p.cutouts = [...(p.cutouts ?? []), { pts: holeLoop(s.x0, s.y0, s.n.w, s.n.d, c.shape, c.radius), skin }]
     }
   }
   return warnings
 }
+

@@ -6,8 +6,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → R1 built 2026-11-01 (holes on the carcass bottom / top /
-> rails, no UI yet — set via `part_cutouts`). Next: R2 (notches). First real job: RHK6586 WC-04, Sirius SM927EL520
+> **RESUME HERE** → R1 + R2 built 2026-11-01 (holes on the carcass bottom / top /
+> rails; notches on those + fixed / adj shelves). No UI yet — set via
+> `part_cutouts`. Next: R3 (custom parts). First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -142,12 +143,30 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 - A Shape Editor override on the same part replaces the outline and drops its
   holes (as for curved-end ribs).
 
+## R2 as built (2026-11-01)
+
+- **Keys are part ids** (`case_bottom`, `case_full_top`, `int_fixed_shelf_0`) —
+  the ids partShapes, part hides and the formula engine use (changed from R1's
+  bare part keys; no data existed yet).
+- `notchOutline`: the part's outline (rectangle if none) less the notch rects,
+  on a grid of every x / y, traced back to one counter-clockwise loop. Any
+  number of notches, corners included; works on top of an existing
+  square-cornered outline (e.g. half-check shelves) and keeps its edge tags.
+  An arced / angled outline, or notches that split the part, warn and skip.
+- A notch butts against its `edge` (the anchor that way is ignored) and runs
+  1 past it. Inner corners come out with the cutter radius — no corner radius.
+- Notches first, then holes on the result. Shelves (`fixed_shelf`, `adj_shelf`)
+  take notches only — holes need `internal_parts.cutouts` + the optimiser
+  reading it (later, if wanted).
+- **For R5:** check the shelf / top joint holes along the back edge don't land
+  in the flue notch.
+
 ## Phases
 
 | # | What | Status |
 |---|---|---|
 | R1 | Cut-out type + `part_cutouts` column; **holes** on standard case parts through resolve → nest / G-code / 3D / cabinet views; tests | [x] 2026-11-01 (831535c) |
-| R2 | **Notches** → part outline (true shape), incl. a rect part gaining an outline | [ ] |
+| R2 | **Notches** → part outline (true shape), incl. a rect part gaining an outline | [x] 2026-11-01 |
 | R3 | Cut-outs on **custom parts** (`cabinet_custom_parts.cutouts`) | [ ] |
 | R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [ ] |
 | R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [ ] |

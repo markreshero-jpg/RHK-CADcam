@@ -32,7 +32,7 @@ import { resolveCurvedEnd } from './resolveCurvedEnd'
 import { resolveFloatShelf } from './resolveFloatShelf'
 import { railSupportSeams } from './railSupportSeams'
 import { resolveBackPanel } from './resolveBackPanel'
-import { applyPartCutouts } from '../partCutouts'
+import { applyPartCutouts, cutoutTargets } from '../partCutouts'
 import { buildFormulaScope } from '../formula/context'
 
 export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
@@ -186,11 +186,11 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allErrors.push(...checkHingeFixedShelfClash(hingeInstances, internalParts))
   allErrors.push(...checkHingeRailClash(hingeInstances, caseParts))
 
-  // ── 6e. Part cut-outs (z_rangehood R1) ────────────────────────
-  // Holes cut in the finished parts — formulas see the parts as resolved.
+  // ── 6e. Part cut-outs (z_rangehood R1 / R2) ───────────────────
+  // Notches + holes cut in the finished parts — formulas see the parts as resolved.
   if (cab.part_cutouts && Object.keys(cab.part_cutouts).length) {
     const scope = buildFormulaScope({ case_parts: caseParts, toekick_parts: toekickParts, internal_parts: internalParts, face_zones: zones } as ResolvedCabinet, cab)
-    allWarnings.push(...applyPartCutouts(caseParts, cab.part_cutouts, scope))
+    allWarnings.push(...applyPartCutouts(cutoutTargets(caseParts, internalParts), cab.part_cutouts, scope))
   }
 
   // ── 7. Warnings ───────────────────────────────────────────────
