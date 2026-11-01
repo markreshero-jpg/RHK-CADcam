@@ -6,7 +6,8 @@
     "Wall hung, no kick: carcass 460-800 (pos_z 460, dy 340) under a 60 finished top (20 YDL Bella Oro slab at 800 + 60 mitred apron, top 820 AFFL). Fronts 5 back from the 500 top -> 476.5 carcass. Top drawers: finger gap 60 under the apron (room base REVT 44). Finger pulls for now (Mark) - 'set back SQ edge' finger pull to come.",
     "Each bay: one 300ish drawer (inner drawer behind per markup - CAD note, detail TBC). Rails on edge (basins).",
     "Floating shelf 33 x 250 under, top 246.5 AFFL, LED strip at the back, 250d centre support (TBC). Taps 407 / 414 in, wastes 408 / 398 in (heights TBC: 1110 / 640 as US Bath).",
-    "REV 1 (Mark 2026-11-01): 30 TEPFs out -> 33 end panels each end = 2 x TEPF 16.5 glued (dz 476.5 -> panel 495 = carcass + front + 2), pos_z 213.5 (shelf underside) to 760 (apron underside). Drawers 798 x 2, shelf 1596 between, top 1662 wall to wall. Ceiling 2692 confirmed. Basins: 2 x Harmony Bassini 360 round x 115 (library Abi Lola sized), centres 408 / 1264, 250 off the wall."
+    "REV 1 (Mark 2026-11-01): 30 TEPFs out -> 33 end panels each end = 2 x TEPF 16.5 glued (dz 476.5 -> panel 495 = carcass + front + 2), pos_z 213.5 (shelf underside) to 760 (apron underside). Drawers 798 x 2, shelf 1596 between, top 1662 wall to wall. Ceiling 2692 confirmed. Basins: 2 x Harmony Bassini 360 round x 115 (library Abi Lola sized), centres 408 / 1264, 250 off the wall.",
+    "REV 2 (Mark 2026-11-01): shelf dz 495 full depth; drawers main box Dragon Pro 400x95 + internal_grid inner_drawer y_position 130 (400x95) - script _tmp-6478-ens-inner.mjs."
   ],
   "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
   "roomName": "US Main Ensuite",
@@ -176,7 +177,7 @@
       "offset": 33,
       "dx": 1596,
       "dy": 33,
-      "dz": 250,
+      "dz": 495,
       "note": "floating shelf 33 x 250, top 246.5 AFFL",
       "set": {
         "pos_z": 213.5
