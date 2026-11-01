@@ -1,0 +1,33 @@
+{
+  "_source": "SynologyDrive/.../SITE CHECK MEASURES/Site measure 22.10.26.pdf (U/S Broom 481 x 714, CH 2714) + Mark Q&A 2026-11-01: copy of the DS Linen",
+  "_notes": [
+    "Site: 481 between 714 returns, CH 2714 off slab. Floor allowance 20 (TBC) -> 2694 finished, 18 shadowline -> 2676 top.",
+    "TFFW 30 | T2D 421 single door (hinge R, PTO) | TFFW 30 = 481. 700 OA incl door (680 carcass); fillers fitted 2 back from the wall (CAD note).",
+    "As DS Linen: whole run lifted 150 for the robo vac (pos_z 150, dy 2526), no kick, no bottom (open underneath), back to the gable bottoms, gables + back taped on bottoms. All shelves adjustable."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "US Broom",
+  "roomHeight": 2694,
+  "wallCabinetTop": 2676,
+  "roomRules": { "TOEH": 100 },
+  "walls": [
+    { "x": 0, "y": 714, "length": 714, "angle": 270, "_": "1 left return, S->N" },
+    { "x": 0, "y": 0, "length": 481, "angle": 0, "_": "2 back wall, W->E = elevation" },
+    { "x": 481, "y": 0, "length": 714, "angle": 90, "_": "3 right return, N->S" }
+  ],
+  "cabinets": [
+    { "def": "TFFW", "wall": 2, "offset": 0, "dx": 30, "dy": 2526, "dz": 680, "note": "# 1 30 filler, 150 off the floor", "set": { "pos_z": 150 } },
+    { "def": "T2D", "wall": 2, "offset": 30, "dx": 421, "dy": 2526, "dz": 680, "note": "# 2 broom, single door hinged right, PTO, 150 off the floor, open underneath, all adj shelves",
+      "rules": { "EDGING": { "back": ["bottom"], "bottom": ["top"], "full_top": ["top"], "left_side": ["right", "bottom"], "right_side": ["right", "bottom"] }, "BOTTOM_BACK_JOIN": "butts_into_back" },
+      "set": {
+        "pos_z": 150,
+        "has_toekick": false,
+        "part_hide_views": { "case_bottom": ["plan", "elevation", "3d"] },
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "right" } ] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } }
+        ] } } } },
+    { "def": "TFFW", "wall": 2, "offset": 451, "dx": 30, "dy": 2526, "dz": 680, "note": "# 3 30 filler, 150 off the floor", "set": { "pos_z": 150 } }
+  ]
+}
