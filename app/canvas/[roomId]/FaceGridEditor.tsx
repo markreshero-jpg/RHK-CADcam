@@ -186,6 +186,7 @@ export default function FaceGridEditor({
   )
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
+  const [doorProfiles, setDoorProfiles] = useState<{ id: string; name: string }[]>([])
   const [handles, setHandles] = useState<HandleOpt[]>([])
   const [bins, setBins] = useState<{ id: string; name: string; box_height: number | null; inside_width_min: number | null; inside_width_max: number | null }[]>([])
   const [runners, setRunners] = useState<{ id: string; name: string }[]>([])
@@ -196,6 +197,8 @@ export default function FaceGridEditor({
     let cancelled = false
     supabase.from('door_styles').select('id, name').eq('is_active', true).order('sort_order').order('name')
       .then(({ data }) => { if (!cancelled) setDoorStyles((data ?? []) as DoorStyleOpt[]) })
+    supabase.from('door_profiles').select('id, name').order('name')
+      .then(({ data }) => { if (!cancelled) setDoorProfiles((data ?? []) as { id: string; name: string }[]) })
     supabase.from('hardware_handles').select('id, name, grip_kind').eq('active', true).order('name')
       .then(({ data }) => { if (!cancelled) setHandles((data ?? []) as HandleOpt[]) })
     supabase.from('hardware_slides').select('id, name, box_height, inside_width_min, inside_width_max')
@@ -382,6 +385,18 @@ export default function FaceGridEditor({
   function removeHinge(gz: FaceZoneInput, idx: number) {
     const cur = zoneHingeYs(gz); cur.splice(idx, 1)
     setZoneHinges(gz.row_index, gz.col_index, cur)  // empty array = zero hinges (still manual)
+  }
+
+  // Per-front profile override (Glass on a Laminex / Polytec style). `all` = every
+  // door on this cabinet. null = the style's own profile.
+  function setZoneDoorProfile(rowIdx: number, colIdx: number, profileId: string | null, all = false) {
+    useTutorial.getState().emit('door_profile_set')   // tutorial glass_any_material
+    save({
+      ...grid,
+      zones: grid.zones.map(z =>
+        (all ? z.face_type === 'door' : z.row_index === rowIdx && z.col_index === colIdx) ? { ...z, door_profile_id: profileId } : z
+      ),
+    })
   }
 
   function setZoneDoorStyle(rowIdx: number, colIdx: number, styleId: string | null) {
@@ -1096,6 +1111,27 @@ export default function FaceGridEditor({
                       <option value="">— inherit (room / job) —</option>
                       {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                  </div>
+                )}
+
+                {/* Door profile override — e.g. Glass on a Laminex / Polytec door:
+                    keeps the style's blank, colour and tape, swaps the machining. */}
+                {gz.face_type === 'door' && (
+                  <div data-tour="door-profile-override">
+                    <p className="text-gray-600 mb-1">Profile</p>
+                    <select
+                      value={gz.door_profile_id ?? ''}
+                      onChange={e => setZoneDoorProfile(gz.row_index, gz.col_index, e.target.value || null)}
+                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                    >
+                      <option value="">— the door style’s —</option>
+                      {doorProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    </select>
+                    {grid.zones.filter(z => z.face_type === 'door').length > 1 && (
+                      <button onClick={() => setZoneDoorProfile(gz.row_index, gz.col_index, gz.door_profile_id ?? null, true)}
+                        className="mt-1 text-[10px] text-blue-400 hover:text-blue-300">Same on every door of this cabinet</button>
+                    )}
+                    <p className="text-gray-600 mt-0.5 text-[9px]">e.g. Glass: keeps this door’s material, colour and tape.</p>
                   </div>
                 )}
 

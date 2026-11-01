@@ -1221,6 +1221,10 @@ export interface FaceZoneInput {
   // zone → room → job). null/undefined = inherit. Lives in the face_grid
   // JSONB so it survives re-resolve (the face_zones table is rebuilt each persist).
   door_style_id?: string | null
+  // Per-front door PROFILE override (e.g. Glass on a Laminex / Polytec style):
+  // the front keeps its style's blank, colour range, colour and tape, and takes
+  // this profile's machining instead. null/undefined = the style's own profile.
+  door_profile_id?: string | null
   // Manual hinge positions for a door (mm from the door BOTTOM, along the hinged
   // edge). When set, the resolver uses these exact positions instead of the shop
   // hinge_count_rules — letting the user add/move/remove hinges per door.

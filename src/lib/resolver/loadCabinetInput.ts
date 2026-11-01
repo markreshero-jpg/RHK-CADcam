@@ -114,24 +114,7 @@ async function resolveDoorStyles(
   }
   const styleById = new Map<string, ResolvedDoorStyleInput>()
   for (const row of ((data ?? []) as unknown as StyleRow[])) {
-    const ops: RawProfileOp[] = (row.profile?.ops ?? []).map(o => ({
-      operation_type:      (o.operation_type as RawProfileOp['operation_type']) ?? 'route',
-      depth_mm:            o.depth_mm != null ? Number(o.depth_mm) : null,
-      width_mm:            o.width_mm != null ? Number(o.width_mm) : null,
-      offset_from_edge_mm: o.offset_from_edge_mm != null ? Number(o.offset_from_edge_mm) : null,
-      repeat_axis:         (o.repeat_axis as RawProfileOp['repeat_axis']) ?? 'none',
-      spacing_mm:          o.spacing_mm != null ? Number(o.spacing_mm) : null,
-      tool_diameter_mm:    o.tool_diameter_mm != null ? Number(o.tool_diameter_mm) : null,
-      face:                (o.face as RawProfileOp['face']) ?? 'front',
-      expressions:         (o.expressions as Record<string, string> | null) ?? null,
-      sort_order:          (o.sort_order as number) ?? 0,
-      router_tool_id:      (o.router_tool_id as string | null) ?? null,
-      tool_set_id:         (o.tool_set_id as string | null) ?? null,
-      offset_top_mm:       o.offset_top_mm != null ? Number(o.offset_top_mm) : null,
-      offset_bottom_mm:    o.offset_bottom_mm != null ? Number(o.offset_bottom_mm) : null,
-      offset_left_mm:      o.offset_left_mm != null ? Number(o.offset_left_mm) : null,
-      offset_right_mm:     o.offset_right_mm != null ? Number(o.offset_right_mm) : null,
-    }))
+    const ops: RawProfileOp[] = (row.profile?.ops ?? []).map(toRawProfileOp)
     const cat = row.catalogue
     const edgeSides: EdgeSides | null = cat
       ? ([
@@ -159,6 +142,29 @@ async function resolveDoorStyles(
   for (const [zoneKey, styleId] of zoneStyle) {
     const resolved = styleById.get(styleId)
     if (resolved) out[zoneKey] = resolved
+  }
+
+  // Per-front profile overrides (Glass on any material's style): the front keeps
+  // its style's blank / colour / tape and takes the chosen profile's machining.
+  const profOverride = new Map<string, string>()
+  for (const z of grid.zones) {
+    const k = `${z.row_index}_${z.col_index}`
+    if (z.door_profile_id && out[k]) profOverride.set(k, z.door_profile_id)
+  }
+  if (profOverride.size) {
+    const pids = [...new Set(profOverride.values())].sort()
+    const { data: profs } = await cachedCascade(`profiles:${pids.join(',')}`, async () => await supabase
+      .from('door_profiles')
+      .select(`id, profile_type,
+        ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
+          router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm )`)
+      .in('id', pids))
+    const byId = new Map(((profs ?? []) as unknown as { id: string; profile_type: string; ops: Record<string, unknown>[] }[]).map(p => [p.id, p]))
+    for (const [k, pid] of profOverride) {
+      const p = byId.get(pid)
+      if (!p) continue
+      out[k] = { ...out[k], profile_id: p.id, profile_type: p.profile_type as ResolvedDoorStyleInput['profile_type'], ops: (p.ops ?? []).map(toRawProfileOp) }
+    }
   }
   return out
 }
@@ -1434,4 +1440,27 @@ async function loadHingeInputs(
   } : null
 
   return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges, pie_hinges }
+}
+
+// A door_profile_operations row → the resolver's RawProfileOp (numbers coerced).
+function toRawProfileOp(o: Record<string, unknown>): RawProfileOp {
+  const n = (v: unknown) => (v != null ? Number(v) : null)
+  return {
+    operation_type:      (o.operation_type as RawProfileOp['operation_type']) ?? 'route',
+    depth_mm:            n(o.depth_mm),
+    width_mm:            n(o.width_mm),
+    offset_from_edge_mm: n(o.offset_from_edge_mm),
+    repeat_axis:         (o.repeat_axis as RawProfileOp['repeat_axis']) ?? 'none',
+    spacing_mm:          n(o.spacing_mm),
+    tool_diameter_mm:    n(o.tool_diameter_mm),
+    face:                (o.face as RawProfileOp['face']) ?? 'front',
+    expressions:         (o.expressions as Record<string, string> | null) ?? null,
+    sort_order:          (o.sort_order as number) ?? 0,
+    router_tool_id:      (o.router_tool_id as string | null) ?? null,
+    tool_set_id:         (o.tool_set_id as string | null) ?? null,
+    offset_top_mm:       n(o.offset_top_mm),
+    offset_bottom_mm:    n(o.offset_bottom_mm),
+    offset_left_mm:      n(o.offset_left_mm),
+    offset_right_mm:     n(o.offset_right_mm),
+  }
 }

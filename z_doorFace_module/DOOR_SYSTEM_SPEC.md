@@ -321,6 +321,14 @@ door_style_id on room       (Level 2 — Room)
 door_style_id on job        (Level 1 — Job)
 ```
 
+**Level 4 profile override — BUILT 01/11/26** (Mark: glass doors in Laminex /
+Polytec, not a style per material). Stored as `door_profile_id` on the zone in
+the cabinet's face_grid JSON (not a face_zones column — that table is rebuilt on
+every persist). The front keeps its style's blank, colour range, colour and tape
+and takes the chosen profile's ops (`loadCabinetInput` door loader). UI: Cabinet
+Edit → Face Grid → a door → **Profile** (+ "Same on every door of this cabinet").
+Material / catalogue overrides at Level 4 are still not built.
+
 ---
 
 ## 6. JOB & ROOM — DEFAULT DOOR STYLE

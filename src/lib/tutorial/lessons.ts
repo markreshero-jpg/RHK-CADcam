@@ -1327,6 +1327,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'A tool set with a Glass thickness (Glass Door: 6mm, 1.5 clearance each side) marks its doors as glass doors. Reports → Glass Order lists the glass to order — panes grouped by size and thickness with their cabinets — then each room’s glass doors with door, opening and glass sizes. Glass = opening + the rebate both sides − 2 × clearance. Print it for the glazier.',
       canvas: true, done: c => c.report === 'glass_order' },
   ]},
+
+  // Appended 2026-11-01 (per-front door profile override — glass in any material).
+  { id: 'glass_any_material', level: 'intermediate', topic: 'cabinets', title: 'Glass doors in Laminex, Polytec or any material',
+    blurb: 'Keep the door’s own style (material, colour, tape) and switch just its machining to Glass.',
+    keywords: 'glass door laminex polytec melamine profile override face grid shaker vj material colour rebate', steps: [
+    { id: 'open', title: 'Open the door',
+      body: 'Double-click the cabinet, open the Face Grid tab and click the door you want glass in.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'profile', title: 'Profile → Glass',
+      body: 'Under Door style, set Profile to Glass. The door keeps its style’s board, colour and edge tape (Laminex, Polytec, 2pac…) and gets the glass machining from the back: rebate, squared corners, opening cut through. Click Same on every door of this cabinet to do the pair. Blank = the style’s own profile. The glass size goes on Reports → Glass Order. Board doors: the routed opening and rebate are bare board — edge or paint them by hand.',
+      canvas: true, done: (c, s) => ev(c, 'door_profile_set') > ev(s, 'door_profile_set') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
