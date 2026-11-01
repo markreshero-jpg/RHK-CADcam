@@ -12,7 +12,7 @@ const frontOp = {
   side: 'both', repeat_axis: 'up', router_tool_id: null, drill_id: null, auto_tool: true, notes: null, expressions: null,
 } as SlideDrillOp
 const dp95: SlideProduct = {
-  id: 'dp', name: 'Dragon Pro 400x95', brand: 'Dragon', kind: 'system', inside_width_min: null, inside_width_max: null,
+  id: 'dp', name: 'Dragon Pro 400x95', brand: 'Dragon', kind: 'slide', inside_width_min: null, inside_width_max: null,
   nominal_length: 400, box_height: 95, side_deduction: 0, runner_thickness: 37.5,
   min_runner_depth: null, max_runner_depth: null, soft_close: true, full_extension: true,
   cost_per_pair: null, colour: null, model_url: null, model_format: null, model_scale: 1,
