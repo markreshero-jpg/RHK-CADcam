@@ -351,8 +351,13 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
       // Runners touch the compartment walls (no inset); the box spans between them.
       const left: ResolvedDrawerSlide  = { ...slideBase, side: 'left',  X: box.x }
       const right: ResolvedDrawerSlide = { ...slideBase, side: 'right', X: box.x + box.w - runnerThick }
-      left.drills  = slideDrillOps(left,  slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.left,  face: faceDatum, memberFaceX: box.x })
-      right.drills = slideDrillOps(right, slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.right, face: faceDatum, memberFaceX: box.x + box.w })
+      // Front-fixing holes sit where they do on a face drawer: a system box rides a
+      // carcass thickness (frontLift) above the datum its holes are measured from,
+      // so measure from boxY − T, not the inner front's own bottom (which sits just
+      // under the box) — that put them 18.5 high (Mark, 2026-11-01, RHK6478).
+      const frontDatumY = it.drawerType === 'system' ? boxY - ctx.T : undefined
+      left.drills  = slideDrillOps(left,  slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.left,  face: faceDatum, memberFaceX: box.x, frontDatumY })
+      right.drills = slideDrillOps(right, slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.right, face: faceDatum, memberFaceX: box.x + box.w, frontDatumY })
       ctx.internalSlides.push(left, right)
     }
 
