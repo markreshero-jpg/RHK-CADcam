@@ -350,6 +350,16 @@ Esc cancels; one undo step.
     (lid/cookbox #141414, frames #1E1E20, side tables #1A1A1A, knobs #2A2A2A; grate kept).
     Egg 506 × 590.5 × 826 (incl. rear hinge); Weber 1260 (both side tables) × 520 × 420, lid
     closed. Egg built-in drop left at 0 — set per install. Shapes traced headless. Not checked in-app.
+  - 2026-11-01 (user): **BeefEater Proline integrated BBQ with roasting hood, BSH158** — no model
+    supplied, so a GLB was **generated** from the BMAN Proline manual (Jun26, pdf p7 = pp 12–13, the
+    3rd drawing from the left, hood up): `z_fixtures/make-beefeater-bsh-glb.mjs` →
+    `BeefEater_Proline_BSH158_HoodOpen.glb` (public + `BBQ/`). Drawn **hood open**: flange
+    1053 × 540, 924 hood swung 86° about a rear pivot to 615 above the top with its back 59 behind
+    the cut-out, body 177 below × 464 deep, grill / hotplate / grill, 4 knobs right. Item box
+    1053 × 582.5 × 801.9 (bbox), BBQs group sort 30, **benchtop**, **bench_drop 177**, **benchtop
+    cut 1025 × 502 rect**, cutout_off_y +21 (box runs from the open hood's back to the flange front).
+    Stainless at metalness 0.25 — the canvas 3D has no environment map, full metal renders near
+    black. Shapes traced headless. Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
