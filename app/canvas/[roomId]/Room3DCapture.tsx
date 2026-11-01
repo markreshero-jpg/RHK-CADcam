@@ -1,12 +1,13 @@
 // Shop drawings 3D shots (z_shop_drawings S8). <Room3DCapture> mounts the room's
 // own 3D scene off-screen (RoomScene printMode), points the camera at each shot
 // in turn with that shot's walls hidden, lets the scene settle (part details,
-// fixture models), then captures it as vector hidden lines. <Shot3DSVG> draws a
+// fixture models — the first shot only; later shots just wait for the scene to
+// stop changing), then captures it as vector hidden lines. <Shot3DSVG> draws a
 // captured shot as black SVG lines fitted to a paper-mm box.
 'use client'
-import { Suspense, useEffect, useMemo, type ComponentProps } from 'react'
+import { Suspense, useEffect, useMemo, useState, type ComponentProps } from 'react'
 import { Canvas, useThree } from '@react-three/fiber'
-import type { PerspectiveCamera } from 'three'
+import type { Mesh, Object3D, PerspectiveCamera } from 'three'
 import type { Wall, CabinetInstance, Room, RoomFixture, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -16,9 +17,40 @@ import { captureHiddenLines, type HiddenLineResult } from '@/src/lib/shopDrawing
 import type { Shot3D } from '@/src/lib/shopDrawings/shots3d'
 import { PEN, PRINT_INK } from '@/src/lib/shopDrawings/pens'
 
-/** Wait after a shot's scene mounts before capturing (async part details + models). */
+/** Wait after the scene first mounts before capturing (async part details + models). */
 const SETTLE_MS = 1500
+/** Later shots: capture once the scene has stopped changing this long (capped at SETTLE_MS). */
+const QUIET_MS = 200
 const NOOP = () => {}
+
+/** What's drawn and how big — changes while parts / models are still arriving. */
+function sceneSig(scene: Object3D) {
+  let n = 0, v = 0
+  scene.traverseVisible(o => { const g = (o as Mesh).geometry; if (g) { n++; v += g.attributes.position?.count ?? 0 } })
+  return n ? `${n}:${v}` : ''
+}
+
+/** Calls run() once the scene has settled: at least minMs, then QUIET_MS without changes, at most minMs + SETTLE_MS.
+ *  Starts over when the scene swaps in its own camera (the default one has the wrong near / far). */
+function useAfterSettle(key: string, minMs: number, run: () => void) {
+  const { gl, scene, camera } = useThree()
+  useEffect(() => {
+    let raf = 0, last = '', since = 0
+    const t0 = performance.now()
+    const tick = () => {
+      const now = performance.now()
+      const sig = sceneSig(scene)
+      if (sig !== last) { last = sig; since = now }
+      const age = now - t0
+      if (age >= minMs && ((sig && now - since >= QUIET_MS) || age >= minMs + SETTLE_MS)) run()
+      else raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+    // One run per key; run's identity changes every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, gl, scene, camera])
+}
 
 export interface Bt3DPrint {
   benchtops: BenchtopInstance[]
@@ -26,23 +58,16 @@ export interface Bt3DPrint {
   profiles: Record<string, BenchtopEdgeProfile>
 }
 
-function CaptureDriver({ shot, onDone }: { shot: Shot3D; onDone: (r: HiddenLineResult) => void }) {
+function CaptureDriver({ shot, minMs, onDone }: { shot: Shot3D; minMs: number; onDone: (r: HiddenLineResult) => void }) {
   const { gl, scene, camera } = useThree()
-  useEffect(() => {
-    let cancelled = false
-    const t = setTimeout(() => requestAnimationFrame(() => {
-      if (cancelled) return
-      const cam = camera as PerspectiveCamera
-      cam.position.set(...shot.eye)
-      cam.lookAt(...shot.target)
-      cam.updateMatrixWorld()
-      scene.updateMatrixWorld(true)
-      onDone(captureHiddenLines(gl, scene, cam))
-    }), SETTLE_MS)
-    return () => { cancelled = true; clearTimeout(t) }
-    // One capture per shot; onDone identity changes every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shot.id, gl, scene, camera])
+  useAfterSettle(shot.id, minMs, () => {
+    const cam = camera as PerspectiveCamera
+    cam.position.set(...shot.eye)
+    cam.lookAt(...shot.target)
+    cam.updateMatrixWorld()
+    scene.updateMatrixWorld(true)
+    onDone(captureHiddenLines(gl, scene, cam))
+  })
   return null
 }
 
@@ -61,6 +86,8 @@ export default function Room3DCapture({ shots, walls, cabinets, room, resolvedPa
   const shot = shots[0]
   const hidden = useMemo(() => new Set(shot?.hiddenWallIds ?? []), [shot])
   const hiddenCabs = useMemo(() => new Set(shot?.hiddenCabinetIds ?? []), [shot])
+  // The full settle wait is for the scene's first mount (data + models load once).
+  const [settled, setSettled] = useState(false)
   if (!shot) return null
   return (
     <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, width: 1200, height: 900, pointerEvents: 'none' }}>
@@ -79,7 +106,8 @@ export default function Room3DCapture({ shots, walls, cabinets, room, resolvedPa
             fx={{ fixtures, selectedId: null, onSelect: NOOP }}
             pickBenchtops={false} measuring={false} wire={false}
           />
-          <CaptureDriver key={shot.id} shot={shot} onDone={r => onCaptured(shot.id, r)} />
+          <CaptureDriver key={shot.id} shot={shot} minMs={settled ? 0 : SETTLE_MS}
+            onDone={r => { setSettled(true); onCaptured(shot.id, r) }} />
         </Suspense>
       </Canvas>
     </div>
@@ -92,23 +120,17 @@ export default function Room3DCapture({ shots, walls, cabinets, room, resolvedPa
 
 const RENDER_BG = '#f4f2ee'
 
-function RenderDriver({ shot, onDone }: { shot: Shot3D; onDone: (dataUrl: string) => void }) {
+function RenderDriver({ shot, minMs, onDone }: { shot: Shot3D; minMs: number; onDone: (dataUrl: string) => void }) {
   const { gl, scene, camera } = useThree()
-  useEffect(() => {
-    let cancelled = false
-    const t = setTimeout(() => requestAnimationFrame(() => {
-      if (cancelled) return
-      const cam = camera as PerspectiveCamera
-      cam.position.set(...shot.eye)
-      cam.lookAt(...shot.target)
-      cam.updateMatrixWorld()
-      // Render and read back in the same tick (no preserveDrawingBuffer needed).
-      gl.render(scene, cam)
-      onDone(gl.domElement.toDataURL('image/jpeg', 0.92))
-    }), SETTLE_MS)
-    return () => { cancelled = true; clearTimeout(t) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shot.id, gl, scene, camera])
+  useAfterSettle(shot.id, minMs, () => {
+    const cam = camera as PerspectiveCamera
+    cam.position.set(...shot.eye)
+    cam.lookAt(...shot.target)
+    cam.updateMatrixWorld()
+    // Render and read back in the same tick (no preserveDrawingBuffer needed).
+    gl.render(scene, cam)
+    onDone(gl.domElement.toDataURL('image/jpeg', 0.92))
+  })
   return null
 }
 
@@ -131,6 +153,7 @@ export function Room3DRender({ shots, width, height, walls, cabinets, room, reso
   const shot = shots[0]
   const hidden = useMemo(() => new Set(shot?.hiddenWallIds ?? []), [shot])
   const hiddenCabs = useMemo(() => new Set(shot?.hiddenCabinetIds ?? []), [shot])
+  const [settled, setSettled] = useState(false)
   if (!shot) return null
   return (
     <div aria-hidden style={{ position: 'fixed', left: -20000, top: 0, width, height, pointerEvents: 'none' }}>
@@ -151,7 +174,8 @@ export function Room3DRender({ shots, width, height, walls, cabinets, room, reso
             fx={{ fixtures, selectedId: null, onSelect: NOOP }}
             pickBenchtops={false} measuring={false} wire={false}
           />
-          <RenderDriver key={shot.id} shot={shot} onDone={url => onCaptured(shot.id, url)} />
+          <RenderDriver key={shot.id} shot={shot} minMs={settled ? 0 : SETTLE_MS}
+            onDone={url => { setSettled(true); onCaptured(shot.id, url) }} />
         </Suspense>
       </Canvas>
     </div>
