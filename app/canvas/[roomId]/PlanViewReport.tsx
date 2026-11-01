@@ -6,7 +6,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
-import { reportDoc, saveReport } from './pdfCombine'
+import { armSave, reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { QuoteTop, QuoteTotals } from '@/src/lib/benchtopQuote'
 import { BenchtopQuoteSchedule, drawBenchtopQuoteSchedule } from './BenchtopQuoteSchedule'
@@ -142,9 +142,12 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
     return () => cancelAnimationFrame(id)
   }, [show, layers, walls, cabinets, getFitInfo, paperKey, scale, tbH])
 
+  const fileName = `${quote ? 'benchtops' : 'plan'}-${room.name.replace(/[^\w-]/g, '_')}-1-${scale}.pdf`
   async function handleDownload() {
     const svgEl = svgRef.current
     if (!svgEl) return
+    // Save As on a click (a batch run asked once, up front).
+    if (!batch && !(await armSave(fileName))) return
     useTutorial.getState().emit('plan_pdf')
     setBusy(true)
     try {
@@ -173,8 +176,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
         if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
       }
 
-      const safeRoom = room.name.replace(/[^\w-]/g, '_')
-      saveReport(doc, `${quote ? 'benchtops' : 'plan'}-${safeRoom}-1-${scale}.pdf`)
+      saveReport(doc, fileName)
     } finally {
       setBusy(false)
     }

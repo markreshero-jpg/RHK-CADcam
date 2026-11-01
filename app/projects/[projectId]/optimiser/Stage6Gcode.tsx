@@ -20,6 +20,7 @@ import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import { sheetNumbers } from '@/src/lib/optimiser/labels'
 import { saveRun, reserveRunNo, runCode, runFileText, runFileName, type SheetDrill, type SavedRun, type RunInput } from '@/src/lib/optimiser/savedRuns'
 import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
+import { pickSaveFolder, saveBlob, saveBlobAs, type SaveTarget } from '@/src/lib/saveAs'
 
 interface SimState { coord: SimCoord | null; drillBlock: DrillBlockConfig | null; drillCoord: SimDrillCoord | null }
 interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[]; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]> }
@@ -34,17 +35,19 @@ function savedNote(iso: string) {
   return `Run saved ${d.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit' })} ${d.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit' })} — reopen it any time from Stage 1 → Saved runs.`
 }
 
-function download(name: string, text: string) {
+function ncBlob(text: string) {
   // The controller reads raw bytes, so write one byte per character — a Blob
   // built from a JS string encodes UTF-8, which turns any stray non-ASCII into
   // multiple illegal bytes. generateSheetGcode has already folded the program
   // to 7-bit ASCII; this keeps it that way on the wire. No BOM.
   const bytes = new Uint8Array(text.length)
   for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i) & 0x7f
-  const url = URL.createObjectURL(new Blob([bytes], { type: 'application/octet-stream' }))
-  const a = document.createElement('a')
-  a.href = url; a.download = name; a.click()
-  URL.revokeObjectURL(url)
+  return new Blob([bytes], { type: 'application/octet-stream' })
+}
+
+/** One file: Save As (asks on the click), else a plain download. */
+function download(name: string, text: string) {
+  void saveBlobAs(ncBlob(text), name)
 }
 
 export default function Stage6Gcode() {
@@ -331,13 +334,22 @@ export default function Stage6Gcode() {
   }
 
   // Backup copy of the run, kept next to the NC files (opened from Stage 1).
-  function downloadRunFile() {
+  // `into` = a folder picked for Download all; on its own it asks (Save As).
+  function downloadRunFile(into?: SaveTarget) {
     if (!current) return
     const text = runFileText({ id: current.id, name: current.name, projectId: snap.projectId, jobNumber: snap.jobNumber, run: runInput(current) })
-    const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }))
-    const a = document.createElement('a')
-    a.href = url; a.download = runFileName(snap.jobNumber, current.runNo, current.savedAt); a.click()
-    URL.revokeObjectURL(url)
+    const blob = new Blob([text], { type: 'application/json' })
+    const name = runFileName(snap.jobNumber, current.runNo, current.savedAt)
+    void (into ? saveBlob(blob, name, into) : saveBlobAs(blob, name))
+  }
+
+  // Download all: pick a folder once (cancel = nothing saved), then every NC file
+  // + the run file go in it; without the folder dialog they download as before.
+  async function downloadAll() {
+    const into = await pickSaveFolder()
+    if (into === null) return
+    for (const f of files) await saveBlob(ncBlob(f.gcode), f.fileName, into)
+    downloadRunFile(into)
   }
 
   async function save(run: SavedRun, replaceId: string | null) {
@@ -371,10 +383,10 @@ export default function Stage6Gcode() {
           {files.length > 0 && <>
             <button onClick={() => setSimulating(true)}
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">▶ Simulate</button>
-            <button onClick={() => { files.forEach(f => download(f.fileName, f.gcode)); downloadRunFile() }}
+            <button onClick={() => void downloadAll()}
               title="Every program plus the run file (backup copy of the run)"
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Download all</button>
-            {current && <button onClick={downloadRunFile}
+            {current && <button onClick={() => downloadRunFile()}
               title="Backup copy of this run — keep it with the NC files; Stage 1 → Open run file puts it back"
               className="px-3 py-1.5 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Run file</button>}
             {saveFailed && <button onClick={retrySave} disabled={busy}

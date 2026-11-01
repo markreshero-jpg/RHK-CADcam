@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useBatchDownload } from './useBatchDownload'
 import { svg2pdf } from 'svg2pdf.js'
-import { reportDoc, saveReport } from './pdfCombine'
+import { armSave, reportDoc, saveReport } from './pdfCombine'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, RoomAnnotation } from '@/src/lib/types'
 import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
@@ -133,8 +133,11 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
     return () => { cancelled = true }
   }, [room.id, project?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const fileName = `cabinet-sheets-${room.name.replace(/[^\w-]/g, '_')}.pdf`
   async function handleDownload() {
     if (visible.length === 0) return
+    // Save As on a click (a batch run asked once, up front).
+    if (!batch && !(await armSave(fileName))) return
     setBusy(true)
     try {
       const paper = PAPER[paperKey] ?? PAPER.A3L
@@ -147,8 +150,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
         first = false
         await svg2pdf(svgEl, doc, { x: 0, y: 0, width: paper.w, height: paper.h })
       }
-      const safeRoom = room.name.replace(/[^\w-]/g, '_')
-      saveReport(doc, `cabinet-sheets-${safeRoom}.pdf`)
+      saveReport(doc, fileName)
     } finally {
       setBusy(false)
     }

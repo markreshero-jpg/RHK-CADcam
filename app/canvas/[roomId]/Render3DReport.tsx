@@ -5,7 +5,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo, type ComponentProps } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
-import { reportDoc, saveReport } from './pdfCombine'
+import { armSave, reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -83,8 +83,12 @@ export default function Render3DReport({ project, room, walls, cabinets, resolve
 
   const pageRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const [busy, setBusy] = useState(false)
+  const safeName = (t: string) => t.replace(/[^\w-]+/g, '_')
+  const fileName = `3d-render-${safeName(project?.job_number || project?.name || 'job')}-${safeName(room.name)}.pdf`
   async function handleDownload() {
     if (!shots.length || !done) return
+    // Save As on a click (a batch run asked once, up front).
+    if (!batch && !(await armSave(fileName))) return
     setBusy(true)
     try {
       const orientation = paper.w >= paper.h ? 'landscape' : 'portrait'
@@ -100,8 +104,7 @@ export default function Render3DReport({ project, room, walls, cabinets, resolve
         const tb = page.querySelector<SVGSVGElement>('[data-role="title-block"] svg')
         if (tb && layout.tb) await svg2pdf(tb, doc, { x: layout.tb.x, y: layout.tb.y, width: layout.tb.w, height: layout.tb.h })
       }
-      const safe = (t: string) => t.replace(/[^\w-]+/g, '_')
-      saveReport(doc, `3d-render-${safe(project?.job_number || project?.name || 'job')}-${safe(room.name)}.pdf`)
+      saveReport(doc, fileName)
     } finally {
       setBusy(false)
     }

@@ -17,6 +17,7 @@ import {
   LABEL_SIZES, DEFAULT_LABEL_SETTINGS, LABEL_SETTINGS_KEY, loadLabelLookups, buildAllLabels, labelsPdf, a4Grid, sheetNumbers,
   type LabelSettings, type LabelData,
 } from '@/src/lib/optimiser/labels'
+import { pickSaveFile, saveBlob } from '@/src/lib/saveAs'
 
 const STORE_KEY = LABEL_SETTINGS_KEY
 const sel = 'bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-sm text-ink focus:outline-none focus:border-accent'
@@ -135,12 +136,13 @@ function LabelsPanel() {
     const w = frameRef.current?.contentWindow
     if (w) { w.focus(); w.print() }
   }
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
     if (!pdfUrl) return
-    const a = document.createElement('a')
-    a.href = pdfUrl
-    a.download = `${snap.jobNumber ?? 'job'} labels ${st.w}x${st.h}.pdf`
-    a.click()
+    // Save As (asks first, on the click), else a plain download.
+    const name = `${snap.jobNumber ?? 'job'} labels ${st.w}x${st.h}.pdf`
+    const target = await pickSaveFile(name)
+    if (target === null) return
+    await saveBlob(await (await fetch(pdfUrl)).blob(), name, target)
   }
 
   if (!nestResult?.sheets.length) {

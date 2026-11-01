@@ -6,7 +6,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useBatchDownload } from './useBatchDownload'
 import { svg2pdf } from 'svg2pdf.js'
-import { reportDoc, saveReport } from './pdfCombine'
+import { armSave, reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile, RoomAnnotation } from '@/src/lib/types'
 import type { BtElevInfo } from './BenchtopElevation'
 import { fixtureLayer } from '@/src/lib/fixtureGeometry'
@@ -94,8 +94,11 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
     [wallKey, walls, cabinets])
   const returnSec = useReturnSectionData(retCabs, resolvedParts, layers.show('return_sections'))
 
+  const fileName = `elevations-${room.name.replace(/[^\w-]/g, '_')}-1-${scale}.pdf`
   async function handleDownload() {
     if (visibleViews.length === 0) return
+    // Save As on a click (a batch run asked once, up front).
+    if (!batch && !(await armSave(fileName))) return
     useTutorial.getState().emit('elevation_pdf')
     setBusy(true)
     try {
@@ -117,8 +120,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
         const tbSvg = tbRefs.current.get(v.key)?.querySelector('svg')
         if (tb && tbSvg) await svg2pdf(tbSvg, doc, { x: tb.x, y: tb.y, width: tb.w, height: tb.h })
       }
-      const safeRoom = room.name.replace(/[^\w-]/g, '_')
-      saveReport(doc, `elevations-${safeRoom}-1-${scale}.pdf`)
+      saveReport(doc, fileName)
     } finally {
       setBusy(false)
     }

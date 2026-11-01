@@ -4,9 +4,41 @@
 // the rooms one at a time; while a combined run is on, each report asks
 // reportDoc() for its document (the shared one, a new page started at its paper
 // size) and saveReport() is a no-op, then ReportsModal saves the lot once.
+//
+// Save As (Mark, 2026-11-01): a Download click first asks where to save
+// (armSave / armSaveFolder — the dialog must open on the click itself, before the
+// PDF is built), and the save writes there. One picked file is used once; a
+// picked folder takes every file of a batch run until disarmSave().
 import { jsPDF } from 'jspdf'
+import { pickSaveFile, pickSaveFolder, saveBlob, type SaveTarget } from '@/src/lib/saveAs'
 
 let combined: { doc: jsPDF | null } | null = null
+let armed: SaveTarget | undefined
+
+/** Ask where to save `name`; false = the user cancelled, so don't build it. */
+export async function armSave(name: string): Promise<boolean> {
+  const t = await pickSaveFile(name)
+  if (t === null) return false
+  armed = t
+  return true
+}
+
+/** Ask for a folder for a batch run's files; false = cancelled. */
+export async function armSaveFolder(): Promise<boolean> {
+  const t = await pickSaveFolder()
+  if (t === null) return false
+  armed = t
+  return true
+}
+
+/** Forget the picked file / folder (a batch run ended or was stopped). */
+export function disarmSave() { armed = undefined }
+
+function save(doc: jsPDF, filename: string) {
+  const t = armed
+  if (t && 'file' in t) armed = undefined   // a picked file takes one save
+  void saveBlob(doc.output('blob'), filename, t)
+}
 
 export function startCombined() { combined = { doc: null } }
 
@@ -14,11 +46,12 @@ export function startCombined() { combined = { doc: null } }
 export function finishCombined(filename: string) {
   const doc = combined?.doc
   combined = null
-  doc?.save(filename)
+  if (doc) save(doc, filename)
+  armed = undefined
 }
 
 /** End the run without saving (stopped part-way). */
-export function cancelCombined() { combined = null }
+export function cancelCombined() { combined = null; armed = undefined }
 
 /** The document a report draws into: its own, or the shared one with a fresh page. */
 export function reportDoc(w: number, h: number): jsPDF {
@@ -32,5 +65,5 @@ export function reportDoc(w: number, h: number): jsPDF {
 /** Download a report's own document; the shared one waits for finishCombined. */
 export function saveReport(doc: jsPDF, filename: string) {
   if (combined && combined.doc === doc) return
-  doc.save(filename)
+  save(doc, filename)
 }

@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, type ComponentProps } from 'react'
-import { startCombined, finishCombined, cancelCombined } from './pdfCombine'
+import { startCombined, finishCombined, cancelCombined, armSave, armSaveFolder, disarmSave } from './pdfCombine'
+import { pickSaveFile, saveBlob } from '@/src/lib/saveAs'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -378,8 +379,15 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   const [onePdf, setOnePdf] = useState(() => { try { return localStorage.getItem('reports-one-pdf') !== '0' } catch { return true } })
   useEffect(() => { try { localStorage.setItem('reports-one-pdf', onePdf ? '1' : '0') } catch { /* ignore */ } }, [onePdf])
   const batchDone = useRef(false)
-  const startBatch = () => {
+  const combinedName = (total: number) => {
+    const safe = (x: string) => x.replace(/[^\w-]+/g, '_')
+    const label = REPORTS.find(r => r.id === selectedReport)?.label ?? 'report'
+    return `${safe(label)}-${safe(project?.job_number || project?.name || 'job')}-${total}-rooms.pdf`
+  }
+  const startBatch = async () => {
     if (!tickedRooms.length) return
+    // Save As first, on the click: one file for One PDF, else a folder for every room's file.
+    if (!(await (onePdf ? armSave(combinedName(tickedRooms.length)) : armSaveFolder()))) return
     batchDone.current = false
     if (onePdf) startCombined()
     setQueue({ ids: tickedRooms.map(r => r.id), total: tickedRooms.length, one: onePdf })
@@ -396,11 +404,11 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   useEffect(() => {
     const was = prevQueue.current
     prevQueue.current = queue
-    if (!was?.one || queue) return
+    if (!was || queue) return
+    if (!was.one) { disarmSave(); return }   // per-room files: let go of the picked folder
     if (!batchDone.current) { cancelCombined(); return }
-    const safe = (x: string) => x.replace(/[^\w-]+/g, '_')
-    const label = REPORTS.find(r => r.id === selectedReport)?.label ?? 'report'
-    finishCombined(`${safe(label)}-${safe(project?.job_number || project?.name || 'job')}-${was.total}-rooms.pdf`)
+    finishCombined(combinedName(was.total))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [queue, selectedReport, project])
   const batch = queue ? batchNext : undefined
   const drawRoom = scope === 'room' ? room : (jobRooms.find(r => r.id === drawRoomId) ?? room)
@@ -518,13 +526,12 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     : [], [takeoff.data, project?.name])
   async function downloadCutStickers() {
     const st = loadLabelSettings()
+    const name = `${project?.job_number || project?.name || 'job'} ${scope === 'room' ? `${room.name} ` : ''}cut stickers ${st.w}x${st.h}.pdf`
+    // Save As first, on the click (the dialog can't open after the PDF is built).
+    const target = await pickSaveFile(name)
+    if (target === null) return
     const doc = await cutStickersPdf(cutStickers, st)
-    const url = URL.createObjectURL(doc.output('blob'))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${project?.job_number || project?.name || 'job'} ${scope === 'room' ? `${room.name} ` : ''}cut stickers ${st.w}x${st.h}.pdf`
-    a.click()
-    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+    await saveBlob(doc.output('blob'), name, target)
   }
 
   function handlePrint() {

@@ -1404,6 +1404,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Reports → 3D Colour Render and the Shop Drawings 3D sheets draw the same cuts and door profile lines. The shop drawings use their own 3D layer set, so Front routes needs to be on there too (it is unless a set turns it off).',
       canvas: true, done: c => c.report === 'shop_drawings' || c.report === 'render_3d' },
   ]},
+
+  // Appended 2026-11-01 (Save As on every Download).
+  { id: 'save_as_downloads', level: 'beginner', topic: 'reports', title: 'Choose where a download is saved',
+    blurb: 'Download opens a Save As window so PDFs and CNC files go straight to the job folder.',
+    keywords: 'download save as folder file explorer location where pdf gcode nc labels cut sheets job folder', steps: [
+    { id: 'one', title: 'Download one report',
+      body: 'Open Reports → Shop Drawings (or any report) and click Download. A Save As window opens straight away with the file name filled in: pick the folder (e.g. the job folder), rename it if you like, and click Save. The PDF is then built and saved there. Cancel saves nothing. The window opens in the folder you used last time.',
+      canvas: true, done: (c, s) => ev(c, 'shop_pdf') > ev(s, 'shop_pdf') },
+    { id: 'many', title: 'Several rooms or files at once',
+      body: 'Job Reports → Download N rooms: with One PDF ticked you get one Save As; without it you pick a folder once and every room’s PDF goes into it. The optimiser’s Download all G-code works the same way (one folder for all the NC files + the run file). This needs Chrome or Edge; other browsers download to Downloads as before.',
+      canvas: true, done: c => c.report === 'shop_drawings' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

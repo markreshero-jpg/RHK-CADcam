@@ -7,7 +7,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
-import { reportDoc, saveReport } from './pdfCombine'
+import { armSave, reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -309,8 +309,12 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   const misfits = printed.filter(s => { const p = place(s.key); return p && !p.fits })
 
   const [busy, setBusy] = useState(false)
+  const safeName = (s: string) => s.replace(/[^\w-]+/g, '_')
+  const fileName = `shop-drawings-${safeName(project?.job_number || project?.name || 'job')}-${safeName(room.name)}.pdf`
   async function handleDownload() {
     if (printed.length === 0) return
+    // Save As on a click (a batch run asked once, up front).
+    if (!batch && !(await armSave(fileName))) return
     useTutorial.getState().emit('shop_pdf')
     setBusy(true)
     try {
@@ -346,8 +350,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
         const tb = page.querySelector<SVGSVGElement>('[data-role="title-block"] svg')
         if (tb && layout.tb) await svg2pdf(tb, doc, { x: layout.tb.x, y: layout.tb.y, width: layout.tb.w, height: layout.tb.h })
       }
-      const safe = (s: string) => s.replace(/[^\w-]+/g, '_')
-      saveReport(doc, `shop-drawings-${safe(project?.job_number || project?.name || 'job')}-${safe(room.name)}.pdf`)
+      saveReport(doc, fileName)
     } finally {
       setBusy(false)
     }

@@ -12,6 +12,7 @@ import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { cutSheetsPdf } from '@/src/lib/optimiser/cutSheets'
 import { runCode } from '@/src/lib/optimiser/savedRuns'
 import { sheetNumbers } from '@/src/lib/optimiser/labels'
+import { pickSaveFile, saveBlob } from '@/src/lib/saveAs'
 
 const STORE_KEY = 'rhk.optimiser.cutSheetSettings'
 
@@ -86,10 +87,13 @@ export default function CutSheetsPanel() {
     return next.size === sheetNos.length ? null : next
   })
   const print = () => { const w = frameRef.current?.contentWindow; if (w) { w.focus(); w.print() } }
-  const downloadPdf = () => {
+  const downloadPdf = async () => {
     if (!pdfUrl) return
-    const a = document.createElement('a')
-    a.href = pdfUrl; a.download = `${snap.jobNumber ?? 'job'} cut sheets.pdf`; a.click()
+    // Save As (asks first, on the click), else a plain download.
+    const name = `${snap.jobNumber ?? 'job'} cut sheets.pdf`
+    const target = await pickSaveFile(name)
+    if (target === null) return
+    await saveBlob(await (await fetch(pdfUrl)).blob(), name, target)
   }
   const count = sheetsOn ? sheetsOn.size : sheetNos.length
 
