@@ -1,0 +1,189 @@
+{
+  "_source": "Markup 26.10.26 img_261026111543.pdf p9-10 (US Powder) + Site measure 22.10.26.pdf p6 (U/S PdR 2103 F/P, tap + waste 545 in from the right, 637 waste / 1100 tap) + Mark Q&A 2026-11-02",
+  "_notes": [
+    "Like the US Main Ensuite (Mark, \"box in sides\"): 33 end panels (2 x TEPF 16.5 glued) from the shelf underside (238.5) to the apron underside (785), 495 deep.",
+    "2103 wall to wall: 33 | D 1018.5 | D 1018.5 | 33. No inner drawers (Mark). Basins finish 960: carcass 485-825, top 845 (height_mm 825).",
+    "Floating shelf 2037 x 33 x 495 between the panels at 238.5. Basin centred on the tap 545 in from the right wall. Ceiling 2692 TBC."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "US Powder",
+  "roomHeight": 2692,
+  "wallCabinetTop": 2692,
+  "roomRules": {
+    "TOEH": 100,
+    "BY_CLASS": {
+      "base": {
+        "REVT": 44
+      }
+    }
+  },
+  "walls": [
+    {
+      "x": 0,
+      "y": 600,
+      "length": 600,
+      "angle": 270,
+      "_": "1 left wall (return not measured)"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2103,
+      "angle": 0,
+      "_": "2 back wall 2103 F/P"
+    },
+    {
+      "x": 2103,
+      "y": 0,
+      "length": 600,
+      "angle": 90,
+      "_": "3 right wall (return not measured)"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 0,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel L, wall half",
+      "set": {
+        "pos_z": 238.5
+      }
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 16.5,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel L, cabinet half",
+      "set": {
+        "pos_z": 238.5
+      }
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 33,
+      "dx": 1018.5,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "drawer (no inner drawer)",
+      "rules": {
+        "FLOAT": true,
+        "RAIL_ORIENT": "vertical",
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 485,
+        "top_type": "double_rail",
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "hinge_side": "left",
+              "finger_gap": 60
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 1051.5,
+      "dx": 1018.5,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "drawer (no inner drawer)",
+      "rules": {
+        "FLOAT": true,
+        "RAIL_ORIENT": "vertical",
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 485,
+        "top_type": "double_rail",
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "hinge_side": "left",
+              "finger_gap": 60
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 2070,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel R, cabinet half",
+      "set": {
+        "pos_z": 238.5
+      }
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 2086.5,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel R, wall half",
+      "set": {
+        "pos_z": 238.5
+      }
+    },
+    {
+      "def": "FLSHLF",
+      "wall": 2,
+      "offset": 33,
+      "dx": 2037,
+      "dy": 33,
+      "dz": 495,
+      "note": "floating shelf 33 x 495 between the end panels, LED strip at back",
+      "set": {
+        "pos_z": 238.5
+      }
+    }
+  ]
+}
