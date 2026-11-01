@@ -115,3 +115,11 @@ the carcass, 16s against walls = fillers on the kick, seen vanity panels to the 
 - New resolver error HINGE_RAIL_CLASH (hinge level with a front top rail). Upright-rail sink cupboards clashed:
   main BC-02 / BC-04 and ensuite BC-03 hinges -> [100, 556], butlers BC-02 -> [100, 636] (30 lower, under the rail).
   All four rooms resolver clean.
+
+## Rev 7 — handles on the shaker rails (Mark 2026-11-01)
+
+- Every kitchen + butlers cabinet with doors / drawers: `hardware_overrides` handle_offset 30 + handle_inset 30
+  (`_tmp-6592-handles30.mjs`). Drawers: centred, hole line 30 down (centre of the 60 top rail). Doors: hole line 30 in
+  from the opening edge (centre of the stile), nearest hole 30 from the grip edge — top on base doors, bottom on
+  overheads. Checked resolved: BC-02 drawer x 223.5 / y 332 on 447 x 362; BC-06 door x 30 / centre 632 on 726.
+- Job Handle Holes = Don't drill (rule_overrides.HANDLE_DRILL false, set 2026-10-29), so no holes are machined.
