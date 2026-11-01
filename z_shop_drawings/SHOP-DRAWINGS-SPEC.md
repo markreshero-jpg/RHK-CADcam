@@ -19,8 +19,10 @@ Menu entry: **Production → Shop Drawings…** (`canvasMenuConfig.ts`, currentl
 4. **Keep cabinet numbering** (#1, #2… as on the CV elevations): the same number for a cabinet on
    every sheet.
 5. **Both island faces on one page if they fit** at the package scale. Otherwise one face per page.
-6. **One scale for every drawing on every page.** Default **1:20 on A3**. If a view doesn't fit at
-   that scale, warn and name the view. Never quietly rescale one sheet.
+6. **One package scale, overridable per sheet** (changed by Mark, 2026-11-01). Default **1:20 on A3**
+   for every sheet. A sheet can be given its own scale in the Sheets row, and its heading and title
+   block show it. If a view doesn't fit at its scale, warn and name the view. Never quietly rescale a
+   sheet. Drawings can be dragged on the page (double-click re-centres); the PDF prints them where placed.
 7. **Interior elevations (doors off) are optional.** Ticked per wall in the package dialog, off by default.
 8. **Lines must be as crisp as possible in the PDF** (see "PDF quality rules").
 
@@ -327,3 +329,11 @@ Checked headless on the test room's BC-04 (rib cut-out gable) + BC-08 (shaped do
 `buildPartSolids()` (partSolids.ts) is shared by the sheet and `ResolvedViews`; a shaped / turned part passes
 `pathD` to `PartShape` (wins over the rect / rotation silhouette, holes evenodd) and skips its rect edge tape.
 Checked headless on BC-04 + BC-08: `z_plan_automation/verify-modal-shapes.mjs`.
+
+**Per-sheet scale + drag (Mark, 2026-11-01):** decision 6 relaxed. The Sheets row has a scale box per Plan /
+elevation sheet (first option = the package scale); the specs sheet lays out at the plan's scale. A drawing's
+preview can be dragged (paper-mm offset from its centred spot, 0.5mm steps); double-click re-centres. The fit
+check now includes position, so a drawing dragged past the drawing area counts as a misfit. Both are kept in
+localStorage per room (`shop-drawings-scales`, `shop-drawings-offsets`) like the sheet ticks, so they're per
+computer and headless exports start centred at the package scale. Checked headless on RHK6592 Main Bathroom:
+plan at 1:50 and dragged, elevation at 1:20, PDF headings and title blocks right.

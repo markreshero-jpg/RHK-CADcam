@@ -1,8 +1,9 @@
 // Shop drawings package (z_shop_drawings S3): one PDF per room — plan, then
-// one elevation per wall — every sheet at the same scale on the same paper,
-// each with its heading top-left and the company title block at the foot
-// ("Sheet n of N"). A sheet that doesn't fit is named in a warning; it is
-// never rescaled. Previews are true page layouts (WYSIWYG with the PDF).
+// one elevation per wall — every sheet at the package scale on the same paper
+// unless that sheet has its own scale, each with its heading top-left and the
+// company title block at the foot ("Sheet n of N"). A sheet that doesn't fit is
+// named in a warning; it is never rescaled on its own. Drawings can be dragged
+// on the page. Previews are true page layouts (WYSIWYG with the PDF).
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
@@ -35,6 +36,33 @@ const PAPER: Record<string, { w: number; h: number; label: string }> = {
 }
 const MARGIN = 10
 const LS_SHEETS = 'shop-drawings-sheets'
+/** Per-sheet scale overrides + drawing offsets, per room (Mark, 2026-11-01). */
+const LS_SCALES = 'shop-drawings-scales'
+const LS_OFFSETS = 'shop-drawings-offsets'
+const SHEET_SCALES = [5, 10, 15, 20, 25, 30, 40, 50, 100]
+
+/** A per-room map of sheet key → T, remembered in localStorage (per viewer). */
+function useRoomMap<T>(storageKey: string, roomId: string) {
+  const [map, setMap] = useState<Record<string, T>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) ?? '{}')[roomId]
+      if (saved && typeof saved === 'object') return saved as Record<string, T>
+    } catch { /* ignore */ }
+    return {}
+  })
+  useEffect(() => {
+    try {
+      const all = JSON.parse(localStorage.getItem(storageKey) ?? '{}')
+      localStorage.setItem(storageKey, JSON.stringify({ ...all, [roomId]: map }))
+    } catch { /* storage unavailable */ }
+  }, [storageKey, map, roomId])
+  const set = (key: string, v: T | undefined) => setMap(prev => {
+    const next = { ...prev }
+    if (v === undefined) delete next[key]; else next[key] = v
+    return next
+  })
+  return [map, set] as const
+}
 
 // Page extras follow the Plan View / Elevation Views toggles (same storage keys);
 // the title block is always on in the package.
@@ -212,6 +240,14 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     if (next.has(key)) next.delete(key); else next.add(key)
     return next
   })
+  // Scale per sheet: its override, else the package scale. The spec sheet (NTS)
+  // lays out at the plan's scale.
+  const [scaleOv, setScaleOv] = useRoomMap<number>(LS_SCALES, room.id)
+  const scaleOf = (key: string): number =>
+    key === KEY_SPECS || key === 'plan:full' ? scaleOf('plan') : (scaleOv[key] ?? scale)
+  // Where each drawing was dragged to: paper-mm offset from its centred spot.
+  const [offsets, setOffset] = useRoomMap<{ x: number; y: number }>(LS_OFFSETS, room.id)
+
   // Drawing sizes (paper mm) come from each SVG's data-vb-* once it has rendered
   // ('plan:full' = the plan with its spec blocks, whether or not they're on it).
   const [sizes, setSizes] = useState<Record<string, { w: number; h: number }>>({})
@@ -239,7 +275,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       const next: Record<string, { w: number; h: number }> = {}
       const read = (key: string, el: SVGSVGElement | null | undefined, attr = 'vb') => {
         const w = Number(el?.getAttribute(`data-${attr}-w`)), h = Number(el?.getAttribute(`data-${attr}-h`))
-        if (w > 0 && h > 0) next[key] = { w: w / scale, h: h / scale }
+        if (w > 0 && h > 0) next[key] = { w: w / scaleOf(key), h: h / scaleOf(key) }
       }
       read('plan', planRef.current)
       read('plan:full', planRef.current, 'full')
@@ -260,11 +296,14 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     // NTS spec sheet: enlarged to fill the band (the PDF scales the vector with the box).
     const z = key === KEY_SPECS ? specZoom(s0.w, s0.h, layout.usableW, layout.usableH) : 1
     const s = { w: s0.w * z, h: s0.h * z }
+    const o = offsets[key] ?? { x: 0, y: 0 }
+    const x = MARGIN + Math.max(0, (layout.usableW - s.w) / 2) + o.x
+    const y = layout.top + Math.max(0, (layout.usableH - s.h) / 2) + o.y
     return {
-      x: MARGIN + Math.max(0, (layout.usableW - s.w) / 2),
-      y: layout.top + Math.max(0, (layout.usableH - s.h) / 2),
-      w: s.w, h: s.h,
-      fits: s.w <= layout.usableW + 0.01 && s.h <= layout.usableH + 0.01,
+      x, y, w: s.w, h: s.h,
+      // Inside the drawing area where it's been dragged to, not just small enough.
+      fits: x >= MARGIN - 0.01 && x + s.w <= MARGIN + layout.usableW + 0.01
+        && y >= layout.top - 0.01 && y + s.h <= layout.top + layout.usableH + 0.01,
     }
   }
   const misfits = printed.filter(s => { const p = place(s.key); return p && !p.fits })
@@ -296,7 +335,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
             if (svg) await svg2pdf(svg, doc, { x: Number(d.x), y: Number(d.y), width: Number(d.w), height: Number(d.h) })
           }
         } else if (drawing) {
-          // True scale: the model-mm viewBox renders into vbW/scale paper mm.
+          // True scale: the model-mm viewBox renders into vbW/(sheet scale) paper mm.
           const clone = drawing.cloneNode(true) as SVGSVGElement
           clone.setAttribute('width', `${box.w}mm`)
           clone.setAttribute('height', `${box.h}mm`)
@@ -320,6 +359,26 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   useBatchDownload(batch, batchReady, handleDownload)
 
   const pct = (mm: number, of: number) => `${(mm / of) * 100}%`
+  const printedScales = new Set(printed.filter(s => !s.shots && s.key !== KEY_SPECS).map(s => scaleOf(s.key)))
+  const scaleLabel = printedScales.size > 1 ? 'mixed scales' : `1:${printedScales.size ? [...printedScales][0] : scale}`
+
+  // Drag a drawing on its page preview; the pointer delta converts to paper mm by
+  // the page's on-screen width. Double-click puts it back in the middle.
+  const [drag, setDrag] = useState<{ key: string; px: number; py: number; ox: number; oy: number; k: number } | null>(null)
+  const startDrag = (key: string, e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) return
+    const page = pageRefs.current.get(key)
+    if (!page) return
+    e.currentTarget.setPointerCapture(e.pointerId)
+    const o = offsets[key] ?? { x: 0, y: 0 }
+    setDrag({ key, px: e.clientX, py: e.clientY, ox: o.x, oy: o.y, k: paper.w / page.clientWidth })
+  }
+  const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag) return
+    const x = Math.round((drag.ox + (e.clientX - drag.px) * drag.k) * 2) / 2
+    const y = Math.round((drag.oy + (e.clientY - drag.py) * drag.k) * 2) / 2
+    setOffset(drag.key, x || y ? { x, y } : undefined)
+  }
 
   return (
     <div className="space-y-3">
@@ -340,21 +399,33 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
         )}
         <button data-tour="shop-download" onClick={handleDownload} disabled={busy || printed.length === 0 || (ticked.has(KEY_3D) && !captured && shots.length > 0)}
           className={`${ticked.has(KEY_3D) ? '' : 'ml-auto '}px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium`}>
-          {busy ? 'Generating…' : `Download PDF · ${printed.length} sheet${printed.length === 1 ? '' : 's'} · 1:${scale} ${paper.label}`}
+          {busy ? 'Generating…' : `Download PDF · ${printed.length} sheet${printed.length === 1 ? '' : 's'} · ${scaleLabel} ${paper.label}`}
         </button>
       </div>
 
       <div className="flex flex-wrap gap-2 pb-2 border-b border-gray-800">
         <span className="text-[10px] text-gray-500 uppercase tracking-wider self-center mr-1">Sheets:</span>
         {[...baseSheets, { key: KEY_3D, title: '3D' } as Sheet].map(s => (
-          <button key={s.key} onClick={() => toggle(s.key)}
-            className={`px-2 py-0.5 rounded text-xs border transition-colors ${
+          <span key={s.key} className="inline-flex items-center">
+          <button onClick={() => toggle(s.key)}
+            className={`px-2 py-0.5 ${s.key === KEY_3D ? 'rounded' : 'rounded-l'} text-xs border transition-colors ${
               ticked.has(s.key) ? 'bg-blue-600/25 border-blue-600/50 text-blue-300'
                                 : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'
             }`}>
             {ticked.has(s.key) ? '☑' : '☐'} {s.key === 'plan' ? 'Plan' : s.key === KEY_3D ? '3D views' : s.wall!.name}
           </button>
+          {s.key !== KEY_3D && (
+            <select value={scaleOv[s.key] ?? ''} data-sheet-scale={s.key}
+              title={`Scale for this sheet (first option = the package scale, 1:${scale})`}
+              onChange={e => setScaleOv(s.key, e.target.value ? Number(e.target.value) : undefined)}
+              className={`py-0.5 pl-1 rounded-r text-xs border border-l-0 bg-gray-900 ${scaleOv[s.key] ? 'border-blue-600/50 text-blue-300' : 'border-gray-700 text-gray-500'}`}>
+              <option value="">1:{scale}</option>
+              {SHEET_SCALES.filter(n => n !== scale).map(n => <option key={n} value={n}>1:{n}</option>)}
+            </select>
+          )}
+          </span>
         ))}
+        <span className="text-[10px] text-gray-600 self-center ml-1">Drag a drawing to move it · double-click to re-centre</span>
       </div>
 
       {ticked.has(KEY_3D) && (
@@ -383,12 +454,12 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
 
       {misfits.length > 0 && (
         <div className="rounded border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs text-amber-200 space-y-0.5">
-          <div>At 1:{scale} on {paper.label} the drawing area is {Math.floor(layout.usableW)} × {Math.floor(layout.usableH)}mm. These sheets don&apos;t fit (all sheets stay at one scale):</div>
+          <div>On {paper.label} the drawing area is {Math.floor(layout.usableW)} × {Math.floor(layout.usableH)}mm. These sheets don&apos;t fit on the page:</div>
           {misfits.map(s => {
             const p = place(s.key)!
-            return <div key={s.key}>• {s.title}: {Math.ceil(p.w)} × {Math.ceil(p.h)}mm</div>
+            return <div key={s.key}>• {s.title} at 1:{scaleOf(s.key)}: {Math.ceil(p.w)} × {Math.ceil(p.h)}mm</div>
           })}
-          <div>Choose bigger paper or a larger scale number above.</div>
+          <div>Choose bigger paper, a larger scale number for that sheet (Sheets row) or for all of them above, or drag it back onto the page.</div>
         </div>
       )}
 
@@ -397,7 +468,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       {sheets.map(sheet => {
         const n = printed.indexOf(sheet)
         const box = place(sheet.key)
-        const sheetScale = sheet.shots || sheet.key === KEY_SPECS ? 'NTS' : scale
+        const sheetScale = sheet.shots || sheet.key === KEY_SPECS ? 'NTS' : scaleOf(sheet.key)
         const cells = sheet.shots ? shotCells(sheet.shots.length, MARGIN, layout.top, layout.usableW, layout.usableH) : []
         return (
           <div key={sheet.key} ref={el => { if (el) pageRefs.current.set(sheet.key, el); else pageRefs.current.delete(sheet.key) }}
@@ -416,12 +487,17 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                 </div>
               )
             })}
-            {!sheet.shots && <div data-role="drawing" className={`absolute ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
+            {!sheet.shots && <div data-role="drawing"
+              className={`absolute touch-none ${drag?.key === sheet.key ? 'cursor-grabbing outline outline-1 outline-blue-400' : 'cursor-grab'} ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
+              title="Drag to move on the page · double-click to re-centre"
+              onPointerDown={e => startDrag(sheet.key, e)} onPointerMove={moveDrag}
+              onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}
+              onDoubleClick={() => setOffset(sheet.key, undefined)}
               style={box
                 ? { left: pct(box.x, paper.w), top: pct(box.y, paper.h), width: pct(box.w, paper.w) }
                 : { left: pct(MARGIN, paper.w), top: pct(layout.top, paper.h), width: pct(layout.usableW, paper.w), visibility: 'hidden' }}>
               {sheet.key === KEY_SPECS ? (
-                <SpecSheetSVG annotations={specAnnots} scale={scale} maxW={layout.usableW} maxH={layout.usableH} layers={planLayers}
+                <SpecSheetSVG annotations={specAnnots} scale={scaleOf(KEY_SPECS)} maxW={layout.usableW} maxH={layout.usableH} layers={planLayers}
                   printColours={planShow.annotColours}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }} />
               ) : sheet.wall ? (
@@ -431,14 +507,14 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                   benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles}
                   benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category, f.kind)))) : []}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }}
-                  scale={scale} layers={elevLayers} show={elevShow} returnSec={returnSec}
+                  scale={scaleOf(sheet.key)} layers={elevLayers} show={elevShow} returnSec={returnSec}
                 />
               ) : (
                 <PlanViewReportSVG
                   walls={walls} cabinets={cabinets} fixtures={fixtures} annotations={planAnnots} benchtops={benchtops}
                   btProfiles={bt3d?.profiles} btDefaultProfile={bt3d && (b => bt3d.info(b).defaultProfileId)}
                   resolvedParts={planResolved} svgRef={planRef} hideSpecBlocks={moveSpecs}
-                  scale={scale} layers={planLayers} show={planShow}
+                  scale={scaleOf('plan')} layers={planLayers} show={planShow}
                 />
               )}
             </div>}

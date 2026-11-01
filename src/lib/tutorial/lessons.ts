@@ -640,7 +640,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Production in the menu bar and choose Shop Drawings…. It opens the room\'s reports on the Shop Drawings package.',
       target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
     { id: 'sheets', title: 'Pick scale, paper and sheets',
-      body: 'Every sheet prints at the same scale (1:20 on A3 is usual). Tick the sheets you want: the plan and each wall. If a sheet won\'t fit, it\'s named in the warning: pick bigger paper or a larger scale number.',
+      body: 'Sheets print at the scale picked at the top (1:20 on A3 is usual); a sheet can have its own scale from the box beside its name. Tick the sheets you want: the plan and each wall. If a sheet won\'t fit, it\'s named in the warning: pick bigger paper or a larger scale number.',
       canvas: true, done: c => c.report === 'shop_drawings' },
     { id: 'download', title: 'Download the PDF',
       body: 'Click Download PDF. Each page has its heading, the drawing at true scale, and your company title block (Settings → Company) with Sheet n of N.',
@@ -1373,6 +1373,21 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'use', title: 'Put mirror doors on a room',
       body: 'Open the room, then Room → Doors and set the Tall (or Base / Wall) style to “Mirror Door”. The doors show a mirror face in 3D, the door part gets the comment “4MM MIRROR FACED - stick on after” in the optimiser, and every mirror is listed with its size on Reports → Glass Order (Type = 4mm Mirror) for the glazier.',
       canvas: true, done: c => !!c.report?.includes('glass') },
+  ]},
+
+  // Appended 2026-11-01 (shop drawings: scale per sheet + drag on the page).
+  { id: 'shop_sheet_scale_move', level: 'intermediate', topic: 'reports', title: 'Shop drawings: scale per sheet, move a drawing',
+    blurb: 'Give one sheet its own scale and drag a drawing to where you want it on the page.',
+    keywords: 'shop drawings scale per sheet page 1:25 1:50 move drag position centre layout plan elevation', steps: [
+    { id: 'open', title: 'Production → Shop Drawings…',
+      body: 'Open the room’s Shop Drawings. The scale at the top is the package scale: every sheet uses it unless you change that sheet.',
+      target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
+    { id: 'scale', title: 'Pick a scale for one sheet',
+      body: 'In the Sheets row each sheet has a small scale box beside its name. Pick 1:25 (or any scale) on a big wall: only that page changes, and its heading and title block show its own scale. Pick the first option (the package scale) to put it back. The Download button says “mixed scales” when they differ.',
+      canvas: true, done: c => c.report === 'shop_drawings' },
+    { id: 'move', title: 'Drag the drawing on the page',
+      body: 'Drag a drawing in the page preview to move it, e.g. to make room for notes. The PDF prints it exactly there. Double-click it to put it back in the middle. Drag it past the page edge and it gets an amber outline and is named in the warning. Scales and positions are remembered for the room on this computer.',
+      canvas: true, done: (c, s) => ev(c, 'shop_pdf') > ev(s, 'shop_pdf') },
   ]},
 ]
 
