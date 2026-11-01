@@ -108,7 +108,7 @@ ByLayer colour fill-in used by `resolveStyle`.
 | L1 | Tables + RLS + starter shop list + `cad_layer_id`; types; `cadLayers.ts` + tests; copy on first open; renderer: on/off + ByLayer colour on canvas, print switch on Plan View / Elevation Views / shop drawings / cabinet sheets; off layers out of select / marquee / snaps | [x] built 2026-10-28 |
 | L2 | CAD panel: Layer dropdown (current layer / move selection), layer list (eye, colour, print), ByLayer swatch in the colour picker, right-click Move to layer; new items ByLayer | [x] built 2026-10-28 |
 | L3 | Job layer manager (add / rename / recolour / reorder / delete → General / Add from shop list) + Settings → CAD Layers (shop list editor) | [x] built 2026-10-28 |
-| L4 | Tutorial + headless check (layer off hides on canvas + report, no-print layer, ByLayer recolour) | [x] built 2026-10-28; canvas checked headless, reports not yet |
+| L4 | Tutorial + headless check (layer off hides on canvas + report, no-print layer, ByLayer recolour) | [x] built 2026-10-28; canvas checked headless; Plan View report checked headless 2026-11-02 |
 
 ## Build notes (2026-10-28)
 
@@ -138,5 +138,11 @@ ByLayer colour fill-in used by `resolveStyle`.
   - the Plumbing eye hides its box and saves `visible=false`;
   - the picker and the manager open.
 
-  **Not checked yet:** report output with a no-print layer, Move to layer (right-click and
+- Plan View report check `z_plan_automation/verify-cad-layers-report.mjs` (2026-11-02, all pass):
+  a General text prints; a don't-print (Construction) text shows on the canvas but is left out
+  of the report preview and the downloaded PDF; a switched-off (Site notes) text is out of all
+  three. It restores the layers and removes its texts.
+
+  **Not checked yet:** no-print on Elevation Views / shop drawings / cabinet sheets (same
+  `annotationsForPrint` path as the plan), Move to layer (right-click and
   ribbon), the Settings tab, undo of a move.
