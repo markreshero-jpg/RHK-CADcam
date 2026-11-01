@@ -6,8 +6,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → spec written 2026-11-01. Next: R1 (cut-out data model + holes
-> on standard case parts). First real job: RHK6586 WC-04, Sirius SM927EL520
+> **RESUME HERE** → R1 built 2026-11-01 (holes on the carcass bottom / top /
+> rails, no UI yet — set via `part_cutouts`). Next: R2 (notches). First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -125,11 +125,28 @@ On resolve, a WUP (`UNDER_PANEL`) finds the cabinets over it with a rangehood
 hole and adds each one (source `linked`) to its Under Panel, mapped from the
 cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it.
 
+## R1 as built (2026-11-01)
+
+- `src/lib/partCutouts.ts`: `Cutout` type, `normalisePartCutouts`, `holeLoop`
+  (rect / rounded rect / circle as bulges), `applyPartCutouts`. Test
+  `src/lib/__tests__/partCutouts.test.ts`.
+- Migration `migration_r1_part_cutouts.sql` (applied): `part_cutouts jsonb` on
+  `cabinet_definitions` + `cabinet_instances`; placement copies the definition's,
+  Save to library carries the instance's; copy / paste copies the whole row.
+- Resolver step 6e, after joints: formulas see the resolved parts
+  (`buildFormulaScope`). A part with a hole gains a rectangle `outline` — the
+  optimiser only cuts `cutouts` on a resolver outline — so it nests as a shaped part.
+- R1 parts: `bottom`, `full_top`, `front_rail`, `back_rail` (horizontal frame).
+  Anything else, notches, bad formulas and holes running off the part give a
+  `CUTOUT_SKIPPED` warning and aren't cut.
+- A Shape Editor override on the same part replaces the outline and drops its
+  holes (as for curved-end ribs).
+
 ## Phases
 
 | # | What | Status |
 |---|---|---|
-| R1 | Cut-out type + `part_cutouts` column; **holes** on standard case parts through resolve → nest / G-code / 3D / cabinet views; tests | [ ] |
+| R1 | Cut-out type + `part_cutouts` column; **holes** on standard case parts through resolve → nest / G-code / 3D / cabinet views; tests | [x] 2026-11-01 (831535c) |
 | R2 | **Notches** → part outline (true shape), incl. a rect part gaining an outline | [ ] |
 | R3 | Cut-outs on **custom parts** (`cabinet_custom_parts.cutouts`) | [ ] |
 | R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [ ] |
