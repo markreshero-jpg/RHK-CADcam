@@ -1406,7 +1406,7 @@ export const LESSONS: TutorialLesson[] = [
   ]},
 
   // Appended 2026-11-01 (Save As on every Download).
-  { id: 'save_as_downloads', level: 'beginner', topic: 'reports', title: 'Choose where a download is saved',
+  { id: 'save_as_downloads', level: 'basics', topic: 'reports', title: 'Choose where a download is saved',
     blurb: 'Download opens a Save As window so PDFs and CNC files go straight to the job folder.',
     keywords: 'download save as folder file explorer location where pdf gcode nc labels cut sheets job folder', steps: [
     { id: 'one', title: 'Download one report',
