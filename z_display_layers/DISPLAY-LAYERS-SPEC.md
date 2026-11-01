@@ -148,7 +148,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 |---|---|
 | Carcase | `carcass_outline` (P,E), `carcass_gables`, `carcass_top`, `carcass_bottom` (P,E,3D), `carcass_back` (P,3D) |
 | Kicks | `kick_faces` (the face board only), `kick_backs` (sub front + back, incl. curved `crv:kick_back`; split out 2026-10-26), `kick_spreaders` (P,E,3D; **plan default hidden**) |
-| Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E), `grain` (E,3D — timber grain on grained colours: ghost shade + grain lines in elevations / prints, lines in 3D; layer colour / opacity restyle it; z_material_colours MC11, 2026-10-25) |
+| Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E), `front_routes` (3D, default on — hand-drawn routes / grooves / pockets on doors + drawer fronts cut into the front, also in the colour render + shop-drawing 3D; independent of `machining`, Mark 2026-11-01), `grain` (E,3D — timber grain on grained colours: ghost shade + grain lines in elevations / prints, lines in 3D; layer colour / opacity restyle it; z_material_colours MC11, 2026-10-25) |
 | Internals | `internal_outline` (P, default hidden), `adj_shelves`, `fixed_shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
 | Hardware | `drawer_boxes` (sides / bottom / front), `drawer_box_backs` (db_back only — split out 2026-10-26 so a set can show just the back as a rough drawer outline in elevation; `drawerBoxPartItem()`), `drawer_runners` (P,E,3D), `inner_drawer_runners`, `hinges`, `machining` (E,3D), `drawer_front_drilling` (E — drawer_front slide bores; also in elevation reports), `drawer_markers` (E — drawer front marker pricks, z_handles D22; shown by default), `bifold` (E,3D — sliding bi-fold fitting holes on the doors + the 3D top / bottom tracks, z_bifold_slide; shown in 3D by default — plain geometry, no model load) — **all default hidden in plan + 3D**; `bins` (E,3D — z_bin_cabinet bin + its outline in elevation / sheet / editor views, default shown; a bin's rails never draw as runners) |
 | Panels | `applied_panels`, `fillers`, `custom_panels` (P,E,3D) — by parts_library key (3b) |
@@ -242,7 +242,8 @@ Decisions (2026-09-16): hardware before appearance; real hardware models in
   cabinet has its own `<Suspense>`, so a loading model only hides that cabinet.
 - Room overrides + shapes load in two queries (`dbLoadRoomPartDetails` in
   `canvasDB.ts`) and refetch when the resolved-parts map changes (after an edit).
-  Hand-added ops (`useHandOpMarkersMulti`) load only while `machining` is shown.
+  Hand-added ops (`useHandOpMarkersMulti`) load while `machining` or `front_routes` is shown;
+  with only `front_routes` on, just the fronts' routes / grooves / pockets come through (no drills).
 - Room selection: parts are **passive** in the room (`PassivePartsContext` in
   `PartViewer.tsx`: no part-level pointer handlers or hover). R3F raycasts every
   descendant of the cabinet group (which has the handlers), so clicking or

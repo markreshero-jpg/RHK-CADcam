@@ -1389,6 +1389,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Drag a drawing in the page preview to move it, e.g. to make room for notes. The PDF prints it exactly there. Double-click it to put it back in the middle. Drag it past the page edge and it gets an amber outline and is named in the warning. Scales and positions are remembered for the room on this computer.',
       canvas: true, done: (c, s) => ev(c, 'shop_pdf') > ev(s, 'shop_pdf') },
   ]},
+
+  // Appended 2026-11-01 (door / drawer front routes in 3D).
+  { id: 'front_routes_3d', level: 'intermediate', topic: 'reports', title: 'See door routes in 3D and the prints',
+    blurb: 'Routes and pockets drawn on a door show cut into it in 3D, the colour render and the shop-drawing 3D.',
+    keywords: 'door route routes pocket groove drawer front 3d render shop drawings profile shaker part editor front routes layer', steps: [
+    { id: 'draw', title: 'Draw a route on a door',
+      body: 'Open a cabinet, double-click a door or drawer front to open it in the Part Editor, and draw a pocket / route or a groove on its front face.',
+      canvas: true, done: c => !!c.selected },
+    { id: 'see', title: 'Look at it in 3D',
+      body: 'Switch to 3D: the route is cut into the front. Its door style’s profile (shaker frame, V-grooves) shows as lines on the face too. If you can’t see the cuts, open Layers and tick Front routes (Fronts group) for 3D. It’s separate from Drilling / machining, so you get the routes without every hinge and joint bore.',
+      canvas: true, done: c => c.view === '3d' },
+    { id: 'print', title: 'Print it',
+      body: 'Reports → 3D Colour Render and the Shop Drawings 3D sheets draw the same cuts and door profile lines. The shop drawings use their own 3D layer set, so Front routes needs to be on there too (it is unless a set turns it off).',
+      canvas: true, done: c => c.report === 'shop_drawings' || c.report === 'render_3d' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

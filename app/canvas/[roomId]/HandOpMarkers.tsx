@@ -102,6 +102,8 @@ export function HandOpMarkers3D({ markers, color = HAND_COLOR, csgPartKeys }: { 
         // Area ops on CSG'd parts are drawn as real recesses in the part mesh — skip
         // the overlay marker so they aren't double-drawn.
         if (m.kind === 'area' && csgPartKeys?.has(m.partKey)) return null
+        // Fronts cut their grooves too (Cabinet3DView pocketsByPart).
+        if (m.kind === 'groove' && m.partKey.startsWith('zone_') && csgPartKeys?.has(m.partKey)) return null
         if (m.kind === 'drill') {
           const rot: [number, number, number] = m.normal === 'x' ? [0, 0, Math.PI / 2] : m.normal === 'z' ? [Math.PI / 2, 0, 0] : [0, 0, 0]
           const off = (h: Pt): [number, number, number] => m.normal === 'x'

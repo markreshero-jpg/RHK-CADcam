@@ -20,6 +20,7 @@ import type { OutlinePt, ShapePt } from '@/src/lib/shapePath'
 import type { PartShape } from '@/src/lib/partSolids'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
+import { outlineSegments } from '@/src/lib/shopDrawings/hiddenLine'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -537,9 +538,20 @@ export function Part({
     // A cut that consumed the whole panel (bad op data) → fall back to the uncut
     // panel rather than rendering nothing.
     if (result && (result.attributes.position?.count ?? 0) === 0) { result.dispose(); return null }
+    // CSG output has T-junctions; the shop-drawing line capture drops the seams they
+    // leave across flat faces (hiddenLine.ts topology).
+    if (result) result.userData.csg = true
     return result
   }, [subtractions, shapeGeom, b.x, b.y, b.z, core.x, core.y, core.z, core.w, core.h, core.d])
   useEffect(() => () => { csgGeom?.dispose() }, [csgGeom])
+  // Cut part outline without the CSG seams (drei <Edges> would draw them all).
+  const csgOutline = useMemo(() => {
+    if (!csgGeom) return null
+    const s = outlineSegments(csgGeom, 10)
+    const pts: THREE.Vector3[] = []
+    for (let i = 0; i < s.length; i += 3) pts.push(new THREE.Vector3(s[i], s[i + 1], s[i + 2]))
+    return pts.length ? pts : null
+  }, [csgGeom])
 
   // Rotation pivots about the part's reference point (origin corner b.x/b.y/b.z):
   // the group sits at that corner and carries the rotation, while children are
@@ -615,7 +627,9 @@ export function Part({
         >
           {!ownGeom && <boxGeometry args={[b.w, b.h, b.d]} />}
           <meshStandardMaterial color={wireCol.fill} transparent opacity={0.08} depthWrite={false} />
-          <Edges threshold={10} color={wireCol.edge} linewidth={1} />
+          {csgGeom
+            ? csgOutline && <Line points={csgOutline} segments color={wireCol.edge} lineWidth={1} />
+            : <Edges threshold={10} color={wireCol.edge} linewidth={1} />}
         </mesh>
         {edgeTargetMeshes}
       </group>
@@ -675,7 +689,7 @@ export function Part({
           // the CSG output collapses the 6 per-face colours, an accepted trade-off.
           <>
             <meshStandardMaterial key={grainMaps?.[0] && !selected && !highlighted ? 'g' : 'p'} color={mats[0]} map={(!selected && !highlighted && grainMaps?.[0]) || null} roughness={0.7} metalness={0.05} {...am} />
-            <Edges threshold={10} color={edgeLine} linewidth={lineWidth} transparent opacity={alpha} />
+            {csgOutline && <Line points={csgOutline} segments color={edgeLine} lineWidth={lineWidth} transparent opacity={alpha} />}
           </>
         ) : shapeGeom ? (
           // ExtrudeGeometry material groups: 0 = the two caps (faces), 1 = the

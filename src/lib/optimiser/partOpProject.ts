@@ -66,6 +66,26 @@ export function areaSubtraction(m: Extract<CabinetOpMarker, { kind: 'area' }>): 
   }
 }
 
+// A groove as a CSG box: its ends run along one of the part's axes (toCabinet keeps
+// them axis-aligned), its width is the cutter diameter. Same proud start as areas.
+export function grooveSubtraction(m: Extract<CabinetOpMarker, { kind: 'groove' }>): { center: [number, number, number]; size: [number, number, number] } {
+  const axes: Axis[] = ['x', 'y', 'z']
+  const lo: Record<Axis, number> = { x: Infinity, y: Infinity, z: Infinity }
+  const hi: Record<Axis, number> = { x: -Infinity, y: -Infinity, z: -Infinity }
+  for (const c of m.ends) for (const a of axes) { lo[a] = Math.min(lo[a], c[a]); hi[a] = Math.max(hi[a], c[a]) }
+  // Across the groove (the in-plane axis the ends don't move along): the cutter width.
+  for (const a of axes) if (a !== m.normal && hi[a] - lo[a] < 0.01) { lo[a] -= m.radius; hi[a] += m.radius }
+  // Along the groove: the cutter's round ends reach a radius past each end point.
+  for (const a of axes) if (a !== m.normal && hi[a] - lo[a] > 2 * m.radius + 0.01) { lo[a] -= m.radius; hi[a] += m.radius }
+  const face = lo[m.normal]
+  const nA = face - m.dir * 1, nB = face + m.dir * m.depth
+  lo[m.normal] = Math.min(nA, nB); hi[m.normal] = Math.max(nA, nB)
+  return {
+    center: [(lo.x + hi.x) / 2, (lo.y + hi.y) / 2, (lo.z + hi.z) / 2],
+    size: [Math.max(hi.x - lo.x, 0.1), Math.max(hi.y - lo.y, 0.1), Math.max(hi.z - lo.z, 0.1)],
+  }
+}
+
 // A part's footprint frame + the cabinet coord of its mid-thickness plane along the
 // frame normal, and its half-thickness (so callers can reach either face).
 function frameFor(rp: ResolvedCabinet, key: string): { frame: FootprintFrame; nMid: number; halfThick: number } | null {

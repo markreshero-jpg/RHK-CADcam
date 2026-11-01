@@ -114,6 +114,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'grain',          group: 'fronts', label: 'Timber grain',   views: ['elevation', '3d'], default: ON,
     hint: 'Grained colours (has_grain): a light ghost shade + grain lines in elevations and prints, grain lines in 3D. Colour / opacity restyle the elevation grain (z_material_colours)' },
   { id: 'drawer_labels',  group: 'fronts', label: 'Drawer labels',  views: ['elevation'], default: ON },
+  { id: 'front_routes',   group: 'fronts', label: 'Front routes',   views: ['3d'], default: ON,
+    hint: 'Routes, grooves and pockets drawn on doors / drawer fronts in the Part Editor, cut into the front in 3D (and the colour render + shop-drawing 3D). Separate from Drilling / machining (Mark, 2026-11-01)' },
   { id: 'grain_match',    group: 'fronts', label: 'Grain match',    views: ['plan', 'elevation'], default: OFF,
     hint: 'Grain-matched fronts (z_grain_match): tinted in the group colour with a GM1 ↕ / GM2 ↔ tag; plan: a bar along the matched fronts. Quick toggle: Layers ▸ Show grain match' },
 

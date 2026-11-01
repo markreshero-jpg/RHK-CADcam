@@ -51,7 +51,7 @@ import { casePartItem, kickPartItem, internalPartItem, faceZoneItem, drawerBoxPa
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { PartAlpha, NO_ROTATION, EdgeEditContext } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
-import { areaSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
+import { areaSubtraction, grooveSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import { handleShape, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
@@ -429,7 +429,8 @@ function DoorProfile3D({ profile, b, color = '#5a4a32' }: {
   }, [profile, b.x, b.y, b.z, b.w, b.h, b.d])
   if (!geo) return null
   return (
-    <lineSegments geometry={geo} renderOrder={1}>
+    // printLines: the shop-drawing line capture traces these too (hiddenLine.ts).
+    <lineSegments geometry={geo} renderOrder={1} userData={{ printLines: true }}>
       <lineBasicMaterial color={color} />
     </lineSegments>
   )
@@ -508,7 +509,8 @@ function HingeArmFold({ url, pivot, openAngle, doorsOpen, mirror, scale, color, 
  *  side by side at the hinge gable). */
 interface BifoldOpen { role: 'outer' | 'leading'; span: number; maxAngle: number }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, bifold, ...partProps }: PartProps & {
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, bifold, pockets, ...partProps }: PartProps & {
+  pockets?:   { center: [number, number, number]; size: [number, number, number] }[]   // cabinet coords; cut into the door
   handle?:    HandleShape | null   // z_handles H2 — swings with the door
   handleMeta?: PartMeta            // click-to-select info for the handle
   selectedId?: string | null       // selected part id (hinge / handle highlight)
@@ -543,6 +545,10 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDr
   const hingeX    = pivotLeft ? b.x : b.x + b.w
   const localB: Box = { x: pivotLeft ? 0 : -b.w, y: 0, z: 0, w: b.w, h: b.h, d: b.d }
   const mirror    = hingeSide === 'left'   // swapped: left hand gets the X reflection
+  // Hand-drawn routes / pockets, moved into the swinging group's frame (origin at the hinge).
+  const localPockets = useMemo(() => pockets?.map(p => ({
+    ...p, center: [p.center[0] - hingeX, p.center[1] - b.y, p.center[2] - b.z] as [number, number, number],
+  })), [pockets, hingeX, b.y, b.z])
 
   const place = (a: number) => {
     const g = groupRef.current
@@ -567,7 +573,7 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDr
     <group ref={groupRef} position={[hingeX, b.y, b.z]}>
       {showPanel && (
         <PartAlpha a={panelAlpha}>
-          <Part b={localB} {...partProps} />
+          <Part b={localB} {...partProps} subtractions={localPockets} />
           {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
           {facing?.thickness_mm ? (
             <mesh position={[localB.x + b.w / 2, b.h / 2, b.d + facing.thickness_mm / 2]}>
@@ -627,9 +633,10 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDr
 function DrawerAssembly({
   faceZone, stack, targetTravel, selected, onSelect,
   faceHighlighted, materialColours, ebByMatId, edgeOverrides, wire, partOverrides, dragRef, shapes3D,
-  showFace = true, showBox = true, showSlides = true, roomOutlines, layers, handle,
+  showFace = true, showBox = true, showSlides = true, roomOutlines, layers, handle, pockets,
 }: {
   handle?:           HandleShape | null   // z_handles H2 — slides with the drawer
+  pockets?:          { center: [number, number, number]; size: [number, number, number] }[]   // hand-drawn routes cut into the front
   roomOutlines?:     boolean
   layers?:           LayerView
   showFace?:         boolean
@@ -710,6 +717,7 @@ function DrawerAssembly({
         wire={wire}
         rotation={getRotOv(zoneId, partOverrides)}
         shape={shapes3D?.get(zoneId)}
+        subtractions={pockets}
       />{faceZone.door_profile && <DoorProfile3D profile={faceZone.door_profile} b={zb} />}</PartAlpha>}
       {handle && (() => { const hm = buildHandleInfo(handle, faceZone); return (
         <PickableHardware meta={hm} selected={selected?.id === hm.id} onSelect={onSelect} dragRef={dragRef}>
@@ -1464,17 +1472,23 @@ export function CabinetScene({
   }
 
   // Pocket/route (area) ops → real CSG recesses per part (keyed by source_part_key).
-  // Drills/grooves stay as HandOpMarkers3D overlays.
+  // Fronts (doors / drawer fronts) also cut their grooves, so hand-drawn door routes
+  // read as real routes in 3D, the colour render and the shop-drawing line views.
+  // Drills (and carcass grooves) stay as HandOpMarkers3D overlays.
   const pocketsByPart = useMemo(() => {
     const m = new Map<string, { center: [number, number, number]; size: [number, number, number] }[]>()
     for (const mk of handMarkers) {
-      if (mk.kind !== 'area') continue
+      const cut = mk.kind === 'area' ? areaSubtraction(mk)
+        : mk.kind === 'groove' && mk.partKey.startsWith('zone_') ? grooveSubtraction(mk) : null
+      if (!cut) continue
       const arr = m.get(mk.partKey) ?? []
-      arr.push(areaSubtraction(mk))
+      arr.push(cut)
       m.set(mk.partKey, arr)
     }
     return m
   }, [handMarkers])
+  // Parts whose cut-outs are drawn into the mesh, so the overlay skips them.
+  const csgPartKeys = useMemo(() => new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_') || k.startsWith('zone_'))), [pocketsByPart])
 
   // Grained colours render the generic wood grain (z_material_colours MC9).
   const grainIds = layers && !layers.show('grain') ? new Set<string>() : new Set(Object.entries(materialColours ?? {})
@@ -1484,7 +1498,7 @@ export function CabinetScene({
     <FrontGrainAcrossContext.Provider value={frontsAcross}>
     <ExplodeGroup amount={explode} centre={[dx / 2, dy / 2, dz / 2]} version={rp} position={[-dx / 2, -dy / 2, -dz / 2]}>
       {showDrilling && handMarkers.length > 0 && (
-        <HandOpMarkers3D markers={handMarkers} csgPartKeys={new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_')))} />
+        <HandOpMarkers3D markers={handMarkers} csgPartKeys={csgPartKeys} />
       )}
       {/* Height split (z_cabinet_split): cut sides / back draw as their pieces. Each piece is the
           part it came from for geometry, colours, selection and holes (its own height's only). */}
@@ -1725,6 +1739,7 @@ export function CabinetScene({
                 showBox={show('drawer_boxes') || show('drawer_box_backs')}
                 showSlides={show('drawer_runners')}
                 handle={show('drawer_fronts') && (show('handles') || show('handle_holes')) ? handleShape(z) : null}
+                pockets={pocketsByPart.get(id)}
                 roomOutlines={roomOutlines}
                 layers={layers}
                 key={`f${i}`}
@@ -1803,6 +1818,7 @@ export function CabinetScene({
                 handleAlpha={alpha('handles')}
                 handleParts={{ bar: show('handles'), holes: show('handle_holes') }}
                 bifold={bifold}
+                pockets={pocketsByPart.get(id)}
                 {...partProps}
               />
               {/* Plates stay fixed in world space at the bore-centre anchor.
@@ -1876,7 +1892,7 @@ export function CabinetScene({
           )
         }
 
-        return <group key={`f${i}`}><PartAlpha a={alpha(faceItem ?? 'doors')}><Part b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} /></PartAlpha>{staticHandle}</group>
+        return <group key={`f${i}`}><PartAlpha a={alpha(faceItem ?? 'doors')}><Part b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} subtractions={pocketsByPart.get(id)} {...partProps} /></PartAlpha>{staticHandle}</group>
       })()))}
       {(customParts ?? []).filter(p => p.visible && Number(p.dz) > 0 && show(customPartItem(p))).map((p, i) => {
         const orient = (p.orientation ?? 'flat') as CustomOrient

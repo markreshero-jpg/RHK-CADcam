@@ -794,10 +794,21 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
     dbLoadRoomPartDetails(cabIdsKey ? cabIdsKey.split(',') : []).then(d => { if (!cancelled) setDetails(d) })
     return () => { cancelled = true }
   }, [cabIdsKey, resolvedParts])
-  // Hand-added operations only load while the machining layer is shown.
-  const handMarkersByCab = useHandOpMarkersMulti(
-    layers.show('machining') ? cabinets.map(c => c.id) : [], resolvedParts,
+  // Hand-added operations load while the machining layer is shown, or Front routes
+  // (doors / drawer fronts: routes, grooves, pockets — cut into the front).
+  const showMachining = layers.show('machining'), showFrontRoutes = layers.show('front_routes')
+  const allHandMarkers = useHandOpMarkersMulti(
+    showMachining || showFrontRoutes ? cabinets.map(c => c.id) : [], resolvedParts,
   )
+  const handMarkersByCab = useMemo(() => {
+    if (showMachining) return allHandMarkers
+    const out = new Map<string, CabinetOpMarker[]>()
+    for (const [id, ms] of allHandMarkers) {
+      const fronts = ms.filter(m => m.kind !== 'drill' && m.partKey.startsWith('zone_'))
+      if (fronts.length) out.set(id, fronts)
+    }
+    return out
+  }, [allHandMarkers, showMachining])
   const roomH = room.room_dy ?? 2400
 
   const bounds = useMemo(() => {
