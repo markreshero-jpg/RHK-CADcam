@@ -104,3 +104,14 @@ the carcass, 16s against walls = fillers on the kick, seen vanity panels to the 
   blind false panel (352) is shaker too; it sits mostly behind the return run.
 - Shaker routes are generated on the fronts when the optimiser runs (face routes), not at resolve.
 - Open: end panels / fridge panels / island back panel are still flat 2pac board (quote says panels shaker too).
+
+## Rev 6 (Mark 2026-11-01) — `_tmp-6592-rev6.mjs`
+
+- 2pac colour renamed "Satin, to match Polytec Classic White" (only this job uses it), so `{fronts}` reads
+  "Shaker — 2pac - Satin, to match Polytec Classic White"; spec block lines updated (kitchen + butlers).
+- Kitchen Wall 1: CAD "FRIDGE OPENING 920W x 1850H" in the fridge space.
+- Butlers: Wall 4 "DISHWASHER / WASHER / DRYER SPACE 610W x 880H"; "VOID CORNER" on Wall 1 (0–580) and Wall 4
+  (3355–3915); Wall 2 TC-02 / TC-03 "OPEN SHELVES PT CLASSIC WHITE MATT".
+- New resolver error HINGE_RAIL_CLASH (hinge level with a front top rail). Upright-rail sink cupboards clashed:
+  main BC-02 / BC-04 and ensuite BC-03 hinges -> [100, 556], butlers BC-02 -> [100, 636] (30 lower, under the rail).
+  All four rooms resolver clean.

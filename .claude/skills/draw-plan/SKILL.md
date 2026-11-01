@@ -197,6 +197,22 @@ line and mirrors the island elevation.
   at least 50 above a fixed shelf's top (or 50 below its underside) where
   possible — "just clear of the plate" (≈ 30) is too close. E.g. shelf top 820 →
   hinge ≥ 870. Still check the shelf-hole error after moving.
+- **Hinges clear of an upright top rail** (Mark, RHK6592 2026-11-01): a sink /
+  vanity with `RAIL_ORIENT: vertical` has its front rail RD tall at the top, and
+  the auto top hinge (100 from the door top) lands level with it — resolver
+  error `HINGE_RAIL_CLASH`. Check every rails-on-edge cabinet after drawing and
+  drop that hinge a bit with manual `face_grid.zones[].hinges`: ~30 lower,
+  e.g. 690 carcass, rail 610–690 → `[100, 556]` (plate ~29 under the rail).
+- **Space notes on the elevation** (Mark, RHK6592 2026-11-01), text boxes like
+  the cabinet notes, inside the space, size on the second line:
+  - a **non-integrated fridge** space → `FRIDGE OPENING` / `920W x 1850H`
+    (floor to the fridge overhead's underside, panel to panel);
+  - freestanding **dishwasher / washer / dryer** spaces → `DISHWASHER SPACE`
+    (`WASHER SPACE`, `DRYER SPACE`) / `610W x 880H` (floor to the top's underside);
+  - a **void corner** (fillers on both runs leaving the corner empty) →
+    `VOID CORNER` on BOTH walls' elevations, in the void's width.
+  - Open shelving in a different finish from the fronts → its finish on it,
+    e.g. `OPEN SHELVES` / `PT CLASSIC WHITE MATT`.
 - **Bulkhead returns where the end is seen** (Mark, 2026-10-23): when a run has
   a seen end panel (open end, not a wall), turn on that side's bulkhead return
   — `bulkhead.left/right = { on: true, depth: <carcass dz>, joint: 'mitre' }`

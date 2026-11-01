@@ -170,3 +170,36 @@ export function checkHingeFixedShelfClash(hinges: ResolvedHingeInstance[], inter
   }
   return out
 }
+
+// ============================================================
+// Hinge ↔ front top rail
+//
+// A front rail runs gable to gable at the top front. Stood on edge (RAIL_ORIENT
+// vertical, e.g. sink cabinets) it's RD tall, and a hinge level with it has
+// its plate and arm in the rail — they can't both go in. Flat it's only the
+// board thickness at the very top, so normal hinge heights clear it, but the
+// same test covers it. ERROR (Mark, RHK6592 vanities): drop the hinge below
+// the rail.
+// ============================================================
+
+export function checkHingeRailClash(hinges: ResolvedHingeInstance[], caseParts: ResolvedCasePart[]): ResolverError[] {
+  const rails = caseParts.filter(p => p.part_key === 'front_rail')
+  if (!rails.length) return []
+  const out: ResolverError[] = []
+  for (const h of hinges) {
+    if (h.hinge_edge !== 'left' && h.hinge_edge !== 'right') continue
+    const b = plateBox(h)
+    if (!b) continue
+    // Rail Y range: on edge DX = RD is its height, flat DZ = thickness.
+    const hit = rails.find(p => { const top = p.Y + (p.upright ? p.DX : p.DZ); return top >= b.y0 && p.Y <= b.y1 })
+    if (!hit) continue
+    const cupY = h.cup_drills?.[0]?.y ?? h.y_position_mm
+    out.push({
+      code: 'HINGE_RAIL_CLASH',
+      message: `Door [${h.row_index},${h.col_index}] hinge ${h.sort_order + 1} (≈${Math.round(cupY)}mm high) is level with the `
+        + `${hit.upright ? 'upright ' : ''}top rail (${Math.round(hit.Y)}–${Math.round(hit.Y + (hit.upright ? hit.DX : hit.DZ))}mm). Drop the hinge below the rail.`,
+      part: 'hinge',
+    })
+  }
+  return out
+}
