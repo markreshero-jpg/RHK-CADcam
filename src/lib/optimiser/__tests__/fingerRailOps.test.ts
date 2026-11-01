@@ -187,3 +187,16 @@ describe('finger-rail machining per column (H5b)', () => {
     for (const rl of through) expect(at(rl)).toEqual(['case_left_side', 'case_right_side'])
   })
 })
+
+describe('set back rail notches (D24)', () => {
+  const sb: HandleProductInput = { ...shark, id: 'sb', name: 'Set Back SQ Edge', grip_kind: 'setback', bevel_angle_deg: null, bevel_land_mm: null }
+  const rp = resolveCabinet({ ...cab, handle_schedule: { drawer: { handle: sb, offset_from_edge_mm: 50, inset_from_side_mm: null, orientation: 'horizontal' } } })
+  const right = rp.case_parts.find(p => p.part_key === 'right_side')!
+  const sideFront = right.Z + right.DX - right.Z
+
+  it('pocket runs from the set back rail\'s back face out through the side\'s front edge', () => {
+    const r = collectNotchRoutes(rp, 'c1', 'tool10').rows.find(o => o.source_part_key === 'case_right_side' && o.operation_key === 'fprail_notch_0')!
+    expect(r.pos_x - r.size_dx! / 2).toBeCloseTo(sideFront - 16.5 - 18)
+    expect(r.pos_x + r.size_dx! / 2).toBeCloseTo(sideFront + 5)
+  })
+})

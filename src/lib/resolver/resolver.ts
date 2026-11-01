@@ -128,7 +128,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     const { rails, warnings: railWarnings } = fingerRails(cab, r, zones, caseParts, dividers)
     backingRails = rails
     notchPanels([...caseParts.filter(p => p.part_key === 'left_side' || p.part_key === 'right_side'), ...dividers], rails, r.RAILCUT)
-    pushFrontRailBack(caseParts, rails)
+    pushFrontRailBack(caseParts, rails, r.RAILSBFR)
     caseParts.push(...fingerRailParts(cab, r, rails, caseParts))
     allWarnings.push(...railWarnings)
   }

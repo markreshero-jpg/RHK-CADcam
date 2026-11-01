@@ -108,7 +108,7 @@ export interface FingerPullLine { name: string; grip: GripKind; fronts: number }
 
 export interface RoomHardware { roomId: string; lines: HardwareLine[]; fingerPulls: FingerPullLine[] }
 
-const FINGER_GRIPS: GripKind[] = ['sharknose', 'rail', 'routed', 'channel']
+const FINGER_GRIPS: GripKind[] = ['sharknose', 'setback', 'rail', 'routed', 'channel']
 
 class Acc {
   lines = new Map<string, HardwareLine>()
@@ -219,7 +219,7 @@ export function buildHardware(
   return { rooms, totals: job.lines, fingerPulls: job.fingerPulls }
 }
 
-export const GRIP_LABEL: Partial<Record<GripKind, string>> = { sharknose: 'Sharknose', rail: 'Finger rail', routed: 'Routed', channel: 'Channel' }
+export const GRIP_LABEL: Partial<Record<GripKind, string>> = { sharknose: 'Sharknose', setback: 'Set back SQ edge', rail: 'Finger rail', routed: 'Routed', channel: 'Channel' }
 
 export const unitLabel = (l: HardwareLine) => (l.unit === 'pr' ? (l.qty === 1 ? 'pair' : 'pairs') : '')
 

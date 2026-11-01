@@ -219,6 +219,13 @@ export interface ConstructionRules {
   RAILBLK:  number   // knock-in block hole: back of the rail → hole centre
   RAILBLKD: number   // knock-in block hole diameter
   RAILBLKZ: number   // knock-in block hole depth into the side
+  // Set back SQ edge finger pull (grip kind 'setback', z_handles D24): the rail
+  // sits RAILSB further back so fingers reach behind a square-edged front, runs
+  // RAILSBX further down behind it, with a flat base piece closing the pocket; an
+  // on-edge front rail behind the top one is cut down to RAILSBFR.
+  RAILSB:   number   // set back rail: setback behind the sides' front edge (the pocket depth)
+  RAILSBX:  number   // set back rail: extra height over a sharknose rail
+  RAILSBFR: number   // set back top rail: on-edge front rail height
 
   // Pull-out bins (z_bin_cabinet B3)
   BINUP:    number   // min clear height kept above a bin when the cabinet has inner drawers / pull-outs
@@ -306,6 +313,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,
   REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2, FPGAP: 20, RAILH: 45, RAILUP: 5, RAILCUT: 5, RAILBLK: 15, RAILBLKD: 10, RAILBLKZ: 12,
+  RAILSB: 16.5, RAILSBX: 10, RAILSBFR: 50,
   BINUP: 140, BINGAP: 10,
   FACBUF: 2, FACINS: 0,
   BOTTOM_JOIN: 'sides_outside', BOTTOM_BACK_JOIN: 'back_on_bottom',
@@ -924,7 +932,7 @@ export interface CabinetInput {
 
 // ── Handles (z_handles/HANDLES-SPEC.md) ─────────────────────────────────────
 export type HandleRole = 'door_base' | 'door_wall' | 'door_tall' | 'drawer'
-export type GripKind   = 'hardware' | 'sharknose' | 'routed' | 'push' | 'rail' | 'channel' | 'linear'
+export type GripKind   = 'hardware' | 'sharknose' | 'setback' | 'routed' | 'push' | 'rail' | 'channel' | 'linear'
 
 export interface HandleProductInput {
   id:            string
@@ -1536,7 +1544,9 @@ export interface ResolvedCasePart extends ResolvedPart {
   // front face (as the box rails); seamDrillSync machines its ends in each panel's own frame.
   // noBlocks: the top rail against an on-edge front rail — that rail fixes it, so no
   // knock-in blocks / holes (z_handles D20).
-  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true; noBlocks?: true }
+  // setback: a set back SQ edge rail (D24) — its front face sits this far behind the
+  // sides' front edge, so the side notch runs that much further forward.
+  fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true; noBlocks?: true; setback?: number }
   // Linear strip handle (z_handles D17): the sharknose edge (face-kind frame:
   // top / bottom = ends of DX, left / right = ends of DY) and its bevel.
   lh?: { bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number }
@@ -1572,6 +1582,7 @@ export interface ResolvedCasePart extends ResolvedPart {
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
             'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
             `fprail:${number}` |  // finger-pull backing rail (z_handles H6)
+            `fpbase:${number}` |  // set back rail's flat base piece (z_handles D24)
             `lh:${number}` |      // linear strip handle on a front (z_handles D17)
             `split:${string}:${number}`   // a cut piece (z_cabinet_split): split:<part key>:<n>
 }

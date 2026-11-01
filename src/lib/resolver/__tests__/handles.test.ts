@@ -368,3 +368,60 @@ describe('resolveHandles', () => {
     expect(left.handle).toBeNull()
   })
 })
+
+describe('set back SQ edge finger pull (D24)', () => {
+  const setback: HandleProductInput = { ...pto, id: 'sb', name: 'Set Back SQ Edge', grip_kind: 'setback', needs_finger_gap: true }
+  const sbSched = {
+    ...schedule,
+    door_base: { ...schedule.door_base!, handle: setback },
+    door_wall: { ...schedule.door_wall!, handle: setback },
+    drawer:    { ...schedule.drawer!, handle: setback },
+  }
+  const threeDrawers = {
+    rows: [0, 1, 2].map(i => ({ row_index: i, height_locked: false })),
+    cols: [{ col_index: 0, width_locked: false }],
+    zones: [0, 1, 2].map(i => ({ row_index: i, col_index: 0, face_type: 'drawer_face' as const })),
+  }
+  const rp = resolveCabinet(cab({ face_grid: threeDrawers, handle_schedule: sbSched, top_type: 'front_rail',
+    rules: mergeRules(DEFAULT_RULES, { RAIL_ORIENT: 'vertical' }) }))
+  const zones = rp.face_zones.sort((a, b) => a.row_index - b.row_index)
+  const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:')).sort((a, b) => a.Y - b.Y)
+  const bases = rp.case_parts.filter(p => p.part_key.startsWith('fpbase:')).sort((a, b) => a.Y - b.Y)
+  const side = rp.case_parts.find(p => p.part_key === 'left_side')!
+  const frontZ = side.Z + side.DX
+
+  it('square front: no bevel, no hardware', () => {
+    expect(zones[2].handle).toMatchObject({ grip_kind: 'setback', finger_gap: true, bevel: null, holes: [] })
+  })
+
+  it('rails 10 taller than sharknose (55 between drawers, 50 at the top) and 16.5 further back', () => {
+    expect(rails).toHaveLength(3)
+    expect(rails[0].DX).toBeCloseTo(55)
+    expect(rails[0].Y).toBeCloseTo(zones[0].Y + zones[0].DY - 30)    // 30 down behind the square front
+    expect(rails[2].DX).toBeCloseTo(50)
+    expect(rails[2].Y + rails[2].DX).toBeCloseTo(900)
+    expect(rails[0].Z + rails[0].DZ).toBeCloseTo(frontZ - 16.5)
+    expect(rails[0].fprail!.setback).toBe(16.5)
+  })
+
+  it('a flat base piece closes each pocket, out to the sides\' front edge', () => {
+    expect(bases).toHaveLength(3)
+    const b = bases[0]
+    expect(b.Y).toBeCloseTo(rails[0].Y)                             // at the pocket bottom (behind the front below)
+    expect(b.DX).toBeCloseTo(16.5)                                  // depth = the setback
+    expect(b.DZ).toBe(18)
+    expect(b.Z + b.DX).toBeCloseTo(frontZ)
+    expect(b.DY).toBe(900)
+    expect(b.edge_band).toMatchObject({ top: true, bottom: false })
+  })
+
+  it('notches run setback + thickness deep; the on-edge front rail goes back behind the rail and down to 50', () => {
+    expect(side.outline!.some(q => Math.abs(q.x - (side.DX - 18 - 16.5)) < 0.01)).toBe(true)
+    const plain = resolveCabinet(cab({ face_grid: threeDrawers, top_type: 'front_rail', rules: mergeRules(DEFAULT_RULES, { RAIL_ORIENT: 'vertical' }) }))
+      .case_parts.find(p => p.part_key === 'front_rail')!
+    const fr = rp.case_parts.find(p => p.part_key === 'front_rail')!
+    expect(fr.Z).toBeCloseTo(plain.Z - 18 - 16.5)
+    expect(fr.DX).toBeCloseTo(50)
+    expect(fr.Y + fr.DX).toBeCloseTo(plain.Y + plain.DX)
+  })
+})

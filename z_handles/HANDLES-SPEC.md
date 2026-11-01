@@ -476,6 +476,37 @@ is, and which edge is the bottom, once the label is off.
 - UI: Face Grid → Handle → "No handle".
 - Tests: `handles.test.ts`.
 
+**D24. Set back SQ edge finger pull (Mark, 2026-11-01 — RHK6478 US Main Ensuite; used a lot on Lx and PT colours).** Built 2026-11-01, in-app check pending.
+- Like the sharknose pull, but the **front's grip edge stays square** (taped, no bevel,
+  no saw note). Fingers get behind it because the **backing rail is set back**.
+- Grip kind `setback` (`hardware_handles.grip_kind`, needs finger gap). Seeded: handle
+  "Set Back SQ Edge" + schedule "Set Back SQ Edge Finger Pull" (all four roles).
+- **Rail (Mark's words: "two separate pieces", answer 1a):**
+  - the upright rail is **RAILSBX (10) taller** than a sharknose rail (RAILH 45 → 55
+    between fronts; the top rail 40 → 50 with the default gap), the extra running
+    down behind the square front;
+  - it sits **RAILSB (16.5) further back**: its front face is 16.5 behind the sides'
+    front edge, so there's ~18.5 behind the front for fingers;
+  - a **flat base piece** (`fpbase:<n>`, same board, RAILSB deep × rail length,
+    front edge taped) sits in front of the rail at the pocket's closed end (the end
+    behind the front: the bottom for a grip-edge-top front, the top for a wall
+    door), out to the sides' front edge, so the pocket is closed.
+- **Fixing (answer 2: yes):** both pieces sit in one notch through the sides,
+  RAILSB + rail thickness deep (33 for 16.5 board) for the rail's height; the
+  generated notch pocket (seamDrillSync) runs from the rail's back face out
+  through the front edge. Knock-in blocks as D20.
+- **Front rail:** an on-edge carcass front rail behind the top set back rail is pushed
+  back by rail thickness + RAILSB and **cut down to RAILSBFR (50)** ("the vertical
+  front rails get cut down to 50mm", Mark), keeping its top.
+- Rules RAILSB / RAILSBX / RAILSBFR in the Finger Pull Rails group (job / room / cabinet).
+- Optimiser: the base piece nests like a rail (60 strip, trim, tape the front edge,
+  D21), named "Finger Rail Base n". Display layer `finger_rails`.
+- Migration `z_handles/migration_d24_setback.sql` (grip kind + `fpbase:` part key) — applied.
+- Not yet: base pieces don't join along the run in the optimiser (D19 joins `fprail:`
+  only); shaped (footprint) cabinets ignore the setback; elevation shows the
+  square front + rail only (no base line).
+- Tests: `handles.test.ts` (D24 block), `fingerRailOps.test.ts` (notch).
+
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
 - **Reuse, don't rebuild.** Same loader as slides and fixtures

@@ -1416,6 +1416,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Job Reports → Download N rooms: with One PDF ticked you get one Save As; without it you pick a folder once and every room’s PDF goes into it. The optimiser’s Download all G-code works the same way (one folder for all the NC files + the run file). This needs Chrome or Edge; other browsers download to Downloads as before.',
       canvas: true, done: c => c.report === 'shop_drawings' },
   ]},
+
+  // Appended 2026-11-01 (set back SQ edge finger pull, z_handles D24).
+  { id: 'setback_finger_pull', level: 'intermediate', topic: 'cabinets', title: 'Set back SQ edge finger pull',
+    blurb: 'Square-edged fronts with the backing rail set back so fingers reach behind the front.',
+    keywords: 'set back setback square edge finger pull rail sharknose lx pt colour handle schedule backing rail base', steps: [
+    { id: 'schedule', title: 'Pick the schedule',
+      body: 'Room (or Job) Properties → Handles: pick “Set Back SQ Edge Finger Pull”. Every front in the room gets a finger gap with a square top edge (no bevel). One front can be changed on its own in Face Grid → Handle. Then switch to 3D to see the rails.',
+      canvas: true, done: c => c.view === '3d' },
+    { id: 'rail', title: 'What gets made',
+      body: 'Behind each gap: a rail 10 taller than a sharknose rail, set 16.5 back from the gable front, plus a flat base piece in front of it that closes the pocket. Both sit in one notch through the gables. An on-edge front rail behind the top one is pushed back and cut down to 50. Change the 16.5 / 10 / 50 in the Finger Pull Rails rules.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

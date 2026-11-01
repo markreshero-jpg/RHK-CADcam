@@ -53,6 +53,9 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     RAILBLK: 15,  // knock-in block hole: back of rail → hole centre
     RAILBLKD: 10, // knock-in block hole diameter
     RAILBLKZ: 12, // knock-in block hole depth
+    RAILSB:  16.5, // set back SQ edge rail: setback behind the sides' front (pocket depth)
+    RAILSBX: 10,  // set back rail: extra height over a sharknose rail
+    RAILSBFR: 50, // set back top rail: on-edge front rail cut down to this
 
     // Pull-out bins (z_bin_cabinet)
     BINUP:  140,  // min clear height above a bin for an inner drawer

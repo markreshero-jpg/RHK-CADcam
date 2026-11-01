@@ -62,6 +62,9 @@ const RULE_LABELS: Record<RuleKey, string> = {
   FPGAP:   'Finger Gap (mm)',
   RAILH:   'Finger Rail Height (mm)',
   RAILUP:  'Finger Rail Overlap Up (mm)',
+  RAILSB:  'Set Back Rail Setback (mm)',
+  RAILSBX: 'Set Back Rail Extra Height (mm)',
+  RAILSBFR: 'Set Back Top: Front Rail Height (mm)',
   RAILCUT: 'Finger Rail Notch Relief (mm)',
   RAILBLK: 'Knock-in Block Setback (mm)',
   RAILBLKD:'Knock-in Block Hole Ø (mm)',
@@ -82,7 +85,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Fixed Shelves',      keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',      keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   // Face Reveals (CLASS_RULE_KEYS) render per class — see ClassRulesTable.
-  { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ'] },
+  { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ', 'RAILSB', 'RAILSBX', 'RAILSBFR'] },
   { label: 'Bins',               keys: ['BINUP', 'BINGAP'] },
   { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
   { label: 'Shaped Cabinets',   keys: ['ANGLE_JOIN'] },

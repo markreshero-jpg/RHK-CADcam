@@ -75,6 +75,8 @@ export function shapedPartLabel(k: string): string | null {
   if (crv) return crv
   const fp =/^fprail:(\d+)$/.exec(k)
   if (fp) return `Finger Rail ${Number(fp[1]) + 1}`
+  const fb = /^fpbase:(d+)$/.exec(k)
+  if (fb) return `Finger Rail Base ${Number(fb[1]) + 1}`
   const lh = /^lh:(\d+)$/.exec(k)
   if (lh) return `Linear Handle ${Number(lh[1]) + 1}`
   const ap = /^ap:(.+)$/.exec(k)

@@ -292,14 +292,15 @@ export function normalizeProject(
     // Finger-pull rails narrower than the machine cuts well nest as a RAIL_NEST_W
     // strip; the shop trims it and tapes the long edges after (Mark, 2026-10-29), so
     // nothing is deducted for tape here and the comment gives the trim size.
-    const railStrip = key.startsWith('fprail:') && Number(r.dx) < RAIL_NEST_W
+    // A set back rail's flat base piece (fpbase:, D24) is the same kind of strip.
+    const railStrip = (key.startsWith('fprail:') || key.startsWith('fpbase:')) && Number(r.dx) < RAIL_NEST_W
       ? fingerRailStrip(Number(r.dx), Number(r.dy), Number(r.dz), flagsOf(r), tFor(r), !!turned) : null
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     const cutHere = cutByCab.get(String(r.cabinet_instance_id)) ?? new Map<string, number>()
     const piece = splitPieceSuffix(key, cutHere).trim().replace(/[()]/g, '') || null
     const splitNote = splitPieceNote(key, cutHere)
-    push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : key.startsWith('lh:') ? `Linear Handle ${Number(key.slice(3)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
+    push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : key.startsWith('fpbase:') ? `Finger Rail Base ${Number(key.slice(7)) + 1}` : key.startsWith('lh:') ? `Linear Handle ${Number(key.slice(3)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
       ...(bevel || piece || key.startsWith('lh:') ? { suffix: [bevel, piece, key.startsWith('lh:') ? 'sharknose edge, saw' : null].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), railStrip?.dims ?? turned,
       railStrip ? { ...eb, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0 } : eb, base)

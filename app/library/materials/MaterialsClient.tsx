@@ -175,6 +175,7 @@ const TABS: TabConfig[] = [
           { value: 'hardware',  label: 'Handle' },
           { value: 'push',      label: 'Push to open' },
           { value: 'sharknose', label: 'Sharknose' },
+          { value: 'setback',   label: 'Set back SQ edge' },
           { value: 'rail',      label: 'Rail' },
           { value: 'channel',   label: 'Channel' },
         ],

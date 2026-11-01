@@ -42,6 +42,10 @@ export interface FingerRail {
   material_id: string
   edgeband_id?: string        // the front's tape (rails take the door's board + tape)
   at?: 'top' | 'bottom'       // the rail at the carcass top / bottom gap
+  // Set back SQ edge rail (D24): front face this far behind frontZ, and which end
+  // of the rail the pocket's flat base piece closes (the end behind the front).
+  setback?:  number
+  baseAt?:   'top' | 'bottom'
 }
 
 const EPS = 0.01
@@ -96,14 +100,17 @@ export function fingerRails(
     const h = z.handle
     if (!h?.finger_gap || z.facet || z.AY) continue
     const gap = h.finger_gap_mm ?? r.FPGAP
+    // Set back SQ edge (D24): RAILSBX further down behind the square front.
+    const sb = h.grip_kind === 'setback'
+    const behind = down + (sb ? r.RAILSBX : 0)
     let bottom: number, top: number
     if (h.grip_edge === 'top') {
       const gapLo = z.Y + z.DY, gapHi = gapLo + gap
-      bottom = gapLo - down
+      bottom = gapLo - behind
       top = Math.min(gapHi + r.RAILUP, carcTop)
     } else {
       const gapHi = z.Y, gapLo = gapHi - gap
-      top = gapHi + down
+      top = gapHi + behind
       bottom = Math.max(gapLo - r.RAILUP, carcBot)
     }
     if (top - bottom <= EPS) continue
@@ -114,7 +121,8 @@ export function fingerRails(
       if (d.joint <= cx && d.joint > x0) x0 = d.joint
       if (d.joint >= cx && d.joint < x1) x1 = d.joint
     }
-    found.push({ key: 'fprail:0', bottom, top, x0, x1, frontZ, thickness: z.DZ, material_id: z.material_id, edgeband_id: z.edge_band?.id })
+    found.push({ key: 'fprail:0', bottom, top, x0, x1, frontZ, thickness: z.DZ, material_id: z.material_id, edgeband_id: z.edge_band?.id,
+      ...(sb ? { setback: r.RAILSB, baseAt: h.grip_edge === 'top' ? 'bottom' as const : 'top' as const } : {}) })
   }
 
   // 2. Within a column, fronts on one seam share a rail; different gaps with
@@ -127,6 +135,7 @@ export function fingerRails(
     if (Math.abs(prev.bottom - rl.bottom) > SAME || Math.abs(prev.top - rl.top) > SAME)
       warn('FPRAIL_NO_DIVISION', 'Fronts side by side have different finger gaps with no division between them — their backing rails are merged; add a divider between them')
     prev.bottom = Math.min(prev.bottom, rl.bottom); prev.top = Math.max(prev.top, rl.top)
+    if (rl.setback && !(prev.setback && prev.setback >= rl.setback)) { prev.setback = rl.setback; prev.baseAt = rl.baseAt }
   }
 
   // 3. Rails at the same height either side of a division join through it.
@@ -135,7 +144,7 @@ export function fingerRails(
     joined = false
     for (const a of merged) {
       const b = merged.find(m => m !== a && Math.abs(m.x0 - a.x1) < EPS
-        && Math.abs(m.bottom - a.bottom) < SAME && Math.abs(m.top - a.top) < SAME)
+        && Math.abs(m.bottom - a.bottom) < SAME && Math.abs(m.top - a.top) < SAME && (m.setback ?? 0) === (a.setback ?? 0))
       if (!b) continue
       a.x1 = b.x1; a.top = Math.max(a.top, b.top); a.bottom = Math.min(a.bottom, b.bottom)
       merged.splice(merged.indexOf(b), 1)
@@ -172,15 +181,16 @@ export function fingerRails(
 export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails: FingerRail[], caseParts: ResolvedCasePart[] = []): ResolvedCasePart[] {
   const front = caseParts.find(p => p.part_key === 'front_rail')
   const fixedByFront = front?.upright ? topRail(front, rails) : undefined
-  return rails.map(rl => ({
+  const uprights = rails.map(rl => ({
     grain_direction: r.RAILGRAIN ?? 'horizontal',
     fprail: {
       cut: r.RAILCUT, blockSetback: r.RAILBLK, blockDia: r.RAILBLKD, blockDepth: r.RAILBLKZ,
       ...(rl === fixedByFront ? { noBlocks: true as const } : {}),
+      ...(rl.setback ? { setback: rl.setback } : {}),
     },
     part_key: rl.key,
     DX: rl.top - rl.bottom, DY: rl.x1 - rl.x0, DZ: rl.thickness,
-    X: rl.x0, Y: rl.bottom, Z: rl.frontZ - rl.thickness,
+    X: rl.x0, Y: rl.bottom, Z: rl.frontZ - (rl.setback ?? 0) - rl.thickness,
     AX: 0, AY: 0, AZ: 0,
     material_id: rl.material_id,
     // Long edges taped after the shop trims the CNC strip (Mark, 2026-10-29): the rail
@@ -191,15 +201,36 @@ export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails:
       id: rl.edgeband_id,
     },
   }) as ResolvedCasePart)
+  // Set back SQ edge (D24): a flat strip of the same board in front of the rail at
+  // the pocket's closed end (behind the front), out to the sides' front edge, in
+  // the same notch. Horizontal frame: DX = depth, DY = length, DZ = thickness;
+  // its front edge (top) taped.
+  const bases = rails.filter(rl => rl.setback).map((rl, i) => ({
+    grain_direction: 'horizontal',
+    part_key: `fpbase:${i}`,
+    DX: rl.setback!, DY: rl.x1 - rl.x0, DZ: rl.thickness,
+    X: rl.x0, Y: rl.baseAt === 'top' ? rl.top - rl.thickness : rl.bottom, Z: rl.frontZ - rl.setback!,
+    AX: 0, AY: 0, AZ: 0,
+    material_id: rl.material_id,
+    edge_band: { top: true, bottom: false, left: false, right: false, id: rl.edgeband_id },
+  }) as ResolvedCasePart)
+  return [...uprights, ...bases]
 }
 
 /** A rail at the carcass top sits where a base cabinet's horizontal front rail
- *  was: push the front rail back by the backing rail's thickness (user, 2026-10-14). */
-export function pushFrontRailBack(caseParts: ResolvedCasePart[], rails: FingerRail[]): void {
+ *  was: push the front rail back by the backing rail's thickness (user, 2026-10-14)
+ *  — and its setback for a set back rail, where an on-edge front rail is also
+ *  cut down to `sbFrontH` (RAILSBFR, Mark 2026-11-01), its top kept. */
+export function pushFrontRailBack(caseParts: ResolvedCasePart[], rails: FingerRail[], sbFrontH?: number): void {
   const front = caseParts.find(p => p.part_key === 'front_rail')
   if (!front) return
   const rail = topRail(front, rails)
-  if (rail) front.Z -= rail.thickness
+  if (!rail) return
+  front.Z -= rail.thickness + (rail.setback ?? 0)
+  if (rail.setback && front.upright && sbFrontH && front.DX > sbFrontH) {
+    front.Y += front.DX - sbFrontH
+    front.DX = sbFrontH
+  }
 }
 
 /** The backing rail level with a base cabinet's front rail (the carcass-top gap). */
@@ -237,7 +268,7 @@ export function sideNotches(side: RailPanel, rails: FingerRail[], cut: number): 
     .filter(rl => railInPanel(rl, side))
     .map(rl => {
       const y1 = Math.max(topY - rl.top, 0), y2 = Math.min(topY - rl.bottom, H)
-      return { y1, y2, t: Math.min(rl.thickness, D), cut, openTop: y1 <= EPS, openBottom: y2 >= H - EPS }
+      return { y1, y2, t: Math.min(rl.thickness + (rl.setback ?? 0), D), cut, openTop: y1 <= EPS, openBottom: y2 >= H - EPS }
     })
     .filter(n => n.y2 - n.y1 > EPS)
     .sort((a, b) => a.y1 - b.y1)

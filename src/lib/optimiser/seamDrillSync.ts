@@ -463,8 +463,10 @@ export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolI
         parameters: { generated: GENERATED_MARK, kind: 'fprail_notch' },
       }
       // Side footprint (caseFrame): u = depth from the side's back (side.Z), v = height.
-      const front = rail.Z + rail.DZ - side.Z
-      const back = front - rail.DZ
+      // A set back rail (D24) sits rail.fprail.setback behind the side's front edge;
+      // its notch still runs out through the front (the base piece fills it).
+      const back = rail.Z - side.Z
+      const front = back + rail.DZ + (rail.fprail!.setback ?? 0)
       const bot = rail.Y - side.Y, top = bot + rail.DX
       const openBot = bot <= EPS, openTop = top >= side.DY - EPS
       const u0 = back, u1 = front + NOTCH_OVERRUN
