@@ -50,6 +50,7 @@ const FILL_OPS = ['pocket', 'raster'] as const
 interface Catalogue {
   id: string; name: string; thickness_mm: number; construction: string
   substrate: string | null; description: string | null
+  facing_name?: string | null; facing_thickness_mm?: number | null   // z_faced_doors
   is_active: boolean; sort_order: number
   edge_band_top: boolean; edge_band_bottom: boolean
   edge_band_left: boolean; edge_band_right: boolean
@@ -314,6 +315,27 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
             <label className={lbl}>Description</label>
             <input className={inp} defaultValue={c.description ?? ''}
               onBlur={e => patch<Catalogue>('door_catalogue', c.id, { description: e.target.value.trim() || null }, setCatalogue)} />
+          </div>
+        </div>
+
+        {/* Faced door (z_faced_doors) — a bought-in facing stuck on the board's face */}
+        <div className="border-t border-edge pt-4">
+          <label className={lbl}>Facing (bought in)</label>
+          <p className="text-[10px] text-ink-subtle mb-2">
+            E.g. a 4mm mirror cut to the door size and stuck on its face. The board above is cut on the CNC;
+            the facing goes on the Glass Order and adds its thickness to the front (door + facing + 2).
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={lbl}>Facing name</label>
+              <input className={inp} defaultValue={c.facing_name ?? ''} placeholder="4mm Mirror"
+                onBlur={e => patch<Catalogue>('door_catalogue', c.id, { facing_name: e.target.value.trim() || null }, setCatalogue)} />
+            </div>
+            <div>
+              <label className={lbl}>Facing thickness (mm)</label>
+              <input type="number" className={inp} defaultValue={c.facing_thickness_mm ?? ''} placeholder="none"
+                onBlur={e => patch<Catalogue>('door_catalogue', c.id, { facing_thickness_mm: parseFloat(e.target.value) || null }, setCatalogue)} />
+            </div>
           </div>
         </div>
 

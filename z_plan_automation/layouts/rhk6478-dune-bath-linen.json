@@ -1,0 +1,27 @@
+{
+  "_source": "G:/My Drive/.../Mark ups with Cleint 26.10.26/img_261026111543.pdf p11 (US Bathroom Tall Storage) + Site measure 22.10.26.pdf p6 (Bath Linen 1036 x 602, CH 2400) + Mark Q&A 2026-11-01",
+  "_notes": [
+    "Site: 1036 between 602 returns, CH 2400 (TBC - Mark). Width needs a final measure after the tiles go on.",
+    "No fillers: T2D 1030 with a 3 shadowline each side (offset 3). Doors flush with the carcass sides (no side reveals), 3 gap between the doors for the lip pulls.",
+    "Mirror doors: style 'Mirror Door' = 16.5 Whiteboard + 4mm mirror face (z_faced_doors) -> front 20.5. 600 OA -> 577.5 carcass.",
+    "2382 incl 100 kick (2282 carcass), 18 shadowline to 2400. 4 shelves equally spaced, 2nd up fixed. Lip pull 50 brushed nickel (small) on the meeting edges."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "Bath Linen",
+  "roomHeight": 2400,
+  "wallCabinetTop": 2382,
+  "roomRules": { "TOEH": 100, "HANDLE_DRILL": false },
+  "walls": [
+    { "x": 0, "y": 602, "length": 602, "angle": 270, "_": "1 left return, S->N" },
+    { "x": 0, "y": 0, "length": 1036, "angle": 0, "_": "2 back wall, W->E = elevation" },
+    { "x": 1036, "y": 0, "length": 602, "angle": 90, "_": "3 right return, N->S" }
+  ],
+  "cabinets": [
+    { "def": "T2D", "wall": 2, "offset": 3, "dx": 1030, "dy": 2382, "dz": 577.5, "note": "# 1 linen pair, mirror doors, 3 shadowline each side, lip pulls on the meeting edges",
+      "rules": { "GAPC": 3, "REVSL": 0, "REVSR": 0, "REVENDL": 0, "REVENDR": 0, "REVL": 0, "REVR": 0 },
+      "set": { "internal_grid": { "tree": { "type": "hsplit", "children": [
+        { "size": 889.7, "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false } ] }, "separator": "fixed_shelf" },
+        { "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } }
+      ] } } } }
+  ]
+}

@@ -68,8 +68,8 @@ const setNote = (s: GlassSet) => `${s.name}: ${s.thickness}mm glass, ${s.clearan
 
 export function GlassOrderSheet({ data }: { data: GlassOrderData | null }) {
   if (!data) return <div className="text-gray-500 text-center py-12 text-sm">Loading…</div>
-  if (!data.sets.length) return <div className="text-gray-500 text-center py-12 text-sm">No glass tool set. Set a glass thickness on one in Settings → CNC Tool Sets.</div>
-  if (!data.totals.length) return <div className="text-gray-500 text-center py-12 text-sm">No glass doors in this scope.</div>
+  if (!data.sets.length && !data.totals.length) return <div className="text-gray-500 text-center py-12 text-sm">No glass tool set. Set a glass thickness on one in Settings → CNC Tool Sets.</div>
+  if (!data.totals.length) return <div className="text-gray-500 text-center py-12 text-sm">No glass or mirror doors in this scope.</div>
   return (
     <div className="space-y-8">
       <div>
@@ -79,10 +79,11 @@ export function GlassOrderSheet({ data }: { data: GlassOrderData | null }) {
         </div>
         <table className="w-full text-[11px] border-collapse">
           <thead><tr className="text-gray-500 text-[10px]">
-            {['Glass W × H', 'Thick', 'Qty', 'Cabinets'].map((h, i) => <th key={h} className={`${TH} ${i === 1 || i === 2 ? 'text-right' : 'text-left'}`}>{h}</th>)}
+            {['Type', 'Glass W × H', 'Thick', 'Qty', 'Cabinets'].map((h, i) => <th key={h} className={`${TH} ${i === 2 || i === 3 ? 'text-right' : 'text-left'}`}>{h}</th>)}
           </tr></thead>
           <tbody>{data.totals.map((l, i) => (
-            <tr key={`${l.glassW}x${l.glassH}x${l.thickness}`} className={rowCls(i)}>
+            <tr key={`${l.type}|${l.glassW}x${l.glassH}x${l.thickness}`} className={rowCls(i)}>
+              <td className="py-0.5 pr-3">{l.type}</td>
               <td className="py-0.5 pr-3 font-mono font-semibold text-white">{sz(l.glassW, l.glassH)}</td>
               <td className="py-0.5 pr-3 text-right font-mono">{l.thickness}</td>
               <td className="py-0.5 pr-3 text-right font-mono font-semibold text-white">{l.qty}</td>
@@ -99,12 +100,13 @@ export function GlassOrderSheet({ data }: { data: GlassOrderData | null }) {
           </div>
           <table className="w-full text-[11px] border-collapse">
             <thead><tr className="text-gray-500 text-[10px]">
-              {['Cab #', 'Door', 'Door W × H', 'Opening W × H', 'Glass W × H', 'Thick'].map((h, i) => <th key={h} className={`${TH} ${i === 5 ? 'text-right' : 'text-left'}`}>{h}</th>)}
+              {['Cab #', 'Door', 'Type', 'Door W × H', 'Opening W × H', 'Glass W × H', 'Thick'].map((h, i) => <th key={h} className={`${TH} ${i === 6 ? 'text-right' : 'text-left'}`}>{h}</th>)}
             </tr></thead>
             <tbody>{r.panes.map((p, i) => (
               <tr key={`${p.cabinetId}-${p.door}`} className={rowCls(i)}>
                 <td className="py-0.5 pr-3 font-mono">{p.cabinetLabel}</td>
                 <td className="py-0.5 pr-3 text-gray-500">{p.door}</td>
+                <td className="py-0.5 pr-3">{p.type}</td>
                 <td className="py-0.5 pr-3 font-mono">{sz(p.doorW, p.doorH)}</td>
                 <td className="py-0.5 pr-3 font-mono">{sz(p.openW, p.openH)}</td>
                 <td className="py-0.5 pr-3 font-mono font-semibold text-white">{sz(p.glassW, p.glassH)}</td>
@@ -125,12 +127,12 @@ export function glassOrderPrintHtml(data: GlassOrderData | null): string {
   if (!data || !data.totals.length) return ''
   const totals = `<h2>Glass to order</h2>
     <p style="font-size:10px;color:#555;margin:0 0 6px">Width × height, mm · ${esc(data.sets.map(setNote).join(' · '))}</p>
-    <table><thead><tr><th>Glass W × H</th><th class="r">Thick</th><th class="r">Qty</th><th>Cabinets</th></tr></thead><tbody>
-    ${data.totals.map(l => `<tr><td><b>${sz(l.glassW, l.glassH)}</b></td><td class="r">${l.thickness}</td><td class="r"><b>${l.qty}</b></td><td>${esc(l.cabinets.join(', '))}</td></tr>`).join('')}
+    <table><thead><tr><th>Type</th><th>Glass W × H</th><th class="r">Thick</th><th class="r">Qty</th><th>Cabinets</th></tr></thead><tbody>
+    ${data.totals.map(l => `<tr><td>${esc(l.type)}</td><td><b>${sz(l.glassW, l.glassH)}</b></td><td class="r">${l.thickness}</td><td class="r"><b>${l.qty}</b></td><td>${esc(l.cabinets.join(', '))}</td></tr>`).join('')}
     </tbody></table>`
   const rooms = data.rooms.map(r => `<h2>${esc(r.room.name)}</h2>
-    <table><thead><tr><th>Cab #</th><th>Door</th><th>Door W × H</th><th>Opening W × H</th><th>Glass W × H</th><th class="r">Thick</th></tr></thead><tbody>
-    ${r.panes.map(p => `<tr><td>${esc(p.cabinetLabel)}</td><td>${esc(p.door)}</td><td>${sz(p.doorW, p.doorH)}</td><td>${sz(p.openW, p.openH)}</td><td><b>${sz(p.glassW, p.glassH)}</b></td><td class="r">${p.thickness}</td></tr>`).join('')}
+    <table><thead><tr><th>Cab #</th><th>Door</th><th>Type</th><th>Door W × H</th><th>Opening W × H</th><th>Glass W × H</th><th class="r">Thick</th></tr></thead><tbody>
+    ${r.panes.map(p => `<tr><td>${esc(p.cabinetLabel)}</td><td>${esc(p.door)}</td><td>${esc(p.type)}</td><td>${sz(p.doorW, p.doorH)}</td><td>${sz(p.openW, p.openH)}</td><td><b>${sz(p.glassW, p.glassH)}</b></td><td class="r">${p.thickness}</td></tr>`).join('')}
     </tbody></table>`).join('')
   return totals + rooms
 }

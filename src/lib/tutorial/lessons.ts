@@ -1362,6 +1362,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Under Runner, type into Box raise (mm) and press Enter: + lifts, − drops. The runners, the box and the front-fixing holes all move together, so the front still lines up. A drop can take the box below the cabinet floor, which is meant for a cabinet whose bottom you have removed (−16.5 for a 16.5 bottom). A raise uses up front height, so a taller box may stop fitting (see the Errors tab). Clear the box to go back to 0.',
       canvas: true, done: (c, s) => ev(c, 'box_raise_set') > ev(s, 'box_raise_set') },
   ]},
+
+  // Appended 2026-11-01 (z_faced_doors — mirror doors).
+  { id: 'faced_doors', level: 'intermediate', topic: 'cabinets', title: 'Mirror doors (faced doors)',
+    blurb: 'A Whiteboard door cut on the CNC with a bought-in 4mm mirror stuck on its face.',
+    keywords: 'mirror door glass facing faced whiteboard bathroom linen bought in glazier glass order', steps: [
+    { id: 'blank', title: 'The faced blank',
+      body: 'Go to Library → Doors → Blanks and open “16mm Whiteboard + 4mm Mirror”. Under Facing (bought in) it has a name (4mm Mirror) and a thickness (4). Any blank with a facing thickness is a faced door: the board is cut on the CNC as normal, and the facing is ordered cut to the same size and stuck on its face. The front counts board + facing, so a 600 overall cupboard with mirror doors is a 577.5 carcass (16.5 + 4 + 2 buffer).',
+      done: c => c.path.startsWith('/library/doors') },
+    { id: 'use', title: 'Put mirror doors on a room',
+      body: 'Open the room, then Room → Doors and set the Tall (or Base / Wall) style to “Mirror Door”. The doors show a mirror face in 3D, the door part gets the comment “4MM MIRROR FACED - stick on after” in the optimiser, and every mirror is listed with its size on Reports → Glass Order (Type = 4mm Mirror) for the glazier.',
+      canvas: true, done: c => !!c.report?.includes('glass') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

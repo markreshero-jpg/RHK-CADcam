@@ -29,7 +29,7 @@ import { isSide, caseBox, internalBox, internalSeamPartKey, seamDrillsFor, intoP
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
-import type { ResolvedDoorProfile } from '@/src/lib/resolver/types'
+import type { ResolvedDoorProfile, DoorFacing } from '@/src/lib/resolver/types'
 import { isKickSidePart } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
 import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
@@ -508,7 +508,7 @@ function HingeArmFold({ url, pivot, openAngle, doorsOpen, mirror, scale, color, 
  *  side by side at the hinge gable). */
 interface BifoldOpen { role: 'outer' | 'leading'; span: number; maxAngle: number }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, bifold, ...partProps }: PartProps & {
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, bifold, ...partProps }: PartProps & {
   handle?:    HandleShape | null   // z_handles H2 — swings with the door
   handleMeta?: PartMeta            // click-to-select info for the handle
   selectedId?: string | null       // selected part id (hinge / handle highlight)
@@ -521,6 +521,7 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
   panelAlpha?: number   // layer-set material alpha (ghost / opacity) — door, hinges
   hingeAlpha?: number
   doorProfile?: ResolvedDoorProfile | null
+  facing?:    DoorFacing | null      // z_faced_doors — bought-in mirror on the face, swings with the door
   hinges?:    ResolvedHingeInstance[]
   cupDrills?: ResolvedHingeDrill[]   // world coords; converted to local below
   showDrilling?: boolean
@@ -568,6 +569,12 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, hinges, cupDrills, sh
         <PartAlpha a={panelAlpha}>
           <Part b={localB} {...partProps} />
           {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
+          {facing?.thickness_mm ? (
+            <mesh position={[localB.x + b.w / 2, b.h / 2, b.d + facing.thickness_mm / 2]}>
+              <boxGeometry args={[b.w, b.h, facing.thickness_mm]} />
+              <meshStandardMaterial color="#cfd8dc" metalness={0.85} roughness={0.08} transparent={panelAlpha < 1} opacity={panelAlpha} />
+            </mesh>
+          ) : null}
         </PartAlpha>
       )}
       {handle && (() => {
@@ -1783,6 +1790,7 @@ export function CabinetScene({
                 hingeSide={z.hinge_side}
                 doorsOpen={doorsOpen}
                 doorProfile={z.door_profile}
+                facing={z.facing}
                 showPanel={showFaceZone}
                 panelAlpha={alpha(faceItem ?? 'doors')}
                 hingeAlpha={alpha('hinges')}

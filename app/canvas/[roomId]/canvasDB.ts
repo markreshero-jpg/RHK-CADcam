@@ -256,6 +256,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
         door_style_id: z.door_style_id ?? null,
         door_profile_id: z.door_profile_id ?? null,
         door_profile: z.door_profile ?? null,
+        ...(z.facing ? { facing: z.facing } : {}),   // z_faced_doors
         // NULL = saved before handles (undefined → sheet falls back to the
         // schedule); { none: true } = resolved to no handle (see persistResolved).
         handle: z.handle == null ? undefined : z.handle.none ? null : z.handle,

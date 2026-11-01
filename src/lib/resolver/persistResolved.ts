@@ -165,6 +165,7 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       door_style_id:     z.door_style_id ?? null,
       door_profile_id:   z.door_profile_id ?? null,
       door_profile:      z.door_profile ?? null,
+      facing:            z.facing ?? null,   // z_faced_doors
       // Resolved grip (z_handles H1)
       // A NULL column means "saved before handles existed"; a front resolved
       // to no handle stores { none: true } so the DB rebuild can tell them apart.

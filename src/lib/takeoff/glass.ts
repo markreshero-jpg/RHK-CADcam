@@ -8,6 +8,9 @@
 //   glass   = rebate − 2 × clearance (per side, default 1.5)
 // The rebate corners are squared to the 6mm cutter's R3, so a square glass corner
 // needs ≥ 0.88 clearance to clear the fillet — 1.5 does.
+//
+// Faced doors (z_faced_doors): a front whose blank has a bought-in facing (e.g.
+// 4mm mirror) orders it here too, cut to the door's own size.
 // ============================================================
 
 import type { ResolvedCabinet } from '../resolver/types'
@@ -32,9 +35,10 @@ export interface GlassPane {
   glassW: number; glassH: number
   thickness: number
   setName: string
+  type: string                 // 'Glass', or the facing's name ('4mm Mirror')
 }
 
-export interface GlassSizeLine { glassW: number; glassH: number; thickness: number; qty: number; cabinets: string[] }
+export interface GlassSizeLine { type: string; glassW: number; glassH: number; thickness: number; qty: number; cabinets: string[] }
 
 export const DEFAULT_GLASS_CLEARANCE = 1.5
 
@@ -53,6 +57,16 @@ export function buildGlassPanes(
     const rp = filterRemovedParts(rp0)
     for (const z of rp.face_zones) {
       if (z.facet || z.AY) continue
+      if (z.facing?.thickness_mm) {
+        const w = r1(z.DX), h = r1(z.DY)
+        out.push({
+          cabinetId: cab.id, cabinetLabel: cab.label ?? '—', roomId: cab.room_id,
+          door: `Door r${z.row_index + 1} c${z.col_index + 1}`,
+          doorW: w, doorH: h, openW: w, openH: h, glassW: w, glassH: h,
+          thickness: z.facing.thickness_mm, setName: z.facing.name, type: z.facing.name,
+        })
+        continue
+      }
       const op = z.door_profile?.ops.find(o => o.tool_set_id && sets.has(o.tool_set_id))
       if (!op) continue
       const set = sets.get(op.tool_set_id!)!
@@ -70,22 +84,22 @@ export function buildGlassPanes(
         door: `Door r${z.row_index + 1} c${z.col_index + 1}`,
         doorW: r1(z.DX), doorH: r1(z.DY), openW: r1(openW), openH: r1(openH),
         glassW: r1(rebW - 2 * c), glassH: r1(rebH - 2 * c),
-        thickness: set.thickness, setName: set.name,
+        thickness: set.thickness, setName: set.name, type: 'Glass',
       })
     }
   }
   return out
 }
 
-/** Panes grouped by glass size + thickness (the glazier's order lines), largest first. */
+/** Panes grouped by type + glass size + thickness (the glazier's order lines), largest first. */
 export function glassSizeLines(panes: GlassPane[]): GlassSizeLine[] {
   const by = new Map<string, GlassSizeLine>()
   for (const p of panes) {
-    const k = `${p.glassW}x${p.glassH}x${p.thickness}`
-    const e = by.get(k) ?? { glassW: p.glassW, glassH: p.glassH, thickness: p.thickness, qty: 0, cabinets: [] }
+    const k = `${p.type}|${p.glassW}x${p.glassH}x${p.thickness}`
+    const e = by.get(k) ?? { type: p.type, glassW: p.glassW, glassH: p.glassH, thickness: p.thickness, qty: 0, cabinets: [] }
     e.qty++
     if (!e.cabinets.includes(p.cabinetLabel)) e.cabinets.push(p.cabinetLabel)
     by.set(k, e)
   }
-  return [...by.values()].sort((a, b) => b.glassW * b.glassH - a.glassW * a.glassH || a.thickness - b.thickness)
+  return [...by.values()].sort((a, b) => a.type.localeCompare(b.type) || b.glassW * b.glassH - a.glassW * a.glassH || a.thickness - b.thickness)
 }

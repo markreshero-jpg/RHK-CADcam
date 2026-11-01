@@ -52,7 +52,7 @@ const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'edgeband_length',    label: 'Edgeband Length',     desc: 'Tape metres by product · waste · cost' },
   { id: 'hardware_pick',      label: 'Hardware Pick List',  desc: 'Per room: hinges, runners, handles … qty + tick box' },
   { id: 'takeoff',            label: 'Takeoff',             desc: 'Per room: cabinets, sheets (nested), tape, hardware' },
-  { id: 'glass_order',        label: 'Glass Order',         desc: 'Glass doors: glass sizes to order from the glazier' },
+  { id: 'glass_order',        label: 'Glass Order',         desc: 'Glass + mirror doors: sizes to order from the glazier' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'opening_schedule',   label: 'Door & Window Schedule', desc: 'Doors, windows, openings · size · sill · head' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },

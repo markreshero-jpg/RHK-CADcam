@@ -75,7 +75,7 @@ async function resolveDoorStyles(
     .from('door_styles')
     .select(`
       id, default_material_id,
-      catalogue:door_catalogue ( thickness_mm, edge_band_top, edge_band_bottom, edge_band_left, edge_band_right ),
+      catalogue:door_catalogue ( thickness_mm, edge_band_top, edge_band_bottom, edge_band_left, edge_band_right, facing_name, facing_thickness_mm ),
       profile:door_profiles (
         id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
@@ -109,6 +109,7 @@ async function resolveDoorStyles(
       thickness_mm: number
       edge_band_top: boolean; edge_band_bottom: boolean
       edge_band_left: boolean; edge_band_right: boolean
+      facing_name?: string | null; facing_thickness_mm?: number | null
     } | null
     profile: { id: string; profile_type: string; ops: Record<string, unknown>[] } | null
   }
@@ -135,6 +136,8 @@ async function resolveDoorStyles(
       colour_material_id: effColourId ? (colourMatById.get(effColourId) ?? null) : null,
       edgeband_id:        effColourId ? (colourEbById.get(effColourId) ?? null) : null,
       edge_band_sides:    edgeSides,
+      // Bought-in facing stuck on the board's face (z_faced_doors), e.g. 4mm mirror.
+      facing:             cat?.facing_thickness_mm ? { name: cat.facing_name ?? 'Facing', thickness_mm: Number(cat.facing_thickness_mm) } : null,
     })
   }
 
@@ -841,9 +844,11 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     rows: [{ row_index: 0, height_locked: false }], cols: [{ col_index: 0, width_locked: false }],
     zones: [{ row_index: 0, col_index: 0, face_type: 'door' }],
   }
-  const doorThickness = (roomStyleId ?? effectiveJobStyleId)
-    ? (await resolveDoorStyles(ONE_DOOR, roomStyleId, effectiveJobStyleId, doorColourOverride))['0_0']?.thickness_mm
+  // A faced blank (z_faced_doors) counts its facing: board + mirror = the front.
+  const oneDoor = (roomStyleId ?? effectiveJobStyleId)
+    ? (await resolveDoorStyles(ONE_DOOR, roomStyleId, effectiveJobStyleId, doorColourOverride))['0_0']
     : undefined
+  const doorThickness = oneDoor ? oneDoor.thickness_mm + (oneDoor.facing?.thickness_mm ?? 0) : undefined
 
   // Shaped cabinets (z_cabinet_shape Phase 3): the other front facets' grids
   // resolve their styles under `${edgeId}.${row}_${col}`, and '*' carries the

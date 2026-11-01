@@ -305,6 +305,7 @@ export function resolveFace(
       door_style_id:   door?.style_id ?? null,
       door_profile_id: door?.profile_id ?? null,
       door_profile:    doorProfile,
+      ...(door?.facing ? { facing: door.facing } : {}),
     })
   }
 

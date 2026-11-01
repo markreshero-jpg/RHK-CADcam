@@ -13,12 +13,13 @@ import { bandedLengthMM, tapeRuns, type EbSides } from './edgebandLength'
 import type { OutlinePt } from '@/src/lib/shapePath'
 import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
 import { removedIdsFrom, isAllViews } from '@/src/lib/resolver/filterHidden'
-import type { PartHideViews } from '@/src/lib/resolver/types'
+import type { PartHideViews, DoorFacing } from '@/src/lib/resolver/types'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
 import { floatShelfPartLabel, floatShelfPartNote } from '@/src/lib/floatShelf'
 import { backPanelPartLabel } from '@/src/lib/backPanel'
 import { cutBaseKeys, splitBaseKey, splitPieceNote, splitPieceSuffix } from '@/src/lib/cabinetSplit'
+import { facedDoorNote } from '@/src/lib/facedDoor'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -381,6 +382,10 @@ export function normalizeProject(
     // turns with it) rather than swapping w/h here.
     const last = parts[parts.length - 1]
     if (last?.source_part_id === r.id && cabById.get(String(r.cabinet_instance_id))?.grain_match?.direction === 'horizontal') last.grain_across = true
+    // Faced door (z_faced_doors): the board is cut here; the bought-in facing
+    // (e.g. 4mm mirror) is ordered cut to the same size and stuck on after.
+    const facingNote = facedDoorNote(r.facing as DoorFacing | null | undefined)
+    if (facingNote && last?.source_part_id === r.id) last.comment = last.comment ? `${facingNote} · ${last.comment}` : facingNote
   }
   // Drawer box panels — key mirrors svgDbMeta / Cabinet3DView (db_<row>_<col>_<part_type>),
   // the same identity the PartEditor writes to part_operations.source_part_key and that
@@ -420,7 +425,7 @@ export const PART_SELECTS = {
   case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,outline,cutouts,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,outline,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,grain_direction,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id,facing',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,material_id,no_cnc,hide_views,edge_top,edge_bottom,edge_left,edge_right',
 } as const

@@ -28,6 +28,13 @@ describe('glass order', () => {
     expect(p[0].openH).toBe(560)
   })
   it('groups identical panes for the glazier', () => {
-    expect(glassSizeLines(panes)).toEqual([{ glassW: 358.8, glassH: 628.8, thickness: 6, qty: 2, cabinets: ['W-01'] }])
+    expect(glassSizeLines(panes)).toEqual([{ type: 'Glass', glassW: 358.8, glassH: 628.8, thickness: 6, qty: 2, cabinets: ['W-01'] }])
+  })
+  it('faced doors (z_faced_doors) order their facing at the door size', () => {
+    const mirror = { row_index: 0, col_index: 0, DX: 513.5, DY: 2259, DZ: 16.5, facing: { name: '4mm Mirror', thickness_mm: 4 } }
+    const p = buildGlassPanes([{ id: 'm', room_id: 'r', label: 'TC-01' }], new Map([['m', cab([mirror, { ...mirror, col_index: 1 }])]]), new Map())
+    expect(p).toHaveLength(2)
+    expect(p[0]).toMatchObject({ type: '4mm Mirror', glassW: 513.5, glassH: 2259, thickness: 4, door: 'Door r1 c1' })
+    expect(glassSizeLines(p)).toEqual([{ type: '4mm Mirror', glassW: 513.5, glassH: 2259, thickness: 4, qty: 2, cabinets: ['TC-01'] }])
   })
 })

@@ -1195,7 +1195,13 @@ export interface ResolvedDoorStyleInput {
   // Which edges of the door blank get banded (from door_catalogue). Falls back
   // to the construction method's EDGING[door] rule when unset.
   edge_band_sides?: EdgeSides | null
+  // Bought-in facing stuck on the board's face (z_faced_doors): e.g. 4mm mirror.
+  // thickness_mm stays the board (what's cut); the front is board + facing.
+  facing?: DoorFacing | null
 }
+
+/** A faced door's bought-in layer (z_faced_doors), cut to the door's size. */
+export interface DoorFacing { name: string; thickness_mm: number }
 
 export interface FaceRowInput {
   row_index:    number
@@ -1709,6 +1715,9 @@ export interface ResolvedFaceZone extends ResolvedPart {
   door_style_id?:   string | null
   door_profile_id?: string | null
   door_profile?:    ResolvedDoorProfile | null
+  // Faced door (z_faced_doors): bought-in layer on the board's face, same W x H,
+  // sitting at Z + DZ. DZ stays the board; the front is DZ + facing.thickness_mm.
+  facing?:          DoorFacing | null
   // Shaped cabinets (z_cabinet_shape Phase 3). facet = footprint edge id of a
   // non-primary front facet (absent = primary front, ids stay zone_<r>_<c>).
   // AY turns the zone about its min corner onto the facet. bevel_l / bevel_r =
