@@ -69,7 +69,10 @@ describe('shaped toe kick (4b)', () => {
     const [a, b] = faces.map(plan)
     const shared = a.filter(p => b.some(q => Math.hypot(p.x - q.x, p.y - q.y) < 0.01))
     expect(shared).toHaveLength(2)
-    for (const f of faces) expect(Math.abs(f.bevel_lo ?? 0) + Math.abs(f.bevel_hi ?? 0)).toBeCloseTo(22.5, 6)
+    // The shared corner is a 22.5 mitre on each; the facet's other end lies flush in the side plane (45).
+    const has = (f: ResolvedToekickPart, deg: number) => [f.bevel_lo, f.bevel_hi].some(b => Math.abs(Math.abs(b ?? 0) - deg) < 1e-6)
+    for (const f of faces) expect(has(f, 22.5)).toBe(true)
+    expect(has(faces.find(f => f.AY)!, 45)).toBe(true)
     // The facet face is set back TOESCF from the facet (2x + 2z = 2·(600 + 580) line → x + z = 1180).
     const facet = faces.find(f => f.AY)!
     const outer = plan(facet).filter(q => Math.abs((q.x + q.y) - (1180 - DEFAULT_RULES.TOESCF * Math.SQRT2)) < 0.01)
@@ -106,8 +109,13 @@ describe('shaped toe kick (4b)', () => {
       expect(q.x, p.part_key).toBeLessThanOrEqual(W + 0.01)
       expect(q.y, p.part_key).toBeLessThanOrEqual(D + 0.01)
     }
-    // the face reaches the gable's outer face
-    expect(Math.max(...plan(rp.toekick_parts.find(p => p.part_key === 'kick_front_face')!).map(q => q.x))).toBeCloseTo(W, 1)
+    // Face and sub front run on to the gable's outer face with a 45 end lying flat on it
+    // (both corners of the end on x = W; the back face is the shorter).
+    for (const key of ['kick_front_face', 'kick_sub_front']) {
+      const p = rp.toekick_parts.find(q => q.part_key === key)!
+      expect([p.bevel_lo, p.bevel_hi].some(b => Math.abs((b ?? 0) - 45) < 1e-6), key).toBe(true)
+      expect(plan(p).filter(q => Math.abs(q.x - W) < 0.01), key).toHaveLength(2)
+    }
   })
 
   it('leg kick: front faces only', () => {

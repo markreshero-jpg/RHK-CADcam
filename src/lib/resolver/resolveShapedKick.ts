@@ -144,6 +144,11 @@ export function resolveShapedKick(
       const nf: EdgeFrame = edgeFrame(kEdge(poly, j))
       if (mitreFronts && edges[j].kind === 'front' && Math.abs(alpha - 180) > 0.5)
         return angledEnd('mitre', V, away, f.n, nf, t)
+      // A front board meeting a side / back off square (an angled kick
+      // running into a gable or end panel): run it on and cut the end to lie in
+      // the neighbour's plane — the outer face reaches the corner, the back face
+      // is the shorter. A square end would leave the face short of the panel.
+      if (mitreFronts && Math.abs(alpha - 90) > 0.5) return angledEnd('flush', V, away, f.n, nf, t)
       const s = vertexTrim(away, f.n, nf.n, t, butt?.(j) ?? false)
       return { sOut: s, sIn: s }
     }
