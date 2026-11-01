@@ -19,6 +19,8 @@ Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 
 - **Fronts: every "16mm Polytec Woodmatt TBA" is now Lx Sublime Teak Chalk** (Mark 2026-11-01) - new colour "Sublime Teak" (Chalk) on the Laminex Colour 16mm range (`5fdb0fa7-…`, board `67ecbeff-…` LX Colour 16mm – Sublime Teak (Chalk)). Set per room (vanities, laundry powder cabinet + overheads).
 - Handle schedule "Push To Open" (all roles -> PTO product) created this job; set per room where PTO.
 
+- **Vanity inner drawers 350 deep** (Mark 2026-11-02): Dragon Pro 350x95 Silk White (`5a10d26c`) on the inner_drawer fittings in the US Main Ensuite + US Bathroom (box 325 deep); main drawers stay 400x95.
+
 ## Rooms
 | Room | Room id | Status |
 |---|---|---|
