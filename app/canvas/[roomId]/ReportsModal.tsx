@@ -378,6 +378,9 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   // "One PDF": every ticked room's pages in a single file (pdfCombine), remembered.
   const [onePdf, setOnePdf] = useState(() => { try { return localStorage.getItem('reports-one-pdf') !== '0' } catch { return true } })
   useEffect(() => { try { localStorage.setItem('reports-one-pdf', onePdf ? '1' : '0') } catch { /* ignore */ } }, [onePdf])
+  // Hardware Pick List / Takeoff prints: rooms run on (each kept whole) unless ticked, remembered.
+  const [pagePerRoom, setPagePerRoom] = useState(() => { try { return localStorage.getItem('reports-page-per-room') === '1' } catch { return false } })
+  useEffect(() => { try { localStorage.setItem('reports-page-per-room', pagePerRoom ? '1' : '0') } catch { /* ignore */ } }, [pagePerRoom])
   const batchDone = useRef(false)
   const combinedName = (total: number) => {
     const safe = (x: string) => x.replace(/[^\w-]+/g, '_')
@@ -542,8 +545,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
 
     const rows = selectedReport === 'benchtop_supply' ? [supplyPrintHtml(supplyData, supplyTotalsAll)]
       : selectedReport === 'edgeband_length' ? [edgebandPrintHtml(ebReport, ebWaste / 100)]
-      : selectedReport === 'hardware_pick' ? [hardwarePickPrintHtml(takeoff.data)]
-      : selectedReport === 'takeoff' ? [takeoffPrintHtml(takeoff.data)]
+      : selectedReport === 'hardware_pick' ? [hardwarePickPrintHtml(takeoff.data, pagePerRoom)]
+      : selectedReport === 'takeoff' ? [takeoffPrintHtml(takeoff.data, pagePerRoom)]
       : selectedReport === 'glass_order' ? [glassOrderPrintHtml(glassOrder)]
       : selectedReport === 'appliance_schedule' ? [schedulePrintHtml(scheduleData)]
       : selectedReport === 'opening_schedule' ? [openingSchedulePrintHtml(openingData)] : reportData.flatMap(({ room: rm, materialGroups }) =>
@@ -675,6 +678,13 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                       onChange={e => setEbWaste(Math.max(0, Number(e.target.value) || 0))}
                       className="w-12 text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1 text-right" />
                     %
+                  </label>
+                )}
+                {(selectedReport === 'hardware_pick' || selectedReport === 'takeoff') && (
+                  <label data-page-per-room className="text-xs text-gray-400 flex items-center gap-1 cursor-pointer"
+                    title="Off: rooms follow on down the page, a room that won't fit starts the next page. On: every room on its own page.">
+                    <input type="checkbox" checked={pagePerRoom} onChange={e => setPagePerRoom(e.target.checked)} />
+                    Page per room
                   </label>
                 )}
                 {selectedReport === 'hardware_pick' && cutStickers.length > 0 && (

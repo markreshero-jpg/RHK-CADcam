@@ -1,7 +1,8 @@
 // Printable HTML for the Hardware Pick List + Takeoff (z_takeoff). Goes inside
 // ReportsModal's print shell (its header + base table styles); everything here
-// is scoped under .tk. One room per page — `.room + .room` (not :first-child:
-// the <style> block sits before the first room).
+// is scoped under .tk. Rooms run on down the page, each kept whole (a room that
+// won't fit in what's left starts the next page); pagePerRoom puts each on its own
+// page — `.room + .room` (not :first-child: the <style> block sits before the first room).
 
 import type { TakeoffData } from './TakeoffReport'
 import type { HardwareLine, FingerPullLine, KindCount, HardwareGroup } from '@/src/lib/takeoff/hardware'
@@ -16,7 +17,9 @@ const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`
 
 const CSS = `<style>
   .tk { color: #1a1a1a; }
-  .tk .room + .room { break-before: page; }
+  .tk .room { break-inside: avoid; }
+  .tk .room + .room { margin-top: 26px; }
+  .tk.pp .room + .room { break-before: page; margin-top: 0; }
   .tk .band { display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
     background: #1f2937; color: #fff; padding: 7px 10px; border-radius: 3px; margin: 4px 0 12px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -81,10 +84,10 @@ function pickTable(lines: HardwareLine[], showCabs: boolean): string {
     </tbody></table>`
 }
 
-export function hardwarePickPrintHtml(data: TakeoffData | null): string {
+export function hardwarePickPrintHtml(data: TakeoffData | null, pagePerRoom = false): string {
   if (!data?.hardware.length) return ''
   const rooms = data.rooms.filter(r => r.hardware.length)
-  return `${CSS}<div class="tk">${rooms.map(r => `
+  return `${CSS}<div class="tk${pagePerRoom ? ' pp' : ''}">${rooms.map(r => `
     <div class="room">
       ${band(r.room.name, `${plural(r.hardware.length, 'line')} · ${plural(itemCount(r.hardware), 'item')}`)}
       ${pickTable(r.hardware, true)}
@@ -166,10 +169,10 @@ function blockHtml(b: Block, waste: number): string {
   return sec('Cabinets', countsHtml(b)) + sec('Sheets', sheetsHtml(b)) + sec('Edgetape', tapeHtml(b, waste)) + sec('Hardware', hardwareHtml(b))
 }
 
-export function takeoffPrintHtml(data: TakeoffData | null): string {
+export function takeoffPrintHtml(data: TakeoffData | null, pagePerRoom = false): string {
   if (!data) return ''
   const job: Block = { kinds: data.kinds, fingerPulls: data.fingerPulls, sheets: data.sheetsByRoom, jobSheets: data.sheetsJob, sheetNotes: [], tape: data.tape, hardware: data.hardware }
-  return `${CSS}<div class="tk">${data.rooms.map(r => `
+  return `${CSS}<div class="tk${pagePerRoom ? ' pp' : ''}">${data.rooms.map(r => `
     <div class="room">${band(r.room.name, blockStats(r))}${blockHtml(r, data.tapeWaste)}</div>`).join('')}
     ${data.rooms.length > 1 ? `<div class="room">${band('Job totals', `${plural(data.rooms.length, 'room')} · ${blockStats(job)}`)}
       <p class="note">Sheets = the room nests added up · Cut together = every room nested as one</p>

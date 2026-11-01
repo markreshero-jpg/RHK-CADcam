@@ -5,11 +5,13 @@ Status: **T1–T3 built 2026-10-27**, in-app check by Mark pending. T4 (CSV) not
 Two reports in Reports (Room / Job), for the floor and for quoting:
 
 - **Hardware Pick List**: per room, every hardware product with its qty, a tick
-  box and the cabinets it goes in; job totals at the end. Print = one room per
-  page with a "Picked by / Date" line.
+  box and the cabinets it goes in; job totals at the end. Print = rooms one after
+  another with a "Picked by / Date" line each, never split across pages (a room that
+  won't fit in what's left starts the next page); **Page per room** (remembered)
+  gives one room per page (Mark, 2026-11-02 — fewer sheets to print).
 - **Takeoff**: per room, summarised for keying into the quoting system:
   cabinet counts, finger pulls, sheets per material (nested), edgetape, hardware.
-  Job totals at the end.
+  Job totals at the end. Prints the same way as the pick list (rooms run on, Page per room).
 
 Code: `src/lib/takeoff/hardware.ts` (classification + hardware rollup),
 `src/lib/takeoff/roomSheets.ts` (per-room nest), `app/canvas/[roomId]/TakeoffReport.tsx`
@@ -69,6 +71,7 @@ Checks: `src/lib/takeoff/__tests__/hardware.test.ts`; real-job dry run
 | T2 | Per-room nest sheet counts | ✅ built 2026-10-27 |
 | T3 | Takeoff report (counts, finger pulls, sheets, tape, hardware) + print + tutorial `takeoff_reports` | ✅ built 2026-10-27 |
 | T4 | CSV / Excel export of the takeoff for the quoting system | not started — needs the quoting system's import format |
+| T6 | Rooms share pages on print, each kept whole (`break-inside: avoid`); Page per room tick box; check `z_plan_automation/verify-room-packing.mjs` (RHK6592 pick list 6 → 3 pages) | built 2026-11-02 |
 | T5 | Cut-length stickers: Hardware Pick List → **Cut stickers (n)** — one sticker per cut piece (hanging rails, linear handle strips): job, room, type, product + code, Cab #, cut length, n of N. Size / printer / nudge = Optimiser → Labels settings (102 × 48 default). Code `src/lib/takeoff/cutStickers.ts` (shared pager `labelPagesPdf` in optimiser/labels.ts) | built 2026-10-30, in-app check pending |
 
 ## Open
