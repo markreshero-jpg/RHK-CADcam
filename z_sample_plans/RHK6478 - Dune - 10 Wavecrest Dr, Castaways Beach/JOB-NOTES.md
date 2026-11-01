@@ -21,7 +21,7 @@ Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 
 
 - **Vanity inner drawers 350 deep** (Mark 2026-11-02): Dragon Pro 350x95 Silk White (`5a10d26c`) on the inner_drawer fittings in the US Main Ensuite + US Bathroom (box 325 deep); main drawers stay 400x95.
 
-- **Vanity heights** (Mark 2026-11-02): every vanity has the same carcass (460-800) + bench (820 AFF) heights; only vanities with 140 high basins sit 25 higher (845).
+- **Vanity heights** (Mark 2026-11-02): **every basin finishes 960 AFF.** 115 basins sit on an 845 top (20 slab at 825, carcass 485-825, 60 apron to 785); end panels / fillers / floating shelves moved up 25 with them. A 960 dim beside each basin on the elevation. (Superseded: 820 tops.)
 
 ## Rooms
 | Room | Room id | Status |

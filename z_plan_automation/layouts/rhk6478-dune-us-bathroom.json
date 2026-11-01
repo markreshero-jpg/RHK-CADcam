@@ -4,36 +4,214 @@
     "Copy of the US Main Ensuite (Mark): same fronts, handles, drawers, inner drawers, top, basins.",
     "1750 bench centred on the 2400 wall (Mark). 16.5 end panels the drawer height only (460-760 AFF, under the apron); the floating shelf below runs the full width outside to outside of the panels (1740) and is seen both ends (Mark).",
     "Bench 1750 = 5 + 16.5 + 853.5 + 853.5 + 16.5 + 5: top overhangs the seen end panels 5, apron returned down both ends.",
-    "Returns not measured - drawn 600 so the room has sides. Ceiling 2692 TBC (as the ensuite)."
+    "Returns not measured - drawn 600 so the room has sides. Ceiling 2692 TBC (as the ensuite).",
+    "BASINS 960 (Mark 2026-11-02): every basin finishes 960 AFF -> 115 basin on an 845 top; carcass 485-825, panels / fillers / shelf / top all up 25 (benchtop height_mm 825)."
   ],
   "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
   "roomName": "US Bathroom",
   "roomHeight": 2692,
   "wallCabinetTop": 2692,
-  "roomRules": { "TOEH": 100, "BY_CLASS": { "base": { "REVT": 44 } } },
+  "roomRules": {
+    "TOEH": 100,
+    "BY_CLASS": {
+      "base": {
+        "REVT": 44
+      }
+    }
+  },
   "walls": [
-    { "x": 0, "y": 600, "length": 600, "angle": 270, "_": "1 left return (length not measured)" },
-    { "x": 0, "y": 0, "length": 2400, "angle": 0, "_": "2 back wall 2400, W->E = elevation" },
-    { "x": 2400, "y": 0, "length": 600, "angle": 90, "_": "3 right return (length not measured)" }
+    {
+      "x": 0,
+      "y": 600,
+      "length": 600,
+      "angle": 270,
+      "_": "1 left return (length not measured)"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2400,
+      "angle": 0,
+      "_": "2 back wall 2400, W->E = elevation"
+    },
+    {
+      "x": 2400,
+      "y": 0,
+      "length": 600,
+      "angle": 90,
+      "_": "3 right return (length not measured)"
+    }
   ],
   "cabinets": [
-    { "def": "TEPF", "wall": 2, "offset": 330, "dx": 16.5, "dy": 300, "dz": 476.5, "note": "Left end panel, drawer height 460-760 AFF", "set": { "pos_z": 460 } },
-    { "def": "D2-LL", "wall": 2, "offset": 346.5, "dx": 853.5, "dy": 340, "dz": 476.5, "note": "drawer + inner drawer, basin over",
-      "rules": { "FLOAT": true, "RAIL_ORIENT": "vertical", "SCRBK": 0 },
-      "set": { "has_toekick": false, "pos_z": 460, "top_type": "double_rail",
-        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ],
-          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "drawer_face", "hinge_side": "left", "finger_gap": 60,
-            "drawer_type_config": { "type": "system", "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15" } } ] },
-        "internal_grid": { "tree": { "type": "open", "fittings": [ { "type": "inner_drawer", "y_locked": true, "y_position": 130, "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15" } ] }, "stack_gap": 3 } } },
-    { "def": "D2-LL", "wall": 2, "offset": 1200, "dx": 853.5, "dy": 340, "dz": 476.5, "note": "drawer + inner drawer, basin over",
-      "rules": { "FLOAT": true, "RAIL_ORIENT": "vertical", "SCRBK": 0 },
-      "set": { "has_toekick": false, "pos_z": 460, "top_type": "double_rail",
-        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ],
-          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "drawer_face", "hinge_side": "left", "finger_gap": 60,
-            "drawer_type_config": { "type": "system", "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15" } } ] },
-        "internal_grid": { "tree": { "type": "open", "fittings": [ { "type": "inner_drawer", "y_locked": true, "y_position": 130, "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15" } ] }, "stack_gap": 3 } } },
-    { "def": "TEPF", "wall": 2, "offset": 2053.5, "dx": 16.5, "dy": 300, "dz": 476.5, "note": "Right end panel, drawer height 460-760 AFF", "set": { "pos_z": 460 } },
-    { "def": "FLSHLF", "wall": 2, "offset": 330, "dx": 1740, "dy": 33, "dz": 495, "note": "floating shelf 33 x 495 x 1740, seen both ends, top 246.5 AFF, LED strip at back",
-      "set": { "pos_z": 213.5, "float_shelf": { "stop": 30, "build": "double", "cleat": true, "strip_w": 90, "tape_id": null, "radius_l": 0, "radius_r": 0, "rebate_h": 10, "seen_left": true, "seen_right": true, "rebate_depth": 30, "strip_spacing": 600 } } }
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 330,
+      "dx": 16.5,
+      "dy": 300,
+      "dz": 476.5,
+      "note": "Left end panel, drawer height 460-760 AFF",
+      "set": {
+        "pos_z": 485
+      }
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 346.5,
+      "dx": 853.5,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "drawer + inner drawer, basin over",
+      "rules": {
+        "FLOAT": true,
+        "RAIL_ORIENT": "vertical",
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 485,
+        "top_type": "double_rail",
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "hinge_side": "left",
+              "finger_gap": 60,
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15"
+              }
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "inner_drawer",
+                "y_locked": true,
+                "y_position": 130,
+                "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15"
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      }
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 1200,
+      "dx": 853.5,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "drawer + inner drawer, basin over",
+      "rules": {
+        "FLOAT": true,
+        "RAIL_ORIENT": "vertical",
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 485,
+        "top_type": "double_rail",
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "hinge_side": "left",
+              "finger_gap": 60,
+              "drawer_type_config": {
+                "type": "system",
+                "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15"
+              }
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": [
+              {
+                "type": "inner_drawer",
+                "y_locked": true,
+                "y_position": 130,
+                "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15"
+              }
+            ]
+          },
+          "stack_gap": 3
+        }
+      }
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 2053.5,
+      "dx": 16.5,
+      "dy": 300,
+      "dz": 476.5,
+      "note": "Right end panel, drawer height 460-760 AFF",
+      "set": {
+        "pos_z": 485
+      }
+    },
+    {
+      "def": "FLSHLF",
+      "wall": 2,
+      "offset": 330,
+      "dx": 1740,
+      "dy": 33,
+      "dz": 495,
+      "note": "floating shelf 33 x 495 x 1740, seen both ends, top 246.5 AFF, LED strip at back",
+      "set": {
+        "pos_z": 238.5,
+        "float_shelf": {
+          "stop": 30,
+          "build": "double",
+          "cleat": true,
+          "strip_w": 90,
+          "tape_id": null,
+          "radius_l": 0,
+          "radius_r": 0,
+          "rebate_h": 10,
+          "seen_left": true,
+          "seen_right": true,
+          "rebate_depth": 30,
+          "strip_spacing": 600
+        }
+      }
+    }
   ]
 }
