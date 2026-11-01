@@ -74,6 +74,12 @@ rangehood model is drawn (Mark: "noone sees them … i'm happy just to have a ho
      into the sides' front edges** (5mm Dynamic Holes front → each side).
 9. **Code `WRH`** (already reserved in the cabinet-codes convention for the
    wall rangehood cabinet). Wall › Appliances.
+10. **One library item, not options on every wall cabinet** (Mark, 2026-11-02:
+    "happy with WRH"). `WRH` is placed like any cabinet; a **Rangehood** sidebar
+    section shows only on a cabinet with the rangehood block (like Bulkhead /
+    Floating shelf). Variants are saved from a tuned job cabinet via Save to
+    library. Generic cut-outs are edited in Cabinet Edit per part (R4), not the
+    sidebar. No right-click "Make rangehood cabinet" for now.
 
 ## How it's built
 
