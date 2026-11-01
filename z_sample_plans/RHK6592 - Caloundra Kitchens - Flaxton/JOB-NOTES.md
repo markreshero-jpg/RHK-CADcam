@@ -92,3 +92,15 @@ the carcass, 16s against walls = fillers on the kick, seen vanity panels to the 
   updateFixture (a DB-only move snaps back to the cabinet link). Spec blocks say "Semi inset".
 - Main tall TC-02 handles 1000 AFF to the handle centre: face_grid zones grip_edge bottom, handle_offset 796
   (door bottom at the 140 kick + 796 + 64 half of the 128 centres). Resolver clean.
+
+## Rev 5 — shaker doors (Mark 2026-11-01)
+
+- Quote (ISS 1, 28/10/26): kitchen "doors, drawers and panels (shaker style)", butlers "doors and panels (shaker
+  style)", both 2pac satin; bathrooms Flexipanel New Classic White (flat, unchanged).
+- Job default door style 2 Pac Flat 18mm -> **Shaker — 2pac** (`2610ca59`, 60 frame, 5 deep pocket, Shaker Door tool
+  set) by `_tmp-6592-shaker.mjs`. Same blank + colour range, so Classic White Satin stays. Bathrooms keep their room
+  style (Flat Panel 16mm PT). Kitchen + butlers re-resolved, resolver clean, every front now on the shaker style.
+- The 61-high oven false panel (BC-03) is too short for the 60 frame, so no pocket is cut (stays flat). The butlers
+  blind false panel (352) is shaker too; it sits mostly behind the return run.
+- Shaker routes are generated on the fronts when the optimiser runs (face routes), not at resolve.
+- Open: end panels / fridge panels / island back panel are still flat 2pac board (quote says panels shaker too).
