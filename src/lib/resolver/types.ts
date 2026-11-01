@@ -1217,6 +1217,10 @@ export interface FaceZoneInput {
   face_ins?:  number   // per-zone inset override
   face_buf?:  number   // per-zone buffer override
   drawer_type_config?: DrawerTypeConfig  // only used when face_type === 'drawer_face'
+  // Per-drawer box raise (mm, − = down): moves the runners + box (and the
+  // front-fixing hole datum) on top of DB_RUNNER_RAISE. A drop may take the box
+  // below the interior floor — for a carcass with its bottom removed.
+  box_raise?: number
   // Per-zone door style assignment (lowest level of the door cascade:
   // zone → room → job). null/undefined = inherit. Lives in the face_grid
   // JSONB so it survives re-resolve (the face_zones table is rebuilt each persist).

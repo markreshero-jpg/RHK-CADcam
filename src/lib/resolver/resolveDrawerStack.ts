@@ -360,8 +360,10 @@ export function resolveDrawerStacks(
     // System boxes ride frontLift above the front bottom, so that much of the front is unusable.
     // DB_RUNNER_RAISE lifts runners + box further for clearance off the opening
     // bottom; the front-fixing holes ride up with it (frontDatumY below).
-    const raise = drawerType === 'system' ? (dbRules.DB_RUNNER_RAISE ?? 0) : 0
-    const lift = drawerType === 'system' ? frontLift + raise : 0
+    // The drawer's own box_raise (Face Grid) adds to it, either way.
+    const zoneRaise = zoneInput?.box_raise ?? 0
+    const raise = (drawerType === 'system' ? (dbRules.DB_RUNNER_RAISE ?? 0) : 0) + zoneRaise
+    const lift = (drawerType === 'system' ? frontLift : 0) + raise
 
     const slide = findSlide(depthHere, openingHeight - lift, slideProducts, slideSchedule, slideOverride, { clearance })
 
@@ -460,8 +462,9 @@ export function resolveDrawerStacks(
     const boxX = leftMemberX + runnerThick
     // Bottom sits `lift` above the face zone (system drawers), never below the
     // interior floor — the lowest drawer's zone.Y sits a panel thickness below it,
-    // which would drop the box through the carcase bottom panel.
-    const boxY = Math.max(zone.Y + lift, internalFloorY)
+    // which would drop the box through the carcase bottom panel. A box_raise
+    // drop is meant: it may go that far below the floor (bottom removed).
+    const boxY = Math.max(zone.Y + lift, internalFloorY + Math.min(0, zoneRaise))
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 
     // Slide Z: back of slide rail. Front of slide aligns with the front face of the box sides

@@ -120,6 +120,11 @@ set to **5** on DTC Dragon Pro. System drawers' runners + box sit that much high
 the front-fixing holes move up with them (frontDatumY = front bottom + raise), so the front still lines up with
 the box. It counts against the opening when picking a slide.
 
+Per-drawer box raise (2026-11-01 Mark, RHK6586 study drawer with no carcass bottom): face-grid zone field
+`box_raise` (mm, − = down), Face Grid → drawer → "Box raise". Adds to DB_RUNNER_RAISE (any drawer type but bins):
+runners, box and front-fixing hole datum all move. A drop may take the box below the interior floor (by that
+much only) — meant for a removed bottom (−16.5).
+
 Thick drawer bottoms (2026-10-30 Mark): the runners take a 16–16.5 bottom. New method rules DB_BOTTOM_FIT_T
 ("Runner Takes Bottom Thickness", default **16**) and DB_BOTTOM_REBATE_W ("Thick Bottom Rebate Width", default **16**),
 Opening Fit group. A bottom thicker than fit + 0.5 (so 16.5 board passes) gets an underside rebate along its left +

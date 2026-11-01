@@ -519,6 +519,18 @@ export default function FaceGridEditor({
     })
   }
 
+  // Raise (+) or drop (−) this drawer's runners + box. null clears it.
+  function setBoxRaise(rowIdx: number, colIdx: number, mm: number | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const { box_raise: _, ...rest } = z
+        return mm ? { ...rest, box_raise: mm } : rest
+      }),
+    })
+  }
+
   // The resolved stack for a zone — carries the effective drawer type and the box
   // height the resolver actually settled on (i.e. the tallest slide that fits).
   function zoneStack(rowIdx: number, colIdx: number) {
@@ -1369,6 +1381,25 @@ export default function FaceGridEditor({
                         </div>
                       )
                     })()}
+
+                    {/* Box raise — moves this drawer's runners + box up (+) or down (−),
+                        e.g. −16.5 when the carcass bottom is removed. */}
+                    {(zoneStack(gz.row_index, gz.col_index)?.drawer_type ?? gz.drawer_type_config?.type) !== 'bin' && (
+                      <div className="mt-1.5">
+                        <p className="text-gray-600 mb-0.5">Box raise (mm, − = down)</p>
+                        <input
+                          type="number"
+                          defaultValue={gz.box_raise ?? ''}
+                          placeholder="0"
+                          onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                          onBlur={e => {
+                            const v = parseFloat(e.target.value)
+                            setBoxRaise(gz.row_index, gz.col_index, isNaN(v) ? null : v)
+                          }}
+                          className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

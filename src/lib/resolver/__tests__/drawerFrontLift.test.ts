@@ -51,3 +51,25 @@ describe('system drawer boxes sit a constant height above their front', () => {
     for (const s of rp.drawer_stacks) expect(s.box_height).toBe(127)
   })
 })
+
+describe('per-drawer box_raise (Face Grid)', () => {
+  const withRaise = (mm: number) => resolveCabinet(cab({
+    face_grid: { ...fourDrawers, zones: fourDrawers.zones.map(z => z.row_index === 0 ? { ...z, box_raise: mm } : z) },
+  }))
+  const lowest = (rp: ReturnType<typeof resolveCabinet>) => rp.drawer_stacks.find(s => s.face_zone_row === 0)!
+  const base = lowest(resolveCabinet(cab()))
+
+  it('a drop of the bottom thickness puts the lowest box level with its front bottom (bottom removed)', () => {
+    const rp = withRaise(-16.5)
+    const zoneY = rp.face_zones.find(z => z.row_index === 0)!.Y
+    expect(lowest(rp).box_Y).toBeCloseTo(base.box_Y - 16.5)
+    expect(lowest(rp).box_Y).toBeCloseTo(zoneY)
+    // only that drawer moves
+    const other = (r: typeof rp) => r.drawer_stacks.find(s => s.face_zone_row === 2)!.box_Y
+    expect(other(rp)).toBeCloseTo(other(resolveCabinet(cab())))
+  })
+
+  it('a raise lifts the box', () => {
+    expect(lowest(withRaise(10)).box_Y).toBeCloseTo(base.box_Y + 10)
+  })
+})
