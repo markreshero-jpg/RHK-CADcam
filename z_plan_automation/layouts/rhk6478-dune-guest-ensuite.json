@@ -1,0 +1,32 @@
+{
+  "_source": "Markup 26.10.26 img_261026111543.pdf p7-8 (Guest Ensuite) + Site measure 22.10.26.pdf p4 (DS Guest Ens: tap 510 in @1086, waste 543 in @625) + Mark Q&A 2026-11-02",
+  "_notes": [
+    "Like the US Bathroom (Mark): 1000 overall from the left wall = 30 filler (drawer height) | D 948.5 | 16.5 end panel (drawer height only, seen) + 5 top overhang.",
+    "Same carcass + bench heights as the other vanities (Mark: only vanities with 140 basins sit 25 higher) - this one has a 115 basin -> top 820.",
+    "Floating shelf 995 from the wall to the outside of the right panel, seen on the right, 495 deep.",
+    "Back wall length + right return not measured - drawn 1600 / 600. Ceiling 2399 TBC (2419 off slab as DS Linen - 20 floor)."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "Guest Ensuite",
+  "roomHeight": 2399,
+  "wallCabinetTop": 2399,
+  "roomRules": { "TOEH": 100, "BY_CLASS": { "base": { "REVT": 44 } } },
+  "walls": [
+    { "x": 0, "y": 600, "length": 600, "angle": 270, "_": "1 left wall (vanity against it)" },
+    { "x": 0, "y": 0, "length": 1600, "angle": 0, "_": "2 back wall (length not measured)" },
+    { "x": 1600, "y": 0, "length": 600, "angle": 90, "_": "3 right return (not measured)" }
+  ],
+  "cabinets": [
+    { "def": "TFFW", "wall": 2, "offset": 0, "dx": 30, "dy": 300, "dz": 476.5, "note": "30 filler at the left wall, drawer height 460-760 AFF", "set": { "pos_z": 460, "has_toekick": false } },
+    { "def": "D2-LL", "wall": 2, "offset": 30, "dx": 948.5, "dy": 340, "dz": 476.5, "note": "drawer + inner drawer, basin over",
+      "rules": { "FLOAT": true, "RAIL_ORIENT": "vertical", "SCRBK": 0 },
+      "set": { "has_toekick": false, "pos_z": 460, "top_type": "double_rail",
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "drawer_face", "hinge_side": "left", "finger_gap": 60,
+            "drawer_type_config": { "type": "system", "slide_product_id": "8b86cf55-7a03-40e6-879d-08fde8e35b15" } } ] },
+        "internal_grid": { "tree": { "type": "open", "fittings": [ { "type": "inner_drawer", "y_locked": true, "y_position": 130, "slide_product_id": "5a10d26c-caf3-40c3-b07c-997ed83db63b" } ] }, "stack_gap": 3 } } },
+    { "def": "TEPF", "wall": 2, "offset": 978.5, "dx": 16.5, "dy": 300, "dz": 476.5, "note": "Right end panel, drawer height 460-760 AFF (seen)", "set": { "pos_z": 460 } },
+    { "def": "FLSHLF", "wall": 2, "offset": 0, "dx": 995, "dy": 33, "dz": 495, "note": "floating shelf 33 x 495 x 995, seen right end, top 246.5 AFF, LED strip at back",
+      "set": { "pos_z": 213.5, "float_shelf": { "stop": 30, "build": "double", "cleat": true, "strip_w": 90, "tape_id": null, "radius_l": 0, "radius_r": 0, "rebate_h": 10, "seen_left": false, "seen_right": true, "rebate_depth": 30, "strip_spacing": 600 } } }
+  ]
+}
