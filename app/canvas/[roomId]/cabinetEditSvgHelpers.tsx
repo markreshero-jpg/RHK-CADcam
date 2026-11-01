@@ -151,7 +151,8 @@ export function doorProfileSvg(
   opacity = 0.85,
   nonScaling = false,
 ): React.ReactNode {
-  if (z.face_type !== 'door' || !z.door_profile) return null
+  // Any styled front (door, drawer front, false panel) — the same fronts the CNC routes.
+  if (z.face_type === 'open' || !z.door_profile) return null
   const W = z.DX, H = z.DY   // face: DX=width, DY=height
   if (W <= 0 || H <= 0) return null
   const prims = doorProfilePrimitives(z.door_profile, { w: W, h: H, thickness: z.DZ })

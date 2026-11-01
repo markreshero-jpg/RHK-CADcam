@@ -703,7 +703,7 @@ function DrawerAssembly({
         wire={wire}
         rotation={getRotOv(zoneId, partOverrides)}
         shape={shapes3D?.get(zoneId)}
-      /></PartAlpha>}
+      />{faceZone.door_profile && <DoorProfile3D profile={faceZone.door_profile} b={zb} />}</PartAlpha>}
       {handle && (() => { const hm = buildHandleInfo(handle, faceZone); return (
         <PickableHardware meta={hm} selected={selected?.id === hm.id} onSelect={onSelect} dragRef={dragRef}>
           <Handle3D s={handle} opacity={alpha('handles')} showBar={!layers || layers.show('handles')} showHoles={!layers || layers.show('handle_holes')} />
@@ -1858,7 +1858,7 @@ export function CabinetScene({
           )
         }
 
-        if (z.face_type === 'door' && z.door_profile) {
+        if (z.door_profile) {
           return (
             <group key={`f${i}`}>
               <PartAlpha a={alpha(faceItem ?? 'doors')}><Part b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} />
