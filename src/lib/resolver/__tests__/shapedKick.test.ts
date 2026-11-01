@@ -91,6 +91,25 @@ describe('shaped toe kick (4b)', () => {
     for (const p of rp.toekick_parts) expect(Math.abs(p.X) + Math.abs(p.Z)).toBeLessThan(1100)
   })
 
+  it('a square gable end beside a 45 front: the kick stops at the gable outer face', () => {
+    const W = 507.5, D = 482.5, GI = 491, T = GI - D, s = 40 / Math.SQRT2
+    const fp = { params: {}, segments: [
+      { type: 'line' as const, p0: { x: T, y: 0 }, p1: { x: W, y: 0 }, edge: { id: 'back', role: 'back' as const } },
+      { type: 'line' as const, p0: { x: W, y: 0 }, p1: { x: W, y: D }, edge: { id: 'right', role: 'side' as const } },
+      { type: 'line' as const, p0: { x: W, y: D }, p1: { x: GI, y: D }, edge: { id: 'end', role: 'side' as const } },
+      { type: 'line' as const, p0: { x: GI, y: D }, p1: { x: T + s, y: s }, edge: { id: 'front', role: 'front' as const, sub: 'open' as const } },
+      { type: 'line' as const, p0: { x: T + s, y: s }, p1: { x: T, y: 0 }, edge: { id: 'filler', role: 'front' as const } },
+    ] }
+    const rp = resolveCabinet(cab({ DX: W, DZ: D, footprint: fp }, { TOESCR: 0 }))
+    expect(rp.toekick_parts.filter(p => p.part_key === 'kick_front_face')).toHaveLength(1)
+    for (const p of rp.toekick_parts) for (const q of plan(p)) {
+      expect(q.x, p.part_key).toBeLessThanOrEqual(W + 0.01)
+      expect(q.y, p.part_key).toBeLessThanOrEqual(D + 0.01)
+    }
+    // the face reaches the gable's outer face
+    expect(Math.max(...plan(rp.toekick_parts.find(p => p.part_key === 'kick_front_face')!).map(q => q.x))).toBeCloseTo(W, 1)
+  })
+
   it('leg kick: front faces only', () => {
     const fp = buildPresetFootprint('clipped_corner', {}, { w: 900, d: 580 })
     const rp = resolveCabinet(cab({ footprint: fp }, { TOE_TYPE: 'leg' }))

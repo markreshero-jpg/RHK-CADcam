@@ -100,12 +100,6 @@ export function resolveShapedKick(
   }
   if (edges.length > 2 && inLine(edges[edges.length - 1], edges[0]))
     edges[0].seg = { ...edges[0].seg, p0: edges.pop()!.seg.p0 } as FootprintSegment
-  const lines = edges.map(e => e.seg)
-  const n = edges.length
-  const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
-  const TF = cab.toekick_face_material.DZ, TI = cab.toekick_interior_material.DZ
-  const TK = r.TOEH, FC = r.TOEFC
-  const fid = cab.toekick_face_material.id, iid = cab.toekick_interior_material.id
 
   const sideOff = (s: FootprintSegment) =>
     Math.abs(s.p0.x) < NEAR && Math.abs(s.p1.x) < NEAR ? r.TOESCL
@@ -114,6 +108,28 @@ export function resolveShapedKick(
     const k = kindOf(s)
     return k === 'front' ? r.TOESCF + frontExtra : k === 'back' ? r.TOESCB + backExtra : sideOff(s) + sideExtra
   }
+  // A short side the front setback swallows (e.g. the square end of a gable
+  // beside an angled front) comes out of the inset reversed and throws the
+  // kick past the gable — drop it, so its neighbours meet (the kick face then
+  // stops at the gable's outer face).
+  for (;;) {
+    const P = insetPolygon(edges.map(e => e.seg), off(0, 0))
+    if (P.length !== edges.length || edges.length <= 3) break
+    const bad = edges.findIndex((e, i) => {
+      if (e.kind === 'front') return false
+      const a = P[i], b = P[(i + 1) % P.length]
+      return (b.x - a.x) * (e.seg.p1.x - e.seg.p0.x) + (b.y - a.y) * (e.seg.p1.y - e.seg.p0.y) < 0
+    })
+    if (bad < 0) break
+    edges.splice(bad, 1)
+  }
+  const lines = edges.map(e => e.seg)
+  const n = edges.length
+  const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
+  const TF = cab.toekick_face_material.DZ, TI = cab.toekick_interior_material.DZ
+  const TK = r.TOEH, FC = r.TOEFC
+  const fid = cab.toekick_face_material.id, iid = cab.toekick_interior_material.id
+
   const K = insetPolygon(lines, off(0, 0))                 // kick face outer line
   const kEdge = (poly: ShapePt[], i: number) => ({ p0: poly[i], p1: poly[(i + 1) % n] })
   let sort = 0
