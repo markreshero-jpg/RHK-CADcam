@@ -13,13 +13,13 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
 import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
-import { loadResolvedDrillOps, projectSheetDrills, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
+import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import { sheetNumbers } from '@/src/lib/optimiser/labels'
 import type { ShapePt } from '@/src/lib/shapePath'
 import { PlacedOutline, PlacedHoles, GrainBlockOutlines } from './SheetSVG'
-import type { SheetDrill } from '@/src/lib/optimiser/gcode'
+import type { SheetDrill, SheetRoute } from '@/src/lib/optimiser/gcode'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { snapPoint, rectLoop, type MeasureSnap, type SnapSources } from '@/src/lib/optimiser/measure'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
@@ -78,6 +78,9 @@ export default function Stage5Edit() {
   // INSTANTLY (no sync); regenerating from joints (slow) only happens on first
   // load if nothing exists yet, or when the user hits ↻ after changing joints.
   const [showDrills, setShowDrills] = useState(true)
+  // Routing overlay (shaker pockets, VJ grooves, rebates, notches) — the same
+  // routes Stage 6 cuts, every face, one colour per router bit.
+  const [showRoutes, setShowRoutes] = useState(true)
   // Measure tool: click two points (snaps to hole centres, part corners, edges).
   const [measuring, setMeasuring] = useState(false)
   const [drillOps, setDrillOps] = useState<ResolvedDrillOps | null>(null)
@@ -110,6 +113,10 @@ export default function Stage5Edit() {
   }
   const drillsBySheet = useMemo(
     () => (drillOps && nestResult ? projectSheetDrills(nestResult.sheets, drillOps) : new Map<number, SheetDrill[]>()),
+    [drillOps, nestResult],
+  )
+  const routesBySheet = useMemo(
+    () => (drillOps && nestResult ? projectSheetRoutes(nestResult.sheets, drillOps) : new Map<number, SheetRoute[]>()),
     [drillOps, nestResult],
   )
 
@@ -259,6 +266,11 @@ export default function Stage5Edit() {
                 className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${showDrills ? 'border-amber-600/60 text-amber-400 bg-amber-900/15' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
                 {drillsLoading ? 'Drilling…' : `Drilling${showDrills ? ' ✓' : ''} (${drillsBySheet.get(sheet.index)?.length ?? 0})`}
               </button>
+              <button onClick={() => setShowRoutes(s => !s)}
+                title={`Routing — every route, groove and pocket the CNC cuts, one colour per bit${(() => { const ts = [...new Set((routesBySheet.get(sheet.index) ?? []).map(r => r.toolNumber))].sort((a, b) => a - b); return ts.length ? ': ' + ts.map(t => 'T' + t).join(', ') : '' })()}`}
+                className={`text-[11px] px-2 py-0.5 rounded border font-normal transition-colors ${showRoutes ? 'border-fuchsia-600/60 text-fuchsia-300 bg-fuchsia-900/15' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
+                {`Routes${showRoutes ? ' ✓' : ''} (${routesBySheet.get(sheet.index)?.length ?? 0})`}
+              </button>
               <button onClick={regenerateDrills} disabled={drillsLoading}
                 title="Regenerate joint drilling from the current joints (use after editing joints)"
                 className="text-[11px] px-1.5 py-0.5 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 font-normal transition-colors">
@@ -285,6 +297,7 @@ export default function Stage5Edit() {
               sheet={sheet}
               selectedUid={selectedUid}
               drills={showDrills ? (drillsBySheet.get(sheet.index) ?? []) : []}
+              routes={showRoutes ? (routesBySheet.get(sheet.index) ?? []) : []}
               zoom={zoom}
               measuring={measuring}
               onZoom={zoomBy}
@@ -432,7 +445,7 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, zoom, measuring, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock, blocks }: {
+function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock, blocks }: {
   blocks: GrainBlockInfo[]
   /** Grain match block holding a front (z_grain_match G4): it drags as one. */
   blockFor: (uid: string) => GrainBlockInfo | undefined
@@ -442,6 +455,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, measuring, onZoom,
   sheet: NestedSheet
   selectedUid: string | null
   drills: SheetDrill[]
+  routes: SheetRoute[]
   zoom: number
   measuring: boolean
   onZoom: (factor: number) => void
@@ -618,6 +632,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, measuring, onZoom,
           </g>
         )
       })}
+      {routes.length > 0 && <SheetRoutes routes={routes} H={H} scale={scale} />}
       {/* Drill holes (sheet space, BL origin) — same source as Stage 6 G-code.
           Drawn at EXACT diameter (so ⌀5 vs ⌀8 vs ⌀35 read true-to-scale — zoom in
           to inspect). A real ⌀5 on a 2400mm sheet is ~1px when zoomed out, so a
@@ -647,6 +662,55 @@ function InteractiveSheet({ sheet, selectedUid, drills, zoom, measuring, onZoom,
         <MeasureOverlay key={sheet.index} snap={measureSnap} H={H} scale={scale} pxW={pxW} pxH={pxH} />
       )}
     </svg>
+  )
+}
+
+// Routing features (sheet space, BL origin) — same source as Stage 6 G-code, so a
+// tool-set door shows every step: the pocket cleared, each outline as the band its
+// bit cuts, square-off corners, grooves at their width. One colour per bit.
+const ROUTE_COLOURS = ['#e879f9', '#22d3ee', '#a3e635', '#fb923c', '#f472b6', '#facc15', '#818cf8', '#34d399']
+function SheetRoutes({ routes, H, scale }: { routes: SheetRoute[]; H: number; scale: number }) {
+  const tools = [...new Set(routes.map(r => r.toolNumber))].sort((a, b) => a - b)
+  const col = (t: number) => ROUTE_COLOURS[tools.indexOf(t) % ROUTE_COLOURS.length]
+  const X = (x: number) => x * scale, Y = (y: number) => (H - y) * scale
+  // A band `b` wide just inside (or centred on, onLine) the rectangle, as a stroked rect.
+  const band = (key: string, x: number, y: number, w: number, h: number, b: number, c: string) => {
+    const k = b / 2
+    return w - b > 0 && h - b > 0
+      ? <rect key={key} x={X(x + k)} y={Y(y + h - k)} width={(w - b) * scale} height={(h - b) * scale}
+          fill="none" stroke={c} strokeOpacity={0.55} strokeWidth={Math.max(0.6, b * scale)} />
+      : <rect key={key} x={X(x)} y={Y(y + h)} width={w * scale} height={h * scale} fill={c} fillOpacity={0.45} />
+  }
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {routes.map((r, i) => {
+        const c = col(r.toolNumber)
+        if (r.kind === 'groove') return (
+          <line key={i} x1={X(r.x1)} y1={Y(r.y1)} x2={X(r.x2)} y2={Y(r.y2)}
+            stroke={c} strokeOpacity={0.8} strokeWidth={Math.max(0.8, r.width * scale)} />
+        )
+        if (r.corners) {
+          // Square-off: the tool runs into each corner — mark a tool-wide square there.
+          const d = r.toolDiameter
+          return (
+            <g key={i}>
+              {[[r.x, r.y], [r.x + r.w - d, r.y], [r.x, r.y + r.h - d], [r.x + r.w - d, r.y + r.h - d]].map(([cx, cy], k) => (
+                <rect key={k} x={X(cx)} y={Y(cy + d)} width={Math.max(1.5, d * scale)} height={Math.max(1.5, d * scale)}
+                  fill={c} fillOpacity={0.9} />
+              ))}
+            </g>
+          )
+        }
+        if (r.clear && r.ringWidth != null && r.ringWidth > 0) return band(String(i), r.x, r.y, r.w, r.h, r.ringWidth, c)
+        if (r.clear) return (
+          <rect key={i} x={X(r.x)} y={Y(r.y + r.h)} width={r.w * scale} height={r.h * scale}
+            fill={c} fillOpacity={0.22} stroke={c} strokeOpacity={0.8} strokeWidth={0.8} />
+        )
+        return r.onLine
+          ? band(String(i), r.x - r.toolDiameter / 2, r.y - r.toolDiameter / 2, r.w + r.toolDiameter, r.h + r.toolDiameter, r.toolDiameter, c)
+          : band(String(i), r.x, r.y, r.w, r.h, r.toolDiameter, c)
+      })}
+    </g>
   )
 }
 
