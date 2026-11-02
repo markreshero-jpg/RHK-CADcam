@@ -152,7 +152,8 @@ export function wallInwardNormal(w: Wall, ref: RoomRef): Pt {
   // Islands have no room side, so the face direction is fixed to the left-perp of
   // the draw direction rather than derived from the centroid — otherwise placement,
   // plan render and elevation can disagree depending on where the island was drawn.
-  if (w.wall_type === 'island') return { x: -d.y, y: d.x }
+  // Nibs (z_nib_wall) are centred on their line, so the side is only a convention.
+  if (w.wall_type === 'island' || w.wall_type === 'nib') return { x: -d.y, y: d.x }
   const chained = ref.inward?.get(w.id)
   if (chained) return chained
   // Lone wall (or a branching / straight run): face the room centroid.
@@ -162,12 +163,14 @@ export function wallInwardNormal(w: Wall, ref: RoomRef): Pt {
 }
 
 export function centroid(walls: Wall[]): RoomRef {
-  if (!walls.length) return { x: 0, y: 0 }
-  const pts = walls.flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)])
+  // Nibs stick into the room, so they would pull the centre towards them.
+  const room = walls.filter(w => w.wall_type !== 'nib')
+  if (!room.length) return { x: 0, y: 0 }
+  const pts = room.flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)])
   return {
     x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
     y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
-    inward: chainInwardNormals(walls),
+    inward: chainInwardNormals(room),
   }
 }
 
@@ -287,6 +290,11 @@ export function wallMitreCorners(w: Wall, walls: Wall[], ref: RoomRef): Pt[] {
 
   const s = { x: w.pos_x, y: w.pos_y }
   const e = wallEnd(w)
+  // Nib: a plain rectangle centred on its line, square ends (no mitres).
+  if (w.wall_type === 'nib') {
+    const h = { x: inward.x * thick / 2, y: inward.y * thick / 2 }
+    return [{ x: s.x + h.x, y: s.y + h.y }, { x: e.x + h.x, y: e.y + h.y }, { x: e.x - h.x, y: e.y - h.y }, { x: s.x - h.x, y: s.y - h.y }]
+  }
   const outX = -inward.x * thick, outY = -inward.y * thick
 
   let pSO = { x: s.x + outX, y: s.y + outY }
@@ -295,7 +303,7 @@ export function wallMitreCorners(w: Wall, walls: Wall[], ref: RoomRef): Pt[] {
   const JSNAP = 5
 
   for (const o of walls) {
-    if (o.id === w.id || o.wall_type === 'island') continue
+    if (o.id === w.id || o.wall_type === 'island' || o.wall_type === 'nib') continue
     const od = wallDir(o)
     const oInward = wallInwardNormal(o, ref)
     const oThick = o.thickness
@@ -384,9 +392,32 @@ export function snapAngle(start: Pt, end: Pt, stepDeg: number): Pt {
 
 // ── Cabinet helpers ───────────────────────────────────────────────────────────
 
+/**
+ * Nib walls standing off this wall's inside face (z_nib_wall): `t` = the nib's
+ * centre along this wall, from its start. A nib counts when one of its ends sits
+ * on the face line (within NIB_TOL) strictly inside the wall's length.
+ */
+export const NIB_TOL = 10
+export function nibsOnWall(wall: Wall, walls: Wall[]): { nib: Wall; t: number }[] {
+  if (wall.wall_type === 'nib') return []
+  const d = wallDir(wall)
+  const out: { nib: Wall; t: number }[] = []
+  for (const n of walls) {
+    if (n.wall_type !== 'nib') continue
+    for (const p of [{ x: n.pos_x, y: n.pos_y }, wallEnd(n)]) {
+      const rx = p.x - wall.pos_x, ry = p.y - wall.pos_y
+      const t = rx * d.x + ry * d.y
+      if (Math.abs(rx * d.y - ry * d.x) < NIB_TOL && t > 0 && t < wall.length) { out.push({ nib: n, t }); break }
+    }
+  }
+  return out.sort((a, b) => a.t - b.t)
+}
+
 export function nearestWall(p: Pt, walls: Wall[], cabDX: number, maxDistMm: number): { wall: Wall; pos_x: number; pos_y: number } | null {
   let best: { wall: Wall; pos_x: number; pos_y: number; d: number } | null = null
   for (const w of walls) {
+    // Cabinets go on the main wall beside a nib, not on the nib itself.
+    if (w.wall_type === 'nib') continue
     const d = wallDir(w)
     const t = Math.max(0, Math.min(w.length - cabDX, (p.x - w.pos_x) * d.x + (p.y - w.pos_y) * d.y))
     const nx = w.pos_x + t * d.x, ny = w.pos_y + t * d.y

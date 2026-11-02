@@ -16,7 +16,7 @@ import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import ReturnSectionSVG, { type ReturnSectionData } from './ReturnSectionSVG'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
-import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ } from '@/src/lib/geometry'
+import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ, nibsOnWall } from '@/src/lib/geometry'
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
 import type {
@@ -562,7 +562,7 @@ export default function ElevationPrintSVG({
     const wE = isBack ? { x: wall.pos_x, y: wall.pos_y } : wallEnd(wall)
     let left: Wall | null = null, right: Wall | null = null
     for (const w of walls) {
-      if (w.id === wall.id || w.wall_type === 'island') continue
+      if (w.id === wall.id || w.wall_type === 'island' || w.wall_type === 'nib') continue
       const s = { x: w.pos_x, y: w.pos_y }, e = wallEnd(w)
       if (!left  && (dist(s, wS) < TOL || dist(e, wS) < TOL)) left  = w
       if (!right && (dist(s, wE) < TOL || dist(e, wE) < TOL)) right = w
@@ -595,7 +595,28 @@ export default function ElevationPrintSVG({
         </g>
       )
     }
-    return (<>{left && render(left, true)}{right && render(right, false)}</>)
+    // Nib walls (z_nib_wall) standing off the face: a cut strip at their spot.
+    const nibs = isBack ? [] : nibsOnWall(wall, walls).map(({ nib, t: nt }) => {
+      const t = nib.thickness, nH = nib.height ?? room.room_dy ?? 2400
+      const x0 = nt - t / 2, slabY = roomH - nH, midX = nt, midY = slabY + nH / 2
+      const patId = `print-nib-fill-${wall.id}-${nib.id}`
+      const pat = layers.pattern('wall_fill', 'hatch')
+      return (
+        <g key={nib.id} pointerEvents="none">
+          {layers.show('wall_fill') && (
+            <defs><FillPatternDef id={patId} pattern={pat} step={t * 1.06} color={INK3} width={atLeastMin(layers.w('wall_fill', thinSW), P)} bg="white" /></defs>
+          )}
+          <rect x={x0} y={slabY} width={t} height={nH}
+            fill={layers.show('wall_fill') ? fillPaint(pat, patId, INK) : 'white'} fillOpacity={layers.show('wall_fill') ? lp('wall_fill').opacity : 1}
+            stroke={layers.show('walls') ? INK : 'none'} strokeWidth={atLeastMin(layers.w('walls', thinSW), P)}
+            strokeOpacity={lp('walls').opacity} strokeDasharray={lp('walls').strokeDasharray} />
+          {layers.show('wall_names') && <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
+            fontSize={layers.w('wall_names', dimFs)} fill={INK} opacity={layers.op('wall_names')} transform={`rotate(-90,${midX},${midY})`}
+            fontFamily="Arial, Helvetica, sans-serif">{nib.name}</text>}
+        </g>
+      )
+    })
+    return (<>{left && render(left, true)}{right && render(right, false)}{nibs}</>)
   }
 
   // ── Reference lines (ceiling / soffit / wall-cab top) ─────────────────────

@@ -1,0 +1,26 @@
+{
+  "_source": "Markup 26.10.26 img_261026111626.pdf p1-3 (Laundry) + Site measure 22.10.26.pdf p1 (Laundry 2656 F/P, 833 returns, 943 opening, 502 walls, 1824 + 832 door opening, CH 2717 off slab; PDR off laundry 980 F/P, 504 / 520 walls, CH 2413, waste 451 @ 650H, tap 493 @ 1107H) + Mark Q&A 2026-11-02",
+  "_notes": [
+    "WALLS ONLY for Mark's check (2026-11-02) - cabinets after.",
+    "Tub wall (Wall 2) 2656 F/P between 833 returns; 943 walkway opening on the west below Wall 1 (no wall drawn).",
+    "South wall (Wall 4) drawn as one line: talls 1824 | 90 nib | PDR vanity 980 wall to wall (Mark: same room, nib divider so it all shows on one elevation). Wall 5 = the PDR's west side wall (502).",
+    "Nib (Wall 6, z_nib_wall) 90 thick, 502 long, centred 1869 from the east wall: talls 832-2656, vanity -238 to 742.",
+    "Ceiling 2697 (2717 off slab - 20 floor TBC). PDR ceiling 2413 (2393 less 20) TBC - drawn at room height."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "Laundry",
+  "roomHeight": 2697,
+  "wallCabinetTop": 2697,
+  "roomRules": {
+    "TOEH": 100
+  },
+  "walls": [
+    { "x": 0, "y": 833, "length": 833, "angle": 270, "_": "1 west return of the tub alcove (833)" },
+    { "x": 0, "y": 0, "length": 2656, "angle": 0, "_": "2 tub wall 2656 F/P" },
+    { "x": 2656, "y": 0, "length": 2278, "angle": 90, "_": "3 east wall 833 + 943 + 502" },
+    { "x": 2656, "y": 2278, "length": 2894, "angle": 180, "_": "4 south: talls 1824 + nib 90 + PDR vanity 980" },
+    { "x": -238, "y": 2278, "length": 502, "angle": 270, "_": "5 PDR west side wall" },
+    { "x": 787, "y": 2278, "length": 502, "angle": 270, "type": "nib", "_": "6 nib between the talls and the PDR vanity" }
+  ],
+  "cabinets": []
+}

@@ -17,13 +17,13 @@ import type { SectionSolid } from './crossSectionRoom'
 /** How close (mm) a wall end must be to count as joined (as the return-wall slabs). */
 export const RETURN_TOL = 50
 
-/** The walls joined to this wall's start (left) and end (right); islands never. */
+/** The walls joined to this wall's start (left) and end (right); islands and nibs never. */
 export function returnWallsOf(wall: Wall, walls: Wall[]): { left: Wall | null; right: Wall | null } {
   const wS = { x: wall.pos_x, y: wall.pos_y }
   const wE = wallEnd(wall)
   let left: Wall | null = null, right: Wall | null = null
   for (const w of walls) {
-    if (w.id === wall.id || w.wall_type === 'island') continue
+    if (w.id === wall.id || w.wall_type === 'island' || w.wall_type === 'nib') continue
     const s = { x: w.pos_x, y: w.pos_y }, e = wallEnd(w)
     if (!left  && (dist(s, wS) < RETURN_TOL || dist(e, wS) < RETURN_TOL)) left  = w
     if (!right && (dist(s, wE) < RETURN_TOL || dist(e, wE) < RETURN_TOL)) right = w

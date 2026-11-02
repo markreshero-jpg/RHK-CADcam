@@ -10,7 +10,7 @@ import type { BtElevInfo } from './BenchtopElevation'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
-  wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad,
+  wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad, wallMitreCorners,
 } from '@/src/lib/geometry'
 import { openingOnWall } from '@/src/lib/fixtureGeometry'
 import { wallTopPoints } from '@/src/lib/wallProfile'
@@ -34,6 +34,8 @@ const FOV    = 40
 
 // Same logic as wallMitrePolygon; returns [startInside, endInside, endOutside, startOutside]
 function mitreCorners(w: Wall, walls: Wall[], rc: RoomRef): [Pt, Pt, Pt, Pt] {
+  // Nib (z_nib_wall): centred on its line, square ends.
+  if (w.wall_type === 'nib') return wallMitreCorners(w, walls, rc) as [Pt, Pt, Pt, Pt]
   const d    = wallDir(w)
   const in_  = wallInwardNormal(w, rc)
   const s    = { x: w.pos_x, y: w.pos_y }
@@ -43,7 +45,7 @@ function mitreCorners(w: Wall, walls: Wall[], rc: RoomRef): [Pt, Pt, Pt, Pt] {
   let pEO    = { x: e.x + ox, y: e.y + oy }
   const SNAP = 5
   for (const o of walls) {
-    if (o.id === w.id || o.wall_type === 'island') continue
+    if (o.id === w.id || o.wall_type === 'island' || o.wall_type === 'nib') continue
     const od  = wallDir(o)
     const oIn = wallInwardNormal(o, rc)
     const oS  = { x: o.pos_x, y: o.pos_y }
@@ -185,8 +187,9 @@ function WallLabel({ wall, room, rc }: { wall: Wall; room: Room; rc: RoomRef }) 
   // Start from the midpoint of the inner face, then shift outward by half the wall thickness
   // so the label sits over the wall centre rather than just the inner edge.
   const inward = wallInwardNormal(wall, rc)
-  const midX = (wall.pos_x + e.x) / 2 - inward.x * wall.thickness / 2
-  const midZ = (wall.pos_y + e.y) / 2 - inward.y * wall.thickness / 2
+  const half = wall.wall_type === 'nib' ? 0 : wall.thickness / 2   // a nib's line is already its centre
+  const midX = (wall.pos_x + e.x) / 2 - inward.x * half
+  const midZ = (wall.pos_y + e.y) / 2 - inward.y * half
   const angleRad = wall.angle * TO_RAD
 
   return (

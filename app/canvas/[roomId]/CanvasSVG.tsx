@@ -1111,8 +1111,9 @@ export default function CanvasSVG({
               {(() => {
                 if (!layers.show('wall_names')) return null
                 const inorm = wallInwardNormal(w, cx)
-                const tx = midX - inorm.x * w.thickness / 2
-                const ty = midY - inorm.y * w.thickness / 2
+                const half = w.wall_type === 'nib' ? 0 : w.thickness / 2   // a nib's line is already its centre
+                const tx = midX - inorm.x * half
+                const ty = midY - inorm.y * half
                 return (
                   <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle"
                     fontSize={layers.w('wall_names', wallNameFs)} fill={isSel ? '#93c5fd' : layers.color('wall_names', '#4b5563')} opacity={layers.op('wall_names')}

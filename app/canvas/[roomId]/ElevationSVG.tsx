@@ -3,7 +3,7 @@ import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile, type RoomAnnotation } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, nibsOnWall, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -996,7 +996,7 @@ export default function ElevationSVG({
         <span className="text-[10px] text-gray-500 mr-2 whitespace-nowrap select-none">Wall:</span>
         {walls.length === 0
           ? <span className="text-[10px] text-gray-600">No walls — draw them in Plan view first</span>
-          : walls.map(w => (
+          : walls.filter(w => w.wall_type !== 'nib').map(w => (
             <button key={w.id} onClick={() => onSetElevWall(w.id)}
               className={`px-2.5 py-0.5 text-[10px] rounded whitespace-nowrap transition-colors ${
                 elevWallId === w.id
@@ -1237,7 +1237,7 @@ export default function ElevationSVG({
               let leftReturn: Wall | null = null
               let rightReturn: Wall | null = null
               for (const w of walls) {
-                if (w.id === wall.id || w.wall_type === 'island') continue
+                if (w.id === wall.id || w.wall_type === 'island' || w.wall_type === 'nib') continue
                 const s = { x: w.pos_x, y: w.pos_y }
                 const e = wallEnd(w)
                 if (!leftReturn  && (dist(s, wS) < TOL || dist(e, wS) < TOL)) leftReturn  = w
@@ -1301,6 +1301,37 @@ export default function ElevationSVG({
                 {rightReturn && renderReturn(rightReturn, false)}
               </>)
             })()}
+
+            {/* Nib walls (z_nib_wall): cut stubs standing off this wall's face, drawn as a hatched strip at their spot. */}
+            {!isBack && nibsOnWall(wall, walls).map(({ nib, t: nt }) => {
+              const t = nib.thickness, nH = nib.height ?? room.room_dy ?? 2400
+              const x0 = nt - t / 2, slabY = roomH - nH, midX = nt, midY = slabY + nH / 2
+              const patId = `nib-fill-${nib.id}`
+              const showFill = layers.show('wall_fill'), showLine = layers.show('walls')
+              const pat = layers.pattern('wall_fill', 'hatch')
+              return (
+                <g key={nib.id} style={{ pointerEvents: 'none' }}>
+                  {showFill && (
+                    <defs>
+                      <FillPatternDef id={patId} pattern={pat} step={t * 1.06} bg="#111827"
+                        color={layers.color('wall_fill', '#1f2937')} width={layers.w('wall_fill', 1.5) / lz} />
+                    </defs>
+                  )}
+                  <rect x={x0} y={slabY} width={t} height={nH}
+                    fill={showFill ? fillPaint(pat, patId, layers.color('wall_fill', '#111827')) : 'none'}
+                    fillOpacity={layers.props('wall_fill', z).opacity}
+                    stroke={showLine ? layers.color('walls', '#4b5563') : 'none'} strokeWidth={layers.w('walls', 1) / lz}
+                    strokeOpacity={layers.props('walls', z).opacity} strokeDasharray={layers.props('walls', z).strokeDasharray} />
+                  {layers.show('wall_names') && <text x={midX} y={midY}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontSize={layers.w('wall_names', 10 / z)} fill={layers.color('wall_names', '#ffffff')} opacity={layers.op('wall_names')}
+                    transform={`rotate(-90,${midX},${midY})`}
+                    style={{ userSelect: 'none' }}>
+                    {nib.name}
+                  </text>}
+                </g>
+              )
+            })}
 
             {/* Cabinets — click-through in F4 Benchtop mode (only tops pick) */}
             <g style={{ pointerEvents: isBenchtopMode(mode) ? 'none' : undefined }}>

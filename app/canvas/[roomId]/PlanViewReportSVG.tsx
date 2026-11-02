@@ -338,8 +338,9 @@ export default function PlanViewReportSVG({
         if (w.wall_type === 'island' || !w.name) return null
         const inward = wallInwardNormal(w, cx)
         const e = wallEnd(w)
-        const mx = (w.pos_x + e.x) / 2 - inward.x * w.thickness / 2
-        const my = (w.pos_y + e.y) / 2 - inward.y * w.thickness / 2
+        const half = w.wall_type === 'nib' ? 0 : w.thickness / 2   // a nib's line is already its centre
+        const mx = (w.pos_x + e.x) / 2 - inward.x * half
+        const my = (w.pos_y + e.y) / 2 - inward.y * half
         const fs = Math.min(w.thickness * 0.7, layers.w('wall_names', 5 * P))   // never larger than the wall band
         if (fs < 1) return null
         const textAngle = Math.cos(toRad(w.angle)) < -0.001 ? w.angle + 180 : w.angle

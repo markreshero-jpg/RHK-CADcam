@@ -184,6 +184,7 @@ Notes:
   (hatch / solid in black ink). Island reference line on the canvas still always draws
   (`island_line` = prints); island name follows `wall_names`.
   Test: `displayLayers/__tests__/wallLayers.test.ts`; headless: `z_plan_automation/verify-wall-layers.mjs`.
+  **Nib walls** (z_nib_wall, 2026-11-02) use the same three items - plan polygon, 3D, and the cut strip on the main wall's elevation (canvas + print); no new registry item.
 - **Only what's shown is selectable, and only what's shown gets labels** (user
   decision, 2026-09-16; replaces the Phase 1 "hit targets always stay" rule):
   - Plan / elevation: a cabinet's hit area is the extent (union bbox) of everything

@@ -126,7 +126,9 @@ export interface ConstructionMethodScheduleRow {
   rules:          Record<string, unknown>
 }
 
-export type WallType = 'standard' | 'island'
+/** 'nib' = a short wall stub off a main wall (z_nib_wall): not part of the room
+ *  outline; pos = its start on the main wall's inside face, its line = its centre. */
+export type WallType = 'standard' | 'island' | 'nib'
 
 export interface Wall {
   id: string

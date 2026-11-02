@@ -46,12 +46,12 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_A
 
 // ── Sanity-check the wall loop is head-to-tail clockwise ─────────────────────
 // Shop rule: walls drawn head-to-tail in a clockwise rotation. Detached walls
-// (islands, separate runs) are exempt from the continuity check.
+// (islands, separate runs) and nib walls (z_nib_wall) are exempt from the continuity check.
 {
   const rad = a => (a * Math.PI) / 180
   for (let i = 0; i < layout.walls.length - 1; i++) {
     const w = layout.walls[i], n = layout.walls[i + 1]
-    if (w.detached || n.detached) continue
+    if (w.detached || n.detached || w.type === 'nib' || n.type === 'nib') continue
     const ex = w.x + w.length * Math.cos(rad(w.angle))
     const ey = w.y + w.length * Math.sin(rad(w.angle))
     if (Math.hypot(ex - n.x, ey - n.y) > 1)
@@ -121,7 +121,7 @@ for (let i = 0; i < layout.walls.length; i++) {
     thickness: w.thickness ?? (w.type === 'island' ? 0 : 90),
     height: w.height ?? layout.roomHeight ?? 2400,
     soffit_height: w.soffit ?? null,
-    wall_type: w.type === 'island' ? 'island' : 'standard',
+    wall_type: w.type === 'island' ? 'island' : w.type === 'nib' ? 'nib' : 'standard',
   }).select('id,name').single()
   if (error) die(`wall insert failed: ${error.message}`)
   wallIds.push(row.id)

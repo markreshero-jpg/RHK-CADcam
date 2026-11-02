@@ -32,7 +32,7 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
     <div className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto">
       <div className="px-4 py-3 border-b border-gray-800 flex items-center justify-between">
         <div>
-          <p className="text-xs font-medium text-gray-300">{wall.wall_type === 'island' ? 'Island' : 'Wall'}</p>
+          <p className="text-xs font-medium text-gray-300">{wall.wall_type === 'island' ? 'Island' : wall.wall_type === 'nib' ? 'Nib wall' : 'Wall'}</p>
           <p className="text-[10px] text-gray-500">{displayLen}mm</p>
         </div>
         {onClose && <PanelCloseButton onClose={onClose} />}
@@ -45,7 +45,11 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
             className={inp}>
             <option value="standard">Standard</option>
             <option value="island">Island</option>
+            <option value="nib">Nib (stub off a wall)</option>
           </select>
+          {wall.wall_type === 'nib' && (
+            <p className="text-[10px] text-gray-600 mt-0.5">Start on a wall&apos;s inside face; drawn centred on its line, shows on that wall&apos;s elevation.</p>
+          )}
         </div>
         <div>
           <label className={lbl}>Name</label>
