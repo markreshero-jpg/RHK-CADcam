@@ -798,8 +798,32 @@ export function extForAxes(kind: PanelKind, dxIsWidth?: boolean): Record<RawAxis
   return inv
 }
 
+// Part comment box: saves on blur or Ctrl/Cmd+Enter, Esc reverts. Keys stop
+// here so Delete/Backspace never reach the 3D view's delete-part shortcut.
+function CommentField({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
+  const [draft, setDraft] = useState(value)
+  const [prev, setPrev] = useState(value)
+  if (value !== prev) { setPrev(value); setDraft(value) }
+  const commit = () => { if (draft.trim() !== value.trim()) onCommit(draft) }
+  return (
+    <textarea
+      value={draft}
+      rows={2}
+      placeholder="Add a comment…"
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => {
+        e.stopPropagation()
+        if (e.key === 'Escape') { setDraft(value); (e.target as HTMLTextAreaElement).blur() }
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); (e.target as HTMLTextAreaElement).blur() }
+      }}
+      className="w-full resize-y min-h-[2.5rem] bg-gray-800 border border-gray-700 rounded px-1.5 py-1 text-[11px] leading-snug text-amber-300 placeholder-gray-600 focus:outline-none focus:border-orange-500 select-text"
+    />
+  )
+}
+
 export function PartPropertiesPanel({
-  part, onClose, onEdgeChange, onSizeChange, actions, jointControls, ebThickness, eb,
+  part, onClose, onEdgeChange, onSizeChange, actions, jointControls, ebThickness, eb, comment,
   className = 'absolute top-3 right-3 w-56',
 }: {
   part: PartMeta
@@ -813,6 +837,9 @@ export function PartPropertiesPanel({
   ebThickness?: number
   // The part's edge band (thickness + tape colour) for the Material block.
   eb?: { thickness: number; color: string | null }
+  // Editable part comment (cabinet edit modal). Without it the part's comment
+  // shows read-only.
+  comment?: { value: string; onChange: (v: string) => void }
   // Outer positioning/sizing only — pass e.g. 'relative w-full' to dock the
   // panel in a sidebar instead of floating it over the canvas.
   className?: string
@@ -912,7 +939,13 @@ export function PartPropertiesPanel({
             <span className="text-gray-200 text-right">{part.detail}</span>
           </>
         )}
-        {part.comment && (
+        {comment && (
+          <>
+            <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Comment</span>
+            <span className="col-span-2"><CommentField key={part.id} value={comment.value} onCommit={comment.onChange} /></span>
+          </>
+        )}
+        {!comment && part.comment && (
           <>
             <span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Comment</span>
             <span className="text-amber-300 col-span-2 text-[11px] leading-snug whitespace-pre-wrap">{part.comment}</span>

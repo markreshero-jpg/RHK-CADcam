@@ -436,6 +436,15 @@ export default function CabinetEditModal({
     if (hit) setContextMenu({ part: hit, cx, cy })
   }
 
+  // Right-click "Comment" and the docked part panels' Comment box share this.
+  function savePartComment(partId: string, value: string) {
+    const updated = value.trim()
+      ? { ...partComments, [partId]: value.trim() }
+      : (() => { const { [partId]: _r, ...rest } = partComments; return rest })()
+    setPartComments(updated)
+    dbSavePartComment(cabinet.id, partId, value, partComments).catch(console.error)
+  }
+
   function handleContextAction(action: PartContextAction, value?: string) {
     if (!contextMenu) return
     const { part } = contextMenu
@@ -459,13 +468,7 @@ export default function CabinetEditModal({
       }
     }
 
-    if (action === 'comment') {
-      const updated = value?.trim()
-        ? { ...partComments, [part.id]: value.trim() }
-        : (() => { const { [part.id]: _r, ...rest } = partComments; return rest })()
-      setPartComments(updated)
-      dbSavePartComment(cabinet.id, part.id, value ?? '', partComments).catch(console.error)
-    }
+    if (action === 'comment') savePartComment(part.id, value ?? '')
 
     if (action === 'delete' && isCustom && customPartId) {
       setCustomParts(prev => prev.filter(p => p.id !== customPartId))
@@ -764,7 +767,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FacetFaceGridEditor cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onEdgeSaved={(partId, edge) => onEdgeChange?.(cabinet.id, partId, edge)} onPanelVisibleChange={setPanel3DVisible} partPanelExtra={cutoutsPanelFor} compactInfo={phone}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} partComments={partComments} onCommentChange={savePartComment} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onEdgeSaved={(partId, edge) => onEdgeChange?.(cabinet.id, partId, edge)} onPanelVisibleChange={setPanel3DVisible} partPanelExtra={cutoutsPanelFor} compactInfo={phone}
               fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />}
             {selFixture && (activeView === '3d' || isOrthoView) && (
               <CabinetFixtureCard f={selFixture}
@@ -904,6 +907,7 @@ export default function CabinetEditModal({
                     onEdgeChange={handleSVGEdgeChange}
                     ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
                     eb={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId] : undefined}
+                    comment={{ value: partComments[selectedSVGPart.id] ?? '', onChange: v => savePartComment(selectedSVGPart.id, v) }}
                   />
                   <PartPosOverridePanel
                     className="relative w-full"

@@ -1956,8 +1956,12 @@ export function CabinetScene({
 export default function Cabinet3DView({
   cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, shapeOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
   setCustomParts, onOverridesChange, onEditPart, panelHost, onPanelVisibleChange, compactInfo = false,
-  fixtures, selectedFixtureId, onFixtureSelect, onEdgeSaved, partPanelExtra,
+  fixtures, selectedFixtureId, onFixtureSelect, onEdgeSaved, partPanelExtra, partComments, onCommentChange,
 }: {
+  // Part comments by part id + save callback — the part panel shows an editable
+  // Comment box when onCommentChange is given.
+  partComments?:     Record<string, string>
+  onCommentChange?:  (partId: string, comment: string) => void
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
   highlightPartKeys?: string[] | null
@@ -2311,6 +2315,7 @@ export default function Cabinet3DView({
                 onEdgeChange={handleEdgeChange}
                 ebThickness={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId]?.thickness : undefined}
                 eb={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId] : undefined}
+                comment={onCommentChange ? { value: partComments?.[selectedPart.id] ?? '', onChange: v => onCommentChange(selectedPart.id, v) } : undefined}
                 onSizeChange={!selectedPart.hardware && /^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id) ? handleSizeChange : undefined}
                 actions={drawerActions}
                 jointControls={onUpdate && rp && /^(case_|int_(adj_shelf|fixed_shelf|divider)_)/.test(selectedPart.id)
