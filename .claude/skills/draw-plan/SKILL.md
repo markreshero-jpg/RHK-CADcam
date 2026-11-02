@@ -260,6 +260,13 @@ line and mirrors the island elevation.
   +5, same centre), and those panels / curved ends stop **apron − 20 lower**
   (80 apron → 60 down, e.g. 900 → 840) so the apron folds down over them.
   Door faces keep the normal 20 overhang.
+- **Open shelf bays in a run of fronts come out flush with the fronts** (Mark,
+  RHK6478 DS Powder 2026-11-02, standard): the open box's `dz` = carcass + door
+  + 2 (e.g. 476.5 + 16.5 + 2 = 495), not the carcass depth. Under an apron top
+  the open box stops at the **apron underside** (e.g. 820 top, 60 apron → box
+  top 760: `dy` 300 from 460), so the apron sits over it. Open bay = `B1D` with
+  face zone `open`, no fittings, `top_type: 'full_top'`, `exposed_interior: true`
+  (inside in the front colour).
 - **Void bay = false front + L fixing brackets** (Mark, RHK6581 J10 2026-10-25):
   place a `TEPF` the width of the void, then turn its Applied Panel into the
   false front (orientation `front`, z = `cab.d + t.door + 2 - t.exposed`, flush

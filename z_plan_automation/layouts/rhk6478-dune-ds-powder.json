@@ -4,7 +4,8 @@
     "Like the US Powder (Mark): 33 end panels (70 scribe strip wall side + 16.5 full depth) | open shelf | drawer | drawer | open shelf | 33 end panels.",
     "2351 wall to wall: 33 + 200 open + 942.5 D + 942.5 D + 200 open + 33 (Mark rev 1: open bays 200).",
     "140 basin (markup) finishing 960 -> top 820 (height_mm 800), carcass 460-800, panels + shelf as the original ensuite (213.5 shelf underside to 760 apron underside).",
-    "Basin + spout 600 from the RIGHT wall (Mark rev 1). Ceiling 2399 TBC (2419 - 20 floor, as the DS Hallway next door)."
+    "Basin + spout 600 from the RIGHT wall (Mark rev 1). Ceiling 2399 TBC (2419 - 20 floor, as the DS Hallway next door).",
+    "Rev 2 (Mark 2026-11-02): open shelf bays flush with the drawer fronts (dz 495) and only up to the apron underside (dy 300, 460-760) - now standard (draw-plan skill)."
   ],
   "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
   "roomName": "DS Powder",
@@ -71,9 +72,9 @@
       "wall": 2,
       "offset": 33,
       "dx": 200,
-      "dy": 340,
-      "dz": 476.5,
-      "note": "open shelf bay L 200",
+      "dy": 300,
+      "dz": 495,
+      "note": "open shelf bay L 200 - flush with the drawer fronts (495), 460-760 to the apron underside",
       "rules": {
         "FLOAT": true,
         "SCRBK": 0
@@ -201,9 +202,9 @@
       "wall": 2,
       "offset": 2118,
       "dx": 200,
-      "dy": 340,
-      "dz": 476.5,
-      "note": "open shelf bay R 200",
+      "dy": 300,
+      "dz": 495,
+      "note": "open shelf bay R 200 - flush with the drawer fronts (495), 460-760 to the apron underside",
       "rules": {
         "FLOAT": true,
         "SCRBK": 0
