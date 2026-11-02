@@ -211,8 +211,9 @@ export function notchOutline(W: number, D: number, base: OutlinePt[] | undefined
 
 /** Parts that take cut-outs so far (horizontal shape frame: x along the width
  *  0..DY, y back from the front edge 0..DX). Holes: carcass parts only — the
- *  optimiser reads `cutouts` from case_parts. */
-export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail'])
+ *  optimiser reads `cutouts` from case_parts. `crv:bottom` = a curved canopy's
+ *  (BHCRVFIXP) bottom former — same frame (kit x across, d back from the front). */
+export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail', 'crv:bottom'])
 export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
 
 type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }

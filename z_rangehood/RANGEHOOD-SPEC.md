@@ -144,6 +144,8 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
   (`buildFormulaScope`). A part with a hole gains a rectangle `outline` — the
   optimiser only cuts `cutouts` on a resolver outline — so it nests as a shaped part.
 - R1 parts: `bottom`, `full_top`, `front_rail`, `back_rail` (horizontal frame).
+  Added 2026-11-02: `crv:bottom` — a curved canopy's (BHCRVFIXP) bottom former,
+  same frame; first use RHK6581 J05 WC-02 (Miele DA 2578, 670 × 370 hole).
   Anything else, notches, bad formulas and holes running off the part give a
   `CUTOUT_SKIPPED` warning and aren't cut.
 - A Shape Editor override on the same part replaces the outline and drops its
