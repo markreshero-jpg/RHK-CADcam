@@ -274,6 +274,22 @@ line and mirrors the island elevation.
   `finger_gap` = apron drop + 20 (MA60 on 20 stone = **60**) in its face_grid
   zone, as the powder vanities do. Check the front tops AFF (≤ apron underside
   − 20) and the drawer box tops after the resolve.
+- **Finger-pull drawer box vs its backing rail** (Mark, RHK6478 WIP BC-01
+  2026-11-03): the backing rail behind a top-edge finger gap runs from
+  **20 below the front's top** up to the carcass top, flush with the gables'
+  front edge (rail thickness deep). The drawer box runs right up to that front
+  edge, so its top must stay under the rail: **box_Y + box_height ≤ front top
+  − 20**. BC-01: 150 front, top 700, rail bottom 680, the old auto pick took a
+  127 box at 571.5 → top 698.5 = 18.5 into the rail. Since z_handles D25
+  (2026-11-03) the auto pick stays under the rail (BC-01 → 95 box) and a
+  forced box that reaches it warns `DRAWER_FPRAIL_CLASH`. So: never force a
+  taller `slide_product_id` on a finger-gap drawer, treat that warning as a
+  must-fix, and re-resolve (`updateCabinet(label, {dy: same})`) any cabinet
+  drawn before 2026-11-03 — its cached `resolved_drawer_hw` keeps the old box.
+  Fix a clash with a lower box, never a negative box_raise (keeps the 64-up
+  front holes level across the stack). Not checked by the resolver: shaped
+  (footprint) cabinets and a bottom-edge grip's rail under a box (wall-unit
+  drawers) — check those by hand.
 - **Wall units standing on a benchtop get a 3 bottom reveal** (Mark, RHK6478
   Buffet 2026-11-02, standard): an upper sitting on the bench (bottom = bench
   top, e.g. a buffet hutch) → `rule_overrides.REVB: 3` so the doors clear the

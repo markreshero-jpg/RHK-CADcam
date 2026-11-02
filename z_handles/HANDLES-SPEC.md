@@ -509,6 +509,21 @@ is, and which edge is the bottom, once the label is off.
   square front + rail only (no base line).
 - Tests: `handles.test.ts` (D24 block), `fingerRailOps.test.ts` (notch).
 
+**D25. Drawer boxes stay under the backing rail (Mark, 2026-11-03 — RHK6478 WIP BC-01).**
+The rail sits flush with the sides' front edge and a system drawer box runs up
+to that edge, so the box top must stay under the lowest rail above it (20 below a
+top-edge grip's front top). BC-01's 150 top front under a 60 gap auto-picked a
+127 box 18.5 into the rail. Built 2026-11-03, in-app check pending.
+- `resolveDrawerStack`: the system slide pick fits under `min(front − lift, rail
+  bottom − box bottom)` (rails overlapping the drawer's width), as bins already
+  did. BC-01 now gets the 95 box (top 666.5, rail 680).
+- A forced slide (or five-piece box) that still reaches a rail warns
+  `DRAWER_FPRAIL_CLASH`; `NO_SLIDE_FITS` says when the rail is what stopped it.
+- Not covered: shaped (footprint) cabinets (rails from `resolveShapedFingerRails`
+  aren't passed to the stack); a bottom-edge grip's rail under a drawer box
+  (wall-unit drawers, rare).
+- Tests: `drawerFingerRailClear.test.ts`.
+
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
 - **Reuse, don't rebuild.** Same loader as slides and fixtures

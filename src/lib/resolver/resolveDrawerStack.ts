@@ -365,7 +365,17 @@ export function resolveDrawerStacks(
     const raise = (drawerType === 'system' ? (dbRules.DB_RUNNER_RAISE ?? 0) : 0) + zoneRaise
     const lift = (drawerType === 'system' ? frontLift : 0) + raise
 
-    const slide = findSlide(depthHere, openingHeight - lift, slideProducts, slideSchedule, slideOverride, { clearance })
+    // Finger-pull backing rail above the box (z_handles H6): it sits flush with
+    // the sides' front edge, where the box runs up to, so the box top stays
+    // under the lowest rail over this drawer — 20 below a top-edge grip's front
+    // top (Mark, RHK6478 BC-01 2026-11-03). Bins do the same above.
+    const boxBottom = Math.max(zone.Y + lift, internalFloorY + Math.min(0, zoneRaise))
+    const railCap = Math.min(Infinity, ...backingRails
+      .filter(rl => rl.bottom > boxBottom + EPS && rl.x0 < zone.X + zone.DX - EPS && rl.x1 > zone.X + EPS)
+      .map(rl => rl.bottom))
+    const fitH = Math.min(openingHeight - lift, railCap - boxBottom)
+
+    const slide = findSlide(depthHere, fitH, slideProducts, slideSchedule, slideOverride, { clearance })
 
     if (!slide && hasHardware && !slideOverride) {
       const source = slideSchedule.length > 0 ? 'the slide schedule' : 'the slide list'
@@ -373,6 +383,7 @@ export function resolveDrawerStacks(
         code: 'NO_SLIDE_FITS',
         message: `Drawer ${zoneRef}: nothing in ${source} fits a ${round1(openingHeight)}mm opening` +
           (clearance > 0 ? ` with ${round1(clearance)}mm clearance above the box` : '') +
+          (fitH < openingHeight - lift - EPS ? ` under the finger-pull backing rail (${round1(fitH)}mm clear)` : '') +
           ` at ${round1(depthHere)}mm available depth`,
         part: 'drawer_box',
       })
@@ -420,6 +431,15 @@ export function resolveDrawerStacks(
 
     // A forced slide (per-zone or cabinet override) bypasses the fitting search, so an
     // over-tall box can still reach here. Emit the geometry so the clash is visible.
+    // A forced slide (or a five-piece box) can still reach into the rail.
+    if (boxBottom + boxHeight > railCap + EPS) {
+      warnings.push({
+        code: 'DRAWER_FPRAIL_CLASH',
+        message: `Drawer ${zoneRef}: ${round1(boxHeight)}mm box top at ${round1(boxBottom + boxHeight)} runs ${round1(boxBottom + boxHeight - railCap)}mm into the finger-pull backing rail (bottom ${round1(railCap)}) — use a lower box`,
+        part: 'drawer_box',
+      })
+    }
+
     if (boxHeight + clearance + lift > openingHeight + EPS) {
       warnings.push({
         code: 'DRAWER_BOX_TOO_TALL',
@@ -464,7 +484,7 @@ export function resolveDrawerStacks(
     // interior floor — the lowest drawer's zone.Y sits a panel thickness below it,
     // which would drop the box through the carcase bottom panel. A box_raise
     // drop is meant: it may go that far below the floor (bottom removed).
-    const boxY = Math.max(zone.Y + lift, internalFloorY + Math.min(0, zoneRaise))
+    const boxY = boxBottom
     const boxZ = zone.Z - boxDepth    // cabinet Z of the back face of the box
 
     // Slide Z: back of slide rail. Front of slide aligns with the front face of the box sides
