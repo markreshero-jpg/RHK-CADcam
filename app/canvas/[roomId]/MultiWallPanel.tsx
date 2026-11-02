@@ -3,12 +3,19 @@
 import { Wall } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
 import { wallEnd } from '@/src/lib/geometry'
+import { WallEndFields } from './WallPanel'
+
+const r1 = (n: number) => Math.round(n * 10) / 10
 
 /** Shared edits for a box / Shift+click selection of several walls. */
-export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onDeleteMany, onClear }: {
+export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onUpdateWall, onMoveBy, onDeleteMany, onClear }: {
   walls: Wall[]
   roomHeight?: number
   onUpdateMany: (u: Partial<Wall>) => void
+  /** Edit one wall of the set (start / end / centre) — joined walls follow, like the single-wall panel. */
+  onUpdateWall: (id: string, u: Partial<Wall>) => Promise<void> | void
+  /** Move the whole set + everything on it by (dx, dy), like a drag. */
+  onMoveBy: (dx: number, dy: number) => Promise<void> | void
   onDeleteMany: () => void
   onClear: () => void
 }) {
@@ -22,6 +29,22 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onDele
   const mixed = (k: keyof Wall) => !walls.every(w => w[k] === walls[0]?.[k])
   const standard = walls.filter(w => w.wall_type !== 'island')
   const total = Math.round(walls.reduce((s, w) => s + w.length, 0))
+
+  // Selection extents over the wall lines (start + end points).
+  const pts = walls.flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)])
+  const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
+  const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+
+  const pair = (x: number, y: number, set: (x: number | null, y: number | null) => void) => (
+    <div className="grid grid-cols-2 gap-2">
+      <CalcInput value={r1(x)} decimals={1} onCommit={v => set(v, null)} className={inp + ' text-right'} placeholder="X" />
+      <CalcInput value={r1(y)} decimals={1} onCommit={v => set(null, v)} className={inp + ' text-right'} placeholder="Y" />
+    </div>
+  )
+  // Move the whole set so the reference point (fx, fy) lands on the typed value.
+  const moveSetTo = (x: number | null, y: number | null, fx: number, fy: number) =>
+    void onMoveBy(x == null ? 0 : x - fx, y == null ? 0 : y - fy)
 
   return (
     <div className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto">
@@ -58,35 +81,43 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onDele
             onClear={() => onUpdateMany({ soffit_height: null as unknown as number })}
             className={inp + ' text-right'} />
         </div>
-        <div>
-          <label className={lbl}>Positions (mm) — X, Y</label>
-          {(() => {
-            const r = (n: number) => Math.round(n)
-            const pts = walls.flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)])
-            const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
-            const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
-            return (
-              <div className="space-y-1.5 text-[10px] text-gray-400 tabular-nums">
-                {walls.map(w => {
-                  const e = wallEnd(w)
-                  return (
-                    <div key={w.id} className="bg-gray-800/50 rounded px-2 py-1">
-                      <p className="text-gray-300 text-xs">{w.name}</p>
-                      <p>Start {r(w.pos_x)}, {r(w.pos_y)}</p>
-                      <p>End {r(e.x)}, {r(e.y)}</p>
-                      <p>Centre {r((w.pos_x + e.x) / 2)}, {r((w.pos_y + e.y) / 2)}</p>
-                    </div>
-                  )
-                })}
-                <div className="bg-gray-800/50 rounded px-2 py-1">
-                  <p className="text-gray-300 text-xs">Selection (wall lines)</p>
-                  <p>Centre {r((minX + maxX) / 2)}, {r((minY + maxY) / 2)}</p>
-                  <p>Extents X {r(minX)} → {r(maxX)} · Y {r(minY)} → {r(maxY)}</p>
-                </div>
-              </div>
-            )
-          })()}
+
+        <div className="border border-gray-800 rounded p-2 space-y-2">
+          <p className="text-xs text-gray-300">Selection position</p>
+          <p className="text-[10px] text-gray-600 -mt-1">Moves all {walls.length} walls and everything on them, like a drag.</p>
+          <div>
+            <label className={lbl}>Centre (mm)</label>
+            {pair(cx, cy, (x, y) => moveSetTo(x, y, cx, cy))}
+          </div>
+          <div>
+            <label className={lbl}>Min corner — X / Y (mm)</label>
+            {pair(minX, minY, (x, y) => moveSetTo(x, y, minX, minY))}
+          </div>
+          <p className="text-[10px] text-gray-600">Extents X {Math.round(minX)} → {Math.round(maxX)} · Y {Math.round(minY)} → {Math.round(maxY)}</p>
         </div>
+
+        {walls.map(w => {
+          const e = wallEnd(w)
+          const wcx = (w.pos_x + e.x) / 2, wcy = (w.pos_y + e.y) / 2
+          return (
+            <div key={w.id} className="border border-gray-800 rounded p-2 space-y-2">
+              <p className="text-xs text-gray-300">{w.name} · {Math.round(w.length)}mm</p>
+              <div>
+                <label className={lbl}>Start (mm)</label>
+                {pair(w.pos_x, w.pos_y, (x, y) => void onUpdateWall(w.id, x != null ? { pos_x: x } : { pos_y: y! }))}
+              </div>
+              <WallEndFields wall={w} inp={inp} lbl={lbl} label="End (mm)" onUpdate={onUpdateWall} />
+              <div>
+                <label className={lbl}>Centre (mm)</label>
+                {pair(wcx, wcy, (x, y) => void onUpdateWall(w.id, {
+                  pos_x: w.pos_x + (x == null ? 0 : x - wcx),
+                  pos_y: w.pos_y + (y == null ? 0 : y - wcy),
+                }))}
+              </div>
+            </div>
+          )
+        })}
+
         <button onClick={onDeleteMany}
           className="w-full bg-red-900/40 hover:bg-red-900/70 text-red-300 text-xs font-medium py-1.5 rounded transition-colors">
           Delete {walls.length} walls (Del)

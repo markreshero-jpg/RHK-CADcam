@@ -2600,6 +2600,33 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   async function resolveWallDetach(choice: WallDetachChoice) {
+  // Typed move from the wall panels — same as dropping a drag of these walls by
+  // (dx, dy): everything on them comes along, and joined walls left behind ask
+  // detach / stretch / move all.
+  async function moveWallsBy(ids: string[], dx: number, dy: number) {
+    dx = Math.round(dx * 10) / 10; dy = Math.round(dy * 10) / 10
+    if (!ids.length || (!dx && !dy)) return
+    captureSnapshot()
+    const d: WallDrag = {
+      ids, start: { x: 0, y: 0 }, startPx: { x: 0, y: 0 }, active: true, clickedId: ids[0],
+      base: {
+        walls: walls.filter(w => ids.includes(w.id)),
+        cabs: cabinets.filter(c => c.wall_id && ids.includes(c.wall_id)),
+        bts: benchtops.filter(b => b.wall_id && ids.includes(b.wall_id)),
+        fxs: fixtures.filter(x => x.wall_id && ids.includes(x.wall_id)),
+      },
+    }
+    const pre = walls
+    const neighbours = detachedNeighbours(pre, ids)
+    if (neighbours.length) {
+      await applyWallDrag(d, dx, dy, false)
+      const canStretch = neighbours.every(n => stretchNeighbour(pre.find(w => w.id === n.id)!, n, dx, dy))
+      setWallDetach({ d, dx, dy, pre, neighbours, canStretch })
+      return
+    }
+    await applyWallDrag(d, dx, dy, true)
+  }
+
     const p = wallDetach
     if (!p) return
     setWallDetach(null)
@@ -3742,6 +3769,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               }
             }}
             onDeleteMany={() => setDeleteWallPending(multiWalls)}
+            onUpdateWall={(id, u) => { captureSnapshot(); return handleUpdateWall(id, u) }}
+            onMoveBy={(dx, dy) => moveWallsBy(multiWallObjs.map(w => w.id), dx, dy)}
             onClear={() => { setSelected(null); setMultiWalls([]) }}
           />
         )}
@@ -3752,7 +3781,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             elevation={cadElevWall ? `${cadElevWall.name} — ${elevWallSide === 'face' ? 'Face' : 'Back'}` : null} />
         )}
         {mode !== 'draw_wall' && mode !== 'draw_island' && selectedWall && multiWallObjs.length < 2 && (canvasView === 'plan' || canvasView === 'elevation') && (
-          <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall} onDelete={handleDeleteWall} onClose={() => setSelected(null)} />
+          <WallPanel wall={selectedWall} roomHeight={room.room_dy ?? undefined} onUpdate={handleUpdateWall}
+            onMoveBy={(dx, dy) => moveWallsBy([selectedWall.id], dx, dy)} onDelete={handleDeleteWall} onClose={() => setSelected(null)} />
         )}
         {selectedCab && cabResize?.cabId === selectedCab.id && (
           <CabinetResizePanel

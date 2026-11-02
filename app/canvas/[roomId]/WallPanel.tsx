@@ -7,10 +7,37 @@ import { wallEnd } from '@/src/lib/geometry'
 import CalcInput from '@/src/components/CalcInput'
 import { parseWallProfile, formatWallProfile } from '@/src/lib/wallProfile'
 
-export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClose }: {
+const r1 = (n: number) => Math.round(n * 10) / 10
+
+/** Editable wall end X / Y — the start stays put; length + angle follow the new end. */
+export function WallEndFields({ wall, inp, lbl, onUpdate, label = 'End position (mm)' }: {
+  wall: Wall; inp: string; lbl: string; label?: string
+  onUpdate: (id: string, u: Partial<Wall>) => Promise<void> | void
+}) {
+  const e = wallEnd(wall)
+  function setEnd(x: number, y: number) {
+    const dx = x - wall.pos_x, dy = y - wall.pos_y
+    const length = Math.hypot(dx, dy)
+    if (length < 1) return
+    void onUpdate(wall.id, { length: r1(length), angle: Math.atan2(dy, dx) * 180 / Math.PI })
+  }
+  return (
+    <div>
+      {label && <label className={lbl}>{label}</label>}
+      <div className="grid grid-cols-2 gap-2">
+        <CalcInput value={r1(e.x)} decimals={1} onCommit={v => setEnd(v, e.y)} className={inp + ' text-right'} placeholder="X" />
+        <CalcInput value={r1(e.y)} decimals={1} onCommit={v => setEnd(e.x, v)} className={inp + ' text-right'} placeholder="Y" />
+      </div>
+    </div>
+  )
+}
+
+export default function WallPanel({ wall, roomHeight, onUpdate, onMoveBy, onDelete, onClose }: {
   wall: Wall
   roomHeight?: number
   onUpdate: (id: string, u: Partial<Wall>) => Promise<void>
+  /** Move the wall and everything on it by (dx, dy), like a drag. */
+  onMoveBy?: (dx: number, dy: number) => Promise<void> | void
   onDelete: (id: string) => void
   onClose?: () => void
 }) {
@@ -27,6 +54,12 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
 
   const e = wallEnd(wall)
   const displayLen = Math.round(Math.sqrt((e.x - wall.pos_x) ** 2 + (e.y - wall.pos_y) ** 2))
+  function moveCentre(x: number | null, y: number | null) {
+    const cx = (wall.pos_x + e.x) / 2, cy = (wall.pos_y + e.y) / 2
+    const dx = x == null ? 0 : x - cx, dy = y == null ? 0 : y - cy
+    if (onMoveBy) void onMoveBy(dx, dy)
+    else void onUpdate(wall.id, { pos_x: wall.pos_x + dx, pos_y: wall.pos_y + dy })
+  }
 
   return (
     <div className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto">
@@ -116,22 +149,16 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
               onCommit={v => onUpdate(wall.id, { pos_y: v })} className={inp + ' text-right'} placeholder="Y" />
           </div>
         </div>
+        <WallEndFields wall={wall} inp={inp} lbl={lbl} onUpdate={onUpdate} />
         <div>
-          <label className={lbl}>Centre position (mm) — moves the wall</label>
+          <label className={lbl}>Centre position (mm)</label>
           <div className="grid grid-cols-2 gap-2">
-            <CalcInput value={Math.round(((wall.pos_x + e.x) / 2) * 10) / 10} decimals={1}
-              onCommit={v => onUpdate(wall.id, { pos_x: wall.pos_x + v - (wall.pos_x + e.x) / 2 })} className={inp + ' text-right'} placeholder="X" />
-            <CalcInput value={Math.round(((wall.pos_y + e.y) / 2) * 10) / 10} decimals={1}
-              onCommit={v => onUpdate(wall.id, { pos_y: wall.pos_y + v - (wall.pos_y + e.y) / 2 })} className={inp + ' text-right'} placeholder="Y" />
+            <CalcInput value={r1((wall.pos_x + e.x) / 2)} decimals={1}
+              onCommit={v => moveCentre(v, null)} className={inp + ' text-right'} placeholder="X" />
+            <CalcInput value={r1((wall.pos_y + e.y) / 2)} decimals={1}
+              onCommit={v => moveCentre(null, v)} className={inp + ' text-right'} placeholder="Y" />
           </div>
-        </div>
-        <div>
-          <label className={lbl}>End position (mm)</label>
-          <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 text-right">
-            <span className="px-2 py-1 bg-gray-800/50 rounded">X {Math.round(e.x * 10) / 10}</span>
-            <span className="px-2 py-1 bg-gray-800/50 rounded">Y {Math.round(e.y * 10) / 10}</span>
-          </div>
-          <p className="text-[10px] text-gray-600 mt-0.5">Change Length / Angle to move the end.</p>
+          <p className="text-[10px] text-gray-600 mt-0.5">Moves the wall and everything on it, like a drag.</p>
         </div>
       </div>
       <PanelDeleteButton label={wall.wall_type === 'island' ? 'Delete island' : 'Delete wall'} onDelete={() => onDelete(wall.id)} />
