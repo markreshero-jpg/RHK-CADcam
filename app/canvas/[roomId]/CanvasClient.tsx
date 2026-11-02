@@ -12,7 +12,7 @@ import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass,
 import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
-  wallEnd, wallDir,
+  wallEnd, wallDir, wallCorners,
   snapAngle,
   nearestWall, wallMitreCorners, findFreeSlot, slideToFreeSlot, slideAlongWall, fitFreeSlot, cabsBlock, cabT, nextLabel,
   centroid, wallInwardNormal, cabWallPerp, cabWallSide, cabinetCornerPts, wallAnchorPoint, cabWallGap, cabWallSpan,
@@ -451,12 +451,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     base: { walls: Wall[]; cabs: CabinetInstance[]; bts: BenchtopInstance[]; fxs: RoomFixture[] }
   } | null>(null)
   type WallDrag = NonNullable<typeof wallDragRef.current>
-  // Dragging a selected wall's start / end grabber: resizes that wall; joined
-  // walls follow live (same joint propagation as typed Start / End edits).
+  // Wall end grabber: click a selected wall's start / end dot to pick it up, the
+  // end follows the cursor, click again to drop (Esc / right-click = cancel).
+  // Joined walls follow live (same joint propagation as typed Start / End edits).
   const wallEndDragRef = useRef<{
-    id: string; end: 'start' | 'end'; base: Wall; pre: Wall[]; startPx: Pt; active: boolean
+    id: string; end: 'start' | 'end'; base: Wall; pre: Wall[]; active: boolean
     u?: Partial<Wall>; propagated?: { id: string; update: Partial<Wall> }[]
   } | null>(null)
+  const [wallEndFollowing, setWallEndFollowing] = useState(false)
+  // Thin dashed alignment lines shown while a wall end snaps to another wall.
+  const [alignGuides, setAlignGuides] = useState<{ a: Pt; b: Pt }[]>([])
   // A drop that pulled walls off walls joined to them waits here for the user's choice.
   const [wallDetach, setWallDetach] = useState<{ d: WallDrag; dx: number; dy: number; pre: Wall[]; neighbours: DetachedNeighbour[]; canStretch: boolean } | null>(null)
   // Tracks whether a pointerdown actually fired on the SVG — guards against phantom
@@ -1004,7 +1008,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const editCabIdRef = useRef<string | null>(null)
   editCabIdRef.current = editCabId
   const escBusyRef = useRef(false)
-  escBusyRef.current = !!(cabResize || cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart || fx.carry || fx.stretch)
+  escBusyRef.current = !!(wallEndFollowing || cabResize ||cabFollowing || cabMoveDrag || drawStart || armedDef || contextMenu || measureStart || fx.carry || fx.stretch)
 
   useEffect(() => {
     const isInput = (t: EventTarget | null) => t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement
@@ -2274,28 +2278,56 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     if (wallEndDragRef.current) {
       const d = wallEndDragRef.current
-      if (!d.active && dist(svgP, d.startPx) < 3) return
       if (!d.active) { captureSnapshot(); d.active = true }
       const b = d.base, dir = wallDir(b), be = wallEnd(b)
+      const S = { x: b.pos_x, y: b.pos_y }
+      const dragged = d.end === 'end' ? be : S
+      // Snap targets: other walls' line ends + face corners. Walls joined at the
+      // dragged end move with it, so they're left out. Ctrl = no snap.
+      const tol = 8 / view.zoom
+      const refs: Pt[] = ctrlRef.current ? [] : d.pre
+        .filter(w => w.id !== b.id && !(dist({ x: w.pos_x, y: w.pos_y }, dragged) < 1 || dist(wallEnd(w), dragged) < 1))
+        .flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w), ...wallCorners(w)])
+      const guides: { a: Pt; b: Pt }[] = []
       let u: Partial<Wall>
       if (shiftRef.current) {
         // Free: the dragged end follows the cursor; the other end stays put.
-        const p = { x: Math.round(wp.x), y: Math.round(wp.y) }
-        const from = d.end === 'end' ? { x: b.pos_x, y: b.pos_y } : p
+        // Snaps onto a point, else lines up in X and / or Y with one.
+        let p = { x: Math.round(wp.x), y: Math.round(wp.y) }
+        const hit = refs.find(r => dist(r, p) < tol)
+        if (hit) p = { ...hit }
+        else {
+          const rx = refs.filter(r => Math.abs(r.x - p.x) < tol).sort((a, c) => Math.abs(a.x - p.x) - Math.abs(c.x - p.x))[0]
+          const ry = refs.filter(r => Math.abs(r.y - p.y) < tol).sort((a, c) => Math.abs(a.y - p.y) - Math.abs(c.y - p.y))[0]
+          if (rx) p.x = rx.x
+          if (ry) p.y = ry.y
+          if (rx) guides.push({ a: rx, b: { ...p } })
+          if (ry) guides.push({ a: ry, b: { ...p } })
+        }
+        const from = d.end === 'end' ? S : p
         const to   = d.end === 'end' ? p : be
         const len = Math.hypot(to.x - from.x, to.y - from.y)
         if (len < 10) return
         u = { length: Math.round(len * 10) / 10, angle: Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI }
         if (d.end === 'start') { u.pos_x = p.x; u.pos_y = p.y }
       } else {
-        // Along the wall's own line: length only.
-        const t = Math.round((wp.x - b.pos_x) * dir.x + (wp.y - b.pos_y) * dir.y)
+        // Along the wall's own line: length only. Snaps where the end lines up
+        // square-on with another wall's end or face corner (parallel alignment).
+        let t = Math.round((wp.x - S.x) * dir.x + (wp.y - S.y) * dir.y)
+        let best: { r: Pt; tr: number } | null = null
+        for (const r of refs) {
+          const tr = (r.x - S.x) * dir.x + (r.y - S.y) * dir.y
+          if (Math.abs(tr - t) < tol && (!best || Math.abs(tr - t) < Math.abs(best.tr - t))) best = { r, tr }
+        }
+        if (best) t = Math.round(best.tr * 10) / 10
         if (d.end === 'end') u = { length: Math.max(10, t) }
         else {
-          const tt = Math.min(t, b.length - 10)
-          u = { pos_x: b.pos_x + tt * dir.x, pos_y: b.pos_y + tt * dir.y, length: b.length - tt }
+          t = Math.min(t, b.length - 10)
+          u = { pos_x: S.x + t * dir.x, pos_y: S.y + t * dir.y, length: b.length - t }
         }
+        if (best) guides.push({ a: best.r, b: { x: S.x + t * dir.x, y: S.y + t * dir.y } })
       }
+      setAlignGuides(guides)
       const propagated = computeJointUpdates(d.pre, b.id, b, { ...b, ...u })
       d.u = u; d.propagated = propagated
       setWalls(d.pre.map(w => {
@@ -2422,17 +2454,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     const svgP = svgCoords(e)
     const wp = toWorld(svgP.x, svgP.y)
-
-    if (wallEndDragRef.current) {
-      const d = wallEndDragRef.current
-      wallEndDragRef.current = null
-      if (!d.active || !d.u) return
-      await Promise.all([
-        dbUpdateWall(d.base.id, d.u),
-        ...(d.propagated ?? []).map(({ id, update }) => dbUpdateWall(id, update)),
-      ])
-      return
-    }
 
     if (wallDragRef.current) {
       const d = wallDragRef.current
@@ -2649,6 +2670,48 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       ...[...xMap].map(async ([id, u]) => { const { error } = await supabase.from('room_fixtures').update({ ...u, updated_at: new Date().toISOString() }).eq('id', id); if (error) console.error(error) }),
     ])
   }
+
+  // Wall end grabber: drop (save) or cancel (put the walls back).
+  async function dropWallEnd() {
+    const d = wallEndDragRef.current
+    wallEndDragRef.current = null
+    setWallEndFollowing(false); setAlignGuides([])
+    if (!d?.active || !d.u) return
+    await Promise.all([
+      dbUpdateWall(d.base.id, d.u),
+      ...(d.propagated ?? []).map(({ id, update }) => dbUpdateWall(id, update)),
+    ])
+  }
+  function cancelWallEnd() {
+    const d = wallEndDragRef.current
+    wallEndDragRef.current = null
+    setWallEndFollowing(false); setAlignGuides([])
+    if (d?.active) setWalls(d.pre)
+  }
+  // While an end is picked up, the next click anywhere on the canvas drops it
+  // (captured before walls / cabinets see it); right-click or Esc cancels.
+  useEffect(() => {
+    if (!wallEndFollowing) return
+    const inSvg = (t: EventTarget | null) => !!(t instanceof Node && svgRef.current?.contains(t))
+    const down = (e: PointerEvent) => {
+      if (!inSvg(e.target)) return
+      e.stopPropagation(); e.preventDefault()
+      if (e.button === 0) void dropWallEnd()
+      else if (e.button === 2) cancelWallEnd()
+    }
+    const swallow = (e: MouseEvent) => { if (inSvg(e.target)) { e.stopPropagation(); e.preventDefault() } }
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); cancelWallEnd() } }
+    window.addEventListener('pointerdown', down, true)
+    window.addEventListener('click', swallow, true)
+    window.addEventListener('contextmenu', swallow, true)
+    window.addEventListener('keydown', key, true)
+    return () => {
+      window.removeEventListener('pointerdown', down, true)
+      window.removeEventListener('click', swallow, true)
+      window.removeEventListener('contextmenu', swallow, true)
+      window.removeEventListener('keydown', key, true)
+    }
+  })
 
   // Typed move from the wall panels — same as dropping a drag of these walls by
   // (dx, dy): everything on them comes along, and joined walls left behind ask
@@ -3013,7 +3076,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : sectionDrag ? 'grabbing'
     : (mode === 'draw_wall' || mode === 'draw_island' || mode === 'draw_section' || mode === 'measure' || mode === 'draw_benchtop' || mode === 'draw_benchtop_rect' || mode === 'draw_benchtop_l' || mode === 'draw_benchtop_line' || mode === 'draw_benchtop_join' || mode === 'move_benchtop') ? 'crosshair'
     : (currentPlaceInfo() || mode === 'paste') ? 'cell'
-    : cabResize ? 'crosshair'
+    : (cabResize || wallEndFollowing) ? 'crosshair'
     : 'default'
 
   function fitToWalls() {
@@ -3446,11 +3509,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 e.stopPropagation()
                 const base = walls.find(w => w.id === wallId)
                 if (!base) return
-                svgPointerDownRef.current = true
                 setContextMenu(null); setOpenMenu(null)
-                wallEndDragRef.current = { id: wallId, end, base, pre: walls, startPx: svgCoords(e), active: false }
-                svgRef.current?.setPointerCapture(e.pointerId)
+                wallEndDragRef.current = { id: wallId, end, base, pre: walls, active: false }
+                setWallEndFollowing(true)
               }}
+              alignGuides={alignGuides}
               onCabinetPointerDown={onCabinetPointerDown}
               pickHoverId={cabPicker ? cabPickHover : null}
               onCabinetCrosshairClick={onCabinetCrosshairClick}

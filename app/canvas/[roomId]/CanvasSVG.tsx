@@ -98,6 +98,8 @@ interface CanvasSVGProps {
   onWallPointerDown: (e: React.PointerEvent, wallId: string) => void
   /** Press on a selected wall's start / end grabber — drag resizes the wall. */
   onWallEndPointerDown?: (e: React.PointerEvent, wallId: string, end: 'start' | 'end') => void
+  /** Thin dashed alignment lines (wall end snapping). */
+  alignGuides?: { a: Pt; b: Pt }[]
   onCabinetPointerDown: (e: React.PointerEvent, cab: CabinetInstance) => void
   /** Row hovered in the stacked-cabinet picker — highlights that cabinet. */
   pickHoverId?: string | null
@@ -198,7 +200,7 @@ export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, layers, planGrid,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, multiWalls = [], marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
-  setSelected, setContextMenu, onWallPointerDown, onWallEndPointerDown, onCabinetPointerDown, pickHoverId, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
+  setSelected, setContextMenu, onWallPointerDown, onWallEndPointerDown, alignGuides = [], onCabinetPointerDown, pickHoverId, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick, onCabLabelMove, cabLabelMoving, onLabelMoveEnd,
   benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
   onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBtUndoVertex,
@@ -2106,10 +2108,17 @@ export default function CanvasSVG({
               fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / lz}
               style={{ cursor: 'move' }}
               onPointerDown={ev => onWallEndPointerDown(ev, w.id, end)}>
-              <title>Drag to change the wall length · Shift = free (changes the angle too)</title>
+              <title>Click to pick up, click again to drop · Shift = free (changes the angle) · Ctrl = no snap · Esc = cancel</title>
             </circle>
           ))
         })()}
+        {alignGuides.map((g, i) => (
+          <g key={`ag${i}`} style={{ pointerEvents: 'none' }}>
+            <line x1={g.a.x} y1={g.a.y} x2={g.b.x} y2={g.b.y}
+              stroke="#22d3ee" strokeWidth={0.75 / lz} strokeDasharray={`${4 / view.zoom} ${3 / view.zoom}`} />
+            <circle cx={g.a.x} cy={g.a.y} r={3 / view.zoom} fill="none" stroke="#22d3ee" strokeWidth={0.75 / lz} />
+          </g>
+        ))}
 
         {/* ── Marquee selection rect ── */}
         {marquee && (
