@@ -22,7 +22,8 @@ import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { addBinDivisions } from './binDivisionsAction'
 import { drawerBoundaries, planAutoDivider, AUTO_DIVIDER_NOTE, type SeamGeometry } from '@/src/lib/dividers/autoDivider'
 
-type DoorStyleOpt = { id: string; name: string }
+type DoorStyleOpt = { id: string; name: string; door_material_schedule_id: string | null }
+type DoorColourOpt = { id: string; schedule_id: string; colour_name: string; finish: string | null }
 type HandleOpt = { id: string; name: string; grip_kind: string }
 
 function useSvgZoom(initW: number, initH: number) {
@@ -186,6 +187,7 @@ export default function FaceGridEditor({
   )
   const [selectedZone, setSelectedZone] = useState<{ row: number; col: number } | null>(null)
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
+  const [doorColours, setDoorColours] = useState<DoorColourOpt[]>([])
   const [doorProfiles, setDoorProfiles] = useState<{ id: string; name: string }[]>([])
   const [handles, setHandles] = useState<HandleOpt[]>([])
   const [bins, setBins] = useState<{ id: string; name: string; box_height: number | null; inside_width_min: number | null; inside_width_max: number | null }[]>([])
@@ -195,8 +197,10 @@ export default function FaceGridEditor({
 
   useEffect(() => {
     let cancelled = false
-    supabase.from('door_styles').select('id, name').eq('is_active', true).order('sort_order').order('name')
+    supabase.from('door_styles').select('id, name, door_material_schedule_id').eq('is_active', true).order('sort_order').order('name')
       .then(({ data }) => { if (!cancelled) setDoorStyles((data ?? []) as DoorStyleOpt[]) })
+    supabase.from('door_schedule_materials').select('id, schedule_id, colour_name, finish').eq('is_active', true).order('sort_order').order('colour_name')
+      .then(({ data }) => { if (!cancelled) setDoorColours((data ?? []) as DoorColourOpt[]) })
     supabase.from('door_profiles').select('id, name').order('name')
       .then(({ data }) => { if (!cancelled) setDoorProfiles((data ?? []) as { id: string; name: string }[]) })
     supabase.from('hardware_handles').select('id, name, grip_kind').eq('active', true).order('name')
@@ -403,7 +407,17 @@ export default function FaceGridEditor({
     save({
       ...grid,
       zones: grid.zones.map(z =>
-        z.row_index === rowIdx && z.col_index === colIdx ? { ...z, door_style_id: styleId } : z
+        // A new style starts on its own default colour (the old pick belongs to another range).
+        z.row_index === rowIdx && z.col_index === colIdx ? { ...z, door_style_id: styleId, door_colour_id: null } : z
+      ),
+    })
+  }
+
+  function setZoneDoorColour(rowIdx: number, colIdx: number, colourId: string | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z =>
+        z.row_index === rowIdx && z.col_index === colIdx ? { ...z, door_colour_id: colourId } : z
       ),
     })
   }
@@ -1113,8 +1127,8 @@ export default function FaceGridEditor({
                   </div>
                 ))(gz.hinge_side ?? 'left')}
 
-                {/* Door style — only for door zones */}
-                {gz.face_type === 'door' && (
+                {/* Door style + colour — any front (door, drawer front, false panel) */}
+                {gz.face_type !== 'open' && (
                   <div>
                     <p className="text-gray-600 mb-1">Door style</p>
                     <select
@@ -1125,6 +1139,23 @@ export default function FaceGridEditor({
                       <option value="">— inherit (room / job) —</option>
                       {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
+                    {gz.door_style_id && (() => {
+                      const sched = doorStyles.find(s => s.id === gz.door_style_id)?.door_material_schedule_id
+                      const opts = doorColours.filter(c => c.schedule_id === sched)
+                      return (
+                        <>
+                          <p className="text-gray-600 mt-1 mb-1">Colour</p>
+                          <select
+                            value={gz.door_colour_id ?? ''}
+                            onChange={e => setZoneDoorColour(gz.row_index, gz.col_index, e.target.value || null)}
+                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                          >
+                            <option value="">— the style’s default —</option>
+                            {opts.map(c => <option key={c.id} value={c.id}>{c.colour_name}{c.finish ? ` (${c.finish})` : ''}</option>)}
+                          </select>
+                        </>
+                      )
+                    })()}
                   </div>
                 )}
 

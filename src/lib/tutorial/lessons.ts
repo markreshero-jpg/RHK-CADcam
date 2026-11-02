@@ -1485,6 +1485,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The 3D view shows the cut once it saves. The optimiser nests the part as a shaped part and cuts the hole or notch. A cut-out goes with the cabinet when you copy it or Save it to the library.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-02 (per-front colour, RHK6478 Laundry).
+  { id: 'front_colour', level: 'intermediate', topic: 'cabinets', title: 'Give one cabinet a different door colour',
+    blurb: 'E.g. a Chalk vanity drawer in a room of 2pac bases, or 2pac doors on a wall unit among Chalk overheads.',
+    keywords: 'door colour style front drawer front different colour mixed finish per door override face grid', steps: [
+    { id: 'open', title: 'Pick the front',
+      body: 'Double-click the cabinet, open the Face Grid tab and click the door, drawer front or false panel.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'style', title: 'Door style, then Colour',
+      body: 'Set Door style to the range you want (e.g. Laminex 16mm Colour). A Colour box shows under it with that range’s colours: pick one. Left on “the style’s default”, the front takes the style’s own default colour, not the room’s colour (that belongs to the room’s range). Panels, fillers and kicks still follow the room colour: change those parts’ board by hand if they need to match.',
+      canvas: true, done: c => c.cabinets.some(cab => ((cab.face_grid as { zones?: { door_colour_id?: string | null }[] } | null)?.zones ?? []).some(z => !!z.door_colour_id)) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -354,8 +354,16 @@ columns `base|wall|tall_door_style_id` / `_door_colour_id` added
 
 Resolved cascade per cabinet class (loadCabinetInput §12):
 - style: zone → room class → room default → job class → job default
-- colour: room class → job class (only while the room keeps the job's style for
-  that class) → the effective style's default colour.
+- colour: zone `door_colour_id` → room class → job class (only while the room keeps
+  the job's style for that class) → the effective style's default colour. A zone
+  that picks its own style (not the room / job one) skips the class colour and
+  takes its style's default unless it names a colour.
+
+**Per-front colour — BUILT 02/11/26** (Mark, RHK6478 Laundry: a Chalk PDR vanity
+in a room of 2pac bases). `door_colour_id` on the zone in the face_grid JSON, next
+to `door_style_id`. UI: Cabinet Edit → Face Grid → any front (door, drawer front,
+false panel) → **Door style**, then **Colour** (the style's colour range). Panels,
+fillers and kicks still follow the room class colour.
 
 ---
 

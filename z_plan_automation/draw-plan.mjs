@@ -96,8 +96,19 @@ if (!projectId && layout.projectName) {
 if (!projectId) die('no project — set projectId, or projectName (+ createProject: true)')
 
 // ── Create room + walls (direct DB — walls need no resolver) ─────────────────
+// `roomId`: draw into an existing room and keep its walls (e.g. walls the user
+// fixed up by hand). Cabinets' `wall` numbers then match the walls' names.
+let room, roomErr
+if (layout.roomId) {
+  ({ data: room, error: roomErr } = await sb.from('rooms').update({
+    ...(layout.roomRules ? { rule_overrides: layout.roomRules } : {}),
+    ...(layout.wallCabinetTop != null ? { wall_cabinet_top: layout.wallCabinetTop } : {}),
+  }).eq('id', layout.roomId).select().single())
+  if (roomErr) die(`room load failed: ${roomErr.message}`)
+  console.log('existing room', room.name, room.id)
+} else {
 const { data: siblings } = await sb.from('rooms').select('sort_order').eq('project_id', projectId)
-const { data: room, error: roomErr } = await sb.from('rooms').insert({
+;({ data: room, error: roomErr } = await sb.from('rooms').insert({
   project_id: projectId,
   name: layout.roomName ?? 'Room',
   sort_order: (siblings ?? []).reduce((m, r) => Math.max(m, r.sort_order + 1), 0),
@@ -106,12 +117,13 @@ const { data: room, error: roomErr } = await sb.from('rooms').insert({
   // job) — set before placement so every cabinet resolves with them.
   ...(layout.roomRules ? { rule_overrides: layout.roomRules } : {}),
   ...(layout.wallCabinetTop != null ? { wall_cabinet_top: layout.wallCabinetTop } : {}),
-}).select().single()
+}).select().single())
 if (roomErr) die(`room create failed: ${roomErr.message}`)
 console.log('created room', room.name, room.id)
+}
 
 const wallIds = []
-for (let i = 0; i < layout.walls.length; i++) {
+for (let i = 0; !layout.roomId && i < layout.walls.length; i++) {
   const w = layout.walls[i]
   const { data: row, error } = await sb.from('walls').insert({
     room_id: room.id,

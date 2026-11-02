@@ -61,11 +61,19 @@ async function resolveDoorStyles(
   // Effective style id per front zone (lowest set level wins). Drawer fronts
   // and false panels take the same style as doors so the whole face matches
   // in material, thickness, profile and edging.
+  // Colour per zone: its own door_colour_id, else the class colour while the
+  // zone keeps the cascade style — a zone that picks another style takes that
+  // style's default colour (the class colour belongs to another range), as rooms do.
+  const cascadeStyleId = roomStyleId ?? projStyleId ?? null
   const zoneStyle = new Map<string, string>()
+  const zoneColour = new Map<string, string | null>()
   for (const z of grid.zones) {
     if (z.face_type === 'open') continue
-    const styleId = z.door_style_id ?? roomStyleId ?? projStyleId ?? null
-    if (styleId) zoneStyle.set(`${z.row_index}_${z.col_index}`, styleId)
+    const styleId = z.door_style_id ?? cascadeStyleId
+    if (!styleId) continue
+    const key = `${z.row_index}_${z.col_index}`
+    zoneStyle.set(key, styleId)
+    zoneColour.set(key, z.door_colour_id ?? (styleId === cascadeStyleId ? colourOverrideId : null))
   }
   const distinctIds = [...new Set(zoneStyle.values())]
   if (distinctIds.length === 0) return {}
@@ -90,7 +98,7 @@ async function resolveDoorStyles(
   // The per-class override (when set) takes priority over each style's default.
   const colourIds = [
     ...((data ?? []) as { default_material_id: string | null }[]).map(r => r.default_material_id),
-    colourOverrideId,
+    ...zoneColour.values(),
   ].filter((x): x is string => !!x)
   const colourMatById = new Map<string, string | null>()
   const colourEbById  = new Map<string, string | null>()
@@ -126,8 +134,8 @@ async function resolveDoorStyles(
           cat.edge_band_right  ? 'right'  : null,
         ].filter(Boolean) as EdgeSides)
       : null
-    // Per-class colour override wins over the style's own default colour.
-    const effColourId = colourOverrideId ?? row.default_material_id
+    // Colour is filled in per zone below (zone / class colour, else the style's default).
+    const effColourId = row.default_material_id
     styleById.set(row.id, {
       style_id:           row.id,
       profile_id:         row.profile?.id ?? null,
@@ -145,7 +153,11 @@ async function resolveDoorStyles(
   const out: Record<string, ResolvedDoorStyleInput> = {}
   for (const [zoneKey, styleId] of zoneStyle) {
     const resolved = styleById.get(styleId)
-    if (resolved) out[zoneKey] = resolved
+    if (!resolved) continue
+    const colourId = zoneColour.get(zoneKey)
+    out[zoneKey] = colourId
+      ? { ...resolved, colour_material_id: colourMatById.get(colourId) ?? null, edgeband_id: colourEbById.get(colourId) ?? null }
+      : resolved
   }
 
   // Per-front profile overrides (Glass on any material's style): the front keeps

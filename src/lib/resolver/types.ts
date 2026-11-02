@@ -1245,6 +1245,10 @@ export interface FaceZoneInput {
   // zone → room → job). null/undefined = inherit. Lives in the face_grid
   // JSONB so it survives re-resolve (the face_zones table is rebuilt each persist).
   door_style_id?: string | null
+  // Per-front colour (door_schedule_materials id) — e.g. one Chalk vanity in a
+  // room of 2pac bases. null/undefined = the room / job class colour, or the
+  // zone's own style's default colour when door_style_id names another style.
+  door_colour_id?: string | null
   // Per-front door PROFILE override (e.g. Glass on a Laminex / Polytec style):
   // the front keeps its style's blank, colour range, colour and tape, and takes
   // this profile's machining instead. null/undefined = the style's own profile.
