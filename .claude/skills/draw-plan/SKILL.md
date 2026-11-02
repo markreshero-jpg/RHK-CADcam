@@ -274,6 +274,12 @@ line and mirrors the island elevation.
   `finger_gap` = apron drop + 20 (MA60 on 20 stone = **60**) in its face_grid
   zone, as the powder vanities do. Check the front tops AFF (≤ apron underside
   − 20) and the drawer box tops after the resolve.
+- **Wall units standing on a benchtop get a 3 bottom reveal** (Mark, RHK6478
+  Buffet 2026-11-02, standard): an upper sitting on the bench (bottom = bench
+  top, e.g. a buffet hutch) → `rule_overrides.REVB: 3` so the doors clear the
+  stone. An open unit standing on the bench has **no bottom**: hide
+  `case_bottom` in all views (= not made) + `BOTTOM_BACK_JOIN:
+  'butts_into_back'`, so the gables and back sit on the bench.
 - **Panels between bays under an apron get a front notch** (Mark, RHK6478
   Buffet 2026-11-02): an 18 panel running full depth to the bench front (e.g.
   between bar fridges) is notched (apron thickness + 2) × (apron drop) at its top
