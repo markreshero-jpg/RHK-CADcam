@@ -484,6 +484,25 @@ function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingC
     if (a.key !== HANGING_RAIL_OVAL.key) continue
     const prod = hangingRailProduct(ctx.accessoryProducts, a.product_id)
     const R = { ...HANGING_RAIL_OVAL, h: Number(prod?.height_mm) || HANGING_RAIL_OVAL.h, w: Number(prod?.width_mm) || HANGING_RAIL_OVAL.w }
+    if (a.run === 'depth') {
+      // Front to back, centred across the opening, `run_inset` off the back and
+      // the front. No supports; drawn as a block (the model runs along X).
+      const ins = a.run_inset ?? 20
+      out.push({
+        part_type:   'accessory',
+        sort_order:  ctx.sort.accessory++,
+        DX: ctx.intD - 2 * ins, DY: R.w, DZ: R.h,
+        X:  box.x + (box.w - R.w) / 2,
+        Y:  (a.y_locked && a.y_position !== undefined) ? a.y_position : box.y + box.h - R.belowTop - R.h,
+        Z:  ctx.intBack + ins,
+        AX: 0, AY: 0, AZ: 0,
+        material_id: ctx.shelfMatId,
+        edge_band:   edgeSidesToBanding([]),
+        y_locked:    !!a.y_locked,
+        ...(prod ? { accessory: { product_id: prod.id, name: prod.name, colour: prod.colour, run: 'depth' as const } } : {}),
+      })
+      continue
+    }
     const plan = prod ? railSupportPlan(box, prod, a, ctx) : null
     // With pillars the rail hangs where they hold it: its centre the pillar's
     // drop below the top of the opening (Mark 2026-10-25), else 60 under the top.

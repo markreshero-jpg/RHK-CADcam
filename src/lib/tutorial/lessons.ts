@@ -1458,6 +1458,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Switch to Elevation and pick the main wall. The nib shows as a hatched cut strip at its spot, full height, with the cabinets either side on the same view. A nib has no elevation tab of its own.',
       target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' && c.walls.some(w => w.wall_type === 'nib') },
   ]},
+
+  // Appended 2026-11-02 (front-to-back hanging rail, RHK6581 Bed 2).
+  { id: 'hanging_rail_depth', level: 'intermediate', topic: 'cabinets', title: 'Run a hanging rail front to back',
+    blurb: 'For a shallow robe: the rail runs from the back to the front instead of side to side.',
+    keywords: 'hanging rail front to back shallow robe wardrobe oval depth end on accessory internals', steps: [
+    { id: 'open', title: 'Open the cabinet',
+      body: 'Double-click the robe cupboard, go to the internals and click its hanging rail (or add one with Add → Hanging rail).',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'tick', title: 'Tick Front to back',
+      body: 'Tick Front to back (fit by hand). The rail turns to run from the back to the front, centred across the opening, 20 off the back and 20 off the front (change Off back / front). It has no supports and no drilling: you fit it and drill the holes by hand. The hardware list takes its length front to back.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

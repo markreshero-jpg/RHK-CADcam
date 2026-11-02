@@ -36,6 +36,8 @@ export const PART_TYPE_LABELS: Record<string, string> = {
   'bh:sl_ret_l': 'Shadowline Left Return',
   'bh:sl_ret_r': 'Shadowline Right Return',
   'bh:split':    'Bulkhead Shadowline Rail',
+  'bh:split_l':  'Bulkhead Shadowline Rail Left',
+  'bh:split_r':  'Bulkhead Shadowline Rail Right',
 }
 
 export const humanizePartKey = (s: string): string =>

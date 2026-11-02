@@ -145,7 +145,7 @@ underside when the bulkhead isn't sitting on cabinets.
       every other part is lifted by the rail's thickness and the fascia /
       returns lose it, so a `thickness × setback` recess shows. Raw rail, no
       tape (it sits in the shadow). Straight bulkhead: the rail runs the full
-      width (not round the returns yet). Curved bulkhead (BHCRVFIXP,
+      width; with a left / right return on, the front rail stops `setback` in from that end and a return rail `bh:split_l` / `bh:split_r` runs back with the return, its outer edge `setback` in from the return face, mitred 45° to the front rail (outlines) (2026-11-02, Mark: RHK6581 robes "10mm shadowline under bulkhead with mitred returns"). Curved bulkhead (BHCRVFIXP,
       z_curved_end C7): the rail follows the front, the curve and the side.
       Not for `kind: 'shadowline'`.
 - [~] **B8 — angled ends** (built 2026-10-27, in-app check pending) (Mark, 2026-10-27,

@@ -1401,6 +1401,11 @@ export interface AccessoryFitting {
   // Rail supports (z_accessories A6): each end's support (default end support),
   // centre pillar count (default one per max_span_mm), drilling on (default).
   supports?:   RailSupportsSetting
+  // Hanging rail running front to back (Mark 2026-11-02, RHK6581 Bed 2): centred
+  // across the width, `run_inset` (20) off the back and the front; no supports
+  // (fitted and drilled by hand).
+  run?:        'depth'
+  run_inset?:  number
   height?:     number
   y_position?: number
   y_locked?:   boolean
@@ -1633,6 +1638,7 @@ export interface ResolvedInternalPart extends ResolvedPart {
     side?: 'left' | 'right'
     joint_id?: string | null
     below_rail?: number   // end support: rail centre above the part's bottom (model anchor)
+    run?: 'depth'         // rail runs front to back: DX = its length (drawn as a block)
     // The product's 3D model (S1); anchors per role in AccessoryModel.tsx.
     model?: { url: string; format: string; scale: number }
   }

@@ -65,6 +65,12 @@ their supports now; wardrobe / pantry / misc items later on the same table.
   (library data, was 3). RHK6581's saved rails updated to match.
 - **A9 Rails are controlled in the Interior editor** (existing): add / drag /
   lock height, product. S2 adds the support controls to the same rail row.
+- **A12 Front-to-back rail** (Mark, 2026-11-02, RHK6581 Bed 2, 390-deep robe):
+  fitting `run: 'depth'` (+ `run_inset`, default 20): the rail runs from the
+  back to the front, centred across the opening, `run_inset` off the back panel
+  and off the front. No supports and no drilling (fitted + drilled by hand);
+  drawn as a block (the models run along X); hardware list length = DX.
+  Interior editor tick "Front to back (fit by hand)". Tutorial `hanging_rail_depth`.
 
 ## Phases
 

@@ -171,7 +171,7 @@ function cabinetHardware(r: ResolvedCabinet, label: string, P: HardwareProducts,
 
   for (const p of r.internal_parts ?? []) {
     if (!p.accessory) continue
-    if (p.part_type === 'accessory') acc.add('Hanging rails', p.accessory.product_id, '', P.accessories.get(p.accessory.product_id), p.accessory.name, label, 1, 'ea', p.DY)
+    if (p.part_type === 'accessory') acc.add('Hanging rails', p.accessory.product_id, '', P.accessories.get(p.accessory.product_id), p.accessory.name, label, 1, 'ea', p.accessory.run === 'depth' ? p.DX : p.DY)
     else if (p.part_type === 'rail_support') acc.add('Rail supports', p.accessory.product_id, '', P.accessories.get(p.accessory.product_id), p.accessory.name, label, 1, 'ea')
   }
 

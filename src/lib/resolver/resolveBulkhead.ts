@@ -149,16 +149,40 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     })
   }
   if (ts > 0) {
-    // Full width under the fascia (not round the returns yet), front edge set back.
+    // Under the fascia, front edge set back. A side return gets its own rail,
+    // outer edge set back from the return's face, mitred to the front rail
+    // (Mark 2026-11-02, RHK6581 robes); it runs back as far as the return.
+    // Outlines in the horizontal shape frame: x along X, y back from the front edge.
     const s = b.split, d = Math.min(s.width, Zf - s.setback)
-    const sz = Zf - s.setback - d, sx0 = xLo(sz), sx1 = xHi(sz)
-    if (d > 0 && sx1 > sx0) out.push({
+    const sz = Zf - s.setback - d
+    const sx0 = L.on ? s.setback : xLo(sz), sx1 = R.on ? W - s.setback : xHi(sz)
+    const sw = sx1 - sx0
+    if (d > 0 && sw > 0) out.push({
       part_key: 'bh:split',
-      DX: d, DY: sx1 - sx0, DZ: ts,
-      X: sx0, Y: 0, Z: Zf - s.setback - d, AX: 0, AY: 0, AZ: 0,
+      DX: d, DY: sw, DZ: ts,
+      X: sx0, Y: 0, Z: sz, AX: 0, AY: 0, AZ: 0,
       material_id: cab.split_material!.id,
       edge_band: band({}),
+      ...(L.on || R.on ? { outline: [{ x: 0, y: 0 }, { x: sw, y: 0 }, { x: R.on ? sw - d : sw, y: d }, { x: L.on ? d : 0, y: d }] } : {}),
     })
+    const sret = (key: 'bh:split_l' | 'bh:split_r', ret: typeof L) => {
+      if (!ret.on) return
+      const l = len(ret.depth) - s.setback
+      if (d <= 0 || l <= d) return
+      const isL = key === 'bh:split_l'
+      out.push({
+        part_key: key,
+        DX: l, DY: d, DZ: ts,
+        X: isL ? s.setback : W - s.setback - d, Y: 0, Z: Zf - s.setback - l, AX: 0, AY: 0, AZ: 0,
+        material_id: cab.split_material!.id,
+        edge_band: band({}),
+        outline: isL
+          ? [{ x: 0, y: 0 }, { x: d, y: d }, { x: d, y: l }, { x: 0, y: l }]
+          : [{ x: 0, y: d }, { x: d, y: 0 }, { x: d, y: l }, { x: 0, y: l }],
+      })
+    }
+    sret('bh:split_l', L)
+    sret('bh:split_r', R)
   }
   return out
 }

@@ -2127,11 +2127,29 @@ export default function InternalGridEditor({
                       value={(selFittingData as AccessoryFitting).product_id}
                       onChange={id => handlePatchFitting(selFittingPath, selFittingIndex, { product_id: id })}
                     />
-                    <RailSupportsControls
-                      inp={inp}
-                      value={(selFittingData as AccessoryFitting).supports}
-                      onChange={sup => handlePatchFitting(selFittingPath, selFittingIndex, { supports: sup } as Partial<InternalFitting>)}
-                    />
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox"
+                        checked={(selFittingData as AccessoryFitting).run === 'depth'}
+                        onChange={e => handlePatchFitting(selFittingPath, selFittingIndex, { run: e.target.checked ? 'depth' : undefined } as Partial<InternalFitting>)}
+                      />
+                      <span className="text-gray-400">Front to back (fit by hand)</span>
+                    </label>
+                    {(selFittingData as AccessoryFitting).run === 'depth' ? (
+                      <label className="block">
+                        <span className="block text-gray-500 mb-1">Off back / front (mm)</span>
+                        <input type="number"
+                          defaultValue={(selFittingData as AccessoryFitting).run_inset ?? 20}
+                          onBlur={e => handlePatchFitting(selFittingPath, selFittingIndex, { run_inset: Number(e.target.value) || 0 } as Partial<InternalFitting>)}
+                          className={inp}
+                        />
+                      </label>
+                    ) : (
+                      <RailSupportsControls
+                        inp={inp}
+                        value={(selFittingData as AccessoryFitting).supports}
+                        onChange={sup => handlePatchFitting(selFittingPath, selFittingIndex, { supports: sup } as Partial<InternalFitting>)}
+                      />
+                    )}
                   </>) : <label className="block">
                     <span className="block text-gray-500 mb-1">Key (parts_library)</span>
                     <input type="text"
