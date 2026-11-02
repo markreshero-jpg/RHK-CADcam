@@ -5,7 +5,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo, type ComponentProps } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
-import { armSave, reportDoc, saveReport } from './pdfCombine'
+import { armSave, armPrint, reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -85,10 +85,11 @@ export default function Render3DReport({ project, room, walls, cabinets, resolve
   const [busy, setBusy] = useState(false)
   const safeName = (t: string) => t.replace(/[^\w-]+/g, '_')
   const fileName = `3d-render-${safeName(project?.job_number || project?.name || 'job')}-${safeName(room.name)}.pdf`
-  async function handleDownload() {
+  async function handleDownload(print = false) {
     if (!shots.length || !done) return
     // Save As on a click (a batch run asked once, up front).
-    if (!batch && !(await armSave(fileName))) return
+    if (print) armPrint()
+    else if (!batch && !(await armSave(fileName))) return
     setBusy(true)
     try {
       const orientation = paper.w >= paper.h ? 'landscape' : 'portrait'
@@ -123,9 +124,14 @@ export default function Render3DReport({ project, room, walls, cabinets, resolve
           className="ml-auto px-2 py-1 text-xs border border-gray-700 text-gray-300 hover:border-gray-500 disabled:opacity-50 rounded">
           {done ? 'Re-render' : `Rendering ${shots.length - pending.length + 1} of ${shots.length}…`}
         </button>
-        <button onClick={handleDownload} disabled={busy || !shots.length || !done}
+        <button onClick={() => void handleDownload()} disabled={busy || !shots.length || !done}
           className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium">
           {busy ? 'Generating…' : `Download PDF · ${shots.length} page${shots.length === 1 ? '' : 's'} · ${paper.label}`}
+        </button>
+        <button data-report-print onClick={() => void handleDownload(true)} disabled={busy || !shots.length || !done}
+          title="Build the same PDF and open the print dialog"
+          className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-100 rounded transition-colors font-medium">
+          Print
         </button>
       </div>
 

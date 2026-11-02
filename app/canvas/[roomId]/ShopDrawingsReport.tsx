@@ -7,7 +7,7 @@
 'use client'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
-import { armSave, reportDoc, saveReport } from './pdfCombine'
+import { armSave, armPrint, reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerSet } from '@/src/lib/displayLayers/registry'
@@ -311,10 +311,11 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   const [busy, setBusy] = useState(false)
   const safeName = (s: string) => s.replace(/[^\w-]+/g, '_')
   const fileName = `shop-drawings-${safeName(project?.job_number || project?.name || 'job')}-${safeName(room.name)}.pdf`
-  async function handleDownload() {
+  async function handleDownload(print = false) {
     if (printed.length === 0) return
     // Save As on a click (a batch run asked once, up front).
-    if (!batch && !(await armSave(fileName))) return
+    if (print) armPrint()
+    else if (!batch && !(await armSave(fileName))) return
     useTutorial.getState().emit('shop_pdf')
     setBusy(true)
     try {
@@ -400,9 +401,14 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
             {captured ? 'Re-render 3D' : 'Rendering 3D…'}
           </button>
         )}
-        <button data-tour="shop-download" onClick={handleDownload} disabled={busy || printed.length === 0 || (ticked.has(KEY_3D) && !captured && shots.length > 0)}
+        <button data-tour="shop-download" onClick={() => void handleDownload()} disabled={busy || printed.length === 0 || (ticked.has(KEY_3D) && !captured && shots.length > 0)}
           className={`${ticked.has(KEY_3D) ? '' : 'ml-auto '}px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium`}>
           {busy ? 'Generating…' : `Download PDF · ${printed.length} sheet${printed.length === 1 ? '' : 's'} · ${scaleLabel} ${paper.label}`}
+        </button>
+        <button data-report-print onClick={() => void handleDownload(true)} disabled={busy || printed.length === 0 || (ticked.has(KEY_3D) && !captured && shots.length > 0)}
+          title="Build the same PDF and open the print dialog"
+          className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-100 rounded transition-colors font-medium">
+          Print
         </button>
       </div>
 

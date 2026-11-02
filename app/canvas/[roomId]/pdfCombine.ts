@@ -9,11 +9,15 @@
 // (armSave / armSaveFolder — the dialog must open on the click itself, before the
 // PDF is built), and the save writes there. One picked file is used once; a
 // picked folder takes every file of a batch run until disarmSave().
+//
+// Print (Mark, 2026-11-02): armPrint() instead of armSave — the same PDF is built,
+// then sent to the browser's print dialog (hidden iframe) instead of saved.
 import { jsPDF } from 'jspdf'
 import { pickSaveFile, pickSaveFolder, saveBlob, type SaveTarget } from '@/src/lib/saveAs'
+import { useTutorial } from '@/src/lib/tutorial/store'
 
 let combined: { doc: jsPDF | null } | null = null
-let armed: SaveTarget | undefined
+let armed: SaveTarget | 'print' | undefined
 
 /** Ask where to save `name`; false = the user cancelled, so don't build it. */
 export async function armSave(name: string): Promise<boolean> {
@@ -31,11 +35,32 @@ export async function armSaveFolder(): Promise<boolean> {
   return true
 }
 
+/** Print the next report (or the combined run) instead of saving it. */
+export function armPrint() {
+  armed = 'print'
+  useTutorial.getState().emit('report_print')   // tutorial report_print_presets
+}
+
+/** Open a PDF in the browser's print dialog; a new tab if the frame can't print. */
+function printBlob(blob: Blob) {
+  const url = URL.createObjectURL(blob)
+  const frame = document.createElement('iframe')
+  frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  frame.src = url
+  frame.onload = () => {
+    try { frame.contentWindow?.focus(); frame.contentWindow?.print() } catch { window.open(url, '_blank') }
+  }
+  document.body.appendChild(frame)
+  // The print dialog holds the frame open; drop it well after.
+  setTimeout(() => { frame.remove(); URL.revokeObjectURL(url) }, 10 * 60_000)
+}
+
 /** Forget the picked file / folder (a batch run ended or was stopped). */
 export function disarmSave() { armed = undefined }
 
 function save(doc: jsPDF, filename: string) {
   const t = armed
+  if (t === 'print') { armed = undefined; printBlob(doc.output('blob')); return }
   if (t && 'file' in t) armed = undefined   // a picked file takes one save
   void saveBlob(doc.output('blob'), filename, t)
 }

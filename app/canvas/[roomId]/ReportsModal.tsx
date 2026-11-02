@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo, useCallback, useRef, type ComponentProps } from 'react'
-import { startCombined, finishCombined, cancelCombined, armSave, armSaveFolder, disarmSave } from './pdfCombine'
+import { startCombined, finishCombined, cancelCombined, armSave, armSaveFolder, armPrint, disarmSave } from './pdfCombine'
+import { usePrintPresets, PrintPresetBar, currentSets, applyPresetSets, type PrintPreset } from './PrintPresets'
 import { pickSaveFile, saveBlob } from '@/src/lib/saveAs'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
@@ -163,6 +164,12 @@ function collectBtParts(
 
 /** Reports that draw one room at a time (one PDF per room); Job Reports picks the room. */
 const DRAWING_REPORTS: ReportId[] = ['shop_drawings', 'plan_view_v2', 'benchtop_quote', 'elevation_view_v2', 'cabinet_sheets', 'render_3d']
+
+/** Reports whose toolbar takes a scale / paper size; presets save what each one has. */
+const SCALE_REPORTS: ReportId[] = ['plan_view_v2', 'benchtop_quote', 'elevation_view_v2', 'shop_drawings']
+const PAPER_REPORTS: ReportId[] = [...SCALE_REPORTS, 'cabinet_sheets', 'render_3d']
+const ROOM_RUN_REPORTS: ReportId[] = ['hardware_pick', 'takeoff']
+const PRESET_REPORTS: ReportId[] = [...PAPER_REPORTS, ...ROOM_RUN_REPORTS]
 
 const PAPER = {
   A4L: { w: 297, h: 210, label: 'A4 Landscape' },
@@ -387,8 +394,17 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     const label = REPORTS.find(r => r.id === selectedReport)?.label ?? 'report'
     return `${safe(label)}-${safe(project?.job_number || project?.name || 'job')}-${total}-rooms.pdf`
   }
-  const startBatch = async () => {
+  const startBatch = async (print = false) => {
     if (!tickedRooms.length) return
+    // Print: every ticked room in one PDF, straight to the print dialog.
+    if (print) {
+      batchDone.current = false
+      armPrint()
+      startCombined()
+      setQueue({ ids: tickedRooms.map(r => r.id), total: tickedRooms.length, one: true })
+      setDrawRoomId(tickedRooms[0].id)
+      return
+    }
     // Save As first, on the click: one file for One PDF, else a folder for every room's file.
     if (!(await (onePdf ? armSave(combinedName(tickedRooms.length)) : armSaveFolder()))) return
     batchDone.current = false
@@ -417,7 +433,9 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   const drawRoom = scope === 'room' ? room : (jobRooms.find(r => r.id === drawRoomId) ?? room)
   const isHere = drawRoom.id === room.id
   // Remount per room, and once more when a queue starts on the room already shown.
-  const reportKey = queue ? `${drawRoom.id}:b${queue.ids.length}` : drawRoom.id
+  // A preset applied remounts the report so it reads its new layer sets.
+  const [presetRev, setPresetRev] = useState(0)
+  const reportKey = `${queue ? `${drawRoom.id}:b${queue.ids.length}` : drawRoom.id}:p${presetRev}`
   const drawWalls = useMemo(() => isHere ? walls : jobWalls.filter(w => w.room_id === drawRoom.id), [isHere, walls, jobWalls, drawRoom.id])
   const drawCabinets = useMemo(() => isHere ? cabinets : jobCabinets.filter(c => c.room_id === drawRoom.id), [isHere, cabinets, jobCabinets, drawRoom.id])
   const drawFixtures = useMemo(() => isHere ? fixtures : jobFixtures.filter(f => f.room_id === drawRoom.id), [isHere, fixtures, jobFixtures, drawRoom.id])
@@ -535,6 +553,41 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     if (target === null) return
     const doc = await cutStickersPdf(cutStickers, st)
     await saveBlob(doc.output('blob'), name, target)
+  }
+
+  // Print presets (PrintPresets.tsx): paper, scale, layer sets, page per room.
+  const printPresets = usePrintPresets()
+  const [activePresetId, setActivePresetId] = useState<string | null>(null)
+  const setFallbackId = selectedReport === 'benchtop_quote' ? (layerSets.find(s => s.name === 'Benchtops')?.id ?? activeLayerSetId) : activeLayerSetId
+  function applyPreset(p: PrintPreset) {
+    applyPresetSets(p)
+    if (p.paper && p.paper in PAPER) setPrintPaper(p.paper as keyof typeof PAPER)
+    if (p.scale) setPrintScale(p.scale)
+    if (p.pagePerRoom !== undefined) setPagePerRoom(p.pagePerRoom)
+    setPresetRev(n => n + 1)
+    setActivePresetId(p.id)
+  }
+  function addPreset(name: string) {
+    const p: PrintPreset = { id: crypto.randomUUID(), name, report: selectedReport }
+    if (PAPER_REPORTS.includes(selectedReport)) p.paper = printPaper
+    if (SCALE_REPORTS.includes(selectedReport)) p.scale = printScale
+    const sets = currentSets(selectedReport, layerSets, setFallbackId)
+    if (Object.keys(sets).length) p.sets = sets
+    if (ROOM_RUN_REPORTS.includes(selectedReport)) p.pagePerRoom = pagePerRoom
+    void printPresets.save([...printPresets.presets, p])
+    setActivePresetId(p.id)
+  }
+  function describePreset(p: PrintPreset) {
+    const sets = [...new Set(Object.values(p.sets ?? {}))]
+    return [p.paper && PAPER[p.paper as keyof typeof PAPER]?.label, p.scale && `1:${p.scale}`,
+      sets.length && `Layer set: ${sets.join(' / ')}`,
+      p.pagePerRoom !== undefined && (p.pagePerRoom ? 'Page per room' : 'Rooms run on')].filter(Boolean).join(' · ')
+  }
+  function suggestPresetName() {
+    const sets = [...new Set(Object.values(currentSets(selectedReport, layerSets, setFallbackId)))]
+    return [PAPER_REPORTS.includes(selectedReport) && printPaper.replace('L', ''),
+      SCALE_REPORTS.includes(selectedReport) && `1:${printScale}`, sets.join(' / '),
+      ROOM_RUN_REPORTS.includes(selectedReport) && (pagePerRoom ? 'Page per room' : 'Rooms run on')].filter(Boolean).join(' · ')
   }
 
   function handlePrint() {
@@ -657,14 +710,14 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
               </div>
               <div className="flex items-center gap-2">
                 {(selectedReport === 'plan_view_v2' || selectedReport === 'benchtop_quote' || selectedReport === 'elevation_view_v2' || selectedReport === 'shop_drawings') && (
-                  <select value={printScale} onChange={e => setPrintScale(Number(e.target.value))}
+                  <select value={printScale} onChange={e => { setPrintScale(Number(e.target.value)); setActivePresetId(null) }}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1"
                     title="Drawing scale — 1:N">
                     {SCALES.map(s => <option key={s} value={s}>1:{s}</option>)}
                   </select>
                 )}
                 {(selectedReport === 'plan_view_v2' || selectedReport === 'benchtop_quote' || selectedReport === 'elevation_view_v2' || selectedReport === 'cabinet_sheets' || selectedReport === 'shop_drawings' || selectedReport === 'render_3d') && (
-                  <select value={printPaper} onChange={e => setPrintPaper(e.target.value as keyof typeof PAPER)}
+                  <select value={printPaper} onChange={e => { setPrintPaper(e.target.value as keyof typeof PAPER); setActivePresetId(null) }}
                     className="text-xs bg-gray-800 border border-gray-700 text-gray-300 rounded px-1.5 py-1">
                     {(Object.keys(PAPER) as (keyof typeof PAPER)[]).map(k => (
                       <option key={k} value={k}>{PAPER[k].label}</option>
@@ -683,7 +736,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 {(selectedReport === 'hardware_pick' || selectedReport === 'takeoff') && (
                   <label data-page-per-room className="text-xs text-gray-400 flex items-center gap-1 cursor-pointer"
                     title="Off: rooms follow on down the page, a room that won't fit starts the next page. On: every room on its own page.">
-                    <input type="checkbox" checked={pagePerRoom} onChange={e => setPagePerRoom(e.target.checked)} />
+                    <input type="checkbox" checked={pagePerRoom} onChange={e => { setPagePerRoom(e.target.checked); setActivePresetId(null) }} />
                     Page per room
                   </label>
                 )}
@@ -694,7 +747,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                     Cut stickers ({cutStickers.length})
                   </button>
                 )}
-                {/* The plan / elevation / cabinet reports have their own download button in their toolbar. */}
+                {/* The plan / elevation / cabinet reports have their own Download + Print buttons in their toolbar. */}
                 {selectedReport !== 'plan_view_v2' && selectedReport !== 'benchtop_quote' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && (
                   <button onClick={handlePrint}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
@@ -703,6 +756,13 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 )}
               </div>
             </div>
+
+            {PRESET_REPORTS.includes(selectedReport) && !queue && (
+              <PrintPresetBar report={selectedReport} presets={printPresets.presets} activeId={activePresetId}
+                onApply={applyPreset} onAdd={addPreset}
+                onDelete={id => void printPresets.save(printPresets.presets.filter(p => p.id !== id))}
+                suggestName={suggestPresetName} describe={describePreset} />
+            )}
 
             {/* Job Reports: which room the drawing report draws (one PDF per room). */}
             {scope === 'job' && DRAWING_REPORTS.includes(selectedReport) && jobRooms.length > 0 && (
@@ -739,7 +799,12 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                     <input type="checkbox" checked={onePdf} onChange={e => setOnePdf(e.target.checked)} />
                     One PDF
                   </label>
-                  <button onClick={startBatch} disabled={!tickedRooms.length}
+                  <button data-print-rooms onClick={() => void startBatch(true)} disabled={!tickedRooms.length}
+                    title="All ticked rooms in one PDF, straight to the print dialog"
+                    className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-100 rounded font-medium">
+                    Print {tickedRooms.length} room{tickedRooms.length === 1 ? '' : 's'}
+                  </button>
+                  <button onClick={() => void startBatch()} disabled={!tickedRooms.length}
                     title={onePdf ? 'All ticked rooms in one PDF' : 'One PDF per room, downloaded one after another'}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded font-medium">
                     Download {tickedRooms.length} room{tickedRooms.length === 1 ? '' : 's'}

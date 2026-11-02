@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useBatchDownload } from './useBatchDownload'
 import { svg2pdf } from 'svg2pdf.js'
-import { armSave, reportDoc, saveReport } from './pdfCombine'
+import { armSave, armPrint, reportDoc, saveReport } from './pdfCombine'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, RoomAnnotation } from '@/src/lib/types'
 import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blocks'
@@ -134,10 +134,11 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
   }, [room.id, project?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fileName = `cabinet-sheets-${room.name.replace(/[^\w-]/g, '_')}.pdf`
-  async function handleDownload() {
+  async function handleDownload(print = false) {
     if (visible.length === 0) return
     // Save As on a click (a batch run asked once, up front).
-    if (!batch && !(await armSave(fileName))) return
+    if (print) armPrint()
+    else if (!batch && !(await armSave(fileName))) return
     setBusy(true)
     try {
       const paper = PAPER[paperKey] ?? PAPER.A3L
@@ -177,9 +178,14 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
             {show[t.key] ? '☑' : '☐'} {t.label}
           </button>
         ))}
-        <button onClick={handleDownload} disabled={busy || visible.length === 0}
+        <button onClick={() => void handleDownload()} disabled={busy || visible.length === 0}
           className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium">
           {busy ? 'Generating…' : `Download PDF · ${visible.length} ${visible.length === 1 ? 'page' : 'pages'}`}
+        </button>
+        <button data-report-print onClick={() => void handleDownload(true)} disabled={busy || visible.length === 0}
+          title="Build the same PDF and open the print dialog"
+          className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-100 rounded transition-colors font-medium">
+          Print
         </button>
       </div>
 

@@ -6,7 +6,7 @@
 'use client'
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { svg2pdf } from 'svg2pdf.js'
-import { armSave, reportDoc, saveReport } from './pdfCombine'
+import { armSave, armPrint, reportDoc, saveReport } from './pdfCombine'
 import type { Project, Room, Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { QuoteTop, QuoteTotals } from '@/src/lib/benchtopQuote'
 import { BenchtopQuoteSchedule, drawBenchtopQuoteSchedule } from './BenchtopQuoteSchedule'
@@ -143,11 +143,12 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
   }, [show, layers, walls, cabinets, getFitInfo, paperKey, scale, tbH])
 
   const fileName = `${quote ? 'benchtops' : 'plan'}-${room.name.replace(/[^\w-]/g, '_')}-1-${scale}.pdf`
-  async function handleDownload() {
+  async function handleDownload(print = false) {
     const svgEl = svgRef.current
     if (!svgEl) return
     // Save As on a click (a batch run asked once, up front).
-    if (!batch && !(await armSave(fileName))) return
+    if (print) armPrint()
+    else if (!batch && !(await armSave(fileName))) return
     useTutorial.getState().emit('plan_pdf')
     setBusy(true)
     try {
@@ -200,9 +201,14 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
             {show[t.key] ? '☑' : '☐'} {t.label}
           </button>
         ))}
-        <button data-tour="plan-download" onClick={handleDownload} disabled={busy || walls.length === 0}
+        <button data-tour="plan-download" onClick={() => void handleDownload()} disabled={busy || walls.length === 0}
           className="ml-auto px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded transition-colors font-medium">
           {busy ? 'Generating…' : `Download PDF · 1:${scale}`}
+        </button>
+        <button data-report-print onClick={() => void handleDownload(true)} disabled={busy || walls.length === 0}
+          title="Build the same PDF and open the print dialog"
+          className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-gray-100 rounded transition-colors font-medium">
+          Print
         </button>
       </div>
 

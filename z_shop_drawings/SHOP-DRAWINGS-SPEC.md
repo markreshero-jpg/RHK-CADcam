@@ -337,3 +337,15 @@ check now includes position, so a drawing dragged past the drawing area counts a
 localStorage per room (`shop-drawings-scales`, `shop-drawings-offsets`) like the sheet ticks, so they're per
 computer and headless exports start centred at the package scale. Checked headless on RHK6592 Main Bathroom:
 plan at 1:50 and dragged, elevation at 1:20, PDF headings and title blocks right.
+
+### Print button + print presets (2026-11-02)
+Every drawing report (Shop Drawings, Plan View, Benchtop Quote, Elevation Views, Cabinet Sheets, 3D Colour
+Render) has **Print** beside Download PDF. It builds the same PDF and sends it to the browser print dialog
+through a hidden iframe on a blob URL (`armPrint()` in pdfCombine.ts), or opens a new tab if the frame can't
+print. In Job Reports, **Print N rooms** runs the room queue as One PDF and prints the result.
+**Print presets** (PrintPresets.tsx) are listed under the toolbar. Each preset belongs to one report and sets
+paper, scale, the layer set(s) by name (the useReportLayerSet storage keys, one for each of Plan, Elevations
+and 3D on shop drawings) and page-per-room (Hardware Pick List / Takeoff). Applying a preset remounts the
+report so it reads the new sets. Presets are shop-wide, stored in `shop_settings.print_presets` (jsonb, see
+migration_print_presets.sql, applied), and the migration seeds starter presets. Checked headless with
+z_plan_automation/verify-report-print.mjs.

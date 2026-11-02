@@ -1428,6 +1428,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Behind each gap: a rail 10 taller than a sharknose rail, set 16.5 back from the gable front, plus a flat base piece in front of it that closes the pocket. Both sit in one notch through the gables. An on-edge front rail behind the top one is pushed back and cut down to 50. Change the 16.5 / 10 / 50 in the Finger Pull Rails rules.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-02 (Reports Print button + print presets).
+  { id: 'report_print_presets', level: 'basics', topic: 'reports', title: 'Print reports and use print presets',
+    blurb: 'Send shop drawings and the other drawing reports straight to the printer, and set paper, scale and layer sets in one click.',
+    keywords: 'print printer printing preset presets paper size scale layer set shop drawings plan elevation benchtop quote cabinet sheets 3d render page per room', steps: [
+    { id: 'open', title: 'Open a drawing report',
+      body: 'Click Reports → Room Reports… and pick Shop Drawings (Plan View, Benchtop Quote, Elevation Views, Cabinet Sheets and 3D Colour Render work the same).',
+      target: 'menu-Reports', canvas: true, done: c => c.report === 'shop_drawings' },
+    { id: 'preset', title: 'Pick a print preset',
+      body: 'The Print presets row under the toolbar lists the presets for this report. Click one to set its paper size, scale and layer sets (Plan / Elevations / 3D on shop drawings) together; the one in use is highlighted. Hover a preset to see what it sets. + Save current saves what the report is set to now under a name; × deletes one. Presets are shared by the whole shop. Hardware Pick List and Takeoff presets set Page per room.',
+      canvas: true, done: c => c.report !== null },
+    { id: 'print', title: 'Print it',
+      body: 'Click Print next to Download PDF. It builds the same PDF and opens the print dialog instead of saving a file. In Job Reports, Print N rooms puts every ticked room into one print job.',
+      canvas: true, done: (c, s) => ev(c, 'report_print') > ev(s, 'report_print') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
