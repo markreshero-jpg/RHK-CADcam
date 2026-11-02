@@ -180,6 +180,12 @@ line and mirrors the island elevation.
   another hinge in a drawer gap in between. RHK6581
   Bed 2 TC-03: boxes 30.5 / 226.5 / 422.5 / 618.5, hinges [2196, 1570, 870, 187]
   with the fixed shelf top at carcass Y 820.
+  Mixed heights (e.g. "bottom 2 at 178"): use the `Dragon Pro <len>x178` slide
+  on those. A front runs box + 2 → box + h + 20 (178 → 196, 95 → 113). Keep the
+  bottom box and the top box where they were, spread the gaps between fronts
+  equally over what's left, and put hinges in gap centres. RHK6478 WIP TC-05:
+  boxes 30.5 / 332 / 633.5 / 852 / 1070.5 (178, 178, 95, 95, 95), gaps 105.5,
+  hinges [2140, 1520, 801, 281].
 - **Join the kicks BEFORE locking inner drawers / hinges** (RHK6590, 2026-10-25):
   a locked inner-drawer `y_position` (and every part Y) is in the cabinet frame,
   which includes the kick until the run's kick is joined — then the frame starts
@@ -394,11 +400,26 @@ line and mirrors the island elevation.
   20) + FPGAP` (50 apron → 50) on each TOP-ROW grip zone of every base face_grid
   (never class-wide FPGAP — that widens the gaps between drawers too). Tops get
   edge profile `MA50` / `MA80` on the front + seen-end segments (RHK6555).
-- **Overheads with a finger grab = bottom overhang + under panel set back 20**
-  (Mark, standard, 2026-10-27): `SCRBT` 18 on the overheads, carcass dy =
-  overall − 18, then `addUnderPanel([...overheads])` and `updateCabinet(WUP,
-  { dz: carcass dz − 20 })` so the panel sits 20 back from the carcass front
-  (fingers grab the door backs). "720 high incl under panel" = 702 carcass + 18.
+- **Overheads over a benchtop = bottom scribe + under panel set back 20 — STANDARD**
+  (Mark, 2026-10-27; restated RHK6478 WIP WC-05/06 2026-11-03): every run of
+  overhead DOORS over a bench, with no cupboard butting up underneath it, gets
+  an 18 under panel set 20 back from the carcass front so fingers get behind
+  the door bottoms to open them. Do it unasked on every job. The overhead
+  doors have no handle (sharknose schedule `door_wall` = none), so there's no
+  finger gap; the grip is the door hanging past the set back panel. Keep the
+  overheads' `dy` = overall (e.g. 832 for 1530–2362) and run
+  `addUnderPanel([...overheads])`: it places one `WUP` across the run under
+  the carcasses and gives each a `SCRBT` of its thickness inside that dy (box
+  814 + panel 18). Then `updateCabinet(WUP, { dz: carcass dz − 20 })` (330 →
+  310). Not for open shelf units (WOPN) or overheads standing on a cabinet
+  below. "720 high incl under panel" = dy 720 (702 box + 18).
+- **Shadowline set back flush with the carcass breaks on the carcass line**
+  (Mark, RHK6478 WIP 2026-11-03, standard): where a `BHSL` shadowline piece
+  changes depth over a tall end panel, the deep piece stops flush with the
+  carcass beside it, i.e. the panel's INSIDE face (WC-07 over the fridge ends
+  at TC-03's inside face, flush with WC-01's end). The next piece runs on over
+  the panel (WC-08 extended left by the panel thickness). Don't break the
+  shadowline on the panel's outer face.
   An overhead filler at a wall = a `WEP` at the filler width with its Applied
   Panel turned into a front filler (`orientation 'front'`, expressions
   `{z: 'cab.d + 2', dx: 'cab.w', dy: 'cab.h', dz: 't.exposed'}`), dy = overall.
