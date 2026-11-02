@@ -558,6 +558,12 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     }
   }
 
+  // A kick face picked at the job / room / cabinet wins; otherwise the kick
+  // takes the colour of the cabinet it sits under (§12, after the fronts resolve).
+  const hasTkFace = (res: unknown) =>
+    (((res as { data: unknown[] }).data ?? []) as (MatRow & { part_role?: string })[]).some(r => r.part_role === 'face' && r.materials)
+  const kickFaceSet = !!tkOverrides.face || hasTkFace(jobTkRes) || hasTkFace(roomTkRes)
+
   // Board colours (z_material_colours MC3): a board picked without a colour
   // becomes its default colour; colours take their matched tape.
   const materialWarnings = await applyBoardColours(matMap, tkMap, ebMap)
@@ -579,7 +585,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   const doorFace   = matMap.get('door_face')
   const shelf      = matMap.get('shelf') ?? matMap.get('interior')
   const exposed    = matMap.get('exposed')
-  const tkFace     = tkMap.get('face')
+  let   tkFace     = tkMap.get('face')
   const tkInt      = tkMap.get('interior')
   const drawerboxMat = matMap.get('drawerbox') ?? matMap.get('interior')
 
@@ -895,6 +901,19 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     // Doors-tab colours linked to a board that has colours: same fallback as
     // the carcass roles (default colour + COLOUR_NOT_CHOSEN, matched tape).
     materialWarnings.push(...await applyDoorBoardColours(resolvedDoors))
+  }
+
+  // Kick face = the colour of the cabinet it sits under (Mark, RHK6478
+  // 2026-11-02), unless a kick face is set at the job / room / cabinet: the
+  // board of the cabinet's first front, else the room / job default front.
+  // Without this a kick fell back to the toekick schedule's board (MDF).
+  if (!kickFaceSet) {
+    const front = Object.values(resolvedDoors).find(d => d.colour_material_id) ?? oneDoor
+    const boardId = front?.colour_material_id
+    if (boardId && boardId !== tkFace.id) {
+      const row = (((await loadMaterialsByIds([boardId])).data ?? []) as Record<string, unknown>[])[0]
+      if (row) tkFace = dbRowToMaterial(row)
+    }
   }
 
   // Shadowline split rail board (z_bulkhead B7).
