@@ -1,0 +1,282 @@
+{
+  "_source": "Markup 26.10.26 img_261026111543.pdf p1-2 (DS Powder) + Site measure 22.10.26.pdf p3 (D/S Pdr: 2351 wall, 1514 left wall, 556 + 19 jamb right, spout to move ~600 off the left wall) + Mark Q&A 2026-11-02",
+  "_notes": [
+    "Like the US Powder (Mark): 33 end panels (70 scribe strip wall side + 16.5 full depth) | open shelf | drawer | drawer | open shelf | 33 end panels.",
+    "2351 wall to wall: 33 + 571 + 571.5 + 571.5 + 571 + 33 (bays equal - widths not given).",
+    "140 basin (markup) finishing 960 -> top 820 (height_mm 800), carcass 460-800, panels + shelf as the original ensuite (213.5 shelf underside to 760 apron underside).",
+    "Basin + spout 600 from the left wall (Mark). Ceiling 2399 TBC (2419 - 20 floor, as the DS Hallway next door)."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "DS Powder",
+  "roomHeight": 2399,
+  "wallCabinetTop": 2399,
+  "roomRules": {
+    "TOEH": 100,
+    "BY_CLASS": {
+      "base": {
+        "REVT": 44
+      }
+    }
+  },
+  "walls": [
+    {
+      "x": 0,
+      "y": 1514,
+      "length": 1514,
+      "angle": 270,
+      "_": "1 left wall 1514"
+    },
+    {
+      "x": 0,
+      "y": 0,
+      "length": 2351,
+      "angle": 0,
+      "_": "2 back wall 2351"
+    },
+    {
+      "x": 2351,
+      "y": 0,
+      "length": 556,
+      "angle": 90,
+      "_": "3 right wall 556 + 19 jamb (door)"
+    }
+  ],
+  "cabinets": [
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 0,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel L, wall half",
+      "set": {
+        "pos_z": 213.5
+      }
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 16.5,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel L, cabinet half",
+      "set": {
+        "pos_z": 213.5
+      }
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 33,
+      "dx": 571,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "open shelf bay L",
+      "rules": {
+        "FLOAT": true,
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 460,
+        "top_type": "full_top",
+        "exposed_interior": true,
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "open"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      }
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 604,
+      "dx": 571.5,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "drawer (no inner drawer)",
+      "rules": {
+        "FLOAT": true,
+        "RAIL_ORIENT": "vertical",
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 460,
+        "top_type": "double_rail",
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "hinge_side": "left",
+              "finger_gap": 60
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "D2-LL",
+      "wall": 2,
+      "offset": 1175.5,
+      "dx": 571.5,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "drawer (no inner drawer)",
+      "rules": {
+        "FLOAT": true,
+        "RAIL_ORIENT": "vertical",
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 460,
+        "top_type": "double_rail",
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "drawer_face",
+              "hinge_side": "left",
+              "finger_gap": 60
+            }
+          ]
+        }
+      }
+    },
+    {
+      "def": "B1D",
+      "wall": 2,
+      "offset": 1747,
+      "dx": 571,
+      "dy": 340,
+      "dz": 476.5,
+      "note": "open shelf bay R",
+      "rules": {
+        "FLOAT": true,
+        "SCRBK": 0
+      },
+      "set": {
+        "has_toekick": false,
+        "pos_z": 460,
+        "top_type": "full_top",
+        "exposed_interior": true,
+        "face_grid": {
+          "cols": [
+            {
+              "col_index": 0,
+              "width_locked": false
+            }
+          ],
+          "rows": [
+            {
+              "row_index": 0,
+              "height_locked": false
+            }
+          ],
+          "zones": [
+            {
+              "col_index": 0,
+              "row_index": 0,
+              "face_type": "open"
+            }
+          ]
+        },
+        "internal_grid": {
+          "tree": {
+            "type": "open",
+            "fittings": []
+          }
+        }
+      }
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 2318,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel R, cabinet half",
+      "set": {
+        "pos_z": 213.5
+      }
+    },
+    {
+      "def": "TEPF",
+      "wall": 2,
+      "offset": 2334.5,
+      "dx": 16.5,
+      "dy": 546.5,
+      "dz": 476.5,
+      "note": "33 end panel R, wall half",
+      "set": {
+        "pos_z": 213.5
+      }
+    },
+    {
+      "def": "FLSHLF",
+      "wall": 2,
+      "offset": 33,
+      "dx": 2285,
+      "dy": 33,
+      "dz": 495,
+      "note": "floating shelf 33 x 495 between the end panels, LED strip at back",
+      "set": {
+        "pos_z": 213.5
+      }
+    }
+  ]
+}
