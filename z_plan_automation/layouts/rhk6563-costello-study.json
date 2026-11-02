@@ -4,7 +4,7 @@
     "Walls (clockwise): 1 left 1433, 2 back 2044 (desk 400 deep + tower), 3 right 1431 (bench 600 deep, BEPF at the open end). CH 2155.",
     "Tower in the Wall 1/2 corner, 500 OA, 400 OA deep incl doors (Mark): TFKW 30 | D3-SLL 452 (750 OA incl 100 kick) + W1D 452 single door 750-2125 | TEPF 18 seen end = 500. Carcass 380 (400 - 18 door - 2). 30 BH over it to the 2155 ceiling.",
     "Desk tops = 33 LX Board Tasmanian Oak (WUP, material_overrides exposed -> 33 board), top at 750: Wall 3 600 x 1431 runs into the corner, Wall 2 400 x 944 from the TEPF to the Wall 3 top.",
-    "BEPF 18 x 575 deep (sketch) under the Wall 3 top at its open end.",
+    "BEPF 18 x 595 finished (dz 575) under the Wall 3 top at its open end (Mark). Desk tops carry custom-part Wall Cleats (front, 18 Lx ABS Grain Tas Oak, 80 high at y -80, grain_across, edge_bottom).",
     "Open shelf boxes (Mark 2026-11-02): 2 WOPN wall cabinets (WC-05 Wall 2, WC-06 Wall 3), no front/shelf, underside 1400 AFF via rule WALLZ, 300 x 370, 33 LX Board Tas Oak via material_overrides interior/exposed/shelf, back 18 Lx ABS Grain Tas Oak (role back), Wall 2 box right end 18 (role right_side) to line up with the back of the Wall 3 box. Wall 3 box: left end removed (part_hide_views all = not made), offset 267.",
     "Open shelf boxes (Mark 2026-11-02): 2 real boxes, B1D open (no front, no shelf, FLOAT, bottom 1400 AFF), 300 x 370, all parts 33 LX Board Tas Oak via material_overrides interior/exposed/shelf (tape: LX Abs Grain 1mm Matching 40 - Tasmanian Oak, matched to the 33 board). Wall 3 box: left end removed (part_hide_views all = not made), offset 267 so its top/bottom start at 300 against the Wall 2 box."
   ],
@@ -137,7 +137,7 @@
       "dx": 1431,
       "dy": 33,
       "dz": 600,
-      "note": "Desk top 33 LX Tasmanian Oak 600 x 1431, top at 750",
+      "note": "Desk top 33 LX Tasmanian Oak 600 x 1431, top at 750; open end (right) taped. Wall cleat 18 Tas Oak 80 x 1395 under it (x 18, behind the Wall 2 cleat, to the end panel), bottom edge taped, grain across",
       "set": {
         "pos_z": 717,
         "material_overrides": {
@@ -152,7 +152,7 @@
       "dx": 944,
       "dy": 33,
       "dz": 400,
-      "note": "Desk top 33 LX Tasmanian Oak 400 x 944, top at 750, butts the Wall 3 top",
+      "note": "Desk top 33 LX Tasmanian Oak 400 x 944, top at 750, butts the Wall 3 top. Wall cleat 18 Tas Oak 80 x 1544 under it (end panel to the corner), bottom edge taped, grain across",
       "set": {
         "pos_z": 717,
         "material_overrides": {
@@ -166,8 +166,8 @@
       "offset": 1413,
       "dx": 18,
       "dy": 717,
-      "dz": 555,
-      "note": "Desk end panel 575 deep (sketch) under the top at the open end"
+      "dz": 575,
+      "note": "Desk end panel 595 finished depth (Mark 2026-11-02), under the top at the open end"
     },
     {
       "def": "WOPN",

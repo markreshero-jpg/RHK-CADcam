@@ -739,7 +739,7 @@ export async function saveCabinetToLibrary(
 
   // Snapshot the instance's custom parts so the definition carries them.
   const { data: cpRows } = await supabase.from('cabinet_custom_parts')
-    .select('id,part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,no_cnc,sort_order,part_cutouts')
+    .select('id,part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,no_cnc,grain_across,sort_order,part_cutouts')
     .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const cps = (cpRows ?? []).map(({ id, ...rest }) => rest)
@@ -1275,6 +1275,7 @@ export interface CabinetCustomPart {
   // computed cache of the formula, re-evaluated on resolve. Absent = plain literal.
   expressions?:        Record<string, string>
   no_cnc?:             boolean
+  grain_across?:       boolean   // grain runs along DX (across the length), e.g. a horizontal-grain cleat standing front-on
   part_cutouts?:       import('@/src/lib/partCutouts').Cutout[]   // cut-outs (z_rangehood R3); the resolve writes outline / cutouts from them
   sort_order:          number
 }

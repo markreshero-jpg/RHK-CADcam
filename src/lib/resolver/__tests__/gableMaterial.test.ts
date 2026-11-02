@@ -47,3 +47,15 @@ describe('gable material overrides', () => {
     expect(part(c, 'bottom').DY).toBe(1000 - 18 - 33)
   })
 })
+
+describe('back thinner than the bottom', () => {
+  it('back_on_bottom: 3D bottom face (Y + DZ) sits on the bottom, top face under the top', () => {
+    const c = cab({ back_material: b18 })
+    const back = part(c, 'back'), bottom = part(c, 'bottom')
+    const bottomTop = bottom.Y + bottom.DZ
+    expect(back.DZ).toBe(18)
+    if (c.rules.BOTTOM_BACK_JOIN !== 'butts_into_back') expect(back.Y + back.DZ).toBe(bottomTop)
+    else expect(back.Y + back.DZ).toBe(bottom.Y)
+    expect(back.Y + back.DZ + back.DX).toBeLessThanOrEqual(370)
+  })
+})

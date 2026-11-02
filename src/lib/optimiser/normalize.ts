@@ -416,6 +416,9 @@ export function normalizeProject(
     // Empty typeKey: custom parts already carry a user-typed name column, so there's
     // no type-level default to apply. A per-part rename still overrides it.
     push('custom_parts', r, `custom_${r.id}`, { typeKey: '', base: String(r.name ?? 'Custom') }, null, 0, undefined, eb)
+    // Grain across (e.g. a front-on wall cleat with horizontal grain): nest turned.
+    const last = parts[parts.length - 1]
+    if (r.grain_across && last?.source_part_id === r.id) last.grain_across = true
   }
 
   return { rooms, cabinets, parts }
@@ -428,7 +431,7 @@ export const PART_SELECTS = {
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,grain_direction,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id,facing',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,outline,cutouts,material_id,no_cnc,hide_views,edge_top,edge_bottom,edge_left,edge_right',
+  custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,outline,cutouts,material_id,no_cnc,hide_views,edge_top,edge_bottom,edge_left,edge_right,grain_across',
 } as const
 
 // Fetch the edge_banding thicknesses referenced by a set of part rows — shared

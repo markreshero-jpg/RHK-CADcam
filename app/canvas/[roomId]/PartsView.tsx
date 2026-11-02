@@ -318,6 +318,7 @@ export function PartDialog({ cabinetId, scope, editPart, initialPos, onSaved, on
   const [hideViews, setHideViews] = useState<PartHideView[]>(editPart?.hide_views ?? [])
   const [orient,    setOrient]    = useState<CustomOrient>(editPart?.orientation ?? 'flat')
   const [noCnc,     setNoCnc]     = useState(editPart?.no_cnc ?? false)
+  const [grainX,    setGrainX]    = useState(editPart?.grain_across ?? false)
   const [saving,    setSaving]    = useState(false)
 
   useEffect(() => {
@@ -370,7 +371,7 @@ export function PartDialog({ cabinetId, scope, editPart, initialPos, onSaved, on
       material_override_id: matId || null,
       ...(matId ? { material_id: matId } : {}),
       edge_top: eTop, edge_bottom: eBot, edge_left: eLeft, edge_right: eRight,
-      visible: true, show_in_room: true, hide_views: hideViews, orientation: orient, no_cnc: noCnc, expressions,
+      visible: true, show_in_room: true, hide_views: hideViews, orientation: orient, no_cnc: noCnc, grain_across: grainX, expressions,
     }
     if (editing && editPart) {
       await dbUpdateCustomPart(editPart.id, fields)
@@ -487,6 +488,10 @@ export function PartDialog({ cabinetId, scope, editPart, initialPos, onSaved, on
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={noCnc} onChange={e => setNoCnc(e.target.checked)} className="accent-red-500 w-3.5 h-3.5" />
                   <span className="text-xs text-gray-300">No CNC (don&apos;t cut)</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer" title="Grain runs along the width (DX) instead of the length (DY) — e.g. a front-on wall cleat with horizontal grain. The optimiser nests it turned.">
+                  <input type="checkbox" checked={grainX} onChange={e => setGrainX(e.target.checked)} className="accent-amber-500 w-3.5 h-3.5" />
+                  <span className="text-xs text-gray-300">Grain across (along the width)</span>
                 </label>
                 {/* Per-view hide (PART-HIDE-SPEC) — room views only, never this editor. */}
                 <div className="flex items-center gap-3">

@@ -194,14 +194,16 @@ export function resolveCaseParts(
 
   // ── Back ─────────────────────────────────────────────────────
   // Bottom joinery shifts the back's stored Y so its 3D bottom face (p.Y + p.DZ)
-  // lands at TK+SCRBT (butts_into_back) or TK+SCRBT+backT (back_on_bottom).
-  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - bottomT : TK + r.SCRBT
+  // lands at TK+SCRBT (butts_into_back) or on top of the bottom, TK+SCRBT+bottomT
+  // (back_on_bottom). p.DZ is the BACK's thickness, so an 18 back on a 33 bottom
+  // stores Y = bottom top − 18.
+  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT + bottomT - backT
 
   // Top joinery trims the back's top face by topT when the top sits over it.
   // SCRT: back panel stops at DY - SCRT (scribe material on sides above).
   // Cabinet3DView now uses p.DX directly as the rendered height of the back panel,
   // so compute it as (top face) − (bottom face in 3D).
-  const backBottom3D = backY + bottomT   // the back stands on the bottom (its thickness, not the back's)
+  const backBottom3D = backY + backT     // 3D bottom face (p.Y + p.DZ)
   const backTop3D    = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
   const backDX       = backTop3D - backBottom3D
 
