@@ -23,6 +23,9 @@ Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 
 
 - **Vanity heights** (Mark 2026-11-02): **every basin finishes 960 AFF.** 115 basins sit on an 845 top (20 slab at 825, carcass 485-825, 60 apron to 785); end panels / fillers / floating shelves moved up 25 with them. A 960 dim beside each basin on the elevation. (Superseded: 820 tops.)
 
+- **Wall-side end panels = 70 scribe strips** (Mark 2026-11-02): where a 33 vanity end panel meets a wall, the wall-side 16.5 half is a 70 deep strip at the front (custom part dx 70, z = cab.d + t.door + 2 - 70), glued face to face onto the front of the full-depth half, scribed to the wall. US Main Ensuite + US Powder TC-01 / TC-04.
+- **Elevation notes on the Site notes layer** (Mark 2026-11-02), all but the floating shelf note; the job's Site notes layer set to print = off so they stay off the client's shop drawings.
+
 ## Rooms
 | Room | Room id | Status |
 |---|---|---|
