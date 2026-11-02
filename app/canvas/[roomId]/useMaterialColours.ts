@@ -90,6 +90,9 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
         rp.toekick_parts.forEach(p => matIds.add(p.material_id))
         rp.internal_parts.forEach(p=> matIds.add(p.material_id))
         rp.face_zones.forEach(z    => matIds.add(z.material_id))
+        // Custom parts (panels, under panels, desk tops…) can be in a board no
+        // carcass / front part uses — e.g. a per-cabinet 33 board override.
+        rp.custom_parts?.forEach(p => { if (p.material_id) matIds.add(p.material_id) })
       }
       if (matIds.size > 0) {
         const { data } = await supabase
@@ -144,6 +147,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
     const mats = [
       input.material, input.door_material, input.shelf_material,
       input.toekick_face_material, input.toekick_interior_material,
+      input.exposed_material,
     ]
     const colours: MatColours = {}
     for (const m of mats) {
