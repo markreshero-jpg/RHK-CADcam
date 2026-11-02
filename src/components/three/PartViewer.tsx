@@ -20,6 +20,7 @@ import type { OutlinePt, ShapePt } from '@/src/lib/shapePath'
 import type { PartShape } from '@/src/lib/partSolids'
 import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
+import { PartMaterialInfo } from '@/src/components/PartMaterialInfo'
 import { outlineSegments } from '@/src/lib/shopDrawings/hiddenLine'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -798,7 +799,7 @@ export function extForAxes(kind: PanelKind, dxIsWidth?: boolean): Record<RawAxis
 }
 
 export function PartPropertiesPanel({
-  part, onClose, onEdgeChange, onSizeChange, actions, jointControls, ebThickness,
+  part, onClose, onEdgeChange, onSizeChange, actions, jointControls, ebThickness, eb,
   className = 'absolute top-3 right-3 w-56',
 }: {
   part: PartMeta
@@ -810,6 +811,8 @@ export function PartPropertiesPanel({
   // Tape thickness (mm) of this part's edgeband, when known — enables the
   // "include edge banding in overall part size" user pref (off = show cut size).
   ebThickness?: number
+  // The part's edge band (thickness + tape colour) for the Material block.
+  eb?: { thickness: number; color: string | null }
   // Outer positioning/sizing only — pass e.g. 'relative w-full' to dock the
   // panel in a sidebar instead of floating it over the canvas.
   className?: string
@@ -879,6 +882,7 @@ export function PartPropertiesPanel({
             {part.az !== 0 && <><span className="text-gray-500">AZ</span><span className="text-gray-200 text-right font-mono">{part.az}°</span></>}
           </>
         )}
+        {!part.hardware && <PartMaterialInfo materialId={part.materialId} eb={eb} />}
         {!part.hardware && <><span className="text-gray-600 col-span-2 text-[9px] uppercase tracking-wider pt-2 pb-0.5">Edge band</span>
         <span className="col-span-2">
           <div className="grid grid-cols-2 gap-x-2 gap-y-1">

@@ -903,6 +903,7 @@ export default function CabinetEditModal({
                     onClose={() => setSelectedSVGPart(null)}
                     onEdgeChange={handleSVGEdgeChange}
                     ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
+                    eb={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId] : undefined}
                   />
                   <PartPosOverridePanel
                     className="relative w-full"

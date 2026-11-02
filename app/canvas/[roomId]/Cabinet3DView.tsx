@@ -2310,6 +2310,7 @@ export default function Cabinet3DView({
                 onClose={() => setSelectedPart(null)}
                 onEdgeChange={handleEdgeChange}
                 ebThickness={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId]?.thickness : undefined}
+                eb={selectedPart.materialId ? ebByMatId?.[selectedPart.materialId] : undefined}
                 onSizeChange={!selectedPart.hardware && /^(case_|tk_|int_|zone_|custom_)/.test(selectedPart.id) ? handleSizeChange : undefined}
                 actions={drawerActions}
                 jointControls={onUpdate && rp && /^(case_|int_(adj_shelf|fixed_shelf|divider)_)/.test(selectedPart.id)
