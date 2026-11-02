@@ -116,6 +116,23 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onDelete, onClos
               onCommit={v => onUpdate(wall.id, { pos_y: v })} className={inp + ' text-right'} placeholder="Y" />
           </div>
         </div>
+        <div>
+          <label className={lbl}>Centre position (mm) — moves the wall</label>
+          <div className="grid grid-cols-2 gap-2">
+            <CalcInput value={Math.round(((wall.pos_x + e.x) / 2) * 10) / 10} decimals={1}
+              onCommit={v => onUpdate(wall.id, { pos_x: wall.pos_x + v - (wall.pos_x + e.x) / 2 })} className={inp + ' text-right'} placeholder="X" />
+            <CalcInput value={Math.round(((wall.pos_y + e.y) / 2) * 10) / 10} decimals={1}
+              onCommit={v => onUpdate(wall.id, { pos_y: wall.pos_y + v - (wall.pos_y + e.y) / 2 })} className={inp + ' text-right'} placeholder="Y" />
+          </div>
+        </div>
+        <div>
+          <label className={lbl}>End position (mm)</label>
+          <div className="grid grid-cols-2 gap-2 text-xs text-gray-400 text-right">
+            <span className="px-2 py-1 bg-gray-800/50 rounded">X {Math.round(e.x * 10) / 10}</span>
+            <span className="px-2 py-1 bg-gray-800/50 rounded">Y {Math.round(e.y * 10) / 10}</span>
+          </div>
+          <p className="text-[10px] text-gray-600 mt-0.5">Change Length / Angle to move the end.</p>
+        </div>
       </div>
       <PanelDeleteButton label={wall.wall_type === 'island' ? 'Delete island' : 'Delete wall'} onDelete={() => onDelete(wall.id)} />
       {saving && <div className="px-4 py-2 border-t border-gray-800 text-[10px] text-gray-500">Saving…</div>}

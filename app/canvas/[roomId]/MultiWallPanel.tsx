@@ -2,6 +2,7 @@
 
 import { Wall } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
+import { wallEnd } from '@/src/lib/geometry'
 
 /** Shared edits for a box / Shift+click selection of several walls. */
 export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onDeleteMany, onClear }: {
@@ -56,6 +57,35 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onDele
             onCommit={v => onUpdateMany({ soffit_height: v })}
             onClear={() => onUpdateMany({ soffit_height: null as unknown as number })}
             className={inp + ' text-right'} />
+        </div>
+        <div>
+          <label className={lbl}>Positions (mm) — X, Y</label>
+          {(() => {
+            const r = (n: number) => Math.round(n)
+            const pts = walls.flatMap(w => [{ x: w.pos_x, y: w.pos_y }, wallEnd(w)])
+            const minX = Math.min(...pts.map(p => p.x)), maxX = Math.max(...pts.map(p => p.x))
+            const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
+            return (
+              <div className="space-y-1.5 text-[10px] text-gray-400 tabular-nums">
+                {walls.map(w => {
+                  const e = wallEnd(w)
+                  return (
+                    <div key={w.id} className="bg-gray-800/50 rounded px-2 py-1">
+                      <p className="text-gray-300 text-xs">{w.name}</p>
+                      <p>Start {r(w.pos_x)}, {r(w.pos_y)}</p>
+                      <p>End {r(e.x)}, {r(e.y)}</p>
+                      <p>Centre {r((w.pos_x + e.x) / 2)}, {r((w.pos_y + e.y) / 2)}</p>
+                    </div>
+                  )
+                })}
+                <div className="bg-gray-800/50 rounded px-2 py-1">
+                  <p className="text-gray-300 text-xs">Selection (wall lines)</p>
+                  <p>Centre {r((minX + maxX) / 2)}, {r((minY + maxY) / 2)}</p>
+                  <p>Extents X {r(minX)} → {r(maxX)} · Y {r(minY)} → {r(maxY)}</p>
+                </div>
+              </div>
+            )
+          })()}
         </div>
         <button onClick={onDeleteMany}
           className="w-full bg-red-900/40 hover:bg-red-900/70 text-red-300 text-xs font-medium py-1.5 rounded transition-colors">
