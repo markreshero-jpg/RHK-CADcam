@@ -296,10 +296,15 @@ line and mirrors the island elevation.
   its own `TEPF`. A low "cabinet with a false front to the floor + top" = `B1D`
   with has_toekick off, face zone `false_panel`, no shelf, + an 18 `WUP` top
   (UNDER_PANEL, pos_z = carcass height).
-- **Kick face = the fronts' colour** (Mark, 2026-10-25): when the kick face board
-  has colours, set `job_toekick_materials` face to the colour material the job's
-  door colour links (`door_schedule_materials.material_id`), else every cabinet
-  warns COLOUR_NOT_CHOSEN.
+- **Kick face = the colour of the cabinet it sits under** (Mark, 2026-10-25,
+  restated RHK6478 2026-11-02: "unless otherwise specified"). The resolver does
+  NOT do this itself: with no face set, a kick takes the toekick schedule's
+  default board (MDF). On every job set `job_toekick_materials` face to the board
+  the job's door colour links (`door_schedule_materials.material_id`, e.g. 2pac →
+  Satin Board 18), and where a room's cabinets are another colour set
+  `room_toekick_materials` face for that room (e.g. RHK6478 Bath Linen →
+  Sublime Teak). A kick under one cabinet of its own colour → that cabinet's
+  `toekick_overrides.face`. Check the KICK n face material after drawing.
 - **Bulkhead flush with carcase = flush on the seen side too** (Mark,
   2026-10-23): with `front: 'carcase'`, the BH stops at the carcass edge on a
   seen end — it does NOT run over the end panel. Start it after the panel and
