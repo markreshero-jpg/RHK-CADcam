@@ -111,13 +111,15 @@ export function resolveInternalParts(
   const mid = cab.material.id
 
   // ── Internal opening reference dimensions ─────────────────────
-  const intW = DX - 2 * T - r.SCRL - r.SCRR     // interior width
+  const TL  = cab.left_side_material?.DZ  ?? T   // gable overrides (roles left_side / right_side)
+  const TR  = cab.right_side_material?.DZ ?? T
+  const intW = DX - TL - TR - r.SCRL - r.SCRR     // interior width
   const intH = DY - TK - floorT - T - r.SCRT - r.SCRBT   // interior height
   const BT   = caseBackT(cab, r)                // back panel thickness (0 = no back)
   const intD = DZ - r.SCRBK - BT                // interior depth
 
   // Interior origin (cabinet coordinates)
-  const intLeft   = T + r.SCRL        // X of interior left face
+  const intLeft   = TL + r.SCRL       // X of interior left face
   const intBottom = TK + floorT + r.SCRBT  // Y of interior bottom face
   const intBack   = r.SCRBK + BT      // Z of interior back face (back panel inner face)
 

@@ -954,6 +954,8 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     shelf_material:            shelfMat,
     exposed_material:          exposed,
     back_material:             matMap.get('back'),
+    left_side_material:        matMap.get('left_side'),
+    right_side_material:       matMap.get('right_side'),
     toekick_face_material:     tkFace,
     toekick_interior_material: tkInt,
     interior_edgeband_id:         carcassEb,

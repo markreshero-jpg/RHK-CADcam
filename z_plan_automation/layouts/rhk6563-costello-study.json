@@ -5,7 +5,7 @@
     "Tower in the Wall 1/2 corner, 500 OA, 400 OA deep incl doors (Mark): TFKW 30 | D3-SLL 452 (750 OA incl 100 kick) + W1D 452 single door 750-2125 | TEPF 18 seen end = 500. Carcass 380 (400 - 18 door - 2). 30 BH over it to the 2155 ceiling.",
     "Desk tops = 33 LX Board Tasmanian Oak (WUP, material_overrides exposed -> 33 board), top at 750: Wall 3 600 x 1431 runs into the corner, Wall 2 400 x 944 from the TEPF to the Wall 3 top.",
     "BEPF 18 x 575 deep (sketch) under the Wall 3 top at its open end.",
-    "Fronts + exposed = Lx ABS Grain 18mm Tasmanian Oak (room style), carcass default. Handles Momo Dallas 128 DBR. Kick 100 (TBC).",
+    "Open shelf boxes (Mark 2026-11-02): 2 WOPN wall cabinets (WC-05 Wall 2, WC-06 Wall 3), no front/shelf, underside 1400 AFF via rule WALLZ, 300 x 370, 33 LX Board Tas Oak via material_overrides interior/exposed/shelf, back 18 Lx ABS Grain Tas Oak (role back), Wall 2 box right end 18 (role right_side) to line up with the back of the Wall 3 box. Wall 3 box: left end removed (part_hide_views all = not made), offset 267.",
     "Open shelf boxes (Mark 2026-11-02): 2 real boxes, B1D open (no front, no shelf, FLOAT, bottom 1400 AFF), 300 x 370, all parts 33 LX Board Tas Oak via material_overrides interior/exposed/shelf (tape: LX Abs Grain 1mm Matching 40 - Tasmanian Oak, matched to the 33 board). Wall 3 box: left end removed (part_hide_views all = not made), offset 267 so its top/bottom start at 300 against the Wall 2 box."
   ],
   "projectId": "416bf6cf-9681-4462-b93d-6ecac19e015b",
@@ -170,15 +170,14 @@
       "note": "Desk end panel 575 deep (sketch) under the top at the open end"
     },
     {
-      "def": "B1D",
+      "def": "WOPN",
       "dy": 370,
       "dz": 300,
       "rules": {
-        "FLOAT": true,
+        "WALLZ": 1400,
         "SCRBK": 0
       },
       "set": {
-        "pos_z": 1400,
         "has_face": false,
         "has_toekick": false,
         "top_type": "full_top",
@@ -187,7 +186,8 @@
           "interior": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
           "exposed": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
           "shelf": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
-          "back": "6cd37f1b-67ce-4005-b5c3-c2715b739e07"
+          "back": "6cd37f1b-67ce-4005-b5c3-c2715b739e07",
+          "right_side": "6cd37f1b-67ce-4005-b5c3-c2715b739e07"
         },
         "internal_grid": {
           "tree": {
@@ -202,18 +202,17 @@
       "wall": 2,
       "offset": 500,
       "dx": 1544,
-      "note": "Open shelf box 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back, no back scribe, 300 deep x 370, bottom 1400 AFF. Both ends."
+      "note": "Open shelf wall cabinet (WOPN) 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back + right end (lines up with the back of the Wall 3 box), no back scribe, 300 deep x 370, bottom 1400 AFF (WALLZ)."
     },
     {
-      "def": "B1D",
+      "def": "WOPN",
       "dy": 370,
       "dz": 300,
       "rules": {
-        "FLOAT": true,
+        "WALLZ": 1400,
         "SCRBK": 0
       },
       "set": {
-        "pos_z": 1400,
         "has_face": false,
         "has_toekick": false,
         "top_type": "full_top",
@@ -244,7 +243,7 @@
       "wall": 3,
       "offset": 267,
       "dx": 1164,
-      "note": "Open shelf box 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back, no back scribe, 300 deep x 370, bottom 1400 AFF. No left end (butts the Wall 2 box), right end seen."
+      "note": "Open shelf wall cabinet (WOPN) 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back, no back scribe, 300 deep x 370, bottom 1400 AFF (WALLZ). No left end (butts the Wall 2 box), right end seen."
     }
   ]
 }

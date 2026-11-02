@@ -39,6 +39,8 @@ export function resolveCaseParts(
   // All case parts currently use the primary carcass material.
   // Individual part-level overrides wire in here when supported.
   const sideMat   = cab.material
+  const leftMat   = cab.left_side_material  ?? sideMat   // role 'left_side' / 'right_side' override, else carcass
+  const rightMat  = cab.right_side_material ?? sideMat
   const bottomMat = cab.material
   const backMat   = cab.back_material ?? cab.material   // role 'back' override, else carcass
   const topMat    = cab.material
@@ -53,6 +55,8 @@ export function resolveCaseParts(
   const { TK, floating } = caseFloor(cab, r)
 
   const sideT   = sideMat.DZ
+  const leftT   = leftMat.DZ
+  const rightT  = rightMat.DZ
   const bottomT = bottomMat.DZ
   const backT   = caseBackT(cab, r)
   const topT    = topMat.DZ
@@ -61,7 +65,7 @@ export function resolveCaseParts(
   const DY = cab.DY   // cabinet height
   const DZ = cab.DZ   // cabinet depth
 
-  if (DX <= 2 * sideT) {
+  if (DX <= leftT + rightT) {
     errors.push({ code: 'CASE_TOO_NARROW', message: `Cabinet DX (${DX}mm) is too narrow for side material thickness (${sideT}mm)`, part: 'case' })
     return { parts, errors }
   }
@@ -90,8 +94,8 @@ export function resolveCaseParts(
 
   // Bottom: full-width or between sides (X/width).
   // sides_outside: bottom fits between sides, so scribes narrow it on both ends.
-  const botX = bottomJoin === 'bottom_outside' ? 0  : sideT + r.SCRL
-  const botW  = bottomJoin === 'bottom_outside' ? DX : DX - 2 * sideT - r.SCRL - r.SCRR
+  const botX = bottomJoin === 'bottom_outside' ? 0  : leftT + r.SCRL
+  const botW  = bottomJoin === 'bottom_outside' ? DX : DX - leftT - rightT - r.SCRL - r.SCRR
 
   // Bottom: depth relationship with back panel (Z/depth)
   const botZstart = bottomBackJoin === 'butts_into_back' ? r.SCRBK + backT : 0
@@ -99,13 +103,13 @@ export function resolveCaseParts(
 
   // Back: between sides or wrapping full-width behind them.
   // between_sides: scribes narrow the back panel to match the bottom/shelves.
-  const backX = backJoin === 'behind_sides' ? 0      : sideT + r.SCRL
-  const backW  = backJoin === 'behind_sides' ? DX     : DX - 2 * sideT - r.SCRL - r.SCRR
+  const backX = backJoin === 'behind_sides' ? 0      : leftT + r.SCRL
+  const backW  = backJoin === 'behind_sides' ? DX     : DX - leftT - rightT - r.SCRL - r.SCRR
 
   // Rail / top: between sides or spanning full width on top of them.
   // between_sides: scribes narrow the rail to match the bottom/shelves.
-  const railX = railJoin === 'on_top_of_sides' ? 0  : sideT + r.SCRL
-  const railW  = railJoin === 'on_top_of_sides' ? DX : DX - 2 * sideT - r.SCRL - r.SCRR
+  const railX = railJoin === 'on_top_of_sides' ? 0  : leftT + r.SCRL
+  const railW  = railJoin === 'on_top_of_sides' ? DX : DX - leftT - rightT - r.SCRL - r.SCRR
 
   // Top / back relationship: where full_top and back_rail start in Z.
   // SCRBK (scribe back) holds the top/rail forward off the rear edge so the sides
@@ -134,12 +138,12 @@ export function resolveCaseParts(
     part_key: 'left_side',
     DX: sideDepth,
     DY: sideHeight,
-    DZ: sideT,
+    DZ: leftT,
     X:  r.SCRL,
     Y:  sideYstart,
     Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
-    material_id: sideMat.id,
+    material_id: leftMat.id,
     edge_band: edgeSidesToBanding(leftEdging, ebId),
   })
 
@@ -148,12 +152,12 @@ export function resolveCaseParts(
     part_key: 'right_side',
     DX: sideDepth,
     DY: sideHeight,
-    DZ: sideT,
-    X:  DX - sideT - r.SCRR,
+    DZ: rightT,
+    X:  DX - rightT - r.SCRR,
     Y:  sideYstart,
     Z:  sideZstart,
     AX: 0, AY: 0, AZ: 0,
-    material_id: sideMat.id,
+    material_id: rightMat.id,
     edge_band: edgeSidesToBanding(rightEdging, ebId),
   })
 

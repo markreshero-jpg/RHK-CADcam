@@ -805,6 +805,11 @@ export interface CabinetInput {
   // cabinet-level material_overrides.back: 33 box with an 18 back). Absent =
   // the carcass material.
   back_material?: Material
+  // Gable boards when one end differs from the carcass (roles 'left_side' /
+  // 'right_side', e.g. a 33 box with an 18 right gable lining up with the
+  // back of the box it meets). Absent = the carcass material.
+  left_side_material?:  Material
+  right_side_material?: Material
   toekick_face_material:     Material
   toekick_interior_material: Material
 
