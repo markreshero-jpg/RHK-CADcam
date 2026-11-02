@@ -1443,6 +1443,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Print next to Download PDF. It builds the same PDF and opens the print dialog instead of saving a file. In Job Reports, Print N rooms puts every ticked room into one print job.',
       canvas: true, done: (c, s) => ev(c, 'report_print') > ev(s, 'report_print') },
   ]},
+
+  // Appended 2026-11-02 (nib walls, z_nib_wall N1).
+  { id: 'nib_wall', level: 'intermediate', topic: 'room', title: 'Nib walls',
+    blurb: 'A short wall stub off a main wall, e.g. a divider between talls and a vanity recess, shown on that wall’s elevation.',
+    keywords: 'nib wall stub divider partition recess alcove pier elevation wall type', steps: [
+    { id: 'draw', title: 'Draw the stub',
+      body: 'Press F2 and draw a short wall starting ON the main wall’s inside face and going straight out into the room (e.g. 500 long). Its start must sit on the face line.',
+      target: 'mode-draw_wall|tool-wall', canvas: true, done: c => c.mode === 'draw_wall' },
+    { id: 'type', title: 'Make it a nib',
+      body: 'Select the new wall and set Type → Nib in the Wall panel. It is drawn 90 thick centred on its line, is left out of the room outline, and a cabinet butted against it treats it as a wall (fillers, scribes).',
+      canvas: true, done: c => c.walls.some(w => w.wall_type === 'nib') },
+    { id: 'elev', title: 'See it on the elevation',
+      body: 'Switch to Elevation and pick the main wall. The nib shows as a hatched cut strip at its spot, full height, with the cabinets either side on the same view. A nib has no elevation tab of its own.',
+      target: 'view-elevation', canvas: true, done: c => c.view === 'elevation' && c.walls.some(w => w.wall_type === 'nib') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
