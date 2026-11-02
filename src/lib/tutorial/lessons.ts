@@ -1521,6 +1521,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Rails are two flat rails in the bottom’s place, Rail Depth deep (the same RD as the top rails): the front one flush with the front, taped like the bottom, the back one at the back. They take the bottom’s joints into the gables. No bottom leaves the gables running down to the floor line. The back and the shelves don’t move.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-02 (kick face follows the cabinet colour).
+  { id: 'kick_colour', level: 'beginner', topic: 'cabinets', title: 'Kick colour',
+    blurb: 'A kick takes the colour of the cabinet it sits under, unless you pick a kick colour.',
+    keywords: 'kick toekick plinth colour face board match cabinet front room job override', steps: [
+    { id: 'auto', title: 'It follows the cabinet',
+      body: 'With no kick colour picked, every kick (and a joined KICK run) is made from the same board as the fronts of the cabinet it sits under, e.g. 2pac cabinets get a 2pac kick.',
+      canvas: true, done: c => c.cabinets.length > 0 },
+    { id: 'set', title: 'Pick a different colour',
+      body: 'To change it, set the kick face for the whole job (Job → Cabinet Standards → materials), one room (Room → materials) or one cabinet (its kick face override). A colour picked at any of those levels wins over the cabinet colour. If the drawings name a kick colour, set it before the room is drawn.',
+      canvas: true, done: c => c.cabinets.length > 0 },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
