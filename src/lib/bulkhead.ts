@@ -23,7 +23,12 @@ export type BulkheadJoint = 'mitre' | 'butt'
  *  that isn't square to the run. The fascia end is cut to it, nothing behind
  *  the fascia runs past the wall line, and that end gets no return. + = the
  *  wall closes in behind the end (the back is shorter than the front). */
-export interface BulkheadReturn { on: boolean; depth: number; joint: BulkheadJoint; angle?: number }
+export interface BulkheadReturn {
+  on: boolean; depth: number; joint: BulkheadJoint; angle?: number
+  /** Bottom return only: part width, mm from the bulkhead's left end (e.g. a
+   *  soffit over a doorway, RHK6581 WIR). Unset = the full width. */
+  from?: number; to?: number
+}
 /** Shadowline split (B7): a flat rail of its own board under the bulkhead, its
  *  front edge `setback` behind the bulkhead face, `width` deep. The bulkhead
  *  builds above it, so a rail-thickness × setback recess shows. */
@@ -75,6 +80,8 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
     depth: x?.depth != null && x.depth > 0 ? x.depth : d.depth,
     joint: x?.joint === 'butt' ? 'butt' : 'mitre',
     ...(x?.angle != null && x.angle > 0 ? { angle: Math.min(x.angle, BH_MAX_END_ANGLE) } : {}),
+    ...(x?.from != null && x.from > 0 ? { from: x.from } : {}),
+    ...(x?.to != null && x.to > 0 ? { to: x.to } : {}),
   })
   return {
     kind:   sl ? 'shadowline' : 'bulkhead',

@@ -62,7 +62,9 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   const L = aL > 0 ? { ...b.left, on: false } : b.left
   const R = aR > 0 ? { ...b.right, on: false } : b.right
   const B = b.bottom
-  const mL = L.on && L.joint === 'mitre', mR = R.on && R.joint === 'mitre', mB = B.on && B.joint === 'mitre'
+  // A part-width bottom return (from / to) can't mitre to the full-width fascia: butted.
+  const bPart = B.on && (B.from != null || B.to != null)
+  const mL = L.on && L.joint === 'mitre', mR = R.on && R.joint === 'mitre', mB = B.on && B.joint === 'mitre' && !bPart
   // Return length from the front face, never through the wall.
   const len = (depth: number) => Math.min(depth, Zf)
 
@@ -113,17 +115,20 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   // Between the side returns.
   const x0 = L.on ? t : 0, x1 = R.on ? W - t : W
 
-  // Bottom return — flat, between the sides. `top` = its front edge, `bottom` = back.
+  // Bottom return — flat, between the sides (or from / to along the width).
+  // `top` = its front edge, `bottom` = back; an end short of a side return is taped.
   if (B.on) {
     const full = len(B.depth)
     const d = mB ? full : full - t
     const front = mB ? Zf : Zf - t
+    const bx0 = Math.max(x0, xLo(front - d), B.from ?? 0)
+    const bx1 = Math.min(x1, xHi(front - d), B.to ?? W)
     push({
       part_key: 'bh:ret_b',
-      DX: d, DY: Math.min(x1, xHi(front - d)) - Math.max(x0, xLo(front - d)), DZ: t,
-      X: Math.max(x0, xLo(front - d)), Y: 0, Z: front - d, AY: 0,
+      DX: d, DY: bx1 - bx0, DZ: t,
+      X: bx0, Y: 0, Z: front - d, AY: 0,
       material_id: exp,
-      edge_band: band({ bottom: full < Zf - 0.5, left: !L.on, right: !R.on }),
+      edge_band: band({ bottom: full < Zf - 0.5, left: !L.on || bx0 > x0 + 0.5, right: !R.on || bx1 < x1 - 0.5 }),
     })
   }
 

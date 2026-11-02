@@ -107,6 +107,18 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
             </select>
           </div>
         ))}
+        {b.bottom.on && (
+          <div className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-1 items-center"
+            title="Part-width bottom return, mm from the bulkhead's left end (e.g. a soffit over a doorway only). Blank = the full width. A part-width return is butted behind the fascia.">
+            <label className="text-xs text-gray-300">Bottom from / to</label>
+            <CalcInput value={b.bottom.from ?? 0} decimals={1}
+              onCommit={v => putRet('bottom', { from: v > 0 ? v : undefined })}
+              className={inp + ' text-right'} />
+            <CalcInput value={b.bottom.to ?? Number(cabinet.dx)} decimals={1}
+              onCommit={v => putRet('bottom', { to: v > 0 && v < Number(cabinet.dx) ? v : undefined })}
+              className={inp + ' text-right'} />
+          </div>
+        )}
         <p className="text-[10px] text-gray-600">Depth = how far the return runs back from the front (stops at the wall).</p>
         <div className="grid grid-cols-[1fr_4.5rem] gap-1 items-center"
           title="0 = square. Where an end meets a wall that isn't square to the run (e.g. 45), type its angle: the fascia end is cut to it, the outline follows the wall and that end has no return.">

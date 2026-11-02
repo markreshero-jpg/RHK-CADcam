@@ -160,6 +160,13 @@ underside when the bulkhead isn't sitting on cabinets.
       it assumes a 20 front (18 door + 2) for "flush with doors", so it errs off
       the wall. Sidebar: Left / Right end angle °. Not automatic from the wall
       yet; not for shadowlines or curved bulkheads. Tutorial `bulkhead_angled_end`.
+- [~] **B9 — part-width bottom return** (built 2026-11-02, in-app check pending)
+      (Mark, RHK6581 WIR J11: "a bulkhead return under open space above door way
+      ... run it past into TC-09 about 100mm"). `bulkhead.bottom.from / .to` (mm
+      from the bulkhead's left end; unset = full width): the bottom return covers
+      only that span, butted behind the fascia (a part-width return can't mitre to
+      the full-width fascia, so the fascia keeps its taped bottom edge); ends short
+      of a side return taped. Sidebar "Bottom from / to" when the bottom return is on.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 

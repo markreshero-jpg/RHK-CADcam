@@ -1497,6 +1497,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Set Door style to the range you want (e.g. Laminex 16mm Colour). A Colour box shows under it with that range’s colours: pick one. Left on “the style’s default”, the front takes the style’s own default colour, not the room’s colour (that belongs to the room’s range). Panels, fillers and kicks still follow the room colour: change those parts’ board by hand if they need to match.',
       canvas: true, done: c => c.cabinets.some(cab => ((cab.face_grid as { zones?: { door_colour_id?: string | null }[] } | null)?.zones ?? []).some(z => !!z.door_colour_id)) },
   ]},
+
+  // Appended 2026-11-02 (z_bulkhead B9 part-width bottom return, RHK6581 WIR).
+  { id: 'bulkhead_soffit_part', level: 'intermediate', topic: 'cabinets', title: 'Close the underside of a bulkhead over a doorway',
+    blurb: 'A bottom return (soffit) under just part of a bulkhead, e.g. the open space over a door.',
+    keywords: 'bulkhead bottom return soffit underside doorway door opening part width from to', steps: [
+    { id: 'on', title: 'Tick Bottom return',
+      body: 'Select the bulkhead. In the Bulkhead section tick Bottom return. On its own it runs the full width.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead?.bottom?.on) },
+    { id: 'span', title: 'Set Bottom from / to',
+      body: 'Type Bottom from / to in mm from the bulkhead’s left end, e.g. 0 and 1170 to cover a doorway and run 100 onto the cupboard past it. It is butted behind the fascia, and its ends are taped.',
+      canvas: true, done: c => c.cabinets.some(cab => cab.bulkhead?.bottom?.to != null || cab.bulkhead?.bottom?.from != null) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
