@@ -13,6 +13,7 @@ import { evalCustomPartFields } from '../formula/customParts'
 import { buildFormulaScope } from '../formula/context'
 import { invalidateResolverCascade } from './cascadeCache'
 import { withLibraryKey } from '../displayLayers/customPartKinds'
+import { customPartCuts, normaliseCutoutList } from '../partCutouts'
 
 // Map a part's role (parts_library.material_role) to the assembly's scheduled
 // material id for that role. Used to auto-assign a custom part's material when the
@@ -38,7 +39,21 @@ function roleMaterialId(role: string | null | undefined, input: CabinetInput): s
 // role). Same embed as ROOM_CUSTOM_PART_COLS, widened with material_role.
 const CUSTOM_PART_RESOLVE_COLS =
   'id,cabinet_instance_id,part_library_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,' +
-  'expressions,material_override_id,parts_library(key,material_role)'
+  'expressions,material_override_id,part_cutouts,outline,cutouts,parts_library(key,material_role)'
+
+// Cut-outs on a custom part (z_rangehood R3): its `part_cutouts` cut against
+// its freshly evaluated size → the `outline` / `cutouts` the optimiser and 3D
+// read. Returns the patch (only what changed); warnings go on the cabinet.
+function customCutsPatch(p: Record<string, unknown>, resolved: ResolvedCabinet, scope: ReturnType<typeof buildFormulaScope>) {
+  const cut = customPartCuts(
+    { id: String(p.id), orientation: p.orientation as string | null, dx: Number(p.dx), dy: Number(p.dy), dz: Number(p.dz) },
+    normaliseCutoutList(p.part_cutouts), scope)
+  resolved.warnings.push(...cut.warnings)
+  const patch: Record<string, unknown> = {}
+  if (JSON.stringify(cut.outline) !== JSON.stringify(p.outline ?? null)) patch.outline = cut.outline
+  if (JSON.stringify(cut.cutouts) !== JSON.stringify(p.cutouts ?? null)) patch.cutouts = cut.cutouts
+  return patch
+}
 
 // Resolve each custom part against its assembly: (1) evaluate parametric formulas
 // and write the computed dims/positions back, and (2) resolve its effective material
@@ -61,6 +76,7 @@ export async function resolveCustomParts(cabinetId: string, resolved: ResolvedCa
     const role = (p.parts_library as { material_role?: string | null } | null)?.material_role ?? null
     const eff = (p.material_override_id as string | null) ?? roleMaterialId(role, input)
     if (eff && eff !== p.material_id) patch.material_id = eff
+    Object.assign(patch, customCutsPatch({ ...p, ...patch }, resolved, scope))
     if (Object.keys(patch).length > 0) {
       Object.assign(p, patch)
       const { error } = await supabase.from('cabinet_custom_parts').update(patch).eq('id', p.id)
@@ -195,11 +211,11 @@ export async function resolveDraftCabinet(
   resolved.custom_parts = customParts.map((p, i) => {
     const literal = { dx: Number(p.dx ?? 0), dy: Number(p.dy ?? 0), dz: Number(p.dz ?? 18), x: Number(p.x ?? 0), y: Number(p.y ?? 0), z: Number(p.z ?? 0) }
     const lib = libById.get(p.part_library_id as string)
+    const sized = { ...p, ...literal, ...evalCustomPartFields(literal, p.expressions as Record<string, string> | null, scope), id: `draft_custom_${i}` }
     return {
-      ...p,
-      ...literal,
-      ...evalCustomPartFields(literal, p.expressions as Record<string, string> | null, scope),
-      id: `draft_custom_${i}`,
+      ...sized,
+      outline: null, cutouts: null,
+      ...customCutsPatch(sized, resolved, scope),
       cabinet_instance_id: draft.id,
       material_id: (p.material_override_id as string | null) ?? roleMaterialId(lib?.material_role, input),
       visible: p.visible !== false,

@@ -26,7 +26,7 @@ import { mergeRules } from '@/src/lib/resolver/mergeRules'
 import { normaliseBulkhead } from '@/src/lib/bulkhead'
 import { normaliseSplit } from '@/src/lib/cabinetSplit'
 import { normaliseFloatShelf } from '@/src/lib/floatShelf'
-import { normalisePartCutouts } from '@/src/lib/partCutouts'
+import { normalisePartCutouts, normaliseCutoutList } from '@/src/lib/partCutouts'
 import { normaliseBackPanel } from '@/src/lib/backPanel'
 import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
 import { FLOAT_Z } from '@/src/lib/floating'
@@ -566,6 +566,8 @@ export async function dbInsertCustomPartsSnapshot(cabinetId: string, snapshot: R
     orientation: (p.orientation as string) ?? 'flat',
     no_cnc: !!p.no_cnc,
     sort_order: (p.sort_order as number) ?? i,
+    // Cut-outs (z_rangehood R3) — the resolve cuts outline / cutouts from them.
+    part_cutouts: normaliseCutoutList(p.part_cutouts),
   }))
   // Ids made here so each is known to belong to its snapshot index — one insert.
   const ids = rows.map(() => crypto.randomUUID())
@@ -735,7 +737,7 @@ export async function saveCabinetToLibrary(
 
   // Snapshot the instance's custom parts so the definition carries them.
   const { data: cpRows } = await supabase.from('cabinet_custom_parts')
-    .select('id,part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,no_cnc,sort_order')
+    .select('id,part_library_id,name,dx,dy,dz,x,y,z,expressions,material_override_id,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,no_cnc,sort_order,part_cutouts')
     .eq('cabinet_instance_id', cabinetInstanceId).order('sort_order')
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const cps = (cpRows ?? []).map(({ id, ...rest }) => rest)

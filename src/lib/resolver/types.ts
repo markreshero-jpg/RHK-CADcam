@@ -1467,6 +1467,11 @@ export interface ResolvedCustomPart {
   // drives the display-layer item (src/lib/displayLayers/customPartKinds.ts).
   part_library_id?: string | null
   library_key?:     string | null
+  // Cut-outs (z_rangehood R3): the user's list, and what the resolve cut from
+  // it — outline (horizontal frame, like a carcass bottom) + hole loops.
+  part_cutouts?: import('../partCutouts').Cutout[] | null
+  outline?:      import('../shapePath').OutlinePt[] | null
+  cutouts?:      { pts: import('../shapePath').OutlinePt[]; skin: number }[] | null
 }
 
 /** An open face cell: X / Y = its left / bottom in cabinet space, DX × DY its

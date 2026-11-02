@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver/resolver'
 import { mergeRules } from '../resolver/mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material } from '../resolver/types'
-import { normalisePartCutouts, holeLoop, notchOutline, type Cutout } from '../partCutouts'
+import { normalisePartCutouts, normaliseCutoutList, customPartCuts, holeLoop, notchOutline, type Cutout } from '../partCutouts'
+import { buildFormulaScope } from '../formula/context'
 import { cutoutsToOp, shapeFrameFor } from '../optimiser/shapes'
 import { partShapes } from '../partSolids'
 import { sampleOutline } from '../shapePath'
@@ -148,6 +149,46 @@ describe('part cut-outs (R2 notches)', () => {
       [{ x0: 40, x1: 60, y0: -1, y1: 10 }])!
     expect(o.filter(p => p.e === 'top')).toHaveLength(2)
     expect(o).toHaveLength(8)
+  })
+})
+
+// z_rangehood R3: cut-outs on a flat custom part (the WUP's Under Panel).
+describe('part cut-outs (R3 custom parts)', () => {
+  const panel = { id: 'up', orientation: 'flat', dx: 330, dy: 1200, dz: 18 }   // 1200 long, 330 deep
+  it('cuts a hole + notch into a flat custom part, in the carcass-bottom frame', () => {
+    const cut = customPartCuts(panel, [hole({ x: { from: 'left', off: 50 } }), notch({ id: 'pipe', w: 60, d: 40 })])
+    expect(cut.warnings).toEqual([])
+    expect(cut.outline).toHaveLength(8)
+    expect(area(cut.outline!)).toBeCloseTo(1200 * 330 - 60 * 40)
+    expect(cut.cutouts).toHaveLength(1)
+    const b = bbox(cut.cutouts![0].pts)
+    expect([b.x0, b.x1, b.y0, b.y1]).toEqual([50, 550, 30, 280])
+    // Optimiser: same op frame as a carcass bottom (swap), so the 250 runs along DX.
+    const op = cutoutsToOp(cut.cutouts, { frame: shapeFrameFor('custom_parts', 'flat', 'custom_up'), DX: 330, DY: 1200 })!
+    const ob = bbox(op.cut_holes[0])
+    expect(ob.x1 - ob.x0).toBeCloseTo(250)
+    expect(ob.y1 - ob.y0).toBeCloseTo(500)
+    // 3D: partShapes picks the outline + hole up off the resolved custom part.
+    const rp = resolveCabinet(cab({}))
+    rp.custom_parts = [{ ...panel, outline: cut.outline, cutouts: cut.cutouts } as unknown as NonNullable<typeof rp.custom_parts>[number]]
+    expect(partShapes(rp).get('custom_up')!.holes).toHaveLength(1)
+  })
+
+  it('no cut-outs → nothing; formulas; standing parts warn', () => {
+    expect(customPartCuts(panel, [])).toEqual({ outline: null, cutouts: null, warnings: [] })
+    const rp = resolveCabinet(cab({}))
+    const f = customPartCuts(panel, [hole({ w: 'cab.w - 100' })], buildFormulaScope(rp, cab({})))
+    expect(f.warnings).toEqual([])
+    const fb = bbox(f.cutouts![0].pts)
+    expect(fb.x1 - fb.x0).toBeCloseTo(500)
+    const side = customPartCuts({ ...panel, orientation: 'side' }, [hole()])
+    expect(side.outline).toBeNull()
+    expect(side.warnings[0].message).toMatch(/not supported yet/)
+  })
+
+  it('normalises the stored list', () => {
+    expect(normaliseCutoutList(null)).toEqual([])
+    expect(normaliseCutoutList([{ kind: 'notch', edge: 'back', w: 200, d: 250 }])[0]).toMatchObject({ id: 'c1', kind: 'notch', edge: 'back' })
   })
 })
 

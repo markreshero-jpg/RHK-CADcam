@@ -10,7 +10,8 @@
 //          nesting, G-code, 3D and the cabinet views pick it up unchanged.
 //   notch  a rectangle open to an edge, cut into the part's outline (R2).
 //
-// So far: the carcass's horizontal parts (bottom, top, rails) and shelves.
+// So far: the carcass's horizontal parts (bottom, top, rails), shelves, and
+// flat custom parts (their own `cabinet_custom_parts.part_cutouts`, R3).
 // Positions are in the horizontal shape frame — x across from the part's left
 // end (0..DY), y back from its front edge (0..DX).
 // ============================================================
@@ -286,5 +287,31 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
     }
   }
   return warnings
+}
+
+// ── Custom parts (R3) ─────────────────────────────────────────────────────────
+
+/** A custom part's stored `part_cutouts` (Cutout[]) → clean list. */
+export function normaliseCutoutList(raw: unknown): Cutout[] {
+  return Array.isArray(raw) ? normalisePartCutouts({ p: raw }).p ?? [] : []
+}
+
+type CustomCutRow = { id: string; orientation?: string | null; dx: number; dy: number; dz: number }
+
+/**
+ * A custom part's cut-outs → the `outline` + `cutouts` the optimiser and 3D
+ * read (null when it has none). Flat parts only so far (the WUP's Under Panel):
+ * same horizontal frame as a carcass bottom — x along its length (dy), y back
+ * from its front edge (dx).
+ */
+export function customPartCuts(p: CustomCutRow, list: Cutout[], scope?: FormulaScope): {
+  outline: OutlinePt[] | null; cutouts: { pts: OutlinePt[]; skin: number }[] | null; warnings: Issue[]
+} {
+  if (!list.length) return { outline: null, cutouts: null, warnings: [] }
+  const id = `custom_${p.id}`
+  const part: CutPart = { DX: Number(p.dx), DY: Number(p.dy), DZ: Number(p.dz) }
+  const targets = (p.orientation ?? 'flat') === 'flat' ? [{ id, part, holes: true }] : []
+  const warnings = applyPartCutouts(targets, { [id]: list }, scope)
+  return { outline: part.outline ?? null, cutouts: part.cutouts?.length ? part.cutouts : null, warnings }
 }
 

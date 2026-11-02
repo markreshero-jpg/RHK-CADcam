@@ -7,8 +7,9 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → R1 + R2 built 2026-11-01 (holes on the carcass bottom / top /
-> rails; notches on those + fixed / adj shelves). No UI yet — set via
-> `part_cutouts`. Next: R3 (custom parts). First real job: RHK6586 WC-04, Sirius SM927EL520
+> rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
+> parts, e.g. the WUP Under Panel). No UI yet — set via `part_cutouts`.
+> Next: R4 (Cut-outs UI in Cabinet Edit). First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -102,8 +103,9 @@ type Cutout = {
 }
 ```
 
-- Placed cabinets: `cabinet_instances.part_cutouts jsonb` (part key → `Cutout[]`).
-  Custom parts: `cabinet_custom_parts.cutouts jsonb` (the WUP's Under Panel is one).
+- Placed cabinets: `cabinet_instances.part_cutouts jsonb` (part id → `Cutout[]`).
+  Custom parts: `cabinet_custom_parts.part_cutouts jsonb` (`Cutout[]`; the WUP's
+  Under Panel is one) — see R3 as built.
 - Library defaults: `cabinet_definitions.part_cutouts`, **copied to the cabinet at
   placement** (job pinning rule — library edits never move a placed cabinet).
 - Fields take formulas (z_formulas engine, `cab.` / `t.` / `part("…")` scopes).
@@ -169,13 +171,32 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 - **For R5:** check the shelf / top joint holes along the back edge don't land
   in the flue notch.
 
+## R3 as built (2026-11-02)
+
+- Migration `migration_r3_custom_part_cutouts.sql` (applied) on
+  `cabinet_custom_parts`: `part_cutouts jsonb` (the `Cutout[]` list — on the row,
+  not the instance's `part_cutouts`, so it travels when custom parts are copied
+  with new ids), plus `outline` / `cutouts` — **what the resolve cut**, written
+  back like the formula dims (same columns and frame as `case_parts`).
+- `customPartCuts` (partCutouts.ts): runs the R1 / R2 cutter on the part, after
+  its formulas are evaluated (`resolveCustomParts`; in memory for the library
+  preview, `resolveDraftCabinet`). Warnings go on the cabinet.
+- **Flat parts only** (frame = carcass bottom: x along its length `dy`, y back
+  from the front `dx`). Side / front-standing customs warn "not supported yet".
+- Optimiser: `PART_SELECTS.custom_parts` reads `outline,cutouts` — the existing
+  path nests the outline and cuts the holes. Cabinet 3D: `partShapes` gives the
+  part its outline + holes. Elevation / plan / cabinet sheets still draw custom
+  parts as boxes (a hole in an under panel only shows from below).
+- Placement copies the definition snapshot's `part_cutouts`; Save to library
+  snapshots it; copy / paste copies the row.
+
 ## Phases
 
 | # | What | Status |
 |---|---|---|
 | R1 | Cut-out type + `part_cutouts` column; **holes** on standard case parts through resolve → nest / G-code / 3D / cabinet views; tests | [x] 2026-11-01 (831535c) |
 | R2 | **Notches** → part outline (true shape), incl. a rect part gaining an outline | [x] 2026-11-01 |
-| R3 | Cut-outs on **custom parts** (`cabinet_custom_parts.cutouts`) | [ ] |
+| R3 | Cut-outs on **custom parts** (`cabinet_custom_parts.part_cutouts`, flat parts) | [x] 2026-11-02 |
 | R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [ ] |
 | R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [ ] |
 | R6 | **WUP takes the hole** from the cabinets above it | [ ] |
