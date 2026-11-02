@@ -1509,6 +1509,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Type Bottom from / to in mm from the bulkhead’s left end, e.g. 0 and 1170 to cover a doorway and run 100 onto the cupboard past it. It is butted behind the fascia, and its ends are taped.',
       canvas: true, done: c => c.cabinets.some(cab => cab.bulkhead?.bottom?.to != null || cab.bulkhead?.bottom?.from != null) },
   ]},
+
+  // Appended 2026-11-02 (Bottom type: full / rails / none).
+  { id: 'bottom_type', level: 'basics', topic: 'cabinets', title: 'Rails or no bottom instead of a bottom panel',
+    blurb: 'Swap a cabinet’s bottom panel for front + back rails, or leave the bottom out.',
+    keywords: 'bottom type rails no bottom open bottom panel base rail carcass', steps: [
+    { id: 'pick', title: 'Set Bottom Type',
+      body: 'Select the cabinet. Under Top Type there is Bottom Type: Full bottom, Rails or No bottom. Inherit follows the construction method (Full bottom unless the method or the Job / Room rules say otherwise). It is the same box in the Cabinet Edit sidebar, and it goes with the cabinet when you Save it to the library.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.bottom_type) },
+    { id: 'check', title: 'Check it',
+      body: 'Rails are two flat rails in the bottom’s place, Rail Depth deep (the same RD as the top rails): the front one flush with the front, taped like the bottom, the back one at the back. They take the bottom’s joints into the gables. No bottom leaves the gables running down to the floor line. The back and the shelves don’t move.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
