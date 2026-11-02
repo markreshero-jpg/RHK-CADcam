@@ -685,6 +685,7 @@ function SheetRoutes({ routes, H, scale }: { routes: SheetRoute[]; H: number; sc
     <g style={{ pointerEvents: 'none' }}>
       {routes.map((r, i) => {
         const c = col(r.toolNumber)
+        const cw = r.cutWidth ?? r.toolDiameter   // V-bit: its width at depth, not its diameter
         if (r.kind === 'groove') return (
           <line key={i} x1={X(r.x1)} y1={Y(r.y1)} x2={X(r.x2)} y2={Y(r.y2)}
             stroke={c} strokeOpacity={0.8} strokeWidth={Math.max(0.8, r.width * scale)} />
@@ -707,8 +708,8 @@ function SheetRoutes({ routes, H, scale }: { routes: SheetRoute[]; H: number; sc
             fill={c} fillOpacity={0.22} stroke={c} strokeOpacity={0.8} strokeWidth={0.8} />
         )
         return r.onLine
-          ? band(String(i), r.x - r.toolDiameter / 2, r.y - r.toolDiameter / 2, r.w + r.toolDiameter, r.h + r.toolDiameter, r.toolDiameter, c)
-          : band(String(i), r.x, r.y, r.w, r.h, r.toolDiameter, c)
+          ? band(String(i), r.x - cw / 2, r.y - cw / 2, r.w + cw, r.h + cw, cw, c)
+          : band(String(i), r.x, r.y, r.w, r.h, cw, c)
       })}
     </g>
   )

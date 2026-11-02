@@ -188,10 +188,10 @@ export async function loadResolvedDrillOps(
     const rawRoutes = (rRows as unknown as (RouteRow & { operation_key?: string | null })[]).filter(o => o.output_to_cnc !== false && !notchCut(o))
     if (rawRoutes.length) {
       const { data: toolRows } = await supabase.from('cnc_tools')
-        .select('id,tool_number,diameter,max_depth_per_pass,base_feed_rate,plunge_feed_rate,base_spindle_speed').eq('active', true)
+        .select('id,tool_number,diameter,max_depth_per_pass,base_feed_rate,plunge_feed_rate,base_spindle_speed,shape_profile').eq('active', true)
       const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
       // Resolve a cnc_tools id → concrete router bit, or null (with a warning).
-      type Bit = { toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null; feed: number | null; plunge: number | null; rpm: number | null }
+      type Bit = { toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null; feed: number | null; plunge: number | null; rpm: number | null; vAngleDeg: number | null; vTipDia: number | null }
       const numOrNull = (v: unknown) => v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null
       const bit = (toolId: string | null, label: string): Bit | null => {
         const t = toolId ? toolById.get(toolId) : undefined
@@ -203,6 +203,8 @@ export async function loadResolvedDrillOps(
         return {
           toolNumber: num, toolDiameter: dia, maxDepthPerPass: t?.max_depth_per_pass != null ? Number(t.max_depth_per_pass) : null,
           feed: numOrNull(t?.base_feed_rate), plunge: numOrNull(t?.plunge_feed_rate), rpm: numOrNull(t?.base_spindle_speed),
+          ...(() => { const sp = t?.shape_profile as { type?: string; params?: { angle_deg?: number; tip_diameter?: number } } | null | undefined
+            return sp?.type === 'vbit' ? { vAngleDeg: numOrNull(sp.params?.angle_deg), vTipDia: numOrNull(sp.params?.tip_diameter) } : { vAngleDeg: null, vTipDia: null } })(),
         }
       }
 

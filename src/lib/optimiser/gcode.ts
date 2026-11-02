@@ -192,7 +192,9 @@ export interface SheetDrill {
 // A router bit's own cutting data (cnc_tools feed / plunge / spindle). Absent or
 // null → the machine profile / material routing tool values. `partKey` (the
 // placement) keeps each part's tool-set steps in their order across tool groups.
-export interface ToolCutData { feed?: number | null; plunge?: number | null; rpm?: number | null; partKey?: string }
+export interface ToolCutData { feed?: number | null; plunge?: number | null; rpm?: number | null; partKey?: string
+  cutWidth?: number   // width the bit cuts at this depth (V-bit < diameter) — display only
+}
 
 // An internal routing feature projected into sheet space (bottom-left origin),
 // carrying its own resolved router bit. `groove` = a straight slot along a line;

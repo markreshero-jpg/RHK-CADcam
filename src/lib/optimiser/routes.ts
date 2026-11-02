@@ -42,6 +42,8 @@ export interface RouteOpRaw {
   toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null
   // The bit's own cutting data (cnc_tools) — null → profile / material tool values.
   feed?: number | null; plunge?: number | null; rpm?: number | null
+  // V-bit geometry (cnc_tools.shape_profile) — the width it cuts depends on depth.
+  vAngleDeg?: number | null; vTipDia?: number | null
   // Tool-set step options (z_cnc_tools T2), carried onto the sheet route:
   on_line?: boolean                 // outline with the tool centre on the rectangle
   ring_width?: number | null        // pocket only this wide a band in from the edge
@@ -50,7 +52,14 @@ export interface RouteOpRaw {
 
 // Geometry + strategy of a route op WITHOUT its resolved tool — what a tool-set
 // member expands to before the loader attaches the member's bit.
-export type RouteGeom = Omit<RouteOpRaw, 'toolNumber' | 'toolDiameter' | 'maxDepthPerPass' | 'feed' | 'plunge' | 'rpm'>
+export type RouteGeom = Omit<RouteOpRaw, 'toolNumber' | 'toolDiameter' | 'maxDepthPerPass' | 'feed' | 'plunge' | 'rpm' | 'vAngleDeg' | 'vTipDia'>
+
+// Width a bit actually cuts at `depth`: a V-bit's flank width (tip + 2·depth·tan(½angle),
+// capped at its diameter); any other bit its diameter.
+export function cutWidthAt(op: Pick<RouteOpRaw, 'toolDiameter' | 'vAngleDeg' | 'vTipDia'>, depth: number): number {
+  if (!(op.vAngleDeg && op.vAngleDeg > 0)) return op.toolDiameter
+  return Math.min(op.toolDiameter, (op.vTipDia ?? 0) + 2 * depth * Math.tan((op.vAngleDeg * Math.PI) / 360))
+}
 
 // One step of a cnc_tool_set recipe (cnc_tool_set_operations row).
 export interface ToolSetMember {
@@ -170,7 +179,7 @@ export function buildSheetRoutes(
         out.push({
           kind: 'groove', label: pl.label, x1: a.x, y1: a.y, x2: b.x, y2: b.y,
           width: w, depth, toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
-          feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid,
+          feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid, cutWidth: cutWidthAt(op, depth),
         })
         continue
       }
@@ -189,7 +198,7 @@ export function buildSheetRoutes(
         rasterAngleDeg: op.raster_angle_deg ?? 0,
         stepoverPct: op.raster_stepover_pct ?? 0,
         toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
-        feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid,
+        feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid, cutWidth: cutWidthAt(op, depth),
         onLine: !!op.on_line,
         ringWidth: op.ring_width ?? null,
         // A square_off never falls back to a full lap: no radius → gcode warns + skips.
