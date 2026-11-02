@@ -1,0 +1,62 @@
+{
+  "_source": "mark ups with Client 02.09.26/Bed 2,3 Robes and US TV.pdf p1-2 (Bed 2 Robe plan / Elev 2 + Mark's red section sketch) + Site measure 22.10.26.pdf p7 (Bed 2 Robe 2709 x 603 returns, CH 2389) + Mark Q&A 2026-11-03",
+  "_notes": [
+    "CH 2389 off slab - 20 floor = 2369. Section, floor up: kick 100 (Teak, 540 deep overall to the kick face) | 16.5 Teak base plate 200 deep, front at 600 (400-600 off the wall), 100-116.5 | Whiteboard carcass 116.5-2336 (2219.5), 520 deep = 80 back from the plates | 16.5 Teak top plate 200 deep 2336-2352.5 | 16.5 Teak shadowline 2352.5-2369, set back 16.5 from the plate front.",
+    "Across: 150 Teak filler (front at 600, between the plates, return to the gable) | 803 | 803 | 803 | 150 filler = 2709. Plates + kick + shadowline wall to wall.",
+    "No sliding doors yet (Mark: robe first). #2: 3 inner drawers Whiteboard, 178 boxes, 30 finger gaps, bottom front 2 off the bottom; fixed shelf 30 over; top fixed shelf (top 1940 AFF) + rail. #3: top shelf + rail. #4: top shelf + rail + lower rail (~1000 AFF) double hanging."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "Bed 2 Robe",
+  "roomHeight": 2369,
+  "wallCabinetTop": 2369,
+  "roomRules": { "TOEH": 100 },
+  "walls": [
+    { "x": 0, "y": 603, "length": 603, "angle": 270, "_": "1 left return, S->N" },
+    { "x": 0, "y": 0, "length": 2709, "angle": 0, "_": "2 robe back wall, W->E = elevation" },
+    { "x": 2709, "y": 0, "length": 603, "angle": 90, "_": "3 right return, N->S" }
+  ],
+  "cabinets": [
+    { "def": "TFFW", "wall": 2, "offset": 0, "dx": 150, "dy": 2219.5, "dz": 520, "note": "# 1 150 Lx Sublime Teak filler between the plates, front flush with the plates (600 OA), return to the gable",
+      "set": { "pos_z": 116.5, "material_overrides": { "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b" } } },
+    { "def": "T2D", "wall": 2, "offset": 150, "dx": 803, "dy": 2219.5, "dz": 520, "note": "# 2 3 inner drawers (30 finger gaps), fixed shelf over, top shelf + hanging rail. Sliding doors later",
+      "set": { "pos_z": 116.5, "has_toekick": false, "has_face": false,
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ], "zones": [ { "col_index": 0, "row_index": 0, "face_type": "open" } ] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 626, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 16.5 },
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 224.5 },
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 432.5 } ] } },
+          { "size": 1148, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
+            { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 1717.5 } ] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "T2D", "wall": 2, "offset": 953, "dx": 803, "dy": 2219.5, "dz": 520, "note": "# 3 top shelf + hanging rail. Sliding doors later",
+      "set": { "pos_z": 116.5, "has_toekick": false, "has_face": false,
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ], "zones": [ { "col_index": 0, "row_index": 0, "face_type": "open" } ] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 1790.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
+            { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 1717.5 } ] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "T2D", "wall": 2, "offset": 1756, "dx": 803, "dy": 2219.5, "dz": 520, "note": "# 4 double hanging: top shelf + rail, lower rail ~1000 AFF. Sliding doors later",
+      "set": { "pos_z": 116.5, "has_toekick": false, "has_face": false,
+        "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ], "rows": [ { "row_index": 0, "height_locked": false } ], "zones": [ { "col_index": 0, "row_index": 0, "face_type": "open" } ] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 1790.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
+            { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 883.5 },
+            { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 1717.5 } ] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "TFFW", "wall": 2, "offset": 2559, "dx": 150, "dy": 2219.5, "dz": 520, "note": "# 5 150 Lx Sublime Teak filler between the plates, front flush with the plates (600 OA), return to the gable",
+      "set": { "pos_z": 116.5, "material_overrides": { "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b" } } },
+    { "def": "B1D", "wall": 2, "offset": 0, "dx": 2709, "dy": 100, "dz": 540, "note": "Robe kick 100 high, Lx Sublime Teak face, 540 deep overall to the kick face, wall to wall",
+      "rules": { "TOESCF": 0, "TOESCB": 0, "TOEH": 100 },
+      "set": { "has_carcass": false, "has_face": false, "has_internal": false, "has_toekick": true,
+        "toekick_overrides": { "face": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b" } } },
+    { "def": "WUP", "wall": 2, "offset": 0, "dx": 2709, "dy": 16.5, "dz": 200, "note": "Base plate 16.5 Lx Sublime Teak, 200 deep, front flush with the robe front (600 OA), 100-116.5 AFF, wall to wall",
+      "set": { "pos_z": 100, "pos_y": 400, "material_overrides": { "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b" } } },
+    { "def": "WUP", "wall": 2, "offset": 0, "dx": 2709, "dy": 16.5, "dz": 200, "note": "Top plate 16.5 Lx Sublime Teak, 200 deep, front flush with the robe front (600 OA), 2336-2352.5 AFF, wall to wall",
+      "set": { "pos_z": 2336, "pos_y": 400, "material_overrides": { "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b" } } },
+    { "def": "BHSL", "wall": 2, "offset": 0, "dx": 2709, "dy": 16.5, "dz": 583.5, "note": "16.5 Lx Sublime Teak shadowline 2352.5-2369, set back 16.5 from the plate front, wall to wall",
+      "set": { "material_overrides": { "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b" },
+        "bulkhead": { "kind": "shadowline", "front": "carcase", "width": 60, "cleat": false, "auto_h": false,
+          "left": { "on": false, "depth": 583.5, "joint": "mitre" }, "right": { "on": false, "depth": 583.5, "joint": "mitre" }, "bottom": { "on": false, "depth": 583.5, "joint": "mitre" } } } }
+  ]
+}
