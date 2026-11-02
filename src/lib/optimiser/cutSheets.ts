@@ -11,7 +11,7 @@ import type { NestResult } from './nest'
 import { placedOutline } from './shapes'
 import { blockRectOn, grainMatchTags, grainMatchLine } from './grainBlocks'
 import { grainMatchColour } from '../grainMatch'
-import { partNumbers, holesIn, sheetNumbers } from './labels'
+import { partNumbers, sheetPartOrder, holesIn, sheetNumbers } from './labels'
 
 type Drill = { x: number; y: number; diameter: number }
 
@@ -21,13 +21,13 @@ export interface CutSheetRow {
   holes: number; comment: string | null; gm: string | null
 }
 
-/** The parts list: sheet by sheet, in placement order. */
+/** The parts list: sheet by sheet, in part-number order. */
 export function cutSheetRows(nest: NestResult, partByUid: Map<string, OptiPart>, drillsBySheet: Map<number, Drill[]>): CutSheetRow[] {
   const nos = partNumbers(nest)
   const sheetNos = sheetNumbers(nest.sheets)
   const gm = grainMatchTags(nest)
   const rows: CutSheetRow[] = []
-  nest.sheets.forEach((s, si) => s.placements.forEach(pl => {
+  nest.sheets.forEach((s, si) => sheetPartOrder(s.placements).forEach(pl => {
     const p = partByUid.get(pl.baseUid)
     if (!p) return
     rows.push({

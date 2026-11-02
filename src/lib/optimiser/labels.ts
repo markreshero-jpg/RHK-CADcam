@@ -65,11 +65,29 @@ export interface LabelData {
   pic: { W: number; H: number; edges: [Pt, Pt, boolean][]; holes: { x: number; y: number; d: number }[] }
 }
 
-/** Part numbers: 1, 2, 3… on each sheet, in placement order (Mark, 2026-10-29) —
- *  label "Sheet 2 / Part 3" matches the sheet prints. */
+/** A sheet's parts in numbering order (Mark, 2026-11-02): column by column left
+ *  to right, top to bottom within a column, as the sheet is drawn and printed —
+ *  so part 1 sits next to part 2 for whoever sticks the labels on by hand.
+ *  Placement order is the nest's big-first order, which scattered the numbers.
+ *  A column = parts whose left edges sit within COL_TOL of the column's first. */
+const COL_TOL = 30
+export function sheetPartOrder<P extends { x: number; y: number; h: number }>(placements: P[]): P[] {
+  const byX = [...placements].sort((a, b) => a.x - b.x || (b.y + b.h) - (a.y + a.h))
+  const out: P[] = []
+  for (let i = 0; i < byX.length;) {
+    let j = i
+    while (j < byX.length && byX[j].x - byX[i].x <= COL_TOL) j++
+    out.push(...byX.slice(i, j).sort((a, b) => (b.y + b.h) - (a.y + a.h) || a.x - b.x))
+    i = j
+  }
+  return out
+}
+
+/** Part numbers: 1, 2, 3… on each sheet, in sheetPartOrder — label
+ *  "Sheet 2 / Part 3" matches the sheet prints and Stage 5. */
 export function partNumbers(nest: NestResult): Map<string, number> {
   const out = new Map<string, number>()
-  for (const s of nest.sheets) s.placements.forEach((pl, i) => out.set(pl.uid, i + 1))
+  for (const s of nest.sheets) sheetPartOrder(s.placements).forEach((pl, i) => out.set(pl.uid, i + 1))
   return out
 }
 
@@ -160,7 +178,8 @@ export function buildAllLabels(
   const sheetNos = sheetNumbers(nest.sheets)
   const gm = grainMatchTags(nest)
   const out: LabelData[] = []
-  nest.sheets.forEach((s, si) => s.placements.forEach(pl => {
+  // Labels print in part-number order on each sheet.
+  nest.sheets.forEach((s, si) => sheetPartOrder(s.placements).forEach(pl => {
     const p = partByUid.get(pl.baseUid)
     if (!p) return
     out.push({ ...buildLabelData(p, pl, sheetNos.get(s.index)!.no, nos.get(pl.uid)!, drillsBySheet.get(s.index) ?? [], deductEb, look, gm.get(pl.uid), dims), sheetKey: si + 1, runNo })

@@ -16,7 +16,7 @@ import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
-import { sheetNumbers } from '@/src/lib/optimiser/labels'
+import { sheetNumbers, sheetPartOrder } from '@/src/lib/optimiser/labels'
 import type { ShapePt } from '@/src/lib/shapePath'
 import { PlacedOutline, PlacedHoles, GrainBlockOutlines } from './SheetSVG'
 import type { SheetDrill, SheetRoute } from '@/src/lib/optimiser/gcode'
@@ -159,9 +159,9 @@ export default function Stage5Edit() {
   const selectedInfo = (() => {
     if (!selectedUid) return null
     for (const s of nestResult.sheets) {
-      const idx = s.placements.findIndex(pl => pl.uid === selectedUid)
+      const idx = sheetPartOrder(s.placements).findIndex(pl => pl.uid === selectedUid)
       if (idx >= 0) {
-        const pl = s.placements[idx]
+        const pl = sheetPartOrder(s.placements)[idx]
         const part = snap?.parts.find(p => p.uid === pl.baseUid) ?? null
         return { pl, part, sheetIndex: s.index, num: idx + 1 }
       }
@@ -348,7 +348,7 @@ export default function Stage5Edit() {
           </div>
           <div className="flex-1 overflow-y-auto divide-y divide-edge/50">
             {sheet.placements.length === 0 && <p className="text-[11px] text-ink-subtle px-3 py-3">No parts on this sheet.</p>}
-            {sheet.placements.map((pl, idx) => {
+            {sheetPartOrder(sheet.placements).map((pl, idx) => {
               const on = selectedUid === pl.uid
               const part = snap?.parts.find(p => p.uid === pl.baseUid)
               return (
@@ -543,6 +543,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
   }
 
   const fy = (y: number, h: number) => (H - y - h) * scale
+  const partNo = new Map(sheetPartOrder(sheet.placements).map((pl, i) => [pl.uid, i + 1]))
 
   // ── Measure tool ── snap targets in sheet mm: sheet border, each part's outline (or rect), cutouts, drill holes.
   const snapSrc = useMemo<SnapSources | null>(() => {
@@ -577,7 +578,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
         const x = inBlock ? p.x + drag!.gx - drag!.block!.x0 : isDrag ? drag!.gx : p.x
         const y = inBlock ? p.y + drag!.gy - drag!.block!.y0 : isDrag ? drag!.gy : p.y
         const on = selectedUid === p.uid
-        const num = idx + 1   // per-sheet part number
+        const num = partNo.get(p.uid) ?? idx + 1   // per-sheet part number (labels.sheetPartOrder)
         const outline = outlineFor(p)
         return (
           <g key={p.uid}
