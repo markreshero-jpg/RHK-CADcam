@@ -12,7 +12,7 @@ import {
  *  the panel ('none' / 'rail'), so shelves, dividers and drawers run to the
  *  back of the box (z_ubo U1). */
 export function caseBackT(cab: CabinetInput, r: ConstructionRules): number {
-  return (r.BACK_TYPE ?? 'panel') === 'panel' ? cab.material.DZ : 0
+  return (r.BACK_TYPE ?? 'panel') === 'panel' ? (cab.back_material ?? cab.material).DZ : 0
 }
 
 /** Where the carcass floor sits (z_floating). TK is the kick lift, floorT the
@@ -40,7 +40,7 @@ export function resolveCaseParts(
   // Individual part-level overrides wire in here when supported.
   const sideMat   = cab.material
   const bottomMat = cab.material
-  const backMat   = cab.material
+  const backMat   = cab.back_material ?? cab.material   // role 'back' override, else carcass
   const topMat    = cab.material
 
   // BACK_TYPE (z_ubo U1): 'none' / 'rail' drop the back panel, so nothing
@@ -174,13 +174,13 @@ export function resolveCaseParts(
   // ── Back ─────────────────────────────────────────────────────
   // Bottom joinery shifts the back's stored Y so its 3D bottom face (p.Y + p.DZ)
   // lands at TK+SCRBT (butts_into_back) or TK+SCRBT+backT (back_on_bottom).
-  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT
+  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - bottomT : TK + r.SCRBT
 
   // Top joinery trims the back's top face by topT when the top sits over it.
   // SCRT: back panel stops at DY - SCRT (scribe material on sides above).
   // Cabinet3DView now uses p.DX directly as the rendered height of the back panel,
   // so compute it as (top face) − (bottom face in 3D).
-  const backBottom3D = backY + backT
+  const backBottom3D = backY + bottomT   // the back stands on the bottom (its thickness, not the back's)
   const backTop3D    = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
   const backDX       = backTop3D - backBottom3D
 

@@ -174,7 +174,8 @@
       "dy": 370,
       "dz": 300,
       "rules": {
-        "FLOAT": true
+        "FLOAT": true,
+        "SCRBK": 0
       },
       "set": {
         "pos_z": 1400,
@@ -185,7 +186,8 @@
         "material_overrides": {
           "interior": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
           "exposed": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
-          "shelf": "a92331d4-f2fd-4a82-9984-86f5af59bb01"
+          "shelf": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
+          "back": "6cd37f1b-67ce-4005-b5c3-c2715b739e07"
         },
         "internal_grid": {
           "tree": {
@@ -200,14 +202,15 @@
       "wall": 2,
       "offset": 500,
       "dx": 1544,
-      "note": "Open shelf box 33 Lx Tas Oak, 300 deep x 370, bottom 1400 AFF. Both ends."
+      "note": "Open shelf box 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back, no back scribe, 300 deep x 370, bottom 1400 AFF. Both ends."
     },
     {
       "def": "B1D",
       "dy": 370,
       "dz": 300,
       "rules": {
-        "FLOAT": true
+        "FLOAT": true,
+        "SCRBK": 0
       },
       "set": {
         "pos_z": 1400,
@@ -218,7 +221,8 @@
         "material_overrides": {
           "interior": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
           "exposed": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
-          "shelf": "a92331d4-f2fd-4a82-9984-86f5af59bb01"
+          "shelf": "a92331d4-f2fd-4a82-9984-86f5af59bb01",
+          "back": "6cd37f1b-67ce-4005-b5c3-c2715b739e07"
         },
         "internal_grid": {
           "tree": {
@@ -240,7 +244,7 @@
       "wall": 3,
       "offset": 267,
       "dx": 1164,
-      "note": "Open shelf box 33 Lx Tas Oak, 300 deep x 370, bottom 1400 AFF. No left end (butts the Wall 2 box), right end seen."
+      "note": "Open shelf box 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back, no back scribe, 300 deep x 370, bottom 1400 AFF. No left end (butts the Wall 2 box), right end seen."
     }
   ]
 }

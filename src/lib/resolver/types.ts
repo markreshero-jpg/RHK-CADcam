@@ -796,6 +796,10 @@ export interface CabinetInput {
   // exposed_interior is set (loadCabinetInput swaps material/shelf_material).
   // Required: schedules must carry an 'exposed' row (no fallback by design).
   exposed_material: Material
+  // Case back board when it differs from the carcass (role 'back', e.g. a
+  // cabinet-level material_overrides.back: 33 box with an 18 back). Absent =
+  // the carcass material.
+  back_material?: Material
   toekick_face_material:     Material
   toekick_interior_material: Material
 
