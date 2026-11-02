@@ -390,7 +390,11 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
         Z:  frontZ + frontMat.DZ - idbSetback,
         AX: 0, AY: 0, AZ: 0,
         material_id: frontMat.id,
-        edge_band:   edgeSidesToBanding(ctx.edging.inner_drawer_front, frontEb),
+        // Edged sides: the drawer builder's db_front ticks on the inner method
+        // (inner drawers never emit the box's own front, so that row IS the
+        // face — same as the builder preview), else the schedule EDGING.
+        // Standard = all 4 sides (Mark, 2026-11-03).
+        edge_band:   edgeSidesToBanding(rulesForResolve.DB_EDGING?.db_front ?? ctx.edging.inner_drawer_front, frontEb),
         y_locked:    !!it.y_locked,
         inner_drawer_index: drawerIdx,
       })

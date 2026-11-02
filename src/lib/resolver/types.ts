@@ -116,7 +116,7 @@ export const DEFAULT_EDGING: Required<EdgingDefaults> = {
   inner_drawer_bottom: [],
   inner_drawer_back:   ['top'],
   inner_drawer_side:   ['top'],
-  inner_drawer_front:  ['top'],
+  inner_drawer_front:  ['top', 'bottom', 'left', 'right'],   // all 4 (Mark, 2026-11-03)
   pull_out_bottom:     [],
   pull_out_side:       ['top'],
   pull_out_back:       ['top'],
