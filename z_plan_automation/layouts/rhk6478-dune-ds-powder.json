@@ -2,9 +2,9 @@
   "_source": "Markup 26.10.26 img_261026111543.pdf p1-2 (DS Powder) + Site measure 22.10.26.pdf p3 (D/S Pdr: 2351 wall, 1514 left wall, 556 + 19 jamb right, spout to move ~600 off the left wall) + Mark Q&A 2026-11-02",
   "_notes": [
     "Like the US Powder (Mark): 33 end panels (70 scribe strip wall side + 16.5 full depth) | open shelf | drawer | drawer | open shelf | 33 end panels.",
-    "2351 wall to wall: 33 + 571 + 571.5 + 571.5 + 571 + 33 (bays equal - widths not given).",
+    "2351 wall to wall: 33 + 200 open + 942.5 D + 942.5 D + 200 open + 33 (Mark rev 1: open bays 200).",
     "140 basin (markup) finishing 960 -> top 820 (height_mm 800), carcass 460-800, panels + shelf as the original ensuite (213.5 shelf underside to 760 apron underside).",
-    "Basin + spout 600 from the left wall (Mark). Ceiling 2399 TBC (2419 - 20 floor, as the DS Hallway next door)."
+    "Basin + spout 600 from the RIGHT wall (Mark rev 1). Ceiling 2399 TBC (2419 - 20 floor, as the DS Hallway next door)."
   ],
   "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
   "roomName": "DS Powder",
@@ -70,10 +70,10 @@
       "def": "B1D",
       "wall": 2,
       "offset": 33,
-      "dx": 571,
+      "dx": 200,
       "dy": 340,
       "dz": 476.5,
-      "note": "open shelf bay L",
+      "note": "open shelf bay L 200",
       "rules": {
         "FLOAT": true,
         "SCRBK": 0
@@ -115,8 +115,8 @@
     {
       "def": "D2-LL",
       "wall": 2,
-      "offset": 604,
-      "dx": 571.5,
+      "offset": 233,
+      "dx": 942.5,
       "dy": 340,
       "dz": 476.5,
       "note": "drawer (no inner drawer)",
@@ -158,7 +158,7 @@
       "def": "D2-LL",
       "wall": 2,
       "offset": 1175.5,
-      "dx": 571.5,
+      "dx": 942.5,
       "dy": 340,
       "dz": 476.5,
       "note": "drawer (no inner drawer)",
@@ -199,11 +199,11 @@
     {
       "def": "B1D",
       "wall": 2,
-      "offset": 1747,
-      "dx": 571,
+      "offset": 2118,
+      "dx": 200,
       "dy": 340,
       "dz": 476.5,
-      "note": "open shelf bay R",
+      "note": "open shelf bay R 200",
       "rules": {
         "FLOAT": true,
         "SCRBK": 0
