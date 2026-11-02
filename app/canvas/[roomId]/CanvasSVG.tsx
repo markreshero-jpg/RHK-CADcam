@@ -96,6 +96,8 @@ interface CanvasSVGProps {
   setSelected: (s: Selected) => void
   setContextMenu: (m: ContextMenuState | null) => void
   onWallPointerDown: (e: React.PointerEvent, wallId: string) => void
+  /** Press on a selected wall's start / end grabber — drag resizes the wall. */
+  onWallEndPointerDown?: (e: React.PointerEvent, wallId: string, end: 'start' | 'end') => void
   onCabinetPointerDown: (e: React.PointerEvent, cab: CabinetInstance) => void
   /** Row hovered in the stacked-cabinet picker — highlights that cabinet. */
   pickHoverId?: string | null
@@ -196,7 +198,7 @@ export default function CanvasSVG({
   svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, layers, planGrid,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, multiWalls = [], marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
-  setSelected, setContextMenu, onWallPointerDown, onCabinetPointerDown, pickHoverId, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
+  setSelected, setContextMenu, onWallPointerDown, onWallEndPointerDown, onCabinetPointerDown, pickHoverId, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick, onCabLabelMove, cabLabelMoving, onLabelMoveEnd,
   benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
   onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBtUndoVertex,
@@ -2092,6 +2094,22 @@ export default function CanvasSVG({
               fill="#f59e0b" style={{ pointerEvents: 'none' }} />
           </>
         )}
+
+        {/* ── Wall end grabbers (single selected wall) — press + drag to resize ── */}
+        {onWallEndPointerDown && mode === 'select' && selected?.type === 'wall' && multiWalls.length < 2 && (() => {
+          const w = walls.find(x => x.id === selected.id)
+          if (!w) return null
+          const e = wallEnd(w)
+          const r = 6 / view.zoom
+          return ([['start', { x: w.pos_x, y: w.pos_y }], ['end', e]] as const).map(([end, p]) => (
+            <circle key={end} cx={p.x} cy={p.y} r={r}
+              fill="#1d4ed8" stroke="#93c5fd" strokeWidth={1.5 / lz}
+              style={{ cursor: 'move' }}
+              onPointerDown={ev => onWallEndPointerDown(ev, w.id, end)}>
+              <title>Drag to change the wall length · Shift = free (changes the angle too)</title>
+            </circle>
+          ))
+        })()}
 
         {/* ── Marquee selection rect ── */}
         {marquee && (

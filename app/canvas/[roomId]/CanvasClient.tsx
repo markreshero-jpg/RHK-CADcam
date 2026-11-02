@@ -451,6 +451,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     base: { walls: Wall[]; cabs: CabinetInstance[]; bts: BenchtopInstance[]; fxs: RoomFixture[] }
   } | null>(null)
   type WallDrag = NonNullable<typeof wallDragRef.current>
+  // Dragging a selected wall's start / end grabber: resizes that wall; joined
+  // walls follow live (same joint propagation as typed Start / End edits).
+  const wallEndDragRef = useRef<{
+    id: string; end: 'start' | 'end'; base: Wall; pre: Wall[]; startPx: Pt; active: boolean
+    u?: Partial<Wall>; propagated?: { id: string; update: Partial<Wall> }[]
+  } | null>(null)
   // A drop that pulled walls off walls joined to them waits here for the user's choice.
   const [wallDetach, setWallDetach] = useState<{ d: WallDrag; dx: number; dy: number; pre: Wall[]; neighbours: DetachedNeighbour[]; canStretch: boolean } | null>(null)
   // Tracks whether a pointerdown actually fired on the SVG — guards against phantom
@@ -2266,6 +2272,40 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       return
     }
 
+    if (wallEndDragRef.current) {
+      const d = wallEndDragRef.current
+      if (!d.active && dist(svgP, d.startPx) < 3) return
+      if (!d.active) { captureSnapshot(); d.active = true }
+      const b = d.base, dir = wallDir(b), be = wallEnd(b)
+      let u: Partial<Wall>
+      if (shiftRef.current) {
+        // Free: the dragged end follows the cursor; the other end stays put.
+        const p = { x: Math.round(wp.x), y: Math.round(wp.y) }
+        const from = d.end === 'end' ? { x: b.pos_x, y: b.pos_y } : p
+        const to   = d.end === 'end' ? p : be
+        const len = Math.hypot(to.x - from.x, to.y - from.y)
+        if (len < 10) return
+        u = { length: Math.round(len * 10) / 10, angle: Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI }
+        if (d.end === 'start') { u.pos_x = p.x; u.pos_y = p.y }
+      } else {
+        // Along the wall's own line: length only.
+        const t = Math.round((wp.x - b.pos_x) * dir.x + (wp.y - b.pos_y) * dir.y)
+        if (d.end === 'end') u = { length: Math.max(10, t) }
+        else {
+          const tt = Math.min(t, b.length - 10)
+          u = { pos_x: b.pos_x + tt * dir.x, pos_y: b.pos_y + tt * dir.y, length: b.length - tt }
+        }
+      }
+      const propagated = computeJointUpdates(d.pre, b.id, b, { ...b, ...u })
+      d.u = u; d.propagated = propagated
+      setWalls(d.pre.map(w => {
+        if (w.id === b.id) return { ...w, ...u }
+        const p = propagated.find(x => x.id === w.id)
+        return p ? { ...w, ...p.update } : w
+      }))
+      return
+    }
+
     if (wallDragRef.current) {
       const d = wallDragRef.current
       // Same 3px dead zone as cabinet drags so a click never nudges a wall.
@@ -2382,6 +2422,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
     const svgP = svgCoords(e)
     const wp = toWorld(svgP.x, svgP.y)
+
+    if (wallEndDragRef.current) {
+      const d = wallEndDragRef.current
+      wallEndDragRef.current = null
+      if (!d.active || !d.u) return
+      await Promise.all([
+        dbUpdateWall(d.base.id, d.u),
+        ...(d.propagated ?? []).map(({ id, update }) => dbUpdateWall(id, update)),
+      ])
+      return
+    }
 
     if (wallDragRef.current) {
       const d = wallDragRef.current
@@ -2599,7 +2650,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     ])
   }
 
-  async function resolveWallDetach(choice: WallDetachChoice) {
   // Typed move from the wall panels — same as dropping a drag of these walls by
   // (dx, dy): everything on them comes along, and joined walls left behind ask
   // detach / stretch / move all.
@@ -2627,6 +2677,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     await applyWallDrag(d, dx, dy, true)
   }
 
+  async function resolveWallDetach(choice: WallDetachChoice) {
     const p = wallDetach
     if (!p) return
     setWallDetach(null)
@@ -3390,6 +3441,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               setSelected={setSelected}
               setContextMenu={setContextMenu}
               onWallPointerDown={onWallPointerDown}
+              onWallEndPointerDown={(e, wallId, end) => {
+                if (mode !== 'select' || e.button !== 0) return
+                e.stopPropagation()
+                const base = walls.find(w => w.id === wallId)
+                if (!base) return
+                svgPointerDownRef.current = true
+                setContextMenu(null); setOpenMenu(null)
+                wallEndDragRef.current = { id: wallId, end, base, pre: walls, startPx: svgCoords(e), active: false }
+                svgRef.current?.setPointerCapture(e.pointerId)
+              }}
               onCabinetPointerDown={onCabinetPointerDown}
               pickHoverId={cabPicker ? cabPickHover : null}
               onCabinetCrosshairClick={onCabinetCrosshairClick}
@@ -3768,9 +3829,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 if (Object.keys(uw).length) void handleUpdateWall(w.id, uw)
               }
             }}
-            onDeleteMany={() => setDeleteWallPending(multiWalls)}
             onUpdateWall={(id, u) => { captureSnapshot(); return handleUpdateWall(id, u) }}
             onMoveBy={(dx, dy) => moveWallsBy(multiWallObjs.map(w => w.id), dx, dy)}
+            onDeleteMany={() => setDeleteWallPending(multiWalls)}
             onClear={() => { setSelected(null); setMultiWalls([]) }}
           />
         )}
