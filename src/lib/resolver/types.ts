@@ -673,6 +673,9 @@ export interface DeclaredSeamGeom {
   toward: { x: number; y: number; z: number }
   length: number
   width:  number
+  // Part B is a flat part (a shelf / top) bored along this axis from the face
+  // at `at` — instead of an upright's inner face (z_rangehood flue box).
+  bore_b?: { axis: 'x+' | 'x-' | 'y+' | 'y-' | 'z+' | 'z-'; at: number }
 }
 
 // What a generator declares; resolveJoints adds the joint assignment cascade.
@@ -765,6 +768,8 @@ export interface CabinetInput {
   curved_end?:    import('../curvedEnd/settings').CurvedEndSettings | null
   // Floating shelf (z_floating_shelf): boards, strips + cleats from resolveFloatShelf.
   float_shelf?:   import('../floatShelf').FloatShelfSettings | null
+  // Undermount rangehood (z_rangehood R5): hole, flue notch, shelf height, flue box.
+  rangehood?:     import('../rangehood').RangehoodSettings | null
   // Part cut-outs (z_rangehood R1): holes added to the resolved parts by applyPartCutouts.
   part_cutouts?:  import('../partCutouts').PartCutouts | null
   // Height split (z_cabinet_split): sides + back cut at these heights (cabinet frame).
@@ -1526,6 +1531,9 @@ export interface ResolvedCabinet {
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]
+  // Where notches took board away (z_rangehood), cabinet space — joint holes
+  // running into one are dropped (seamDrillsFor). In memory only.
+  cutout_voids?: import('../partCutouts').CutoutVoid[]
   // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md): part id → the
   // room views it is hidden in. Visual only — room views filter via filterHiddenParts().
   part_hide_views?: PartHideViews
@@ -1553,7 +1561,7 @@ export interface ResolvedPart extends PartTransform {
 //   cleat:<edge>               return cleat behind a face filler on side edge <edge>
 //                              (z_angled_filler, carcass off) — same frame as side:<edge>
 // See src/lib/cabinetShape/partKeys.ts.
-export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}` | `crv:${string}` | `fs:${string}` | `ibp:${string}` | `ap:${string}`
+export type ShapedCasePartKey = `side:${string}` | `back:${string}` | `rail:${string}` | `cleat:${string}` | `bh:${string}` | `crv:${string}` | `fs:${string}` | `ibp:${string}` | `ap:${string}` | `rh:${string}`
 
 export interface ResolvedCasePart extends ResolvedPart {
   // Finger-pull rails (z_handles H6) + island back panels (vertical): sheet grain.

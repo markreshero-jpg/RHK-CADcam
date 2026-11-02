@@ -32,10 +32,13 @@ import { resolveCurvedEnd } from './resolveCurvedEnd'
 import { resolveFloatShelf } from './resolveFloatShelf'
 import { railSupportSeams } from './railSupportSeams'
 import { resolveBackPanel } from './resolveBackPanel'
-import { applyPartCutouts, cutoutTargets } from '../partCutouts'
+import { applyPartCutouts, cutoutTargets, type CutoutVoid, type PartCutouts } from '../partCutouts'
+import { resolveRangehood, withRangehoodShelf } from './resolveRangehood'
 import { buildFormulaScope } from '../formula/context'
 
-export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
+export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
+  // Undermount rangehood (z_rangehood R5): its first fixed shelf sits at the shelf height.
+  const cab = cabIn.rangehood ? withRangehoodShelf(cabIn) : cabIn
   const allErrors:   ResolverError[] = []
   const allWarnings: ResolverError[] = [...(cab.material_warnings ?? [])]
 
@@ -149,6 +152,15 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
   allWarnings.push(...drawerWarnings)
   if (shapedHw) allWarnings.push(...drawerClashes(drawerStacks))
 
+  // ── 5b. Rangehood (z_rangehood R5) ─────────────────────────────
+  // Flue box parts + their seams; the hole and notches join the cut-outs (6e).
+  const rh = cab.rangehood && cab.has_carcass ? resolveRangehood(cab, caseParts, internalParts) : null
+  if (rh) {
+    caseParts.push(...rh.parts)
+    declaredSeams.push(...rh.seams)
+    allWarnings.push(...rh.warnings)
+  }
+
   // ── 6. Seam Joints ────────────────────────────────────────────
   // For each seam that has a joint assigned (per-cabinet or CM default) — carcase
   // part seams plus internal seams (shelf ↔ support, divider ↔ panel) — collect
@@ -188,9 +200,13 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
 
   // ── 6e. Part cut-outs (z_rangehood R1 / R2) ───────────────────
   // Notches + holes cut in the finished parts — formulas see the parts as resolved.
-  if (cab.part_cutouts && Object.keys(cab.part_cutouts).length) {
+  // Generated ones (the rangehood's) go in before the user's on the same part.
+  const cutouts: PartCutouts = { ...(cab.part_cutouts ?? {}) }
+  for (const [id, list] of Object.entries(rh?.cutouts ?? {})) cutouts[id] = [...list, ...(cutouts[id] ?? [])]
+  const cutoutVoids: CutoutVoid[] = []
+  if (Object.keys(cutouts).length) {
     const scope = buildFormulaScope({ case_parts: caseParts, toekick_parts: toekickParts, internal_parts: internalParts, face_zones: zones } as ResolvedCabinet, cab)
-    allWarnings.push(...applyPartCutouts(cutoutTargets(caseParts, internalParts), cab.part_cutouts, scope))
+    allWarnings.push(...applyPartCutouts(cutoutTargets(caseParts, internalParts), cutouts, scope, cutoutVoids))
   }
 
   // ── 7. Warnings ───────────────────────────────────────────────
@@ -220,6 +236,7 @@ export function resolveCabinet(cab: CabinetInput): ResolvedCabinet {
     ...(bifold ? { bifold: { hand: bifold.hand, bottom: r.BIFOLD_BOTTOM ?? 'above', centre: r.BIFOLD_CENTRE ?? 'standard' } } : {}),
     errors:          allErrors,
     warnings:        allWarnings,
+    ...(cutoutVoids.length ? { cutout_voids: cutoutVoids } : {}),
   }
 }
 

@@ -18,6 +18,7 @@ export function isShapedPanelKey(k: string): boolean {
     || isCurvedEndUprightKey(k)
     || k.startsWith('ibp:')   // island back panels (z_island_back_panel)
     || k.startsWith('ap:')    // applied end panels on shaped edges (z_cabinet_shape_edit E1)
+    || k.startsWith('rh:')    // rangehood flue box uprights (z_rangehood R5)
 }
 
 /** Bulkhead parts (z_bulkhead, resolveBulkhead). Fascia, side returns and the

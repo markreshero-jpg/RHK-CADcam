@@ -27,6 +27,7 @@ import { normaliseBulkhead } from '@/src/lib/bulkhead'
 import { normaliseSplit } from '@/src/lib/cabinetSplit'
 import { normaliseFloatShelf } from '@/src/lib/floatShelf'
 import { normalisePartCutouts, normaliseCutoutList } from '@/src/lib/partCutouts'
+import { normaliseRangehood } from '@/src/lib/rangehood'
 import { normaliseBackPanel } from '@/src/lib/backPanel'
 import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
 import { FLOAT_Z } from '@/src/lib/floating'
@@ -535,6 +536,7 @@ export function buildInstanceFromDefinition(
     bulkhead: def.bulkhead ?? null,
     curved_end: curvedEnd,
     float_shelf: normaliseFloatShelf(def.float_shelf),
+    rangehood: normaliseRangehood(def.rangehood),
     part_cutouts: normalisePartCutouts(def.part_cutouts),
     back_panel: normaliseBackPanel(def.back_panel),
     faces: def.faces ?? null,
@@ -787,6 +789,7 @@ export async function saveCabinetToLibrary(
     bulkhead: inst.bulkhead ?? null,
     curved_end: inst.curved_end ?? null,
     float_shelf: inst.float_shelf ?? null,
+    rangehood: inst.rangehood ?? null,
     part_cutouts: inst.part_cutouts ?? {},
     back_panel: inst.back_panel ?? null,
     faces: inst.faces ?? null,
@@ -833,7 +836,7 @@ export async function dbUpdateCabinet(
   // So do curved end settings (z_curved_end) and the plan outline they rebuild,
   // and floating shelf settings (z_floating_shelf).
   // Part cut-outs (z_rangehood) are cut after the parts resolve — same fast path.
-  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || k === 'back_panel' || k === 'split' || k === 'part_cutouts' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
+  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || k === 'back_panel' || k === 'split' || k === 'part_cutouts' || k === 'rangehood' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
   // A shadowline split rail (z_bulkhead B7) switched on / to another board needs
   // that board loaded — full resolve.
   const split = u.bulkhead !== undefined ? normaliseBulkhead(u.bulkhead)?.split : undefined
@@ -850,6 +853,7 @@ export async function dbUpdateCabinet(
       ...(u.back_panel !== undefined && { back_panel: normaliseBackPanel(u.back_panel) }),
       ...(u.split !== undefined && { split: normaliseSplit(u.split) }),
       ...(u.part_cutouts !== undefined && { part_cutouts: normalisePartCutouts(u.part_cutouts) }),
+      ...(u.rangehood !== undefined && { rangehood: normaliseRangehood(u.rangehood) }),
       ...(u.footprint !== undefined && { footprint: u.footprint ?? null }),
     }
     setCachedInput(id, updated)

@@ -308,6 +308,7 @@ export function casePartItem(partKey: string): string {
   if (partKey === 'back') return 'carcass_back'
   // Shaped-cabinet per-edge panels (z_cabinet_shape): side:<edge> / back:<edge>.
   if (partKey.startsWith('side:')) return 'carcass_gables'
+  if (partKey.startsWith('rh:')) return 'carcass_gables'     // rangehood flue box uprights (z_rangehood R5)
   if (partKey.startsWith('back:')) return 'carcass_back'
   if (partKey.startsWith('fprail:') || partKey.startsWith('fpbase:')) return 'finger_rails'
   if (partKey.startsWith('lh:')) return 'handles'          // linear strip handles (z_handles D17)

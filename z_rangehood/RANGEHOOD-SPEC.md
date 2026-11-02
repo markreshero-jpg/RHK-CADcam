@@ -9,7 +9,8 @@
 > **RESUME HERE** → R1 + R2 built 2026-11-01 (holes on the carcass bottom / top /
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
-> (in-app check pending). Next: R5 (Rangehood block + `resolveRangehood`). First real job: RHK6586 WC-04, Sirius SM927EL520
+> (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
+> section (no cabinet has the block until R7). Next: R6 (WUP takes the hole). First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -210,6 +211,42 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
   row, then the same fast-path resolve re-cuts it and the rows are reloaded.
 - Tutorial `part_cutouts` (Cabinets, intermediate).
 
+## R5 as built (2026-11-02)
+
+- Migration `migration_r5_rangehood.sql` (applied): `rangehood jsonb` on definitions +
+  instances (placement copies it, Save to library carries it, fast resolve path);
+  every construction-method row gets **5mm Dynamic Holes** for `rh_flue:shelf`,
+  `rh_flue:top`, `rh_flue:front` (a shop can change them like any joint default).
+- `src/lib/rangehood.ts`: settings + `normaliseRangehood`. Defaults: hole **unset**
+  (w / d null → warning, no hole), set back 50 from the bottom's front edge,
+  centred, square; flue 200 × 250 centred; shelf 350.
+- `resolveRangehood.ts`:
+  - `withRangehoodShelf` locks the first fixed shelf **fitting** (open compartment)
+    at `y_position = shelf_h` before the interior resolves. Cabinet Y 0 is the
+    underside incl. the WUP (the carcass scribes up over it), so that is the
+    shelf's underside height. A split's separator shelf isn't moved — warns.
+  - Generated cut-outs (source `rangehood`): `rh_hole` on `case_bottom`;
+    `rh_flue` notch on the shelf (`flue.d` deep) and `case_full_top` (to the
+    same front line in cabinet space). Merged in front of the user's list at
+    step 6e. They are **not stored**, so they don't show in the Cut-outs box.
+  - Flue box `rh:flue_l` / `rh:flue_r` (turned ±90°, front end taped) and
+    `rh:flue_front` (200 + 2T, both ends taped), carcass board + interior tape,
+    shelf top → top underside. Layer item: carcass gables.
+  - Declared seams: shelf / top (B) into each piece's bottom / top edge (A),
+    front (B) into each side's front edge. New `DeclaredSeamGeom.bore_b` bores a
+    **flat** part B (shelf up from its underside, top down from its top face).
+  - Warns and builds no box: no fixed shelf, no full top, box too wide / deep for
+    the shelf, no room under the top.
+- **Back-edge holes in the notch** (the R2 note): the cut-out step reports each
+  applied notch's gap in cabinet space (`ResolvedCabinet.cutout_voids`, in
+  memory); `seamDrillsFor` drops any joint hole whose bore (+2) runs into one —
+  both the back's screw and the edge hole it meets. Applies to every caller (3D,
+  2D views, optimiser drill sync, hardware list).
+- Sidebar **Rangehood** section (`RangehoodSection.tsx`): hole W / D (0 = not
+  set, amber warning), back from front, off centre, radius; flue W / D / off
+  centre; shelf height.
+- Tutorial: with R8 (nothing carries the block until the R7 library item).
+
 ## Phases
 
 | # | What | Status |
@@ -218,7 +255,7 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 | R2 | **Notches** → part outline (true shape), incl. a rect part gaining an outline | [x] 2026-11-01 |
 | R3 | Cut-outs on **custom parts** (`cabinet_custom_parts.part_cutouts`, flat parts) | [x] 2026-11-02 |
 | R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [x] 2026-11-02 |
-| R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [ ] |
+| R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [x] 2026-11-02 |
 | R6 | **WUP takes the hole** from the cabinets above it | [ ] |
 | R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [ ] |
 | R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [ ] |

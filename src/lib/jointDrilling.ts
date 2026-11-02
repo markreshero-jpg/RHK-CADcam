@@ -11,6 +11,7 @@ import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedS
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { removedIds, seamPartId } from '@/src/lib/resolver/filterHidden'
 import { sampleOutline } from '@/src/lib/shapePath'
+import type { CutoutVoid } from '@/src/lib/partCutouts'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 
 export function isSide(k: string) { return k === 'left_side' || k === 'right_side' }
@@ -918,10 +919,32 @@ export function intoPartFrame<T extends DrillOpPos>(p: Pick<ResolvedCasePart, 'A
   return rest as T
 }
 
-/** One seam's drills, declared, shaped or legacy. */
-export function seamDrillsFor(sj: ResolvedSeamJoint, rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts'>, boxA: Box, boxB: Box): DrillOpPos[] {
-  if (sj.declared) return declaredSeamDrillOps(sj, rp.case_parts, boxA, boxB, rp.internal_parts ?? [])
-  return sj.shaped ? shapedSeamDrillOps(sj, rp.case_parts, rp.internal_parts ?? []) : seamJointDrillOps(sj, boxA, boxB)
+/** One seam's drills, declared, shaped or legacy — less any running into a notch. */
+export function seamDrillsFor(sj: ResolvedSeamJoint, rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts' | 'cutout_voids'>, boxA: Box, boxB: Box): DrillOpPos[] {
+  const drills = sj.declared ? declaredSeamDrillOps(sj, rp.case_parts, boxA, boxB, rp.internal_parts ?? [])
+    : sj.shaped ? shapedSeamDrillOps(sj, rp.case_parts, rp.internal_parts ?? []) : seamJointDrillOps(sj, boxA, boxB)
+  return rp.cutout_voids?.length ? dropVoidDrills(drills, rp.cutout_voids) : drills
+}
+
+/**
+ * Holes whose bore (plus 2 past its end) runs into board a notch took away
+ * (z_rangehood: the back panel's screws into a shelf / top behind the flue
+ * notch, and the edge holes they meet). Axis-aligned bores only.
+ */
+export function dropVoidDrills<T extends DrillOpPos>(drills: T[], voids: CutoutVoid[]): T[] {
+  const E = 0.25, PAST = 2
+  const inside = (v: number, a: number, b: number) => v > a + E && v < b - E
+  return drills.filter(d => {
+    const ax = d.axis[0] as 'x' | 'y' | 'z', sgn = d.axis[1] === '-' ? -1 : 1
+    const a0 = d[ax], a1 = d[ax] + sgn * (d.depthLen + PAST)
+    const lo = Math.min(a0, a1), hi = Math.max(a0, a1)
+    return !voids.some(v => {
+      const r = { x: [v.x0, v.x1], y: [v.y0, v.y1], z: [v.z0, v.z1] } as const
+      return (['x', 'y', 'z'] as const).every(k => k === ax
+        ? hi > r[k][0] + E && lo < r[k][1] - E
+        : inside(d[k], r[k][0], r[k][1]))
+    })
+  })
 }
 
 // ── Declared seams (z_curved_end C3) ──────────────────────────────────────────
@@ -963,8 +986,15 @@ export function declaredSeamDrillOps(sj: ResolvedSeamJoint, caseParts: ResolvedC
         let axis: DrillAxis, depthLen: number
         if (op.target_part === 'part_b') {
           if (op.face !== 'normal') continue
-          if (nIn.x) p.x = innerX; else p.z = innerZ
-          axis = intoB; depthLen = op.stopped ? ev.depth_mm : b.DZ
+          if (g.bore_b) {
+            // A flat part B (shelf / top, z_rangehood): bored along bore_b from that face.
+            p[g.bore_b.axis[0] as 'x' | 'y' | 'z'] = g.bore_b.at
+            axis = g.bore_b.axis
+          } else {
+            if (nIn.x) p.x = innerX; else p.z = innerZ
+            axis = intoB
+          }
+          depthLen = op.stopped ? ev.depth_mm : b.DZ
         } else {
           if (op.face !== 'normal' && op.face !== 'end') continue
           axis = axisOf(g.toward); depthLen = ev.depth_mm

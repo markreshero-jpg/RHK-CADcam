@@ -219,17 +219,25 @@ export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'ba
 export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
 
 type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }
-export type CutTarget = { id: string; part: CutPart; holes: boolean }
+/** `at` = the part's min corner in cabinet space (horizontal box: x across, y
+ *  up its thickness, z = its back edge) — set, a notch's gap is reported as a void. */
+export type CutTarget = { id: string; part: CutPart; holes: boolean; at?: { X: number; Y: number; Z: number } }
+/** Board a notch took away, in cabinet space (z_rangehood R5): joint holes that
+ *  run into it are dropped (jointDrilling seamDrillsFor). */
+export type CutoutVoid = { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }
 type Issue = { code: string; message: string; part?: string }
+
+const atOf = (p: { X?: number; Y?: number; Z?: number }) =>
+  p.X != null && p.Y != null && p.Z != null ? { X: p.X, Y: p.Y, Z: p.Z } : undefined
 
 /** The cut-out targets on a resolved cabinet, by part id (`case_bottom`, `int_fixed_shelf_0`). */
 export function cutoutTargets(
-  caseParts: (CutPart & { part_key: string })[],
-  internalParts: (CutPart & { part_type: string; sort_order: number })[],
+  caseParts: (CutPart & { part_key: string; X?: number; Y?: number; Z?: number })[],
+  internalParts: (CutPart & { part_type: string; sort_order: number; X?: number; Y?: number; Z?: number })[],
 ): CutTarget[] {
   return [
-    ...caseParts.filter(p => CUTOUT_CASE_KEYS.has(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true })),
-    ...internalParts.filter(p => CUTOUT_INTERNAL_TYPES.has(p.part_type)).map(p => ({ id: `int_${p.part_type}_${p.sort_order}`, part: p, holes: false })),
+    ...caseParts.filter(p => CUTOUT_CASE_KEYS.has(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p) })),
+    ...internalParts.filter(p => CUTOUT_INTERNAL_TYPES.has(p.part_type)).map(p => ({ id: `int_${p.part_type}_${p.sort_order}`, part: p, holes: false, at: atOf(p) })),
   ]
 }
 
@@ -238,7 +246,7 @@ export function cutoutTargets(
  * gains a rectangle outline — the optimiser cuts holes only on a resolver
  * outline). Returns warnings for cut-outs it couldn't make.
  */
-export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | null | undefined, scope?: FormulaScope): Issue[] {
+export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | null | undefined, scope?: FormulaScope, voids?: CutoutVoid[]): Issue[] {
   const warnings: Issue[] = []
   if (!cutouts) return warnings
   const byId = new Map(targets.map(t => [t.id, t]))
@@ -274,7 +282,15 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
       if (p.outline && !isRectilinear(p.outline)) notchList.forEach(c => warn(c, 'notches need a square-cornered part'))
       else {
         const o = notchOutline(W, D, p.outline, notches)
-        if (o) p.outline = o
+        if (o) {
+          p.outline = o
+          // Its gaps in cabinet space (frame y runs back from the front edge at Z + D).
+          const at = t.at
+          if (voids && at) for (const n of notches) voids.push({
+            x0: at.X + Math.max(0, n.x0), x1: at.X + Math.min(W, n.x1), y0: at.Y, y1: at.Y + p.DZ,
+            z0: at.Z + D - Math.min(D, n.y1), z1: at.Z + D - Math.max(0, n.y0),
+          })
+        }
         else notchList.forEach(c => warn(c, 'the notches cut the part in two'))
       }
     }

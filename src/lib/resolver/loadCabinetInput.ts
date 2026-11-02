@@ -15,6 +15,7 @@ import type { VjLayout } from './types'
 import { normaliseBulkhead } from '../bulkhead'
 import { normaliseSplit } from '../cabinetSplit'
 import { normaliseFloatShelf } from '../floatShelf'
+import { normaliseRangehood } from '../rangehood'
 import { normalisePartCutouts } from '../partCutouts'
 import { normaliseBackPanel } from '../backPanel'
 import { normaliseCurvedEnd } from '../curvedEnd/settings'
@@ -940,6 +941,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     split_material:  splitMaterial,
     curved_end:      normaliseCurvedEnd(cab.curved_end),
     float_shelf:     normaliseFloatShelf(cab.float_shelf),
+    rangehood:       normaliseRangehood(cab.rangehood),
     part_cutouts:    normalisePartCutouts(cab.part_cutouts),
     back_panel:      normaliseBackPanel(cab.back_panel),
     left_neighbour:  (cab.left_neighbour_type  ?? 'wall') as CabinetInput['left_neighbour'],
