@@ -45,6 +45,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
   SCRR:    'Scribe Right (mm)',
   SCRT:    'Scribe Top (mm)',
   TOP_TYPE:'Top Type',
+  BOTTOM_TYPE: 'Bottom Type',
   RD:      'Rail Depth (mm)',
   RAIL_ORIENT: 'Front Rail Orientation',
   BACK_RAIL_ORIENT: 'Back Rail Orientation',
@@ -89,6 +90,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Toe Kick',          keys: ['TOEH', 'TOE_TYPE', 'TOEFC', 'TOESP', 'TOESCF', 'TOESCB', 'TOESCL', 'TOESCR'] },
   { label: 'Case Scribes',      keys: ['SCRBK', 'SCRBT', 'SCRL', 'SCRR', 'SCRT'] },
   { label: 'Top Rail',          keys: ['TOP_TYPE', 'RD', 'RAIL_ORIENT', 'BACK_RAIL_ORIENT'] },
+  { label: 'Bottom', keys: ['BOTTOM_TYPE'] },
   { label: 'Back',              keys: ['BACK_TYPE', 'BKRH'] },
   { label: 'Adjustable Shelves',keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
   { label: 'Fixed Shelves',     keys: ['FIXSB_F', 'FIXSB_B'] },
@@ -670,6 +672,23 @@ function RuleRow({ ruleKey, value, baseline, baselineLabel, onChange }: {
             className={inputCls}>
             <option value="butt_bevel">Butt — end bevelled</option>
             <option value="mitre">Mitre</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'BOTTOM_TYPE') {
+    return (
+      <div className={rowCls}>
+        <span className={textCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverridden && <span className="text-gray-600 text-[10px]">{baselineLabel}: {String(baseline)}</span>}
+          <select value={(value as string) ?? 'full'} onChange={e => onChange(e.target.value as Rules[RuleKey])}
+            className={inputCls}>
+            <option value="full">Full bottom</option>
+            <option value="rails">Rails</option>
+            <option value="none">No bottom</option>
           </select>
         </div>
       </div>

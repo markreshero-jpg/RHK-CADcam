@@ -21,7 +21,7 @@ export interface CarcassSpecCab {
   material_overrides?: Record<string, unknown> | null
 }
 
-const BOX_KEYS = new Set(['left_side', 'right_side', 'bottom', 'full_top', 'back', 'front_rail', 'back_rail'])
+const BOX_KEYS = new Set(['left_side', 'right_side', 'bottom', 'full_top', 'back', 'front_rail', 'back_rail', 'bottom_front_rail', 'bottom_back_rail'])
 /** A carcass (box) part — plain box keys, a shaped cabinet's side:/back:/rail:, a height-split piece of one. */
 export function isCarcassPartKey(k: string): boolean {
   const base = k.startsWith('split:') ? k.split(':')[1] : k

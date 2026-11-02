@@ -22,6 +22,10 @@ export function toGenericSeamKey(key: string): string {
   if (back) return `${back[1]}:side`
   const div = key.match(/^int_divider_\d+:(top|bottom)$/)
   if (div) return `divider:${div[1]}`
+  // Bottom rails (BOTTOM_TYPE 'rails') fall back to the bottom panel's joints.
+  if (key === 'back:bottom_back_rail') return 'back:bottom'
+  const bRail = key.match(/^bottom_(?:front|back)_rail:(.+)$/)
+  if (bRail) return `bottom:${bRail[1]}`
   return key.replace(/^(front_rail|full_top|back_rail):/, 'top:')
 }
 
@@ -257,6 +261,7 @@ export function internalSeamPartLabel(key: string): string {
   const fixed: Record<string, string> = {
     left_side: 'Left Gable', right_side: 'Right Gable',
     bottom: 'Bottom Panel', full_top: 'Top Panel',
+    bottom_front_rail: 'Front Bottom Rail', bottom_back_rail: 'Back Bottom Rail',
     front_rail: 'Front Rail', back_rail: 'Back Rail', back: 'Back Panel',
   }
   if (fixed[key]) return fixed[key]

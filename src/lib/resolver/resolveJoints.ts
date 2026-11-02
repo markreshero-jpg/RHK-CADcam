@@ -155,6 +155,12 @@ export function resolveJoints(
   const seamKeys: string[] = []
   if (byKey['bottom'] && byKey['left_side'])  seamKeys.push('bottom:left_side')
   if (byKey['bottom'] && byKey['right_side']) seamKeys.push('bottom:right_side')
+  // BOTTOM_TYPE 'rails': each rail fixes into both gables (inherits the bottom's
+  // joint unless the method / cabinet sets its own).
+  for (const rk of ['bottom_front_rail', 'bottom_back_rail']) {
+    if (byKey[rk] && byKey['left_side'])  seamKeys.push(`${rk}:left_side`)
+    if (byKey[rk] && byKey['right_side']) seamKeys.push(`${rk}:right_side`)
+  }
   for (const topKey of topSeamPartKeys(has)) {
     if (byKey['left_side'])  seamKeys.push(`${topKey}:left_side`)
     if (byKey['right_side']) seamKeys.push(`${topKey}:right_side`)
@@ -162,6 +168,7 @@ export function resolveJoints(
   if (byKey['back']   && byKey['left_side'])  seamKeys.push('back:left_side')
   if (byKey['back']   && byKey['right_side']) seamKeys.push('back:right_side')
   if (byKey['back']   && byKey['bottom'])     seamKeys.push('back:bottom')
+  if (byKey['back']   && byKey['bottom_back_rail']) seamKeys.push('back:bottom_back_rail')
   if (byKey['back']   && byKey['back_rail'])  seamKeys.push('back:back_rail')
 
   const result: ResolvedSeamJoint[] = []
@@ -211,7 +218,7 @@ export function resolveJoints(
       part_a_key:      partAKey,
       part_b_key:      partBKey,
       ops,
-      bottom_back_join: seamKey === 'back:bottom' ? cab.rules?.BOTTOM_BACK_JOIN : undefined,
+      bottom_back_join: seamKey === 'back:bottom' || seamKey === 'back:bottom_back_rail' ? cab.rules?.BOTTOM_BACK_JOIN : undefined,
     })
   }
 

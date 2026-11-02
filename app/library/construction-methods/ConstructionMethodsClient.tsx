@@ -1257,6 +1257,21 @@ function QuestionPanel({ classTab, delta, onChange, onHoverParts }: {
         </div>
       </QCard>
 
+      {/* ── Cabinet bottom ── */}
+      <QCard question="What closes the bottom of the cabinet?" isOverride={'BOTTOM_TYPE' in delta}
+        partKeys={['bottom','bottom_front_rail','bottom_back_rail']}
+        onHover={onHoverParts}>
+        <ChipSelect
+          value={effectiveRule(delta, 'BOTTOM_TYPE') ?? 'full'}
+          onChange={v => onChange('BOTTOM_TYPE', v as ConstructionRules['BOTTOM_TYPE'])}
+          options={[
+            { label: 'Full bottom',               value: 'full' },
+            { label: 'Front & back rails (flat)', value: 'rails' },
+            { label: 'No bottom',                 value: 'none' },
+          ]}
+        />
+      </QCard>
+
       {/* ── Joinery ── */}
       <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider pt-2">Joinery</p>
 
@@ -1413,6 +1428,22 @@ function RuleRow({ ruleKey, delta, onChange }: {
             <option value="front_rail">Front Rail</option>
             <option value="double_rail">Double Rail</option>
             <option value="none">None</option>
+          </select>
+        </div>
+      </div>
+    )
+  }
+
+  if (ruleKey === 'BOTTOM_TYPE') {
+    return (
+      <div className={rowCls}>
+        <span className={txtCls}>{label}</span>
+        <div className="flex items-center gap-2">
+          {isOverride && <span className="text-ink-subtle text-[10px]">default: {String(baseline)}</span>}
+          <select value={(value as string) ?? 'full'} onChange={e => onChange(e.target.value as ConstructionRules[RuleKey])} className={inpCls}>
+            <option value="full">Full bottom</option>
+            <option value="rails">Rails</option>
+            <option value="none">No bottom</option>
           </select>
         </div>
       </div>

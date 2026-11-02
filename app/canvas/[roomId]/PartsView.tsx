@@ -78,6 +78,8 @@ const PART_LABEL: Record<string, string> = {
   full_top:            'Full Top',
   front_rail:          'Front Rail',
   back_rail:           'Back Rail',
+  bottom_front_rail:   'Front Bottom Rail',
+  bottom_back_rail:    'Back Bottom Rail',
   kick_front_face:     'Kick Front Face',
   kick_sub_front:      'Kick Sub Front',
   kick_back:           'Kick Back',

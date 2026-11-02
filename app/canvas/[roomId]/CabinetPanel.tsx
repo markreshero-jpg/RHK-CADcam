@@ -3,7 +3,7 @@
 import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import { Room, Wall, CabinetInstance, NeighbourType, TopType, ToeType } from '@/src/lib/types'
+import { Room, Wall, CabinetInstance, NeighbourType, TopType, BottomType, ToeType } from '@/src/lib/types'
 import { cabT, findFreeSlot, cabsBlock, cabBottomZ, wallZOf, slideAlongWall, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveReveal } from '@/src/lib/resolver/mergeRules'
@@ -310,6 +310,27 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
             )
           })()}
         </div>
+        {/* Bottom type — cabinet column bottom_type; blank = the method's BOTTOM_TYPE. */}
+        {cabinet.has_carcass && !cabinet.is_kick_assembly && (() => {
+          const cur = cabinet.bottom_type
+          const inherited = getCachedInput(cabinet.id)?.rules_base?.BOTTOM_TYPE ?? 'full'
+          const name = (v: string) => v === 'rails' ? 'rails' : v === 'none' ? 'no bottom' : 'full bottom'
+          return (
+            <div>
+              <label className={lbl}>Bottom Type</label>
+              <select
+                value={cur === 'full' || cur === 'rails' || cur === 'none' ? cur : ''}
+                onChange={e => void onUpdate(cabinet.id, { bottom_type: (e.target.value || null) as BottomType | null })}
+                className={inp}
+              >
+                <option value="">Inherit ({name(inherited)})</option>
+                <option value="full">Full bottom</option>
+                <option value="rails">Rails</option>
+                <option value="none">No bottom</option>
+              </select>
+            </div>
+          )
+        })()}
         {/* Back (z_ubo U1) — rule_overrides.BACK_TYPE */}
         {cabinet.has_carcass && !cabinet.is_kick_assembly && (() => {
           const cur = (cabinet.rule_overrides ?? {}).BACK_TYPE

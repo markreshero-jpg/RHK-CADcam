@@ -79,6 +79,8 @@ const PART_ALIASES: Record<string, string> = {
   top:         'case_full_top',
   front_rail:  'case_front_rail',
   back_rail:   'case_back_rail',
+  bottom_front_rail: 'case_bottom_front_rail',
+  bottom_back_rail:  'case_bottom_back_rail',
 }
 
 export interface FormulaScopeExtras {

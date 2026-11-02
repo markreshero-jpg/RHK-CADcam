@@ -97,7 +97,7 @@ const CASE_LABELS: Record<string, string> = {
   bottom:     'Bottom Panel',
   back:       'Back Panel',
   full_top:   'Top Panel',
-  front_rail: 'Front Top Rail',
+  front_rail: 'Front Top Rail', bottom_front_rail: 'Front Bottom Rail', bottom_back_rail: 'Back Bottom Rail',
   back_rail:  'Back Top Rail',
 }
 

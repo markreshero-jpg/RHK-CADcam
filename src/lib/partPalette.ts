@@ -62,6 +62,7 @@ const PART_CATEGORY: Record<string, PaletteCategory> = {
   // carcase
   left_side: 'carcase', right_side: 'carcase', bottom: 'carcase', back: 'carcase',
   full_top: 'carcase', front_rail: 'carcase', back_rail: 'carcase',
+  bottom_front_rail: 'carcase', bottom_back_rail: 'carcase',
   // toe kick
   kick_front_face: 'toekick', kick_sub_front: 'toekick', kick_back: 'toekick',
   spreader_vertical: 'toekick', spreader_horizontal: 'toekick', kick_return: 'toekick',

@@ -166,6 +166,8 @@ export interface ConstructionRules {
 
   // Top options
   TOP_TYPE: 'full_top' | 'front_rail' | 'double_rail' | 'none'
+  // Bottom: full panel, front + back rails (flat, RD deep, bottom material), or none.
+  BOTTOM_TYPE: 'full' | 'rails' | 'none'
   RD:       number   // rail depth mm (its height when the rail stands on edge)
   // Top rails stand on edge (face to the front, RD tall) or lie flat (RD deep).
   // Vertical is the shop norm (Mark, 2026-10-15).
@@ -306,7 +308,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   TOEH: 150, TOE_TYPE: 'ladder', TOEFC: 16.5, TOESP: 450,
   TOESCF: 40, TOESCB: 0, TOESCL: 0, TOESCR: 0,
   SCRBK: 0, SCRBT: 0, SCRL: 0, SCRR: 0, SCRT: 0,
-  TOP_TYPE: 'front_rail', RD: 100, RAIL_ORIENT: 'horizontal', BACK_RAIL_ORIENT: 'horizontal',
+  TOP_TYPE: 'front_rail', BOTTOM_TYPE: 'full', RD: 100, RAIL_ORIENT: 'horizontal', BACK_RAIL_ORIENT: 'horizontal',
   BACK_TYPE: 'panel', BKRH: 100,
   ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_DRILL: 'per_shelf', ADJ_ROWS: 0,
   FIXSB_F: 0, FIXSB_B: 0,
@@ -754,6 +756,7 @@ export interface CabinetInput {
 
   // Top / toe overrides
   top_type?:      ConstructionRules['TOP_TYPE']
+  bottom_type?:   ConstructionRules['BOTTOM_TYPE']
   toe_type?:      ConstructionRules['TOE_TYPE']
 
   // Shaped-cabinet plan outline (z_cabinet_shape/). Absent/null = rectangle.
@@ -1614,7 +1617,7 @@ export interface ResolvedCasePart extends ResolvedPart {
   // shelf cleats). Persisted as case_parts.output_to_cnc = false.
   hand_cut?: true
   part_key: 'left_side' | 'right_side' | 'bottom' | 'back' |
-            'full_top' | 'front_rail' | 'back_rail' | ShapedCasePartKey |
+            'full_top' | 'front_rail' | 'back_rail' | 'bottom_front_rail' | 'bottom_back_rail' | ShapedCasePartKey |
             `fprail:${number}` |  // finger-pull backing rail (z_handles H6)
             `fpbase:${number}` |  // set back rail's flat base piece (z_handles D24)
             `lh:${number}` |      // linear strip handle on a front (z_handles D17)

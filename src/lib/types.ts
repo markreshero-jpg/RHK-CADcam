@@ -3,6 +3,8 @@
 export type AssemblyClass = 'base' | 'wall' | 'tall' | 'base_corner' | 'wall_corner' | 'tall_corner'
 export type NeighbourType = 'cabinet' | 'end_panel' | 'wall' | 'freestanding'
 export type TopType = 'full_top' | 'front_rail' | 'double_rail' | 'none'
+/** Cabinet bottom: full panel, front + back rails (flat, RD deep), or none. */
+export type BottomType = 'full' | 'rails' | 'none'
 export type ToeType = 'ladder' | 'leg' | 'none'
 export type ProjectStatus = 'draft' | 'quoted' | 'approved' | 'in_production' | 'completed' | 'archived'
 
@@ -173,6 +175,8 @@ export interface CabinetInstance {
   has_toekick: boolean
   construction_method_id: string | null
   top_type: TopType | null
+  /** null = the construction method's BOTTOM_TYPE (default full). */
+  bottom_type?: BottomType | null
   toe_type: ToeType | null
   left_neighbour_type: NeighbourType | null
   right_neighbour_type: NeighbourType | null
@@ -272,6 +276,7 @@ export interface CabinetDefinition {
   has_face: boolean
   has_toekick: boolean
   top_type: TopType
+  bottom_type?: BottomType | null
   toe_type: ToeType
   // Frozen geometry / composition
   face_grid: Record<string, unknown> | null

@@ -65,7 +65,7 @@ const REPORTS: { id: ReportId; label: string; desc: string }[] = [
 
 const CASE_LABELS: Record<string, string> = {
   left_side: 'Left Side', right_side: 'Right Side', bottom: 'Bottom', back: 'Back',
-  full_top: 'Top', front_rail: 'Front Rail', back_rail: 'Back Rail',
+  full_top: 'Top', front_rail: 'Front Rail', back_rail: 'Back Rail', bottom_front_rail: 'Front Bottom Rail', bottom_back_rail: 'Back Bottom Rail',
 }
 const TK_LABELS: Record<string, string> = {
   kick_front_face: 'Toe Kick Front', kick_sub_front: 'Sub Front', kick_back: 'Toe Kick Back',

@@ -71,8 +71,12 @@ export function resolveCaseParts(
   }
 
   // ── Joinery ──────────────────────────────────────────────────
+  // BOTTOM_TYPE: 'full' panel, 'rails' (front + back, flat, RD deep, in the
+  // bottom's place) or 'none'. Per-cabinet bottom_type overrides the method.
+  const bottomType = cab.bottom_type ?? r.BOTTOM_TYPE ?? 'full'
   // A floating cabinet's gables always run through, the bottom between them.
-  const bottomJoin     = floating ? 'sides_outside' : r.BOTTOM_JOIN
+  // No bottom → nothing for the gables to stand on, so they run to the floor line.
+  const bottomJoin     = floating || bottomType === 'none' ? 'sides_outside' : r.BOTTOM_JOIN
   const bottomBackJoin = r.BOTTOM_BACK_JOIN
   const backJoin       = r.BACK_JOIN
   const topBackJoin    = r.TOP_BACK_JOIN
@@ -162,7 +166,7 @@ export function resolveCaseParts(
   })
 
   // ── Bottom ───────────────────────────────────────────────────
-  parts.push({
+  if (bottomType === 'full') parts.push({
     part_key: 'bottom',
     DX: botDepth,
     DY: botW,
@@ -174,6 +178,19 @@ export function resolveCaseParts(
     material_id: bottomMat.id,
     edge_band: edgeSidesToBanding(edging.bottom, ebId),
   })
+  else if (bottomType === 'rails') {
+    // Two flat rails in the bottom's plane, RD deep: the front one flush with the
+    // bottom's front edge (taped like the bottom), the back one at its back line.
+    const RD = Math.min(r.RD, botDepth / 2)
+    if (RD <= 0) {
+      errors.push({ code: 'INVALID_RAIL_DEPTH', message: 'RD must be > 0 for bottom rails', part: 'bottom_front_rail' })
+    } else {
+      const rail = { DX: RD, DY: botW, DZ: bottomT, X: botX, Y: TK + r.SCRBT, AX: 0, AY: 0, AZ: 0, material_id: bottomMat.id }
+      parts.push({ part_key: 'bottom_front_rail', ...rail, Z: botZstart + botDepth - RD, edge_band: edgeSidesToBanding(edging.bottom, ebId) })
+      parts.push({ part_key: 'bottom_back_rail',  ...rail, Z: botZstart, edge_band: edgeSidesToBanding([], ebId) })
+    }
+  }
+  // 'none' → no bottom parts
 
   // ── Back ─────────────────────────────────────────────────────
   // Bottom joinery shifts the back's stored Y so its 3D bottom face (p.Y + p.DZ)

@@ -935,6 +935,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     has_face:        cab.has_face,
     has_toekick:     cab.has_toekick,
     top_type:        cab.top_type ?? undefined,
+    bottom_type:     cab.bottom_type ?? undefined,
     toe_type:        cab.toe_type ?? undefined,
     footprint:       (cab.footprint as CabinetInput['footprint']) ?? null,
     bulkhead:        bh,

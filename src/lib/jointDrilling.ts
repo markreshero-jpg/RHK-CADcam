@@ -509,6 +509,11 @@ export function seamDrillOps(
   if (seamKey === 'back:bottom') {
     return backBottomDrillOps(boxA, boxB, ops, opts?.bottomBackJoin ?? 'back_on_bottom')
   }
+  // Back panel onto the back bottom rail (BOTTOM_TYPE 'rails') — same joint line.
+  if (seamKey === 'back:bottom_back_rail') {
+    return backBottomDrillOps(boxA, boxB, ops, opts?.bottomBackJoin ?? 'back_on_bottom')
+      .map(d => d.targetPartKey === 'bottom' ? { ...d, targetPartKey: 'bottom_back_rail' } : d)
+  }
   if (seamKey === 'back:back_rail') return backRailDrillOps(boxA, boxB, ops)
   if (!opts?.side && !isSide(partBKey)) return []
 

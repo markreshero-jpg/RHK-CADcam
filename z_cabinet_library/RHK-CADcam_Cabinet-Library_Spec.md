@@ -27,7 +27,8 @@
 - **The table already exists.** `cabinet_definitions` is live, empty (0 rows), RLS enabled, and the FK `cabinet_instances.cabinet_definition_id → cabinet_definitions.id` is already wired. We are finishing scaffolding, not inventing it.
 - **Copy-not-link.** A library definition is a *placement-time template only*. At placement, its fields are copied into a new `cabinet_instances` row and the instance becomes fully independent. The `cabinet_definition_id` on the instance is an **audit/origin pointer only**.
 - **The resolver is not touched.** `loadCabinetInput` reads everything (dims, `has_*`, `face_grid`, `internal_grid`, joints, overrides) from the **instance**, never from the definition. So once placement copies the fields in, resolution is unchanged. Do not make the resolver consult `cabinet_definitions`.
-- **Freeze vs cascade.** A definition **freezes geometry + part composition**: dims, `has_*` flags, `top_type`, `toe_type`, `face_grid`, `internal_grid`, `carcase_joints`, `construction_method_id`. It **does not freeze** materials/hardware/door-style by default — those resolve through the Job → Room → Assembly cascade at placement, so bulk hierarchy changes keep working on placed library cabinets. Door style is carried inside `face_grid`, so it travels with geometry automatically.
+- **Freeze vs cascade.** A definition **freezes geometry + part composition**: dims, `has_*` flags, `top_type`, `bottom_type`, `toe_type`, `face_grid`, `internal_grid`, `carcase_joints`, `construction_method_id`. It **does not freeze** materials/hardware/door-style by default — those resolve through the Job → Room → Assembly cascade at placement, so bulk hierarchy changes keep working on placed library cabinets. Door style is carried inside `face_grid`, so it travels with geometry automatically.
+- **Bottom type (2026-11-02).** `bottom_type` on `cabinet_instances` + `cabinet_definitions` (migration_bottom_type.sql): `full` | `rails` | `none`, null = the construction method's `BOTTOM_TYPE` rule (default `full`; also on Job / Room rule overrides). `rails` = `bottom_front_rail` + `bottom_back_rail`, flat, RD deep, bottom material, in the bottom's plane (front rail flush with the bottom's front edge, back rail on its back line); their seams fall back to the bottom's joints (`bottom:left_side` …, `back:bottom`). `none` = no bottom, gables run to the floor line even with `bottom_outside`. Back panel and interior heights don't move.
 - **Preservation = opt-in assembly-level overrides.** The Save-As modal's preservation tab lets the user tick cascade-resolved properties (e.g. a specific drawer slide, carcase material) to *remember*. Ticked items are written into override columns on the definition and, at placement, copied into the instance's existing assembly-level override columns — the lowest, highest-priority cascade layer the resolver already honours. Tick nothing → pure cascade.
 
 ---
@@ -136,7 +137,7 @@ placeCabinetFromDefinition(definitionId, wall, x, y, flip) → cabinetInstanceId
 
 It must:
 1. Load the definition.
-2. Insert a `cabinet_instances` row copying: `assembly_class`; `default_dx/dy/dz → dx/dy/dz`; `has_carcass/internal/face/toekick`; `top_type`; `toe_type`; `construction_method_id`; `face_grid`; `internal_grid`; `carcase_joints`; `rule_overrides`; the four `*_overrides`; `exposed_interior`.
+2. Insert a `cabinet_instances` row copying: `assembly_class`; `default_dx/dy/dz → dx/dy/dz`; `has_carcass/internal/face/toekick`; `top_type`; `bottom_type`; `toe_type`; `construction_method_id`; `face_grid`; `internal_grid`; `carcase_joints`; `rule_overrides`; the four `*_overrides`; `exposed_interior`.
 3. **Stamp `cabinet_definition_id = definitionId`** (audit pointer).
 4. Run the existing `dbResolveAndPersistCabinet` exactly as the current path does.
 
@@ -189,7 +190,7 @@ Service-layer function:
 ```
 saveCabinetToLibrary(cabinetInstanceId, { name, categoryId, subcategoryId, preserve: {...} }) → definitionId
 ```
-- Snapshots the instance's **frozen-geometry** fields (dims → `default_*`, `has_*`, `top_type`, `toe_type`, `face_grid`, `internal_grid`, `carcase_joints`, `construction_method_id`) into a new `cabinet_definitions` row, `is_library_item=true`.
+- Snapshots the instance's **frozen-geometry** fields (dims → `default_*`, `has_*`, `top_type`, `bottom_type`, `toe_type`, `face_grid`, `internal_grid`, `carcase_joints`, `construction_method_id`) into a new `cabinet_definitions` row, `is_library_item=true`.
 - For each ticked preservation item, copy the resolved value into the matching definition `*_overrides` column (and `exposed_interior` if ticked). Unticked → leave `{}` / false.
 
 > The exact set of *preservable* properties is itself a list we'll extend over time (same as subcategories). Start with: carcase material, drawer slide, hinge, handle, toekick material, `exposed_interior`. Each must map to an assembly-level override channel the resolver already reads.

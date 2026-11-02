@@ -13,7 +13,7 @@ import { zonePartId, dbPartId, zoneRef, stackRef } from '@/src/lib/cabinetShape/
 
 const CASE_LABELS: Record<string, string> = {
   left_side: 'Left Gable', right_side: 'Right Gable', bottom: 'Bottom Panel',
-  back: 'Back Panel', full_top: 'Top Panel', front_rail: 'Front Top Rail', back_rail: 'Back Top Rail',
+  back: 'Back Panel', full_top: 'Top Panel', front_rail: 'Front Top Rail', bottom_front_rail: 'Front Bottom Rail', bottom_back_rail: 'Back Bottom Rail', back_rail: 'Back Top Rail',
 }
 const TK_LABELS: Record<string, string> = {
   kick_front_face: 'Toe Kick Face', kick_sub_front: 'Toe Kick Sub-Front',
