@@ -238,12 +238,102 @@
             "elevation",
             "3d"
           ]
+        },
+        "footprint": {
+          "preset": "rectangle",
+          "params": {
+            "side": "right"
+          },
+          "from_preset": "rectangle",
+          "edge_overrides": {
+            "left": {
+              "role": "open"
+            }
+          },
+          "segments": [
+            {
+              "type": "line",
+              "p0": {
+                "x": 0,
+                "y": 0
+              },
+              "p1": {
+                "x": 1131,
+                "y": 0
+              },
+              "edge": {
+                "id": "back",
+                "role": "back"
+              },
+              "p0_expr": {
+                "x": "0",
+                "y": "0"
+              }
+            },
+            {
+              "type": "line",
+              "p0": {
+                "x": 1131,
+                "y": 0
+              },
+              "p1": {
+                "x": 1131,
+                "y": 300
+              },
+              "edge": {
+                "id": "right",
+                "role": "side"
+              },
+              "p0_expr": {
+                "x": "cab.w",
+                "y": "0"
+              }
+            },
+            {
+              "type": "line",
+              "p0": {
+                "x": 1131,
+                "y": 300
+              },
+              "p1": {
+                "x": 0,
+                "y": 300
+              },
+              "edge": {
+                "id": "front",
+                "role": "front"
+              },
+              "p0_expr": {
+                "x": "cab.w",
+                "y": "cab.d"
+              }
+            },
+            {
+              "type": "line",
+              "p0": {
+                "x": 0,
+                "y": 300
+              },
+              "p1": {
+                "x": 0,
+                "y": 0
+              },
+              "edge": {
+                "id": "left",
+                "role": "open"
+              },
+              "p0_expr": {
+                "x": "0",
+                "y": "cab.d"
+              }
+            }
+          ]
         }
       },
       "wall": 3,
-      "offset": 267,
-      "dx": 1164,
-      "note": "Open shelf wall cabinet (WOPN) 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back, no back scribe, 300 deep x 370, bottom 1400 AFF (WALLZ). No left end (butts the Wall 2 box), right end seen."
+      "offset": 300,
+      "dx": 1131,
+      "note": "Open shelf wall cabinet (WOPN) 33 Lx Tas Oak, 18 Lx ABS Grain Tas Oak back, no back scribe, 300 deep x 370, bottom 1400 AFF (WALLZ). 1131 from 300 (Mark): left edge open (shape edit), butts the Wall 2 box front; right end seen. Top runs over the back to the wall."
     }
   ]
 }

@@ -59,3 +59,29 @@ describe('back thinner than the bottom', () => {
     expect(back.Y + back.DZ + back.DX).toBeLessThanOrEqual(370)
   })
 })
+
+describe('shaped box (open left edge, RHK6563 WC-06)', () => {
+  const fp = {
+    preset: 'rectangle', params: {},
+    segments: [
+      { type: 'line', p0: { x: 0, y: 0 }, p1: { x: 1164, y: 0 }, edge: { id: 'back', role: 'back' } },
+      { type: 'line', p0: { x: 1164, y: 0 }, p1: { x: 1164, y: 300 }, edge: { id: 'right', role: 'side' } },
+      { type: 'line', p0: { x: 1164, y: 300 }, p1: { x: 0, y: 300 }, edge: { id: 'front', role: 'front' } },
+      { type: 'line', p0: { x: 0, y: 300 }, p1: { x: 0, y: 0 }, edge: { id: 'left', role: 'open' } },
+    ],
+  } as unknown as CabinetInput['footprint']
+  const shaped = (top: 'sits_over_back' | 'butts_into_back') => cab({
+    DX: 1164, footprint: fp, back_material: b18,
+    rules: mergeRules(DEFAULT_RULES, { FLOAT: true, SCRBK: 0, SCRL: 0, SCRR: 0, TOP_BACK_JOIN: top, RAIL_JOIN: 'between_sides' }),
+  })
+  it('top over the back runs to the back of the cabinet', () => {
+    const top = part(shaped('sits_over_back'), 'full_top')
+    expect(top.Z).toBe(0)
+    expect(top.DX).toBe(300)
+  })
+  it('top butting the back stops at the 18 back, not 33', () => {
+    const top = part(shaped('butts_into_back'), 'full_top')
+    expect(top.Z).toBe(18)
+    expect(part(shaped('butts_into_back'), 'back').DZ).toBe(18)
+  })
+})

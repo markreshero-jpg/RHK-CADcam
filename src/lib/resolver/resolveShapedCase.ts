@@ -82,10 +82,19 @@ export interface EdgeBuild {
   applied?: { t: number; material_id: string; tape?: string }
 }
 
+/** Board thickness of the box part on a box slot (or any back edge): the
+ *  cabinet's back / left / right board overrides, else the carcass. */
+function slotT(cab: CabinetInput, slot: 'left' | 'right' | 'back' | null, back = false): number {
+  if (slot === 'back' || back) return (cab.back_material ?? cab.material).DZ
+  if (slot === 'left')  return (cab.left_side_material  ?? cab.material).DZ
+  if (slot === 'right') return (cab.right_side_material ?? cab.material).DZ
+  return cab.material.DZ
+}
+
 /** How a side / back edge is built. Null for any other edge. */
 export function edgeBuild(cab: CabinetInput, s: FootprintSegment): EdgeBuild | null {
   if (!isPanelRole(s)) return null
-  const t = cab.material.DZ
+  const t = slotT(cab, boxSlot(cab, s), s.edge.role === 'back')
   const exp = cab.exposed_material
   const sub = edgeSub(s.edge)
   if (sub === 'finished') return { t: exp.DZ, off: 0, material_id: exp.id, tape: cab.exposed_edgeband_id }
@@ -106,7 +115,7 @@ function panelLineOff(cab: CabinetInput, s: FootprintSegment, b: EdgeBuild | nul
   if (!b) return 0
   const slot = boxSlot(cab, s)
   if (!slot) return b.off
-  if (!b.off && Math.abs(b.t - cab.material.DZ) < 1e-6) return 0
+  if (!b.off && Math.abs(b.t - slotT(cab, slot)) < 1e-6) return 0
   const r = cab.rules
   return b.off + (slot === 'left' ? r.SCRL : slot === 'right' ? r.SCRR : r.SCRBK)
 }
@@ -123,12 +132,12 @@ type FaceShift = { at: number; d: number }
 type FaceShifts = { l?: FaceShift; r?: FaceShift; b?: FaceShift }
 
 function boxFaceShifts(cab: CabinetInput, r: ConstructionRules, segs: FootprintSegment[]): FaceShifts {
-  const T = cab.material.DZ
   const out: FaceShifts = {}
   for (const s of segs) {
     const slot = boxSlot(cab, s)
     const b = slot && edgeBuild(cab, s)
     if (!slot || !b) continue
+    const T = slotT(cab, slot)
     const d = b.off + b.t - T
     if (Math.abs(d) < 1e-6) continue
     if (slot === 'left') out.l ??= { at: r.SCRL + T, d }
@@ -527,7 +536,12 @@ export function shapeCaseParts(
       const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : underBacks, shape, gr(p))
       if (c) out.push(c)
     } else if (k === 'full_top') {
-      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : inner, shape, gr(p))
+      // A top sitting over the backs (TOP_BACK_JOIN sits_over_back, as the box)
+      // runs over them to the outline, like the bottom under them.
+      const overBacks = r.TOP_BACK_JOIN === 'sits_over_back'
+        ? insetPolygon(segs, s => (s.edge.role !== 'back' ? insetOf(cab, s) : 0))
+        : inner
+      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : overBacks, shape, gr(p))
       if (c) out.push(c)
     } else if (k === 'front_rail') {
       if (!mainFront) continue
