@@ -42,6 +42,8 @@ import PartEditor from './PartEditor'
 import { buildReferenceOutlines } from './partEditor/referenceOutlines'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { useCabinetCad, type ModalCadContext } from './CabinetCad'
+import PartCutoutsPanel from './PartCutoutsPanel'
+import { cutoutPartInfo, normaliseCutoutList, normalisePartCutouts, type Cutout } from '@/src/lib/partCutouts'
 
 type ViewId = 'top' | 'elevation' | 'side' | 'parts' | '3d' | 'face' | 'interior' | 'joints' | 'overrides' | 'tree' | 'routes' | 'errors'
 
@@ -536,6 +538,36 @@ export default function CabinetEditModal({
     return rp && input ? buildFormulaScope(rp, input) : null
   }, [rp, cabinet.id])
 
+  // Cut-outs on the selected part (z_rangehood R4): carcass parts / shelves keep
+  // theirs on the cabinet's part_cutouts, custom parts on their own row.
+  async function saveCutouts(partId: string, next: Cutout[]) {
+    useTutorial.getState().emit('cutout_set')   // tutorial part_cutouts
+    if (partId.startsWith('custom_')) {
+      const cid = partId.slice(7)
+      setCustomParts(prev => prev.map(p => p.id === cid ? { ...p, part_cutouts: next } : p))
+      await dbUpdateCustomPart(cid, { part_cutouts: next })
+      // Re-resolve (fast path) so resolveCustomParts re-cuts its outline / holes,
+      // then reload the rows that now carry them.
+      await onUpdate(cabinet.id, { part_cutouts: normalisePartCutouts(cabinet.part_cutouts) })
+      dbLoadCustomParts(cabinet.id).then(setCustomParts)
+      return
+    }
+    const all = { ...normalisePartCutouts(cabinet.part_cutouts) }
+    if (next.length) all[partId] = next
+    else delete all[partId]
+    await onUpdate(cabinet.id, { part_cutouts: all })
+  }
+  function cutoutsPanelFor(partId: string) {
+    const info = rp ? cutoutPartInfo(rp, partId) : null
+    if (!info) return null
+    const cp = partId.startsWith('custom_') ? customParts.find(p => p.id === partId.slice(7)) : null
+    const list = cp ? normaliseCutoutList(cp.part_cutouts) : (normalisePartCutouts(cabinet.part_cutouts)[partId] ?? [])
+    return (
+      <PartCutoutsPanel key={`cut_${partId}`} className="relative w-full" W={info.W} D={info.D} DZ={info.DZ}
+        holesAllowed={info.holes} list={list} scope={formulaScope} onChange={next => { void saveCutouts(partId, next) }} />
+    )
+  }
+
   // CAD on the Elevation / Top / Side tabs (z_item_cad IC1, IC3a): one drawing per tab.
   const onCadEnter = useCallback(() => { setSelectedSVGPart(null); setMeasureMode(false) }, [])
   const mcadFront = useCabinetCad({ ctx: cadCtx, cabinet, rp, sheet: 'front', viewOn: activeView === 'elevation', onEnter: onCadEnter })
@@ -732,7 +764,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'face'     && <FacetFaceGridEditor cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
-            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onEdgeSaved={(partId, edge) => onEdgeChange?.(cabinet.id, partId, edge)} onPanelVisibleChange={setPanel3DVisible} compactInfo={phone}
+            {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onEdgeSaved={(partId, edge) => onEdgeChange?.(cabinet.id, partId, edge)} onPanelVisibleChange={setPanel3DVisible} partPanelExtra={cutoutsPanelFor} compactInfo={phone}
               fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />}
             {selFixture && (activeView === '3d' || isOrthoView) && (
               <CabinetFixtureCard f={selFixture}
@@ -881,6 +913,7 @@ export default function CabinetEditModal({
                     onOverridesChange={setPartOverrides}
                     setCustomParts={setCustomParts}
                   />
+                  {cutoutsPanelFor(selectedSVGPart.id)}
                 </>
               )}
             </div>

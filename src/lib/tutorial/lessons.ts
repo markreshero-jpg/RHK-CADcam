@@ -1470,6 +1470,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Tick Front to back (fit by hand). The rail turns to run from the back to the front, centred across the opening, 20 off the back and 20 off the front (change Off back / front). It has no supports and no drilling: you fit it and drill the holes by hand. The hardware list takes its length front to back.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-02 (z_rangehood R4 — part cut-outs).
+  { id: 'part_cutouts', level: 'intermediate', topic: 'cabinets', title: 'Cut a hole or notch in a part',
+    blurb: 'A rangehood hole, a plumbing notch or a power point cut-out, cut on the CNC.',
+    keywords: 'cut out cutout hole notch rangehood flue plumbing pipe power point pocket shaped part bottom top shelf under panel', steps: [
+    { id: 'open', title: 'Pick the part',
+      body: 'Double-click the cabinet, go to the 3D tab and click the part: the bottom, the top, a rail, a shelf, or a flat added part such as an under panel. A Cut-outs box shows under the part’s details. Other parts (gables, backs, doors) don’t take cut-outs yet.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'add', title: '+ Hole or + Notch',
+      body: 'A hole is cut inside the part: rectangle, rounded (Radius) or circle, through, or a pocket if you give it a Depth. A notch opens to an edge (pick back / front / left / right) and changes the part’s shape. Shelves take notches only. Type W × D, then where it sits: X from left / centre / right and Y from front / centre / back, plus an offset. Any field takes a formula, e.g. cab.w - 100. The picture shows the part from above, front at the bottom; anything that can’t be cut shows a ⚠ line and is left off.',
+      canvas: true, done: (c, s) => ev(c, 'cutout_set') > ev(s, 'cutout_set') },
+    { id: 'check', title: 'Check it',
+      body: 'The 3D view shows the cut once it saves. The optimiser nests the part as a shaped part and cuts the hole or notch. A cut-out goes with the cabinet when you copy it or Save it to the library.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

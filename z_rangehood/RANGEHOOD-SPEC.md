@@ -8,8 +8,8 @@
 >
 > **RESUME HERE** → R1 + R2 built 2026-11-01 (holes on the carcass bottom / top /
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
-> parts, e.g. the WUP Under Panel). No UI yet — set via `part_cutouts`.
-> Next: R4 (Cut-outs UI in Cabinet Edit). First real job: RHK6586 WC-04, Sirius SM927EL520
+> parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
+> (in-app check pending). Next: R5 (Rangehood block + `resolveRangehood`). First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -190,6 +190,26 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 - Placement copies the definition snapshot's `part_cutouts`; Save to library
   snapshots it; copy / paste copies the row.
 
+## R4 as built (2026-11-02)
+
+- **Cut-outs box** (`PartCutoutsPanel.tsx`) in Cabinet Edit's docked part panel —
+  under the part details in the 3D tab (via Cabinet3DView `partPanelExtra`) and
+  under Position / Offset in Top / Elevation / Side. Shows only on parts that
+  take cut-outs (`cutoutPartInfo`): carcass bottom / top / rails, shelves
+  (notches only — no + Hole), flat custom parts.
+- Per cut-out: hole (rect / circle, radius, depth blank = through) or notch (edge
+  it opens to); W × D; X from left / centre / right + offset; Y from front /
+  centre / back + offset. Sizes and offsets take formulas (amber when one).
+  Fields save on blur / Enter. Generated ones (`source` rangehood / linked) are
+  greyed and read-only.
+- **Preview**: a top view, front at the bottom, cut by `previewCutouts` (the same
+  cutter the resolve runs, on a plain rectangle), with its ⚠ warnings. The 3D
+  view shows the real result after the save's resolve.
+- Saving: carcass parts / shelves → `cabinet_instances.part_cutouts` via
+  onUpdate (on the `dbUpdateCabinet` fast path, no reload); custom parts → the
+  row, then the same fast-path resolve re-cuts it and the rows are reloaded.
+- Tutorial `part_cutouts` (Cabinets, intermediate).
+
 ## Phases
 
 | # | What | Status |
@@ -197,7 +217,7 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 | R1 | Cut-out type + `part_cutouts` column; **holes** on standard case parts through resolve → nest / G-code / 3D / cabinet views; tests | [x] 2026-11-01 (831535c) |
 | R2 | **Notches** → part outline (true shape), incl. a rect part gaining an outline | [x] 2026-11-01 |
 | R3 | Cut-outs on **custom parts** (`cabinet_custom_parts.part_cutouts`, flat parts) | [x] 2026-11-02 |
-| R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [ ] |
+| R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [x] 2026-11-02 |
 | R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [ ] |
 | R6 | **WUP takes the hole** from the cabinets above it | [ ] |
 | R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [ ] |

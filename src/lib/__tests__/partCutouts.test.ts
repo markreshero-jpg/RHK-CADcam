@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver/resolver'
 import { mergeRules } from '../resolver/mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material } from '../resolver/types'
-import { normalisePartCutouts, normaliseCutoutList, customPartCuts, holeLoop, notchOutline, type Cutout } from '../partCutouts'
+import { normalisePartCutouts, normaliseCutoutList, customPartCuts, cutoutPartInfo, previewCutouts, holeLoop, notchOutline, type Cutout } from '../partCutouts'
 import { buildFormulaScope } from '../formula/context'
 import { cutoutsToOp, shapeFrameFor } from '../optimiser/shapes'
 import { partShapes } from '../partSolids'
@@ -189,6 +189,30 @@ describe('part cut-outs (R3 custom parts)', () => {
   it('normalises the stored list', () => {
     expect(normaliseCutoutList(null)).toEqual([])
     expect(normaliseCutoutList([{ kind: 'notch', edge: 'back', w: 200, d: 250 }])[0]).toMatchObject({ id: 'c1', kind: 'notch', edge: 'back' })
+  })
+})
+
+// z_rangehood R4: what the Cabinet Edit cut-outs panel reads.
+describe('cut-outs editor helpers (R4)', () => {
+  it('says which parts take cut-outs, and their size in the cut-out frame', () => {
+    const rp = resolveCabinet(shelfCab({}))
+    rp.custom_parts = [
+      { id: 'up', orientation: 'flat', dx: 330, dy: 1200, dz: 18 },
+      { id: 'ep', orientation: 'side', dx: 330, dy: 700, dz: 18 },
+    ] as unknown as NonNullable<typeof rp.custom_parts>
+    const bot = rp.case_parts.find(p => p.part_key === 'bottom')!
+    expect(cutoutPartInfo(rp, 'case_bottom')).toEqual({ W: bot.DY, D: bot.DX, DZ: bot.DZ, holes: true })
+    expect(cutoutPartInfo(rp, 'int_fixed_shelf_0')!.holes).toBe(false)
+    expect(cutoutPartInfo(rp, 'custom_up')).toEqual({ W: 1200, D: 330, DZ: 18, holes: true })
+    expect(cutoutPartInfo(rp, 'custom_ep')).toBeNull()
+    expect(cutoutPartInfo(rp, 'case_left_side')).toBeNull()
+  })
+
+  it('previews like the resolve cuts', () => {
+    const pv = previewCutouts(600, 300, 16.5, false, [notch(), hole()])
+    expect(pv.outline).toHaveLength(8)
+    expect(pv.cutouts).toEqual([])
+    expect(pv.warnings[0].message).toMatch(/^Cut-out rh on p: holes on this part/)
   })
 })
 

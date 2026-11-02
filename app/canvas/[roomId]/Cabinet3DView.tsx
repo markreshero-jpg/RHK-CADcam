@@ -1956,7 +1956,7 @@ export function CabinetScene({
 export default function Cabinet3DView({
   cab, rp, highlightPartKeys, materialColours, ebByMatId, wire = false, customParts, partOverrides, shapeOverrides, onPartSelect, showDrilling = true, onUpdate, onDeletePart,
   setCustomParts, onOverridesChange, onEditPart, panelHost, onPanelVisibleChange, compactInfo = false,
-  fixtures, selectedFixtureId, onFixtureSelect, onEdgeSaved,
+  fixtures, selectedFixtureId, onFixtureSelect, onEdgeSaved, partPanelExtra,
 }: {
   cab:               CabinetInstance
   rp?:               ResolvedCabinet
@@ -1997,6 +1997,9 @@ export default function Cabinet3DView({
   // Phones (z_mobile): a tap shows the small read-only PartInfoCard over the model;
   // its "Details" opens the full panel (docked via panelHost as usual).
   compactInfo?:      boolean
+  // More panels under the docked part panel for the selected part (the edit
+  // modal's Cut-outs, z_rangehood R4). Null = nothing for that part.
+  partPanelExtra?:   (partId: string) => React.ReactNode
   // Linked fixtures drawn inside the cabinet (z_ubo U5) — e.g. a UBO's oven —
   // and their selection. Edit modal only; the room 3D draws fixtures itself.
   fixtures?:          LocalFixtureBox[]
@@ -2316,7 +2319,9 @@ export default function Cabinet3DView({
                   : undefined}
               />
             )
-            return panelHost ? createPortal(panel, panelHost) : panel
+            // Extras dock under it in the sidebar only (no room floating over the canvas).
+            const extra = panelHost ? partPanelExtra?.(selectedPart.id) : null
+            return panelHost ? createPortal(<>{panel}{extra}</>, panelHost) : panel
           })()}
           {editMenu && selectedPart && (onEditPart || frontEnd) && (
             <>

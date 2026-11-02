@@ -832,7 +832,8 @@ export async function dbUpdateCabinet(
   // Bulkhead settings (z_bulkhead) only feed resolveBulkhead — same fast path.
   // So do curved end settings (z_curved_end) and the plan outline they rebuild,
   // and floating shelf settings (z_floating_shelf).
-  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || k === 'back_panel' || k === 'split' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
+  // Part cut-outs (z_rangehood) are cut after the parts resolve — same fast path.
+  const cached = keys.length > 0 && keys.every(k => DIM_KEYS.has(k) || k === 'bulkhead' || k === 'curved_end' || k === 'float_shelf' || k === 'back_panel' || k === 'split' || k === 'part_cutouts' || (k === 'footprint' && 'curved_end' in u)) ? getCachedInput(id) : undefined
   // A shadowline split rail (z_bulkhead B7) switched on / to another board needs
   // that board loaded — full resolve.
   const split = u.bulkhead !== undefined ? normaliseBulkhead(u.bulkhead)?.split : undefined
@@ -848,6 +849,7 @@ export async function dbUpdateCabinet(
       ...(u.float_shelf !== undefined && { float_shelf: normaliseFloatShelf(u.float_shelf) }),
       ...(u.back_panel !== undefined && { back_panel: normaliseBackPanel(u.back_panel) }),
       ...(u.split !== undefined && { split: normaliseSplit(u.split) }),
+      ...(u.part_cutouts !== undefined && { part_cutouts: normalisePartCutouts(u.part_cutouts) }),
       ...(u.footprint !== undefined && { footprint: u.footprint ?? null }),
     }
     setCachedInput(id, updated)
@@ -1269,6 +1271,7 @@ export interface CabinetCustomPart {
   // computed cache of the formula, re-evaluated on resolve. Absent = plain literal.
   expressions?:        Record<string, string>
   no_cnc?:             boolean
+  part_cutouts?:       import('@/src/lib/partCutouts').Cutout[]   // cut-outs (z_rangehood R3); the resolve writes outline / cutouts from them
   sort_order:          number
 }
 

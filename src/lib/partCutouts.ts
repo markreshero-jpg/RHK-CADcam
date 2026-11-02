@@ -18,6 +18,7 @@
 
 import type { OutlinePt } from './shapePath'
 import { evaluateFormula, type FormulaScope } from './formula'
+import type { ResolvedCabinet } from './resolver/types'
 
 export type CutoutKind  = 'hole' | 'notch'
 export type CutoutShape = 'rect' | 'circle'
@@ -287,6 +288,27 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
     }
   }
   return warnings
+}
+
+/** Whether a part on a resolved cabinet takes cut-outs (R4 editor): its size in
+ *  the cut-out frame (W across, D front to back) and whether holes are allowed.
+ *  Null = not supported (yet). */
+export function cutoutPartInfo(rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts' | 'custom_parts'>, partId: string):
+  { W: number; D: number; DZ: number; holes: boolean } | null {
+  if (partId.startsWith('custom_')) {
+    const p = rp.custom_parts?.find(c => `custom_${c.id}` === partId)
+    return p && (p.orientation ?? 'flat') === 'flat' ? { W: Number(p.dy), D: Number(p.dx), DZ: Number(p.dz), holes: true } : null
+  }
+  const t = cutoutTargets(rp.case_parts, rp.internal_parts ?? []).find(x => x.id === partId)
+  return t ? { W: t.part.DY, D: t.part.DX, DZ: t.part.DZ, holes: t.holes } : null
+}
+
+/** Cut-outs on a plain W × D part, for the editor's preview: the outline (null =
+ *  still a rectangle), hole loops and warnings, exactly as the resolve cuts them. */
+export function previewCutouts(W: number, D: number, DZ: number, holes: boolean, list: Cutout[], scope?: FormulaScope) {
+  const part: CutPart = { DX: D, DY: W, DZ }
+  const warnings = applyPartCutouts([{ id: 'p', part, holes }], { p: list }, scope)
+  return { outline: part.outline ?? null, cutouts: part.cutouts ?? [], warnings }
 }
 
 // ── Custom parts (R3) ─────────────────────────────────────────────────────────
