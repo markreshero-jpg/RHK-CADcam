@@ -1523,7 +1523,7 @@ export const LESSONS: TutorialLesson[] = [
   ]},
 
   // Appended 2026-11-02 (kick face follows the cabinet colour).
-  { id: 'kick_colour', level: 'beginner', topic: 'cabinets', title: 'Kick colour',
+  { id: 'kick_colour', level: 'basics', topic: 'materials', title: 'Kick colour',
     blurb: 'A kick takes the colour of the cabinet it sits under, unless you pick a kick colour.',
     keywords: 'kick toekick plinth colour face board match cabinet front room job override', steps: [
     { id: 'auto', title: 'It follows the cabinet',
