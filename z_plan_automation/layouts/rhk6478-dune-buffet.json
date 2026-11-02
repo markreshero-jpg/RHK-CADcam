@@ -1,0 +1,41 @@
+{
+  "_source": "Markup 26.10.26 img_261026111626.pdf p7-8 (Buffet) + Site measure 22.10.26.pdf p2 (Buffet 2345 F/P, 612 / 604 returns, CH 2410 to bulkhead) + client sketch Buffet.jpg (SynologyDrive APPLIANCES folder: F 600 + F 600 under M open shelves, 1200 drawers under 2P doors) + Mark Q&A 2026-11-02",
+  "_notes": [
+    "2345 wall to wall. Lower: bar fridge 620 | 18 2pac panel | bar fridge 620 | 18 2pac panel | 1039 3-drawer (shrunk 5 to site) | 30 filler. Fridges TBC, vent slots TBC.",
+    "Bench as the Laundry: 140 kick + 740 = 880 carcass, 20 YDL Bella Oro + 60 mitred apron, 600 OA (580 + 18 + 2).",
+    "Ceiling 2390 (2410 - 20 floor TBC), 18 shadowline -> uppers 900-2372 standing on the bench.",
+    "Upper: 30 front filler | 1246 open shelf unit in LX Board 33mm Sublime Teak, whiteboard back (mirrors over it), 3 fixed 33 shelves, flush with the doors (370) | 1039 2pac pair, 2 adj shelves (350 + 18 + 2 = 370 OA) | 30 front filler. Divider lines up with the lower 18 panel / drawer edge (1276).",
+    "Colours: 2 Pac Flat 18 colour TBC + sharknose on everything but the open shelf unit."
+  ],
+  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+  "roomName": "Buffet",
+  "roomHeight": 2390,
+  "wallCabinetTop": 2372,
+  "roomRules": { "TOEH": 140, "BY_CLASS": { "base": { "REVT": 44 } } },
+  "walls": [
+    { "x": 0, "y": 612, "length": 612, "angle": 270, "_": "1 left return 612" },
+    { "x": 0, "y": 0, "length": 2345, "angle": 0, "_": "2 back wall 2345 F/P" },
+    { "x": 2345, "y": 0, "length": 604, "angle": 90, "_": "3 right return 604" }
+  ],
+  "cabinets": [
+    { "def": "BEPF", "wall": 2, "offset": 620, "dx": 18, "dy": 880, "dz": 580, "note": "18 2pac panel between the bar fridges, to the floor (vent slots TBC)" },
+    { "def": "BEPF", "wall": 2, "offset": 1258, "dx": 18, "dy": 880, "dz": 580, "note": "18 2pac panel, bar fridge 2 / drawers, to the floor" },
+    { "def": "D3-SLL", "wall": 2, "offset": 1276, "dx": 1039, "dy": 880, "dz": 580, "note": "3 equal drawers, 2pac sharknose",
+      "set": { "face_grid": { "cols": [ { "col_index": 0, "width_locked": false } ],
+        "rows": [ { "row_index": 0, "height_locked": false }, { "row_index": 1, "height_locked": false }, { "row_index": 2, "height_locked": false } ],
+        "zones": [ { "col_index": 0, "row_index": 0, "face_type": "drawer_face", "hinge_side": "left" }, { "col_index": 0, "row_index": 1, "face_type": "drawer_face", "hinge_side": "left" }, { "col_index": 0, "row_index": 2, "face_type": "drawer_face", "hinge_side": "left" } ] } } },
+    { "def": "BFK", "wall": 2, "offset": 2315, "dx": 30, "dy": 880, "dz": 580, "note": "30 filler to Wall 3" },
+
+    { "def": "WEP", "wall": 2, "offset": 0, "dx": 30, "dy": 1472, "dz": 350, "note": "30 upper filler to Wall 1 (WEP turned into a front filler)" },
+    { "def": "WOPN", "wall": 2, "offset": 30, "dx": 1246, "dy": 1472, "dz": 370, "note": "Open shelf unit, LX Board 33mm Sublime Teak, whiteboard back under mirrors, 3 fixed 33 shelves, flush with the doors",
+      "set": { "exposed_interior": true,
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 545, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "W2D", "wall": 2, "offset": 1276, "dx": 1039, "dy": 1472, "dz": 350, "note": "Upper pair, 2pac sharknose, 2 adj shelves",
+      "set": { "internal_grid": { "tree": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } } } },
+    { "def": "WEP", "wall": 2, "offset": 2315, "dx": 30, "dy": 1472, "dz": 350, "note": "30 upper filler to Wall 3 (WEP turned into a front filler)" }
+  ]
+}
