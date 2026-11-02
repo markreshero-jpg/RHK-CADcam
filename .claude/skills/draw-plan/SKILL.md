@@ -267,6 +267,19 @@ line and mirrors the island elevation.
   top 760: `dy` 300 from 460), so the apron sits over it. Open bay = `B1D` with
   face zone `open`, no fittings, `top_type: 'full_top'`, `exposed_interior: true`
   (inside in the front colour).
+- **Fronts under an apron top must clear the apron** (Mark, RHK6478 Buffet
+  2026-11-02): a sharknose / finger-pull grip REPLACES the room's `REVT` with
+  its 20 finger gap, so the top doors / drawers run up into a 60 apron (front
+  top 860 vs apron underside 840). Give every top-row front under an apron
+  `finger_gap` = apron drop + 20 (MA60 on 20 stone = **60**) in its face_grid
+  zone, as the powder vanities do. Check the front tops AFF (≤ apron underside
+  − 20) and the drawer box tops after the resolve.
+- **Panels between bays under an apron get a front notch** (Mark, RHK6478
+  Buffet 2026-11-02): an 18 panel running full depth to the bench front (e.g.
+  between bar fridges) is notched (apron thickness + 2) × (apron drop) at its top
+  front, e.g. 22 × 40 for MA60. Upright custom parts don't take cut-outs yet, so
+  it's a `part_shape_overrides` row on `custom_<id>`: side frame, x = depth from
+  the back (front at x = dx), y down from the top (`_tmp-6478-buf-rev1.mjs`).
 - **Void bay = false front + L fixing brackets** (Mark, RHK6581 J10 2026-10-25):
   place a `TEPF` the width of the void, then turn its Applied Panel into the
   false front (orientation `front`, z = `cab.d + t.door + 2 - t.exposed`, flush
