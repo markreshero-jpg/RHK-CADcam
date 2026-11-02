@@ -3,7 +3,7 @@
 import { Wall } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
 import { wallEnd } from '@/src/lib/geometry'
-import { WallEndFields } from './WallPanel'
+import { WallEndFields, xyLbl } from './WallPanel'
 
 const r1 = (n: number) => Math.round(n * 10) / 10
 
@@ -36,10 +36,12 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onUpda
   const minY = Math.min(...pts.map(p => p.y)), maxY = Math.max(...pts.map(p => p.y))
   const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
 
-  const pair = (x: number, y: number, set: (x: number | null, y: number | null) => void) => (
+  const pair = (name: string, x: number, y: number, set: (x: number | null, y: number | null) => void) => (
     <div className="grid grid-cols-2 gap-2">
-      <CalcInput value={r1(x)} decimals={1} onCommit={v => set(v, null)} className={inp + ' text-right'} placeholder="X" />
-      <CalcInput value={r1(y)} decimals={1} onCommit={v => set(null, v)} className={inp + ' text-right'} placeholder="Y" />
+      <div><span className={xyLbl}>{name} X</span>
+        <CalcInput value={r1(x)} decimals={1} onCommit={v => set(v, null)} className={inp + ' text-right'} placeholder="X" /></div>
+      <div><span className={xyLbl}>{name} Y</span>
+        <CalcInput value={r1(y)} decimals={1} onCommit={v => set(null, v)} className={inp + ' text-right'} placeholder="Y" /></div>
     </div>
   )
   // Move the whole set so the reference point (fx, fy) lands on the typed value.
@@ -87,11 +89,11 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onUpda
           <p className="text-[10px] text-gray-600 -mt-1">Moves all {walls.length} walls and everything on them, like a drag.</p>
           <div>
             <label className={lbl}>Centre (mm)</label>
-            {pair(cx, cy, (x, y) => moveSetTo(x, y, cx, cy))}
+            {pair('Centre', cx, cy, (x, y) => moveSetTo(x, y, cx, cy))}
           </div>
           <div>
             <label className={lbl}>Min corner — X / Y (mm)</label>
-            {pair(minX, minY, (x, y) => moveSetTo(x, y, minX, minY))}
+            {pair('Min', minX, minY, (x, y) => moveSetTo(x, y, minX, minY))}
           </div>
           <p className="text-[10px] text-gray-600">Extents X {Math.round(minX)} → {Math.round(maxX)} · Y {Math.round(minY)} → {Math.round(maxY)}</p>
         </div>
@@ -104,12 +106,12 @@ export default function MultiWallPanel({ walls, roomHeight, onUpdateMany, onUpda
               <p className="text-xs text-gray-300">{w.name} · {Math.round(w.length)}mm</p>
               <div>
                 <label className={lbl}>Start (mm)</label>
-                {pair(w.pos_x, w.pos_y, (x, y) => void onUpdateWall(w.id, x != null ? { pos_x: x } : { pos_y: y! }))}
+                {pair('Start', w.pos_x, w.pos_y, (x, y) => void onUpdateWall(w.id, x != null ? { pos_x: x } : { pos_y: y! }))}
               </div>
               <WallEndFields wall={w} inp={inp} lbl={lbl} label="End (mm)" onUpdate={onUpdateWall} />
               <div>
                 <label className={lbl}>Centre (mm)</label>
-                {pair(wcx, wcy, (x, y) => void onUpdateWall(w.id, {
+                {pair('Centre', wcx, wcy, (x, y) => void onUpdateWall(w.id, {
                   pos_x: w.pos_x + (x == null ? 0 : x - wcx),
                   pos_y: w.pos_y + (y == null ? 0 : y - wcy),
                 }))}

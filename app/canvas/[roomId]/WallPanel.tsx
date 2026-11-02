@@ -8,10 +8,12 @@ import CalcInput from '@/src/components/CalcInput'
 import { parseWallProfile, formatWallProfile } from '@/src/lib/wallProfile'
 
 const r1 = (n: number) => Math.round(n * 10) / 10
+/** Small caption over each X / Y box. */
+export const xyLbl = 'text-[10px] text-gray-400 font-medium mb-0.5 block'
 
 /** Editable wall end X / Y — the start stays put; length + angle follow the new end. */
-export function WallEndFields({ wall, inp, lbl, onUpdate, label = 'End position (mm)' }: {
-  wall: Wall; inp: string; lbl: string; label?: string
+export function WallEndFields({ wall, inp, lbl, onUpdate, label = 'End position (mm)', xyPrefix = 'End ' }: {
+  wall: Wall; inp: string; lbl: string; label?: string; xyPrefix?: string
   onUpdate: (id: string, u: Partial<Wall>) => Promise<void> | void
 }) {
   const e = wallEnd(wall)
@@ -25,8 +27,10 @@ export function WallEndFields({ wall, inp, lbl, onUpdate, label = 'End position 
     <div>
       {label && <label className={lbl}>{label}</label>}
       <div className="grid grid-cols-2 gap-2">
-        <CalcInput value={r1(e.x)} decimals={1} onCommit={v => setEnd(v, e.y)} className={inp + ' text-right'} placeholder="X" />
-        <CalcInput value={r1(e.y)} decimals={1} onCommit={v => setEnd(e.x, v)} className={inp + ' text-right'} placeholder="Y" />
+        <div><span className={xyLbl}>{xyPrefix}X</span>
+          <CalcInput value={r1(e.x)} decimals={1} onCommit={v => setEnd(v, e.y)} className={inp + ' text-right'} placeholder="X" /></div>
+        <div><span className={xyLbl}>{xyPrefix}Y</span>
+          <CalcInput value={r1(e.y)} decimals={1} onCommit={v => setEnd(e.x, v)} className={inp + ' text-right'} placeholder="Y" /></div>
       </div>
     </div>
   )
@@ -143,20 +147,24 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onMoveBy, onDele
         <div>
           <label className={lbl}>Start position (mm)</label>
           <div className="grid grid-cols-2 gap-2">
-            <CalcInput value={f('pos_x') as number} decimals={1}
-              onCommit={v => onUpdate(wall.id, { pos_x: v })} className={inp + ' text-right'} placeholder="X" />
-            <CalcInput value={f('pos_y') as number} decimals={1}
-              onCommit={v => onUpdate(wall.id, { pos_y: v })} className={inp + ' text-right'} placeholder="Y" />
+            <div><span className={xyLbl}>Start X</span>
+              <CalcInput value={f('pos_x') as number} decimals={1}
+                onCommit={v => onUpdate(wall.id, { pos_x: v })} className={inp + ' text-right'} placeholder="X" /></div>
+            <div><span className={xyLbl}>Start Y</span>
+              <CalcInput value={f('pos_y') as number} decimals={1}
+                onCommit={v => onUpdate(wall.id, { pos_y: v })} className={inp + ' text-right'} placeholder="Y" /></div>
           </div>
         </div>
         <WallEndFields wall={wall} inp={inp} lbl={lbl} onUpdate={onUpdate} />
         <div>
           <label className={lbl}>Centre position (mm)</label>
           <div className="grid grid-cols-2 gap-2">
-            <CalcInput value={r1((wall.pos_x + e.x) / 2)} decimals={1}
-              onCommit={v => moveCentre(v, null)} className={inp + ' text-right'} placeholder="X" />
-            <CalcInput value={r1((wall.pos_y + e.y) / 2)} decimals={1}
-              onCommit={v => moveCentre(null, v)} className={inp + ' text-right'} placeholder="Y" />
+            <div><span className={xyLbl}>Centre X</span>
+              <CalcInput value={r1((wall.pos_x + e.x) / 2)} decimals={1}
+                onCommit={v => moveCentre(v, null)} className={inp + ' text-right'} placeholder="X" /></div>
+            <div><span className={xyLbl}>Centre Y</span>
+              <CalcInput value={r1((wall.pos_y + e.y) / 2)} decimals={1}
+                onCommit={v => moveCentre(null, v)} className={inp + ' text-right'} placeholder="Y" /></div>
           </div>
           <p className="text-[10px] text-gray-600 mt-0.5">Moves the wall and everything on it, like a drag.</p>
         </div>
