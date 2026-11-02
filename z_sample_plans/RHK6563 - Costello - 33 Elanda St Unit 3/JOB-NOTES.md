@@ -40,9 +40,23 @@ Builder: Costello Building Projects (Nathan Costello, nate@costellobuildingproje
 5. Laundry: no cabinets on the sketch — layout to come (quote drawings?)
 6. Board thickness for Polytec Antique White Matt (16 / 18) and Lx Tasmanian Oak; kick height.
 
+## Answers (Mark 2026-11-02)
+- Study tower 500 wide OA, 1 door upper (W1D) from bench height to ceiling less a 30 bulkhead; cupboard under it 750 OA high.
+- "400 Desk" = the desk depth on the back-wall run, so the tower beside it is 400 OA deep incl doors.
+- Open shelf = a box with top, bottom and back, 33 LX board to match.
+- Vanity shaving cabinets 140 OA deep incl mirror doors.
+- Laundry: later.
+- Boards: 16mm (Polytec Antique White Matt); Lx Tasmanian Oak ABS grain 18mm.
+
+## Library added 2026-11-02
+- Colour "Tasmanian Oak" on the Laminex 18mm ABS Grain range (`b5a28e84`), board `LX Abs Grain 18mm – Tasmanian Oak` (`6cd37f1b`).
+- New board family `LX Board 33mm` + `LX Board 33mm – Tasmanian Oak` (`a92331d4`) for desk tops / shelf boxes (per-cabinet `material_overrides.exposed`).
+- Handle `Momo Dallas 128` (finish DBR, length 140 assumed) + schedule `Momo Dallas 128 DBR` (`463951c9`).
+- Polytec Antique White Matt 16mm NOT added yet (vanity / laundry).
+
 ## Rooms
 | Room | Room id | Status |
 |---|---|---|
-| Study | – | Not drawn |
+| Study | 443a1553-14c4-4b8d-bd1f-2e5890b827e7 | Drawn 2026-11-02, 0 errors (layout `z_plan_automation/layouts/rhk6563-costello-study.json`). Walls clockwise: 1 left 1433, 2 back 2044, 3 right 1431, CH 2155, kick 100 (TBC). Tower in the Wall 1/2 corner, 500 OA x 400 OA deep (380 carcass): TFKW 30 / D3-SLL 452 (750 OA incl kick, joined KICK 1) + W1D 452 single door hinged left 750-2125 (hinges [100, 900, 1275] clear of the shelf holes) / TEPF 18 floor to 2125; BH 30 to the ceiling, flush with carcase, right return 380 mitre. Desk tops 33 LX Tas Oak (WUP) top 750: Wall 3 600 x 1431 into the corner, Wall 2 400 x 944 TEPF to the Wall 3 top. BEPF 18 x 575 deep at the open end (sketch "575"). Open shelf boxes 300 x 370 OA, 33 top + bottom + upright back (WUP custom part orientation front), no ends: Wall 2 1544 from the TEPF, Wall 3 1131 from 300 (butts the Wall 2 box) to the open end. Room fronts + exposed = Lx ABS Grain 18 Tas Oak, kick face Tas Oak, handles Momo Dallas 128 DBR, carcass default whiteboard. CAD: spec block + SITE NOTES (Site notes layer) + shelf / desk notes. **TBC: open shelf height (drawn top level with the tower 2125), kick 100, carcass colour (Nate: "all Tas Oak"), BEPF 575 vs 600, D3-SLL drawers under the 1-door upper.** Check pending. |
 | Bathroom Vanity | – | Not drawn |
 | Laundry | – | Not drawn |
