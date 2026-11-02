@@ -420,6 +420,14 @@ line and mirrors the island elevation.
   at TC-03's inside face, flush with WC-01's end). The next piece runs on over
   the panel (WC-08 extended left by the panel thickness). Don't break the
   shadowline on the panel's outer face.
+  **Returns where the depth steps** (Mark, RHK6478 WIP 2026-11-03): a BHSL is a
+  60 strip at the front, so wherever a deeper shadowline meets a shallower one
+  (talls / fridge 630 next to overheads 330–350), the deep piece gets that
+  side's return: `bulkhead.left/right = { on: true, depth: deep − shallow + 60,
+  joint: 'mitre' }` (630 / 350 → 340), so the shallow strip's end butts fully
+  into it. Left / right are the piece's own frame (on a 180° wall, left = the
+  higher offset end... check which neighbour it faces). Seen ends get a
+  full-depth return; wall ends none.
   An overhead filler at a wall = a `WEP` at the filler width with its Applied
   Panel turned into a front filler (`orientation 'front'`, expressions
   `{z: 'cab.d + 2', dx: 'cab.w', dy: 'cab.h', dz: 't.exposed'}`), dy = overall.
