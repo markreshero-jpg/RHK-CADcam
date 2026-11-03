@@ -840,7 +840,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
       )}
       <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(viewAnnotations), cadFields)} frame={cadFrame} paper={annotScale} layers={layers} cadLayers={cadLayerV}
-        edit={{ ...cad.editProps, hittable: cad.editProps.hittable && (mode === 'cad' || mode === 'select') }} />
+        edit={{ ...cad.editProps, hittable: cad.editProps.hittable && mode === 'cad' }} />
       {cad.drawPreview && (
         <AnnotationLayer annotations={[cad.drawPreview]} frame={cadFrame} paper={annotScale} cadLayers={cadLayerV} />
       )}
@@ -943,9 +943,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   useEffect(() => {
     const svg = svgRef.current; if (!svg) return
-    const ro = new ResizeObserver(([e]) => setSvgSize({ w: e.contentRect.width, h: e.contentRect.height }))
+    // The plan <svg> remounts on every view switch, so re-observe the new element.
+    const ro = new ResizeObserver(([e]) => { const r = e.contentRect; if (r.width > 0 && r.height > 0) setSvgSize({ w: r.width, h: r.height }) })
     ro.observe(svg); return () => ro.disconnect()
-  }, [])
+  }, [canvasView])
 
   useEffect(() => {
     if (canvasView !== 'plan') return
@@ -2046,7 +2047,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           await handleJoinKicks(cab.id)
           return { joined: cab.label }
         },
-        // Open the cabinet edit modal — same path as double-clicking the cabinet
         // Right-click a joined kick → Kick split… (opens the modal for its run).
         kickSplit(ref: string) {
           const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
@@ -2054,6 +2054,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           setKickSettingsRunId(cab.kick_run_id)
           return { run: cab.kick_run_id }
         },
+        // Open the cabinet edit modal — same path as double-clicking the cabinet
         // in the plan (lets headless tests reach the Part/Shape editors).
         openCabinet(ref: string) {
           const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
@@ -4491,8 +4492,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       {kickSettingsRunId && (() => {
         const asm = cabinets.find(c => c.kick_run_id === kickSettingsRunId && c.is_kick_assembly)
         if (!asm) return null
-        return (
-          <KickRunSettingsModal
         // Kick length + start from the resolved face (scribes off the ends), and the
         // member cabinet joints along it, for the seam suggestions (z_kick_join KS1).
         const faces = (resolvedParts.get(asm.id)?.toekick_parts ?? []).filter(p => p.part_key === 'kick_front_face')
@@ -4504,12 +4503,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           .flatMap(c => { const t = cabT(c, wall) - cabT(asm, wall) - kStart; return [t, t + c.dx] })
           .map(t => Math.round(t * 10) / 10)
           .filter(t => t > 1 && t < kLen - 1))].sort((a, b) => a - b) : []
+        return (
+          <KickRunSettingsModal
             runId={kickSettingsRunId}
             runLength={kLen}
             joints={joints}
-            onClose={() => setKickSettingsRunId(null)}
             faceMaterialId={faces[0]?.material_id ?? null}
             faceGrain={faces[0]?.grain_direction ?? 'vertical'}
+            onClose={() => setKickSettingsRunId(null)}
             onSaved={applyKickMutation}
           />
         )

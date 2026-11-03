@@ -1,0 +1,123 @@
+# RHK6586 Greystone Apt 109 Netanya (Milross A109) — job notes
+
+Project `bada385f-41cf-411e-9536-d1e413e6d5ce` (created 2026-10-27). Sources: site measure PDF (Pencil sketch),
+designer set `A109 Milross - Drawings-11.pdf`, appliance invoice, `Fridge for Kitchenette.png`.
+Everything for this job is in this folder (Mark).
+
+## Job-level setup (2026-10-27)
+- Kick 100 (`rule_overrides.TOEH`). Class dims: tall 2095 x 682, base 840 x 560 (kitchen TBC), wall 600 x 430 (TBC).
+- Fronts: style Flat Grain — Polytec, colour **Boston Oak Woodmatt** (new Woodmatt range row `4a70a098`, board `bedd22d1`). Kick face Boston Oak.
+- Internals: new board **Nikpol 16mm – Diamond Grey** `2351a864` (16.5, sheet 2800x2070 for now — Mark to plan the 1030-half / 2700 cut later), tape Diamond Grey 1mm Matching 21x1 `dbb43d45`.
+- Job assembly schedule **16.5mm Nikpol Diamond Grey / Boston Oak** `03291e0f`: interior + shelf Diamond Grey, exposed Boston Oak 16.
+- 32mm PT Woodmatt panels: drawn as **2 x 16.5** for now (Mark). Make a real 32 board later if needed.
+- Hinge / slide / handle / drawer-box schedules cloned from RHK6555 — **handle schedule is finger pull + PTO, not confirmed for this job**.
+
+## Mark's answers (2026-10-27)
+1. Fridge: run with the Smeg PNG (600 x 1500), not the invoice Samsung. CAD note: fridge height fouls the microwave box; draw the fridge size in CAD inside the fridge space.
+2. Kitchenette overheads start at 1500H, 30 shadowline at the top, overheads below it.
+3. Bed 1: plumbing box + beam come down 385 off the ceiling — whole robe sits below that line, bulkhead above. TV can mount over the fixed panel + bulkhead.
+4. Vanity sits on a 200h tiled plinth (builder; hides the toilet waste, runs into the 45 wall).
+5. TV unit 3000 long, 40 short of the pelmet end, flush with the stepped wall on the RHS.
+
+## Rooms
+- **Bed 1 Robe + Study** — drawn 2026-10-27, room `d4fdad8f-bcbf-4c38-a6ad-b6e0cee7ca8d`, layout `z_plan_automation/layouts/rhk6586-greystone-bed1-robe-study.json`.
+  - Wall 3395: 1335 study | 170 door head | 505 plumbing box | 1385 (1370 + the 15 short). Robe 2095 incl kick, 700 OA (682 carcass), BH 385 flush with doors (left return 700 mitre), 2mm top reveal on tall/wall fronts (room BY_CLASS REVT 2).
+  - TC-01/02 TEPF 2x16.5 at the door head | TC-03 hang 569 | TC-04 hang 569 (safe) | BC-04 D3 719 (3 equal) + WC-01 luggage W1D (door 740-1458, TV panel 1460-2093, open inside) | TC-05 triangle iron bay on the 45 (custom footprint, own shaped kick, 3 open shelves to 740, door, TV panel).
+  - Hang bays: fixed shelves tops 300 / 520 / 1800 AFFL, oval rail y 1594 under the top shelf. Auto hinges clear all shelves by 50+.
+  - KICK 1 1538-3395 (TC-03..BC-04); TC-05 keeps its own kick (a straight kick would run through the 45 wall).
+  - Study: Benchtop 1 20 stone (20mm Stone schedule, colour TBC) 1335 x 600, top 750, waterfall left; BC-01/02 BEPF 2x16.5 right; BC-03 650 x 134 floating drawer centred under the top.
+  - Round 2 (Mark 2026-10-27): handles OK (job schedule: PTO doors, finger-pull drawers); desk 600 OK; 1174 hang OK.
+    - Wall 3 = left 45 wall (up-left from the study corner, 1000 long, length not measured). Desk top = trapezoid, waterfall edge parallel to it ((0,0)->(600,600)).
+    - Study: BC-03 drawer butted to the right panels (652-1302); BC-05/06 BEPF 2x16.5 at 600 / 616.5, square to the wall, face on the waterfall's front point (stone leg tip meets the panel - mason to trim square). 19 gap panel -> drawer.
+    - Old triangle TC-05 replaced by BC-07 (B1D triangle 670 x 700, has_face off, exposed_interior - Boston Oak all over, front flush with doors, own kick, 2 fixed shelves) + WC-03 (W1D triangle 670 x 682, door 740-1458 hinged left, TV panel 1460-2093). Footprint ends with a short `open` edge where the filler takes over.
+    - TC-05 = TFKW 40 filler at 4065, 10 into the 45 wall (scribe), has_toekick off, pos_z 100, 1995 high. BH WC-02 now dx 2590 with right end angle 45 (bulkhead B8, 8de171c) - outline follows the 45 wall, fascia front corner on the wall.
+    - New fixture catalog item **Plasterboard box (beam / bulkhead)** (decorative, wall mount, resizable, wall colour, rectangle plan/elev shape): Sliding door head beam 170 x 2700 (length into the room assumed) and Plumbing box 505 x 255, both 385 deep, z 2095.
+    - CAD (Wall 1 elevation): hang dims 1174 in TC-03/04, PTO x2 at the 520 shelf, SAFE box, 42" TV note, DESK. Spec block on the plan.
+  - Open: beam length into the room, real 32 board later.
+- **Lounge TV Unit** — drawn 2026-10-28, room `ddc7d7e2-abd3-4f13-8b65-72eac0050bb6`, layout `z_plan_automation/layouts/rhk6586-greystone-lounge-tv-unit.json`.
+  - Mark: data store flap down, others drawers; 20 stone; BEPFs both ends (the step goes BACK so the full end is seen); top 5 past doors + panels; ledge underside 1800; 3100 long PT Boston Oak sheets available; CH 2320.
+  - Walls: Wall 1 = left wall with the external doors / pelmet line (2500, not measured — drawn first so the room side is right), Wall 2 = TV wall 3040, Walls 3/4 = the 55 step back + wall on (DB).
+  - BC-01 BEPF 16.5 | BC-02/03 drawers 593/594 | BC-04 data store 593 flap (hinge_side bottom) | BC-05/06 drawers 594/593 | BC-07 BEPF. 100 kick + 330 carcass + 20 stone = 450; carcass dz 327 (fronts 345, top 350). Drawers SLIDE_SETBACK 0 (Dragon Pro 300 needs 300; 300.5 available). KICK 1 joined.
+  - Gotcha: after joinKicks, updateCabinet {dy} on a member raised its pos_z (150/250) — fixed pos_z 100 in the DB and re-resolved with a no-op {dz}.
+  - Benchtop 1 3010 x 350 at 430 (20mm Stone schedule, colour TBC). Ledge WC-01 FLSHLF 3000 x 300 x 33 double, pos_z 1800, both ends seen; fs:top + fs:bot part_shape_overrides with R300 at the right front corner (optimiser / G-code / sheets cut it; plan / elev / 3D still square + CAD note).
+  - Fixtures (new catalog rows): TV 65" (Samsung S90H) 1445 x 830 centre 1065, soundbar 900 under. CAD: LOCKABLE x4, data store note, ledge note, 1800 dim; spec block.
+  - Open: LED uplight in the ledge (TBC); Boston Oak sheet is still 2415 long in the library — the 3000 ledge boards won't nest until a 3100 sheet exists (width?).
+- **Bathroom Vanity** — drawn 2026-10-28, room `a321bb6a-1ed6-428b-bcca-6d1946d16345`, layout `z_plan_automation/layouts/rhk6586-greystone-bathroom-vanity.json`.
+  - Mark: 150 apron; drawers stay in the centre (plumbing cut-out in the drawer bottoms later); left tight to the wall, right seen panel; top 2100 overall; 5 overhang; fronts as other rooms.
+  - Walls: Wall 1 left (square, 1500 assumed), Wall 2 vanity 2250 F/T, Wall 3 45 wall. Room height 2400 assumed (not measured).
+  - Top 785 (basin rim 850, semi-inset 530 x 360, 65 above the top - plumbing spec p1). Carcass 200-765 on the builder's 200 tiled plinth (no kick), dz 477 (fronts 495, top 500).
+  - BC-01 D2 700 | BC-02 D2 700 centred on the basin (rails on edge) | BC-03 D2 678.5 | BC-04 BEPF 16.5 seen, 200-635 under the apron. Room BY_CLASS base REVT 134 + top-row finger_gap 150. BC-01/03 pinned Dragon Pro 350x127 (GPO room at the back); BC-02 auto. 2026-10-28: job on Matt Grey slides; BC-01/03 unpinned → 400x127 Matt Grey like BC-02 (top_clearance 30 on all three) — Mark to confirm the GPOs clear a 400 box.
+  - New: edge profile **MA150** (Mitred Apron 150), fixture catalog **Semi-inset basin 530 x 360 (RHK6586 spec)** (cutout 490 x 320 R80 placeholder), plinth drawn with the Plasterboard box item (2250 x 495 x 200).
+  - CAD: stud dims 285 / 610 / 1400 / 1865 (finished), GPO notes, plumbing cut-out note, LED TBC, spout note; spec block.
+  - Open: basin cut-out size (template), LED detail, plinth depth / how it runs into the 45 wall, bathroom ceiling height.
+- **Kitchenette** — drawn 2026-10-28, room `a496c328-cfda-4f74-8c6d-175edd8e5907`, layout `z_plan_automation/layouts/rhk6586-greystone-kitchenette.json` (post-placement steps in its _notes).
+  - Mark: 575 base carcass (finger pull); overheads 380 OA; fridge cupboard carcass 350 set out flush with the tall panels; BH 200 flush with doors over everything (replaces the 30 shadowline -> tops at 2120); filler left of the pantry; overhead filler at the fridge tall; end panel right flush with the bench; option C at the corner (no trays — void bigger, drawers smaller, DW 450, sink min 600).
+  - Walls: 1 return at the pantry end (700, not measured), 2 = 45 wall 1605 (angle 315, corner at the origin), 3 = 1935, 4 = right return (700). Room 2320.
+  - 45 wall: TC-01 TFKW 40 | TC-02 pantry 850 (4 adj EQ) | TC-03/04 TEPF 2x16.5 | fridge space 620: BC-01 microwave box (open, 1500-1873) + WC-06 cupboard 247 over | TC-05/06 TEPF 2x16.5 → 1576 (29 to the corner empty). Tall run 602 carcass (620 OA). KICK 1 under filler + pantry.
+  - Straight wall: BC-02 BFK void filler 128.5 at 300 | BC-03 D4 440 | BC-04 integrated DW door 450 | BC-05 B2D sink 600 (rails on edge) | BC-06 BEPF 16.5 (600 panel, 840 high under the apron). KICK 2 300 → 1918.5 under the DW.
+  - Overheads (362 carcass, 1500-2120): WC-04 range cupboard (angled left end, 1 door hinged right, Sirius 520 in base) | WC-05 17 front filler | WC-01/02 525 | WC-03 WEP 16.5. BH WC-07 (tall run, right return 240) + WC-08 (left end angle 45).
+  - Bench 20 + MA60 apron (new profile), height 880 carcass, room base REVT 44, top-drawer finger_gap 60. New catalog rows: Miele CS7612FL, sink 400 x 460, Sirius SM927EL520, LG MF3226PBS, Smeg 600 fridge.
+  - Notes: fridge fouls the microwave box, microwave box, AC grille TBC, integrated DW, rangehood, LED, PTO tags; spec block.
+  - Open: AC grille size; range cupboard base cut-out for the hood.
+  - **Revised 2026-10-28 (Mark):** no return wall; pantry is a TRIANGLE (602 back on the 45 wall, 602 gable beside the fridge, doors on the 851 45° face — parallel to the straight wall), up to the ceiling with a 198 false panel above the doors as the bulkhead line. Fridge run now 602–1288 (317 to the corner). Base back to designer widths (void 123 at 150 | drawers 580 | DW 450 | sink 615.5 | panel). WC-04 wraps the corner (back on both walls, left side on the fridge tall): fixed panel left, 525 door right; overhead filler deleted. Pantry doors need 45° hinges (HINGE_ANGLE_MISSING) — none in the hinge library yet.
+  - **Revision 2 (Mark 2026-10-28):** right return wall deleted — the run end is open (BC-06 BEPF + WC-03 WEP are the seen ends, bench 5 past to 1940, WC-08 right return 380.5 mitre). Pantry + fridge run +20 along the 45 wall so the pantry door corner stays on the wall (fridge run now 622–1308). Bench front cut at 45 from x 277.5 (drawers) to the fridge panel face (620.5 off the 45 wall); BC-02 filler rotated onto the 45 wall (s 1308, 71.7 wide, face 614 off the wall = 6.5 behind the bench, own kick, 840 high under the apron); KICK 2 now 273 → 1918.5. Microwave box BC-01 up to 1550 (1530 fridge + 20) → WC-06 197 high. WC-04 follows the tall side (pos −210, 1078.5) and its door now hinges right on the square gable (hinged left it hung on the 45 side → HINGE_ANGLE_MISSING).
+  - **Revision 3 (Mark 2026-10-28):** the angled BFK replaced by a **BFKANG** (BC-02, carcass on, depth 575, fill_a 40 beside the drawers, fill_b 50.1 to the fridge tall side, own mitred kick, 880). New BFKANG default (library row): top + bottom over the gables, gables set in 16.5 each side so they can be planed to the real wall angle. Drawers BC-03 −13 → 566 at 287; KICK 2 287 → 1918.5. Bench follows the filler (600 off both walls): front (248.5,600) → (214.2,634.3) on the tall side — no longer flush with the fridge panel face (~19 back).
+  - **Revision 4 (Mark 2026-10-28):** kick stops either side of the DW — KICK 2 287 → 853 under the drawers with a right return; BC-05 sink off the joined run with its own kick and a left return (new kick returns feature, TOERETL / TOERETR).
+  - **Revision 5 (Mark 2026-10-28):** kick returns now mitred (78a04c1, kick grain vertical default). Under panel WC-09 (16.5 Boston Oak) under WC-04 / WC-01 / WC-02, overheads scribed up 16.5 (SCRBT), panel cut round the range cupboard corner (part shape override + footprint) — rangehood cut-out still TBC. Sink = library **Abi Ohelu Single Bowl 380 U/M** (rim under the 20 top: bench_drop 225, z 675) on the sink cupboard centre; tap = library **Abi Pull-out Sink Mixer** behind it. Old "Undermount sink 400 x 460 (RHK6586 spec)" fixture removed (catalog row kept).
+  - **Revision 6 (Mark 2026-10-28):** under panel shape was turned 90° (my part shape used x = depth; the horizontal shape frame is x along the part, y back from the front) — redrawn; the TV ledge R300 overrides (fs:top / fs:bot) had the same mistake and were turned too. BC-04 integrated DW now has a face-only kick (toe_type leg, 450 x 100 between the mitred returns), top long edge taped (cabinet EDGING override — the Standard base row leaves kick faces untaped).
+- **Round 7 (Mark 2026-10-28):** TV ledge (lounge WC-01) R300 now the new floating-shelf corner radius (`float_shelf.radius_r 300`, 87e7ab0) — shows in plan + 3D, cut on the boards; the hand-drawn fs:top / fs:bot shape overrides deleted. Bed 1: TV 42" (new catalog row, 933 x 540 x 30) on the fixed panels over WC-01 + WC-03, x 2904–3837, 1507–2047 AFFL, on the door face (y 700). Vanity: basin GLB built from the plumbing spec p1 (`public/fixture-models/RHK_Semi_Recessed_Basin_530x360.glb`, generator `z_fixtures/make-basin-glb.mjs`), catalog row renamed **White Semi Recessed Basin 530x360**, cut-out 455 x 290 R120 from the drawing (bowl under the rim ≈ 446 x 280) — still check against the template.
+- **Top thicknesses (Mark 2026-10-30):** Kitchen 60 | Vanity 60 | Lounge bench 40 | Study 40 stone + WF end. All drawn as 20 stone slab + mitred apron, top surfaces unchanged (script `z_plan_automation/_tmp-6586-tops-thick.mjs`).
+  - Kitchenette: already 20 + MA60 — notes only.
+  - Vanity: MA150 → MA60 (front + right end). Room base REVT 44, top-row finger_gap 60 (BC-01..03 → front tops 60 below 785), BC-04 BEPF dy 525 (200–725, under the apron).
+  - Lounge: MA (40) on the front + both ends. Room base REVT 24, drawers finger_gap 40, BC-01/07 BEPF dy 410.
+  - Study: MA (40) on the front + right end, waterfall left (built-up face piece + 100 return where the apron meets the leg, automatic). BC-01/02/05/06 panels dy 710. BC-03 drawer carcass 20 lower + taller (pos_z 576, dy 154) with finger_gap 40 so the 114 front stays below the apron.
+  - Found while re-resolving: lounge drawers BC-02/03/05/06 NO_SLIDE_FITS — the Matt Grey slide schedule has no 300 runner (shortest 400) and only 300.5 depth is available. Was already like this since the 2026-10-28 Matt Grey switch; not caused by the apron.
+- **Kitchenette markups (Mark 2026-10-30, CAD layer "Drawing Markups For Ai"; markups left in place)** — script `z_plan_automation/_tmp-6586-markups-apply.mjs`:
+  - WC-10 **WOPN open corner shelf** (Boston Oak inside, 1500–2120 like the overheads): back on the straight wall 0–268.5, right gable to the WC-04 door face (380.5), front at 45° from there to the fridge tall side (459 off the 45 wall), as drawn. Default adjustable shelf. HAND_FIX_JOINT on the 45 backs.
+  - WC-04 range cupboard now a plain 600 box (268.5–868.5), one door hinged right; Sirius 520 (303–823) still inside. PTO tag moved to the door's left edge.
+  - WC-09 under panel trimmed to 268.5–1918.5 (rectangle, old corner shape override deleted); the shelf bottom sits at 1500 itself.
+  - Bulkheads **painted MDF** (material override exposed → MDF 18mm, edge tape off on fascias/returns): WC-07, WC-08 (now 268.5–1935, left end 22.5°), new WC-11 BH over the shelf front (Wall 1, 1308 + 217.8, front flush with the shelf, right end 22.5° → 135° mitre with WC-08 at the shelf front corner).
+  - A/C cut-out 500 x 150 drawn as a CAD box on the Wall 1 bulkhead (centred over the fridge, 965, 2145–2295 AFFL); note now "A/C CUT-OUT 500W x 150H IN BULKHEAD".
+  - Left: the pantry's 198 false panel above the doors (the bulkhead line over TC-02) is still Boston Oak.
+- **Kitchenette round 2 (Mark 2026-10-31)** — scripts `_tmp-6586-pantry-bh-place.mjs` + `_tmp-6586-pantry-doors.mjs`:
+  - Pantry TC-02 down to 2120 (like the other talls), 198 false-panel row removed.
+  - WC-12 painted MDF bulkhead over the pantry, hosted on a new **island-type line "Pantry BH line"** (dashed, no 3D wall; (−839.3, 839.3) → 453.2 along +x, 300 behind the pantry door face). Fascia front on the door face (y 1139.3), 877.5 wide, front = carcase, left end 45° scribed to the 45 wall, right end 22.5° mitred to WC-07. WC-07 now starts at offset 614.3 (dx 693.7, left end 22.5°).
+  - Overheads = 5 equal 330 doors: WC-04 660 pair (268.5–928.5, Sirius 520 still centred on the cooktop), WC-01 660 pair, WC-02 330 single hinged right. PTO tags moved to the new door edges.
+- **Kitchenette round 3 (Mark 2026-10-31)** — `_tmp-6586-bh-carcase.mjs`: all bulkheads set back **flush with the carcases** (front = carcase). WC-08 on the 362 line (right return 362); WC-07 on the 602 line, back to offset 622 / 686 — meets the pantry's 45 carcase face exactly at its front corner; WC-12 on the pantry carcase face (y 1120.8, 851.4 wide, Pantry BH line moved to (−820.8, 820.8) 427.1). WC-10 open shelf set back to the carcase line too (right gable 362, 45 front (268.5,362) → tall side, dz 525.25) so it stays flush under WC-11 (dz 445.8, 230.9 wide). Doors now stand 18.5 proud of the bulkheads.
+  - Round 3b (Mark 2026-10-31, "returns only"): WC-07 right return set in 18 from TC-06's outer face (WC-07 622 → 1290, dx 668); WC-11 now starts at 1290 (dx 248.9) to keep butting it. WC-08 right return already finishes flush with the WC-03 end panel's outer face (1935) — unchanged. End panels stay flush with doors (380.5 / 620.5), fascias on the carcase line.
+  - Round 3c (Mark 2026-10-31): WC-08 now ends flush with the carcase at 1918.5 (dx 1650) — the WC-03 end panel stands 16.5 proud of the return.
+
+## 2026-10-31 drawer boxes
+- Job drawer box schedule set to "Nikpol 16mm – Diamond Grey" (d1133fad), was 16.5mm Whiteboard. Rooms inherit (no room overrides). Drawer cabinets re-resolved in all 4 rooms. Inner drawer box schedule left at 16.5mm Whiteboard (only one exists).
+
+## 2026-10-31 Ben Flint's answers (email 30/10 2:20pm) — Mark's instructions
+- Inner drawer box schedule **Nikpol 16mm – Diamond Grey** (new row 53a0602d, box/bottom/front Diamond Grey + matching tape) set on the job.
+- Finger pull rails: Boston Oak, painted Metallic, colour TBC — added to HANDLES on all 4 spec blocks.
+- Study desk 600 → 500: top polygon (0,0)(1335,0)(1335,500)(500,500), waterfall (0,0)→(500,500); BC-05/06 left panels to 500 / 516.5, all four panels dz 482; BC-03 drawer dz 460. Only 413.5 depth left → pinned Dragon Pro 400x95 Matt Grey (hardware_overrides.slide_id); 95 box needed a taller front, so BC-03 pos_z 576 → 560, dy 154 → 170 (front 130, top of carcass unchanged). Plan dim 500 at x 1100. Script `_tmp-6586-desk500.mjs`, `_tmp-6586-pinslide.mjs`.
+- Lounge ledge LED route: part_operations 7ee700b4 on WC-01 fs:top, face_front (top), route pocket 19 x 2750 x 9 deep, centre pos_x 240.5 (u = depth from the back) / pos_y 1425 (along) → 50–69 back from the front, x 50 → 2800. Not visible in the room 3D (hand ops don't draw there) — check in the Part Editor. Spec: black recessed extrusion, RHK supply.
+- Vanity on a 210 plinth: cabinets pos_z 210, top height_mm 775 (top 795), basin z 680, plinth box 210H; LED note → black surface mount on the underside. Spec block updated (also fixed the stale 150 apron / 785 text).
+- Kitchenette spec: bulkheads painted MDF flush with carcasses + A/C cut-out, rangehood specs TBC, fridge Smeg FAB28RDEG5 Emerald Green.
+- Left for Mark: robe height/bulkhead/TV (re-measure), open angled shelf by the desk, U-shaped plumbing cut-outs (wants them parametric), rangehood cut-out (specs coming), kick finish (call Ben).
+
+## 2026-10-31 round 2 (Mark)
+- Lounge LED route: first insert used source_part_key `fs:top` — hand ops must be keyed `case_fs:top` (part id, as the Part Editor writes them), so it didn't show. Re-inserted (88305f1a); shows in the Cabinet Edit Top view. Hand ops never draw in the room 3D.
+- Study: waterfall → **BC-08 open corner shelf** (B1D patched: has_face off, no kick, exposed_interior, footprint back (25.46,0)→(507.5,0), right side to (507.5,482), open 45 front back to the tip — 18 square off the stone's 45 edge; dy 710 under the apron, 2 fixed shelves). BC-05/06 left panels deleted. Desk top 45 edge WF → MA (40 apron).
+- BC-03 drawer: pos_x 507.5, dx 794.5 (butts BC-08), dz 464 (front face flush with the shelf gable at 482), **no handle** (face_grid zone handle_id 'none' — new D23, a1eaece; finger_gap removed), REVT 22 (front stops 2 under the apron), carcass bottom removed (part_hide_views case_bottom in all 3 views). Still Dragon Pro 400x95 pinned. Script `_tmp-6586-studyshelf.mjs` / `-studyshelf2.mjs`.
+- CAD "STONE W/F END" → "OPEN CORNER SHELF / 45° OPEN FACE"; spec block updated.
+
+## 2026-10-31 round 3 (Mark) — study corner shelf
+- BC-08 corner shelf now on a 100 kick (kick follows the 45 face, mitred, runs to the wall).
+- 40 face filler at the wall end of the 45 open face (`edge.filler` on a split front edge; open part is front/sub open). Stands on the kick, under the top.
+- New BC-09 16.5 end panel (copy of BC-02) on the shelf's right: gable + panel = 33, same as BC-01/02. To the floor, covers the kick end.
+- BC-03 drawer moved to 524, now 778 wide.
+- Code: in-line front edges broke the shaped kick + filler maths (da113b0). Script `_tmp-6586-studykick.mjs`.
+
+## 2026-11-01 round 4 (Mark) — robe + study
+- BC-08 brought out: footprint gable full depth 482.5 (= drawer front), open 45 face through the gable's inner front corner (short 'side' edge across the gable end), filler set flush with the open face via rule FACINS 0.01. BC-09 had no panel part (copying a cabinet row doesn't copy cabinet_custom_parts) - added, 482.5 deep (expr cab.d).
+- Robe: room wall_cabinet_top 2095 -> 2330, WC-02 bulkhead dy 150, talls/end panels/filler +235, WC-01/03 1590. "150MM BULKHEAD" note. Plumbing box fixture left at 2095 - clashes (TBC 7b).
+- 33 panels: halves untaped (custom part edge flags / BC-08 case_right_side edge override) + part comments. Wide tape TBC.
+- BC-03 drawer: zone box_raise -16.5 (new Face Grid "Box raise", 3423604). Box now 5 above the front bottom.
+- Scripts `_tmp-6586-rev3.mjs`, `_tmp-6586-planzoom.mjs`, `_tmp-6586-issues.mjs`.
+- 1/11 later: BC-08 kick ran 51 past the gable (behind BC-09) - the square gable-end edge inverted in the kick inset. Fixed in code (57553b7); kick face now stops at the gable's outer face (x 507.5).
+- 1/11 later: BC-08 kick face + sub front now run on 16.5 at each end with 45 ends lying flat on the gable / BC-09 and on the wall (621108d). Kick face blank 625.7 (was 592.7).
+- 1/11: WC-01 / WC-03 doors 300 higher (718 -> 1018, 740-1758); fixed panels 1760-2328 (568). TV 42" (540H) centred on them at 1774-2314 AFFL; TV note moved with it. Script `_tmp-6586-doors300.mjs`.

@@ -40,7 +40,7 @@ type EdgePair  = [keyof EdgeFlags, keyof EdgeFlags]
 
 const NO_EB: EbFields = { eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, eb_missing: false }
 
-// Finger-pull rails (z_handles D21): the CNC cuts anything narrower than this as
+// Finger-pull rails (z_handles D22): the CNC cuts anything narrower than this as
 // a strip this wide; the shop trims it to size, then tapes its long edges.
 export const RAIL_NEST_W = 60
 
@@ -271,8 +271,8 @@ export function normalizeProject(
   const keysByCab = new Map<string, string[]>()
   for (const r of cp) keysByCab.set(String(r.cabinet_instance_id), [...(keysByCab.get(String(r.cabinet_instance_id)) ?? []), String(r.part_key)])
   const cutByCab = new Map([...keysByCab].map(([cab, keys]) => [cab, cutBaseKeys(keys)]))
-
   const splitByCab = new Map(cabsRaw.map(c => [c.id, c.split?.back_x ?? null]))
+
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
   for (const r0 of cp) {
     const key = String(r0.part_key)
@@ -311,11 +311,11 @@ export function normalizeProject(
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), railStrip?.dims ?? turned,
       railStrip ? { ...eb, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0 } : eb, base)
     const last = parts[parts.length - 1]
-    if (railStrip && last?.source_part_id === r.id) last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
     // Backs run their grain up the panel, as drawn (woodGrain grainExtents): a
     // back's DX is its height, which nests as w, so the grain runs along w
     // (Mark, RHK6542 WC-04 2026-11-03 — was cut along the width).
     if ((pieceOf === 'back' || pieceOf.startsWith('back:')) && last?.source_part_id === r.id) last.grain_across = true
+    if (railStrip && last?.source_part_id === r.id) last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
     if (splitNote && last?.source_part_id === r.id) last.comment = last.comment ? `${splitNote} · ${last.comment}` : splitNote
     // Long-edge mitre (bulkhead bottom return / fascia, z_bulkhead B10): nested
     // at the blank, mitred on the saw. Not doubled when a saved comment has it.
@@ -349,6 +349,11 @@ export function normalizeProject(
   // Edgeband deductions ride along through the same sort: top/bottom band the
   // height axis (dx), left/right the width axis (dy); the thickness axis is never
   // banded.
+  // Joined kick pieces (z_kick_join KS1): a kick assembly's face / sub front / back
+  // cut in more than one piece gets "JOIN" on its name.
+  const kickAsm = new Set(cabsRaw.filter(c => c.is_kick_assembly).map(c => c.id))
+  const tkCount = new Map<string, number>()
+  for (const r of tp) { const k = `${r.cabinet_instance_id}|${r.part_key}`; tkCount.set(k, (tkCount.get(k) ?? 0) + 1) }
   for (const r0 of tp) {
     const { r, base } = sized('toekick_parts', r0, `tk_${r0.part_key}_${r0.sort_order}`)
     const t = tFor(r)
@@ -357,11 +362,6 @@ export function normalizeProject(
     const tt = t ?? 0
     const trip = [
       { v: Number(r.dx), d1: flags.bottom ? tt : 0, d2: flags.top ? tt : 0, b1: flags.bottom, b2: flags.top },
-  // Joined kick pieces (z_kick_join KS1): a kick assembly's face / sub front / back
-  // cut in more than one piece gets "JOIN" on its name.
-  const kickAsm = new Set(cabsRaw.filter(c => c.is_kick_assembly).map(c => c.id))
-  const tkCount = new Map<string, number>()
-  for (const r of tp) { const k = `${r.cabinet_instance_id}|${r.part_key}`; tkCount.set(k, (tkCount.get(k) ?? 0) + 1) }
       { v: Number(r.dy), d1: flags.left ? tt : 0, d2: flags.right ? tt : 0, b1: flags.left, b2: flags.right },
       { v: Number(r.dz), d1: 0, d2: 0, b1: false, b2: false },
     ].sort((a, b) => b.v - a.v)
@@ -376,21 +376,21 @@ export function normalizeProject(
     }
     // Mitred kick boards of a shaped cabinet (z_cabinet_shape 4b): blank + note.
     const mitre = tkBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
+    const join = isKickJoinPiece(String(r.part_key), tkCount.get(`${r.cabinet_instance_id}|${r.part_key}`) ?? 0,
+      kickAsm.has(r.cabinet_instance_id as string))
+    const tkSuffix = (join ? ' JOIN' : '') + (mitre ? ` (${mitre})` : '')
     push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`,
       { typeKey: String(r.part_key), base: humanize(String(r.part_key)), ...(tkSuffix ? { suffix: tkSuffix } : {}) }, null, 0,
       { w: trip[0].v, h: trip[1].v, thickness: trip[2].v },
       { eb_w1: trip[0].d1, eb_w2: trip[0].d2, eb_h1: trip[1].d1, eb_h2: trip[1].d2, eb_missing: banded && t == null,
         on: [trip[0].b1, trip[0].b2, trip[1].b1, trip[1].b2] },
       base)
-  }
-  for (const r0 of fz) {
-    const join = isKickJoinPiece(String(r.part_key), tkCount.get(`${r.cabinet_instance_id}|${r.part_key}`) ?? 0,
     // Split pieces also carry JOIN as their part comment (labels / stickers), in
     // front of any comment typed on the part.
     const tkLast = parts[parts.length - 1]
     if (join && tkLast?.source_part_id === r.id) tkLast.comment = withJoinComment(tkLast.comment)
-      kickAsm.has(r.cabinet_instance_id as string))
-    const tkSuffix = (join ? ' JOIN' : '') + (mitre ? ` (${mitre})` : '')
+  }
+  for (const r0 of fz) {
     const { r: rs, base } = sized('face_zones', r0, zonePartId(r0 as unknown as { row_index: number; col_index: number; facet?: string }))
     // Mitred facet fronts (z_cabinet_shape 3c) nest at their front-face width;
     // the bevel is sawn after and named on the part.

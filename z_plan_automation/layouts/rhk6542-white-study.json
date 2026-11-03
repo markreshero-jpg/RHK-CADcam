@@ -1,0 +1,176 @@
+{
+  "_source": "\\\\server\\Data\\_JOBS\\RHK6500 - 6599\\RHK6542 - DHID  White - Sunshine Beach\\ARCHITECTURALS\\Study Plans and Site Measure.pdf (DHID A117/A118 + Mark's site mark-ups) + Mark Q&A 2026-11-03",
+  "_notes": [
+    "CH 2540, 120 bulkheads everywhere -> wall_cabinet_top 2420. Kick 80 (project TOEH 80).",
+    "Walls clockwise from the NW corner: 1 north (desk) 4595, 2 east (robe) 3079, 3 door wall 1515, 4 step/pier 707 (detached: re-entrant corner), 5 display wall 3080, 6 west (balcony) 2372.",
+    "Fronts LX Colour 16mm Natural Walnut (doors 16 blank, panels 16.5). Shelves / desk top / display top+bottom 33 LX Board Natural Walnut. Robe whiteboard, white seen end, white kick.",
+    "Desk 2700 x 700, top 732 AFF (WUP 33 at pos_z 699). Overheads 2700 flush with the desk end, underside 1430 -> dy 990.",
+    "Display 2860 OA, 335 OA deep (open unit dz 335, cupboard carcass 317 + door). 220 bare wall at the east (pier) end. Shelf heights kept off the floor from the elevation; top openings drop 100 for the 120 bulkhead.",
+    "Robe 1816 OA, carcass 520, 600 S end panel, 200 deep N panel flush with the front, BH flush with 600, L return 200, R return 600. Sliding doors left out (Mark)."
+  ],
+  "projectId": "073332e0-8a03-4071-9c10-8ba098cd9e22",
+  "roomName": "Study",
+  "roomHeight": 2540,
+  "wallCabinetTop": 2420,
+  "roomRules": { "TOEH": 80 },
+  "walls": [
+    { "x": 0, "y": 0, "length": 4595, "angle": 0, "_": "1 north, desk wall, W->E" },
+    { "x": 4595, "y": 0, "length": 3079, "angle": 90, "_": "2 east, robe wall, N->S" },
+    { "x": 4595, "y": 3079, "length": 1515, "angle": 180, "_": "3 door wall, E->W" },
+    { "x": 3080, "y": 3079, "length": 707, "angle": 270, "detached": true, "_": "4 pier / step, S->N (re-entrant corner)" },
+    { "x": 3080, "y": 2372, "length": 3080, "angle": 180, "_": "5 display wall, E->W" },
+    { "x": 0, "y": 2372, "length": 2372, "angle": 270, "_": "6 west, balcony wall, S->N" }
+  ],
+  "cabinets": [
+    { "def": "BFK", "wall": 1, "offset": 0, "dx": 16.5, "dy": 699, "dz": 662, "note": "16.5 filler at the wall beside the pedestal drawers" },
+    { "def": "D2-SL", "wall": 1, "offset": 16.5, "dx": 700, "dy": 699, "dz": 662,
+      "note": "Desk pedestal: 200 stationery drawer over file drawer, 240 Archive handles (Linear Standard, stained to match). 80 kick. Front 20 back from the desk front.",
+      "set": {
+        "material_overrides": { "right_side": "c46d95fc-1dfb-413a-8f76-51610d05e05e" },
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false }, { "row_index": 1, "height": 200, "height_locked": true } ],
+          "zones": [
+            { "col_index": 0, "row_index": 0, "face_type": "drawer_face", "handle_id": "c0f8c980-2eda-44c9-bcb0-b0b2ae22506f", "handle_drill": false },
+            { "col_index": 0, "row_index": 1, "face_type": "drawer_face", "handle_id": "c0f8c980-2eda-44c9-bcb0-b0b2ae22506f", "handle_drill": false }
+          ]
+        }
+      } },
+    { "def": "WUP", "wall": 1, "offset": 0, "dx": 2700, "dy": 33, "dz": 700,
+      "note": "Desk top 33 LX Board Natural Walnut 2700 x 700, top 732 AFF",
+      "set": { "pos_z": 699, "material_overrides": { "exposed": "b44a5113-ef5f-4108-bbe7-fcdd973df798" } } },
+    { "def": "BEPF", "wall": 1, "offset": 2667, "dx": 33, "dy": 699, "dz": 682,
+      "note": "Desk leg panel 33 LX Board Natural Walnut, 700 deep, under the top",
+      "set": { "material_overrides": { "exposed": "b44a5113-ef5f-4108-bbe7-fcdd973df798" } } },
+    { "def": "WEP", "wall": 1, "offset": 0, "dx": 16.5, "dy": 990, "dz": 332, "note": "Overhead 16.5 filler at the wall (front filler)" },
+    { "def": "W2D", "wall": 1, "offset": 16.5, "dx": 700, "dy": 990, "dz": 332,
+      "note": "Overhead cupboard 700, 2 doors, set back finger pull, 2 fixed shelves. COB LED recessed strip under (by others).",
+      "set": { "internal_grid": { "tree": { "type": "hsplit", "children": [
+        { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+        { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+        { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "WOPN", "wall": 1, "offset": 716.5, "dx": 1983.5, "dy": 990, "dz": 350,
+      "rules": { "SCRBK": 0 },
+      "note": "Overhead open shelves, 3 bays x 3, 33 LX Natural Walnut top/bottom/shelves/right end, 16.5 walnut back + left end, 350 flush with the doors. COB LED recessed strip under.",
+      "set": {
+        "has_face": false, "has_toekick": false, "top_type": "full_top", "exposed_interior": true,
+        "material_overrides": {
+          "interior": "b44a5113-ef5f-4108-bbe7-fcdd973df798",
+          "exposed": "c46d95fc-1dfb-413a-8f76-51610d05e05e",
+          "shelf": "b44a5113-ef5f-4108-bbe7-fcdd973df798",
+          "back": "c46d95fc-1dfb-413a-8f76-51610d05e05e",
+          "left_side": "c46d95fc-1dfb-413a-8f76-51610d05e05e"
+        },
+        "internal_grid": { "tree": { "type": "vsplit", "children": [
+          { "divider": "single", "section": { "type": "hsplit", "children": [
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } },
+          { "divider": "single", "section": { "type": "hsplit", "children": [
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } },
+          { "section": { "type": "hsplit", "children": [
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } } ] } }
+      } },
+    { "def": "BH", "wall": 1, "offset": 0, "dx": 2700, "dy": 120, "dz": 332,
+      "note": "120 bulkhead 2420-2540, flush with the doors, seen right end return 350",
+      "set": { "bulkhead": { "front": "doors", "auto_h": true, "cleat": true,
+        "left": { "on": false, "depth": 350, "joint": "mitre" },
+        "right": { "on": true, "depth": 350, "joint": "mitre" },
+        "bottom": { "on": false, "depth": 332, "joint": "mitre" } } } },
+
+    { "def": "TEPF", "wall": 2, "offset": 0, "dx": 16.5, "dy": 2420, "dz": 582,
+      "note": "Robe N panel against the window wall, 200 deep flush with the front (600), whiteboard",
+      "set": { "material_overrides": { "exposed": "d081b2a1-38a8-472c-a415-f179699a1347" } } },
+    { "def": "T2D", "wall": 2, "offset": 16.5, "dx": 891.5, "dy": 2420, "dz": 520,
+      "note": "Robe bay 1 (860 inside), 2 adj + 3 fixed shelves, whiteboard. Sliding doors 25mm Designer White to come (left out).",
+      "set": { "has_face": false, "toekick_overrides": { "face": "d081b2a1-38a8-472c-a415-f179699a1347" },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 1126.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } },
+          { "size": 364.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "size": 364.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "T2D", "wall": 2, "offset": 908, "dx": 891.5, "dy": 2420, "dz": 520,
+      "note": "Robe bay 2 (860 inside), 2 adj + 3 fixed shelves, whiteboard. Sliding doors to come.",
+      "set": { "has_face": false, "toekick_overrides": { "face": "d081b2a1-38a8-472c-a415-f179699a1347" },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 1126.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } },
+          { "size": 364.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "size": 364.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "TEPF", "wall": 2, "offset": 1799.5, "dx": 16.5, "dy": 2420, "dz": 582,
+      "note": "Robe S seen end 600 deep, whiteboard (white seen end)",
+      "set": { "material_overrides": { "exposed": "d081b2a1-38a8-472c-a415-f179699a1347" } } },
+    { "def": "BH", "wall": 2, "offset": 0, "dx": 1816, "dy": 120, "dz": 582,
+      "note": "120 bulkhead over the robe, flush with the 600 end panel, L return 200, R return 600",
+      "set": { "bulkhead": { "front": "doors", "auto_h": true, "cleat": true,
+        "left": { "on": true, "depth": 200, "joint": "mitre" },
+        "right": { "on": true, "depth": 600, "joint": "mitre" },
+        "bottom": { "on": false, "depth": 582, "joint": "mitre" } } } },
+
+    { "def": "TEPF", "wall": 5, "offset": 220, "dx": 16.5, "dy": 2420, "dz": 317, "note": "Display seen end panel (east), walnut, 335" },
+    { "def": "T2D", "wall": 5, "offset": 236.5, "dx": 517, "dy": 2420, "dz": 317,
+      "note": "Display cupboard, 1 door hinged left, 912 Archive handle, walnut inside, 5 fixed 33 shelves",
+      "set": {
+        "exposed_interior": true,
+        "material_overrides": {
+          "interior": "c46d95fc-1dfb-413a-8f76-51610d05e05e",
+          "shelf": "b44a5113-ef5f-4108-bbe7-fcdd973df798",
+          "back": "c46d95fc-1dfb-413a-8f76-51610d05e05e"
+        },
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left", "handle_id": "aec08746-44c3-4008-a23b-17422d266ca1", "handle_drill": false } ]
+        },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 418.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "size": 338, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "size": 323, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "section": { "type": "open", "fittings": [] } } ] } }
+      } },
+    { "def": "T2D", "wall": 5, "offset": 753.5, "dx": 2310, "dy": 2420, "dz": 335,
+      "note": "Display open shelves 3 bays, 33 LX Natural Walnut top/bottom/shelves, 16.5 walnut ends + back, 335 flush with the cupboard door. Staggered fixed shelves per DHID elevation.",
+      "set": {
+        "has_face": false, "top_type": "full_top", "exposed_interior": true,
+        "material_overrides": {
+          "interior": "b44a5113-ef5f-4108-bbe7-fcdd973df798",
+          "exposed": "c46d95fc-1dfb-413a-8f76-51610d05e05e",
+          "shelf": "b44a5113-ef5f-4108-bbe7-fcdd973df798",
+          "back": "c46d95fc-1dfb-413a-8f76-51610d05e05e",
+          "left_side": "c46d95fc-1dfb-413a-8f76-51610d05e05e",
+          "right_side": "c46d95fc-1dfb-413a-8f76-51610d05e05e"
+        },
+        "internal_grid": { "tree": { "type": "vsplit", "children": [
+          { "divider": "single", "section": { "type": "hsplit", "children": [
+            { "size": 402, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 694, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } },
+          { "divider": "single", "section": { "type": "hsplit", "children": [
+            { "size": 402, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } },
+          { "section": { "type": "hsplit", "children": [
+            { "size": 402, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 694, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "size": 399, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } } ] } }
+      } },
+    { "def": "TFKW", "wall": 5, "offset": 3063.5, "dx": 16.5, "dy": 2420, "dz": 317, "note": "16.5 filler at the west (balcony) wall" },
+    { "def": "BH", "wall": 5, "offset": 220, "dx": 2860, "dy": 120, "dz": 317,
+      "note": "120 bulkhead over the display, flush with the door / open shelves (335), seen left (east) end return 335",
+      "set": { "bulkhead": { "front": "doors", "auto_h": true, "cleat": true,
+        "left": { "on": true, "depth": 335, "joint": "mitre" },
+        "right": { "on": false, "depth": 335, "joint": "mitre" },
+        "bottom": { "on": false, "depth": 317, "joint": "mitre" } } } }
+  ]
+}

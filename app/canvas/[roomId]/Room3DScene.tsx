@@ -955,6 +955,27 @@ export interface Bt3DProps {
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
+// Dev-only: window.__room3d.exportGLB() returns the live room scene as a GLB
+// (base64) for the shareable 3D HTML extract (z_plan_automation/_tmp-export-3d.mjs).
+function SceneExportBridge() {
+  const scene = useThree(s => s.scene)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') return
+    const w = window as unknown as { __room3d?: { exportGLB: () => Promise<string> } }
+    w.__room3d = {
+      async exportGLB() {
+        const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js')
+        const buf = await new GLTFExporter().parseAsync(scene, { binary: true, onlyVisible: true }) as ArrayBuffer
+        const bytes = new Uint8Array(buf); let bin = ''
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+        return btoa(bin)
+      },
+    }
+    return () => { delete w.__room3d }
+  }, [scene])
+  return null
+}
+
 export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, fx, pickBenchtops = false, measuring = false, wire = false, onSaveShot }: {
   /** Right-click → "Save view for shop drawings": the current camera + hidden walls. */
   onSaveShot?: (cam: Camera3DState, hiddenWallIds: string[]) => void
@@ -1098,6 +1119,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
           )}
           </WireColorContext.Provider>
         </Suspense>
+        <SceneExportBridge />
       </Canvas>
 
       {walls.length === 0 && (

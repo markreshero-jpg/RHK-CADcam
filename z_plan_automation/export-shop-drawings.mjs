@@ -1,5 +1,5 @@
 // Download a job's Shop Drawings PDFs headlessly through Job Reports.
-//   node z_plan_automation/export-shop-drawings.mjs <roomId> <outDir> [--one] [--set "<layer set name>"]
+//   node z_plan_automation/export-shop-drawings.mjs <roomId> <outDir> [--one] [--set "<layer set name>"] [--skip "<room name>"]…
 // One PDF per ticked room (all rooms), or with --one a single combined PDF.
 // Layer set for the plan, elevations and 3D: "Line Drawing Print" unless --set (Mark, 2026-10-28).
 import fs from 'node:fs'
@@ -12,6 +12,7 @@ const [ROOM, OUT_ARG] = argv
 const OUT = path.resolve(OUT_ARG)
 const ONE = argv.includes('--one')
 const SET_NAME = argv.includes('--set') ? argv[argv.indexOf('--set') + 1] : 'Line Drawing Print'
+const SKIP = argv.flatMap((a, i) => a === '--skip' ? [argv[i + 1]] : [])
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 fs.mkdirSync(OUT, { recursive: true })
 const START = Date.now()
@@ -50,6 +51,12 @@ try {
   await clickText('Job Reports', 'button')
   await page.click('[data-tour="report-shop_drawings"]'); await sleep(1500)
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => /^Download \d+ rooms?$/.test(b.textContent.trim())), { timeout: 60000 })
+  // --skip "<room name>" (repeatable): untick that room in the Rooms row (its ☑ button sits before the name).
+  for (const name of SKIP) {
+    const ok = await page.evaluate(n => { const b = [...document.querySelectorAll('button')].find(e => e.textContent.trim() === n && e.previousElementSibling?.textContent.trim() === '☑'); b?.previousElementSibling.click(); return !!b }, name)
+    if (!ok) throw new Error('room to skip not found: ' + name)
+    console.log('skipped room:', name); await sleep(500)
+  }
   const shown = await page.evaluate(() => [...document.querySelectorAll('select[data-report-layer-set]')].map(s => s.selectedOptions[0]?.textContent))
   console.log('report layer sets (plan | elevations | 3D):', shown.join(' | '))
   if (shown.some(n => n !== SET.name)) throw new Error(`a report section is not on "${SET.name}"`)
