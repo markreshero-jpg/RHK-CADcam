@@ -29,15 +29,16 @@ const rows = [
   txt('Wall 2', 3648, 600, -1100, 'INTEGRATED FRIDGE Liebherr IRBH5120, niche 1780. Momo Barra DBR 288 handle'),
   txt('Wall 2', 4248, 600, -1100, 'INTEGRATED FREEZER Liebherr SIFNH5128, niche 1780. Momo Barra DBR 288 handle'),
   // Wall 5 (Elev 4, island front, from the east end)
-  txt('Wall 5', 0, 280, -500, 'CURVED TILED END (substrate) - TO DETAIL'),
+  txt('Wall 5', 0, 280, -500, 'TOP OVERHANG - curved end on the seating side (BC-15)'),
   txt('Wall 5', 940, 250, -500, 'OIL & SPICE PULL-OUT'),
   txt('Wall 5', 1190, 600, -500, 'INTEGRATED D/W Bosch SMV6HCX03A, 2pac panel by RHK, 25 packer under'),
-  txt('Wall 5', 2690, 450, -500, '2 BIN PULL-OUT'),
+  txt('Wall 5', 2690, 450, -500, 'TERAMO 56L BIN PULL-OUT (2 x 28L)'),
   // Wall 6 (Elev 7, side unit under the stair, from the south)
   txt('Wall 6', 30, 525, -1150, 'OPEN SHELF, Timbergrain inside'),
   txt('Wall 6', 30, 1050, -1360, 'TOP 1300 AFF - raw stair stringer 1320 AFF. Fronts flush with the 750 wall'),
   // Wall 5 back side (island seating side, mirrored: BC-14 offset 598 x 2542 on a 3200 line -> x 60)
-  { ...txt('Wall 5', 60, 2542, -500, '18 SUBSTRATE BACK PANEL - TILED BY OTHERS. 445 off the cabinet backs, ~300 top overhang, 4 stools along 2700'), wall_side: 'back' },
+  { ...txt('Wall 5', 60, 2360, -500, '18 SUBSTRATE BACK PANEL - TILED BY OTHERS. Face flush with the curved end, ~300 top overhang, 4 stools along 2700'), wall_side: 'back' },
+  { ...txt('Wall 5', 2420, 500, -500, 'CURVED END R300, 450 x 500, set in 280 - substrate, TILED BY OTHERS'), wall_side: 'back' },
 ]
 for (const r of rows) if (r.view === 'elevation' && r.kind === 'text' && !r.text.startsWith('LED')) r.cad_layer_id = SITE_LAYER
 chk('del', await sb.from('room_annotations').delete().eq('room_id', R))
