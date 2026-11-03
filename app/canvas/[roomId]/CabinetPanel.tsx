@@ -793,6 +793,59 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
           )
         })()}
 
+        {/* Häfele Slider SC sliding robe doors (z_slider_sc): options on the slider
+            items (library T2D/SLD, T3D/SLD, T3D/SLD3) — rule_overrides.SLIDER*. The
+            door set comes with the item (its door count). */}
+        {cabinet.has_face && ((cabinet.rule_overrides ?? {}) as Record<string, unknown>).SLIDER != null && (() => {
+          const ov = (cabinet.rule_overrides ?? {}) as Record<string, unknown>
+          const layout = String(ov.SLIDER)
+          const setRule = (key: string, value: string | null) => {
+            const next = { ...ov }
+            if (value == null) delete next[key]
+            else next[key] = value
+            void onUpdate(cabinet.id, { rule_overrides: next as typeof cabinet.rule_overrides })
+          }
+          return (
+            <div>
+              <p className={lbl}>Sliding Doors — Häfele Slider SC</p>
+              <p className="text-[10px] text-gray-600 mb-1">
+                {layout === '2' ? '2 doors, double track' : layout === '3T' ? '3 doors, triple track' : '3 doors, double track'}
+              </p>
+              <div className="grid grid-cols-3 gap-1">
+                <div>
+                  <p className="text-[10px] text-gray-600 mb-0.5">Profile</p>
+                  <select className={inp} value={String(ov.SLIDER_STILE ?? 'handle')}
+                    onChange={e => setRule('SLIDER_STILE', e.target.value === 'handle' ? null : e.target.value)}>
+                    <option value="handle">Handle (18)</option>
+                    <option value="slimline">Slimline (18)</option>
+                    <option value="handle16">16mm handle</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-600 mb-0.5">Finish</p>
+                  <select className={inp} value={String(ov.SLIDER_FINISH ?? 'silver')}
+                    onChange={e => setRule('SLIDER_FINISH', e.target.value === 'silver' ? null : e.target.value)}>
+                    <option value="silver">Silver</option>
+                    <option value="white">White</option>
+                    <option value="black">Black</option>
+                  </select>
+                </div>
+                <div>
+                  <p className="text-[10px] text-gray-600 mb-0.5">Bottom rail</p>
+                  <select className={inp} value={layout === '3T' ? 'lip' : String(ov.SLIDER_RAIL ?? 'lip')} disabled={layout === '3T'}
+                    onChange={e => setRule('SLIDER_RAIL', e.target.value === 'lip' ? null : e.target.value)}>
+                    <option value="lip">With lip</option>
+                    <option value="plain">Plain</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-[10px] text-gray-600 mt-1">
+                Width = inside width wall to wall, height = inside height. Panels follow the door colour; door height = height − 55, 60 overlap.
+              </p>
+            </div>
+          )
+        })()}
+
         <div>
           <p className={lbl}>Modules</p>
           <div className="space-y-1">

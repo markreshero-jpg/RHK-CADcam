@@ -160,6 +160,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
     hint: 'Marker pricks on the back of each drawer front: 1 hole top front, 2 the next … (z_handles D22)' },
   { id: 'bifold',         group: 'hardware', label: 'Bi-fold fittings',    views: ['elevation', '3d'], default: ON,
     hint: 'Sliding bi-fold (z_bifold_slide): carriage, guide + centre hinge holes on the doors; 3D: the top / bottom tracks' },
+  { id: 'slider',         group: 'hardware', label: 'Sliding door profiles', views: ['plan', 'elevation', '3d'], default: ON,
+    hint: 'Häfele Slider SC (z_slider_sc): top guide track, bottom running rail, the aluminium door profiles' },
   { id: 'drawer_front_drilling', group: 'hardware', label: 'Drawer front drilling', views: ['elevation'], default: ON,
     hint: 'Drawer-box fixing bores into the back of each drawer front (from the runner drilling)' },
   { id: 'machining',      group: 'hardware', label: 'Drilling / machining', views: ['elevation', '3d'], default: ON,

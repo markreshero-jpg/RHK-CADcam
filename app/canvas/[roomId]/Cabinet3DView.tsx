@@ -61,6 +61,8 @@ import AccessoryModel, { hasAccessoryModel } from '@/src/components/three/Access
 import RailBlockModel from '@/src/components/three/RailBlockModel'
 import BifoldTrackModel from '@/src/components/three/BifoldTrackModel'
 import { bifoldTracks, bifoldFoldAngle } from '@/src/lib/resolver/resolveBifold'
+import { sliderProfiles } from '@/src/lib/resolver/sliderSC'
+import SliderProfileModel from '@/src/components/three/SliderProfileModel'
 import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 import JointFittingModel from '@/src/components/three/JointFittingModel'
 import { edgeLabel } from '@/src/lib/cabinetShape/footprint'
@@ -1422,6 +1424,7 @@ export function CabinetScene({
   const railBlocks = useMemo(() => railBlockEnds(rp.case_parts, rp.internal_parts), [rp])
   // Sliding bi-fold tracks (z_bifold_slide), cut to the inside width.
   const bifoldTrackList = useMemo(() => bifoldTracks(rp), [rp])
+  const sliderPieces = useMemo(() => (rp.slider ? sliderProfiles(rp.slider, rp.face_zones) : []), [rp])
   // Bi-fold pair opening: span = both doors + the gap; folded as far as the two
   // door thicknesses side by side (+4) at the hinge gable allow.
   const bifoldOpen = useMemo(() => {
@@ -1957,6 +1960,9 @@ export function CabinetScene({
       )}
       {show('bifold') && bifoldTrackList.map(t => (
         <PartAlpha key={`bftrack_${t.which}`} a={alpha('bifold')}><BifoldTrackModel t={t} wire={wire} /></PartAlpha>
+      ))}
+      {show('slider') && sliderPieces.map((p, i) => (
+        <PartAlpha key={`slider_${i}`} a={alpha('slider')}><SliderProfileModel p={p} wire={wire} /></PartAlpha>
       ))}
       {show('rail_blocks') && railBlocks.map(e => (
         <PartAlpha key={`rblk_${e.railKey}_${e.panelKey}`} a={alpha('rail_blocks')}><RailBlockModel end={e} /></PartAlpha>

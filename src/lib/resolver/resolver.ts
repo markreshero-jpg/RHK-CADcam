@@ -35,6 +35,7 @@ import { resolveBackPanel } from './resolveBackPanel'
 import { applyPartCutouts, cutoutTargets, type CutoutVoid, type PartCutouts } from '../partCutouts'
 import { resolveRangehood, withRangehoodShelf } from './resolveRangehood'
 import { buildFormulaScope } from '../formula/context'
+import { resolveSlider } from './resolveSlider'
 
 export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
   // Undermount rangehood (z_rangehood R5): its first fixed shelf sits at the shelf height.
@@ -76,6 +77,9 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
   // One grip per door / drawer front from the handle schedule (z_handles H1).
   resolveHandles(cab, zones)
   if (bifold) bifoldHandles(cab, bifold)
+  // Slider SC sliding robe doors (z_slider_sc): panels sized + set on their tracks,
+  // no handles (the stile is the grip), no hinges.
+  const slider = cab.has_face ? resolveSlider(cab, zones, allWarnings) : null
   // Drawer front marker pricks: 1 hole top front, 2 the next … (z_handles D22).
   resolveDrawerMarkers(cab, zones)
   // Linear strip handles (z_handles D17): a strip of each front's board on its face.
@@ -234,6 +238,7 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
     ...(cab.split?.at.length ? { split_at: cab.split.at } : {}),
     ...(cab.split?.back_x?.length ? { split_back_x: cab.split.back_x } : {}),
     hinge_instances: hingeInstances,
+    ...(slider ? { slider } : {}),
     ...(bifold ? { bifold: { hand: bifold.hand, bottom: r.BIFOLD_BOTTOM ?? 'above', centre: r.BIFOLD_CENTRE ?? 'standard' } } : {}),
     errors:          allErrors,
     warnings:        allWarnings,

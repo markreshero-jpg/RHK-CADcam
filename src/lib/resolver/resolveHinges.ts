@@ -140,6 +140,8 @@ export function resolveHinges(
     if (pie?.role === 'trailing') continue
     // A sliding bi-fold's leading door rides its tracks (z_bifold_slide).
     if (z.bifold_role === 'leading') continue
+    // Slider SC doors run on tracks (z_slider_sc).
+    if (z.slider_track != null) continue
 
     const doorH = z.DY   // cabinet-Y extent (height)
     const doorW = z.DX   // cabinet-X extent (width)

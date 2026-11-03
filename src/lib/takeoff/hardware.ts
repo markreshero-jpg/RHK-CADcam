@@ -15,6 +15,7 @@
 
 import type { ResolvedCabinet, GripKind } from '../resolver/types'
 import { cabinetSeamFittings } from '../jointDrilling'
+import { sliderCuts, sliderBuyList, STOCK_LABEL } from '../resolver/sliderSC'
 
 // ── Cabinet classification ───────────────────────────────────────────────────
 
@@ -76,8 +77,8 @@ export function countKinds(cabs: TakeoffCab[], codeOf: (c: TakeoffCab) => string
 
 // ── Hardware ─────────────────────────────────────────────────────────────────
 
-export type HardwareGroup = 'Hinges' | 'Hinge plates' | 'Runners' | 'Inner drawer runners' | 'Bins' | 'Handles' | 'Push to open' | 'Linear handles' | 'Hanging rails' | 'Rail supports' | 'Connectors' | 'Shelf supports'
-export const HARDWARE_GROUPS: HardwareGroup[] = ['Hinges', 'Hinge plates', 'Runners', 'Inner drawer runners', 'Bins', 'Handles', 'Push to open', 'Linear handles', 'Hanging rails', 'Rail supports', 'Connectors', 'Shelf supports']
+export type HardwareGroup = 'Hinges' | 'Hinge plates' | 'Runners' | 'Inner drawer runners' | 'Bins' | 'Handles' | 'Push to open' | 'Linear handles' | 'Hanging rails' | 'Rail supports' | 'Connectors' | 'Shelf supports' | 'Sliding door profiles'
+export const HARDWARE_GROUPS: HardwareGroup[] = ['Hinges', 'Hinge plates', 'Runners', 'Inner drawer runners', 'Bins', 'Handles', 'Push to open', 'Linear handles', 'Hanging rails', 'Rail supports', 'Sliding door profiles', 'Connectors', 'Shelf supports']
 
 export interface HardwareProduct { name: string; brand?: string | null; code?: string | null }
 export interface HardwareProducts {
@@ -173,6 +174,27 @@ function cabinetHardware(r: ResolvedCabinet, label: string, P: HardwareProducts,
     if (!p.accessory) continue
     if (p.part_type === 'accessory') acc.add('Hanging rails', p.accessory.product_id, '', P.accessories.get(p.accessory.product_id), p.accessory.name, label, 1, 'ea', p.accessory.run === 'depth' ? p.DX : p.DY)
     else if (p.part_type === 'rail_support') acc.add('Rail supports', p.accessory.product_id, '', P.accessories.get(p.accessory.product_id), p.accessory.name, label, 1, 'ea')
+  }
+
+  // Slider SC sliding doors (z_slider_sc): aluminium bars to buy, by profile,
+  // finish and stock length (Häfele cat. no.); each cut on the first bar's line.
+  if (r.slider) {
+    const s = r.slider
+    const cuts = sliderCuts(s.icw, s.ih, { layout: s.layout, stile: s.stile, finish: s.finish, railLip: s.rail === 'lip' })
+    const { buy } = sliderBuyList(cuts, s.finish)
+    for (const b of buy) {
+      const id = `${b.key}|${s.finish}|${b.length}`
+      acc.add('Sliding door profiles', id, '', { name: `${STOCK_LABEL[b.key]} ${b.length} ${s.finish}`, brand: 'Häfele', code: b.cat }, '', label, b.qty, 'ea')
+    }
+    for (const c of cuts) {
+      const b = buy.find(x => x.key === c.key)
+      const l = b && acc.lines.get(`Sliding door profiles|${b.key}|${s.finish}|${b.length}|`)
+      if (!l) continue
+      for (let i = 0; i < c.qty; i++) {
+        (l.lengths ??= []).push(Math.round(c.length))
+        ;(l.cuts ??= []).push({ label, length: Math.round(c.length) })
+      }
+    }
   }
 
   // Joint connectors: the drills tag one hole per set with its fitting (the

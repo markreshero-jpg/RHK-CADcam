@@ -152,6 +152,13 @@ export interface ConstructionRules {
   BIFOLD?:        'L' | 'R'
   BIFOLD_BOTTOM?: 'above' | 'below' | 'none'
   BIFOLD_CENTRE?: 'standard' | 'cup'
+  // Häfele Slider SC sliding robe doors in a recess (z_slider_sc): door set
+  // (2 door / 3 door double track / 3 door triple track), vertical profile,
+  // aluminium finish, running rail with or without the front lip. Cabinet layer.
+  SLIDER?:        '2' | '3' | '3T'
+  SLIDER_STILE?:  'handle' | 'slimline' | 'handle16'
+  SLIDER_FINISH?: 'white' | 'silver' | 'black'
+  SLIDER_RAIL?:   'lip' | 'plain'
   // A wall unit's own underside, mm from the floor (geometry.ts wallZOf), instead of
   // hanging from the wall-cabinet-top line — e.g. a cupboard on the bench under
   // another wall unit. Cabinet layer, placement only.
@@ -1560,6 +1567,9 @@ export interface ResolvedCabinet {
   // Sliding bi-fold settings (z_bifold_slide) — the doors carry the roles + holes;
   // this tells the tracks which bottom option to draw.
   bifold?: ResolvedBifold
+  // Slider SC sliding robe doors (z_slider_sc): the settings + opening the
+  // tracks and profiles are drawn and listed from (sliderProfiles).
+  slider?: ResolvedSlider
   // Validation errors — non-empty means something is wrong
   errors:        ResolverError[]
   warnings:      ResolverError[]
@@ -1813,6 +1823,18 @@ export interface ResolvedFaceZone extends ResolvedPart {
   // drilled into the back face.
   bifold_role?:  'outer' | 'leading'
   bifold_holes?: BifoldHole[]
+  // Slider SC (z_slider_sc): the track this door runs on (0 = front).
+  slider_track?: number
+}
+
+export interface ResolvedSlider {
+  layout: '2' | '3' | '3T'
+  stile:  'handle' | 'slimline' | 'handle16'
+  finish: 'white' | 'silver' | 'black'
+  rail:   'lip' | 'plain'
+  icw: number; ih: number           // opening: inside width / height
+  front: number                     // z of the opening front (the rail lip face)
+  doors: { row_index: number; col_index: number; track: number }[]
 }
 
 export interface ResolvedBifold {
