@@ -3,7 +3,7 @@
 
 import { supabase } from '@/src/lib/supabase'
 import { loadCabinetInput, loadCabinetInputFromRow } from './loadCabinetInput'
-import type { CabinetInstance } from '../types'
+import type { CabinetInstance, Wall } from '../types'
 import { resolveCabinet } from './resolver'
 import { zoneKey } from '../cabinetShape/partKeys'
 import { persistResolved } from './persistResolved'
@@ -13,7 +13,8 @@ import { evalCustomPartFields } from '../formula/customParts'
 import { buildFormulaScope } from '../formula/context'
 import { invalidateResolverCascade } from './cascadeCache'
 import { withLibraryKey } from '../displayLayers/customPartKinds'
-import { customPartCuts, normaliseCutoutList } from '../partCutouts'
+import { customPartCuts, normaliseCutoutList, type Cutout } from '../partCutouts'
+import { rangehoodsOverPanel, panelRangehoodHoles, linkedHoleCutout } from '../rangehoodLink'
 
 // Map a part's role (parts_library.material_role) to the assembly's scheduled
 // material id for that role. Used to auto-assign a custom part's material when the
@@ -44,15 +45,38 @@ const CUSTOM_PART_RESOLVE_COLS =
 // Cut-outs on a custom part (z_rangehood R3): its `part_cutouts` cut against
 // its freshly evaluated size → the `outline` / `cutouts` the optimiser and 3D
 // read. Returns the patch (only what changed); warnings go on the cabinet.
-function customCutsPatch(p: Record<string, unknown>, resolved: ResolvedCabinet, scope: ReturnType<typeof buildFormulaScope>) {
+function customCutsPatch(p: Record<string, unknown>, resolved: ResolvedCabinet, scope: ReturnType<typeof buildFormulaScope>, extra: Cutout[] = []) {
   const cut = customPartCuts(
     { id: String(p.id), orientation: p.orientation as string | null, dx: Number(p.dx), dy: Number(p.dy), dz: Number(p.dz) },
-    normaliseCutoutList(p.part_cutouts), scope)
+    [...extra, ...normaliseCutoutList(p.part_cutouts)], scope)
   resolved.warnings.push(...cut.warnings)
   const patch: Record<string, unknown> = {}
   if (JSON.stringify(cut.outline) !== JSON.stringify(p.outline ?? null)) patch.outline = cut.outline
   if (JSON.stringify(cut.cutouts) !== JSON.stringify(p.cutouts ?? null)) patch.cutouts = cut.cutouts
   return patch
+}
+
+// The rangehood holes an under panel takes (z_rangehood R6): the WRHs on its
+// wall sitting on it, each one's bottom resolved in memory (cached input, else
+// a fresh load) so the hole is where its own resolve puts it — no wait on its
+// background persist.
+async function underPanelRangehoodHoles(panelId: string) {
+  const { data: panel } = await supabase.from('cabinet_instances').select('*').eq('id', panelId).maybeSingle()
+  if (!panel?.wall_id) return []
+  const [{ data: cabs }, { data: walls }] = await Promise.all([
+    supabase.from('cabinet_instances').select('*').eq('room_id', panel.room_id).eq('wall_id', panel.wall_id).not('rangehood', 'is', null),
+    supabase.from('walls').select('*').eq('room_id', panel.room_id),
+  ])
+  const wall = (walls ?? []).find(w => w.id === panel.wall_id)
+  const on = rangehoodsOverPanel(panel as CabinetInstance, (cabs ?? []) as CabinetInstance[])
+  if (!wall || !on.length) return []
+  const bottoms = new Map<string, { X: number; Z: number; DX: number; DY: number } | null>()
+  for (const c of on) {
+    let input = _inputCache.get(c.id)
+    if (!input) { input = await loadCabinetInput(c.id); _inputCache.set(c.id, input) }
+    bottoms.set(c.id, resolveCabinet(input).case_parts.find(p => p.part_key === 'bottom') ?? null)
+  }
+  return panelRangehoodHoles(panel as CabinetInstance, on, wall as Wall, (walls ?? []) as Wall[], c => bottoms.get(c.id) ?? null)
 }
 
 // Resolve each custom part against its assembly: (1) evaluate parametric formulas
@@ -69,6 +93,7 @@ export async function resolveCustomParts(cabinetId: string, resolved: ResolvedCa
     .eq('cabinet_instance_id', cabinetId)
   if (!parts || parts.length === 0) { resolved.custom_parts = []; return }
   const scope = buildFormulaScope(resolved, input)
+  const holes = input.rules?.UNDER_PANEL ? await underPanelRangehoodHoles(cabinetId).catch(e => { console.error('rangehood link:', e); return [] }) : []
   for (const p of parts as unknown as Record<string, unknown>[]) {
     const literal = { dx: Number(p.dx), dy: Number(p.dy), dz: Number(p.dz), x: Number(p.x), y: Number(p.y), z: Number(p.z) }
     const patch: Record<string, unknown> = evalCustomPartFields(literal, p.expressions as Record<string, string> | null, scope)
@@ -76,7 +101,12 @@ export async function resolveCustomParts(cabinetId: string, resolved: ResolvedCa
     const role = (p.parts_library as { material_role?: string | null } | null)?.material_role ?? null
     const eff = (p.material_override_id as string | null) ?? roleMaterialId(role, input)
     if (eff && eff !== p.material_id) patch.material_id = eff
-    Object.assign(patch, customCutsPatch({ ...p, ...patch }, resolved, scope))
+    const sized = { ...p, ...patch }
+    // An under panel's flat part takes the holes of the rangehoods on it (R6).
+    const linked = (sized.orientation ?? 'flat') === 'flat'
+      ? holes.map(h => linkedHoleCutout(h.cab.id, h.rect, h.rh, { x: Number(sized.x), z: Number(sized.z), dx: Number(sized.dx), dy: Number(sized.dy) }))
+      : []
+    Object.assign(patch, customCutsPatch(sized, resolved, scope, linked))
     if (Object.keys(patch).length > 0) {
       Object.assign(p, patch)
       const { error } = await supabase.from('cabinet_custom_parts').update(patch).eq('id', p.id)

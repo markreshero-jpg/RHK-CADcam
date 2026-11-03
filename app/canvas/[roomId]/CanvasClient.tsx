@@ -7,6 +7,7 @@ import { getCachedInput, applyEdgeOverrides } from '@/src/lib/resolver/resolveCa
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { underPanelRun, carcassesOverPanel, isUnderPanel, withoutScribe, UNDER_PANEL_DEF } from '@/src/lib/underPanel'
+import { panelLinkSignature } from '@/src/lib/rangehoodLink'
 import { useIsAdmin } from '@/src/lib/useRole'
 import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem, CadLayer } from '@/src/lib/types'
 import {
@@ -1383,6 +1384,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (c && (c.left_neighbour_type !== n.left || c.right_neighbour_type !== n.right)) writeNeighbours(id, n)
     }
   }, [cabinets, detectedNeighbours, writeNeighbours])
+  // Rangehood holes in an under panel (z_rangehood R6): when a rangehood cabinet
+  // on its wall is placed, moved, resized, re-scribed, deleted or its hole edited,
+  // the panel re-resolves (after those saves land) to re-cut the hole under it.
+  const panelLinkSeen = useRef<Map<string, string> | null>(null)
+  useEffect(() => {
+    const now = new Map(cabinets.filter(isUnderPanel).map(p => [p.id, panelLinkSignature(p, cabinets)] as const))
+    const seen = panelLinkSeen.current
+    panelLinkSeen.current = now
+    if (!seen) return
+    for (const [id, sig] of now) {
+      if (!seen.has(id) || seen.get(id) === sig) continue   // a new panel resolves itself
+      void Promise.all([...cabUpdatesInFlight.current.values()].map(p => p.catch(() => {})))
+        .then(() => dbResolveAndPersistCabinet(id))
+        .then(r => { if (r) setResolvedParts(m => new Map(m).set(id, r)) })
+    }
+  }, [cabinets])
   // Cabinet panel → "Detect neighbours for the whole room": re-detect every
   // cabinet in the room, drawn before auto-detection or not.
   function detectRoomNeighbours() {

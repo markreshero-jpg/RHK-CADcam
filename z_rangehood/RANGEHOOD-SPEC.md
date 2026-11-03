@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7). Next: R6 (WUP takes the hole). First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole. Next: R7 (library WRH). First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -247,6 +247,30 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
   centre; shelf height.
 - Tutorial: with R8 (nothing carries the block until the R7 library item).
 
+## R6 as built (2026-11-04)
+
+- `src/lib/rangehoodLink.ts` (pure): `rangehoodsOverPanel` = `carcassesOverPanel`
+  (same wall + side, overlapping, bottom scribe = panel thickness) with a
+  rangehood block; `rangehoodHoleInCab` = the hole in the WRH's own frame from
+  its resolved bottom (same centre + offset / setback-from-front rule
+  `resolveRangehood` cuts); `mapHoleRect` = WRH frame → plan
+  (`cabinetToPlan`) → panel frame (`cabinetPlanFrame` inverse), so turned
+  back-side pairs map too; `linkedHoleCutout` = a `source: 'linked'` rect hole
+  on the panel's flat part (x from its left, y back from its front edge).
+- Resolve (`resolveCustomParts`): an `UNDER_PANEL` cabinet loads its wall's
+  rangehood cabinets + the room walls, resolves each WRH's bottom **in memory**
+  (cached input, else `loadCabinetInput`) — no wait on its background persist —
+  and adds the linked holes to every flat custom part ahead of its own
+  `part_cutouts`. Not stored; like R5's, they don't list in the Cut-outs box.
+  A hole running past the panel's end warns (`CUTOUT_SKIPPED`).
+- Canvas (`CanvasClient`): `panelLinkSignature` per under panel (the rangehoods
+  on its wall: pos, size, rotation, rule_overrides, rangehood). When it changes —
+  WRH placed / moved / resized / re-scribed / deleted / hole edited — the panel
+  re-resolves after the in-flight cabinet saves land. First render and newly
+  placed panels don't trigger (they resolve themselves; opening a job never
+  rewrites it).
+- Test `src/lib/__tests__/rangehoodLink.test.ts`.
+
 ## Phases
 
 | # | What | Status |
@@ -256,7 +280,7 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 | R3 | Cut-outs on **custom parts** (`cabinet_custom_parts.part_cutouts`, flat parts) | [x] 2026-11-02 |
 | R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [x] 2026-11-02 |
 | R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [x] 2026-11-02 |
-| R6 | **WUP takes the hole** from the cabinets above it | [ ] |
+| R6 | **WUP takes the hole** from the cabinets above it | [x] 2026-11-04 |
 | R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [ ] |
 | R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [ ] |
 
