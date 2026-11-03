@@ -4485,8 +4485,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (!asm) return null
         return (
           <KickRunSettingsModal
+        // Kick length + start from the resolved face (scribes off the ends), and the
+        // member cabinet joints along it, for the seam suggestions (z_kick_join KS1).
+        const faces = (resolvedParts.get(asm.id)?.toekick_parts ?? []).filter(p => p.part_key === 'kick_front_face')
+        const kStart = faces.length ? Math.min(...faces.map(p => p.X)) : 0
+        const kLen = faces.length ? faces.reduce((a, p) => a + p.DY, 0) : asm.dx
+        const wall = walls.find(w => w.id === asm.wall_id)
+        const joints = wall ? [...new Set(cabinets
+          .filter(c => c.kick_run_id === kickSettingsRunId && !c.is_kick_assembly)
+          .flatMap(c => { const t = cabT(c, wall) - cabT(asm, wall) - kStart; return [t, t + c.dx] })
+          .map(t => Math.round(t * 10) / 10)
+          .filter(t => t > 1 && t < kLen - 1))].sort((a, b) => a - b) : []
             runId={kickSettingsRunId}
-            runLength={asm.dx}
+            runLength={kLen}
+            joints={joints}
             onClose={() => setKickSettingsRunId(null)}
             onSaved={applyKickMutation}
           />

@@ -1560,4 +1560,19 @@ export function searchLessons(query: string): number[] {
   })
 }
 
+  // Appended 2026-11-03 (z_kick_join KS1: set kick seams — face / sub front split, back mirrored).
+  { id: 'kick_seams', level: 'intermediate', topic: 'cabinets', title: 'Split a long joined kick',
+    blurb: 'Cut a joined kick over a sheet length into pieces: the face on a cabinet joint, the sub front in round lengths, the back staggered.',
+    keywords: 'kick split seam join long kick 2400 sheet length sub front back stagger toe kick joined run JOIN pieces', steps: [
+    { id: 'open', title: 'Open Kick split',
+      body: 'Join the kicks in the run first (right-click a cabinet › Join kicks in run). Then right-click the KICK n assembly › Kick split….',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.is_kick_assembly) },
+    { id: 'seams', title: 'Set seams',
+      body: 'Pick Set seams. Face split at fills in the cabinet joint nearest the middle (click another joint chip to move it), so the face seam lines up with the doors and panels above. Sub front split at fills in round lengths (2400, then the rest). The back is the sub front mirrored, so its long piece starts at the other end and the joints stagger. The lines underneath show the pieces. Save.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.is_kick_assembly) },
+    { id: 'check', title: 'JOIN on the pieces',
+      body: 'A spreader goes on every seam. Each split face / sub front / back is named with JOIN (Parts tab, cut list, optimiser labels) so the shop knows to join it. A piece longer than the sheet shows in the optimiser as too large for any sheet: change the seams if you see that.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
+
 export const lessonDone = (lesson: TutorialLesson, done: string[]) => lesson.steps.every(s => done.includes(stepKey(lesson, s)))

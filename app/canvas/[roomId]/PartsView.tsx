@@ -1,5 +1,6 @@
 'use client'
 
+import { isKickJoinPiece } from '@/src/lib/resolver/resolveKickRun'
 import { useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { rememberLibraryKeys } from '@/src/lib/displayLayers/customPartKinds'
@@ -609,11 +610,14 @@ export default function PartsView({
       })
     }
 
+    // Joined kick pieces get "JOIN" (z_kick_join KS1).
+    const isKickAsm = getCachedInput(cabinetId)?.kick_run?.role === 'assembly'
     for (const p of rp.toekick_parts) {
       const id = `tk_${p.part_key}_${p.sort_order}`
+      const join = isKickJoinPiece(p.part_key, rp.toekick_parts.filter(q => q.part_key === p.part_key).length, isKickAsm) ? ' JOIN' : ''
       result.push({
         id, typeKey: 'toekick', typeLabel: 'Toekick',
-        name: partLabels?.[id] ?? `${PART_LABEL[p.part_key] ?? p.part_key}${tkBevelNote(p) ? ` (${tkBevelNote(p)})` : ''}`,
+        name: partLabels?.[id] ?? `${PART_LABEL[p.part_key] ?? p.part_key}${join}${tkBevelNote(p) ? ` (${tkBevelNote(p)})` : ''}`,
         material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
         dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
         comment: partComments?.[id] ?? '',

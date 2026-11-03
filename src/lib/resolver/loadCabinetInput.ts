@@ -1081,9 +1081,9 @@ async function loadKickRunInput(
 
   const { data: run } = await supabase
     .from('kick_runs')
-    .select('id, kick_cabinet_id, max_segment_length, split_mode')
+    .select('id, kick_cabinet_id, max_segment_length, split_mode, face_splits, sub_splits')
     .eq('id', kickRunId).maybeSingle()
-  const r = run as { id: string; kick_cabinet_id: string | null; max_segment_length: number | null; split_mode: string } | null
+  const r = run as { id: string; kick_cabinet_id: string | null; max_segment_length: number | null; split_mode: string; face_splits: number[] | null; sub_splits: number[] | null } | null
   if (!r) return undefined
 
   return {
@@ -1093,6 +1093,8 @@ async function loadKickRunInput(
     split_mode:         (r.split_mode as KickSplitMode) ?? 'equal',
   }
 }
+    face_splits:        r.face_splits ? r.face_splits.map(Number) : null,
+    sub_splits:         r.sub_splits ? r.sub_splits.map(Number) : null,
 
 // ── Board colours (z_material_colours MC3) ───────────────────────────────────
 // A colour is a materials row whose parent_id is its board. For every role:

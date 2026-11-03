@@ -282,3 +282,39 @@ returns on both of them into dishwasher opening."
   run's kick assembly).
 - `toekick_parts_part_key_check` widened (`migration_kr1_kick_return_key.sql`, applied). Gable-like
   orientation via `isKickSidePart` (3D, sheets, optimiser). Tutorial `kick_returns`.
+
+## Set kick seams — KS1 (built 2026-11-03, in-app check pending)
+
+Mark, RHK6542 Danny's Robe KICK 1 (2984): "sometimes kicks are easier to be made in one if they are close
+but over 2400 … the pieces can be max 2400 … split line for back kick and sub front, then another field of
+kick face split."
+
+**Locked decisions (Mark 2026-11-03)**
+- Joined runs only (a kick assembly). A cabinet's own kick never splits.
+- Sub front seams in **round numbers** (2400, 2300, 2200 …): the default is full pieces of the max length
+  rounded down to 100, from the left, remainder last.
+- The **back is the sub front mirrored** end for end (seam at L − x), so the longest pieces start at
+  opposite ends: stronger, and drawn that way in 3D / elevation.
+- The face splits on its own seams. The default is the cabinet joint nearest the middle whose pieces fit the
+  max, so the seam lines up with the doors / panels above. Else the even split.
+- A split face / sub front / back gets **"JOIN"** on its name (optimiser labels + stickers, Parts tab, Reports
+  cut list) so the shop knows to join it.
+- **No length warning.** A piece longer than the sheet shows in the optimiser as "too large for any configured
+  sheet", and that prompts the change.
+
+**Built**
+- `kick_runs.face_splits` / `sub_splits` (numeric[], mm from the kick's left end, face start) + split_mode
+  `'manual'` (`migration_ks1_manual_seams.sql`, applied as `kick_runs_manual_seams`).
+- Resolver `resolveKickRun.ts`: `kickRunSegments` returns face / sub / back segments (equal / exact keep one
+  seam set for all three, manual takes its own); `seamsToSegments`, `roundSubSeams`, `mirrorSeams`. A vertical
+  spreader is centred on every face, sub front and back seam. Returns step in the end sub / back pieces as
+  before. `isKickJoinPiece` names the JOIN pieces.
+- Kick split… modal: a third mode **Set seams** with face seams (cabinet-joint chips) and sub front seams
+  (round chip), and a live Face / Sub front / Back piece list. CanvasClient passes the kick length + start
+  from the resolved face, and the member joints.
+- Tests `src/lib/resolver/__tests__/kickSeams.test.ts`. Tutorial `kick_seams`.
+- RHK6542 Danny's Robe KICK 1 set to face 2059.5 (2059.5 / 924.5), sub 2400 (2400 / 584), back 584 / 2400.
+  Open Kick split… › Save to re-resolve it (the row was set in the DB).
+
+**Known limits:** seams are absolute mm. If the kick is resized they stay where they are, and a seam past the
+new end is dropped. Joint chips assume the assembly runs along the wall's +t (same limit as the run layout).

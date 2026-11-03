@@ -12,7 +12,9 @@
 //   • depth already baked into the assembly's DZ (built to the deepest member);
 //   • require ladder — leg-type runs are not merged (caller guards; we no-op);
 //   • oversized runs split into equal segments at max_segment_length, with a
-//     vertical spreader forced at every split seam so segments butt over a fixing.
+//     vertical spreader forced at every split seam so segments butt over a fixing;
+//   • or manual seams (KS1): face seams + sub front seams set separately, the
+//     back mirrored from the sub front so the joints stagger.
 // ============================================================
 
 import {
@@ -44,6 +46,57 @@ export function splitKickSegments(
   }
   const len = L / n   // equal
   return Array.from({ length: n }, (_, i) => ({ start: i * len, len }))
+}
+
+type Seg = { start: number; len: number }
+
+// Seam positions (mm from the kick's left end) → segments. Seams outside the
+// kick (or within 1mm of an end / each other) are dropped.
+export function seamsToSegments(L: number, seams: number[] | null | undefined): Seg[] {
+  const xs = [...new Set((seams ?? []).filter(x => Number.isFinite(x) && x > 1 && x < L - 1))].sort((a, b) => a - b)
+  const cuts = [0, ...xs.filter((x, i) => i === 0 || x - xs[i - 1] > 1), L]
+  return cuts.slice(1).map((x, i) => ({ start: cuts[i], len: x - cuts[i] }))
+}
+
+// Round-number sub kick seams (Mark, KS1): full pieces of the max length rounded
+// down to 100 (2400, 2300, ...) from the left, remainder last.
+export function roundSubSeams(L: number, maxSeg: number | null | undefined): number[] {
+  const step = Math.floor((maxSeg && maxSeg > 0 ? maxSeg : 2400) / 100) * 100
+  if (step <= 0 || L <= step) return []
+  const xs: number[] = []
+  for (let x = step; x < L - 1; x += step) xs.push(x)
+  return xs
+}
+
+// Mirror seams end for end: the kick back takes the sub front's seams from the
+// other end, so its longest piece starts at the opposite end (stagger = strength).
+export function mirrorSeams(L: number, seams: number[]): number[] {
+  return seams.map(x => L - x).sort((a, b) => a - b)
+}
+
+// The face / sub front / back segments of a joined kick. Equal / exact split all
+// three at the same seams; manual takes the face and sub seams as set (sub
+// defaults to round numbers, face to the equal split) and mirrors the sub for the back.
+export function kickRunSegments(
+  L: number,
+  run: { max_segment_length: number | null; split_mode: string; face_splits?: number[] | null; sub_splits?: number[] | null } | undefined,
+): { face: Seg[]; sub: Seg[]; back: Seg[] } {
+  const maxSeg = run?.max_segment_length ?? null
+  if (run?.split_mode !== 'manual') {
+    const segs = splitKickSegments(L, maxSeg, run?.split_mode === 'exact' ? 'exact' : 'equal')
+    return { face: segs, sub: segs, back: segs }
+  }
+  const face = run.face_splits ? seamsToSegments(L, run.face_splits) : splitKickSegments(L, maxSeg ?? 2400, 'equal')
+  const subSeams = run.sub_splits ?? roundSubSeams(L, maxSeg)
+  return { face, sub: seamsToSegments(L, subSeams), back: seamsToSegments(L, mirrorSeams(L, subSeams)) }
+}
+
+// Kick-run parts cut in more than one piece get "JOIN" on their name so the
+// shop knows to join them on site. True for a kick assembly's face / sub front /
+// back when that part has more than one piece.
+export function isKickJoinPiece(partKey: string, sameKeyCount: number, isKickAssembly: boolean): boolean {
+  return isKickAssembly && sameKeyCount > 1
+    && (partKey === 'kick_front_face' || partKey === 'kick_sub_front' || partKey === 'kick_back')
 }
 
 export function resolveKickRunParts(
@@ -97,15 +150,14 @@ export function resolveKickRunParts(
   const kickBackZ  = r.TOESCB
 
   // ── Width-spanning boards, split into segments ──────────────────────────────
-  const segs = splitKickSegments(L, cab.kick_run?.max_segment_length ?? null, cab.kick_run?.split_mode ?? 'equal')
+  const segs = kickRunSegments(L, cab.kick_run)
   // End returns (TOERETL / TOERETR), mitred to the face: the interior boards and
   // end spreaders step in at a returned end; only the end face boards are mitred.
   const ret = kickReturns(r, TF)
   const grain = r.TOEGRAIN ?? 'vertical'
-  const last = segs.length - 1
 
-  segs.forEach((seg, i) => {
-    const inL = i === 0 ? ret.l : 0, inR = i === last ? ret.r : 0
+  segs.face.forEach((seg, i) => {
+    const last = segs.face.length - 1
     // Kick Front Face — full height TK, face material
     parts.push({
       part_key: 'kick_front_face',
@@ -119,6 +171,9 @@ export function resolveKickRunParts(
       grain_direction: grain,
       ...ret.faceBevels(i === 0, i === last),
     })
+  })
+  segs.sub.forEach((seg, i) => {
+    const inL = i === 0 ? ret.l : 0, inR = i === segs.sub.length - 1 ? ret.r : 0
     // Kick Sub Front — behind the face, lifted TOEFC off the floor, flush at top
     parts.push({
       part_key: 'kick_sub_front',
@@ -130,6 +185,9 @@ export function resolveKickRunParts(
       edge_band: edgeSidesToBanding(edging.kick_sub_front, intEb),
       is_detached: true,
     })
+  })
+  segs.back.forEach((seg, i) => {
+    const inL = i === 0 ? ret.l : 0, inR = i === segs.back.length - 1 ? ret.r : 0
     // Kick Back — at the back of the assembly
     parts.push({
       part_key: 'kick_back',
@@ -177,8 +235,10 @@ export function resolveKickRunParts(
   const spacing = L / (qty + 1)
   for (let i = 1; i <= qty; i++) xs.push(x0 + spacing * i - TI / 2)
 
-  // Interior split seams (skip seg[0].start === 0) → spreader centred on the seam.
-  for (let i = 1; i < segs.length; i++) xs.push(x0 + segs[i].start - TI / 2)
+  // Interior seams of the face, sub front and back (skip each list's first
+  // segment, start 0) → a spreader centred on every seam, so both pieces fix to it.
+  for (const list of [segs.face, segs.sub, segs.back])
+    for (let i = 1; i < list.length; i++) xs.push(x0 + list[i].start - TI / 2)
 
   const uniqXs: number[] = []
   for (const x of xs.sort((a, b) => a - b)) {

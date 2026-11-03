@@ -1191,26 +1191,30 @@ export async function dbMigrateLegacyKickMembers(roomId: string): Promise<KickRu
   return { memberPatches, removedCabinetIds: [], resolved }
 }
 
-// Split-to-size settings for a run's kick assembly.
-export async function dbLoadKickRunSettings(
-  runId: string,
-): Promise<{ max_segment_length: number | null; split_mode: 'equal' | 'exact' }> {
-  const { data } = await supabase.from('kick_runs').select('max_segment_length, split_mode').eq('id', runId).maybeSingle()
-  const r = data as { max_segment_length: number | null; split_mode: string } | null
+// Split-to-size settings for a run's kick assembly. 'manual' (KS1) carries the
+// face and sub front seams (mm from the kick's left end); the back mirrors the sub.
+export interface KickRunSettings {
+  max_segment_length: number | null
+  split_mode:         'equal' | 'exact' | 'manual'
+  face_splits:        number[] | null
+  sub_splits:         number[] | null
+}
+
+export async function dbLoadKickRunSettings(runId: string): Promise<KickRunSettings> {
+  const { data } = await supabase.from('kick_runs')
+    .select('max_segment_length, split_mode, face_splits, sub_splits').eq('id', runId).maybeSingle()
+  const r = data as { max_segment_length: number | null; split_mode: string; face_splits: number[] | null; sub_splits: number[] | null } | null
   return {
     max_segment_length: r?.max_segment_length != null ? Number(r.max_segment_length) : null,
-    split_mode:         (r?.split_mode as 'equal' | 'exact') ?? 'equal',
+    split_mode:         (r?.split_mode as KickRunSettings['split_mode']) ?? 'equal',
+    face_splits:        r?.face_splits ? r.face_splits.map(Number) : null,
+    sub_splits:         r?.sub_splits ? r.sub_splits.map(Number) : null,
   }
 }
 
 // Write split settings and re-resolve the run so the assembly re-segments live.
-export async function dbUpdateKickRunSettings(
-  runId: string,
-  settings: { max_segment_length: number | null; split_mode: 'equal' | 'exact' },
-): Promise<KickRunMutation> {
-  const { error } = await supabase.from('kick_runs')
-    .update({ max_segment_length: settings.max_segment_length, split_mode: settings.split_mode })
-    .eq('id', runId)
+export async function dbUpdateKickRunSettings(runId: string, settings: KickRunSettings): Promise<KickRunMutation> {
+  const { error } = await supabase.from('kick_runs').update(settings).eq('id', runId)
   if (error) { console.error('dbUpdateKickRunSettings', error); return EMPTY_MUTATION() }
   return { removedCabinetIds: [], resolved: await resolveKickRun(runId) }
 }

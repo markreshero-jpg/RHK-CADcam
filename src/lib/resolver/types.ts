@@ -738,13 +738,18 @@ export interface ResolvedDrawerBoxPart extends ResolvedPart {
 //     assembly's own DX (run length) and DZ (deepest member depth), with split.
 //   • role 'member'   → resolveToekick resolves nothing.
 // Mirrors the kick_runs table. See z_kick_join/KICK-JOIN-PLAN.md.
-export type KickSplitMode = 'equal' | 'exact'
+// 'manual' (z_kick_join KS1): face_splits / sub_splits are seam positions in mm
+// from the kick's left end; the kick back is the sub front mirrored (L - x), so
+// its longest piece starts at the opposite end.
+export type KickSplitMode = 'equal' | 'exact' | 'manual'
 
 export interface KickRunInput {
   run_id:             string
   role:               'assembly' | 'member'
-  max_segment_length: number | null      // null = use sheet-length default
+  max_segment_length: number | null      // null / 0 = one piece (equal / exact)
   split_mode:         KickSplitMode
+  face_splits?:       number[] | null    // manual: face seams (mm from the kick's left end)
+  sub_splits?:        number[] | null    // manual: sub front seams; back = mirrored
 }
 
 // ── Cabinet Input ─────────────────────────────────────────────

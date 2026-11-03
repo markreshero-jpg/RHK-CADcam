@@ -5,6 +5,7 @@
 // client-side batch loader so both produce identical shapes.
 // ============================================================
 
+import { isKickJoinPiece } from '../resolver/resolveKickRun'
 import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
@@ -80,7 +81,7 @@ export function canonicalPanelDims(dx: number, dy: number, dz: number): { w: num
 
 export interface RawProject { id: string; name: string; job_number: string | null }
 export interface RawRoom { id: string; name: string }
-export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null
+export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; is_kick_assembly?: boolean | null; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null
   // resolved_drawer_hw->warnings (saved resolver warnings, z_material_colours MC5)
   warnings?: { code?: string; message?: string; material_id?: string }[] | null
   // Grain match group (z_grain_match), embedded via grain_match_group_id.
@@ -343,6 +344,11 @@ export function normalizeProject(
     const tt = t ?? 0
     const trip = [
       { v: Number(r.dx), d1: flags.bottom ? tt : 0, d2: flags.top ? tt : 0, b1: flags.bottom, b2: flags.top },
+  // Joined kick pieces (z_kick_join KS1): a kick assembly's face / sub front / back
+  // cut in more than one piece gets "JOIN" on its name.
+  const kickAsm = new Set(cabsRaw.filter(c => c.is_kick_assembly).map(c => c.id))
+  const tkCount = new Map<string, number>()
+  for (const r of tp) { const k = `${r.cabinet_instance_id}|${r.part_key}`; tkCount.set(k, (tkCount.get(k) ?? 0) + 1) }
       { v: Number(r.dy), d1: flags.left ? tt : 0, d2: flags.right ? tt : 0, b1: flags.left, b2: flags.right },
       { v: Number(r.dz), d1: 0, d2: 0, b1: false, b2: false },
     ].sort((a, b) => b.v - a.v)
@@ -358,13 +364,16 @@ export function normalizeProject(
     // Mitred kick boards of a shaped cabinet (z_cabinet_shape 4b): blank + note.
     const mitre = tkBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     push('toekick_parts', r, `tk_${r.part_key}_${r.sort_order}`,
-      { typeKey: String(r.part_key), base: humanize(String(r.part_key)), ...(mitre ? { suffix: ` (${mitre})` } : {}) }, null, 0,
+      { typeKey: String(r.part_key), base: humanize(String(r.part_key)), ...(tkSuffix ? { suffix: tkSuffix } : {}) }, null, 0,
       { w: trip[0].v, h: trip[1].v, thickness: trip[2].v },
       { eb_w1: trip[0].d1, eb_w2: trip[0].d2, eb_h1: trip[1].d1, eb_h2: trip[1].d2, eb_missing: banded && t == null,
         on: [trip[0].b1, trip[0].b2, trip[1].b1, trip[1].b2] },
       base)
   }
   for (const r0 of fz) {
+    const join = isKickJoinPiece(String(r.part_key), tkCount.get(`${r.cabinet_instance_id}|${r.part_key}`) ?? 0,
+      kickAsm.has(r.cabinet_instance_id as string))
+    const tkSuffix = (join ? ' JOIN' : '') + (mitre ? ` (${mitre})` : '')
     const { r: rs, base } = sized('face_zones', r0, zonePartId(r0 as unknown as { row_index: number; col_index: number; facet?: string }))
     // Mitred facet fronts (z_cabinet_shape 3c) nest at their front-face width;
     // the bevel is sawn after and named on the part.

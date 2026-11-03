@@ -1,4 +1,5 @@
 'use client'
+import { isKickJoinPiece } from '@/src/lib/resolver/resolveKickRun'
 import { useState, useEffect, useMemo, useCallback, useRef, type ComponentProps } from 'react'
 import { startCombined, finishCombined, cancelCombined, armSave, armSaveFolder, armPrint, disarmSave } from './pdfCombine'
 import { usePrintPresets, PrintPresetBar, currentSets, applyPresetSets, type PrintPreset } from './PrintPresets'
@@ -115,7 +116,11 @@ function collectParts(cabinets: CabinetInstance[], resolved: Map<string, Resolve
       rows.push({ sourceLabel: lbl, partDesc: mark ? `${desc} ${mark}` : desc, length: d.DY, width: blankW ? blankW(d.DX, d.DZ) : d.DX, thickness: d.DZ, quantity: 1, materialId: p.material_id })
     }
     for (const p of r.case_parts) add(CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key, 'case_parts', p)
-    for (const p of r.toekick_parts) add(TK_LABELS[p.part_key] ?? p.part_key, 'toekick_parts', p)
+    for (const p of r.toekick_parts) {
+      // Joined kick pieces get "JOIN" (z_kick_join KS1).
+      const join = isKickJoinPiece(p.part_key, r.toekick_parts.filter(q => q.part_key === p.part_key).length, !!cab.is_kick_assembly) ? ' JOIN' : ''
+      add((TK_LABELS[p.part_key] ?? p.part_key) + join, 'toekick_parts', p)
+    }
     for (const p of r.internal_parts) add(INT_LABELS[p.part_type] ?? p.part_type, 'internal_parts', p)
     for (const z of r.face_zones) {
       if (z.face_type === 'open') continue
