@@ -413,6 +413,29 @@ line and mirrors the island elevation.
   814 + panel 18). Then `updateCabinet(WUP, { dz: carcass dz − 20 })` (330 →
   310). Not for open shelf units (WOPN) or overheads standing on a cabinet
   below. "720 high incl under panel" = dy 720 (702 box + 18).
+- **Overheads never get finger pulls** (Mark, RHK6542 2026-11-03, as a rule):
+  on a finger-pull job (e.g. the Set Back SQ Edge Finger Pull schedule, whose
+  `door_wall` row puts a rail on overheads) set every overhead door zone's
+  `handle_id: 'none'` and give the cupboard the 20-set-back under panel above.
+  Don't edit the shared schedule's row — other jobs use it as-built.
+- **Recessed LED strip = a pocket route 18.5 wide × 9 deep** (Mark, RHK6542
+  Danny's Robe 2026-11-03, standard): 8mm Downshear (`cnc_tools` T110,
+  `12163452-…`), `operation_action: 'pocket'`, run **6 past the part at both
+  ends** so the slot is open right through with no radius corners. Put it on
+  the face the light shines from, e.g. under a top / shelf so it shines down,
+  **50 back from the front edge** (to the route's front edge) unless told
+  otherwise. One `part_operations` row: `operation_type 'route'`,
+  `source_table 'case_parts'`, `source_part_key 'case_full_top'` (or
+  `int_fixed_shelf_<n>` / `int_…`), `plane_kind 'face_back'` (the underside of
+  a horizontal panel), `router_tool_id` the 8mm, `auto_tool false`,
+  `size_dz` / `depth` 9, `fill_strategy 'raster'`, `raster_angle_deg 90`
+  (lanes along the slot). Horizontal panel frame: `pos_x` = depth from the
+  BACK (u), `pos_y` = across from the left end (v), both the rect CENTRE;
+  `size_dx` = 18.5 (depth), `size_dy` = panel width + 12. E.g. a 580 × 1102
+  top: pos_x 520.75, pos_y 551, size 18.5 × 1114
+  (`z_plan_automation/_tmp-6542-danny-led.mjs`). Add the elevation CAD note.
+  Where a light is wanted under a top, separate the cupboards above so the
+  routed top is doubled (33) — see Danny's Robe.
 - **Shadowline set back flush with the carcass breaks on the carcass line**
   (Mark, RHK6478 WIP 2026-11-03, standard): where a `BHSL` shadowline piece
   changes depth over a tall end panel, the deep piece stops flush with the
