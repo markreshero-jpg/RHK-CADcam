@@ -1,6 +1,6 @@
 'use client'
 
-import { isKickJoinPiece } from '@/src/lib/resolver/resolveKickRun'
+import { isKickJoinPiece, withJoinComment } from '@/src/lib/resolver/resolveKickRun'
 import { useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { rememberLibraryKeys } from '@/src/lib/displayLayers/customPartKinds'
@@ -622,7 +622,7 @@ export default function PartsView({
         name: partLabels?.[id] ?? `${PART_LABEL[p.part_key] ?? p.part_key}${join}${tkBevelNote(p) ? ` (${tkBevelNote(p)})` : ''}`,
         material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
         dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
-        comment: partComments?.[id] ?? '',
+        comment: join ? withJoinComment(partComments?.[id]) : partComments?.[id] ?? '',
         isCustom: false, isOverride: false,
       })
     }

@@ -5,7 +5,7 @@
 // client-side batch loader so both produce identical shapes.
 // ============================================================
 
-import { isKickJoinPiece } from '../resolver/resolveKickRun'
+import { isKickJoinPiece, withJoinComment } from '../resolver/resolveKickRun'
 import type { OptiPart, OptiRoom, OptiCabinet, SourceTable } from './types'
 import { PART_TYPE_LABELS } from '@/src/lib/partDisplayNames'
 import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
@@ -385,6 +385,10 @@ export function normalizeProject(
   }
   for (const r0 of fz) {
     const join = isKickJoinPiece(String(r.part_key), tkCount.get(`${r.cabinet_instance_id}|${r.part_key}`) ?? 0,
+    // Split pieces also carry JOIN as their part comment (labels / stickers), in
+    // front of any comment typed on the part.
+    const tkLast = parts[parts.length - 1]
+    if (join && tkLast?.source_part_id === r.id) tkLast.comment = withJoinComment(tkLast.comment)
       kickAsm.has(r.cabinet_instance_id as string))
     const tkSuffix = (join ? ' JOIN' : '') + (mitre ? ` (${mitre})` : '')
     const { r: rs, base } = sized('face_zones', r0, zonePartId(r0 as unknown as { row_index: number; col_index: number; facet?: string }))

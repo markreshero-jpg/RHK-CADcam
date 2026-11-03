@@ -113,6 +113,12 @@ export function kickRunSegments(
 // Kick-run parts cut in more than one piece get "JOIN" on their name so the
 // shop knows to join them on site. True for a kick assembly's face / sub front /
 // back when that part has more than one piece.
+// The JOIN piece's part comment: "JOIN", in front of any comment typed on it.
+export function withJoinComment(comment: string | null | undefined): string {
+  const c = (comment ?? '').trim()
+  return !c ? 'JOIN' : /^JOIN\b/i.test(c) ? c : `JOIN. ${c}`
+}
+
 export function isKickJoinPiece(partKey: string, sameKeyCount: number, isKickAssembly: boolean): boolean {
   return isKickAssembly && sameKeyCount > 1
     && (partKey === 'kick_front_face' || partKey === 'kick_sub_front' || partKey === 'kick_back')

@@ -85,3 +85,12 @@ describe('vertical-grain face max (sheet width)', () => {
     expect(lens(kickRunSegments(2843.5, run({ face_splits: [1287], sub_splits: [2400] }), 1200).face)).toEqual([1287, 1556.5])
   })
 })
+
+describe('JOIN part comment', () => {
+  it('JOIN alone, or in front of a typed comment', async () => {
+    const { withJoinComment } = await import('../resolveKickRun')
+    expect(withJoinComment(null)).toBe('JOIN')
+    expect(withJoinComment('fix to wall')).toBe('JOIN. fix to wall')
+    expect(withJoinComment('Join on site')).toBe('Join on site')
+  })
+})

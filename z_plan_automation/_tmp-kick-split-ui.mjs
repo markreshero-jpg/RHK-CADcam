@@ -12,10 +12,10 @@ try {
   const dump = () => page.evaluate(() => [...document.querySelectorAll('input')].map(i => i.value).join(' | ') + ' || ' + (document.body.innerText.match(/Face:[^\n]*/)?.[0] ?? ''))
   console.log('open:', await dump())
   await click('Set seams'); await click('none'); console.log('none:', await dump())
-  await click('fit'); console.log('fit:', await dump())
+  await click('1200 lengths'); console.log('lengths:', await dump())
   console.log('lit:', await page.evaluate(() => [...document.querySelectorAll('button')].filter(b => b.className.includes('bg-blue-600')).map(b => b.textContent).join(' | ')))
   const reqs = []; page.on('request', r => { if (r.url().includes('supabase')) reqs.push([Date.now(), r.method(), r.url().split('/rest/v1/')[1]?.split('?')[0] ?? r.url().slice(0, 60)]) })
-  const t0 = Date.now(); await click('Save')
+  const t0 = Date.now(); await click(process.env.SAVE ? 'Save' : 'Cancel')   // SAVE=1 writes the seams to the job
   for (let i = 0; i < 60; i++) { if (!(await page.evaluate(() => document.body.innerText.includes('Kick split')))) break; await sleep(1000) }
   console.log('modal closed after', Date.now() - t0, 'ms; still open?', await page.evaluate(() => document.body.innerText.includes('Kick split')))
   console.log(reqs.length, 'requests'); const by = {}; for (const [, m, u] of reqs) by[m + ' ' + u] = (by[m + ' ' + u] ?? 0) + 1; console.log(JSON.stringify(by)); console.log('last at', reqs.length ? reqs[reqs.length - 1][0] - t0 : 0)

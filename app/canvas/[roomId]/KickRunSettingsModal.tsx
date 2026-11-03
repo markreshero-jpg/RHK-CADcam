@@ -122,6 +122,7 @@ export default function KickRunSettingsModal({ runId, runLength, joints, faceMat
   const same = (a: number[], b: number[]) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 0.05)
   const fitSeams = suggestFaceSeams(L, joints, faceCap)
   const roundSeams = roundSubSeams(L, max)
+  const faceLenSeams = roundSubSeams(L, faceCap)   // full face lengths from the left, remainder last
   const MODES: { m: Mode; label: string; hint: string }[] = [
     { m: 'equal',  label: 'Even',      hint: 'even pieces' },
     { m: 'exact',  label: 'Full',      hint: 'full + remainder' },
@@ -181,10 +182,16 @@ export default function KickRunSettingsModal({ runId, runLength, joints, faceMat
                       </button>
                     ))}
                     {faceCap < L && (
-                      <button className={chipCls(same(faceSeams, fitSeams))} onClick={() => setFaceText(fmtList(fitSeams))}
-                        title="Fewest cabinet joints that keep every face piece within the max">
-                        fit {faceCap}
-                      </button>
+                      <>
+                        <button className={chipCls(faceSeams.length > 0 && same(faceSeams, faceLenSeams))} onClick={() => setFaceText(fmtList(faceLenSeams))}
+                          title={`Full ${Math.floor(faceCap / 100) * 100} pieces from the left, the remainder last`}>
+                          {Math.floor(faceCap / 100) * 100} lengths
+                        </button>
+                        <button className={chipCls(same(faceSeams, fitSeams))} onClick={() => setFaceText(fmtList(fitSeams))}
+                          title={`Seams on cabinet joints: the fewest that keep every face piece within ${faceCap}`}>
+                          joints ≤{faceCap}
+                        </button>
+                      </>
                     )}
                     <button className={chipCls(faceSeams.length === 0)} onClick={() => setFaceText('')}>none</button>
                   </div>

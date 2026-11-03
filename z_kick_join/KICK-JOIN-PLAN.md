@@ -348,3 +348,10 @@ boards and horizontal grain have no limit. The sub front and back are not affect
   (~7s, the normal single-cabinet resolve).
 - The chips light up (blue) while their field holds the seams they set: a joint, fit 1200, round 2400, none.
 - Canvas API `kickSplit(ref)` opens the box headlessly (`z_plan_automation/_tmp-kick-split-ui.mjs`).
+- Face chips (Mark 2026-11-03, "I thought fit 1200 meant cut 1200 lengths then the remainder"): **1200 lengths**
+  = full face pieces of the limit from the left, remainder last (KICK 3: 1200 / 1200 / 443.5); **joints ≤1200**
+  (was "fit 1200") = seams on the fewest cabinet joints that keep every piece within it (KICK 3: 517 / 770 /
+  770 / 786.5). The default when you first switch to Set seams is still the joints version.
+- **JOIN part comment** (Mark 2026-11-03): split face / sub front / back pieces also get "JOIN" as their part
+  comment (optimiser labels / stickers / cut sheets via `OptiPart.comment`, Parts tab comment column). A comment
+  typed on the part keeps its text with "JOIN. " in front (`withJoinComment`), unless it already starts with JOIN.
