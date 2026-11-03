@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { labelsPdf, a4Grid, sheetNumbers, DEFAULT_LABEL_SETTINGS, type LabelData } from '../labels'
-import type { NestedSheet } from '../nest'
+import { labelsPdf, a4Grid, sheetNumbers, buildAllLabels, HAND_CUT_KEY, DEFAULT_LABEL_SETTINGS, type LabelData, type LabelLookups } from '../labels'
+import type { NestedSheet, NestResult, NestPartInput } from '../nest'
+import type { OptiPart } from '../types'
 
 const label = (n: number): LabelData => ({
   projectName: 'RHK0000 Test', room: 'Kitchen', cabType: 'B1D', part: 'Left Gable', material: 'Whiteboard 16.5mm', colour: 'White',
@@ -31,5 +32,25 @@ describe('part labels (optimiser Stage 7)', () => {
       [0, { no: 1, of: 4 }], [1, { no: 2, of: 4 }], [3, { no: 3, of: 4 }],
       [4, { no: 1, of: 2 }], [5, { no: 2, of: 2 }], [6, { no: 4, of: 4 }],
     ])
+  })
+
+  it('parts too big for a sheet still get labels, as hand cut', async () => {
+    const part = (uid: string, w: number, h: number) => ({
+      uid, source_table: 'toekick_parts', source_part_id: uid, source_part_key: 'kick_front_face', cabinet_instance_id: 'c', cabinet_label: 'KICK 1',
+      room_id: 'r', room_name: 'Robe', project_id: 'p', job_number: null, label: 'Kick Face', default_label: 'Kick Face', part_type_key: 'kick_front_face',
+      w, h, thickness: 16.5, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, eb_missing: false, material_id: 'wb', grain_direction: null,
+    }) as unknown as OptiPart
+    const parts = [part('a', 80, 600), part('big', 80, 2600)]
+    const inp = (p: OptiPart, i: number) => ({ uid: `${p.uid}#${i}`, baseUid: p.uid, label: p.label, w: p.w, h: p.h, thickness: 16.5, materialId: 'wb', grainLock: false, priority: 0 }) as NestPartInput
+    const nest = {
+      sheets: [{ index: 0, materialId: 'wb', thickness: 16.5, placements: [{ uid: 'a#0', baseUid: 'a', label: 'Kick Face', x: 5, y: 5, w: 80, h: 600, rotated: false }] }],
+      unplaced: [inp(parts[1], 0), inp(parts[1], 1)],
+    } as unknown as NestResult
+    const look: LabelLookups = { projectName: 'RHK6542', cabType: new Map(), tapeName: new Map(), colourName: new Map(), matName: () => 'Whiteboard 16.5mm' }
+    const out = buildAllLabels(nest, new Map(parts.map(p => [p.uid, p])), new Map(), false, look, 'cut')
+    expect(out).toHaveLength(3)
+    const hand = out.filter(l => l.handCut)
+    expect(hand.map(l => [l.sheetKey, l.partNo, l.len])).toEqual([[HAND_CUT_KEY, 1, 2600], [HAND_CUT_KEY, 2, 2600]])
+    expect((await labelsPdf(hand, DEFAULT_LABEL_SETTINGS)).getNumberOfPages()).toBe(2)
   })
 })

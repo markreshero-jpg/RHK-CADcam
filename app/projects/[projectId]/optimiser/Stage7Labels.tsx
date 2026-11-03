@@ -14,7 +14,7 @@ import CutSheetsPanel from './CutSheetsPanel'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import {
-  LABEL_SIZES, DEFAULT_LABEL_SETTINGS, LABEL_SETTINGS_KEY, loadLabelLookups, buildAllLabels, labelsPdf, a4Grid, sheetNumbers,
+  LABEL_SIZES, DEFAULT_LABEL_SETTINGS, LABEL_SETTINGS_KEY, loadLabelLookups, buildAllLabels, labelsPdf, a4Grid, sheetNumbers, HAND_CUT_KEY,
   type LabelSettings, type LabelData,
 } from '@/src/lib/optimiser/labels'
 import { pickSaveFile, saveBlob } from '@/src/lib/saveAs'
@@ -96,7 +96,7 @@ function LabelsPanel() {
   // Label data: holes (drilling already synced by the nest) + the names the
   // snapshot doesn't carry. Built for cut and finished sizes once per nest.
   useEffect(() => {
-    if (!nestResult?.sheets.length) return
+    if (!nestResult?.sheets.length && !nestResult?.unplaced?.length) return
     let dead = false
     setLoading(true); setError(null)
     ;(async () => {
@@ -145,13 +145,15 @@ function LabelsPanel() {
     await saveBlob(await (await fetch(pdfUrl)).blob(), name, target)
   }
 
-  if (!nestResult?.sheets.length) {
+  if (!nestResult?.sheets.length && !nestResult?.unplaced?.length) {
     return <p className="text-xs text-ink-subtle text-center py-12">Nothing nested — run Stage 4 first.</p>
   }
 
   const nums = sheetNumbers(nestResult.sheets)
   const matName = (id: string | null) => (id ? snap.materials.find(m => m.id === id)?.name : null) ?? 'No material'
-  const sheetNos = nestResult.sheets.map((s, i) => ({ n: i + 1, no: nums.get(s.index)!.no, mat: matName(s.materialId), parts: s.placements.length }))
+  const sheetNos = nestResult.sheets.map((s, i) => ({ n: i + 1, no: nums.get(s.index)!.no as number | string, mat: matName(s.materialId), parts: s.placements.length }))
+  // Parts too big for any sheet: hand-cut labels, picked like a sheet.
+  if (nestResult.unplaced?.length) sheetNos.push({ n: HAND_CUT_KEY, no: 'Hand cut', mat: 'Too big for a sheet — cut by hand', parts: nestResult.unplaced.length })
   const grid = st.printer === 'a4' ? a4Grid(st.w, st.h) : null
   const toggleSheet = (n: number) => setSheetsOn(prev => {
     const next = new Set(prev ?? sheetNos.map(s => s.n))
@@ -225,7 +227,7 @@ function LabelsPanel() {
                   {(i === 0 || sheetNos[i - 1].mat !== s.mat) && <span className="w-full text-[10px] text-ink-subtle mt-1">{s.mat}</span>}
                   <button onClick={() => toggleSheet(s.n)}
                     className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${on ? 'border-accent bg-accent/10 text-ink' : 'border-edge-strong text-ink-subtle hover:bg-surface-2'}`}>
-                    Sheet {s.no} <span className="text-ink-subtle">({s.parts})</span>
+                    {typeof s.no === 'number' ? `Sheet ${s.no}` : s.no} <span className="text-ink-subtle">({s.parts})</span>
                   </button>
                 </Fragment>
               )

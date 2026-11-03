@@ -58,7 +58,8 @@ export interface LabelData {
   material: string; colour: string; grainMatch: string | null
   edging: string; comment: string; cab: string
   sheetNo: number; partNo: number   // sheet number within its material (sheetNumbers)
-  sheetKey: number                  // the sheet's place in the run (1-based) — for picking sheets
+  sheetKey: number                  // the sheet's place in the run (1-based) — for picking sheets; HAND_CUT_KEY = not nested
+  handCut?: boolean                 // too big for any sheet — cut by hand, label still printed
   runNo?: number | null        // saved run (savedRuns.ts) — "Run No" under Part No
   len: number; wid: number; grainAcross: boolean
   // Part picture in the cut-blank frame (x = width, y = length).
@@ -168,7 +169,12 @@ export function buildLabelData(
   }
 }
 
-/** Every placed part's label, in part-number order. */
+/** sheetKey of the hand-cut labels (parts too big for any sheet). */
+export const HAND_CUT_KEY = -1
+
+/** Every placed part's label, in part-number order, then the parts too big for
+ *  any sheet (nest.unplaced) as hand-cut labels numbered 1… — they're cut by
+ *  hand but still want a label (Mark, 2026-11-03). No holes: nothing machines them. */
 export function buildAllLabels(
   nest: NestResult, partByUid: Map<string, OptiPart>,
   drillsBySheet: Map<number, { x: number; y: number; diameter: number }[]>,
@@ -184,6 +190,12 @@ export function buildAllLabels(
     if (!p) return
     out.push({ ...buildLabelData(p, pl, sheetNos.get(s.index)!.no, nos.get(pl.uid)!, drillsBySheet.get(s.index) ?? [], deductEb, look, gm.get(pl.uid), dims), sheetKey: si + 1, runNo })
   }))
+  ;(nest.unplaced ?? []).forEach((u, i) => {
+    const p = partByUid.get(u.baseUid)
+    if (!p) return
+    const pl: Placement = { uid: u.uid, baseUid: u.baseUid, label: u.label, x: 0, y: 0, w: u.w, h: u.h, rotated: false }
+    out.push({ ...buildLabelData(p, pl, 0, i + 1, [], deductEb, look, undefined, dims), sheetKey: HAND_CUT_KEY, handCut: true, runNo })
+  })
   return out
 }
 
@@ -263,7 +275,7 @@ export function drawLabel(doc: JsPDF, d: LabelData, ox: number, oy: number, W: n
   doc.setFont('helvetica', 'bold'); fit(d.cab, 64, 9.5, 18, 18, 9)
   fs(7)
   doc.setFont('helvetica', 'normal'); doc.text('Sheet No:', X(95), Y(4.5), { align: 'right' }); doc.text('Part No:', X(95), Y(8.2), { align: 'right' })
-  doc.setFont('helvetica', 'bold'); doc.text(String(d.sheetNo), X(99.5), Y(4.5), { align: 'right' }); doc.text(String(d.partNo), X(99.5), Y(8.2), { align: 'right' })
+  doc.setFont('helvetica', 'bold'); doc.text(d.handCut ? 'Hand' : String(d.sheetNo), X(99.5), Y(4.5), { align: 'right' }); doc.text(String(d.partNo), X(99.5), Y(8.2), { align: 'right' })
   if (d.runNo) {
     doc.setFont('helvetica', 'normal'); doc.text('Run No:', X(95), Y(11.9), { align: 'right' })
     doc.setFont('helvetica', 'bold'); doc.text(String(d.runNo), X(99.5), Y(11.9), { align: 'right' })
