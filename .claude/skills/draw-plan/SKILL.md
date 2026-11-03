@@ -520,6 +520,16 @@ BASIN. No benchtop → drop BENCHTOP. Doors but no drawers → HARDWARE keeps
 `Hinges:` only. The block lives in `room_annotations` (view `plan`,
 kind `text`); trim its text there or in the editor.
 
+**Place the spec block (and the SITE NOTES box) clear of the plan dims**
+(Mark, RHK6542 2026-11-03): the dim chains run out past every wall's outer
+face — overheads 4, bulkhead +4, base 8, overall 12 (+4 per extra row) paper mm,
+plus the text — so a block 10 paper mm off the wall end sits on top of them.
+Put the blocks at **outer wall face + 30 paper mm** (× `rooms.annotation_scale`,
+default 20 → 600 model mm), measured from the outermost wall face on that side
+(the wall line + its `thickness`), not the wall line. Danny's Robe: right wall
+at 2984 + 90 thick → outer face 3074 → blocks at x 3700 (were 3300, on the
+dims). Stack SITE NOTES under the spec block at the same x.
+
 ## Layout JSON schema
 
 ```json
