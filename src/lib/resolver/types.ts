@@ -830,11 +830,6 @@ export interface CabinetInput {
   // back of the box it meets). Absent = the carcass material.
   left_side_material?:  Material
   right_side_material?: Material
-  // Vertical divider board when it differs from the carcass (role 'divider',
-  // room / job Materials tab or cabinet material_overrides — e.g. 16.5 dividers
-  // in a 33 open unit). Absent = the carcass material (exposed on open interiors).
-  divider_material?:    Material
-  divider_edgeband_id?: string
   toekick_face_material:     Material
   toekick_interior_material: Material
 
@@ -1535,8 +1530,6 @@ export interface ResolvedCabinet {
   // Height split cuts (z_cabinet_split) — the parts stay whole here; the persist
   // payload and the drill rows cut the sides / back (splitCaseParts).
   split_at?:     number[]
-  // Width cuts through the back (CabinetSplit.back_x), cut in the same places.
-  split_back_x?: number[]
   toekick_parts: ResolvedToekickPart[]
   internal_parts: ResolvedInternalPart[]
   // Slide rails emitted by inner-drawer / pull-out fittings — rendered like the

@@ -533,11 +533,11 @@ export default function CabinetSheetSVG({
     // Angled panel ends (z_cabinet_shape 4a): listed at the blank, bevel noted.
     // Height split (z_cabinet_split): the sides / back listed as their cut pieces,
     // each sized as the part it came from.
-    const pieces = splitCaseParts(rp.case_parts, rp.split_at, rp.split_back_x)
+    const pieces = splitCaseParts(rp.case_parts, rp.split_at)
     const cutBases = cutBaseKeys(pieces.map(p => p.part_key))
     pieces.forEach(p => {
       const base = splitBaseKey(p.part_key) as typeof p.part_key
-      const piece = splitPieceSuffix(p.part_key, cutBases, rp.split_back_x)
+      const piece = splitPieceSuffix(p.part_key, cutBases)
       const label = (CASE_LABELS[base] ?? shapedPartLabel(base) ?? base) + piece
       add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, 'case_parts', { ...p, part_key: base })
     })

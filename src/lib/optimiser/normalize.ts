@@ -85,9 +85,7 @@ export interface RawCabinet { id: string; label: string | null; assembly_class: 
   // resolved_drawer_hw->warnings (saved resolver warnings, z_material_colours MC5)
   warnings?: { code?: string; message?: string; material_id?: string }[] | null
   // Grain match group (z_grain_match), embedded via grain_match_group_id.
-  grain_match?: { id: string; name: string; direction: string } | null
-  // Height / back-width split (z_cabinet_split) — back_x names the back pieces left / right.
-  split?: { at?: number[]; back_x?: number[] } | null }
+  grain_match?: { id: string; name: string; direction: string } | null }
 type Row = Record<string, unknown>
 
 export interface NormalizedProject {
@@ -271,7 +269,6 @@ export function normalizeProject(
   for (const r of cp) keysByCab.set(String(r.cabinet_instance_id), [...(keysByCab.get(String(r.cabinet_instance_id)) ?? []), String(r.part_key)])
   const cutByCab = new Map([...keysByCab].map(([cab, keys]) => [cab, cutBaseKeys(keys)]))
 
-  const splitByCab = new Map(cabsRaw.map(c => [c.id, c.split?.back_x ?? null]))
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
   for (const r0 of cp) {
     const key = String(r0.part_key)
@@ -302,19 +299,14 @@ export function normalizeProject(
     // Angled panel ends (z_cabinet_shape 4a): nested as the blank, bevel named.
     const bevel = caseBevelNote({ bevel_lo: Number(r.bevel_lo ?? 0), bevel_hi: Number(r.bevel_hi ?? 0) })
     const cutHere = cutByCab.get(String(r.cabinet_instance_id)) ?? new Map<string, number>()
-    const backX = splitByCab.get(String(r.cabinet_instance_id))
-    const piece = splitPieceSuffix(key, cutHere, backX).trim().replace(/[()]/g, '') || null
-    const splitNote = splitPieceNote(key, cutHere, backX)
+    const piece = splitPieceSuffix(key, cutHere).trim().replace(/[()]/g, '') || null
+    const splitNote = splitPieceNote(key, cutHere)
     push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : key.startsWith('fpbase:') ? `Finger Rail Base ${Number(key.slice(7)) + 1}` : key.startsWith('lh:') ? `Linear Handle ${Number(key.slice(3)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
       ...(bevel || piece || key.startsWith('lh:') ? { suffix: [bevel, piece, key.startsWith('lh:') ? 'sharknose edge, saw' : null].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), railStrip?.dims ?? turned,
       railStrip ? { ...eb, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0 } : eb, base)
     const last = parts[parts.length - 1]
     if (railStrip && last?.source_part_id === r.id) last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
-    // Backs run their grain up the panel, as drawn (woodGrain grainExtents): a
-    // back's DX is its height, which nests as w, so the grain runs along w
-    // (Mark, RHK6542 WC-04 2026-11-03 — was cut along the width).
-    if ((pieceOf === 'back' || pieceOf.startsWith('back:')) && last?.source_part_id === r.id) last.grain_across = true
     if (splitNote && last?.source_part_id === r.id) last.comment = last.comment ? `${splitNote} · ${last.comment}` : splitNote
   }
   for (const r0 of ip) {

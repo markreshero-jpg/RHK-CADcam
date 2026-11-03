@@ -42,7 +42,7 @@ async function doPersistResolved(resolved: ResolvedCabinet): Promise<void> {
 export function buildPersistPayload(resolved: ResolvedCabinet) {
   return {
     // Height split (z_cabinet_split): the sides / back go to the DB as their cut pieces.
-    case_parts: splitCaseParts(resolved.case_parts, resolved.split_at, resolved.split_back_x).map(p => ({
+    case_parts: splitCaseParts(resolved.case_parts, resolved.split_at).map(p => ({
       part_key:        p.part_key,
       dx: p.DX, dy: p.DY, dz: p.DZ,
       x:  p.X,  y:  p.Y,  z:  p.Z,
