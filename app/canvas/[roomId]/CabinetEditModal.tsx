@@ -907,7 +907,7 @@ export default function CabinetEditModal({
                     onEdgeChange={handleSVGEdgeChange}
                     ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
                     eb={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId] : undefined}
-                    comment={{ value: partComments[selectedSVGPart.id] ?? '', onChange: v => savePartComment(selectedSVGPart.id, v) }}
+                    comment={{ value: partComments[selectedSVGPart.id] ?? selectedSVGPart.comment ?? '', onChange: v => savePartComment(selectedSVGPart.id, v) }}
                   />
                   <PartPosOverridePanel
                     className="relative w-full"

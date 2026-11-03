@@ -16,6 +16,7 @@ import type {
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
+import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { isShapedPanelKey, isShapedRailKey, shapedPartLabel, zonePartId, parseZonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
@@ -310,6 +311,7 @@ export function svgCaseMeta(p: ResolvedCasePart): PartMeta {
     w: isS ? p.DZ : p.DY, h: isS ? p.DY : isB ? p.DX : p.DZ, d: isS ? p.DX : isB ? p.DZ : p.DX,
     thickness: p.DZ, edge: p.edge_band, materialId: p.material_id,
     panelKind: isS ? 'side' : isB ? 'face' : 'horizontal',
+    ...(edgeMitreNote(p) ? { comment: edgeMitreNote(p) } : {}),   // long-edge mitre (z_bulkhead B10)
     x: p.X, y: p.Y, z: p.Z, ax: p.AX, ay: p.AY, az: p.AZ,
   }
 }
