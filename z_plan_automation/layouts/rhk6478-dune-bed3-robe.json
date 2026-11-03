@@ -2,7 +2,7 @@
  "_source": "mark ups with Client 02.09.26/Bed 2,3 Robes and US TV.pdf p3-4 (Bed 3 Robe plan / Elev 2) + Site measure 22.10.26.pdf p6 (Bed 3 2178 wall, returns 1000 L / 606 R, CH 2391) + Bed 2 Robe build (Mark 2026-11-03)",
  "_notes": [
   "Copy of the Bed 2 Robe build. CH 2391 off slab - 20 = 2371. Kick 100 | base plate 100-116.5 | carcass 116.5-2338 (2221.5) 520 deep, 80 back | top plate 2338-2354.5 | shadowline 2354.5-2371 (wall_cabinet_top 2354.5).",
-  "Across: 18 Teak 18 filler | 1071 | 1071 | 18 filler = 2178. #2 3 inner drawers + fixed shelf + top shelf + rail; #3 top shelf + rail. No sliding doors yet."
+  "Across: 16.5 Teak filler | 1072.5 | 1072.5 | 16.5 filler = 2178 (Mark 2026-11-03: 16mm everywhere unless 33). #2 3 inner drawers + fixed shelf + top shelf + rail; #3 top shelf + rail. No sliding doors yet."
  ],
  "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
  "roomName": "Bed 3 Robe",
@@ -39,23 +39,23 @@
    "def": "TFFW",
    "wall": 2,
    "offset": 0,
-   "dx": 18,
+   "dx": 16.5,
    "dy": 2221.5,
    "dz": 200,
-   "note": "# 1 18 x 200 deep Lx Sublime Teak (Abs Grain 18) filler panel at the wall, between the plates, front flush with the plates (600 OA)",
+   "note": "# 1 16.5 x 200 deep Lx Sublime Teak (16mm Chalk) filler panel at the wall, between the plates, front flush with the plates (600 OA)",
    "set": {
     "pos_z": 116.5,
     "pos_y": 400,
     "material_overrides": {
-     "exposed": "d67d85b0-b12b-4b03-be3c-8bdbbf23cd11"
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
     }
    }
   },
   {
    "def": "T2D",
    "wall": 2,
-   "offset": 18,
-   "dx": 1071,
+   "offset": 16.5,
+   "dx": 1072.5,
    "dy": 2221.5,
    "dz": 520,
    "note": "# 2 3 inner drawers (30 finger gaps), fixed shelf over, top shelf + hanging rail. Sliding doors later",
@@ -145,7 +145,7 @@
    "def": "T2D",
    "wall": 2,
    "offset": 1089,
-   "dx": 1071,
+   "dx": 1072.5,
    "dy": 2221.5,
    "dz": 520,
    "note": "# 3 top shelf + hanging rail. Sliding doors later",
@@ -207,16 +207,16 @@
   {
    "def": "TFFW",
    "wall": 2,
-   "offset": 2160,
-   "dx": 18,
+   "offset": 2161.5,
+   "dx": 16.5,
    "dy": 2221.5,
    "dz": 200,
-   "note": "# 4 18 x 200 deep Lx Sublime Teak (Abs Grain 18) filler panel at the wall, between the plates, front flush with the plates (600 OA)",
+   "note": "# 4 16.5 x 200 deep Lx Sublime Teak (16mm Chalk) filler panel at the wall, between the plates, front flush with the plates (600 OA)",
    "set": {
     "pos_z": 116.5,
     "pos_y": 400,
     "material_overrides": {
-     "exposed": "d67d85b0-b12b-4b03-be3c-8bdbbf23cd11"
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
     }
    }
   },
