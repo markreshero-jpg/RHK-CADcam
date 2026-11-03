@@ -423,7 +423,7 @@ line and mirrors the island elevation.
   `12163452-…`), `operation_action: 'pocket'`, run **6 past the part at both
   ends** so the slot is open right through with no radius corners. Put it on
   the face the light shines from, e.g. under a top / shelf so it shines down,
-  **50 back from the front edge** (to the route's front edge) unless told
+  **60 back from the front edge** (to the route's front edge; Mark moved it from 50, 2026-11-03) unless told
   otherwise. One `part_operations` row: `operation_type 'route'`,
   `source_table 'case_parts'`, `source_part_key 'case_full_top'` (or
   `int_fixed_shelf_<n>` / `int_…`), `plane_kind 'face_back'` (the underside of
@@ -432,7 +432,7 @@ line and mirrors the island elevation.
   (lanes along the slot). Horizontal panel frame: `pos_x` = depth from the
   BACK (u), `pos_y` = across from the left end (v), both the rect CENTRE;
   `size_dx` = 18.5 (depth), `size_dy` = panel width + 12. E.g. a 580 × 1102
-  top: pos_x 520.75, pos_y 551, size 18.5 × 1114
+  top: pos_x 510.75 (580 − 60 − 9.25), pos_y 551, size 18.5 × 1114
   (`z_plan_automation/_tmp-6542-danny-led.mjs`). Add the elevation CAD note.
   Where a light is wanted under a top, separate the cupboards above so the
   routed top is doubled (33) — see Danny's Robe.
