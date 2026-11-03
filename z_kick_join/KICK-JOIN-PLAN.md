@@ -338,3 +338,13 @@ boards and horizontal grain have no limit. The sub front and back are not affect
 - Joined runs only. A cabinet's own kick over 1200 in a grained vertical face isn't split (it shows in the
   optimiser as too large).
 - RHK6542 Study KICK 3 face re-split on the joints: 517 / 770 / 770 / 786.5.
+
+**Fix 2026-11-03 (Mark: "face split, fit 1200 … click save it doesn't work"):**
+- "fit 1200" used the 2400 max. The box read the grain limit from the cached resolver input, which usually
+  isn't loaded when the box opens, so it came back empty. It now looks up the face board itself (the
+  resolved face part's material + grain_direction) when it opens.
+- Save took ~9s to close (it re-resolved every cabinet in the run). It now writes the seams, closes at once,
+  and re-resolves only the kick assembly (members resolve no kick). The kick redraws when the resolve lands
+  (~7s, the normal single-cabinet resolve).
+- The chips light up (blue) while their field holds the seams they set: a joint, fit 1200, round 2400, none.
+- Canvas API `kickSplit(ref)` opens the box headlessly (`z_plan_automation/_tmp-kick-split-ui.mjs`).

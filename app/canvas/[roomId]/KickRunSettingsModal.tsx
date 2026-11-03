@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import CalcInput from '@/src/components/CalcInput'
-import { kickRunSegments, roundSubSeams, splitKickSegments } from '@/src/lib/resolver/resolveKickRun'
+import { kickRunSegments, roundSubSeams, splitKickSegments, kickFaceMaxLength } from '@/src/lib/resolver/resolveKickRun'
+import { supabase } from '@/src/lib/supabase'
 import { dbLoadKickRunSettings, dbUpdateKickRunSettings, type KickRunMutation, type KickRunSettings } from './canvasDB'
 
 type Mode = KickRunSettings['split_mode']
@@ -43,11 +44,12 @@ function suggestFaceSeams(L: number, joints: number[], maxSeg: number): number[]
 // Seams are mm from the kick's left end. Only the boards are cut (no extra spreaders); split
 // pieces get "JOIN" on their names. No length warning here: a piece longer than
 // the sheet shows in the optimiser as too large for any sheet.
-export default function KickRunSettingsModal({ runId, runLength, joints, faceMax, onClose, onSaved }: {
+export default function KickRunSettingsModal({ runId, runLength, joints, faceMaterialId, faceGrain, onClose, onSaved }: {
   runId:     string
   runLength: number        // kick length (face start to face end)
   joints:    number[]      // cabinet joints along the kick, mm from its left end
-  faceMax:   number | null // longest face piece the grain allows (kickFaceMaxLength), null = none
+  faceMaterialId: string | null              // the kick face board (resolved face part)
+  faceGrain:      'vertical' | 'horizontal'  // its Kick Grain (resolved grain_direction)
   onClose:   () => void
   onSaved:   (m: KickRunMutation) => void
 }) {
@@ -58,11 +60,18 @@ export default function KickRunSettingsModal({ runId, runLength, joints, faceMax
   const [subText,  setSubText]  = useState('')
   const [loading, setLoading] = useState(true)
   const [saving,  setSaving]  = useState(false)
+  // Longest face piece the grain allows (vertical grain on a grained board = the
+  // sheet width, 1200 for walnut), read from the face board when the box opens.
+  const [faceMax, setFaceMax] = useState<number | null>(null)
 
   useEffect(() => {
     let live = true
-    dbLoadKickRunSettings(runId).then(s => {
+    const mat = faceMaterialId
+      ? supabase.from('materials').select('has_grain, sheet_dx, sheet_dy').eq('id', faceMaterialId).maybeSingle().then(r => r.data)
+      : Promise.resolve(null)
+    Promise.all([dbLoadKickRunSettings(runId), mat]).then(([s, m]) => {
       if (!live) return
+      setFaceMax(kickFaceMaxLength(m as { has_grain: boolean; sheet_dx: number; sheet_dy: number } | null, faceGrain))
       setMaxSeg(s.max_segment_length)
       setMode(s.split_mode)
       setFaceText(fmtList(s.face_splits))
@@ -70,7 +79,7 @@ export default function KickRunSettingsModal({ runId, runLength, joints, faceMax
       setLoading(false)
     })
     return () => { live = false }
-  }, [runId])
+  }, [runId, faceMaterialId, faceGrain])
 
   const max = maxSeg && maxSeg > 0 ? maxSeg : 2400
   const faceCap = faceMax ? Math.min(max, faceMax) : max
@@ -97,15 +106,22 @@ export default function KickRunSettingsModal({ runId, runLength, joints, faceMax
     [L, maxSeg, mode, faceText, subText, faceMax])
   const lens = (xs: { len: number }[]) => xs.map(s => fmt(s.len)).join(' / ')
 
+  // Close straight away: the seams are written first, then the kick re-resolves
+  // (several seconds) and redraws when it lands.
   async function save() {
     setSaving(true)
-    const mut = await dbUpdateKickRunSettings(runId, settings)
-    onSaved(mut)
+    const pending = dbUpdateKickRunSettings(runId, settings)
     onClose()
+    onSaved(await pending)
   }
 
   const inputCls = 'w-full px-2 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-white focus:border-blue-500 outline-none'
-  const chip = 'px-2 py-0.5 rounded bg-gray-700 text-[11px] text-gray-200 hover:bg-gray-600'
+  // A chip lights up while the seams in its field are the ones it sets.
+  const chipCls = (on: boolean) => `px-2 py-0.5 rounded text-[11px] transition-colors ${
+    on ? 'bg-blue-600 text-white' : 'bg-gray-700 text-gray-200 hover:bg-gray-600'}`
+  const same = (a: number[], b: number[]) => a.length === b.length && a.every((x, i) => Math.abs(x - b[i]) < 0.05)
+  const fitSeams = suggestFaceSeams(L, joints, faceCap)
+  const roundSeams = roundSubSeams(L, max)
   const MODES: { m: Mode; label: string; hint: string }[] = [
     { m: 'equal',  label: 'Even',      hint: 'even pieces' },
     { m: 'exact',  label: 'Full',      hint: 'full + remainder' },
@@ -160,17 +176,17 @@ export default function KickRunSettingsModal({ runId, runLength, joints, faceMax
                   <input value={faceText} onChange={e => setFaceText(e.target.value)} placeholder="no split" className={inputCls} />
                   <div className="flex flex-wrap gap-1">
                     {joints.map(j => (
-                      <button key={j} className={chip} onClick={() => setFaceText(fmt(j))} title="Split the face on this cabinet joint">
+                      <button key={j} className={chipCls(same(faceSeams, [j]))} onClick={() => setFaceText(fmt(j))} title="Split the face on this cabinet joint">
                         joint {fmt(j)}
                       </button>
                     ))}
                     {faceCap < L && (
-                      <button className={chip} onClick={() => setFaceText(fmtList(suggestFaceSeams(L, joints, faceCap)))}
+                      <button className={chipCls(same(faceSeams, fitSeams))} onClick={() => setFaceText(fmtList(fitSeams))}
                         title="Fewest cabinet joints that keep every face piece within the max">
                         fit {faceCap}
                       </button>
                     )}
-                    <button className={chip} onClick={() => setFaceText('')}>none</button>
+                    <button className={chipCls(faceSeams.length === 0)} onClick={() => setFaceText('')}>none</button>
                   </div>
                   {faceMax && (
                     <span className="text-[11px] text-gray-500">Vertical grain: face pieces up to {faceMax} (the sheet width)</span>
@@ -180,8 +196,8 @@ export default function KickRunSettingsModal({ runId, runLength, joints, faceMax
                   <span className="text-xs text-gray-300">Sub front split at (mm from left)</span>
                   <input value={subText} onChange={e => setSubText(e.target.value)} placeholder="no split" className={inputCls} />
                   <div className="flex flex-wrap gap-1">
-                    <button className={chip} onClick={() => setSubText(fmtList(roundSubSeams(L, max)))}>round {Math.floor(max / 100) * 100}</button>
-                    <button className={chip} onClick={() => setSubText('')}>none</button>
+                    <button className={chipCls(subSeams.length > 0 && same(subSeams, roundSeams))} onClick={() => setSubText(fmtList(roundSeams))}>round {Math.floor(max / 100) * 100}</button>
+                    <button className={chipCls(subSeams.length === 0)} onClick={() => setSubText('')}>none</button>
                   </div>
                   <span className="text-[11px] text-gray-500">Back = sub front mirrored, long piece from the other end</span>
                 </label>

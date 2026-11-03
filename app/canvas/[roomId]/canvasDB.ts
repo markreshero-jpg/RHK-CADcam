@@ -1213,11 +1213,17 @@ export async function dbLoadKickRunSettings(runId: string): Promise<KickRunSetti
   }
 }
 
-// Write split settings and re-resolve the run so the assembly re-segments live.
+// Write split settings and re-resolve the kick so it re-segments live. Only the
+// kick assembly changes (members resolve no kick), so only it is re-resolved:
+// re-resolving the whole run took ~9s on a 5-cabinet run and read as "Save
+// doesn't work".
 export async function dbUpdateKickRunSettings(runId: string, settings: KickRunSettings): Promise<KickRunMutation> {
-  const { error } = await supabase.from('kick_runs').update(settings).eq('id', runId)
+  const { data, error } = await supabase.from('kick_runs').update(settings).eq('id', runId).select('kick_cabinet_id').maybeSingle()
   if (error) { console.error('dbUpdateKickRunSettings', error); return EMPTY_MUTATION() }
-  return { removedCabinetIds: [], resolved: await resolveKickRun(runId) }
+  const asmId = (data as { kick_cabinet_id: string | null } | null)?.kick_cabinet_id
+  if (!asmId) return { removedCabinetIds: [], resolved: await resolveKickRun(runId) }
+  const r = await resolveCabinetFromDB(asmId).catch(e => { console.error('dbUpdateKickRunSettings resolve', e); return null })
+  return { removedCabinetIds: [], resolved: r ? new Map([[asmId, r]]) : new Map() }
 }
 
 // Delete a cabinet, reconciling any kick run it belonged to:
