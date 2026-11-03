@@ -1502,7 +1502,8 @@ export function CabinetScene({
     return m
   }, [handMarkers])
   // Parts whose cut-outs are drawn into the mesh, so the overlay skips them.
-  const csgPartKeys = useMemo(() => new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_') || k.startsWith('zone_'))), [pocketsByPart])
+  // Custom parts too (RHK6542 WC-08 under panel LED route), like a case bottom.
+  const csgPartKeys = useMemo(() => new Set([...pocketsByPart.keys()].filter(k => k.startsWith('case_') || k.startsWith('zone_') || k.startsWith('custom_'))), [pocketsByPart])
 
   // Grained colours render the generic wood grain (z_material_colours MC9).
   const grainIds = layers && !layers.show('grain') ? new Set<string>() : new Set(Object.entries(materialColours ?? {})
@@ -1941,6 +1942,7 @@ export function CabinetScene({
             ebSpec={ebFor(p.material_id ?? '')}
             wire={wire}
             shape={shapes3D.get(`custom_${p.id}`)}
+            subtractions={pocketsByPart.get(`custom_${p.id}`)}
           /></PartAlpha>
         )
       })}
