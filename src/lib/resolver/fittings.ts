@@ -157,11 +157,17 @@ function resolveFixedShelfFittings(box: Box, fittings: InternalFitting[], ctx: F
     const y = (s.y_locked && s.y_position !== undefined)
       ? s.y_position
       : box.y + box.h / 2 - ctx.TS / 2
+    // Per-shelf setbacks win over the cabinet's FIXSB_F / FIXSB_B (e.g. a shelf
+    // set back behind an inset flap hinged off it — RHK6542 Danny's Robe).
+    const sbF = s.setback_front ?? r.FIXSB_F
+    const sbB = s.setback_back ?? r.FIXSB_B
+    const dx  = s.setback_front != null || s.setback_back != null ? ctx.intD - sbF - sbB : fsDX
+    const z   = s.setback_back != null ? ctx.intBack + sbB : fsZ
     out.push({
       part_type:   'fixed_shelf',
       sort_order:  ctx.sort.fixed_shelf++,
-      DX: fsDX, DY: box.w, DZ: ctx.TS,
-      X:  box.x, Y: y, Z: fsZ,
+      DX: dx, DY: box.w, DZ: ctx.TS,
+      X:  box.x, Y: y, Z: z,
       AX: 0, AY: 0, AZ: 0,
       material_id: ctx.shelfMatId,
       edge_band:   edgeSidesToBanding(ctx.edging.fixed_shelf, ctx.shelfEbId),
