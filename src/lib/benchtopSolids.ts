@@ -18,7 +18,7 @@
 // Skirt (edge.waterfall_skirt, Mark RHK6478 2026-11-04): a T-thick piece in the
 // neighbouring apron's plane at one leg end, floor to the apron underside, from
 // the face piece (or the leg's inner face) out to a quarter-ellipse. It replaces
-// that end's return. Drawn as convex slices up the curve.
+// that end's return. One extruded solid.
 
 import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3, type BufferGeometry } from 'three'
 import type { BenchtopInstance, BenchtopEdgeProfile } from './types'
@@ -76,13 +76,20 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
       const D = w.bu[sk.side]
       const face = skirtFace(sk, D || T, D ? topZ - D : under)
       if (face) {
-        // face = [u0 floor, curve (floor → top) ..., u0 top]: slice between curve points
-        const curve = face.slice(1, -1), u0 = face[0].u
-        for (let k = 0; k < curve.length - 1; k++) {
-          const p = curve[k], q = curve[k + 1]
-          const quad: [number, number][] = [[u0, p.v], [p.u, p.v], [q.u, q.v], [u0, q.v]]
-          out.push({ key: `l${w.i}k${k}`, geo: hull(quad.flatMap(([u, v]) => [at(0, u, v), at(T, u, v)])) })
-        }
+        // One solid (separate convex slices drew an outline at every joint, Mark
+        // 2026-11-04): the (u, v) face extruded T through the apron plane. Basis
+        // u → −n, v → up, z = u × up; start at whichever end of [0, T] makes z
+        // run into the piece.
+        const g = new ExtrudeGeometry(new Shape(face.map(p => new Vector2(p.u, p.v))), { depth: T, bevelEnabled: false, curveSegments: 1 })
+        const zv = { x: w.n.y, y: -w.n.x }
+        const ad = { x: d.x * sg, y: d.y * sg }
+        const aStart = zv.x * ad.x + zv.y * ad.y > 0 ? 0 : T
+        const [ox, , oy] = at(aStart, 0, 0)
+        const m = new Matrix4().makeBasis(new Vector3(-w.n.x, 0, -w.n.y), new Vector3(0, 1, 0), new Vector3(zv.x, 0, zv.y))
+        m.setPosition(ox, 0, oy)
+        g.applyMatrix4(m)
+        g.computeVertexNormals()
+        out.push({ key: `l${w.i}k`, geo: g })
       }
     }
     if (w.bu.start || w.bu.end) {
