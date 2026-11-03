@@ -1,7 +1,7 @@
 // RHK6478 Kitchen: dump Wall 2 drawer bases' fronts / rails / boxes.
 import puppeteer from 'puppeteer-core'
 const R = 'dd6c9440-6664-4e87-8ea9-4d88b7a9b1b6'
-const labels = process.argv.slice(2).length ? process.argv.slice(2) : ['BC-01', 'BC-02', 'BC-03']
+const labels = process.argv.slice(2)
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const browser = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: 'new', args: ['--no-first-run', '--disable-gpu'], protocolTimeout: 300000 })
 try {
