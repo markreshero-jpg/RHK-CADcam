@@ -98,6 +98,12 @@ describe('hanging rail supports', () => {
     const r = rp.internal_parts.find(p => p.part_type === 'accessory')!
     expect(r.Y + r.DZ / 2).toBeCloseTo(2300 - 16.5 - 50)
   })
+  it('an unlocked rail with no pillars still hangs at the centre pillar drop (standard, 2026-11-03)', () => {
+    const rp = run({ type: 'accessory', key: HANGING_RAIL_OVAL.key, y_locked: false }, 841)
+    expect(sups(rp).some(p => p.accessory?.role === 'centre_pillar')).toBe(false)
+    const r = rp.internal_parts.find(p => p.part_type === 'accessory')!
+    expect(r.Y + r.DZ / 2).toBeCloseTo(2300 - 16.5 - 50)
+  })
   it('an end pillar: rail stops 5 past its centre', () => {
     const rp = run({ ...RAIL, supports: { left: 'end_pillar' } })
     const r = rp.internal_parts.find(p => p.part_type === 'accessory')!

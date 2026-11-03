@@ -230,6 +230,13 @@ line and mirrors the island elevation.
   'center' }` — long notes wrap (a 600 rangehood note goes to 3 lines). Keep the
   box off the cabinet's mid-height size label and off drawer fronts it isn't
   about. Short corner tags (PTO) can stay point text, still inside the door.
+- **Hanging rails hang at the centre-pillar drop** (Mark, RHK6542 2026-11-03,
+  standard): leave a top rail UNLOCKED (`y_locked: false`, no `y_position`) so
+  it hangs from the top of its opening with its centre at the rail's centre
+  pillar `height_mm` (Finista: **53.5** under the shelf / top underside — 71.5
+  overall pillar, ~3 ring wire, 15 half rail), even when the bay is too narrow
+  for a pillar, so one fits later. 1913.5 under a top → rail 1845–1875. Only
+  lock the lower rail of a double hang.
 - **Hanging rails get a CAD note** (Mark, 2026-10-23): every `HANGING_RAIL_OVAL`
   gets a "HANGING RAIL" text note in that wall's elevation just below the rail —
   `room_annotations` row `view: 'elevation'`, `wall_id`, `wall_side: 'face'`,

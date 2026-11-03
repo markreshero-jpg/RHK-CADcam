@@ -88,6 +88,13 @@ their supports now; wardrobe / pantry / misc items later on the same table.
 
 ## Seed (Lincoln Sentry, 2026-10-25)
 
+- **2026-11-03 (Mark): every rail hangs at its centre-pillar drop** — an
+  unlocked rail's centre sits the centre pillar's `height_mm` under the top of
+  the opening even with no pillar fitted (`resolveAccessories` hangDrop), so a
+  pillar can go in later. Pillar drops 50 → **53.5** (LS page: 71.5 overall,
+  40 wide, 28.5 hole centre; no section drawing published, so the ring is read
+  off the photo — check on a real pillar).
+
 - **2026-11-03 (Mark): the shop default rail is now Nikpol `OVALRODALUM`** —
   Oval Wardrobe Rod 15 × 30 × 1.2 wall, 4.0 m, matte aluminium (box of 10
   available; suits OVALFLANGECH / OVALFLANGECOVERCH flanges). Same profile, so

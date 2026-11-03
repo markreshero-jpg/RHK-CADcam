@@ -516,9 +516,12 @@ function resolveAccessories(box: Box, fittings: InternalFitting[], ctx: FittingC
     }
     const plan = prod ? railSupportPlan(box, prod, a, ctx) : null
     // With pillars the rail hangs where they hold it: its centre the pillar's
-    // drop below the top of the opening (Mark 2026-10-25), else 60 under the top.
+    // drop below the top of the opening (Mark 2026-10-25). Without any, it still
+    // hangs at the rail's centre-pillar drop, so a pillar can go in later
+    // (Mark 2026-11-03, standard); no centre pillar in the library → 60 under the top.
+    const hangDrop = plan?.drop ?? (plan?.ctrPil ? Number(plan.ctrPil.height_mm) || null : null)
     const y = (a.y_locked && a.y_position !== undefined) ? a.y_position
-      : plan?.drop ? box.y + box.h - plan.drop - R.h / 2
+      : hangDrop ? box.y + box.h - hangDrop - R.h / 2
       : box.y + box.h - R.belowTop - R.h
     // The rail stops short of its supports (end support: rail_gap_mm off the
     // panel, 3.5 → ICW − 7; end pillar: 5 past its centre) — the part is the cut length.
