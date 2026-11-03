@@ -386,6 +386,19 @@ export function shapeCaseParts(
         // A hand-set butt may turn the box build's priority round: no box clamp.
         return { sOut: sq, sIn: sq, boxed: !set && legacySlot(segs[j]) }
       }
+      // Square inside (reflex) corner between two panels — a box-out round a duct.
+      // Both panels' outlines meet at the vertex and neither covers the t × t
+      // square inside the corner, so one runs on past the vertex by the other's
+      // thickness (Mark, RHK6478 Guest Robe 2026-11-03). Its end is seen from
+      // the cabinet front, so it's taped (`seen`). Hand-set butt wins, else the
+      // butt priority (BACK_JOIN rank, ties → earlier edge).
+      if (isPanelRole(nb) && nb.type === 'line' && Math.abs(alpha - 270) <= ANGLE_TOL) {
+        const through = choice?.startsWith('through:') ? choice.slice(8) : null
+        const nbThrough = through === nb.edge.id ? true : through === s.edge.id ? false : stops(nb, j)
+        return nbThrough
+          ? { sOut: 0, sIn: 0, angled: false, boxed: false }
+          : { sOut: -tOf(j), sIn: -tOf(j), angled: false, boxed: false, seen: true }
+      }
       if (angled && (nb.edge.role === 'front' || nb.edge.role === 'open') && choice === 'flush')
         return { ...angledEnd('flush', V, away, f.n, nf, t), boxed: false }
       const sq = vertexTrim(away, f.n, nf.n, t, stops(nb, j), tOf(j))
@@ -420,6 +433,15 @@ export function shapeCaseParts(
     const bevels = (p0First: boolean) => {
       const [l, h] = p0First ? [bev(c0), bev(c1)] : [bev(c1), bev(c0)]
       return { ...(l ? { bevel_lo: l } : {}), ...(h ? { bevel_hi: h } : {}) }
+    }
+
+    // Tape a panel end that runs past an inside corner (endCut `seen`). Panels
+    // run along DY: 'left' = the low end, 'right' = the high end (PartViewer
+    // edgeStrips — side kind left = back, face kind left = −DY).
+    const seenTape = (eb: ResolvedCasePart['edge_band'], loFirst: boolean) => {
+      const [lo, hi] = loFirst ? [c0, c1] : [c1, c0]
+      const sl = 'seen' in lo && !!lo.seen, sh = 'seen' in hi && !!hi.seen
+      return sl || sh ? { edge_band: { ...eb, ...(sl ? { left: true } : {}), ...(sh ? { right: true } : {}) } } : {}
     }
 
     const isSideRole = s.edge.role !== 'back'
@@ -473,7 +495,8 @@ export function shapeCaseParts(
       used.add('left_side')
       const p = byKey.get('left_side')!
       const [Z, DX] = span(p.Z, p.Z + p.DX, a.y, b.y)
-      out.push({ ...p, X: p.X + off, Z, DX, DZ: t, ...board(p), ...bevels(a.y <= b.y) })
+      { const bp = { ...p, ...board(p) }
+        out.push({ ...bp, X: p.X + off, Z, DX, DZ: t, ...bevels(a.y <= b.y), ...seenTape(bp.edge_band, a.y <= b.y) }) }
       appliedPanel(p, p.Y, p.DY)
       return
     }
@@ -481,7 +504,8 @@ export function shapeCaseParts(
       used.add('right_side')
       const p = byKey.get('right_side')!
       const [Z, DX] = span(p.Z, p.Z + p.DX, a.y, b.y)
-      out.push({ ...p, X: p.X + p.DZ - t - off, Z, DX, DZ: t, ...board(p), ...bevels(a.y <= b.y) })
+      { const bp = { ...p, ...board(p) }
+        out.push({ ...bp, X: p.X + p.DZ - t - off, Z, DX, DZ: t, ...bevels(a.y <= b.y), ...seenTape(bp.edge_band, a.y <= b.y) }) }
       appliedPanel(p, p.Y, p.DY)
       return
     }
@@ -489,7 +513,8 @@ export function shapeCaseParts(
       used.add('back')
       const p = byKey.get('back')!
       const [X, DY] = span(p.X, p.X + p.DY, a.x, b.x)
-      out.push({ ...p, X, DY, Z: p.Z + off, ...(build.material_id ? { DZ: t } : {}), ...board(p), ...bevels(a.x <= b.x) })
+      { const bp = { ...p, ...board(p) }
+        out.push({ ...bp, X, DY, Z: p.Z + off, ...(build.material_id ? { DZ: t } : {}), ...bevels(a.x <= b.x), ...seenTape(bp.edge_band, a.x <= b.x) }) }
       return
     }
 
@@ -507,6 +532,7 @@ export function shapeCaseParts(
       edge_band: ref.edge_band,
       ...board(ref),
       ...bevels(true),
+      ...seenTape({ ...ref.edge_band, ...board(ref).edge_band }, true),
     })
     if (isSideRole) appliedPanel(ref, y0, h)
   })

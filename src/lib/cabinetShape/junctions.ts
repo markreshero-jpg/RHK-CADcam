@@ -15,7 +15,9 @@ import { canonicalSegments, edgeFrame, interiorAngle } from './construct'
 
 const ANGLE_TOL = 0.5   // degrees — as resolveShapedCase
 
-export type JunctionKind = 'panels' | 'panel_end' | 'facets'
+// 'inside' = two panels at a square inside (reflex, 270°) corner, e.g. a box-out
+// round a duct: one runs past the corner by the other's thickness, its end taped.
+export type JunctionKind = 'panels' | 'panel_end' | 'facets' | 'inside'
 
 export interface Junction {
   key: string
@@ -37,7 +39,8 @@ const offSquare = (a: number) => Math.abs(a - 90) > ANGLE_TOL && a < 180 - ANGLE
 
 /** The kind of corner between two consecutive edges, or null where nothing can be chosen. */
 export function junctionKind(a: FootprintSegment, b: FootprintSegment, angle: number): JunctionKind | null {
-  if (angle >= 180 - ANGLE_TOL) return null                       // straight on / reflex
+  if (Math.abs(angle - 270) <= ANGLE_TOL && isPanel(a) && isPanel(b)) return 'inside'
+  if (angle >= 180 - ANGLE_TOL) return null                       // straight on / other reflex
   if (isPanel(a) && isPanel(b)) return 'panels'
   if ((isPanel(a) && isEnd(b)) || (isEnd(a) && isPanel(b))) return offSquare(angle) ? 'panel_end' : null
   if (isDoorFront(a) && isDoorFront(b) && !a.edge.filler && !b.edge.filler) {
@@ -79,6 +82,11 @@ export function joinOptions(j: Junction): { value: JoinChoice | ''; label: strin
     { value: `through:${j.a.id}`, label: `Butt — ${edgeLabel(j.a.id)} runs through` },
     { value: `through:${j.b.id}`, label: `Butt — ${edgeLabel(j.b.id)} runs through` },
     { value: 'mitre', label: 'Mitre' },
+  ]
+  if (j.kind === 'inside') return [
+    { value: '', label: 'Rule default' },
+    { value: `through:${j.a.id}`, label: `${edgeLabel(j.a.id)} runs through (end taped)` },
+    { value: `through:${j.b.id}`, label: `${edgeLabel(j.b.id)} runs through (end taped)` },
   ]
   if (j.kind === 'panel_end') return [
     { value: '', label: 'Square end' },

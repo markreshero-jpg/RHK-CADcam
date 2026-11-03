@@ -130,6 +130,7 @@ dropped with a visible warning, never re-attached.
 | Edges meeting | Choices | Default |
 |---|---|---|
 | panel ↔ panel (side / back, any angle under 180°) | **butt, A runs through** · **butt, B runs through** (at an off-square corner the stopping panel is bevelled against the through one — butt-bevel is just this, not a separate choice) · **mitre** (both bevelled on the corner line, square corners too = 45° each) | BACK_JOIN priority at square corners; ANGLE_JOIN at off-square |
+| panel ↔ panel at a **square inside corner** (270°, e.g. a box-out round a duct — Mark, RHK6478 Guest Robe 2026-11-03) | **A runs through** · **B runs through** — the through panel runs past the corner by the other's thickness (closes the t × t square neither covers) and its end there is **taped** (seen from the front). Kind `inside` | BACK_JOIN priority (ties → earlier edge) |
 | panel ↔ front facet (angled only) | **square end** · **bevelled flush to facet** | square (shape decision 12) |
 | panel ↔ open (angled only) | **square end** · **bevelled flush** | square |
 | front facet ↔ front facet (outside corner, doors on both) | **mitre** (doors bevelled) · **reveal** (square doors, gap) | mitre (shape decision 9) |
