@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole. Next: R7 (library WRH). First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances). Next: R8 (tutorial + RHK6586 WC-04). First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -271,6 +271,15 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
   rewrites it).
 - Test `src/lib/__tests__/rangehoodLink.test.ts`.
 
+## R7 as built (2026-11-04)
+
+- `migration_r7_wrh_library.sql` (applied): new category Wall › **Appliances**;
+  `WRH` copied from `W2D` (pair of doors, 600 × 700 × 350, full top) with one
+  fixed shelf (the block locks it at `shelf_h`) and the rangehood block — hole
+  size unset (warns), setback 50, flue 200 × 250, shelf 350. No under panel in
+  the item: right-click → Add under panel, as for any overhead run.
+- cabinet-codes skill: `WRH` marked as in the library.
+
 ## Phases
 
 | # | What | Status |
@@ -281,7 +290,7 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 | R4 | **Cut-outs UI** — Cabinet Edit, per part: add hole / notch, formula fields, preview in the part view | [x] 2026-11-02 |
 | R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [x] 2026-11-02 |
 | R6 | **WUP takes the hole** from the cabinets above it | [x] 2026-11-04 |
-| R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [ ] |
+| R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [x] 2026-11-04 |
 | R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [ ] |
 
 ## Open
