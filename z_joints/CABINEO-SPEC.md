@@ -74,6 +74,28 @@ it butts into (gable).
 - **Takeoff / pick list** (Mark 2026-10-30): counted under **Connectors**, one
   per set (`buildHardware` via `cabinetSeamDrills`; TAKEOFF-SPEC D3a).
 
+## Shelf supports (S1, Mark 2026-11-03)
+
+The same fitting link places adjustable-shelf supports.
+- **Hole height**: adj shelf pin joints (*Adjustable Shelf Holes x2 Rows* / *x1 Row
+  (centre)*) set `offset_y_mm` = **`T + 4`** (was `T / 2`): the cluster's middle hole is
+  4 below the shelf's underside, so a pinned shelf sits where it's drawn. Full bank
+  ignores offset_y (fine, Mark).
+- **Fitting**: Accessories category **`shelf_support`** (constraint widened), row
+  *Shelf support SSW 5mm, metal pin, white* — Furnware **SSW.WH.FG** (Ø5 x 8 pin,
+  body 10.5 x 8.5, shelf 4 above the hole centre). Linked as `fitting_id` on both
+  joints' part_b drill ops (`migration_s1_shelf_support.sql`). Joint editor's Fitting
+  picker lists connectors + shelf supports.
+- `seamDrillOps` tags the middle hole of each set of a **part_b normal-face** op that
+  has a fitting: `fitting.kind = 'pin'`, toward `y-` (model +X = up). Pocket fittings
+  are `kind 'pocket'`.
+- **3D**: `JointFittingModel` stand-in `SupportStandIn` drawn from the Furnware line
+  drawing (no model_url). Model axes: origin = hole centre on the face, +Y out of the
+  face, +X up. A real GLB on the accessory row replaces it, oriented that way.
+- **Pick list**: group **Shelf supports**, one per set — `cabinetSeamFittings()` (not
+  coalesced, so a division's two supports at one height count as two).
+- Test: `src/lib/resolver/__tests__/shelfSupportFitting.test.ts`. Check pending.
+
 ## Phases
 
 | | | |

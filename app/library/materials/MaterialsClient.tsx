@@ -236,6 +236,7 @@ const TABS: TabConfig[] = [
           { value: 'hanging_rail', label: 'Hanging rail' },
           { value: 'rail_support', label: 'Rail support' },
           { value: 'connector',    label: 'Connector' },
+          { value: 'shelf_support', label: 'Shelf support' },
           { value: 'other',        label: 'Other' },
         ],
       },

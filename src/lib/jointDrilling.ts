@@ -233,8 +233,10 @@ export interface DrillOpPos {
   opRef?:          string
   // The op's fitting (JointTypeOp.fitting), on the middle hole of each set
   // only, with the direction from it to the seam edge — the 3D model sits
-  // there (z_joints C4). Inside/outside faces only for now.
-  fitting?:        { item: JointFitting; toward: DrillAxis }
+  // there (z_joints C4). kind 'pocket' = an inside/outside-face connector
+  // (Cabineo); 'pin' = a shelf support in a part_b face hole, toward = up
+  // (the middle hole of the cluster sits just under the shelf).
+  fitting?:        { item: JointFitting; toward: DrillAxis; kind: 'pocket' | 'pin' }
 }
 
 // Expression evaluator: supports math globals + part-dimension variables.
@@ -626,7 +628,11 @@ export function seamDrillOps(
         result.push({
           ...pos, axis, radius: ev.tool_diameter_mm / 2, depthLen, targetPartKey,
           router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool,
-          ...(op.fitting && inOut && j === midSet ? { fitting: { item: op.fitting, toward: isLeft ? 'x-' as const : 'x+' as const } } : {}),
+          ...(op.fitting && inOut && j === midSet ? { fitting: { item: op.fitting, toward: isLeft ? 'x-' as const : 'x+' as const, kind: 'pocket' as const } } : {}),
+          // Shelf supports (Mark, 2026-11-03): one per first-axis set, in the
+          // middle hole of the cluster — the one under the shelf.
+          ...(op.fitting && op.target_part === 'part_b' && op.face === 'normal' && j === midSet
+            ? { fitting: { item: op.fitting, toward: 'y-' as const, kind: 'pin' as const } } : {}),
         })
       }
     }
@@ -1168,6 +1174,24 @@ export function coalesceOpposingDrills<T extends DrillOpPos>(
     } else {
       out.push(...group)
     }
+  }
+  return out
+}
+
+/** The holes carrying a fitting (Cabineo pockets, shelf supports), one per
+ *  fitting — NOT coalesced, so a division's two shelf supports at one height
+ *  stay two even where their holes merge into one through-bore. */
+export function cabinetSeamFittings(rp: ResolvedCabinet): SeamDrill[] {
+  if (!(rp.seam_joints ?? []).some(sj => sj.ops.some(o => o.fitting))) return []
+  const boxByKey = caseBoxByKey(rp)
+  const removed = removedIds(rp)
+  const out: SeamDrill[] = []
+  for (const sj of rp.seam_joints ?? []) {
+    if (!sj.ops.some(o => o.fitting)) continue
+    if (removed.has(seamPartId(sj.part_a_key)) || removed.has(seamPartId(sj.part_b_key))) continue
+    const bA = boxByKey[sj.part_a_key], bB = boxByKey[sj.part_b_key]
+    if (!bA || !bB) continue
+    for (const d of seamDrillsFor(sj, rp, bA, bB)) if (d.fitting) out.push({ ...d, source: sj.source, seamKey: sj.seam_key })
   }
   return out
 }

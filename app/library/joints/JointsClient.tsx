@@ -187,7 +187,7 @@ export default function JointsClient({
   // Connectors a joint op can place in each set (Accessories, z_joints C4).
   const [fittings, setFittings] = useState<{ id: string; name: string }[]>([])
   useEffect(() => {
-    supabase.from('hardware_accessories').select('id, name').eq('category', 'connector').order('name')
+    supabase.from('hardware_accessories').select('id, name').in('category', ['connector', 'shelf_support']).order('name')
       .then(({ data }) => setFittings((data ?? []) as { id: string; name: string }[]))
   }, [])
   const [tab,       setTab]       = useState<Tab>('joints')

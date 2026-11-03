@@ -14,7 +14,7 @@
 // ============================================================
 
 import type { ResolvedCabinet, GripKind } from '../resolver/types'
-import { cabinetSeamDrills } from '../jointDrilling'
+import { cabinetSeamFittings } from '../jointDrilling'
 
 // ── Cabinet classification ───────────────────────────────────────────────────
 
@@ -76,8 +76,8 @@ export function countKinds(cabs: TakeoffCab[], codeOf: (c: TakeoffCab) => string
 
 // ── Hardware ─────────────────────────────────────────────────────────────────
 
-export type HardwareGroup = 'Hinges' | 'Hinge plates' | 'Runners' | 'Inner drawer runners' | 'Bins' | 'Handles' | 'Push to open' | 'Linear handles' | 'Hanging rails' | 'Rail supports' | 'Connectors'
-export const HARDWARE_GROUPS: HardwareGroup[] = ['Hinges', 'Hinge plates', 'Runners', 'Inner drawer runners', 'Bins', 'Handles', 'Push to open', 'Linear handles', 'Hanging rails', 'Rail supports', 'Connectors']
+export type HardwareGroup = 'Hinges' | 'Hinge plates' | 'Runners' | 'Inner drawer runners' | 'Bins' | 'Handles' | 'Push to open' | 'Linear handles' | 'Hanging rails' | 'Rail supports' | 'Connectors' | 'Shelf supports'
+export const HARDWARE_GROUPS: HardwareGroup[] = ['Hinges', 'Hinge plates', 'Runners', 'Inner drawer runners', 'Bins', 'Handles', 'Push to open', 'Linear handles', 'Hanging rails', 'Rail supports', 'Connectors', 'Shelf supports']
 
 export interface HardwareProduct { name: string; brand?: string | null; code?: string | null }
 export interface HardwareProducts {
@@ -177,11 +177,10 @@ function cabinetHardware(r: ResolvedCabinet, label: string, P: HardwareProducts,
 
   // Joint connectors: the drills tag one hole per set with its fitting (the
   // same sets the CNC machines and 3D draws; removed parts' seams skipped).
-  if ((r.seam_joints ?? []).some(sj => sj.ops.some(o => o.fitting))) {
-    for (const d of cabinetSeamDrills(r)) {
-      const f = d.fitting?.item
-      if (f) acc.add('Connectors', f.id, '', P.accessories.get(f.id), f.name, label, 1, 'ea')
-    }
+  // Shelf supports (one per adj-shelf pin set) count under their own group.
+  for (const d of cabinetSeamFittings(r)) {
+    const f = d.fitting!.item
+    acc.add(d.fitting!.kind === 'pin' ? 'Shelf supports' : 'Connectors', f.id, '', P.accessories.get(f.id), f.name, label, 1, 'ea')
   }
 }
 

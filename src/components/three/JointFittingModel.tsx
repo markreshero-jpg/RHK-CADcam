@@ -72,11 +72,50 @@ function StandIn({ colour }: { colour: string }) {
   )
 }
 
+// Shelf support stand-in: Furnware SSW plastic support, metal pin (Mark,
+// 2026-11-03; furnwaregroup.com.au SSW line drawing). Model axes as above with
+// the pin's toward = up, so here +X = up, +Y = out of the face, origin = hole
+// centre on the face. Ø5 pin 8 into the panel; body 10.5 wide x 8.5 out, its
+// top 4 above the hole centre (the shelf sits there); thin back flange; a
+// curved gusset under the body down to ~9 below the hole centre.
+function SupportStandIn({ colour }: { colour: string }) {
+  const body = useMemo(() => {
+    // Side profile in (up, out) = shape (x, y); extruded across the 10.5 width.
+    const sh = new THREE.Shape()
+    sh.moveTo(4, 0.9)
+    sh.lineTo(4, 8.5)
+    sh.lineTo(-3, 8.5)
+    sh.quadraticCurveTo(-3.5, 3.5, -9, 3)
+    sh.lineTo(-9, 0.9)
+    sh.closePath()
+    const g = new THREE.ExtrudeGeometry(sh, { depth: 10.5, bevelEnabled: false, curveSegments: 8 })
+    g.translate(0, 0, -5.25)
+    return g
+  }, [])
+  return (
+    <group>
+      <mesh geometry={body}><meshStandardMaterial color={colour} /></mesh>
+      {/* Back flange against the panel face. */}
+      <mesh position={[-2.3, 0.45, 0]}>
+        <boxGeometry args={[13.4, 0.9, 10.5]} />
+        <meshStandardMaterial color={colour} />
+      </mesh>
+      {/* Pin: Ø5, 8 into the hole. */}
+      <mesh position={[0, -4, 0]}>
+        <cylinderGeometry args={[2.5, 2.5, 8, 16]} />
+        <meshStandardMaterial color={STEEL} metalness={0.6} roughness={0.35} />
+      </mesh>
+    </group>
+  )
+}
+
 export default function JointFittingModel({ drill }: { drill: DrillOpPos }) {
   const f = drill.fitting
   const q = useMemo(() => basis(drill.axis, f?.toward ?? 'x-'), [drill.axis, f?.toward])
   if (!f) return null
-  const fb = <StandIn colour={f.item.colour ?? '#3a3a3a'} />
+  const fb = f.kind === 'pin'
+    ? <SupportStandIn colour={f.item.colour ?? '#f2f2f2'} />
+    : <StandIn colour={f.item.colour ?? '#3a3a3a'} />
   const m = f.item.model
   return (
     <group position={[drill.x, drill.y, drill.z]} quaternion={q}>
