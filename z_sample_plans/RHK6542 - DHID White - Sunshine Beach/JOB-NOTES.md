@@ -59,4 +59,4 @@ Robe: 520 carcass, 600 end panel right (S), 200 deep panel left (N) against the 
 - Shoe pull-out: just a pull-out shelf in 16 whiteboard with a front.
 - LED routed in the underside of the top; cupboards above separate (double top / bottom).
 - Kick white. Sliding doors left for now.
-- Open: flap opening (PTO / stay?), shoe shelf runner, TV backing.
+- Round 2 (`_tmp-6542-danny-rev2.mjs`): flap 25 finger gap at the top like the drawers (door 470.75 -> 656.5, face row 1 = 185.75); shoe shelf locked on Dragon Pro 500x80 Silk White for now; TV panel stays 16.5 with 2 TV Cleat custom parts behind it (16.5 whiteboard, 1102 x 100, carcass Y 1170 / 1520 = 1250-1350 / 1600-1700 AFF, z 267).
