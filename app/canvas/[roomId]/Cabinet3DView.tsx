@@ -1331,7 +1331,7 @@ export function CabinetScene({
     return m
   }, [rp.case_parts, rp.internal_parts, partOverrides])
   // Height split (z_cabinet_split): the case parts as made, and which ones were cut.
-  const casePieces = useMemo(() => splitCaseParts(rp.case_parts, rp.split_at), [rp.case_parts, rp.split_at])
+  const casePieces = useMemo(() => splitCaseParts(rp.case_parts, rp.split_at, rp.split_back_x), [rp.case_parts, rp.split_at, rp.split_back_x])
   const cutBases = useMemo(() => new Set(casePieces.filter(q => q.part_key.startsWith('split:')).map(q => splitBaseKey(q.part_key))), [casePieces])
 
   const drawerStackByKey = useMemo(() => {
@@ -1511,10 +1511,12 @@ export function CabinetScene({
         const [y0, y1] = splitPieceRange(piece)
         const pp    = applyPosOv(p, id, partOverrides)
         const b     = cut ? caseBox(pp) : applySizeOv(caseBox(pp), id, partOverrides)
+        // A width-cut back's pieces sit side by side: holes by x too.
+        const across = cut && base === 'back' && !!rp.split_back_x?.length
         const info  = applyEdge(buildCaseInfo(p, b))
         const s     = matSpec(p.material_id, '#ddd3bb')
         // Turned per-edge panels draw in their own frame (z_cabinet_shape L3).
-        const holes = (holesByPartKey.get(p.part_key) ?? []).filter(d => !cut || (d.y >= y0 - 0.5 && d.y <= y1 + 0.5)).map(d => intoPartFrame(p, d))
+        const holes = (holesByPartKey.get(p.part_key) ?? []).filter(d => !cut || (d.y >= y0 - 0.5 && d.y <= y1 + 0.5 && (!across || (d.x >= piece.X - 0.5 && d.x <= piece.X + piece.DY + 0.5)))).map(d => intoPartFrame(p, d))
         const pockets = pocketsByPart.get(id)
 
         if (holes.length > 0) {

@@ -4296,12 +4296,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               setContextMenu(null)
               setSelected({ type: 'cabinet', id })
               const cab = cabinets.find(c => c.id === id)
-              if (!cab || normaliseSplit(cab.split)) return
+              const cur = normaliseSplit(cab?.split)
+              if (!cab || cur?.at.length) return
               const input = getCachedInput(id)
               const sug = input ? splitSuggestions(resolveCabinet(input).internal_parts) : []
               const mid = cab.dy / 2
               const at = sug.length ? sug.reduce((b, x) => (Math.abs(x.at - mid) < Math.abs(b.at - mid) ? x : b)).at : Math.round(mid)
-              void handleUpdateCabinet(id, { split: { at: [at] } })
+              void handleUpdateCabinet(id, { split: { ...cur, at: [at] } })
             },
             onEditShape: canvasView === 'plan' || canvasView === '3d' || canvasView === 'elevation' ? startCabinetShapeEdit : undefined,
             onSaveToLibrary: isAdmin ? id => { setContextMenu(null); setSaveLibCabId(id) } : undefined,

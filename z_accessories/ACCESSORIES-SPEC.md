@@ -94,6 +94,12 @@ their supports now; wardrobe / pantry / misc items later on the same table.
   pillar can go in later. Pillar drops 50 → **53.5** (LS page: 71.5 overall,
   40 wide, 28.5 hole centre; no section drawing published, so the ring is read
   off the photo — check on a real pillar).
+- **2026-11-03: centre pillar model redrawn** (Mark: the old one was out of
+  shape — round 40 disc, fat stem). `models/hanging rail/make-centre-pillar.mjs`
+  builds it: plate 40 (across) × 10 (along the rail) × 3 with 2 holes 28.5
+  apart, stem 5 wide on the face flaring into a ~3 wire oval ring round the
+  15 × 30 rail, rail centre 53.5 down, 71.5 overall. Uploaded over
+  `finista/Finista_Oval_Centre_Pillar_Chrome.glb` (`?v=2`); `depth_mm` 40 → 10.
 
 - **2026-11-03 (Mark): the shop default rail is now Nikpol `OVALRODALUM`** —
   Oval Wardrobe Rod 15 × 30 × 1.2 wall, 4.0 m, matte aluminium (box of 10
