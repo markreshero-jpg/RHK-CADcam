@@ -1,0 +1,1789 @@
+{
+ "_source": "Master WIR.pdf (6 pages, markups 02.09.26) + Site measure 22.10.26.pdf p8 (3982 x 3588, door 1176 | 844 | 1962, CH 2704, 609 bulkhead 2418 along the Elev 2 wall) + Mark Q&A 2026-11-03",
+ "_notes": [
+  "Ceiling 2704 - 20 = 2684; Elev 2 wall (bulkhead) 2400. Open Teak carcasses (LX Colour 16 Sublime Teak inside + out), 100 Teak kick bases, 30 shadows: tops 2654 / 2370.",
+  "Corners: Elev 3 runs through; Elev 4 + Elev 2 butt the Elev 3 face, Elev 1 butts the Elev 2 face. Butting end = no end panel, half-depth division at the back (footprint).",
+  "Island 900 x 1000, 1200 high incl 20 stone: two 900 x 481.5 drawer bases back to back, 8 drawers each side."
+ ],
+ "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+ "roomName": "Master WIR",
+ "roomHeight": 2684,
+ "wallCabinetTop": 2654,
+ "roomRules": {
+  "TOEH": 100
+ },
+ "walls": [
+  {
+   "x": 3982,
+   "y": 3588,
+   "length": 3982,
+   "angle": 180,
+   "_": "1 Elev 1 door wall E->W (door 1176-2020)"
+  },
+  {
+   "x": 0,
+   "y": 3588,
+   "length": 3588,
+   "angle": 270,
+   "height": 2400,
+   "soffit": 30,
+   "_": "2 Elev 2 S->N, bulkhead 2400"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 3982,
+   "angle": 0,
+   "_": "3 Elev 3 W->E"
+  },
+  {
+   "x": 3982,
+   "y": 0,
+   "length": 3588,
+   "angle": 90,
+   "_": "4 Elev 4 N->S"
+  },
+  {
+   "x": 1541,
+   "y": 1794,
+   "length": 900,
+   "angle": 0,
+   "type": "island",
+   "detached": true,
+   "height": 1200,
+   "_": "5 island centreline W->E, face south; flipped faces north"
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "D4-SSSL",
+   "wall": 5,
+   "offset": 0,
+   "dx": 900,
+   "dy": 1180,
+   "dz": 481.5,
+   "note": "Island 8 drawers north side: 2 shallow / 3 mid / 3 deep, Teak fronts, 20 stone top to 1200",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      },
+      {
+       "row_index": 2,
+       "height_locked": false
+      },
+      {
+       "row_index": 3,
+       "height_locked": true,
+       "height": 130
+      },
+      {
+       "row_index": 4,
+       "height_locked": true,
+       "height": 130
+      },
+      {
+       "row_index": 5,
+       "height_locked": true,
+       "height": 130
+      },
+      {
+       "row_index": 6,
+       "height_locked": true,
+       "height": 100
+      },
+      {
+       "row_index": 7,
+       "height_locked": true,
+       "height": 100
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 3,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 4,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 5,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 6,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 7,
+       "face_type": "drawer_face"
+      }
+     ]
+    }
+   },
+   "flip": true
+  },
+  {
+   "def": "D4-SSSL",
+   "wall": 5,
+   "offset": 0,
+   "dx": 900,
+   "dy": 1180,
+   "dz": 481.5,
+   "note": "Island 8 drawers south side: 2 shallow / 3 mid / 3 deep, Teak fronts, 20 stone top to 1200",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      },
+      {
+       "row_index": 2,
+       "height_locked": false
+      },
+      {
+       "row_index": 3,
+       "height_locked": true,
+       "height": 130
+      },
+      {
+       "row_index": 4,
+       "height_locked": true,
+       "height": 130
+      },
+      {
+       "row_index": 5,
+       "height_locked": true,
+       "height": 130
+      },
+      {
+       "row_index": 6,
+       "height_locked": true,
+       "height": 100
+      },
+      {
+       "row_index": 7,
+       "height_locked": true,
+       "height": 100
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 3,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 4,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 5,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 6,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 7,
+       "face_type": "drawer_face"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 1,
+   "offset": 2182,
+   "dx": 1200,
+   "dy": 2270,
+   "dz": 600,
+   "note": "Elev 1 open shelf unit 1200, no dividers, to 2370 (under the 609 bulkhead), seen end by the door, butts the Elev 2 face: half-depth division at the back",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 1,
+   "offset": 2182,
+   "dx": 1200,
+   "dy": 100,
+   "dz": 600,
+   "note": "Elev 1 kick",
+   "rules": {
+    "TOEH": 100,
+    "TOESCB": 0
+   },
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true,
+    "toekick_overrides": {
+     "face": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "TFFW",
+   "wall": 2,
+   "offset": 0,
+   "dx": 30,
+   "dy": 2270,
+   "dz": 600,
+   "note": "Elev 2 30 Teak filler to the Elev 1 wall",
+   "set": {
+    "pos_z": 100,
+    "material_overrides": {
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 30,
+   "dx": 1164,
+   "dy": 2270,
+   "dz": 600,
+   "note": "# 9 double hanging",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 900
+          },
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 1734
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 1194,
+   "dx": 1200,
+   "dy": 2270,
+   "dz": 600,
+   "note": "# 10-13 shoe cubes 4 x 300, to 2370",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "vsplit",
+      "children": [
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       },
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       },
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 2394,
+   "dx": 594,
+   "dy": 2270,
+   "dz": 600,
+   "note": "# 14 single hanging, butts the Elev 3 face: half-depth division at the back",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 1734
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 0,
+   "dx": 2988,
+   "dy": 100,
+   "dz": 600,
+   "note": "Elev 2 kick",
+   "rules": {
+    "TOEH": 100,
+    "TOESCB": 0
+   },
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true,
+    "toekick_overrides": {
+     "face": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 0,
+   "dx": 2988,
+   "dy": 30,
+   "dz": 600,
+   "note": "30 shadow 2370-2400 (bulkhead)",
+   "set": {
+    "material_overrides": {
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": false,
+     "cleat": false,
+     "left": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "TFFW",
+   "wall": 3,
+   "offset": 0,
+   "dx": 30,
+   "dy": 2270,
+   "dz": 600,
+   "note": "Elev 3 30 Teak filler to the Elev 2 wall, 2370 (under the bulkhead)",
+   "set": {
+    "pos_z": 100,
+    "material_overrides": {
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 3,
+   "offset": 30,
+   "dx": 1121,
+   "dy": 2270,
+   "dz": 600,
+   "note": "# 18 single hanging, 2370 (under the 609 bulkhead)",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 1734
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 3,
+   "offset": 1151,
+   "dx": 840,
+   "dy": 2554,
+   "dz": 600,
+   "note": "# 19 double hanging",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 900
+          },
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 1734
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 3,
+   "offset": 1991,
+   "dx": 840,
+   "dy": 2554,
+   "dz": 600,
+   "note": "# 20 double hanging",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 900
+          },
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 1734
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 3,
+   "offset": 2831,
+   "dx": 1121,
+   "dy": 2554,
+   "dz": 600,
+   "note": "# 21 adjustable shelves",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "TFFW",
+   "wall": 3,
+   "offset": 3952,
+   "dx": 30,
+   "dy": 2554,
+   "dz": 600,
+   "note": "Elev 3 30 Teak filler to the Elev 4 wall",
+   "set": {
+    "pos_z": 100,
+    "material_overrides": {
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 3,
+   "offset": 0,
+   "dx": 3982,
+   "dy": 100,
+   "dz": 600,
+   "note": "Elev 3 kick",
+   "rules": {
+    "TOEH": 100,
+    "TOESCB": 0
+   },
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true,
+    "toekick_overrides": {
+     "face": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 3,
+   "offset": 1151,
+   "dx": 2831,
+   "dy": 30,
+   "dz": 600,
+   "note": "30 shadow 2654-2684",
+   "set": {
+    "material_overrides": {
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": false,
+     "cleat": false,
+     "left": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 4,
+   "offset": 600,
+   "dx": 879,
+   "dy": 2554,
+   "dz": 600,
+   "note": "# 26 single hanging, butts the Elev 3 face: half-depth division at the back",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 1734
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 4,
+   "offset": 1479,
+   "dx": 879,
+   "dy": 2554,
+   "dz": 600,
+   "note": "# 27 double hanging",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1807,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 900
+          },
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 1734
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 4,
+   "offset": 2358,
+   "dx": 1200,
+   "dy": 2554,
+   "dz": 600,
+   "note": "# 28-31 shoe cubes 4 x 300, to 2654",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "material_overrides": {
+     "back": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "shelf": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b",
+     "interior": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "vsplit",
+      "children": [
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       },
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       },
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "TFFW",
+   "wall": 4,
+   "offset": 3558,
+   "dx": 30,
+   "dy": 2554,
+   "dz": 600,
+   "note": "Elev 4 30 Teak filler to the Elev 1 wall",
+   "set": {
+    "pos_z": 100,
+    "material_overrides": {
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 4,
+   "offset": 600,
+   "dx": 2988,
+   "dy": 100,
+   "dz": 600,
+   "note": "Elev 4 kick",
+   "rules": {
+    "TOEH": 100,
+    "TOESCB": 0
+   },
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true,
+    "toekick_overrides": {
+     "face": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 4,
+   "offset": 600,
+   "dx": 2988,
+   "dy": 30,
+   "dz": 600,
+   "note": "30 shadow 2654-2684",
+   "set": {
+    "material_overrides": {
+     "exposed": "67ecbeff-98ac-41e1-9b1a-618a5bf6a96b"
+    },
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": false,
+     "cleat": false,
+     "left": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 600,
+      "joint": "mitre"
+     }
+    }
+   }
+  }
+ ]
+}
