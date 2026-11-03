@@ -999,6 +999,8 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     back_material:             matMap.get('back'),
     left_side_material:        matMap.get('left_side'),
     right_side_material:       matMap.get('right_side'),
+    divider_material:          matMap.get('divider'),
+    divider_edgeband_id:       matMap.has('divider') ? (ebMap.get('divider') ?? carcassEb) : undefined,
     toekick_face_material:     tkFace,
     toekick_interior_material: tkInt,
     interior_edgeband_id:         carcassEb,
@@ -1091,10 +1093,10 @@ async function loadKickRunInput(
     role:               r.kick_cabinet_id === cabinetId ? 'assembly' : 'member',
     max_segment_length: r.max_segment_length != null ? Number(r.max_segment_length) : null,
     split_mode:         (r.split_mode as KickSplitMode) ?? 'equal',
-  }
-}
     face_splits:        r.face_splits ? r.face_splits.map(Number) : null,
     sub_splits:         r.sub_splits ? r.sub_splits.map(Number) : null,
+  }
+}
 
 // ── Board colours (z_material_colours MC3) ───────────────────────────────────
 // A colour is a materials row whose parent_id is its board. For every role:
@@ -1108,6 +1110,7 @@ async function loadKickRunInput(
 // ebMap keys: material role as-is, toekick roles as tk_<role>.
 const ROLE_LABEL: Record<string, string> = {
   interior: 'Interior', exposed: 'Exposed', door_face: 'Doors', shelf: 'Shelves', drawerbox: 'Drawer box',
+  divider: 'Dividers',
 }
 async function applyBoardColours(
   matMap: Map<string, Material>, tkMap: Map<string, Material>, ebMap: Map<string, string>,

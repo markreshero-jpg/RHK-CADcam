@@ -109,6 +109,10 @@ export function resolveInternalParts(
   const { TK, floorT } = caseFloor(cab, r)   // floorT: bottom panel (0 floating, z_floating)
   const sid = cab.shelf_material.id
   const mid = cab.material.id
+  // Vertical dividers: their own board when the 'divider' role is set, else the carcass.
+  const TD  = cab.divider_material?.DZ ?? T
+  const did = cab.divider_material?.id ?? mid
+  const deb = cab.divider_edgeband_id ?? cab.interior_edgeband_id
 
   // ── Internal opening reference dimensions ─────────────────────
   const TL  = cab.left_side_material?.DZ  ?? T   // gable overrides (roles left_side / right_side)
@@ -226,11 +230,11 @@ export function resolveInternalParts(
     parts.push({
       part_type:   'divider',
       sort_order:  sort.divider++,
-      DX: intD, DY: box.h, DZ: T,
+      DX: intD, DY: box.h, DZ: TD,
       X:  box.x, Y: box.y, Z: intBack,
       AX: 0, AY: 0, AZ: 0,
-      material_id: mid,
-      edge_band:   edgeSidesToBanding(edging.divider, cab.interior_edgeband_id),
+      material_id: did,
+      edge_band:   edgeSidesToBanding(edging.divider, deb),
       y_locked:    false,
       x_locked:    locked,
     })
@@ -246,7 +250,7 @@ export function resolveInternalParts(
   // (z_dividers V-D3): found on a first walk, then the tree is walked again.
   const seams = drawerSeams(zones)
   const autoDouble = new Set<string>()
-  let groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, T, cab.slide_products ?? [])
+  let groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, TD, cab.slide_products ?? [])
 
   // ── Walk the section tree ─────────────────────────────────────────────────────
   // For a split, the available extent along the split axis is divided among the
@@ -279,8 +283,8 @@ export function resolveInternalParts(
 
     // Per-separator thickness. Horizontal: each child's separator type ('none'
     // = open gap = 0mm, else a shelf = TS). Vertical: every separator is a
-    // divider panel (T).
-    const sepThick = (i: number): number => gapThickness(kids, i, horiz, TS, T, autoDouble.has(sepKey(path, i)))
+    // divider panel (TD).
+    const sepThick = (i: number): number => gapThickness(kids, i, horiz, TS, TD, autoDouble.has(sepKey(path, i)))
     const sumSep = kids.reduce<number>((a, _c, i) => a + sepThick(i), 0)
 
     // Classify children: locked (size set), grouped (group id with resolved size),
@@ -337,8 +341,8 @@ export function resolveInternalParts(
         const locked = childResolved[i] !== null
         if (!horiz) {
           // A double divider = two panels back to back, each its own part.
-          for (let p = 0; p * T < st - 0.01; p++) {
-            emitDivider({ x: cursor + size + p * T, y: box.y, w: T, h: box.h }, locked)
+          for (let p = 0; p * TD < st - 0.01; p++) {
+            emitDivider({ x: cursor + size + p * TD, y: box.y, w: TD, h: box.h }, locked)
           }
         } else if (c.separator === 'adj_shelf') {
           emitAdjShelf({ x: box.x, y: cursor + size, w: box.w, h: st }, locked)
@@ -349,7 +353,7 @@ export function resolveInternalParts(
       cursor += size + st
     })
     // Egg-crate grid (z_dividers V5): merge the pieces, notch the crossings.
-    if (section.half_check && halfCheck(parts, start, TS, T)) merged = true
+    if (section.half_check && halfCheck(parts, start, TS, TD)) merged = true
   }
 
   const root: Box = { x: intLeft, y: intBottom, w: intW, h: intH }
@@ -360,7 +364,7 @@ export function resolveInternalParts(
     // Second walk with the doubles in place (thicker separators move the bays).
     parts.length = 0; slides.length = 0; errors.length = startErrors; merged = false
     for (const k of Object.keys(sort)) sort[k] = 0
-    groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, T, cab.slide_products ?? [], autoDouble)
+    groupSizes = computeGroupSizes(cab.internal_tree, intW, intH, TS, TD, cab.slide_products ?? [], autoDouble)
     const found = new Set(autoDouble)
     walk(cab.internal_tree, root)
     // Keep exactly the first walk's set (the second can't add new ones mid-walk

@@ -34,6 +34,7 @@ const ASM_ROLES = [
   { key: 'interior',  label: 'Interior',  desc: 'Carcass panels' },
   { key: 'exposed',   label: 'Exposed',   desc: 'End panels, fillers, open interiors' },
   { key: 'shelf',     label: 'Shelf',     desc: 'Shelves' },
+  { key: 'divider',   label: 'Divider',   desc: 'Upright dividers. Blank = Interior (Exposed on open interiors)' },
 ]
 
 const TK_ROLES = [

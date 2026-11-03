@@ -47,6 +47,15 @@ Robe: 520 carcass, 600 end panel right (S), 200 deep panel left (N) against the 
 - Bulkheads set back 18 (front 'carcase'), raw MDF 18 (material_overrides.exposed MDF 18mm), all tape off (edge_overrides case_bh:*): WC-05 front 332.5, dx 2684 (ends 16 short of WC-04's right end), right return 332.5; WC-06 front 582, L return 200, R 582, bottom return 200 mitre; WC-07 front 317.5, L return 317.5.
 - Layout JSON is the first draw only; rounds 2–4 are DB edits (scripts above).
 
+## Round 5 (Mark 2026-11-03) — `_tmp-6542-study-rev5.mjs`
+- Bulkhead notes "MDF BULKHEAD - PAINTED BY OTHERS" on the Wall 1 / 2 / 5 elevations; spec block BULKHEADS 18mm MDF - painted by others.
+- WC-04 back: grain up the panel (was cut along the width). 1934 wide > 1211 walnut sheet across the grain, so Mark: 2 pieces, comment "join together" → `split.back_x [983.5]`, 2 × 924 x 967, labels `Back Panel (split left / right)`, comment `SPLIT - LEFT/RIGHT · JOIN TOGETHER`. The bay 2 shelf screw on the join is left out (2 holes).
+- LED: recessed route (as TC-03: 18.5 x 9 pocket, 8mm Downshear T110, 6 past both ends) in the underside of WC-04's bottom (33) and WC-08's under panel (16.5 — leaves 7.5 under the route), in line, back edge 50 off the back wall (pos_x 59.25). Elevation note updated.
+- Wall 5 elevation: clear-opening dims between the shelves, one vertical chain per bay a quarter in from its left (`_tmp-6542-w5-dims.mjs`, dims tagged `style.tag 'shelf_gap'`, re-runnable). Bulkhead notes left-aligned so they clear the bulkhead size label.
+- WC-01 custom part renamed "Under Panel" → "Desk Top" (cabinet_custom_parts.name).
+- WC-04 back/bottom screws were on the bottom's back edge: joint 5mm Dynamic Holes used `T / 2` (bottom 33 → 16.5) — now `CW / 2` (z_joints, centre of the 16.5 back = 8.25). Shelf holes in the back now on the 33 shelf centres too.
+- WC-04 `case_back` (left piece) is hidden in plan + elevation + 3D = **Removed**, so the optimiser leaves it out — asked Mark (2026-11-03).
+
 ## Open / to check
 - Overhead cupboard fixed shelves whiteboard, equal spacing.
 - Sliding doors 25mm Designer White (2mm brushed grey frame) to come.

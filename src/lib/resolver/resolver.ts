@@ -232,6 +232,7 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
     drawer_stacks:   drawerStacks,
     seam_joints:     seamJoints,
     ...(cab.split?.at.length ? { split_at: cab.split.at } : {}),
+    ...(cab.split?.back_x?.length ? { split_back_x: cab.split.back_x } : {}),
     hinge_instances: hingeInstances,
     ...(bifold ? { bifold: { hand: bifold.hand, bottom: r.BIFOLD_BOTTOM ?? 'above', centre: r.BIFOLD_CENTRE ?? 'standard' } } : {}),
     errors:          allErrors,

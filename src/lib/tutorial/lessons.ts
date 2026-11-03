@@ -1533,6 +1533,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'To change it, set the kick face for the whole job (Job → Cabinet Standards → materials), one room (Room → materials) or one cabinet (its kick face override). A colour picked at any of those levels wins over the cabinet colour. If the drawings name a kick colour, set it before the room is drawn.',
       canvas: true, done: c => c.cabinets.length > 0 },
   ]},
+
+  // Appended 2026-11-03 (z_dividers V6: Divider material role, RHK6542 study).
+  { id: 'divider_material', level: 'intermediate', topic: 'materials', title: 'Dividers in a different board',
+    blurb: 'Make the upright dividers from their own board, e.g. 16 dividers in a 33 open shelf unit.',
+    keywords: 'divider dividers upright partition board material thickness 16 33 open shelves shelf unit room job', steps: [
+    { id: 'set', title: 'Pick a Divider board',
+      body: 'Open Room → materials (or Job → Cabinet Standards → materials for the whole job). The Divider row sits under Shelf, one pick per class (Base / Wall / Tall). Blank = the dividers stay the carcass board (the Exposed board on open interiors), as before.',
+      canvas: true, done: c => c.cabinets.length > 0 },
+    { id: 'check', title: 'Check the bays',
+      body: 'Every upright divider in that room / class is now that board and thickness. The bays either side get wider by the difference, so equal bays stay equal. Top, bottom, gables and shelves keep their own boards.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
   // Appended 2026-11-03 (drawer back → bottom screw holes, z_drawer_back_screws).
   { id: 'drawer_back_screws', level: 'advanced', topic: 'production', title: 'Drawer back screw holes',
     blurb: 'Screw holes through a drawer back into the edge of the bottom, set on the drawer box method.',
@@ -1547,18 +1559,6 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Re-save the room so its drawers pick up the joint, then open a drawer back in the Part Editor or run the optimiser. The holes drill from the back face of the drawer back.',
       canvas: true, done: c => c.cabinets.length > 0 },
   ]},
-]
-
-export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
-/** Tutorials matching every word of the query (title, blurb, keywords, step titles). */
-export function searchLessons(query: string): number[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
-  if (!words.length) return []
-  return LESSONS.flatMap((l, i) => {
-    const text = [l.title, l.blurb, l.keywords ?? '', ...l.steps.map(s => s.title)].join(' ').toLowerCase()
-    return words.every(w => text.includes(w)) ? [i] : []
-  })
-}
 
   // Appended 2026-11-03 (z_kick_join KS1: set kick seams — face / sub front split, back mirrored).
   { id: 'kick_seams', level: 'intermediate', topic: 'cabinets', title: 'Split a long joined kick',
@@ -1574,5 +1574,17 @@ export function searchLessons(query: string): number[] {
       body: 'The spreaders stay where they are, the split only cuts the boards. Each split face / sub front / back is named with JOIN (Parts tab, cut list, optimiser labels) so the shop knows to join it. A piece longer than the sheet shows in the optimiser as too large for any sheet: change the seams if you see that.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+]
+
+export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
+/** Tutorials matching every word of the query (title, blurb, keywords, step titles). */
+export function searchLessons(query: string): number[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  if (!words.length) return []
+  return LESSONS.flatMap((l, i) => {
+    const text = [l.title, l.blurb, l.keywords ?? '', ...l.steps.map(s => s.title)].join(' ').toLowerCase()
+    return words.every(w => text.includes(w)) ? [i] : []
+  })
+}
 
 export const lessonDone = (lesson: TutorialLesson, done: string[]) => lesson.steps.every(s => done.includes(stepKey(lesson, s)))

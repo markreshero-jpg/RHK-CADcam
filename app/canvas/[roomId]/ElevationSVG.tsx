@@ -2036,7 +2036,7 @@ export default function ElevationSVG({
                               e.currentTarget.releasePointerCapture(e.pointerId)
                               const next = hAt(e.clientY)
                               setSplitDrag(null)
-                              if (Math.abs(next - h0) >= 0.5) onUpdateCabinet(cab.id, { split: normaliseSplit({ at: cuts.map((a, j) => (j === i ? next : a)) }) })
+                              if (Math.abs(next - h0) >= 0.5) onUpdateCabinet(cab.id, { split: normaliseSplit({ ...normaliseSplit(cab.split), at: cuts.map((a, j) => (j === i ? next : a)) }) })
                             }} />
                         )}
                       </g>

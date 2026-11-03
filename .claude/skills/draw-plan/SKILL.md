@@ -442,7 +442,18 @@ line and mirrors the island elevation.
   top: pos_x 510.75 (580 − 60 − 9.25), pos_y 551, size 18.5 × 1114
   (`z_plan_automation/_tmp-6542-danny-led.mjs`). Add the elevation CAD note.
   Where a light is wanted under a top, separate the cupboards above so the
-  routed top is doubled (33) — see Danny's Robe.
+  routed top is doubled (33) — see Danny's Robe. An under panel (a custom
+  part) takes the route too: `source_table 'custom_parts'`, `source_part_key
+  'custom_<id>'`, same horizontal frame (RHK6542 Study WC-04 + WC-08, routes in
+  line 50 off the back wall: pos_x 59.25 on both).
+- **Grained backs wider than the sheet across the grain → split across the
+  width** (Mark, RHK6542 WC-04 2026-11-03): backs are cut with the grain up the
+  panel (as drawn), so a walnut / teak back wider than ~1190 (1211 sheet) won't
+  nest. Set `cabinet_instances.split = { at: [], back_x: [<cut x>] }` (cabinet
+  frame x from the left; back runs from its X for DY), cut at the middle unless
+  told otherwise (Mark chose 2 pieces over cuts behind the dividers). Pieces
+  come out `(split left / right)` with the comment `SPLIT - LEFT · JOIN
+  TOGETHER`; no holes within 20 of the cut (z_cabinet_split S6).
 - **Shadowline set back flush with the carcass breaks on the carcass line**
   (Mark, RHK6478 WIP 2026-11-03, standard): where a `BHSL` shadowline piece
   changes depth over a tall end panel, the deep piece stops flush with the

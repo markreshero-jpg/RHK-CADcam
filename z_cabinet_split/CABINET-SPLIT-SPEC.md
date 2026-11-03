@@ -7,7 +7,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → Split complete 2026-10-25 (S1–S4 + S4a), all checked in-app by Mark.
+> **RESUME HERE** → Height split complete 2026-10-25 (S1–S4 + S4a), all checked in-app by Mark.
+> S6 back width cut built 2026-11-03 (data + resolver + drilling + optimiser + views), no UI yet, check pending.
 > Every view shows the pieces: canvas + modal elevation / side (SPLIT line), 3D (room + modal: each side /
 > back drawn as its pieces, own holes), Parts tab, cabinet sheet, cut list / optimiser / CNC.
 
@@ -76,3 +77,23 @@
   now `(split bottom)` / `(split mid)` / `(split top)` (was (lower) / (upper)) in the cut list, cabinet sheet and
   Parts tab, and the optimiser part comment (labels) leads with `SPLIT - BOTTOM` / `- MID` / `- TOP`, ahead of
   any user comment. `cutBaseKeys` returns base → piece count; `splitPiecePosition` / `splitPieceNote`.
+- [~] **S6** (2026-11-03, Mark RHK6542 Study WC-04: "run it as 2 pieces with part comments on each piece
+  'join together'") **Back width cut.** A back wider than a grained sheet is across the grain (1934 back vs
+  1211 walnut sheet) can't have its grain up the panel in one piece, so it is cut across its width.
+  - Data: `split.back_x` (cabinet-frame x from the cabinet's left, at most 2), beside `split.at`;
+    `{ at: [], back_x: [983.5] }` is valid. Resolved as `split_back_x`.
+  - Only the plain `back` is cut. Pieces sit side by side, left → right: `back` (left), `split:back:1`, …
+    (same key scheme as the height split, so no DB change). A width-cut back is not also cut in height.
+  - Cut edges untaped (the back's left / right flags). Holes go to the piece under them by x
+    (`splitPieceFor(…, x)`); **nothing is drilled within 20 of a cut** (`BACK_CUT_CLEAR`) — WC-04's middle
+    bay shelf screw landed right on the join.
+  - Names `(split left)` / `(split right)` (`(split mid)` between); the optimiser comment is
+    `SPLIT - LEFT · JOIN TOGETHER` automatically.
+  - Grain: the optimiser now nests every back (and its pieces, shaped `back:<edge>` too) with the grain up
+    the panel (`grain_across` on the part, as the 3D draws it). Before, a back nested with the grain along its
+    width. A grained back wider than the sheet across the grain now needs this cut (or comes out unplaced).
+  - Views: 3D draws the pieces with their own holes; Parts tab, cabinet sheet, cut list list the pieces.
+  - The height-split sidebar / elevation drag keep `back_x` as is. No UI to set `back_x` yet (set in the DB).
+  - Tests: `cabinetSplit.test.ts` "back width cut". Still to do: right-click / sidebar control, check in app.
+  - Also on RHK6563 Study WC-05 (Tas Oak 18 back 304 x 1493, Mark 2026-11-03): `back_x [779.5]`, 2 x 746.5,
+    nests clean grain-up.

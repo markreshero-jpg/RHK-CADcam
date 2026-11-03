@@ -53,6 +53,31 @@ describe('dividers (z_dividers V1)', () => {
   })
 })
 
+describe('divider board (z_dividers V6, Materials role "divider")', () => {
+  const b33: Material = { id: 'm33', name: 'Board 33', DZ: 33, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
+  const b16: Material = { id: 'm16', name: 'Board 16.5', DZ: 16.5, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
+
+  it('absent = the carcass board', () => {
+    const [d] = dividers(cab(twoBays(), { material: b33 }))
+    expect(d.DZ).toBe(33)
+    expect(d.material_id).toBe('m33')
+  })
+
+  it('set = its own board and thickness; bays take the thinner panel', () => {
+    const c = cab(twoBays(), { material: b33, divider_material: b16 })
+    const [d] = dividers(c)
+    expect(d.DZ).toBe(16.5)
+    expect(d.material_id).toBe('m16')
+    // Interior 900 - 2 x 33 = 834; two equal bays either side of a 16.5 divider.
+    expect(d.X).toBeCloseTo(33 + (834 - 16.5) / 2)
+  })
+
+  it('a double divider is two of the divider board', () => {
+    const [a, b] = dividers(cab(twoBays({ divider: 'double' }), { material: b33, divider_material: b16 }))
+    expect(b.X).toBeCloseTo(a.X + 16.5)
+  })
+})
+
 describe('drawer runners fix to their own column (z_dividers V2)', () => {
   const sideBySide = {
     rows: [{ row_index: 0, height_locked: false }],

@@ -160,3 +160,63 @@ describe('split cabinet through persist + drilling', () => {
     expect(sideRows.length).toBe(whole.length)
   })
 })
+
+describe('back width cut (split.back_x, RHK6542 WC-04)', () => {
+  const rp = resolveCabinet({ ...tall(), split: { at: [], back_x: [400] } })
+  const back = rp.case_parts.find(p => p.part_key === 'back')!
+
+  it('normaliseSplit keeps back_x on its own', () => {
+    expect(normaliseSplit({ at: [], back_x: [400] })).toEqual({ at: [], back_x: [400] })
+    expect(normaliseSplit({ at: [800] })).toEqual({ at: [800] })
+  })
+
+  it('cuts only the back, side by side, untaped at the cut', () => {
+    expect(rp.split_back_x).toEqual([400])
+    const ps = splitCaseParts(rp.case_parts, rp.split_at, rp.split_back_x)
+    const [l, r] = [ps.find(p => p.part_key === 'back')!, ps.find(p => p.part_key === 'split:back:1')!]
+    expect(l.X).toBe(back.X); expect(l.DY).toBeCloseTo(400 - back.X, 6)
+    expect(r.X).toBe(400); expect(l.DY + r.DY).toBeCloseTo(back.DY, 6)
+    expect(l.DX).toBe(back.DX); expect(r.DX).toBe(back.DX)
+    expect(l.edge_band.right).toBe(false); expect(r.edge_band.left).toBe(false)
+    expect(ps.some(p => p.part_key === 'split:left_side:1')).toBe(false)
+    expect(splitPieceFor(ps, 'back', 1000, 600)!.part_key).toBe('split:back:1')
+    expect(splitPieceFor(ps, 'back', 1000, 100)!.part_key).toBe('back')
+  })
+
+  it('names the pieces left / right with a join note', () => {
+    const cut = cutBaseKeys(['back', 'split:back:1'])
+    expect(splitPieceSuffix('back', cut, [400])).toBe(' (split left)')
+    expect(splitPieceSuffix('split:back:1', cut, [400])).toBe(' (split right)')
+    expect(splitPieceNote('split:back:1', cut, [400])).toBe('SPLIT - RIGHT · JOIN TOGETHER')
+  })
+
+  it('the persist payload carries both pieces', () => {
+    const keys = buildPersistPayload(rp).case_parts.map(p => p.part_key)
+    expect(keys).toEqual(expect.arrayContaining(['back', 'split:back:1', 'left_side']))
+  })
+})
+
+describe('back width cut drilling', () => {
+  it('back holes go to the piece under them, none within BACK_CUT_CLEAR of the cut', async () => {
+    const { BACK_CUT_CLEAR } = await import('../optimiser/seamDrillSync')
+    const base = tall()
+    const c = { ...base, joint_defaults: { ...base.joint_defaults, 'fixed_shelf:back': 'screw' } }
+    const whole = collectDrillRows(resolveCabinet(c), 'c1').rows.filter(r => r.source_part_key === 'case_back')
+    expect(whole.length).toBeGreaterThan(0)
+    const back = resolveCabinet(c).case_parts.find(p => p.part_key === 'back')!
+    const cut = back.X + back.DY / 2
+    const rows = collectDrillRows(resolveCabinet({ ...c, split: { at: [], back_x: [cut] } }), 'c1').rows
+      .filter(r => /^case_(split:)?back/.test(r.source_part_key))
+    expect(rows.some(r => r.source_part_key === 'case_back')).toBe(true)
+    expect(rows.some(r => r.source_part_key === 'case_split:back:1')).toBe(true)
+    // Back frame: pos_y runs along the width (the cut is the left piece's pos_y = DY / 2, the right's 0).
+    const half = back.DY / 2
+    for (const r of rows) {
+      const fromCut = r.source_part_key === 'case_back' ? half - r.pos_y : r.pos_y
+      expect(fromCut).toBeGreaterThanOrEqual(BACK_CUT_CLEAR - 0.01)
+      expect(r.pos_y).toBeLessThanOrEqual(half + 0.5)
+    }
+    // Same holes as uncut, less any at the cut.
+    expect(rows.length).toBeLessThanOrEqual(whole.length)
+  })
+})

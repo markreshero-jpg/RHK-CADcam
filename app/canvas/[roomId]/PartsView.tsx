@@ -594,12 +594,12 @@ export default function PartsView({
     const result: FlatRow[] = []
 
     // Height split (z_cabinet_split): cut sides / back listed as their (split bottom / mid / top) pieces.
-    const pieces = splitCaseParts(rp.case_parts, rp.split_at)
+    const pieces = splitCaseParts(rp.case_parts, rp.split_at, rp.split_back_x)
     const cutBases = cutBaseKeys(pieces.map(q => q.part_key))
     for (const p of pieces) {
       const id = `case_${p.part_key}`
       const base = splitBaseKey(p.part_key)
-      const piece = splitPieceSuffix(p.part_key, cutBases)
+      const piece = splitPieceSuffix(p.part_key, cutBases, rp.split_back_x)
       result.push({
         id, typeKey: 'carcass', typeLabel: 'Carcass',
         name: partLabels?.[id] ?? `${PART_LABEL[base] ?? shapedPartLabel(base) ?? base}${piece}${caseBevelNote(p) ? ` (${caseBevelNote(p)})` : ''}`,

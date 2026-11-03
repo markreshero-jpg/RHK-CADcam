@@ -29,10 +29,11 @@ export default function CabinetSplitSection({ cabinet, wall, room, onUpdate, inp
     const input = getCachedInput(cabinet.id)
     return input ? splitSuggestions(resolveCabinet(input).internal_parts) : []
   }, [cabinet.id, cabinet.dy, cabinet.internal_grid])
-  if (!split) return null
+  // Height cuts only — a back width cut (split.back_x) has no sidebar yet and is kept as is.
+  if (!split?.at.length) return null
   const at = split.at
   const put = (next: number[] | null) =>
-    void onUpdate(cabinet.id, { split: next && next.length ? normaliseSplit({ at: next }) : null })
+    void onUpdate(cabinet.id, { split: normaliseSplit({ ...split, at: next ?? [] }) })
   // Off the floor: the cabinet's bottom height (no room in the edit modal → its pos_z).
   const floor = room ? cabBottomZ(cabinet, room, wall) : Number(cabinet.pos_z ?? 0)
   const used = (v: number) => at.some(a => Math.abs(a - v) < 0.5)

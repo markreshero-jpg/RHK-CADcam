@@ -162,3 +162,25 @@ finger-pull gable notches).
   resolved parts are full length.
 - Build a grid as an hsplit of rows, each row a vsplit of columns (or the other
   way round): both work, the merge makes the long parts.
+
+## 8. Divider board — V6
+
+**Status:** built 2026-11-03 (Mark, RHK6542 study: "16mm dividers in the 33 open
+shelves — can you change it in the room material schedule?"), in-app check pending.
+
+**V-D8. Own material role.** Dividers take the `divider` material role when it
+is set — Job / Room Materials tab (Divider row, per class) or cabinet
+`material_overrides.divider`. Blank = the carcass board, i.e. Interior, or
+Exposed on an open interior (unchanged behaviour). Tape: the role's tape, else
+the carcass tape.
+
+### As built (2026-11-03)
+- `CabinetInput.divider_material` / `divider_edgeband_id` (loadCabinetInput,
+  `matMap.get('divider')`).
+- `resolveInternal`: `TD` = divider board thickness replaces `T` everywhere a
+  vertical split's separator is sized — `gapThickness`, `computeGroupSizes`, the
+  double-panel loop, `emitDivider`, `halfCheck` (merge gap 2 × TD). Fittings keep
+  the carcass `T`.
+- Internal editor sizes vertical splits from a resolved divider's thickness
+  (`divT`), else the gable's.
+- Materials tab: `ASM_ROLES` Divider row. Tutorial `divider_material`.

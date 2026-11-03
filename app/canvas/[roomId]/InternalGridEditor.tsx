@@ -1183,6 +1183,9 @@ export default function InternalGridEditor({
     ?? MAT_T
   const shelfT = rp?.internal_parts?.find(p => p.part_type === 'fixed_shelf' || p.part_type === 'adj_shelf')?.DZ
     ?? matT
+  // Dividers can be their own board (Materials 'divider' role) — size the
+  // vertical splits from a resolved divider when there is one.
+  const divT = rp?.internal_parts?.find(p => p.part_type === 'divider')?.DZ ?? matT
   const T = matT
   const PL = 12, PT = 28, PR = 50, PB = 12
   const vw = cabDX + PL + PR
@@ -1207,7 +1210,7 @@ export default function InternalGridEditor({
   if (dragLive) layoutTree = setChildSize(layoutTree, dragLive.path, dragLive.index, dragLive.size)
   if (fittingDragLive) layoutTree = patchFitting(layoutTree, fittingDragLive.path, fittingDragLive.fittingIndex,
     { y_locked: true, y_position: fittingDragLive.y } as Partial<InternalFitting>)
-  const { seps, leaves } = computeLayout(layoutTree, interior, rp?.internal_parts, stackGap, slideProds, shelfT, matT, new Set(rp?.auto_double_dividers ?? []))
+  const { seps, leaves } = computeLayout(layoutTree, interior, rp?.internal_parts, stackGap, slideProds, shelfT, divT, new Set(rp?.auto_double_dividers ?? []))
 
   dragDataRef.current = { svg: svgRef.current, ox, oy, cabDY, save, tree }
 

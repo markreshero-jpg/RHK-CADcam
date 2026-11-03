@@ -124,6 +124,9 @@ function innerBoxPartFor(
 // Collect every resolver-computed hole, projected onto its target part's flat
 // footprint and keyed so the optimiser's buildSheetDrills can find it.
 // Exported for tests.
+/** Holes closer than this to a back width cut (z_cabinet_split back_x) are left out. */
+export const BACK_CUT_CLEAR = 20
+
 export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedDrill[]; skipped: number } {
   rp = filterRemovedParts(rp)   // removed parts cause no drilling (PART-HIDE-SPEC R-D3)
   const rows: GeneratedDrill[] = []
@@ -132,7 +135,7 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
 
   const caseByKey = new Map(rp.case_parts.map(p => [p.part_key, p]))
   // Cut sides / back (z_cabinet_split) — holes are worked on the whole part, then moved to their piece.
-  const cutPieces = rp.split_at?.length ? splitCaseParts(rp.case_parts, rp.split_at) : null
+  const cutPieces = rp.split_at?.length || rp.split_back_x?.length ? splitCaseParts(rp.case_parts, rp.split_at, rp.split_back_x) : null
   const zoneByKey = new Map(rp.face_zones.map(z => [zoneKey(z), z]))
   const intByKey = new Map(rp.internal_parts.map(p => [`${p.part_type}_${p.sort_order}`, p]))
 
@@ -151,7 +154,9 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
     if (sourceTable === 'case_parts' && cutPieces) {
       const base = sourcePartKey.slice(5)
       if (isSplitKey(base)) {
-        const piece = splitPieceFor(cutPieces, base, drill.y)
+        // Nothing drilled on / next to a back width cut — the pieces are butted there.
+        if (base === 'back' && rp.split_back_x?.some(cx => Math.abs(drill.x - cx) < BACK_CUT_CLEAR)) { skipped++; return }
+        const piece = splitPieceFor(cutPieces, base, drill.y, drill.x)
         // The frame reads the panel kind off the key — build it as the part it came from.
         if (piece) { sourcePartKey = `case_${piece.part_key}`; frame = caseFrame({ ...piece, part_key: base as typeof piece.part_key }) }
       }

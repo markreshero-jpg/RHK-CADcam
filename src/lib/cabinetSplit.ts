@@ -17,7 +17,11 @@
 
 import type { ResolvedCasePart, ResolvedInternalPart } from './resolver/types'
 
-export interface CabinetSplit { at: number[] }
+// at: height cuts (sides + back). back_x: width cuts through the back only
+// (cabinet frame x from the cabinet's left) — a back too wide for one grained
+// sheet with the grain up it is made in pieces and joined (Mark, RHK6542 WC-04,
+// 2026-11-03). A width-cut back is not also cut in height.
+export interface CabinetSplit { at: number[]; back_x?: number[] }
 
 /** Default cut: this far below the top of a fixed shelf (Mark, 2026-10-24). */
 export const SPLIT_LIP = 3
@@ -28,11 +32,25 @@ export const SPLIT_KEYS = ['left_side', 'right_side', 'back'] as const
 const isShapedUpright = (k: string) => /^(side|back):[A-Za-z0-9_-]+$/.test(k)
 
 // Tolerates partial / legacy stored values; at most MAX_CUTS, ascending, positive.
+const cleanCuts = (v: unknown): number[] => Array.isArray(v)
+  ? [...new Set(v.map(Number).filter(n => Number.isFinite(n) && n > 0))].sort((a, b) => a - b).slice(0, MAX_CUTS)
+  : []
 export function normaliseSplit(s: Partial<CabinetSplit> | null | undefined): CabinetSplit | null {
-  if (!s || !Array.isArray(s.at)) return null
-  const at = [...new Set(s.at.map(Number).filter(v => Number.isFinite(v) && v > 0))].sort((a, b) => a - b).slice(0, MAX_CUTS)
-  return at.length ? { at } : null
+  if (!s) return null
+  const at = cleanCuts(s.at), back_x = cleanCuts(s.back_x)
+  if (!at.length && !back_x.length) return null
+  return back_x.length ? { at, back_x } : { at }
 }
+
+/** Width cuts that fall inside the plain back (it runs along DY from X). */
+function backXCutsIn(p: ResolvedCasePart, backX: number[] | null | undefined): number[] {
+  if (p.part_key !== 'back' || !backX?.length) return []
+  return backX.filter(x => x > p.X + 1 && x < p.X + p.DY - 1)
+}
+
+/** True when this piece key belongs to a back that was cut across its width. */
+export const isWidthCut = (key: string, backX: number[] | null | undefined): boolean =>
+  splitBaseKey(key) === 'back' && !!backX?.length
 
 /** Where a cut-able part really sits, bottom → top, in the cabinet frame. The
  *  sides run their height along DY from Y. The back runs along DX and sits on
@@ -71,11 +89,25 @@ function cutsIn(p: ResolvedCasePart, at: number[]): number[] {
  * flags are the ends of DY; the back's run along DX, which is never taped at a
  * cut either). Parts with no cut through them are returned unchanged.
  */
-export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | undefined): ResolvedCasePart[] {
-  if (!at?.length) return parts
+export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | undefined, backX?: number[] | null): ResolvedCasePart[] {
+  if (!at?.length && !backX?.length) return parts
   const out: ResolvedCasePart[] = []
   for (const p of parts) {
-    const cuts = isSplitKey(p.part_key) ? cutsIn(p, at) : []
+    // Width cut through the back: pieces side by side, left → right. The cut
+    // edges are the DY ends (left / right flags) and carry no tape.
+    const xc = backXCutsIn(p, backX)
+    if (xc.length) {
+      const bounds = [p.X, ...xc, p.X + p.DY]
+      for (let i = 0; i < bounds.length - 1; i++) {
+        const first = i === 0, last = i === bounds.length - 2
+        out.push({ ...p, part_key: splitPieceKey(p.part_key, i) as ResolvedCasePart['part_key'],
+          X: bounds[i], DY: bounds[i + 1] - bounds[i],
+          edge_band: { ...p.edge_band, ...(last ? {} : { right: false }), ...(first ? {} : { left: false }) },
+          outline: undefined })
+      }
+      continue
+    }
+    const cuts = isSplitKey(p.part_key) && at?.length ? cutsIn(p, at) : []
     if (!cuts.length) { out.push(p); continue }
     const [y0, y1] = splitPieceRange(p)
     const bounds = [y0, ...cuts, y1]
@@ -98,8 +130,14 @@ export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | 
 
 /** Which piece of a cut part a cabinet-space point at height `y` lands in
  *  (pieces stack bottom-up; a point past either end takes the end piece). */
-export function splitPieceFor(pieces: ResolvedCasePart[], baseKey: string, y: number): ResolvedCasePart | undefined {
-  const own = pieces.filter(p => splitBaseKey(p.part_key) === baseKey).sort((a, b) => a.Y - b.Y)
+export function splitPieceFor(pieces: ResolvedCasePart[], baseKey: string, y: number, x?: number): ResolvedCasePart | undefined {
+  const all = pieces.filter(p => splitBaseKey(p.part_key) === baseKey)
+  // A width-cut back's pieces sit side by side: pick by x.
+  if (x != null && all.length > 1 && all.some(p => Math.abs(p.X - all[0].X) > 0.01)) {
+    const byX = [...all].sort((a, b) => a.X - b.X)
+    return byX.find(p => x < p.X + p.DY) ?? byX[byX.length - 1]
+  }
+  const own = all.sort((a, b) => a.Y - b.Y)
   return own.find(p => y < splitPieceRange(p)[1]) ?? own[own.length - 1]
 }
 
@@ -127,24 +165,27 @@ export function cutBaseKeys(keys: string[]): Map<string, number> {
 /** Where a piece sits in its cut part: 'bottom' (the part's own key), 'top'
  *  (the highest piece), 'mid' (between, on a two-cut part); null when the part
  *  wasn't cut. `cut` is cutBaseKeys over the cabinet's piece keys. */
-export function splitPiecePosition(key: string, cut: Map<string, number>): 'bottom' | 'mid' | 'top' | null {
+export function splitPiecePosition(key: string, cut: Map<string, number>, backX?: number[] | null): 'bottom' | 'mid' | 'top' | 'left' | 'right' | null {
   const base = splitBaseKey(key)
   const count = cut.get(base)
   if (!count) return null
-  if (base === key) return 'bottom'
-  return Number(key.slice(-1)) === count - 1 ? 'top' : 'mid'
+  const across = isWidthCut(key, backX)
+  if (base === key) return across ? 'left' : 'bottom'
+  return Number(key.slice(-1)) === count - 1 ? (across ? 'right' : 'top') : 'mid'
 }
 
 /** Name suffix for a piece: " (split bottom)" / " (split mid)" / " (split top)"
  *  on the pieces of a cut part (Mark, 2026-10-31), "" for a part that wasn't cut. */
-export function splitPieceSuffix(key: string, cut: Map<string, number>): string {
-  const pos = splitPiecePosition(key, cut)
+export function splitPieceSuffix(key: string, cut: Map<string, number>, backX?: number[] | null): string {
+  const pos = splitPiecePosition(key, cut, backX)
   return pos ? ` (split ${pos})` : ''
 }
 
 /** The part comment on a cut piece — "SPLIT - BOTTOM" / "- MID" / "- TOP" — so
  *  the label and cut list say which piece it is; null for a part that wasn't cut. */
-export function splitPieceNote(key: string, cut: Map<string, number>): string | null {
-  const pos = splitPiecePosition(key, cut)
-  return pos ? `SPLIT - ${pos.toUpperCase()}` : null
+export function splitPieceNote(key: string, cut: Map<string, number>, backX?: number[] | null): string | null {
+  const pos = splitPiecePosition(key, cut, backX)
+  if (!pos) return null
+  // Width-cut back pieces are joined edge to edge on the job.
+  return isWidthCut(key, backX) ? `SPLIT - ${pos.toUpperCase()} · JOIN TOGETHER` : `SPLIT - ${pos.toUpperCase()}`
 }

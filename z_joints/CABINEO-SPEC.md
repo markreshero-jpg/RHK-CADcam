@@ -105,3 +105,16 @@ The same fitting link places adjustable-shelf supports.
 | C3 | Nest check: the first circle runs 3.9 past the part edge, 11 deep — must land in the part gap (no bounds check in the optimiser). Check the router pick (≥ Ø10) + the warnings | pending |
 | C4 | Hardware: Cabineo 12 in Accessories (connector), joint op fitting link, 3D (stand-in until the real model) | built 2026-10-30 + counted on Hardware Pick List / Takeoff; check pending; real model open |
 | C5 | Optional: back:bottom seam support, construction-method default | when needed |
+
+## 5mm Dynamic Holes centre on part A's edge (2026-11-03, locked)
+
+`offset_y_mm` was `T / 2` — but `T` is the TARGET part's thickness (part_b, the
+panel drilled through), not the edge going into it. Same thickness everywhere
+(16.5 into 16.5) it lands right; a 16.5 back on a **33** bottom put the screws at
+16.5 = right on the bottom's back edge, and 33 shelves into a 16.5 back got holes
+in the shelf's lower quarter (RHK6542 Study WC-04, Mark). Now **`CW / 2`**: the
+centre of part A's edge (CW = part A's thickness for an edge on a face).
+`migration_dynamic_holes_cw.sql` (data, applied). Unchanged anywhere the two
+thicknesses match.
+Open: **5mm Hole For Rails** has the same `T / 2` — wrong when a rail meets a 33
+gable; not changed yet (rail CW not checked).
