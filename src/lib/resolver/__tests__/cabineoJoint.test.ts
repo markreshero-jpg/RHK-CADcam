@@ -79,4 +79,30 @@ describe('Cabineo joint', () => {
     const d = seamDrillOps('bottom:left_side', bottom, gableL, [op({ target_part: 'part_b' })])
     expect(d.every(h => h.depthLen === 16)).toBe(true)
   })
+
+  // C5 (Mark, RHK6542 WC-04 2026-11-03): Cabineo on the back's bottom edge.
+  it('back:bottom (back on the bottom): pocket on the back front face up from its bottom edge, screw 5 back into the bottom', () => {
+    const ops = cabineo('inside'); ops[0] = { ...ops[0], fitting: { id: 'f', name: 'Cabineo 12', colour: null, model: null } as JointTypeOp['fitting'] }
+    const d = seamDrillOps('back:bottom', back, bottom, ops, { bottomBackJoin: 'back_on_bottom' })
+    const pocket = d.filter(h => h.targetPartKey === 'back')
+    expect(pocket).toHaveLength(9)
+    expect(new Set(pocket.map(h => r(h.y)))).toEqual(new Set([19.6, 30.8, 42]))
+    expect(new Set(pocket.map(h => r(h.x)))).toEqual(new Set([66, 300, 534]))
+    expect(pocket.every(h => h.z === 16 && h.axis === 'z-' && h.radius === 7.5 && h.depthLen === 11)).toBe(true)
+    expect(pocket.filter(h => h.fitting).map(h => r(h.y))).toEqual([30.8, 30.8, 30.8])
+    const screw = d.filter(h => h.targetPartKey === 'bottom')
+    expect(screw).toHaveLength(3)
+    expect(screw.every(h => h.y === 16 && h.z === 11 && h.axis === 'y-' && h.depthLen === 12)).toBe(true)
+  })
+
+  it('back:bottom outside: pocket on the back rear face, screw 5 in from it', () => {
+    const d = seamDrillOps('back:bottom', back, bottom, cabineo('outside'), { bottomBackJoin: 'back_on_bottom' })
+    expect(d.filter(h => h.targetPartKey === 'back').every(h => h.z === 0 && h.axis === 'z+')).toBe(true)
+    expect(d.filter(h => h.targetPartKey === 'bottom').every(h => h.z === 5)).toBe(true)
+  })
+
+  it('back:bottom with the bottom butting into the back: no back pocket', () => {
+    const d = seamDrillOps('back:bottom', back, bottom, cabineo('inside'), { bottomBackJoin: 'butts_into_back' })
+    expect(d.some(h => h.targetPartKey === 'back' && h.radius === 7.5)).toBe(false)
+  })
 })

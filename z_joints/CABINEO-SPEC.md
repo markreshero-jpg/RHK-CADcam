@@ -36,8 +36,11 @@ it butts into (gable).
   toward / away from B's middle — a bottom's top, a top's underside, a back's
   front. Resolved per seam in `seamDrillOps` (gable seams, horizontal or upright
   part A). `offset_x` = distance in from the seam edge; the 2nd axis fans along it.
-  Other seam shapes (back:bottom, back rail, divider ends, declared, bank) skip
-  these faces.
+  Other seam shapes (back rail, divider ends, declared, bank) skip these faces.
+  **back:bottom** (C5, 2026-11-03): pockets on the back's front (inside) / rear
+  (outside) face, offset_x up from its bottom edge, screw into the bottom 5 off
+  that face — only with BOTTOM_BACK_JOIN `back_on_bottom` (butting into the back,
+  the bottom is the edge part: skipped).
 - **Expression var `IN`** = 1 when A's inside face is the face offset_y is measured
   from (top / front), else 0. The B screw hole uses `IN ? 5 : CW - 5` (inside)
   and `IN ? CW - 5 : 5` (outside).
@@ -104,7 +107,7 @@ The same fitting link places adjustable-shelf supports.
 | C2 | In-app check: swap a bottom / back joint, look at 3D + Edge joints, run the optimiser on it | pending (Mark OK'd the plan 2026-10-30) |
 | C3 | Nest check: the first circle runs 3.9 past the part edge, 11 deep — must land in the part gap (no bounds check in the optimiser). Check the router pick (≥ Ø10) + the warnings | pending |
 | C4 | Hardware: Cabineo 12 in Accessories (connector), joint op fitting link, 3D (stand-in until the real model) | built 2026-10-30 + counted on Hardware Pick List / Takeoff; check pending; real model open |
-| C5 | Optional: back:bottom seam support, construction-method default | when needed |
+| C5 | back:bottom seam support (RHK6542 WC-04, Mark) | built 2026-11-03, check pending; construction-method default still open |
 
 ## 5mm Dynamic Holes centre on part A's edge (2026-11-03, locked)
 

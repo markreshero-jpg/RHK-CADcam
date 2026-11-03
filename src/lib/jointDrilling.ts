@@ -390,15 +390,37 @@ function backBottomDrillOps(
   const bottomTopY  = boxBottom.y + boxBottom.h
 
   for (const op of ops) {
-    if (op.machine_operation !== 'drill' || isInOutFace(op.face)) continue
+    if (op.machine_operation !== 'drill') continue
+    // Inside / outside pockets (Cabineo, CABINEO-SPEC C5) on the back's front /
+    // rear face, offset_x up from its bottom edge — only when the back stands on
+    // the bottom (its edge is the one joined). Butting into the back, the bottom
+    // is the edge part, so there's no back pocket to place.
+    const inOut = isInOutFace(op.face)
+    if (inOut && (!vertical || op.target_part !== 'part_a')) continue
     const isBack = op.target_part === 'part_a'
-    const ev = evalOp(op, evBack, evBottom, thickBack, thickBottom)
+    // offset_y runs from the back's front face (its inside face) → IN = 1.
+    const ev = evalOp(op, evBack, evBottom, thickBack, thickBottom, thickBack, true)
     if (!ev) continue
     const spc = ev.spacing_mm ?? 0
+    const steps  = uSteps(ev.qty2, ev.spacing2_mm)
+    const midSet = (steps.length - 1) >> 1
 
     for (let i = 0; i < ev.qty; i++) {
-      for (const du of uSteps(ev.qty2, ev.spacing2_mm)) {
+      for (const [j, du] of steps.entries()) {
         const x = boxBack.x + ev.offset_z_mm + i * spc
+        if (inOut) {
+          const inside = op.face === 'inside'
+          result.push({
+            x, y: backBottomY + ev.offset_x_mm + du, z: inside ? backFrontZ : boxBack.z,
+            axis: inside ? 'z-' : 'z+',
+            radius: ev.tool_diameter_mm / 2,
+            depthLen: ev.depth_mm,
+            targetPartKey: 'back',
+            router_tool_id: op.router_tool_id, drill_id: op.drill_id, auto_tool: op.auto_tool,
+            ...(op.fitting && j === midSet ? { fitting: { item: op.fitting, toward: 'y-' as const, kind: 'pocket' as const } } : {}),
+          })
+          continue
+        }
         const oy = ev.offset_y_mm + du
         let y = 0, z = 0
         let axis: DrillAxis
