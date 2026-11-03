@@ -32,7 +32,7 @@ import {
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
 import { findSlide } from './resolveDrawerStack'
-import { slideDrillOps, type DrillPart } from '../slideDrilling'
+import { slideDrillOps, dbBackJointDrills, type DrillPart } from '../slideDrilling'
 
 // Axis-aligned compartment region in cabinet coordinates (x = left, y = bottom).
 export interface Box { x: number; y: number; w: number; h: number }
@@ -364,6 +364,7 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
       const frontDatumY = it.drawerType === 'system' ? boxY - ctx.T : undefined
       left.drills  = slideDrillOps(left,  slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.left,  face: faceDatum, memberFaceX: box.x, frontDatumY })
       right.drills = slideDrillOps(right, slideOps, { backPart: drillParts.back, bottomPart: drillParts.bottom, sidePart: drillParts.right, face: faceDatum, memberFaceX: box.x + box.w, frontDatumY })
+      left.drills.push(...dbBackJointDrills(drillParts.back, drillParts.bottom, rulesForResolve.DB_BACK_JOINT_OPS))
       ctx.internalSlides.push(left, right)
     }
 

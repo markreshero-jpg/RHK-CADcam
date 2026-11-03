@@ -1533,6 +1533,20 @@ export const LESSONS: TutorialLesson[] = [
       body: 'To change it, set the kick face for the whole job (Job → Cabinet Standards → materials), one room (Room → materials) or one cabinet (its kick face override). A colour picked at any of those levels wins over the cabinet colour. If the drawings name a kick colour, set it before the room is drawn.',
       canvas: true, done: c => c.cabinets.length > 0 },
   ]},
+  // Appended 2026-11-03 (drawer back → bottom screw holes, z_drawer_back_screws).
+  { id: 'drawer_back_screws', level: 'advanced', topic: 'production', title: 'Drawer back screw holes',
+    blurb: 'Screw holes through a drawer back into the edge of the bottom, set on the drawer box method.',
+    keywords: 'drawer box back bottom screw fixing holes joint dragon pro method drill', steps: [
+    { id: 'set', title: 'Pick the joint on the method',
+      body: 'Library → Drawer Boxes, open a method (e.g. DTC Dragon Pro) and under Back → Bottom Holes pick a Back Fixing Joint. Drawer Back Screw is set on both Dragon Pro methods: 5 mm holes through the back, level with the middle of the bottom’s edge.',
+      done: () => true },
+    { id: 'count', title: 'How many holes',
+      body: 'It goes by the width of the back: up to 400 no hole, over 400 to 700 one hole in the middle, over 700 to 1000 two, over 1000 three. They are spread evenly across the back, worked from the centre out. To change the rule, edit the joint’s qty in Library → Joints.',
+      done: () => true },
+    { id: 'see', title: 'Check them',
+      body: 'Re-save the room so its drawers pick up the joint, then open a drawer back in the Part Editor or run the optimiser. The holes drill from the back face of the drawer back.',
+      canvas: true, done: c => c.cabinets.length > 0 },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -444,6 +444,9 @@ export interface ResolvedSlideDrill {
   surface:  SlideDrillSurface
   side:     'left' | 'right'         // which rail produced it
   machine_operation: JointMachineOp  // drill | route | pocket (for labelling)
+  // 'db_back_joint' = a drawer back → bottom fixing hole (DB_BACK_JOINT_ID), carried
+  // on the left rail's drills so every view + the optimiser pick it up; not a runner hole.
+  source?:  'db_back_joint'
   dir?:     { x: number; y: number; z: number }   // exact bore direction once turned off-axis (cabinetSlideDrills)
 }
 
@@ -486,6 +489,11 @@ export interface DrawerBoxRules {
   IDB_FRONT_WIDTH_ADJUST:  number                         // added to inner-drawer face width  (mm); 0 = opening minus 2×clearance. Centred.
   IDB_DRAWER_Z_SETBACK:    number                         // mm the entire inner drawer (box + front) is recessed into the cabinet from the slide front
   DB_EDGING?:            DbEdgingDefaults               // per-part edge sides (absent = use DEFAULT_DB_EDGING)
+  // Back → bottom fixing holes (z_drawer_back_screws): a joints-library joint whose
+  // drill ops bore through the box back into the bottom's back edge. null/absent = none.
+  // The ops are attached at load time (loadCabinetInput), never saved on the method.
+  DB_BACK_JOINT_ID?:     string | null
+  DB_BACK_JOINT_OPS?:    JointTypeOp[]
 }
 
 export const DEFAULT_DB_RULES: DrawerBoxRules = {

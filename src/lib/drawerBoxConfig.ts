@@ -8,7 +8,7 @@ import {
 export type { DbEdgingKey, DbEdgingDefaults }
 export { DEFAULT_DB_EDGING }
 
-export type DbRuleKey = Exclude<keyof DrawerBoxRules, 'DB_EDGING'>
+export type DbRuleKey = Exclude<keyof DrawerBoxRules, 'DB_EDGING' | 'DB_BACK_JOINT_ID' | 'DB_BACK_JOINT_OPS'>
 
 export const DB_RULE_LABELS: Record<DbRuleKey, string> = {
   DB_SIDE_T:             'Side / Front / Back Thickness (mm)',
@@ -80,6 +80,7 @@ export function computeDbDelta(rules: DrawerBoxRules): Partial<DrawerBoxRules> {
   if (rules.DB_EDGING && Object.keys(rules.DB_EDGING).length > 0) {
     delta.DB_EDGING = rules.DB_EDGING
   }
+  if (rules.DB_BACK_JOINT_ID) delta.DB_BACK_JOINT_ID = rules.DB_BACK_JOINT_ID
   return delta
 }
 

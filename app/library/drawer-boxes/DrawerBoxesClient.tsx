@@ -92,6 +92,11 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
   const [editKind,    setEditKind]    = useState<Kind>('external')
   const [kindAvailable, setKindAvailable] = useState(true)   // false if the `kind` column doesn't exist yet
   const [delta,       setDelta]       = useState<Partial<DrawerBoxRules>>({})
+  const [joints,      setJoints]      = useState<{ id: string; name: string }[]>([])
+  useEffect(() => {
+    supabase.from('joint_types').select('id, name').order('name')
+      .then(({ data }) => setJoints((data ?? []) as { id: string; name: string }[]))
+  }, [])
   const [dirty,       setDirty]       = useState(false)
   const [saving,      setSaving]      = useState(false)
   const [newName,     setNewName]     = useState('')
@@ -500,6 +505,32 @@ export default function DrawerBoxesClient({ embedded }: { embedded?: boolean }) 
                       </div>
                     </div>
                   ))}
+
+                  {/* Back → bottom fixing holes (z_drawer_back_screws) */}
+                  <div>
+                    <p className="text-xs font-semibold text-ink-subtle uppercase tracking-wider mb-1">Back → Bottom Holes</p>
+                    <div className="flex items-center gap-3 py-1.5">
+                      <span className={`flex-1 text-xs ${delta.DB_BACK_JOINT_ID ? 'text-accent-ink' : 'text-ink-muted'}`}>Back Fixing Joint</span>
+                      <select
+                        value={delta.DB_BACK_JOINT_ID ?? ''}
+                        onChange={e => {
+                          const v = e.target.value
+                          setDelta(prev => {
+                            const next = { ...prev }
+                            if (v) next.DB_BACK_JOINT_ID = v
+                            else delete next.DB_BACK_JOINT_ID
+                            return next
+                          })
+                          setDirty(true)
+                        }}
+                        className="w-56 bg-surface-2 border border-edge-strong rounded px-2 py-1.5 text-xs text-ink focus:outline-none focus:border-accent"
+                      >
+                        <option value="">None</option>
+                        {joints.map(j => <option key={j.id} value={j.id}>{j.name}</option>)}
+                      </select>
+                    </div>
+                    <p className="text-[11px] text-ink-subtle">Screw holes through the back into the bottom&rsquo;s edge, centred on the back. The joint&rsquo;s qty can be 0 (no holes) and a blank spacing spreads them evenly.</p>
+                  </div>
 
                   {/* Edging */}
                   <div>

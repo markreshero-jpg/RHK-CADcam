@@ -30,7 +30,7 @@
 
 import type {
   ResolvedDrawerSlide, ResolvedDrawerStack, ResolvedSlideDrill,
-  SlideDrillOp, SlideDrillAxis,
+  SlideDrillOp, SlideDrillAxis, JointTypeOp,
 } from './resolver/types'
 import { turnDrill } from './resolver/hardwareTurn'
 
@@ -235,13 +235,61 @@ export function slideDrillOps(
   return out
 }
 
+// Drawer back → bottom fixing holes (z_drawer_back_screws). The box back stands
+// behind the bottom's back edge, so the screws go through the back (from its rear
+// face, boring front-ward) into the bottom's edge. Driven by a joints-library joint
+// (method rule DB_BACK_JOINT_ID); each drill op reads:
+//   qty          — holes across the back (expression; 0 = none, unlike other joints)
+//   spacing_mm   — gap between holes; blank = evenly spread, width / (qty + 1)
+//   offset_y_mm  — height up from the bottom panel's underside (T/2 = edge centre)
+//   depth_mm, tool_diameter_mm
+// Holes are centred on the back and laid out from the centre outward.
+// Expression vars: D = L = back width, T = bottom thickness, TB = back thickness,
+// H = back height.
+export function dbBackJointDrills(
+  back: DrillPart | undefined, bottom: DrillPart | undefined, ops: JointTypeOp[] | undefined,
+): ResolvedSlideDrill[] {
+  if (!back || !bottom || !ops?.length) return []
+  // A back that sits on top of the bottom (five-piece dado box) has no edge to screw into.
+  if (back.Y >= bottom.Y + bottom.DZ - 0.5) return []
+  const vars: Record<string, number> = { D: back.DY, L: back.DY, T: bottom.DZ, TB: back.DZ, H: back.DX }
+  const out: ResolvedSlideDrill[] = []
+  for (const op of ops) {
+    if (op.machine_operation !== 'drill') continue
+    const ex = op.expressions ?? {}
+    const ev = (f: string, fb: number | null): number | null => ex[f] != null ? evalExpr(ex[f], vars) : fb
+    const qty = Math.max(0, Math.round(ev('qty', op.qty ?? 1) ?? 0))
+    if (!qty) continue
+    const dia = ev('tool_diameter_mm', op.tool_diameter_mm), depth = ev('depth_mm', op.depth_mm)
+    const up = ev('offset_y_mm', op.offset_y_mm)
+    if (dia == null || depth == null || up == null) continue
+    const spc = ev('spacing_mm', op.spacing_mm) || back.DY / (qty + 1)
+    const cx = back.X + back.DY / 2
+    for (let i = 0; i < qty; i++) {
+      out.push({
+        x: cx + (i - (qty - 1) / 2) * spc,
+        y: bottom.Y + up,
+        z: back.Z - back.DZ,          // rear face of the back
+        axis: 'z+',
+        radius: dia / 2,
+        depthLen: depth,
+        surface: 'drawer_back',
+        side: 'left',
+        machine_operation: 'drill',
+        source: 'db_back_joint',
+      })
+    }
+  }
+  return out
+}
+
 // Drawer back top marker (Mark, 2026-10-31): the back's fixing holes are close
 // together, so a 2-deep prick 6 below the top one shows which edge is up.
 // Drilled by seamDrillSync; drawn with the runner holes by cabinetSlideDrills.
 export const BACK_MARKER_DEPTH = 2
 export const BACK_MARKER_DROP  = 6
 export function backTopMarker(drills: ResolvedSlideDrill[]): ResolvedSlideDrill | null {
-  const back = drills.filter(d => d.surface === 'drawer_back' && d.machine_operation === 'drill')
+  const back = drills.filter(d => d.surface === 'drawer_back' && d.machine_operation === 'drill' && !d.source)
   if (!back.length) return null
   const top = back.reduce((a, b) => b.y > a.y ? b : a)
   return { ...top, y: top.y - BACK_MARKER_DROP, depthLen: BACK_MARKER_DEPTH }

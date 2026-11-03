@@ -821,6 +821,24 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     }
   }
 
+  // ── 11b. Drawer back → bottom fixing joint (z_drawer_back_screws) ───────────
+  // Attach the joint's ops to every rules object that names one, so the resolver
+  // (face stacks + inner-drawer fittings) stays sync.
+  const backJointRules = [drawerBoxRules, innerDrawerBoxRules, ...Object.values(methodRulesById)]
+    .filter(r => r.DB_BACK_JOINT_ID)
+  const missingBackJoints = [...new Set(backJointRules.map(r => r.DB_BACK_JOINT_ID as string))]
+    .filter(id => !jointTypeOps[id]).sort()
+  if (missingBackJoints.length) {
+    const { data, error } = await cachedCascade(`dbbackjoints:${missingBackJoints.join(',')}`, async () => await supabase
+      .from('joint_type_operations').select(JOINT_OP_SELECT).in('joint_type_id', missingBackJoints).order('operation_order'))
+    if (error) console.error('[loadCabinetInput] drawer back joint query error:', error)
+    for (const op of ((data ?? []) as Record<string, unknown>[])) {
+      const jid = op.joint_type_id as string
+      ;(jointTypeOps[jid] ??= []).push(rowToJointTypeOp(op))
+    }
+  }
+  for (const r of backJointRules) r.DB_BACK_JOINT_OPS = jointTypeOps[r.DB_BACK_JOINT_ID as string] ?? []
+
   // ── 12. Resolve door styles per zone (cascade: zone → room → job) ───────────
   // Job-level door style + colour overrides use the same base/wall/tall
   // classGroup folding as the schedule queries above.

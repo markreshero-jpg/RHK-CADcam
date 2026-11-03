@@ -24,7 +24,7 @@ import {
 } from './types'
 import { resolveDrawerBox } from './resolveDrawerBox'
 import { caseBackT, caseFloor } from './resolveCase'
-import { slideDrillOps } from '../slideDrilling'
+import { slideDrillOps, dbBackJointDrills } from '../slideDrilling'
 import { gridForFacet, zoneTurn, type ZoneOpening } from './resolveShapedHardware'
 
 const EPS = 1e-6
@@ -559,6 +559,8 @@ export function resolveDrawerStacks(
         memberFaceX: sl.side === 'left' ? leftMemberX : rightMemberX,
       })
     }
+    // Back → bottom fixing holes (DB_BACK_JOINT_ID) ride on the left rail's drills.
+    slides[0].drills.push(...dbBackJointDrills(backPart, bottomPart, dbRules.DB_BACK_JOINT_OPS))
 
     stacks.push({
       ...(zone.facet ? { facet: zone.facet } : {}),
