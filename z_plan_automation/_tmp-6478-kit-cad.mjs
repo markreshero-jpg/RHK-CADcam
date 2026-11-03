@@ -36,8 +36,8 @@ const rows = [
   // Wall 6 (Elev 7, side unit under the stair, from the south)
   txt('Wall 6', 30, 525, -1150, 'OPEN SHELF, Timbergrain inside'),
   txt('Wall 6', 30, 1050, -1360, 'TOP 1300 AFF - raw stair stringer 1320 AFF. Fronts flush with the 750 wall'),
-  // Wall 7 (island seating side)
-  txt('Wall 7', 0, 2542, -500, '18 SUBSTRATE BACK PANEL - TILED BY OTHERS. ~300 top overhang, 4 stools along 2700'),
+  // Wall 5 back side (island seating side, mirrored: BC-14 offset 598 x 2542 on a 3200 line -> x 60)
+  { ...txt('Wall 5', 60, 2542, -500, '18 SUBSTRATE BACK PANEL - TILED BY OTHERS. 445 off the cabinet backs, ~300 top overhang, 4 stools along 2700'), wall_side: 'back' },
 ]
 for (const r of rows) if (r.view === 'elevation' && r.kind === 'text' && !r.text.startsWith('LED')) r.cad_layer_id = SITE_LAYER
 chk('del', await sb.from('room_annotations').delete().eq('room_id', R))

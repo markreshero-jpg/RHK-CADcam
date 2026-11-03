@@ -291,8 +291,13 @@ line and mirrors the island elevation.
   2026-11-03): the backing rail behind a top-edge finger gap runs from
   **20 below the front's top** up to the carcass top, flush with the gables'
   front edge (rail thickness deep). The drawer box runs right up to that front
-  edge, so its top must stay under the rail: **box_Y + box_height ≤ front top
-  − 20**. BC-01: 150 front, top 700, rail bottom 680, the old auto pick took a
+  edge, so its top must stay under the rail with **5 clear: box_Y +
+  box_height ≤ front top − 25** (`FPRAIL_BOX_CLEAR`). This applies to EVERY
+  drawer with a rail above it, not just the top one: the mid rails between
+  S/M/L fronts count too (Mark, RHK6478 Kitchen BC-01..03 2026-11-04: 220
+  middle fronts took 178 boxes 0.5 under the mid rail, touching it; now 127).
+  After drawing a finger-pull drawer bank, read each drawer's box top against
+  the `fprail:*` part Y above it. BC-01: 150 front, top 700, rail bottom 680, the old auto pick took a
   127 box at 571.5 → top 698.5 = 18.5 into the rail. Since z_handles D25
   (2026-11-03) the auto pick stays under the rail (BC-01 → 95 box) and a
   forced box that reaches it warns `DRAWER_FPRAIL_CLASH`. So: never force a

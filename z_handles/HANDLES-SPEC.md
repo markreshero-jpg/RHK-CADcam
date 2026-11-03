@@ -519,6 +519,9 @@ top-edge grip's front top). BC-01's 150 top front under a 60 gap auto-picked a
   did. BC-01 now gets the 95 box (top 666.5, rail 680).
 - A forced slide (or five-piece box) that still reaches a rail warns
   `DRAWER_FPRAIL_CLASH`; `NO_SLIDE_FITS` says when the rail is what stopped it.
+- 2026-11-04 (RHK6478 Kitchen BC-01..03): the box keeps **5 clear** under the rail
+  (`FPRAIL_BOX_CLEAR`). 220 middle fronts under a mid rail took 178 boxes 0.5 under
+  it, touching; they now get 127. The warning fires inside the 5 too.
 - Not covered: shaped (footprint) cabinets (rails from `resolveShapedFingerRails`
   aren't passed to the stack); a bottom-edge grip's rail under a drawer box
   (wall-unit drawers, rare).

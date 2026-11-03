@@ -29,6 +29,8 @@ import { gridForFacet, zoneTurn, type ZoneOpening } from './resolveShapedHardwar
 
 const EPS = 1e-6
 const round1 = (n: number) => Math.round(n * 10) / 10
+/** mm a system drawer box keeps under a finger-pull backing rail (z_handles D25). */
+export const FPRAIL_BOX_CLEAR = 5
 
 // The panels a front's runners fix to (z_dividers V2): the nearest internal
 // divider face either side of the front's centre that spans most of the
@@ -373,7 +375,10 @@ export function resolveDrawerStacks(
     const railCap = Math.min(Infinity, ...backingRails
       .filter(rl => rl.bottom > boxBottom + EPS && rl.x0 < zone.X + zone.DX - EPS && rl.x1 > zone.X + EPS)
       .map(rl => rl.bottom))
-    const fitH = Math.min(openingHeight - lift, railCap - boxBottom)
+    // FPRAIL_BOX_CLEAR keeps a gap under the rail: a box that just touches it
+    // (0.5 under a mid rail, RHK6478 Kitchen BC-01..03, Mark 2026-11-04) still clashes.
+    const railFit = railCap === Infinity ? Infinity : railCap - FPRAIL_BOX_CLEAR
+    const fitH = Math.min(openingHeight - lift, railFit - boxBottom)
 
     const slide = findSlide(depthHere, fitH, slideProducts, slideSchedule, slideOverride, { clearance })
 
@@ -432,10 +437,10 @@ export function resolveDrawerStacks(
     // A forced slide (per-zone or cabinet override) bypasses the fitting search, so an
     // over-tall box can still reach here. Emit the geometry so the clash is visible.
     // A forced slide (or a five-piece box) can still reach into the rail.
-    if (boxBottom + boxHeight > railCap + EPS) {
+    if (boxBottom + boxHeight > railFit + EPS) {
       warnings.push({
         code: 'DRAWER_FPRAIL_CLASH',
-        message: `Drawer ${zoneRef}: ${round1(boxHeight)}mm box top at ${round1(boxBottom + boxHeight)} runs ${round1(boxBottom + boxHeight - railCap)}mm into the finger-pull backing rail (bottom ${round1(railCap)}) — use a lower box`,
+        message: `Drawer ${zoneRef}: ${round1(boxHeight)}mm box top at ${round1(boxBottom + boxHeight)} is ${round1(boxBottom + boxHeight - railCap) > 0 ? `${round1(boxBottom + boxHeight - railCap)}mm into` : `only ${round1(railCap - boxBottom - boxHeight)}mm under`} the finger-pull backing rail (bottom ${round1(railCap)}, keep ${FPRAIL_BOX_CLEAR} clear) — use a lower box`,
         part: 'drawer_box',
       })
     }

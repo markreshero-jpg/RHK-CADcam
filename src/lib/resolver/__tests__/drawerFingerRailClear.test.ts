@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
+import { FPRAIL_BOX_CLEAR } from '../resolveDrawerStack'
 import {
   DEFAULT_RULES, type CabinetInput, type Material, type SlideProduct, type FaceGridInput, type HandleProductInput,
 } from '../types'
@@ -64,5 +65,21 @@ describe('finger-pull drawer box stays under its backing rail', () => {
     const rp = resolveCabinet(cab(slml('s127')))
     expect(rp.drawer_stacks.find(s => s.face_zone_row === 2)!.box_height).toBe(127)
     expect(rp.warnings.some(w => w.code === 'DRAWER_FPRAIL_CLASH')).toBe(true)
+  })
+
+  it('a box that only just meets a mid rail drops a size (5 clear, RHK6478 Kitchen 2026-11-04)', () => {
+    // finger gap on every front: mid rails 20 below the lower fronts' tops
+    const grid: FaceGridInput = {
+      rows: [{ row_index: 0, height_locked: false }, { row_index: 1, height: 220, height_locked: true }, { row_index: 2, height: 150, height_locked: true }],
+      cols: [{ col_index: 0, width_locked: false }],
+      zones: [0, 1, 2].map(i => ({ row_index: i, col_index: 0, face_type: 'drawer_face' as const, finger_gap: 20 })),
+    }
+    const rp = resolveCabinet(cab(grid))
+    const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:')).map(p => p.Y)
+    for (const s of rp.drawer_stacks) {
+      const above = rails.filter(y => y > s.box_Y)
+      if (above.length) expect(s.box_Y + s.box_height).toBeLessThanOrEqual(Math.min(...above) - FPRAIL_BOX_CLEAR + 1e-6)
+    }
+    expect(rp.warnings.some(w => w.code === 'DRAWER_FPRAIL_CLASH')).toBe(false)
   })
 })
