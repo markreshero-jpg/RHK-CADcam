@@ -1,0 +1,658 @@
+{
+ "_source": "Site measure 22.10.26.pdf p4 (Study) + markup 26.10.26 'Study only - disregard Buffett unit.pdf' p3-6 + Mark Q&A 2026-11-04",
+ "_notes": [
+  "CH 2715 off slab - 20 floor = 2695. Plaster bulkhead 374 deep along the back wall (Wall 3), underside 2403 - 20 = 2383 -> Wall 3 height 2383, soffit 30 (30 BH under it, overheads to 2353).",
+  "Block wall (Wall 1) 190 thick, top 2403 - 20 = 2383, 2656 inside from the window wall to the nib. Drawn from the nib end (x 2846) west so its elevation reads nib on the left. Stone cladding on both nib sides (CAD note only).",
+  "Nib (Wall 5) 190 thick, 503 out from the block wall face, centreline x 2751.",
+  "Window wall (Wall 2) 2227: 723 wall | 802 window (square set) | 702 wall to the back wall. Right wall (Wall 4) 2427 (left side adds to 2417: 10 out of square). Opening 1176 between the nib and the right wall.",
+  "LV wire @ 1500 in the back-wall / right-wall corner."
+ ],
+ "projectId": "fa0884a2-abd1-4370-adfa-a30044e88ef2",
+ "roomName": "Study",
+ "roomHeight": 2695,
+ "roomRules": {
+  "TOEH": 100
+ },
+ "walls": [
+  {
+   "x": 2846,
+   "y": 2227,
+   "length": 2846,
+   "angle": 180,
+   "thickness": 190,
+   "height": 2383,
+   "_": "1 block wall, nib end -> window wall (E->W)"
+  },
+  {
+   "x": 0,
+   "y": 2227,
+   "length": 2227,
+   "angle": 270,
+   "_": "2 window wall S->N"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 4022,
+   "angle": 0,
+   "height": 2383,
+   "soffit": 30,
+   "_": "3 back wall W->E, plaster bulkhead u/s 2383, 30 BH"
+  },
+  {
+   "x": 4022,
+   "y": 0,
+   "length": 2427,
+   "angle": 90,
+   "_": "4 right wall N->S"
+  },
+  {
+   "x": 2751,
+   "y": 2227,
+   "length": 503,
+   "angle": 270,
+   "thickness": 190,
+   "height": 2383,
+   "type": "nib",
+   "_": "5 nib off the block wall, 190 thick, 503 out"
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "BFK",
+   "wall": 1,
+   "offset": 190,
+   "dx": 50,
+   "dy": 867,
+   "dz": 477,
+   "note": "# 1 50 wide filler at the stone-clad nib (scribe)"
+  },
+  {
+   "def": "B2D",
+   "wall": 1,
+   "offset": 240,
+   "dx": 860,
+   "dy": 867,
+   "dz": 477,
+   "note": "# 2 pair, 1 adj shelf",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "B2D",
+   "wall": 1,
+   "offset": 1100,
+   "dx": 858,
+   "dy": 867,
+   "dz": 477,
+   "note": "# 3 pair, 1 adj shelf",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "B2D",
+   "wall": 1,
+   "offset": 1958,
+   "dx": 858,
+   "dy": 867,
+   "dz": 477,
+   "note": "# 4 printer cupboard, pair, adj shelf 450 off the bottom",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "BFK",
+   "wall": 1,
+   "offset": 2816,
+   "dx": 30,
+   "dy": 867,
+   "dz": 477,
+   "note": "# 5 30 filler to the window wall"
+  },
+  {
+   "def": "WUP",
+   "wall": 1,
+   "offset": 190,
+   "dx": 1768,
+   "dy": 33,
+   "dz": 500,
+   "rules": {
+    "UNDER_PANEL": true
+   },
+   "set": {
+    "pos_z": 867
+   },
+   "note": "33 Sublime Teak bench, 500 deep (5 overhang), top 900 - piece 1 of 2, joint over the BC-03/BC-04 gables"
+  },
+  {
+   "def": "WUP",
+   "wall": 1,
+   "offset": 1958,
+   "dx": 888,
+   "dy": 33,
+   "dz": 500,
+   "rules": {
+    "UNDER_PANEL": true
+   },
+   "set": {
+    "pos_z": 867
+   },
+   "note": "33 Sublime Teak bench, 500 deep (5 overhang), top 900 - piece 2 of 2"
+  },
+  {
+   "def": "WUP",
+   "wall": 1,
+   "offset": 190,
+   "dx": 1768,
+   "dy": 583,
+   "dz": 18,
+   "rules": {
+    "UNDER_PANEL": true
+   },
+   "set": {
+    "pos_z": 900
+   },
+   "note": "Splash wall panel 2pac colour TBC, 900-1483 - piece 1 of 2"
+  },
+  {
+   "def": "WUP",
+   "wall": 1,
+   "offset": 1958,
+   "dx": 888,
+   "dy": 583,
+   "dz": 18,
+   "rules": {
+    "UNDER_PANEL": true
+   },
+   "set": {
+    "pos_z": 900
+   },
+   "note": "Splash wall panel 2pac colour TBC, 900-1483 - piece 2 of 2"
+  },
+  {
+   "def": "WEP",
+   "wall": 1,
+   "offset": 190,
+   "dx": 50,
+   "dy": 900,
+   "dz": 311.5,
+   "note": "# 7 50 wide filler at the stone-clad nib, flush with the open shelves (WEP turned into a front filler)"
+  },
+  {
+   "def": "WOPN",
+   "wall": 1,
+   "offset": 240,
+   "dx": 860,
+   "dy": 900,
+   "dz": 330,
+   "note": "# 8 open shelves 1483-2383 (block wall top), 16.5 Sublime Teak, 2 fixed shelves, open above",
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "WOPN",
+   "wall": 1,
+   "offset": 1100,
+   "dx": 858,
+   "dy": 900,
+   "dz": 330,
+   "note": "# 9 open shelves 1483-2383 (block wall top), 16.5 Sublime Teak, 2 fixed shelves, open above",
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "WOPN",
+   "wall": 1,
+   "offset": 1958,
+   "dx": 858,
+   "dy": 900,
+   "dz": 330,
+   "note": "# 10 open shelves 1483-2383 (block wall top), 16.5 Sublime Teak, 2 fixed shelves, open above",
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "WEP",
+   "wall": 1,
+   "offset": 2816,
+   "dx": 30,
+   "dy": 900,
+   "dz": 311.5,
+   "note": "# 11 30 filler to the window wall, flush with the open shelves"
+  },
+  {
+   "def": "BEPF",
+   "wall": 3,
+   "offset": 0,
+   "dx": 16.5,
+   "dy": 744,
+   "dz": 577,
+   "note": "Desk end panel at the window wall, 595 o/a, to the floor (6 glass top over)"
+  },
+  {
+   "def": "BEPF",
+   "wall": 3,
+   "offset": 1242,
+   "dx": 16.5,
+   "dy": 744,
+   "dz": 577,
+   "note": "# 12 desk panel, file drawers left"
+  },
+  {
+   "def": "D2-LL",
+   "wall": 3,
+   "offset": 1258.5,
+   "dx": 505,
+   "dy": 744,
+   "dz": 577,
+   "note": "# 13 2 file drawers, centred on the desk (1225.5 seating each side), no top - glass over",
+   "set": {
+    "top_type": "none",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 3,
+   "offset": 1763.5,
+   "dx": 16.5,
+   "dy": 744,
+   "dz": 577,
+   "note": "# 14 desk panel, file drawers right"
+  },
+  {
+   "def": "BEPF",
+   "wall": 3,
+   "offset": 3005.5,
+   "dx": 16.5,
+   "dy": 744,
+   "dz": 577,
+   "note": "# 17 shaped leg, desk end 1000 off the right wall: 595 top, 200 bottom, 45 deg into a radius"
+  },
+  {
+   "def": "WEP",
+   "wall": 3,
+   "offset": 0,
+   "dx": 30,
+   "dy": 853,
+   "dz": 330,
+   "note": "# 19 30 overhead filler to the window wall"
+  },
+  {
+   "def": "W2D",
+   "wall": 3,
+   "offset": 30,
+   "dx": 792,
+   "dy": 853,
+   "dz": 330,
+   "note": "# 18 overhead pair 1500-2353 incl under panel, 2 adj shelves, no handles, LED under",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "WOPN",
+   "wall": 3,
+   "offset": 822,
+   "dx": 792,
+   "dy": 853,
+   "dz": 348,
+   "note": "# 21 open shelves 16.5 Sublime Teak, 2 fixed shelves, flush with the doors, LED under",
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 3,
+   "offset": 1614,
+   "dx": 794,
+   "dy": 853,
+   "dz": 330,
+   "note": "# 22 overhead pair 1500-2353 incl under panel, 2 adj shelves, no handles, LED under",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "WOPN",
+   "wall": 3,
+   "offset": 2408,
+   "dx": 792,
+   "dy": 853,
+   "dz": 348,
+   "note": "# 24 open shelves 16.5 Sublime Teak, 2 fixed shelves, flush with the doors, LED under",
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 3,
+   "offset": 3200,
+   "dx": 792,
+   "dy": 853,
+   "dz": 330,
+   "note": "# 23 overhead pair 1500-2353 incl under panel, 2 adj shelves, no handles, LED under",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "WEP",
+   "wall": 3,
+   "offset": 3992,
+   "dx": 30,
+   "dy": 853,
+   "dz": 330,
+   "note": "# 26 30 overhead filler to the right wall"
+  },
+  {
+   "def": "BH",
+   "wall": 3,
+   "offset": 0,
+   "dx": 1614,
+   "dy": 30,
+   "dz": 330,
+   "note": "30 bulkhead 2353-2383 under the plaster bulkhead (374 deep) - piece 1 of 2",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": false,
+     "cleat": false,
+     "left": {
+      "on": false,
+      "depth": 330,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 330,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 330,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 3,
+   "offset": 1614,
+   "dx": 2408,
+   "dy": 30,
+   "dz": 330,
+   "note": "30 bulkhead 2353-2383 under the plaster bulkhead - piece 2 of 2",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": false,
+     "cleat": false,
+     "left": {
+      "on": false,
+      "depth": 330,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 330,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 330,
+      "joint": "mitre"
+     }
+    }
+   }
+  }
+ ],
+ "roomId": "a04663c7-1402-4344-be00-3ad4ce3aeae9"
+}
