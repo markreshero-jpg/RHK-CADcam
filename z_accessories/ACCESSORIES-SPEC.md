@@ -88,6 +88,12 @@ their supports now; wardrobe / pantry / misc items later on the same table.
 
 ## Seed (Lincoln Sentry, 2026-10-25)
 
+- **2026-11-03 (Mark): the shop default rail is now Nikpol `OVALRODALUM`** —
+  Oval Wardrobe Rod 15 × 30 × 1.2 wall, 4.0 m, matte aluminium (box of 10
+  available; suits OVALFLANGECH / OVALFLANGECOVERCH flanges). Same profile, so
+  the row `ac71b672` was renamed / recoded in place (stock 4000); the model and
+  the linked supports are still the Finista ones. Price: login on nikpol.com.au.
+
 - Finista Oval Hanging Rail 15 × 30mm 3.6m White — product 7104006, cat
   1-490-110, aluminium powder-coat, $32.22 inc GST. **Marked discontinued /
   clearance on the LS site** — check with the supplier before ordering.

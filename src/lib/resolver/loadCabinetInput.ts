@@ -681,11 +681,16 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     ...((cab.drawerbox_overrides ?? {}) as Partial<DrawerBoxRules>),
   }
 
-  // Inner-drawer rules: system defaults → inner method (project/shop → face fallback).
+  // Inner-drawer rules: system defaults → inner method (project/shop → face fallback)
+  // → this cabinet's own IDB_* overrides (inner-drawer-only keys, e.g. a taller front
+  // to close a gap: RHK6542 Danny's Robe IDB_FRONT_TOP_ADJUST).
   const innerDbMethodRules = (innerDbMethodRes.data?.rules ?? {}) as Partial<DrawerBoxRules>
+  const innerCabOverrides = Object.fromEntries(Object.entries((cab.drawerbox_overrides ?? {}) as Record<string, unknown>)
+    .filter(([k]) => k.startsWith('IDB_'))) as Partial<DrawerBoxRules>
   const innerDrawerBoxRules: DrawerBoxRules = {
     ...DEFAULT_DB_RULES,
     ...innerDbMethodRules,
+    ...innerCabOverrides,
   }
 
   // Outer drawer box material + edgebands (box / bottom roles).
