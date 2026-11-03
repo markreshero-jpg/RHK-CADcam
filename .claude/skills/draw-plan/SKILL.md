@@ -446,6 +446,15 @@ line and mirrors the island elevation.
   part) takes the route too: `source_table 'custom_parts'`, `source_part_key
   'custom_<id>'`, same horizontal frame (RHK6542 Study WC-04 + WC-08, routes in
   line 50 off the back wall: pos_x 59.25 on both).
+- **Woodgrain drawer fronts → grain match them** (Mark, RHK6542 Study BC-02
+  2026-11-03): on any woodgrain front board (walnut, oak, teak…), every
+  drawer bank goes in a grain-match group so the fronts come off one sheet in
+  elevation order. One group per cabinet's drawer stack (z_grain_match: one wall
+  per group, fronts only), direction **vertical** unless the job says
+  horizontal: `grain_match_groups` row (`room_id`, `name` GMn, `direction`) +
+  `cabinet_instances.grain_match_group_id` (`z_plan_automation/grain-match-set.cjs`
+  does one group). Ask before grouping door pairs / runs or spanning cabinets.
+  Check the headless optimiser run shows `GMn · 1 of n` on the fronts.
 - **Grained backs wider than the sheet across the grain → split across the
   width** (Mark, RHK6542 WC-04 2026-11-03): backs are cut with the grain up the
   panel (as drawn), so a walnut / teak back wider than ~1190 (1211 sheet) won't

@@ -55,6 +55,7 @@ Robe: 520 carcass, 600 end panel right (S), 200 deep panel left (N) against the 
 - WC-01 custom part renamed "Under Panel" → "Desk Top" (cabinet_custom_parts.name).
 - WC-04 back/bottom screws were on the bottom's back edge: joint 5mm Dynamic Holes used `T / 2` (bottom 33 → 16.5) — now `CW / 2` (z_joints, centre of the 16.5 back = 8.25). Shelf holes in the back now on the 33 shelf centres too.
 - WC-04 `case_back` (left piece) is hidden in plan + elevation + 3D = **Removed**, so the optimiser leaves it out — asked Mark (2026-11-03).
+- BC-02 drawer fronts (200 + 413) grain matched: group GM1, vertical (Mark). Optimiser: one block on sheet 3.
 
 ## Round 6 (Mark 2026-11-03) — `_tmp-6542-study-rev6.mjs`
 - WC-07 bulkhead now stops flush with TC-06's carcass, not over the TC-05 tall end panel: 237 → 3080.5 (dx 2860 → 2843.5), left return 317.5 kept on TC-06's left gable. 0 errors.
