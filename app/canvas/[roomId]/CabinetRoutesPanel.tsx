@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { CabinetCustomPart } from './canvasDB'
 import { svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta } from './cabinetEditSvgHelpers'
 import OperationToolSelect, { type DrillLite } from '@/src/components/cnc/OperationToolSelect'
 import { syncSeamDrillOperations } from '@/src/lib/optimiser/seamDrillSync'
@@ -66,15 +67,18 @@ interface RoutablePart { table: string; key: string; label: string }
 const dInp = 'bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-blue-500 w-full'
 const dLbl = 'text-[10px] text-gray-500 uppercase tracking-wide mb-1 block'
 
-export default function CabinetRoutesPanel({ cabinet, rp }: { cabinet: CabinetInstance; rp: ResolvedCabinet }) {
+export default function CabinetRoutesPanel({ cabinet, rp, customParts }: { cabinet: CabinetInstance; rp: ResolvedCabinet; customParts?: CabinetCustomPart[] }) {
   const parts = useMemo<RoutablePart[]>(() => {
     const out: RoutablePart[] = []
     for (const p of rp.case_parts)     { const m = svgCaseMeta(p); out.push({ table: 'case_parts',     key: m.id, label: m.label }) }
     for (const p of rp.toekick_parts)  { const m = svgTkMeta(p);   out.push({ table: 'toekick_parts',  key: m.id, label: m.label }) }
     for (const p of rp.internal_parts) { const m = svgIntMeta(p);  out.push({ table: 'internal_parts', key: m.id, label: m.label }) }
     for (const z of rp.face_zones)     { const m = svgZoneMeta(z); out.push({ table: 'face_zones',     key: m.id, label: m.label }) }
+    // Custom parts (under panels, cleats…) take routes too — key custom_<id>, the
+    // optimiser's frame (RHK6542 WC-08 LED route).
+    for (const p of customParts ?? []) out.push({ table: 'custom_parts', key: `custom_${p.id}`, label: p.name ?? 'Custom Part' })
     return out
-  }, [rp])
+  }, [rp, customParts])
 
   const [ops, setOps] = useState<PartOp[]>([])
   const [tools, setTools] = useState<ToolItem[]>([])

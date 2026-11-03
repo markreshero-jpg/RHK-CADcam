@@ -10,13 +10,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import { handOpMarkers, type CabinetOpMarker, type HandOpRow, type Pt } from '@/src/lib/optimiser/partOpProject'
+import { handOpMarkers, type CabinetOpMarker, type CustomPartGeom, type HandOpRow, type Pt } from '@/src/lib/optimiser/partOpProject'
 
 const COLS = 'id,source_part_key,operation_type,pos_x,pos_y,diameter,width,length,size_dx,size_dy,size_dz,depth,pos_z,plane_kind,repeat_count,repeat_spacing,repeat_axis,parameters'
 const HAND_COLOR = '#f97316'   // orange — distinct from the resolver's drilling markers
 
 // Load hand ops for one cabinet → cabinet-space markers. Empty until rp is ready.
-export function useHandOpMarkers(cabinetId: string | null | undefined, rp: ResolvedCabinet | null | undefined): CabinetOpMarker[] {
+// customParts: the cabinet editor's own custom-part rows (its rp has none).
+export function useHandOpMarkers(cabinetId: string | null | undefined, rp: ResolvedCabinet | null | undefined, customParts?: CustomPartGeom[]): CabinetOpMarker[] {
   const [rows, setRows] = useState<HandOpRow[]>([])
   useEffect(() => {
     if (!cabinetId) return
@@ -31,7 +32,7 @@ export function useHandOpMarkers(cabinetId: string | null | undefined, rp: Resol
       })
     return () => { cancelled = true }
   }, [cabinetId])
-  return useMemo(() => (rp && cabinetId ? handOpMarkers(rp, rows) : []), [rp, rows, cabinetId])
+  return useMemo(() => (rp && cabinetId ? handOpMarkers(rp, rows, customParts) : []), [rp, rows, cabinetId, customParts])
 }
 
 // Multi-cabinet variant for the room elevation: one query for all cabinets on the

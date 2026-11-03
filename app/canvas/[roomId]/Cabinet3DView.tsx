@@ -1522,10 +1522,10 @@ export function CabinetScene({
         const id    = `case_${base}`
         const key   = `case_${piece.part_key}`
         const [y0, y1] = splitPieceRange(piece)
-        const pp    = applyPosOv(p, id, partOverrides)
-        const b     = cut ? caseBox(pp) : applySizeOv(caseBox(pp), id, partOverrides)
         // A width-cut back's pieces sit side by side: holes by x too.
         const across = cut && base === 'back' && !!rp.split_back_x?.length
+        const pp    = applyPosOv(p, id, partOverrides)
+        const b     = cut ? caseBox(pp) : applySizeOv(caseBox(pp), id, partOverrides)
         const info  = applyEdge(buildCaseInfo(p, b))
         const s     = matSpec(p.material_id, '#ddd3bb')
         // Turned per-edge panels draw in their own frame (z_cabinet_shape L3).
@@ -2041,7 +2041,7 @@ export default function Cabinet3DView({
   const { dx, dy, dz } = cab
   // Hand-added part_operations, projected to cabinet space (generated rows excluded
   // — the resolver already draws those). Shown with the carcase-drilling toggle.
-  const handMarkers = useHandOpMarkers(cab.id, rp)
+  const handMarkers = useHandOpMarkers(cab.id, rp, customParts)
 
   const didHitPartRef   = useRef(false)
   const hitHardwareRef  = useRef(false)   // last pick was a hinge / handle / bin (no edit menu)

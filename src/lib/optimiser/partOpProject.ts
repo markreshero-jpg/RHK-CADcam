@@ -16,6 +16,11 @@
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { caseFrame, zoneFrame, intFrame, type FootprintFrame, type Axis } from './partFootprint'
 import { caseBox } from '@/src/lib/jointDrilling'
+import { customExtents, type CustomOrient } from '@/src/lib/customPartBox'
+
+// The custom-part fields the projection needs (cabinet_custom_parts row or
+// rp.custom_parts): min corner x/y/z in cabinet space + intrinsic dims.
+export interface CustomPartGeom { id: string; orientation?: string | null; x: number; y: number; z: number; dx: number | string; dy: number | string; dz: number | string }
 
 // Minimal shape of a part_operations row this module needs.
 export interface HandOpRow {
@@ -88,7 +93,7 @@ export function grooveSubtraction(m: Extract<CabinetOpMarker, { kind: 'groove' }
 
 // A part's footprint frame + the cabinet coord of its mid-thickness plane along the
 // frame normal, and its half-thickness (so callers can reach either face).
-function frameFor(rp: ResolvedCabinet, key: string): { frame: FootprintFrame; nMid: number; halfThick: number } | null {
+function frameFor(rp: ResolvedCabinet, key: string, customParts?: CustomPartGeom[]): { frame: FootprintFrame; nMid: number; halfThick: number } | null {
   if (key.startsWith('case_')) {
     const p = rp.case_parts.find(pp => `case_${pp.part_key}` === key)
     if (!p) return null
@@ -117,7 +122,23 @@ function frameFor(rp: ResolvedCabinet, key: string): { frame: FootprintFrame; nM
     const nMin = f.normal === 'x' ? p.X : p.Y
     return { frame: f, nMid: nMin + p.DZ / 2, halfThick: p.DZ / 2 }
   }
-  return null   // toekick / drawer-box / custom parts: not projected yet
+  if (key.startsWith('custom_')) {
+    // Same op frame as the optimiser (shapeFrameFor 'custom_parts'): flat = a
+    // horizontal panel like a bottom (pos_x = depth DX from its back, pos_y = DY
+    // across), side = like a gable, front = like a door (RHK6542 WC-08 LED route).
+    const cp = (customParts ?? rp.custom_parts as CustomPartGeom[] | undefined)?.find(c => `custom_${c.id}` === key)
+    if (!cp) return null
+    const orient = (cp.orientation ?? 'flat') as CustomOrient
+    const DX = Number(cp.dx), DY = Number(cp.dy), T = Number(cp.dz)
+    const e = customExtents(orient, DX, DY, T)
+    const x = Number(cp.x), y = Number(cp.y), z = Number(cp.z)
+    if (orient === 'side')
+      return { frame: { normal: 'x', u: { axis: 'z', dir: 1, origin: z, extent: DX }, v: { axis: 'y', dir: 1, origin: y, extent: DY } }, nMid: x + e.ex / 2, halfThick: T / 2 }
+    if (orient === 'front')
+      return { frame: { normal: 'z', u: { axis: 'x', dir: 1, origin: x, extent: DX }, v: { axis: 'y', dir: 1, origin: y, extent: DY } }, nMid: z + e.ez / 2, halfThick: T / 2 }
+    return { frame: { normal: 'y', u: { axis: 'z', dir: 1, origin: z, extent: DX }, v: { axis: 'x', dir: 1, origin: x, extent: DY } }, nMid: y + e.ey / 2, halfThick: T / 2 }
+  }
+  return null   // toekick / drawer-box parts: not projected yet
 }
 
 // Invert projectToFrame: part-local (pos_x, pos_y) → cabinet-space point on the plane
@@ -131,12 +152,12 @@ function toCabinet(frame: FootprintFrame, nCoord: number, px: number, py: number
   return { x: c.x, y: c.y, z: c.z }
 }
 
-export function handOpMarkers(rp: ResolvedCabinet, ops: HandOpRow[]): CabinetOpMarker[] {
+export function handOpMarkers(rp: ResolvedCabinet, ops: HandOpRow[], customParts?: CustomPartGeom[]): CabinetOpMarker[] {
   const out: CabinetOpMarker[] = []
   for (const op of ops) {
     if (op.parameters?.generated) continue          // resolver already draws these
     if (!op.source_part_key) continue
-    const ff = frameFor(rp, op.source_part_key)
+    const ff = frameFor(rp, op.source_part_key, customParts)
     if (!ff) continue
     const { frame, nMid, halfThick } = ff
     const px = op.pos_x ?? 0, py = op.pos_y ?? 0

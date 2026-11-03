@@ -799,7 +799,7 @@ export default function CabinetEditModal({
             )}
             {activeView === 'joints' && <JointsPanel cabinet={cabinet} rp={rp} onUpdate={onUpdate} />}
             {activeView === 'tree'   && rp && <CabinetTreePanel rp={rp} partOverrides={partOverrides} />}
-            {activeView === 'routes' && rp && <CabinetRoutesPanel cabinet={cabinet} rp={rp} />}
+            {activeView === 'routes' && rp && <CabinetRoutesPanel cabinet={cabinet} rp={rp} customParts={customParts} />}
             {activeView === 'errors' && <CabinetErrorsPanel rp={rp} onGoToView={setActiveView} staleShapes={staleShapes} onAction={a => { void addBinDivisions(cabinet, a, onUpdate) }} />}
             {activeView === 'overrides' && (
               <OverridesView

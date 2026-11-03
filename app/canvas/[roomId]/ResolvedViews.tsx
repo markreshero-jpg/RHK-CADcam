@@ -580,7 +580,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
   // Cabinet (x,y) → svg, for rotated-part silhouettes (Z ignored in elevation).
   const proj = (px: number, py: number) => ({ x: ox + px, y: oy + dy - py })
   const trueD = useTrueShapes(rp, partOverrides, shapeOverrides, 'front', proj)
-  const handMarkers = useHandOpMarkers(cab.id, rp)
+  const handMarkers = useHandOpMarkers(cab.id, rp, customParts)
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
@@ -910,7 +910,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
   // Shaped / curved footprint: the dx × dz box isn't the cabinet's outline, so
   // don't draw it (or its interior fill) — the parts' true shapes show the outline.
   const shapedPlan = rp.case_parts.some(p => p.wrap || p.outline || p.AY || isShapedPanelKey(p.part_key))
-  const handMarkers = useHandOpMarkers(cab.id, rp)
+  const handMarkers = useHandOpMarkers(cab.id, rp, customParts)
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
@@ -1194,7 +1194,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
   // Cabinet (x,y,z) → svg, for rotated-part silhouettes (X ignored in side view).
   const proj = (_px: number, py: number, pz: number) => ({ x: oz + pz, y: oy + dy - py })
   const trueD = useTrueShapes(rp, partOverrides, shapeOverrides, 'side', (z, y) => proj(0, y, z))
-  const handMarkers = useHandOpMarkers(cab.id, rp)
+  const handMarkers = useHandOpMarkers(cab.id, rp, customParts)
   function sel(id: string) { return selectedPartId === id }
   function stroke(id: string, base: string) { return sel(id) ? SEL_STROKE : base }
   function sw(id: string, base: number) { return sel(id) ? 2 : base }
