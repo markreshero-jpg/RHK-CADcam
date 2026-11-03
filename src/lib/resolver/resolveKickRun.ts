@@ -74,19 +74,38 @@ export function mirrorSeams(L: number, seams: number[]): number[] {
   return seams.map(x => L - x).sort((a, b) => a - b)
 }
 
+// Longest kick face piece the grain allows (Mark 2026-11-03): a grained face
+// with vertical grain (TOEGRAIN, default) runs its length across the sheet, so
+// it can be no longer than the sheet's width, rounded down to 100 (1211 -> 1200).
+// null = no limit (plain board, or horizontal grain along the sheet).
+export function kickFaceMaxLength(
+  mat: { has_grain?: boolean | null; sheet_dx?: number | null; sheet_dy?: number | null } | null | undefined,
+  grain: 'vertical' | 'horizontal' | undefined,
+): number | null {
+  if (!mat?.has_grain || (grain ?? 'vertical') !== 'vertical') return null
+  const w = Math.min(Number(mat.sheet_dx) || Infinity, Number(mat.sheet_dy) || Infinity)
+  return Number.isFinite(w) ? Math.floor(w / 100) * 100 : 1200
+}
+
 // The face / sub front / back segments of a joined kick. Equal / exact split all
 // three at the same seams; manual takes the face and sub seams as set (sub
 // defaults to round numbers, face to the equal split) and mirrors the sub for the back.
+// faceMax (kickFaceMaxLength) caps the face pieces wherever the face seams are
+// not set by hand: equal / exact split the face to fit it on their own.
 export function kickRunSegments(
   L: number,
   run: { max_segment_length: number | null; split_mode: string; face_splits?: number[] | null; sub_splits?: number[] | null } | undefined,
+  faceMax: number | null = null,
 ): { face: Seg[]; sub: Seg[]; back: Seg[] } {
   const maxSeg = run?.max_segment_length ?? null
+  const cap = (m: number | null) => faceMax ? Math.min(m && m > 0 ? m : Infinity, faceMax) : m
   if (run?.split_mode !== 'manual') {
-    const segs = splitKickSegments(L, maxSeg, run?.split_mode === 'exact' ? 'exact' : 'equal')
-    return { face: segs, sub: segs, back: segs }
+    const mode = run?.split_mode === 'exact' ? 'exact' : 'equal'
+    const segs = splitKickSegments(L, maxSeg, mode)
+    const face = faceMax && L > faceMax ? splitKickSegments(L, cap(maxSeg), mode) : segs
+    return { face, sub: segs, back: segs }
   }
-  const face = run.face_splits ? seamsToSegments(L, run.face_splits) : splitKickSegments(L, maxSeg ?? 2400, 'equal')
+  const face = run.face_splits ? seamsToSegments(L, run.face_splits) : splitKickSegments(L, cap(maxSeg ?? 2400), 'equal')
   const subSeams = run.sub_splits ?? roundSubSeams(L, maxSeg)
   return { face, sub: seamsToSegments(L, subSeams), back: seamsToSegments(L, mirrorSeams(L, subSeams)) }
 }
@@ -150,11 +169,11 @@ export function resolveKickRunParts(
   const kickBackZ  = r.TOESCB
 
   // ── Width-spanning boards, split into segments ──────────────────────────────
-  const segs = kickRunSegments(L, cab.kick_run)
+  const grain = r.TOEGRAIN ?? 'vertical'
+  const segs = kickRunSegments(L, cab.kick_run, kickFaceMaxLength(cab.toekick_face_material, grain))
   // End returns (TOERETL / TOERETR), mitred to the face: the interior boards and
   // end spreaders step in at a returned end; only the end face boards are mitred.
   const ret = kickReturns(r, TF)
-  const grain = r.TOEGRAIN ?? 'vertical'
 
   segs.face.forEach((seg, i) => {
     const last = segs.face.length - 1

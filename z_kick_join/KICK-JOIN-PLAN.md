@@ -325,3 +325,16 @@ the resolver and optimiser already used TOEGRAIN, but the 3D texture (`grainExte
 its length) and the elevation ghost grain (`dir="h"` hard-coded, screen + print) ignored it. Now
 `Cabinet3DView` `tkGrainExt` turns the face up the board for vertical (a return along its depth for
 horizontal), and both elevations draw `dir` from the part's `grain_direction`.
+
+**Vertical-grain face max (Mark 2026-11-03: "the kick front in grain can be no wider than 1200mm"):**
+a grained face board with Kick Grain vertical runs its length across the sheet, so a face piece can be no
+longer than the sheet width rounded down to 100 (`kickFaceMaxLength`: walnut 2415 x 1211 -> 1200). Plain
+boards and horizontal grain have no limit. The sub front and back are not affected.
+- Even / Full split the face on their own to fit, even with no max length set (an 1800 walnut kick ->
+  2 x 900 faces, JOIN).
+- Set seams: the default face seams and the **fit 1200** button pick the fewest cabinet joints that keep
+  every face piece within the limit (joints within 100 of an end are skipped; no joint set fits -> even
+  split). Seams typed by hand are kept as entered: over-length pieces show in the optimiser.
+- Joined runs only. A cabinet's own kick over 1200 in a grained vertical face isn't split (it shows in the
+  optimiser as too large).
+- RHK6542 Study KICK 3 face re-split on the joints: 517 / 770 / 770 / 786.5.

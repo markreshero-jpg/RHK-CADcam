@@ -241,8 +241,11 @@ function kickRun(opts: { role?: 'assembly' | 'member'; maxSeg?: number | null; m
   }
 }
 
+// Horizontal kick grain: a grained vertical face over the sheet width (1200)
+// splits on its own (z_kick_join KS1), so these tests turn the grain along.
 test('kick assembly resolves one continuous kick across its width (no split)', () => {
-  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun() }))
+  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun(),
+    rules: mergeRules(DEFAULT_RULES, { TOEGRAIN: 'horizontal' }) }))
   const front = result.toekick_parts.filter(p => p.part_key === 'kick_front_face')
   expect(front).toHaveLength(1)
   expect(front[0].DY).toBe(1800)   // full run width
@@ -279,6 +282,13 @@ test('respaced spreaders span the whole run', () => {
   expect(maxX).toBe(1800 - 18)   // right end at L - TI
 })
 
+test('grained vertical face over 1200 splits to fit the sheet width', () => {
+  const front = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun() }))
+    .toekick_parts.filter(p => p.part_key === 'kick_front_face')
+  expect(front).toHaveLength(2)
+  expect(front[0].DY).toBe(900)
+})
+
 test('split adds no spreaders (same as unsplit)', () => {
   const spr = (k: ReturnType<typeof kickRun>) => resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: k }))
     .toekick_parts.filter(p => p.part_key === 'spreader_vertical').map(p => Math.round(p.X))
@@ -288,7 +298,7 @@ test('split adds no spreaders (same as unsplit)', () => {
 test('run kick applies L/R scribes at the run ends', () => {
   const result = resolveCabinet(make2DoorBase({
     id: 'k', DX: 1800, kick_run: kickRun(),
-    rules: mergeRules(DEFAULT_RULES, { TOESCL: 25, TOESCR: 25 }),
+    rules: mergeRules(DEFAULT_RULES, { TOESCL: 25, TOESCR: 25, TOEGRAIN: 'horizontal' }),
   }))
   const front = result.toekick_parts.filter(p => p.part_key === 'kick_front_face')
   expect(front).toHaveLength(1)

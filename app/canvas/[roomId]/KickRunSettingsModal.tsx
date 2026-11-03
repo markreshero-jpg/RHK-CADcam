@@ -12,18 +12,28 @@ const fmtList = (xs: number[] | null) => (xs ?? []).map(fmt).join(', ')
 const parseList = (t: string): number[] =>
   t.split(/[,\s]+/).map(Number).filter(n => Number.isFinite(n) && n > 0)
 
-// Default face seam: the cabinet joint nearest the middle whose pieces all fit
-// the max length (a seam on a joint lines up with the door / panel lines above);
-// else the even split.
+// Default face seams, on cabinet joints (a seam on a joint lines up with the
+// door / panel lines above): one seam → the joint nearest the middle whose pieces
+// fit; more → the fewest joints that keep every piece within the max (farthest
+// joint that fits, each time). Joints within 100 of an end are skipped. No joint
+// set fits → the even split.
 function suggestFaceSeams(L: number, joints: number[], maxSeg: number): number[] {
+  if (L <= maxSeg + 0.5) return []
+  const js = joints.filter(j => j >= 100 && j <= L - 100)
   const fits = (xs: number[]) => {
     const cuts = [0, ...xs, L]
     return cuts.slice(1).every((x, i) => x - cuts[i] <= maxSeg + 0.5)
   }
-  if (L <= maxSeg) return []
-  const one = joints.filter(j => fits([j])).sort((a, b) => Math.abs(a - L / 2) - Math.abs(b - L / 2))
+  const one = js.filter(j => fits([j])).sort((a, b) => Math.abs(a - L / 2) - Math.abs(b - L / 2))
   if (one.length) return [one[0]]
-  return splitKickSegments(L, maxSeg, 'equal').slice(1).map(s => s.start)
+  const xs: number[] = []
+  let at = 0
+  while (L - at > maxSeg + 0.5) {
+    const next = js.filter(j => j > at + 0.5 && j - at <= maxSeg + 0.5).pop()
+    if (next == null) return splitKickSegments(L, maxSeg, 'equal').slice(1).map(s => s.start)
+    xs.push(next); at = next
+  }
+  return xs
 }
 
 // Set how a joined kick splits into manufacturable lengths (z_kick_join).
@@ -33,10 +43,11 @@ function suggestFaceSeams(L: number, joints: number[], maxSeg: number): number[]
 // Seams are mm from the kick's left end. Only the boards are cut (no extra spreaders); split
 // pieces get "JOIN" on their names. No length warning here: a piece longer than
 // the sheet shows in the optimiser as too large for any sheet.
-export default function KickRunSettingsModal({ runId, runLength, joints, onClose, onSaved }: {
+export default function KickRunSettingsModal({ runId, runLength, joints, faceMax, onClose, onSaved }: {
   runId:     string
   runLength: number        // kick length (face start to face end)
   joints:    number[]      // cabinet joints along the kick, mm from its left end
+  faceMax:   number | null // longest face piece the grain allows (kickFaceMaxLength), null = none
   onClose:   () => void
   onSaved:   (m: KickRunMutation) => void
 }) {
@@ -62,6 +73,7 @@ export default function KickRunSettingsModal({ runId, runLength, joints, onClose
   }, [runId])
 
   const max = maxSeg && maxSeg > 0 ? maxSeg : 2400
+  const faceCap = faceMax ? Math.min(max, faceMax) : max
   const faceSeams = parseList(faceText)
   const subSeams  = parseList(subText)
 
@@ -69,7 +81,7 @@ export default function KickRunSettingsModal({ runId, runLength, joints, onClose
   function pickMode(m: Mode) {
     setMode(m)
     if (m === 'manual') {
-      if (!faceText.trim()) setFaceText(fmtList(suggestFaceSeams(L, joints, max)))
+      if (!faceText.trim()) setFaceText(fmtList(suggestFaceSeams(L, joints, faceCap)))
       if (!subText.trim())  setSubText(fmtList(roundSubSeams(L, max)))
     }
   }
@@ -80,9 +92,9 @@ export default function KickRunSettingsModal({ runId, runLength, joints, onClose
     face_splits: mode === 'manual' ? faceSeams : null,
     sub_splits:  mode === 'manual' ? subSeams : null,
   }
-  const segs = useMemo(() => kickRunSegments(L, settings),
+  const segs = useMemo(() => kickRunSegments(L, settings, faceMax),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [L, maxSeg, mode, faceText, subText])
+    [L, maxSeg, mode, faceText, subText, faceMax])
   const lens = (xs: { len: number }[]) => xs.map(s => fmt(s.len)).join(' / ')
 
   async function save() {
@@ -152,8 +164,17 @@ export default function KickRunSettingsModal({ runId, runLength, joints, onClose
                         joint {fmt(j)}
                       </button>
                     ))}
+                    {faceCap < L && (
+                      <button className={chip} onClick={() => setFaceText(fmtList(suggestFaceSeams(L, joints, faceCap)))}
+                        title="Fewest cabinet joints that keep every face piece within the max">
+                        fit {faceCap}
+                      </button>
+                    )}
                     <button className={chip} onClick={() => setFaceText('')}>none</button>
                   </div>
+                  {faceMax && (
+                    <span className="text-[11px] text-gray-500">Vertical grain: face pieces up to {faceMax} (the sheet width)</span>
+                  )}
                 </label>
                 <label className="flex flex-col gap-1">
                   <span className="text-xs text-gray-300">Sub front split at (mm from left)</span>

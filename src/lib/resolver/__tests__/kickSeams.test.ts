@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { mergeRules } from '../mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type KickRunInput, type Material } from '../types'
 import {
-  kickRunSegments, roundSubSeams, seamsToSegments, mirrorSeams, isKickJoinPiece, resolveKickRunParts,
+  kickRunSegments, roundSubSeams, seamsToSegments, mirrorSeams, isKickJoinPiece, resolveKickRunParts, kickFaceMaxLength,
 } from '../resolveKickRun'
 
 // z_kick_join KS1: manual kick seams — face and sub front split separately, the
@@ -61,5 +61,27 @@ describe('Danny\'s Robe KICK 1 (2984)', () => {
     expect(isKickJoinPiece('kick_back', 1, true)).toBe(false)
     expect(isKickJoinPiece('kick_front_face', 3, false)).toBe(false)
     expect(isKickJoinPiece('spreader_vertical', 6, true)).toBe(false)
+  })
+})
+
+describe('vertical-grain face max (sheet width)', () => {
+  const walnut = { has_grain: true, sheet_dx: 2415, sheet_dy: 1211 }
+  it('1200 for a grained vertical face, none for plain or horizontal', () => {
+    expect(kickFaceMaxLength(walnut, 'vertical')).toBe(1200)
+    expect(kickFaceMaxLength(walnut, undefined)).toBe(1200)
+    expect(kickFaceMaxLength(walnut, 'horizontal')).toBeNull()
+    expect(kickFaceMaxLength({ ...walnut, has_grain: false }, 'vertical')).toBeNull()
+  })
+  it('even / full split the face to fit, the sub and back stay as set', () => {
+    const s = kickRunSegments(2843.5, run({ split_mode: 'equal', max_segment_length: 2400 }), 1200)
+    expect(s.face.length).toBe(3)
+    expect(s.face.every(x => x.len <= 1200)).toBe(true)
+    expect(lens(s.sub)).toEqual([1421.8, 1421.8])
+    const one = kickRunSegments(1800, run({ split_mode: 'equal' }), 1200)
+    expect(lens(one.face)).toEqual([900, 900])
+    expect(lens(one.sub)).toEqual([1800])
+  })
+  it('hand-set face seams are kept as entered', () => {
+    expect(lens(kickRunSegments(2843.5, run({ face_splits: [1287], sub_splits: [2400] }), 1200).face)).toEqual([1287, 1556.5])
   })
 })

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback, useReducer, useMemo } from 'r
 import { createPortal } from 'react-dom'
 import { supabase } from '@/src/lib/supabase'
 import { getCachedInput, applyEdgeOverrides } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { kickFaceMaxLength } from '@/src/lib/resolver/resolveKickRun'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
 import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { underPanelRun, carcassesOverPanel, isUnderPanel, withoutScribe, UNDER_PANEL_DEF } from '@/src/lib/underPanel'
@@ -4501,6 +4502,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             runLength={kLen}
             joints={joints}
             onClose={() => setKickSettingsRunId(null)}
+            faceMax={(() => {
+              // Vertical-grain face → pieces no longer than the sheet width.
+              const inp = getCachedInput(asm.id)
+              return inp ? kickFaceMaxLength(inp.toekick_face_material, inp.rules.TOEGRAIN) : null
+            })()}
             onSaved={applyKickMutation}
           />
         )
