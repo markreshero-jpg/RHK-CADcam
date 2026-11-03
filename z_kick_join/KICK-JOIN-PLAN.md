@@ -141,7 +141,7 @@ else:
 
 - Each segment = its own `kick_front_face` (+ matching `sub_front`/`back`) row,
   with `sort_order`/X offset per segment.
-- A **vertical spreader is forced at every split seam** so segments butt over a
+- ~~A **vertical spreader is forced at every split seam**~~ (dropped 2026-11-03, KS1: seams get no extra spreader) so segments butt over a
   fixing point.
 - Seams land at `L/n` — deliberately **not** at cabinet boundaries.
 - Default `maxSeg` = sheet length (materials config) when run value is null.
@@ -196,7 +196,7 @@ width** — the merged face legitimately extends past the lead's footprint. Audi
    `src/lib/resolver/types.ts` (`KickSplitMode`, `KickRunMember`, `KickRunInput`,
    `CabinetInput.kick_run`). `tsc --noEmit` clean.
 2. ✅ **DONE** — `src/lib/resolver/resolveKickRun.ts` (merged ladder, build-to-deepest,
-   equal/exact `splitKickSegments`, forced seam spreaders); guard in `resolveToekick.ts`
+   equal/exact `splitKickSegments`, forced seam spreaders — dropped in KS1); guard in `resolveToekick.ts`
    (member → empty, lead → `resolveKickRunParts`); kick-run context loaded in
    `loadCabinetInput.ts` (`loadKickRunInput`, orders members by along-wall cabT,
    dissolves runs with <2 live members). 6 unit tests added to `test.ts`, all pass.
@@ -307,7 +307,8 @@ kick face split."
   `'manual'` (`migration_ks1_manual_seams.sql`, applied as `kick_runs_manual_seams`).
 - Resolver `resolveKickRun.ts`: `kickRunSegments` returns face / sub / back segments (equal / exact keep one
   seam set for all three, manual takes its own); `seamsToSegments`, `roundSubSeams`, `mirrorSeams`. A vertical
-  spreader is centred on every face, sub front and back seam. Returns step in the end sub / back pieces as
+  split only cuts the face / sub front / back: **no extra spreaders at the seams** (Mark 2026-11-03: they
+  overlapped the spaced ones; applies to Even / Full too). Returns step in the end sub / back pieces as
   before. `isKickJoinPiece` names the JOIN pieces.
 - Kick split… modal: a third mode **Set seams** with face seams (cabinet-joint chips) and sub front seams
   (round chip), and a live Face / Sub front / Back piece list. CanvasClient passes the kick length + start

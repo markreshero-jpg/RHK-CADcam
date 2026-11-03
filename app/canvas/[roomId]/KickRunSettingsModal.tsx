@@ -30,7 +30,7 @@ function suggestFaceSeams(L: number, joints: number[], maxSeg: number): number[]
 //  • Even / Full + remainder: face, sub front and back cut at the same seams.
 //  • Set seams (KS1): face seams and sub front seams set separately; the back is
 //    the sub front mirrored end for end so the long pieces start at opposite ends.
-// Seams are mm from the kick's left end. A spreader goes on every seam; split
+// Seams are mm from the kick's left end. Only the boards are cut (no extra spreaders); split
 // pieces get "JOIN" on their names. No length warning here: a piece longer than
 // the sheet shows in the optimiser as too large for any sheet.
 export default function KickRunSettingsModal({ runId, runLength, joints, onClose, onSaved }: {

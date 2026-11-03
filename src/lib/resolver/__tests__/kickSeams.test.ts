@@ -45,16 +45,16 @@ describe('Danny\'s Robe KICK 1 (2984)', () => {
   it('sub defaults to round numbers when no seams are set', () => {
     expect(lens(kickRunSegments(2984, run({ face_splits: [2059.5] })).sub)).toEqual([2400, 584])
   })
-  it('resolves pieces with a spreader on every seam', () => {
+  it('resolves the split pieces, no extra spreaders at the seams', () => {
     const { parts } = resolveKickRunParts(asm(2984, run({ face_splits: [2059.5], sub_splits: [2400] })), rules)
     const of = (k: string) => parts.filter(p => p.part_key === k)
     expect(of('kick_front_face').map(p => p.DY)).toEqual([2059.5, 924.5])
     expect(of('kick_sub_front').map(p => p.DY)).toEqual([2400, 584])
     expect(of('kick_back').map(p => p.DY)).toEqual([584, 2400])
     expect(of('kick_back')[1].X).toBe(584)
-    const TI = 16
-    const spr = of('spreader_vertical').map(p => p.X + TI / 2)
-    for (const seam of [2059.5, 2400, 584]) expect(spr.some(x => Math.abs(x - seam) < 0.01)).toBe(true)
+    const unsplit = resolveKickRunParts(asm(2984, run({ face_splits: [], sub_splits: [] })), rules)
+    expect(of('spreader_vertical').map(p => p.X))
+      .toEqual(unsplit.parts.filter(p => p.part_key === 'spreader_vertical').map(p => p.X))
   })
   it('JOIN only on a kick assembly\'s split face / sub / back', () => {
     expect(isKickJoinPiece('kick_back', 2, true)).toBe(true)

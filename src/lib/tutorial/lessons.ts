@@ -1571,7 +1571,7 @@ export function searchLessons(query: string): number[] {
       body: 'Pick Set seams. Face split at fills in the cabinet joint nearest the middle (click another joint chip to move it), so the face seam lines up with the doors and panels above. Sub front split at fills in round lengths (2400, then the rest). The back is the sub front mirrored, so its long piece starts at the other end and the joints stagger. The lines underneath show the pieces. Save.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.is_kick_assembly) },
     { id: 'check', title: 'JOIN on the pieces',
-      body: 'A spreader goes on every seam. Each split face / sub front / back is named with JOIN (Parts tab, cut list, optimiser labels) so the shop knows to join it. A piece longer than the sheet shows in the optimiser as too large for any sheet: change the seams if you see that.',
+      body: 'The spreaders stay where they are, the split only cuts the boards. Each split face / sub front / back is named with JOIN (Parts tab, cut list, optimiser labels) so the shop knows to join it. A piece longer than the sheet shows in the optimiser as too large for any sheet: change the seams if you see that.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
 

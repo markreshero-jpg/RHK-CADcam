@@ -11,8 +11,8 @@
 //     the full run length (fewer verticals than per-cabinet);
 //   • depth already baked into the assembly's DZ (built to the deepest member);
 //   • require ladder — leg-type runs are not merged (caller guards; we no-op);
-//   • oversized runs split into equal segments at max_segment_length, with a
-//     vertical spreader forced at every split seam so segments butt over a fixing;
+//   • oversized runs split into equal segments at max_segment_length (the split
+//     only cuts the face / sub front / back; no extra spreaders at the seams);
 //   • or manual seams (KS1): face seams + sub front seams set separately, the
 //     back mirrored from the sub front so the joints stagger.
 // ============================================================
@@ -226,19 +226,16 @@ export function resolveKickRunParts(
   const sprH  = TK - FC   // vertical spreader height
 
   // Collect vertical-spreader X positions across the whole run:
-  //   • both run ends, • TOESP-spaced internals, • forced at each split seam.
-  // Dedupe near-coincident positions (e.g. a seam landing on a TOESP centre).
+  //   • both run ends, • TOESP-spaced internals. Split seams get no extra
+  //   spreader (Mark 2026-11-03: they overlapped the spaced ones) — a split only
+  //   cuts the face, sub front and back.
+  // Dedupe near-coincident positions.
   const xL = x0 + ret.l, xR = x0 + L - TI - ret.r
   const xs: number[] = [xL, xR]
 
   const qty     = Math.max(0, Math.floor(L / r.TOESP) - 1)
   const spacing = L / (qty + 1)
   for (let i = 1; i <= qty; i++) xs.push(x0 + spacing * i - TI / 2)
-
-  // Interior seams of the face, sub front and back (skip each list's first
-  // segment, start 0) → a spreader centred on every seam, so both pieces fix to it.
-  for (const list of [segs.face, segs.sub, segs.back])
-    for (let i = 1; i < list.length; i++) xs.push(x0 + list[i].start - TI / 2)
 
   const uniqXs: number[] = []
   for (const x of xs.sort((a, b) => a - b)) {

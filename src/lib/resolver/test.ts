@@ -279,14 +279,10 @@ test('respaced spreaders span the whole run', () => {
   expect(maxX).toBe(1800 - 18)   // right end at L - TI
 })
 
-test('split seam forces a spreader at the seam', () => {
-  const result = resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: kickRun({ maxSeg: 800 }) }))
-  const xs = result.toekick_parts
-    .filter(p => p.part_key === 'spreader_vertical')
-    .map(p => Math.round(p.X))
-  // seams at 600 and 1200 → spreaders centred at 600-9=591 and 1200-9=1191
-  expect(xs.includes(591)).toBe(true)
-  expect(xs.includes(1191)).toBe(true)
+test('split adds no spreaders (same as unsplit)', () => {
+  const spr = (k: ReturnType<typeof kickRun>) => resolveCabinet(make2DoorBase({ id: 'k', DX: 1800, kick_run: k }))
+    .toekick_parts.filter(p => p.part_key === 'spreader_vertical').map(p => Math.round(p.X))
+  expect(spr(kickRun({ maxSeg: 800 })).join(',')).toBe(spr(kickRun()).join(','))
 })
 
 test('run kick applies L/R scribes at the run ends', () => {
