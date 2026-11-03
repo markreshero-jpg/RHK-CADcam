@@ -1586,6 +1586,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open the bulkhead (double-click) and look at the 3D: the fascia\'s bottom edge and the bottom return\'s front edge are cut at 45° and meet on the corner. Both parts are listed at their full blank and carry a comment — "MITRE 45° bottom edge to bottom return" on the fascia, "MITRE 45° front edge to fascia" on the bottom return — in the Parts tab, cut list and optimiser labels, so the shop mitres them on the saw.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-04 (z_benchtop_builder: waterfall skirt, RHK6478 island).
+  { id: 'waterfall_skirt', level: 'intermediate', topic: 'benchtops', title: 'Add a curved stone skirt to a waterfall',
+    blurb: 'A stone piece flush with the apron at one end of a waterfall leg, curving down to the floor.',
+    keywords: 'waterfall skirt curve curved stone fascia apron island seating back sweep ellipse leg', steps: [
+    { id: 'on', title: 'Tick Skirt on the waterfall edge',
+      body: 'Select the top and find its waterfall row in the benchtop panel (or Edit edges… and click the waterfall edge). Tick Skirt and pick which edge it runs along, e.g. the back apron on the seating side. The skirt is the top’s thickness, flush with that apron’s face, from the floor up to the apron underside, starting at the waterfall corner. It replaces that end’s return.',
+      canvas: true, done: c => c.benchtops.some(b => b.segments.some(s => !!s.edge?.waterfall_skirt)) },
+    { id: 'size', title: 'Set the curve',
+      body: 'Foot is where the curve meets the floor and Reach is where it meets the apron underside, both measured from the waterfall’s outer face. The curve is a quarter-ellipse: upright at the floor, flat at the apron. Look at that side’s elevation and the 3D. The Benchtop Supply report lists the skirt as a shaped stone piece with its area.',
+      canvas: true, done: c => c.benchtops.some(b => b.segments.some(s => !!s.edge?.waterfall_skirt && s.edge.waterfall_skirt.reach_mm !== 2100)) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -12,6 +12,7 @@
 
 import { useMemo, useState } from 'react'
 import type { BenchtopInstance, BenchtopSegment, BenchtopEdgeProfile } from '@/src/lib/types'
+import WaterfallSkirtControls from './WaterfallSkirtControls'
 import { segPoint, outwardNormal, segLength, edgeProfileColor, effectiveProfileId, waterfallJoin, waterfallReturn } from '@/src/lib/benchtopGeometry'
 import { tapeable, edgeTape, tapeOverridden, tapeTotals, setTapes, setProfiles, tapeColour } from '@/src/lib/benchtopEdgeband'
 import { btLocal, type BtShapeEdit, type BtEdgeEdit } from './canvasTypes'
@@ -224,7 +225,7 @@ function ProfileTab({ segs, edit, profiles, profileById, defaultProfileId, profi
       </div>
 
       {selProf?.generates === 'waterfall' && (
-        <div className="flex items-center gap-1 text-[10px] border border-purple-800/60 rounded p-1.5">
+        <div className="flex flex-wrap items-center gap-1 text-[10px] border border-purple-800/60 rounded p-1.5">
           <span className="text-purple-300 flex-1">Edge {edit.sel! + 1} waterfall leg</span>
           {(['butt', 'mitre'] as const).map(t => (
             <button key={t} onClick={() => onApply(s => s.map((x, i) => (i === edit.sel ? { ...x, edge: { ...x.edge, waterfall_join: t } } : x)))}
@@ -246,6 +247,8 @@ function ProfileTab({ segs, edit, profiles, profileById, defaultProfileId, profi
               }}
               className="w-12 bg-gray-900 border border-gray-700 rounded px-1 text-gray-200" />
           </label>
+          <WaterfallSkirtControls seg={selSeg!} index={edit.sel!} count={segs.length}
+            onSet={k => onApply(s => s.map((x, i) => (i === edit.sel ? { ...x, edge: { ...x.edge, waterfall_skirt: k } } : x)))} />
         </div>
       )}
 

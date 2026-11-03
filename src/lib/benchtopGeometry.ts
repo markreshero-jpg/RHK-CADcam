@@ -11,7 +11,7 @@
 
 import type {
   BenchtopInstance, BenchtopSegment, BenchtopJoinLine, BenchtopArcSegment,
-  BenchtopEdgeTag, BenchtopEdgeProfile, BenchtopJoinType,
+  BenchtopEdgeTag, BenchtopEdgeProfile, BenchtopJoinType, WaterfallSkirt,
 } from './types'
 
 export type P = { x: number; y: number }
@@ -535,6 +535,29 @@ export const waterfallJoin = (s: BenchtopSegment): BenchtopJoinType => s.edge?.w
 export const WATERFALL_RETURN_MM = 100
 /** The edge's return length (set per waterfall edge — e.g. 300 to reach the cabinets past an island's seating overhang). */
 export const waterfallReturn = (s: BenchtopSegment): number => s.edge?.waterfall_return_mm ?? WATERFALL_RETURN_MM
+/** The edge's skirt, when it has a usable one (reach past the foot). */
+export function waterfallSkirt(s: BenchtopSegment): WaterfallSkirt | null {
+  const k = s.edge?.waterfall_skirt
+  if (!k || (k.side !== 'start' && k.side !== 'end')) return null
+  const foot = Number(k.foot_mm), reach = Number(k.reach_mm)
+  return Number.isFinite(foot) && Number.isFinite(reach) && foot >= 0 && reach > foot ? { side: k.side, foot_mm: foot, reach_mm: reach } : null
+}
+
+/** A skirt's face in (u = along the apron edge from the leg's outer corner, v = up
+ *  from the floor): from `u0` (the face piece's inner edge, or the leg's inner face)
+ *  out to the quarter-ellipse u(v) = reach − (reach − foot)·√(1 − (v/H)²), floor to
+ *  H (the apron underside). Counter-clockwise, `n` steps on the curve. Null when
+ *  the curve doesn't clear u0. */
+export function skirtFace(k: WaterfallSkirt, u0: number, H: number, n = 24): { u: number; v: number }[] | null {
+  if (H <= 0 || k.foot_mm < u0 + 1) return null
+  const A = k.reach_mm - k.foot_mm
+  const curve = Array.from({ length: n + 1 }, (_, j) => {
+    const t = (j / n) * Math.PI / 2
+    return { u: k.reach_mm - A * Math.cos(t), v: H * Math.sin(t) }
+  })
+  return [{ u: u0, v: 0 }, ...curve, { u: u0, v: H }]
+}
+
 export interface WaterfallBuildUp { start: number; end: number; depth: number }
 export function waterfallBuildUp(
   segs: BenchtopSegment[], i: number,

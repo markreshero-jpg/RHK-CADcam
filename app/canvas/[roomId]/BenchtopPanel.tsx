@@ -4,6 +4,7 @@ import PanelDeleteButton, { PanelCloseButton } from './PanelDeleteButton'
 import { useState, useEffect } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import CalcInput from '@/src/components/CalcInput'
+import WaterfallSkirtControls from './WaterfallSkirtControls'
 import { BenchtopInstance, BenchtopBuildMethod, BenchtopEdgeProfile, BenchtopJoinType, Wall } from '@/src/lib/types'
 import type { BtPosition, WallSide, BtOverhang, StretchEnd } from '@/src/lib/benchtopAnchor'
 import type { BtThickness, BtTape, BtTapeContext } from './useBenchtopCatalog'
@@ -347,7 +348,7 @@ export default function BenchtopPanel({
                 const setEdge = (e: Partial<NonNullable<typeof s.edge>>) =>
                   void onUpdate(benchtop.id, shapeWrite(segs.map((x, k) => (k === i ? { ...x, edge: { ...x.edge, ...e } } : x))))
                 return (
-                  <div key={`wf${i}`} className="flex items-center gap-1 text-[10px] border border-purple-800/60 rounded p-1.5">
+                  <div key={`wf${i}`} className="flex flex-wrap items-center gap-1 text-[10px] border border-purple-800/60 rounded p-1.5">
                     <span className="text-purple-300 flex-1">Edge {i + 1} waterfall</span>
                     {(['butt', 'mitre'] as const).map(t => (
                       <button key={t} onClick={() => setEdge({ waterfall_join: t })}
@@ -368,6 +369,7 @@ export default function BenchtopPanel({
                         }}
                         className="w-12 bg-gray-900 border border-gray-700 rounded px-1 text-gray-200" />
                     </label>
+                    <WaterfallSkirtControls seg={s} index={i} count={segs.length} onSet={k => setEdge({ waterfall_skirt: k })} />
                   </div>
                 )
               })}

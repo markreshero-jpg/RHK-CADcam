@@ -268,6 +268,16 @@ line and mirrors the island elevation.
   overheads by 30 so their undersides stay put (wall units hang from that line),
   talls / panels / fillers −30. Leave a rangehood canopy alone. Equal-spaced
   fixed shelves move with the height — re-set any `split.at` (shelf top − 3).
+- **Waterfall ends = the WF edge profile** (RHK6478 Kitchen 2026-11-04): a
+  benchtop waterfall is `edge: { profile_id: <WF>, waterfall_join: 'mitre' }`
+  on that segment. There is no `waterfall: true` flag: it is ignored, and the
+  edge just draws as its apron (burned once: the Dune island had no waterfall).
+  On a 60 apron top the leg is built up automatically (face piece + return;
+  `waterfall_return_mm` 300 to reach past a seating overhang). A curved stone
+  **skirt** flush with the apron at one leg end (sketched as a sweep from the
+  floor up to the apron on the seating side) = `waterfall_skirt: { side:
+  'start'|'end', foot_mm, reach_mm }` on the WF edge, measured from the leg's
+  outer face (start = the p0 end, along the previous edge).
 - **Apron tops over end panels / curved ends** (Mark, RHK6581 island 2026-10-25):
   the top overhangs **5** past seen end panels and curved ends (curve radius
   +5, same centre), and those panels / curved ends stop **apron − 20 lower**

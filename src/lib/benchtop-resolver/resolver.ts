@@ -22,7 +22,7 @@
 import type { BenchtopScheduleRow, BenchtopPartRole, BenchtopBuildMethod, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { BenchtopResolverInput, ResolvedBenchtopPart, BenchtopPartMeta } from './types'
 import { DEFAULT_CROSS_MEMBER_SPACING, crossMemberPositions } from './construction'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints, waterfallReturn } from '@/src/lib/benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints, waterfallReturn, waterfallSkirt, skirtFace } from '@/src/lib/benchtopGeometry'
 import {
   splitIntoPieces, pieceFrame, pieceArea, isRectangle, crossIntervals, edgeLength, pieceContains,
   type PieceSeg, type PieceFrame,
@@ -318,9 +318,31 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
         // straight mitred apron deeper than the top, a face piece the apron's drop
         // wide (floor to the top surface, 45° both ways) + a return behind it
         // (floor to the underside).
+        // Skirt (edge.waterfall_skirt): a shaped piece in the neighbouring apron's
+        // plane, floor to its underside, from the face piece (or the leg) out to
+        // the quarter-ellipse. Replaces that end's return.
+        const sk = waterfallSkirt(s)
         for (const j of [i - 1, i + 1]) {
           const q = ps[(j + np) % np], qp = q.type === 'line' ? profileOf(q) : undefined
           const D = qp?.generates === 'apron' ? Number(qp.apron_drop_mm) || 0 : 0
+          const skHere = sk && sk.side === (j < i ? 'start' : 'end') ? sk : null
+          if (skHere) {
+            const built = D > thick.total
+            const u0 = built ? D : thick.total
+            const H = built ? sitsAt + thick.total - D : sitsAt
+            const face = skirtFace(skHere, u0, H)
+            if (face) {
+              const outline = face.map(p => ({ x: Math.round((p.u - u0) * 10) / 10, y: Math.round(p.v * 10) / 10 }))
+              const area = Math.abs(outline.reduce((a, p, k) => { const r = outline[(k + 1) % outline.length]; return a + p.x * r.y - r.x * p.y }, 0)) / 2
+              push({
+                ...wtMaterial, part_role: 'waterfall_skirt', label: `Waterfall Skirt${sfx}`,
+                length_mm: Math.round(skHere.reach_mm - u0), width_mm: Math.round(H), thickness_mm: thick.top, quantity: 1,
+                grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
+                supply_item: outsourced, piece: pieceNo, outline,
+                meta: { shaped: true, area_m2: Math.round(area / 1e4) / 100 },
+              })
+            }
+          }
           if (D <= thick.total) continue
           push({
             ...wtMaterial, part_role: 'waterfall_face', label: `Waterfall Face (${qp!.code ?? qp!.name})${sfx}`,
@@ -328,7 +350,7 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
             grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
             supply_item: outsourced, piece: pieceNo,
           })
-          const R = Math.min(waterfallReturn(s), Math.max(0, Math.round(len - 2 * thick.total)))
+          const R = skHere ? 0 : Math.min(waterfallReturn(s), Math.max(0, Math.round(len - 2 * thick.total)))
           if (R > 0) push({
             ...wtMaterial, part_role: 'waterfall_return', label: `Waterfall Return${sfx}`,
             length_mm: Math.round(sitsAt), width_mm: R, thickness_mm: thick.top, quantity: 1,

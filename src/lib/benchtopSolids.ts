@@ -14,11 +14,16 @@
 // than the top): that end gets a face piece the apron's drop wide (vertical 45°
 // to the leg, front-plane 45° to the apron — the apron's corner wedge comes
 // from apronCornerTris) and a return behind it (waterfallReturn, per edge).
+//
+// Skirt (edge.waterfall_skirt, Mark RHK6478 2026-11-04): a T-thick piece in the
+// neighbouring apron's plane at one leg end, floor to the apron underside, from
+// the face piece (or the leg's inner face) out to a quarter-ellipse. It replaces
+// that end's return. Drawn as convex slices up the curve.
 
 import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3, type BufferGeometry } from 'three'
 import type { BenchtopInstance, BenchtopEdgeProfile } from './types'
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallReturn } from './benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallReturn, waterfallSkirt, skirtFace } from './benchtopGeometry'
 import { loftSlab, undersideOutline, apronStrip, apronCornerTris } from './benchtopSlab3d'
 
 export interface BtSolidInfo { topZ: number; thick: { total: number }; defaultProfileId: string | null }
@@ -63,6 +68,23 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
   }
   for (const w of waterfalls) {
     const len = Math.hypot(w.s.p1.x - w.s.p0.x, w.s.p1.y - w.s.p0.y)
+    const sk = waterfallSkirt(w.s)
+    if (sk) {
+      const d = { x: (w.s.p1.x - w.s.p0.x) / len, y: (w.s.p1.y - w.s.p0.y) / len }
+      const a0 = sk.side === 'start' ? 0 : len, sg = sk.side === 'start' ? 1 : -1
+      const at = (a: number, u: number, v: number) => [w.s.p0.x + d.x * (a0 + sg * a) - w.n.x * u, v, w.s.p0.y + d.y * (a0 + sg * a) - w.n.y * u]
+      const D = w.bu[sk.side]
+      const face = skirtFace(sk, D || T, D ? topZ - D : under)
+      if (face) {
+        // face = [u0 floor, curve (floor → top) ..., u0 top]: slice between curve points
+        const curve = face.slice(1, -1), u0 = face[0].u
+        for (let k = 0; k < curve.length - 1; k++) {
+          const p = curve[k], q = curve[k + 1]
+          const quad: [number, number][] = [[u0, p.v], [p.u, p.v], [q.u, q.v], [u0, q.v]]
+          out.push({ key: `l${w.i}k${k}`, geo: hull(quad.flatMap(([u, v]) => [at(0, u, v), at(T, u, v)])) })
+        }
+      }
+    }
     if (w.bu.start || w.bu.end) {
       // Built-up leg: convex pieces in (a = along from p0, u = inward, v = up).
       const d = { x: (w.s.p1.x - w.s.p0.x) / len, y: (w.s.p1.y - w.s.p0.y) / len }
@@ -80,7 +102,7 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
         const face: [number, number][] = [[0, 0], [0, D], [T, D], [T, T]]
         out.push({ key: `l${w.i}f${k}`, geo: hull(face.flatMap(([a, u]) => [at(A(a), u, 0), at(A(a), u, topZ - u)])) })
         // Return: behind the face's inner edge, to the underside.
-        const R = Math.min(waterfallReturn(w.s), Math.max(0, len - 2 * T))
+        const R = sk?.side === (k === 's' ? 'start' : 'end') ? 0 : Math.min(waterfallReturn(w.s), Math.max(0, len - 2 * T))
         if (R > 0) {
           const ret: [number, number][] = [[T, D - T], [T, D], [T + R, D], [T + R, D - T]]
           out.push({ key: `l${w.i}r${k}`, geo: hull(ret.flatMap(([a, u]) => [at(A(a), u, 0), at(A(a), u, under)])) })

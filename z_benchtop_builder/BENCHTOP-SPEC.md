@@ -21,6 +21,17 @@
 > elevations via BenchtopElevation (the edge reads as one face from the top down to the apron
 > drop; when aprons cover the whole span the band itself is drawn that deep).
 > `apron_drop_mm` = the finished edge height (MA80 = 80). Section view not yet.
+> **2026-11-04: waterfall skirt** (Mark, RHK6478 Dune island, markup sheet 3 Elev 7): `edge.waterfall_skirt
+> { side, foot_mm, reach_mm }` on a waterfall edge. A top-thickness stone piece flush with the neighbouring apron's
+> face at that leg end (start = p0 / edge i−1, end = p1 / edge i+1), floor to the apron underside (to the
+> underside when that edge has no deeper apron), from the face piece's inner edge (or the leg's inner face) out to
+> a quarter-ellipse `u(v) = reach − (reach − foot)·√(1 − (v/H)²)`: upright at the floor `foot` from the corner,
+> flat at the apron `reach` from it. It replaces that end's return. `skirtFace` (benchtopGeometry); resolver part
+> `waterfall_skirt` (supply item, shaped outline, area); 3D = convex slices up the curve (benchtopSolids, so the
+> cross section has it too); elevation draws it on the side that faces the apron. Panel: Skirt tick + edge + Foot
+> / Reach in the waterfall rows (WaterfallSkirtControls). Not drawn in plan; doesn't block cabinet placement.
+> In-app check pending.
+>
 > **2026-10-29: built-up waterfalls** (Mark, RHK6592 "60 top + 60 waterfall"): where a waterfall
 > leg's end meets a straight mitred apron deeper than the top (MA60 on a 20 slab), that end gets a
 > **face piece** the apron's drop wide (floor to top surface; vertical 45° to the leg, 45° in the

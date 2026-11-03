@@ -22,7 +22,7 @@ import type { BenchtopInstance, BenchtopEdgeProfile, Wall } from '@/src/lib/type
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import {
-  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin, waterfallBuildUp,
+  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallSkirt, skirtFace,
 } from '@/src/lib/benchtopGeometry'
 import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, type WallSide } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
@@ -145,7 +145,15 @@ export default function BenchtopElevation({
             const bu = waterfallBuildUp(segs, i, profiles, defaultProfileId, thick.total)
             const faces = (j: number) => dot(outwardNormal(segs, (j + segs.length) % segs.length), f.n) > 0.5
             const D = !endOn ? 0 : bu.start && faces(i - 1) ? bu.start : bu.end && faces(i + 1) ? bu.end : 0
+            // Skirt on the end facing the viewer: its face in (u along from the
+            // outer corner, v up from the floor) → elevation points.
+            const sk = waterfallSkirt(s)
+            const skSeen = sk && endOn && faces(sk.side === 'start' ? i - 1 : i + 1) ? sk : null
+            const skD = skSeen ? bu[skSeen.side] : 0
+            const skFace = skSeen ? skirtFace(skSeen, skD || thick.total, skD ? topZ - skD : topZ - thick.total) : null
+            const skirt = skFace?.map(p => [outer + Math.sign(inner - outer) * p.u, roomH - p.v]) ?? null
             return {
+              skirt,
               i, a: Math.min(...lts), b: Math.max(...lts), endOn, outer, inner, D,
               innerD: outer + Math.sign(inner - outer) * D,
               join: waterfallJoin(s),
@@ -204,6 +212,16 @@ export default function BenchtopElevation({
           const top = l.join === 'mitre' ? yTop : yBot   // face-on mitre runs to the top edge
           return [[l.a, top], [l.b, top], [l.b, roomH], [l.a, roomH]]
         }
+        const skirtEl = (l: typeof legs[number]) => l.skirt && (
+          <polygon key={`wk${l.i}`} points={l.skirt.map(q => q.join(',')).join(' ')}
+            fill={fill} fillOpacity={print ? 1 : 0.85 * fillOp}
+            stroke={isSel ? '#f59e0b' : stroke} strokeWidth={print ? bandW(false) : 1 / lz} opacity={lp.opacity}
+            strokeDasharray={lp.strokeDasharray}
+            style={{ cursor: 'pointer' }}
+            onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
+            <title>Waterfall skirt — stone, flush with the apron</title>
+          </polygon>
+        )
         const legEl = (l: typeof legs[number]) => (
           <polygon key={`wf${l.i}`} points={legPts(l).map(q => q.join(',')).join(' ')}
             fill={fill} fillOpacity={print ? 1 : 0.85 * fillOp}
@@ -221,6 +239,7 @@ export default function BenchtopElevation({
           <Fragment key={bt.id}>
             {/* Waterfall legs under / beside the band (face-on mitres go over it) */}
             {legs.filter(l => !faceMitre(l)).map(legEl)}
+            {legs.map(skirtEl)}
 
             {/* Top band — its ends follow any mitred end-on legs */}
             <polygon points={bandPts}

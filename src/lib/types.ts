@@ -349,6 +349,18 @@ export interface BenchtopArcSegment {
 
 // Per-edge finish (Phase 3). No profile_id on an exposed edge = the build
 // method's default profile. Wall edges never carry a profile (P-d).
+/** Waterfall skirt (Mark, RHK6478 island 2026-11-04): a top-thickness stone piece
+ *  flush with the neighbouring apron's face, floor to the apron underside, running
+ *  along that edge from the leg corner. Its free end is a quarter-ellipse: on the
+ *  floor `foot_mm` from the corner (vertical there), meeting the apron underside
+ *  `reach_mm` from the corner (flat there). `side` = the leg end it sits at
+ *  (start = p0, next to edge i−1; end = p1, next to edge i+1). */
+export interface WaterfallSkirt {
+  side:     'start' | 'end'
+  foot_mm:  number
+  reach_mm: number
+}
+
 export interface BenchtopEdge {
   wall?: boolean
   profile_id?: string | null
@@ -356,6 +368,8 @@ export interface BenchtopEdge {
   waterfall_join?: BenchtopJoinType
   /** Waterfall edges only: built-up return length behind each face piece (mm). Default WATERFALL_RETURN_MM. */
   waterfall_return_mm?: number
+  /** Waterfall edges only: a shaped stone skirt in the apron plane at one end of the leg (z_benchtop_builder, 2026-11-04). */
+  waterfall_skirt?: WaterfallSkirt | null
   /** Edge tape (Phase 7): undefined = the schedule's tape, null = none, id = that tape. */
   edgeband_id?: string | null
   /** Joint with another benchtop here (Phase 7c): not exposed — no profile / tape; the resolver treats it as a join edge. */
@@ -478,6 +492,7 @@ export type BenchtopPartRole =
   | 'waterfall_panel'
   | 'waterfall_face'     // built-up waterfall: face piece at an apron end
   | 'waterfall_return'   // built-up waterfall: short return behind the face
+  | 'waterfall_skirt'    // shaped stone skirt in the apron plane at a leg end (edge.waterfall_skirt)
   | 'apron_strip'
 
 export interface BenchtopScheduleRow {

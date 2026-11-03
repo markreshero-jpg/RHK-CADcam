@@ -127,6 +127,28 @@ describe('resolver — shape-true parts', () => {
     const parts = resolveBenchtopParts(input(bt(segs), method({ construction: 'solid' })))
     expect(parts.find(p => p.part_role === 'apron_strip')).toMatchObject({ length_mm: 2000, width_mm: 60, thickness_mm: 16.5 })
   })
+  it('waterfall skirt: a shaped piece flush with the apron at one leg end replaces that return (RHK6478 island)', () => {
+    // 3200 x 1400 island, APR 60 all round, waterfall west; skirt along the back edge, foot 400, reach 2100.
+    const segs = poly([[1230, 1750], [4430, 1750], [4430, 3150], [1230, 3150]])
+    for (const k of [0, 1, 2]) segs[k].edge = { profile_id: APR }
+    segs[3].edge = { profile_id: WF, waterfall_join: 'mitre', waterfall_return_mm: 300, waterfall_skirt: { side: 'start', foot_mm: 400, reach_mm: 2100 } }
+    const all = resolveBenchtopParts(input(bt(segs), method({ construction: 'outsourced', active_part_roles: ['stone_slab'] })))
+    const sk = all.filter(p => p.part_role === 'waterfall_skirt')
+    expect(sk).toHaveLength(1)
+    // from the face piece's inner edge (60) out to the reach; floor to the apron underside (900 + 20 - 60)
+    expect(sk[0]).toMatchObject({ length_mm: 2040, width_mm: 860, thickness_mm: 20, supply_item: true })
+    const o = sk[0].outline!
+    expect(o[0]).toEqual({ x: 0, y: 0 })
+    expect(o[1]).toEqual({ x: 340, y: 0 })                 // foot 400 - 60
+    expect(o[o.length - 2]).toEqual({ x: 2040, y: 860 })    // meets the apron underside at the reach
+    expect(o[o.length - 1]).toEqual({ x: 0, y: 860 })
+    const qty = (r: string) => all.filter(p => p.part_role === r).reduce((a, p) => a + p.quantity, 0)
+    expect(qty('waterfall_face')).toBe(2)
+    expect(qty('waterfall_return')).toBe(1)   // the front end keeps its return
+    expect(sk[0].meta?.area_m2).toBeGreaterThan(0.5)
+    expect(sk[0].meta?.area_m2).toBeLessThan(2040 * 860 / 1e6)
+  })
+
   it('built-up waterfall: a mitred apron deeper than the top adds a face piece + return at that end', () => {
     // Wall run (RHK6592): back + right on walls, APR 60 front, waterfall on the left.
     const segs = poly([[0, 0], [1560, 0], [1560, 600], [0, 600]], [0, 1])
