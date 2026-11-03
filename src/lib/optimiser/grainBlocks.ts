@@ -102,9 +102,10 @@ export function layoutBlock(fronts: { uid: string; rect: WallRect; w: number; h:
 }
 
 // Does a w×h part (as the nester would orient it) fit an empty sheet?
-function fitsSheet(part: Pick<NestPartInput, 'w' | 'h' | 'grainLock' | 'grainAcross'>, stock: SheetStock, gap: number, allowRot: boolean): boolean {
+function fitsSheet(part: Pick<NestPartInput, 'w' | 'h' | 'grainLock' | 'grainAcross'>, stock: SheetStock, allowRot: boolean): boolean {
   const uW = stock.w - stock.trimLeft - stock.trimRight, uH = stock.h - stock.trimTop - stock.trimBottom
-  const ok = (w: number, h: number) => w + gap <= uW + 1e-6 && h + gap <= uH + 1e-6
+  // The gap is between parts only — a part may sit on the trim (nest.ts tryPlace).
+  const ok = (w: number, h: number) => w <= uW + 1e-6 && h <= uH + 1e-6
   const g = grainOrient({ ...part, grainAcross: part.grainAcross }, stock)
   if (g) return ok(g.w, g.h)
   return ok(part.w, part.h) || (allowRot && ok(part.h, part.w))
@@ -174,7 +175,7 @@ export function buildGrainBlocks(inp: BuildBlocksInput): BuildBlocksResult {
     const fits = (fs: Front[]) => {
       if (!stock) return true
       const b = lay(fs)
-      return fitsSheet({ w: b.W, h: b.H, grainLock, grainAcross }, stock, gap, inp.allowRotation)
+      return fitsSheet({ w: b.W, h: b.H, grainLock, grainAcross }, stock, inp.allowRotation)
     }
 
     // Split at cabinet boundaries: cabinets in wall order, greedy (fewest pieces).

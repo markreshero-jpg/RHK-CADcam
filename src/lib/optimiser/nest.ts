@@ -150,7 +150,10 @@ function tryPlace(open: OpenSheet, part: NestPartInput, gap: number, allowRot: b
 
   let chosen: { x: number; y: number; w: number; h: number; rotated: boolean } | null = null
   for (const [w, h, rotated] of orients) {
-    const pos = findPos(open.sky, open.uW, open.uH, w + gap, h + gap)
+    // Each part reserves w+gap × h+gap; the gap is only needed BETWEEN parts, so
+    // the skyline runs gap past the usable edge — a part may sit right on the trim
+    // (as manual placement allows). 2400 kicks on a 2415 sheet, 5 trim (RHK6542).
+    const pos = findPos(open.sky, open.uW + gap, open.uH + gap, w + gap, h + gap)
     if (pos && (!chosen || pos.y < chosen.y - EPS)) chosen = { x: pos.x, y: pos.y, w, h, rotated }
   }
   if (!chosen) return false
@@ -171,11 +174,11 @@ function tryPlace(open: OpenSheet, part: NestPartInput, gap: number, allowRot: b
   return true
 }
 
-function makeOpen(stock: SheetStock, index: number, materialId: string | null, thickness: number): OpenSheet {
+function makeOpen(stock: SheetStock, index: number, materialId: string | null, thickness: number, gap: number): OpenSheet {
   const u = usable(stock)
   return {
     sheet: { index, materialId, thickness, stock, placements: [], efficiency: 0 },
-    sky: [{ x: 0, width: u.w, y: 0 }],
+    sky: [{ x: 0, width: u.w + gap, y: 0 }],
     uW: u.w, uH: u.h, placedArea: 0,
   }
 }
@@ -193,7 +196,7 @@ function packGroup(parts: NestPartInput[], stock: GroupStock, settings: NestSett
   // Does an empty sheet of this stock have room for the part (either orientation)?
   const fitsEmpty = (stk: SheetStock, part: NestPartInput): boolean => {
     const u = usable(stk)
-    const ok = (w: number, h: number) => w + gap <= u.w + EPS && h + gap <= u.h + EPS
+    const ok = (w: number, h: number) => w <= u.w + EPS && h <= u.h + EPS   // gap is between parts, not to the trim
     return orientsFor(part, stk, settings.allowRotation).some(([w, h]) => ok(w, h))
   }
 
@@ -208,7 +211,7 @@ function packGroup(parts: NestPartInput[], stock: GroupStock, settings: NestSett
     const stk = idx >= 0 ? offcutQueue.splice(idx, 1)[0]
       : fitsEmpty(stock.standard, part) ? stock.standard : null
     if (!stk) { unplaced.push(part); continue }
-    const o = makeOpen(stk, sheetIdx++, matId, thickness)
+    const o = makeOpen(stk, sheetIdx++, matId, thickness, gap)
     open.push(o)
     tryPlace(o, part, gap, settings.allowRotation)
   }
