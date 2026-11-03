@@ -1,0 +1,68 @@
+{
+  "_source": "\\\\server\\Data\\_JOBS\\RHK6500 - 6599\\RHK6542 - DHID  White - Sunshine Beach\\ARCHITECTURALS\\Danny's Robe Plans and Site Measure.pdf (DHID A116 rev 5) + Mark Q&A 2026-11-03",
+  "_notes": [
+    "Alcove 3000 wall to wall, 600 deep + 125 sliding door zone. CH 2540, robe 2400, 140 MDF bulkhead painted by others. Kick 80 white.",
+    "Carcass 580 deep. 30 fillers each end -> 2940: bays 902.5 / 1135 / 902.5 (drawing 932 / 1135 / 932, middle kept for the 48in TV).",
+    "Lowers 80 -> 2010 AFF, separate 390 uppers 2010 -> 2400 (double top / bottom = 33 at 2010; LED routed in the middle lower's top underside).",
+    "Bay 1: tall hanging rail + 900 shoe pull-out shelf (100 front at 66 above the carcass bottom). Bay 2: 2 inner drawers (25 finger gaps), AV fixed shelf, 200 bottom-hinged flap off that shelf, fixed shelf, TV false panel at half depth. Bay 3: 3 inner drawers (25 gaps), fixed shelf, short hanging rail.",
+    "Sliding doors left out (Mark)."
+  ],
+  "projectId": "073332e0-8a03-4071-9c10-8ba098cd9e22",
+  "roomName": "Danny's Robe",
+  "roomHeight": 2540,
+  "wallCabinetTop": 2400,
+  "roomRules": { "TOEH": 80 },
+  "walls": [
+    { "x": 0, "y": 725, "length": 725, "angle": 270, "_": "1 left return, S->N" },
+    { "x": 0, "y": 0, "length": 3000, "angle": 0, "_": "2 robe back wall, W->E = elevation" },
+    { "x": 3000, "y": 0, "length": 725, "angle": 90, "_": "3 right return (nib), N->S" }
+  ],
+  "cabinets": [
+    { "def": "TFKW", "wall": 2, "offset": 0, "dx": 30, "dy": 2400, "dz": 580, "note": "30 filler at the left wall, whiteboard",
+      "set": { "material_overrides": { "exposed": "d081b2a1-38a8-472c-a415-f179699a1347" } } },
+    { "def": "T2D", "wall": 2, "offset": 30, "dx": 902.5, "dy": 2010, "dz": 580,
+      "note": "Bay 1 tall hanging: hanging rail under the top, 900 shoe pull-out shelf 16 whiteboard with a 100 front. Sliding doors to come.",
+      "set": { "has_face": false, "toekick_overrides": { "face": "d081b2a1-38a8-472c-a415-f179699a1347" },
+        "internal_grid": { "tree": { "type": "open", "fittings": [
+          { "type": "inner_drawer", "drawer_type": "five_piece", "height": 82, "y_locked": true, "y_position": 64 },
+          { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 1824 } ] } } } },
+    { "def": "T2D", "wall": 2, "offset": 932.5, "dx": 1135, "dy": 2010, "dz": 580,
+      "note": "Bay 2 drawers + TV: 2 inner drawers (25 finger gaps), AV shelf, 200 flap hinged at the bottom off the AV shelf, fixed shelf, TV false panel half depth (cables behind it - no LV wire through the wall), COB LED routed in the underside of the top.",
+      "set": { "toekick_overrides": { "face": "d081b2a1-38a8-472c-a415-f179699a1347" },
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height": 468.75, "height_locked": true }, { "row_index": 1, "height": 221, "height_locked": true }, { "row_index": 2, "height_locked": false } ],
+          "zones": [
+            { "col_index": 0, "row_index": 0, "face_type": "open" },
+            { "col_index": 0, "row_index": 1, "face_type": "door", "hinge_side": "bottom", "handle_id": "none" },
+            { "col_index": 0, "row_index": 2, "face_type": "open" } ] },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 444, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 16.5 },
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 237.5 } ] } },
+          { "size": 204.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "T2D", "wall": 2, "offset": 2067.5, "dx": 902.5, "dy": 2010, "dz": 580,
+      "note": "Bay 3 short hanging: 3 inner drawers (25 finger gaps), fixed shelf, hanging rail under the top. Sliding doors to come.",
+      "set": { "has_face": false, "toekick_overrides": { "face": "d081b2a1-38a8-472c-a415-f179699a1347" },
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 665, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 16.5 },
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 237.5 },
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 458.5 } ] } },
+          { "section": { "type": "open", "fittings": [
+            { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 1824 } ] } } ] } } } },
+    { "def": "TFKW", "wall": 2, "offset": 2970, "dx": 30, "dy": 2400, "dz": 580, "note": "30 filler at the right wall, whiteboard",
+      "set": { "material_overrides": { "exposed": "d081b2a1-38a8-472c-a415-f179699a1347" } } },
+    { "def": "W2D", "wall": 2, "offset": 30, "dx": 902.5, "dy": 390, "dz": 580, "note": "Bay 1 top cupboard 2010-2400, open (sliding doors)", "set": { "has_face": false } },
+    { "def": "W2D", "wall": 2, "offset": 932.5, "dx": 1135, "dy": 390, "dz": 580, "note": "Bay 2 top cupboard 2010-2400, open (sliding doors)", "set": { "has_face": false } },
+    { "def": "W2D", "wall": 2, "offset": 2067.5, "dx": 902.5, "dy": 390, "dz": 580, "note": "Bay 3 top cupboard 2010-2400, open (sliding doors)", "set": { "has_face": false } },
+    { "def": "BH", "wall": 2, "offset": 0, "dx": 3000, "dy": 140, "dz": 580,
+      "note": "140 bulkhead 2400-2540 wall to wall, raw MDF 18, painted by others",
+      "set": { "material_overrides": { "exposed": "3b486c8f-ee1c-494d-b462-2dd206e3999d" },
+        "bulkhead": { "front": "carcase", "auto_h": true, "cleat": true,
+          "left": { "on": false, "depth": 580, "joint": "mitre" },
+          "right": { "on": false, "depth": 580, "joint": "mitre" },
+          "bottom": { "on": false, "depth": 580, "joint": "mitre" } } } }
+  ]
+}
