@@ -41,4 +41,8 @@ describe('hinge plate ↔ fixed shelf', () => {
   it('ignores a shelf on another bay', () => {
     expect(plateFixedShelfHits(hinge(799), [{ ...fixedShelf, X: 900 } as ResolvedInternalPart])).toEqual([])
   })
+  it('ignores a flap hinged off the shelf it mounts on (RHK6542 AV flap)', () => {
+    const flap = { ...hinge(809), hinge_edge: 'bottom' } as ResolvedHingeInstance
+    expect(plateFixedShelfHits(flap, [fixedShelf])).toEqual([])
+  })
 })

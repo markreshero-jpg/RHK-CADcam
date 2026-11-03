@@ -147,6 +147,9 @@ export function checkHingeShelfHoleClash(
 
 /** Fixed shelves touching the hinge's gable whose thickness falls under its plate. */
 export function plateFixedShelfHits(h: ResolvedHingeInstance, internalParts: ResolvedInternalPart[]): ResolvedInternalPart[] {
+  // Gable plates only. A flap / lift-up door (bottom / top edge) mounts its
+  // plates ON a shelf or panel by design (RHK6542 Danny's Robe AV flap).
+  if (h.hinge_edge === 'top' || h.hinge_edge === 'bottom') return []
   const b = plateBox(h)
   const x = h.plate_drills?.[0]?.x
   if (!b || x === undefined) return []

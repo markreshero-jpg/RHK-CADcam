@@ -234,7 +234,7 @@ export function resolveHinges(
         target = mount?.part_key ? { table: 'case_parts', part_key: mount.part_key as ResolvedCasePart['part_key'] } : null
         plateDrills = (plate && mount && target) ? buildAngledPlateDrills(plate, mount, cupY) : []
       } else {
-        const res = resolveMount(hingeEdge, mountSurface, snapTol, cupY, z, caseParts, internalParts, plate)
+        const res = resolveMount(hingeEdge, mountSurface, snapTol, cupX, cupY, z, caseParts, internalParts, plate)
         target = res.target
         plateDrills = (plate && target) ? buildPlateDrills(plate, res.mountX, res.mountY, res.mountZ, res.mountAxis) : []
       }
@@ -372,6 +372,7 @@ function resolveMount(
   edge: 'left' | 'right' | 'top' | 'bottom',
   surface: 'auto' | 'side' | 'top' | 'bottom' | 'shelf',
   snapTol: number,
+  cupX: number,
   cupY: number,
   z: ResolvedFaceZone,
   caseParts: ResolvedCasePart[],
@@ -425,11 +426,13 @@ function resolveMount(
       if (d < bestDist) { bestDist = d; best = s }
     }
     if (best && (surface === 'shelf' || bestDist <= snapTol)) {
-      const sCentreY = best.Y + best.DZ / 2
+      // Plate sits under its own hinge (cup X), on the shelf face toward the
+      // door: top face for a bottom-hinged flap, underside for a top-hinged one
+      // (RHK6542 Danny's Robe AV flap: every plate landed mid-door, mid-shelf).
       return {
         target: { table: 'internal_parts', internal_part_type: best.part_type, internal_sort_order: best.sort_order },
-        mountX: z.X + z.DX / 2,
-        mountY: sCentreY,
+        mountX: cupX,
+        mountY: edge === 'top' ? best.Y : best.Y + best.DZ,
         mountZ: plateZ,
         // Plate fires on the shelf face toward the door (downward for a top hinge
         // shelf, upward for a bottom). Use edge to pick.
@@ -444,8 +447,8 @@ function resolveMount(
             ?? caseParts.find(p => p.part_key === 'front_rail')
     return {
       target: part ? { table: 'case_parts', part_key: part.part_key } : null,
-      mountX: z.X + z.DX / 2,
-      mountY: z.Y + z.DY,
+      mountX: cupX,
+      mountY: part ? part.Y : z.Y + z.DY,
       mountZ: plateZ,
       mountAxis: 'y-',
     }
@@ -454,8 +457,8 @@ function resolveMount(
   const part = caseParts.find(p => p.part_key === 'bottom')
   return {
     target: part ? { table: 'case_parts', part_key: 'bottom' } : null,
-    mountX: z.X + z.DX / 2,
-    mountY: z.Y,
+    mountX: cupX,
+    mountY: part ? part.Y + part.DZ : z.Y,
     mountZ: plateZ,
     mountAxis: 'y+',
   }
