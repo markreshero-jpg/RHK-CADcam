@@ -38,7 +38,7 @@ function roleMaterialId(role: string | null | undefined, input: CabinetInput): s
 // Room-view custom part columns plus what resolution needs (formulas, override,
 // role). Same embed as ROOM_CUSTOM_PART_COLS, widened with material_role.
 const CUSTOM_PART_RESOLVE_COLS =
-  'id,cabinet_instance_id,part_library_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,' +
+  'id,cabinet_instance_id,part_library_id,name,material_id,dx,dy,dz,x,y,z,edge_top,edge_bottom,edge_left,edge_right,visible,show_in_room,hide_views,orientation,grain_across,' +
   'expressions,material_override_id,part_cutouts,outline,cutouts,parts_library(key,material_role)'
 
 // Cut-outs on a custom part (z_rangehood R3): its `part_cutouts` cut against

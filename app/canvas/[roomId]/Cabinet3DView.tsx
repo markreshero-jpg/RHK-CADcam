@@ -12,7 +12,7 @@ import { saveSVGEdge } from './cabinetEditSvgHelpers'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import type { CabinetInstance } from '@/src/lib/types'
 import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
-import { customExtents, customFieldForExtent, customPanelKind, type CustomOrient } from '@/src/lib/customPartBox'
+import { customExtents, customFieldForExtent, customPanelKind, customGrainExt, type CustomOrient } from '@/src/lib/customPartBox'
 import type {
   ResolvedCabinet, ResolvedCasePart, ResolvedToekickPart,
   ResolvedInternalPart, ResolvedFaceZone,
@@ -1269,7 +1269,7 @@ function explodeItems(nodes: React.ReactNode, prefix = ''): { key: string; node:
 // layer item; omitted (cabinet editor) = show everything.
 export type SceneCustomPart = Pick<CabinetCustomPart,
   'id' | 'name' | 'material_id' | 'dx' | 'dy' | 'dz' | 'x' | 'y' | 'z' |
-  'edge_top' | 'edge_bottom' | 'edge_left' | 'edge_right' | 'visible' | 'orientation'> &
+  'edge_top' | 'edge_bottom' | 'edge_left' | 'edge_right' | 'visible' | 'orientation' | 'grain_across'> &
   { part_library_id?: string | null; library_key?: string | null }
 
 export function CabinetScene({
@@ -1913,6 +1913,7 @@ export function CabinetScene({
           panelKind: kind,
           dxIsWidth: orient === 'front' || undefined,
           materialId: p.material_id ?? undefined,
+          grainExt: p.grain_across ? customGrainExt(orient, true) : undefined,
         }
         return (
           <PartAlpha key={`cust${i}`} a={alpha(customPartItem(p))}><Part

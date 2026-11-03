@@ -7,7 +7,7 @@
 //   Part, PartPropertiesPanel, PreviewCanvas                  (components)
 
 import { Suspense, useState, useEffect, useMemo, useRef, createContext, useContext } from 'react'
-import { GrainContext, FrontGrainAcrossContext, boxGrainMaps, singleGrainMap, grainExtents, shapedGrainMaps } from './woodGrain'
+import { GrainContext, FrontGrainAcrossContext, boxGrainMaps, singleGrainMap, grainExtents, shapedGrainMaps, type Ext as GrainExt } from './woodGrain'
 import * as THREE from 'three'
 import { Canvas, useThree, type ThreeEvent } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, OrthographicCamera, Edges, Line } from '@react-three/drei'
@@ -58,6 +58,9 @@ export interface PartMeta {
   // out without the height→DX display swap it applies to other non-side panels.
   // Ignored by 3D rendering — purely an editor hint.
   dxIsWidth?: boolean
+  // Grain direction override for the 3D grain maps (e.g. a custom part ticked
+  // "grain across" — a front-on wall cleat with the grain along its length).
+  grainExt?: { grain: GrainExt; thick: GrainExt }
   // Resolver outline of a shaped cabinet's part (bottom / top / shelf clipped to
   // the footprint, z_cabinet_shape) in the Shape Editor frame — the Part Editor
   // shows it when the part has no drawn shape of its own.
@@ -581,11 +584,11 @@ export function Part({
     if (!grainOn) return null
     if (shapeGeom && !csgGeom) return shapedGrainMaps(shape?.extrude, meta.panelKind, meta.id)
     if (shapeGeom) return null   // shaped + pocket cuts: single flat material
-    const ext = grainAcross ? { grain: 'w' as const, thick: 'd' as const } : grainExtents(meta.panelKind, meta.id)
+    const ext = meta.grainExt ?? (grainAcross ? { grain: 'w' as const, thick: 'd' as const } : grainExtents(meta.panelKind, meta.id))
     return csgGeom
       ? [singleGrainMap(core.w, core.h, core.d, ext.grain, ext.thick)]
       : boxGrainMaps(core.w, core.h, core.d, ext.grain, ext.thick)
-  }, [grainOn, grainAcross, csgGeom, shapeGeom, shape?.extrude, meta.panelKind, meta.id, core.w, core.h, core.d])
+  }, [grainOn, grainAcross, meta.grainExt?.grain, meta.grainExt?.thick, csgGeom, shapeGeom, shape?.extrude, meta.panelKind, meta.id, core.w, core.h, core.d])
   useEffect(() => () => { grainMaps?.forEach(t => t?.dispose()) }, [grainMaps])
 
   // The edge targets (selected part, edge-banding on) — in solid and wire alike.

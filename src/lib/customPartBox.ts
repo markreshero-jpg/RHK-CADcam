@@ -30,6 +30,14 @@ export function customFieldForExtent(orient: CustomOrient, ext: 'w' | 'h' | 'd')
 }
 
 // Panel kind for face-colour / edge-strip geometry, derived from orientation.
+// 3D grain extents for a custom part. Grain runs along DY (length) by default;
+// grain_across turns it onto DX. Box extents as customExtents (w = ex, h = ey, d = ez).
+export function customGrainExt(orient: CustomOrient, grainAcross: boolean): { grain: 'w' | 'h' | 'd'; thick: 'w' | 'h' | 'd' } {
+  if (orient === 'side')  return { grain: grainAcross ? 'd' : 'h', thick: 'w' }
+  if (orient === 'front') return { grain: grainAcross ? 'w' : 'h', thick: 'd' }
+  return { grain: grainAcross ? 'd' : 'w', thick: 'h' }
+}
+
 export function customPanelKind(orient: CustomOrient): 'horizontal' | 'side' | 'face' {
   return orient === 'side' ? 'side' : orient === 'front' ? 'face' : 'horizontal'
 }

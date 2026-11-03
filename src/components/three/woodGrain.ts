@@ -54,7 +54,7 @@ function grainTexture(): THREE.CanvasTexture {
   return shared
 }
 
-type Ext = 'w' | 'h' | 'd'
+export type Ext = 'w' | 'h' | 'd'
 
 // Which box extent the grain runs along, and which is the thickness, for a
 // rendered part. Upright panels (sides, doors, drawer fronts, backs, curved
