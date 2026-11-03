@@ -75,7 +75,7 @@ function touchSide(a: ReturnType<typeof turnedBox>, b: ReturnType<typeof turnedB
 export function enumerateShapedSeams(
   caseParts: ResolvedCasePart[],
   internalParts: ResolvedInternalPart[] = [],
-  opts?: { adjFullBank?: boolean },
+  opts?: { adjFullBank?: boolean; adjBackMinW?: number },
 ): ShapedSeamCandidate[] {
   // Plain boxes keep the legacy carcass list; only their fixed shelves on the
   // back come through here (below).
@@ -155,7 +155,9 @@ export function enumerateShapedSeams(
   // cabinet (L corner) — a shelf that long needs pins along its back edges
   // too (Mark, 2026-10-15). Back pins inherit the shelf's side joint.
   // A fixed shelf screws into any back it sits hard against, plain box
-  // included (Mark, 2026-10-25) — fixed_shelf:back, inheriting the side joint. ──
+  // included (Mark, 2026-10-25) — fixed_shelf:back, inheriting the side joint.
+  // A wide adj shelf pins into a plain back too, from ADJ_BACK_MIN_W up
+  // (Mark, 2026-11-03). ──
   const intKey = (p: ResolvedInternalPart) => `int_${p.part_type}_${p.sort_order}`
   const shelves = internalParts.filter(p => p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf')
   // Horizontal anchors bounding a full-bank compartment (as enumerateInternalSeams).
@@ -167,21 +169,24 @@ export function enumerateShapedSeams(
   for (const pb of caseParts) {
     const isBack = roleOf(pb.part_key) === 'back'
     if (!(shaped && pb.part_key.startsWith('side:')) && !isBack) continue
-    // Single back: fixed shelves only, and only hard against it (no setback).
+    // Single back: fixed shelves hard against it (no setback), and adj shelves
+    // at least ADJ_BACK_MIN_W wide (within the usual shelf clearance).
     const loneBack = isBack && !multiBack
+    const backMinW = opts?.adjBackMinW ?? 0
     const B = plans.get(pb.part_key)!
     const turn = panelTurn(B)
     if (turn == null) continue
     const bB = turnedBox(B, turn)
     const hits: { p: ResolvedInternalPart; side: 'left' | 'right' }[] = []
     for (const s of shelves) {
-      if (loneBack && s.part_type !== 'fixed_shelf') continue
+      const wideAdj = s.part_type === 'adj_shelf' && backMinW > 0 && s.DY >= backMinW - 0.5
+      if (loneBack && s.part_type !== 'fixed_shelf' && !wideAdj) continue
       const S = partPlan(s)
       const bS = turnedBox(S, turn)
       const midY = s.Y + s.DZ / 2
       if (midY < bB.y || midY > bB.y + bB.h) continue
       if (overlap(bS.z, bS.z + bS.d, bB.z, bB.z + bB.d) < MIN_OVERLAP) continue
-      const side = touchSide(bS, bB, loneBack ? TOUCH : MAX_GAP)
+      const side = touchSide(bS, bB, loneBack && !wideAdj ? TOUCH : MAX_GAP)
       if (!side) continue
       // A shaped shelf (angled edges) still needs a straight edge along B's
       // face; the holes follow that edge (Mark, 2026-10-25).

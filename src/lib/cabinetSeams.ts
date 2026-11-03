@@ -149,7 +149,7 @@ export function internalSeamParts(): SeamPart[] {
       partKey: 'adj_shelf', label: 'Adjustable Shelf',
       edges: [
         { edgeLabel: 'Side supports', seamKey: 'adj_shelf:side', joinsLabel: 'Gables / Divisions' },
-        { edgeLabel: 'Back supports', seamKey: 'adj_shelf:back', joinsLabel: 'Backs (L corner)' },
+        { edgeLabel: 'Back supports', seamKey: 'adj_shelf:back', joinsLabel: 'Backs (L corner, or wide shelves)' },
       ],
     },
     {

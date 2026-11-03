@@ -226,7 +226,7 @@ export function resolveJoints(
   // shelves on them. Same cascade; the CM default comes from the legacy seam
   // the joint plays the part of (bottom:left_side, back:bottom, adj_shelf:side…).
   const adjFullBank = cab.rules?.ADJ_DRILL === 'full_bank'
-  for (const cand of enumerateShapedSeams(caseParts, internalParts, { adjFullBank })) {
+  for (const cand of enumerateShapedSeams(caseParts, internalParts, { adjFullBank, adjBackMinW: cab.rules?.ADJ_BACK_MIN_W })) {
     const entry = Object.prototype.hasOwnProperty.call(carcaseJoints, cand.seam_key) ? carcaseJoints[cand.seam_key] : undefined
     const assigned = seamAssignJoint(entry)
     const jointTypeId = assigned !== undefined

@@ -78,8 +78,10 @@ export default function PartEdgeJoints({ cabinet, rp, partKey, onUpdate }: {
   }).filter(c => c.part_a_key === partKey || c.part_b_key === partKey)
 
   // Shaped-cabinet seams (z_cabinet_shape L3) on this part, either side.
+  const adjBackMinW = ((cabinet.rule_overrides ?? {}) as Record<string, unknown>).ADJ_BACK_MIN_W as number | undefined
+    ?? getCachedInput(cabinet.id)?.rules?.ADJ_BACK_MIN_W
   const shapedSeams = enumerateShapedSeams(rp.case_parts, rp.internal_parts, {
-    adjFullBank: adjDrillEffective === 'full_bank',
+    adjFullBank: adjDrillEffective === 'full_bank', adjBackMinW,
   }).filter(c => c.part_a_key === partKey || c.part_b_key === partKey)
   // Curved end (z_curved_end C3): the generator's declared seams on this part.
   const crv = normaliseCurvedEnd(cabinet.curved_end)

@@ -70,4 +70,35 @@ describe('fixed shelf into the back', () => {
     }))
     expect(rp.seam_joints.some(s => s.seam_key.endsWith('|back'))).toBe(false)
   })
+
+  // Wide adj shelves pin into a plain back from ADJ_BACK_MIN_W (Mark, 2026-11-03).
+  const adjCab = (DX: number, rules: Partial<ConstructionRules> = {}) => cab({
+    DX,
+    internal_tree: { type: 'open', fittings: [{ type: 'adj_shelf', y_locked: false }] },
+    joint_defaults: { 'adj_shelf:side': 'dyn', 'adj_shelf:back': 'centre' },
+    joint_type_ops: { dyn: [dyn], centre: [dyn] }, joint_type_names: { dyn: 'Dyn 5mm', centre: 'Centre' },
+  }, rules)
+  const adjBack = (c: CabinetInput) => resolveCabinet(c).seam_joints.find(s => s.seam_key === 'int_adj_shelf_0|back')
+
+  it('adj shelf at or over ADJ_BACK_MIN_W pins into the back with the back joint', () => {
+    const rp = resolveCabinet(adjCab(1000, { ADJ_BACK_MIN_W: 900 }))
+    const sj = rp.seam_joints.find(s => s.seam_key === 'int_adj_shelf_0|back')!
+    expect(sj.joint_type_id).toBe('centre')
+    const shelf = rp.internal_parts.find(p => p.part_type === 'adj_shelf')!
+    const intoBack = cabinetSeamDrills(rp).filter(d => d.seamKey === sj.seam_key && d.targetPartKey === 'back')
+    expect(intoBack.length).toBeGreaterThan(0)
+    for (const d of intoBack) {
+      expect(d.x).toBeGreaterThan(shelf.X)
+      expect(d.x).toBeLessThan(shelf.X + shelf.DY)
+    }
+  })
+
+  it('narrower adj shelves, or the rule off, get no back pins', () => {
+    expect(adjBack(adjCab(800, { ADJ_BACK_MIN_W: 900 }))).toBeUndefined()
+    expect(adjBack(adjCab(1200))).toBeUndefined()
+  })
+
+  it('works with a shelf back setback inside the shelf clearance', () => {
+    expect(adjBack(adjCab(1000, { ADJ_BACK_MIN_W: 900, ADJSB_B: 10 }))).toBeDefined()
+  })
 })

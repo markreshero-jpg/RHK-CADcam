@@ -194,6 +194,10 @@ export interface ConstructionRules {
   // pitch-filled extent in bank mode). Overridable per cabinet via
   // rule_overrides, and per individual seam via the carcase_joints entry.
   ADJ_ROWS: number
+  // Plain (single-back) cabinets: an adj shelf at least this wide (mm) also
+  // gets pins into the back, via the adj_shelf:back joint (Mark, 2026-11-03).
+  // 0 = off. L-corner backs always get them.
+  ADJ_BACK_MIN_W: number
 
   // Internal — fixed shelf
   FIXSB_F:  number   // fixed shelf setback front
@@ -310,7 +314,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   SCRBK: 0, SCRBT: 0, SCRL: 0, SCRR: 0, SCRT: 0,
   TOP_TYPE: 'front_rail', BOTTOM_TYPE: 'full', RD: 100, RAIL_ORIENT: 'horizontal', BACK_RAIL_ORIENT: 'horizontal',
   BACK_TYPE: 'panel', BKRH: 100,
-  ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_DRILL: 'per_shelf', ADJ_ROWS: 0,
+  ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_DRILL: 'per_shelf', ADJ_ROWS: 0, ADJ_BACK_MIN_W: 0,
   FIXSB_F: 0, FIXSB_B: 0,
   IDCL: 2, IDCR: 2, IDFAO: 0, SLIDE_SETBACK: 20,
   REVT: 4, REVB: 0, REVL: 1, REVR: 1,

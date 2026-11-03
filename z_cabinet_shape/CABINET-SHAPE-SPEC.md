@@ -501,6 +501,11 @@ Decision 15. Split L1 (shape + library) / L2 (bi-fold doors), in-app check each.
         their own CM key `adj_shelf:back` (CM builder "Back supports"), falling back to
         `adj_shelf:side`; overridable per cabinet. Shop default = "Adjustable Shelf Holes x1 Row
         (centre)": one row at D / 2 of the shared edge (`migration_l3b_adj_shelf_back_joint.sql`).
+      - 2026-11-03 (Mark: "adjustable shelf holes in the back of the cabinet if the shelf is over
+        a certain width"): rule `ADJ_BACK_MIN_W` (mm, 0 = off, CM builder Adjustable Shelves
+        group, cascades via rule_overrides). On a plain single-back box an ADJ shelf with width
+        (DY) >= it gets `int_adj_shelf_N|back` on CM key `adj_shelf:back` (shop: x1 Row centre),
+        within the usual 30mm shelf clearance (ADJSB_B ok). Full-bank mode banks it like L backs.
       - 2026-10-25 (Mark: "fixed shelves don't have construction holes into backs"): the same
         loop now runs for every cabinet, plain box included. A FIXED shelf hard against a single
         back (FIXSB_B = 0, within 1mm) gets `int_fixed_shelf_N|back` on CM key `fixed_shelf:back`
