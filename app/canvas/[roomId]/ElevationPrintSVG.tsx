@@ -357,12 +357,12 @@ export default function ElevationPrintSVG({
                 strokeWidth={lw(it, partSW)} strokeDasharray={pp.strokeDasharray} />
             })}
 
-            {/* Ghost grain on grained kick boards, along the kick. */}
+            {/* Ghost grain on grained kick boards, per Kick Grain (TOEGRAIN: vertical default, horizontal = along the kick). */}
             {rp.toekick_parts.map((p, i) => {
               if (!grainOn(p.material_id) || p.part_key.startsWith('spreader') || !layers.show(kickPartItem(p.part_key))) return null
               const { ex, ey, ew, eh } = tkElevRect(p)
               const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-              return <GrainSVG key={`tkg-${i}`} x={x} y={y} w={w} h={h} dir="h" {...grainProps} />
+              return <GrainSVG key={`tkg-${i}`} x={x} y={y} w={w} h={h} dir={p.grain_direction === 'horizontal' ? 'h' : 'v'} {...grainProps} />
             })}
 
             {/* Added parts (applied panels / fillers / other) */}

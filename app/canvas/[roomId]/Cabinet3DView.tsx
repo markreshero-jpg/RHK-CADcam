@@ -157,8 +157,19 @@ function buildTkInfo(p: ResolvedToekickPart, b: Box): PartMeta {
   return { ...buildTkInfoBase(p, b), ...(mitre ? { detail: `${mitre} — cut ${Math.round(p.DY)} long` } : {}) }
 }
 
+// Kick face / return grain per Kick Grain (TOEGRAIN, persisted grain_direction).
+// The default texture runs a kick board along its length ('w'); vertical turns it
+// up the board. A return (side kind, grain up by default) turns along its depth
+// when horizontal.
+function tkGrainExt(p: ResolvedToekickPart): PartMeta['grainExt'] {
+  if (!p.grain_direction) return undefined
+  if (isKickSidePart(p.part_key)) return p.grain_direction === 'horizontal' ? { grain: 'd', thick: 'w' } : undefined
+  return p.grain_direction === 'vertical' ? { grain: 'h', thick: 'd' } : undefined
+}
+
 function buildTkInfoBase(p: ResolvedToekickPart, b: Box): PartMeta {
   return {
+    grainExt:  tkGrainExt(p),
     id:        `tk_${p.part_key}_${p.sort_order}`,
     label:     TK_LABELS[p.part_key] ?? p.part_key,
     w: b.w, h: b.h, d: b.d,

@@ -319,3 +319,9 @@ kick face split."
 
 **Known limits:** seams are absolute mm. If the kick is resized they stay where they are, and a seam past the
 new end is dropped. Joint chips assume the assembly runs along the wall's +t (same limit as the run layout).
+
+**Fix 2026-11-03 (Mark: "changing the drop down nothing happens, default vertical but it shows horizontal"):**
+the resolver and optimiser already used TOEGRAIN, but the 3D texture (`grainExtents` ran every `tk_` board along
+its length) and the elevation ghost grain (`dir="h"` hard-coded, screen + print) ignored it. Now
+`Cabinet3DView` `tkGrainExt` turns the face up the board for vertical (a return along its depth for
+horizontal), and both elevations draw `dir` from the part's `grain_direction`.

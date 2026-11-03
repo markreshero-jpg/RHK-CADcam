@@ -1563,12 +1563,12 @@ export default function ElevationSVG({
                               stroke={isSel ? '#e2e8f0' : fill} strokeWidth={layers.w(kit, 0.5) / lz}
                               opacity={tkP.opacity} style={{ pointerEvents: 'none' }} />
                       })}
-                      {/* Ghost grain on grained kick boards, along the kick. */}
+                      {/* Ghost grain on grained kick boards, per Kick Grain (TOEGRAIN: vertical default, horizontal = along the kick). */}
                       {rp.toekick_parts.map((p, i) => {
                         if (!grainOn(p.material_id) || p.part_key.startsWith('spreader') || !layers.show(kickPartItem(p.part_key))) return null
                         const { ex, ey, ew, eh } = tkElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
-                        return <GrainSVG key={`tkg-${i}`} x={x} y={y} w={w} h={h} dir="h" {...grainProps} />
+                        return <GrainSVG key={`tkg-${i}`} x={x} y={y} w={w} h={h} dir={p.grain_direction === 'horizontal' ? 'h' : 'v'} {...grainProps} />
                       })}
                       {rp.internal_parts.filter(p => showInt(internalPartItem(p.part_type))).map((p, i) => {
                         const intEffP = layers.props(internalPartItem(p.part_type), z)
