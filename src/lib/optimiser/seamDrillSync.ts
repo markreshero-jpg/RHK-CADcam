@@ -17,7 +17,7 @@ import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { cabinetSeamDrills, caseBox } from '@/src/lib/jointDrilling'
 import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type FootprintFrame } from './partFootprint'
 import { coalesceByKey } from './coalesce'
-import type { ResolvedCabinet, ResolvedCasePart } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
 import { dbPartId, zoneKey, zonePartId, stackKey, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
 import { filterRemovedParts } from '@/src/lib/resolver/filterHidden'
@@ -75,6 +75,48 @@ function memberPanel(parts: ResolvedCasePart[], d: { x: number; y: number; z: nu
       : (() => { const c = caseBox(cp); return { x0: c.x, x1: c.x + c.w, y0: c.y, y1: c.y + c.h, z0: c.z, z1: c.z + c.d } })()
     const T = 1
     if (q.x >= b.x0 - T && q.x <= b.x1 + T && q.y >= b.y0 - T && q.y <= b.y1 + T && q.z >= b.z0 - T && q.z <= b.z1 + T) return cp
+  }
+  return null
+}
+
+// ── Inner drawers / pull-outs (rp.internal_slides) ────────────────────────────
+const TOL = 1
+function within(d: { x: number; y: number; z: number }, lo: number, hi: number, a: 'x' | 'y' | 'z'): boolean {
+  const v = a === 'x' ? d.x : a === 'y' ? d.y : d.z
+  return v >= lo - TOL && v <= hi + TOL
+}
+
+// The inner-drawer / pull-out panel a runner hole lands in, with its footprint
+// frame. Internal box panels carry resolveDrawerBox's geometry (cabinet Z = the
+// front face, depth running back along −Z), so they take the db_* frames; the
+// inner front nests back-face up like a face-drawer front (upSign '+').
+function innerBoxPartFor(
+  parts: ResolvedInternalPart[], sl: ResolvedDrawerSlide, d: { x: number; y: number; z: number; surface?: string },
+): { part: ResolvedInternalPart; frame: FootprintFrame } | null {
+  const want = (t: string) =>
+    d.surface === 'drawer_back'   ? t === 'inner_drawer_back'   || t === 'pull_out_back' :
+    d.surface === 'drawer_bottom' ? t === 'inner_drawer_bottom' || t === 'pull_out_bottom' :
+    d.surface === 'drawer_side'   ? t === 'inner_drawer_side'   || t === 'pull_out_side' :
+    d.surface === 'drawer_front'  ? t === 'inner_drawer_front'  : false
+  for (const p of parts) {
+    if (!want(p.part_type)) continue
+    if (sl.inner_drawer_index != null && p.inner_drawer_index != null && p.inner_drawer_index !== sl.inner_drawer_index) continue
+    let inside = false
+    let dbType: ResolvedDrawerBoxPart['part_type']
+    if (d.surface === 'drawer_side') {
+      dbType = 'db_left_side'
+      inside = within(d, p.X, p.X + p.DZ, 'x') && within(d, p.Y, p.Y + p.DY, 'y') && within(d, p.Z - p.DX, p.Z, 'z')
+    } else if (d.surface === 'drawer_bottom') {
+      dbType = 'db_bottom'
+      inside = within(d, p.Y, p.Y + p.DZ, 'y') && within(d, p.X, p.X + p.DY, 'x') && within(d, p.Z - p.DX, p.Z, 'z')
+    } else {
+      dbType = d.surface === 'drawer_front' ? 'db_front' : 'db_back'
+      inside = within(d, p.Z - p.DZ, p.Z, 'z') && within(d, p.X, p.X + p.DY, 'x') && within(d, p.Y, p.Y + p.DX, 'y')
+    }
+    if (!inside) continue
+    const frame = boxFrame({ ...p, part_type: dbType } as unknown as ResolvedDrawerBoxPart)
+    if (!frame) continue
+    return { part: p, frame: d.surface === 'drawer_front' ? { ...frame, upSign: '+' } : frame }
   }
   return null
 }
@@ -244,6 +286,37 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
         const bp = boxByType.get('db_back')
         add('drawer_box_parts', dboxKey('db_back'), bp ? boxFrame(bp) : null, mark, 'db_back_marker', `${opKey}_back_marker`, AUTO_TOOL)
       }
+    }
+  }
+
+  // 3b. Inner drawer / pull-out runners (rp.internal_slides): the same holes as
+  //     a face drawer's — gable or divider, box back / bottom / sides, and the
+  //     inner front (from its back face). The box panels are internal_parts, so
+  //     each hole goes to the panel of its family it actually lands in (two
+  //     compartments can both have an inner drawer index 0).
+  const innerParts = rp.internal_parts.filter(p => p.part_type.startsWith('inner_drawer_') || p.part_type.startsWith('pull_out_'))
+  const dividers = rp.internal_parts.filter(p => p.part_type === 'divider')
+  for (const sl of rp.internal_slides ?? []) {
+    const opKey = `islide_${sl.inner_drawer_index ?? 0}_${Math.round(sl.X)}_${Math.round(sl.Y)}`
+    for (const sd of sl.drills) {
+      if (sd.machine_operation !== 'drill') { skipped++; continue }
+      if (sd.surface === 'cabinet_member') {
+        const cp = memberPanel(rp.case_parts, sd)
+        if (cp) { add('case_parts', `case_${cp.part_key}`, caseFrame(cp), intoPanel(cp, sd), 'slide', opKey, AUTO_TOOL); continue }
+        const dv = dividers.find(p => within(sd, p.X, p.X + p.DZ, 'x') && within(sd, p.Y, p.Y + p.DY, 'y') && within(sd, p.Z, p.Z + p.DX, 'z'))
+        if (dv) { add('internal_parts', `int_divider_${dv.sort_order}`, intFrame(dv), sd, 'slide', opKey, AUTO_TOOL); continue }
+        skipped++; continue
+      }
+      const hit = innerBoxPartFor(innerParts, sl, sd)
+      if (!hit) { skipped++; continue }
+      add('internal_parts', `int_${hit.part.part_type}_${hit.part.sort_order}`, hit.frame, sd, 'slide', opKey, AUTO_TOOL,
+        sd.surface === 'drawer_front' ? 'face_back' : null)
+    }
+    // Back top marker once per runner, like the face drawers'.
+    const mark = backTopMarker(sl.drills)
+    if (mark) {
+      const hit = innerBoxPartFor(innerParts, sl, mark)
+      if (hit) add('internal_parts', `int_${hit.part.part_type}_${hit.part.sort_order}`, hit.frame, mark, 'db_back_marker', `${opKey}_back_marker`, AUTO_TOOL)
     }
   }
 
