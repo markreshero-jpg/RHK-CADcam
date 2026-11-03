@@ -1617,6 +1617,10 @@ export interface ResolvedCasePart extends ResolvedPart {
   // + = the inner face is the shorter. The part is listed at its blank length.
   bevel_lo?: number
   bevel_hi?: number
+  // A long edge mitred 45° to the panel it meets (bulkhead bottom return <->
+  // fascia, z_bulkhead B10), edge-band frame. Listed at its blank; drawn in 3D;
+  // the cut list / Parts tab carry a "MITRE" comment. Persisted (case_parts.edge_mitre).
+  edge_mitre?: import('../bulkhead').MitreEdge
   // Top rails standing on edge (RAIL_ORIENT 'vertical'): DX = RD is the rail's
   // height, DZ its thickness front-to-back — the box maps like a back panel
   // (caseBox). Persisted (case_parts.upright).

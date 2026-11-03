@@ -19,6 +19,7 @@ import { CUSTOM_ORIENT_LABELS, type CustomOrient } from '@/src/lib/customPartBox
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { zonePartId, zoneKey, dbPartId, zoneRef, stackRef, shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
+import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { splitCaseParts, splitBaseKey, cutBaseKeys, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 
 // One dimension/position field: accepts a plain number (fixed), a plain
@@ -605,7 +606,8 @@ export default function PartsView({
         name: partLabels?.[id] ?? `${PART_LABEL[base] ?? shapedPartLabel(base) ?? base}${piece}${caseBevelNote(p) ? ` (${caseBevelNote(p)})` : ''}`,
         material: matNames[p.material_id] ?? '—', materialColor: matColours[p.material_id] ?? null,
         dy: p.DY, dx: p.DX, dz: p.DZ, eb: p.edge_band,
-        comment: partComments?.[id] ?? '',
+        // Long-edge mitre note (z_bulkhead B10) until a comment of its own is typed.
+        comment: partComments?.[id] ?? edgeMitreNote(p),
         isCustom: false, isOverride: false,
       })
     }

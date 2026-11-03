@@ -18,6 +18,7 @@ import type { PartHideViews, DoorFacing } from '@/src/lib/resolver/types'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { curvedEndPartLabel } from '@/src/lib/resolver/resolveCurvedEnd'
 import { floatShelfPartLabel, floatShelfPartNote } from '@/src/lib/floatShelf'
+import { edgeMitreNote, type MitreEdge } from '@/src/lib/bulkhead'
 import { backPanelPartLabel } from '@/src/lib/backPanel'
 import { cutBaseKeys, splitBaseKey, splitPieceNote, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 import { facedDoorNote } from '@/src/lib/facedDoor'
@@ -316,6 +317,10 @@ export function normalizeProject(
     // (Mark, RHK6542 WC-04 2026-11-03 — was cut along the width).
     if ((pieceOf === 'back' || pieceOf.startsWith('back:')) && last?.source_part_id === r.id) last.grain_across = true
     if (splitNote && last?.source_part_id === r.id) last.comment = last.comment ? `${splitNote} · ${last.comment}` : splitNote
+    // Long-edge mitre (bulkhead bottom return / fascia, z_bulkhead B10): nested
+    // at the blank, mitred on the saw. Not doubled when a saved comment has it.
+    const mitreNote = edgeMitreNote({ part_key: key, edge_mitre: r.edge_mitre as MitreEdge | null })
+    if (mitreNote && last?.source_part_id === r.id && !last.comment?.includes(mitreNote)) last.comment = last.comment ? `${mitreNote} · ${last.comment}` : mitreNote
   }
   for (const r0 of ip) {
     const type = String(r0.part_type)
@@ -443,7 +448,7 @@ export function normalizeProject(
 
 // Column selections shared by server + client loaders.
 export const PART_SELECTS = {
-  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,outline,cutouts,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,edge_mitre,outline,cutouts,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,outline,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,grain_direction,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id,facing',

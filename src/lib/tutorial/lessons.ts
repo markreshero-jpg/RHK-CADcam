@@ -1574,6 +1574,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The spreaders stay where they are, the split only cuts the boards. Each split face / sub front / back is named with JOIN (Parts tab, cut list, optimiser labels) so the shop knows to join it. A piece longer than the sheet shows in the optimiser as too large for any sheet: change the seams if you see that.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-03 (z_bulkhead B10: bottom return mitred to the fascia).
+  { id: 'bulkhead_bottom_mitre', level: 'intermediate', topic: 'cabinets', title: 'Mitre a bulkhead bottom return',
+    blurb: 'Close the underside of a bulkhead with a bottom return mitred 45° to the fascia — shown in 3D and noted on the cut list.',
+    keywords: 'bulkhead bottom return mitre 45 fascia under panel soffit edge comment BH', steps: [
+    { id: 'on', title: 'Tick the bottom return',
+      body: 'Select the bulkhead (BH). In the bulkhead section tick Bottom and leave its joint on Mitre (or right-click › Bulkhead). A full-width bottom return mitres to the fascia; a part-width one (Bottom from / to) is always butted behind it.',
+      canvas: true, done: c => c.cabinets.some(cab => !!(cab.bulkhead?.bottom?.on && cab.bulkhead.bottom.joint === 'mitre')) },
+    { id: 'check', title: 'See the mitre',
+      body: 'Open the bulkhead (double-click) and look at the 3D: the fascia\'s bottom edge and the bottom return\'s front edge are cut at 45° and meet on the corner. Both parts are listed at their full blank and carry a comment — "MITRE 45° bottom edge to bottom return" on the fascia, "MITRE 45° front edge to fascia" on the bottom return — in the Parts tab, cut list and optimiser labels, so the shop mitres them on the saw.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

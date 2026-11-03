@@ -12,7 +12,7 @@ import type { ResolvedCabinet, ResolvedToekickPart, ResolvedInternalPart, Resolv
 import { isKickSidePart } from './resolver/types'
 import type { ShapePt, ShapeSegmentLike, EdgeTag } from './shapePath'
 import { sampleOutline, sampleShapeOutline, outlineEdges } from './shapePath'
-import { caseBox, zoneBevelOutline, caseBevelOutline, tkBevelOutline, rotEulerXYZ } from './jointDrilling'
+import { caseBox, isSide, zoneBevelOutline, caseBevelOutline, tkBevelOutline, rotEulerXYZ } from './jointDrilling'
 import { sharknoseProfile } from './handleGeometry'
 import { isShapedPanelKey, zonePartId, dbPartId } from './cabinetShape/partKeys'
 import { dbBox } from './drawerHardwareBoxes'
@@ -106,6 +106,13 @@ export function partShapes(rp: ResolvedCabinet, overrides?: Record<string, { seg
       caps: { lo: 'bottom', hi: 'top' },
     })
   }
+  // Long-edge mitres (bulkhead bottom return <-> fascia, z_bulkhead B10). An
+  // end-bevelled fascia keeps its plan outline (one extrusion can't carry both).
+  for (const p of rp.case_parts) {
+    const id = `case_${p.part_key}`
+    const s = m.has(id) ? null : edgeMitreShape(p)
+    if (s) m.set(id, s)
+  }
   // Mitred kick boards on shaped cabinets (4b).
   for (const p of rp.toekick_parts) {
     const o = tkBevelOutline(p)
@@ -161,6 +168,21 @@ export function linearStripShape(p: ResolvedCaseLike): PartShape | null {
     : [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: land }, { x: b.w - r, y: d }, { x: 0, y: d }] }
 }
 type ResolvedCaseLike = ResolvedCabinet['case_parts'][number]
+
+/** A long edge mitred 45° (z_bulkhead B10) as a side profile across the part:
+ *  x = depth from local z = 0, y = up. A flat part's `top` edge is its front
+ *  (box z = d), the outer face underneath; an upright face-kind part's `bottom`
+ *  edge with its outer face at local z = 0 (the bulkhead fascia). */
+export function edgeMitreShape(p: ResolvedCaseLike): PartShape | null {
+  if (!p.edge_mitre) return null
+  const b = caseBox(p), t = Math.min(p.DZ, b.h, b.d)
+  const flat = !isSide(p.part_key) && p.part_key !== 'back' && !isShapedPanelKey(p.part_key) && !p.upright && !p.wrap
+  if (flat && p.edge_mitre === 'top')
+    return { extrude: 'across', tape: true, pts: [{ x: 0, y: 0 }, { x: b.d, y: 0 }, { x: b.d - t, y: b.h }, { x: 0, y: b.h }] }
+  if (!flat && isShapedPanelKey(p.part_key) && p.edge_mitre === 'bottom')
+    return { extrude: 'across', tape: true, pts: [{ x: 0, y: 0 }, { x: b.d, y: t }, { x: b.d, y: b.h }, { x: 0, y: b.h }] }
+  return null
+}
 
 // ── Solids in cabinet coords ─────────────────────────────────────────────────
 

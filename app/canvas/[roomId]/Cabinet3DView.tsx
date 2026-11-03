@@ -26,6 +26,7 @@ import {
   Part, PartPropertiesPanel, PreviewCanvas, PassivePartsContext,
 } from '@/src/components/three/PartViewer'
 import { isSide, caseBox, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, dropNearDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
+import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
@@ -147,6 +148,7 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
     materialId: p.material_id,
     ...(p.outline && (!p.AY || isShapedPanelKey(p.part_key)) ? { outline: p.outline } : {}),
     ...(caseBevelNote(p) ? { detail: `${caseBevelNote(p)} — cut ${Math.round(isSide(p.part_key) ? p.DX : p.DY)} long` } : {}),
+    ...(edgeMitreNote(p) ? { detail: [caseBevelNote(p), edgeMitreNote(p)].filter(Boolean).join(' · ') } : {}),
   }
 }
 

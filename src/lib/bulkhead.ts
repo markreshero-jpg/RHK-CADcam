@@ -46,6 +46,20 @@ export interface BulkheadSettings {
   split:  BulkheadSplit
 }
 
+/** A panel edge mitred 45° along its length to the panel it meets (the bottom
+ *  return's front edge to the fascia's bottom edge, B10), in the part's
+ *  edge-band frame. Outer face long. Cut by hand on the saw after the nest. */
+export type MitreEdge = 'top' | 'bottom' | 'left' | 'right'
+export const EDGE_MITRE_DEG = 45
+
+/** Part comment for a long-edge mitre, e.g. "MITRE 45° front edge to fascia"; '' when none. */
+export function edgeMitreNote(p: { part_key: string; edge_mitre?: MitreEdge | null }): string {
+  if (!p.edge_mitre) return ''
+  if (p.part_key === 'bh:ret_b')  return `MITRE ${EDGE_MITRE_DEG}° front edge to fascia`
+  if (p.part_key === 'bh:fascia') return `MITRE ${EDGE_MITRE_DEG}° bottom edge to bottom return`
+  return `MITRE ${EDGE_MITRE_DEG}° ${p.edge_mitre} edge`
+}
+
 export const BH_RETURN_DEPTH = 600
 export const BH_MAX_END_ANGLE = 75
 // Two 100 mm legs; a bulkhead lower than this has no room for one.

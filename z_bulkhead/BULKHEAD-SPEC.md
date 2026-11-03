@@ -11,7 +11,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B8 angled ends built 2026-10-27 (no schema change), check pending.
+> **RESUME HERE** → B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
 > B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
 > migration_c7; no schema change) — in-app check pending, with B5. B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
@@ -72,10 +72,10 @@ underside when the bulkhead isn't sitting on cabinets.
 
 ### Known gap
 
-- The **bottom-return mitre** has no bevel geometry yet: `bevel_lo/hi` only
-  cut a panel's length ends, and that mitre runs along the fascia's bottom
-  edge. Blanks are the right size, but in 3D the two blanks overlap at the
-  corner and the cut list carries no mitre note. Side-return mitres are real.
+- ~~The bottom-return mitre has no bevel geometry~~ — fixed by B10
+  (`edge_mitre`). Still open: a fascia with mitred side returns AND a mitred
+  bottom return draws only its end mitres in 3D (one extrusion can't carry
+  both); the bottom return still shows its 45° and both notes are listed.
 
 ## Data
 
@@ -167,6 +167,20 @@ underside when the bulkhead isn't sitting on cabinets.
       only that span, butted behind the fascia (a part-width return can't mitre to
       the full-width fascia, so the fascia keeps its taped bottom edge); ends short
       of a side return taped. Sidebar "Bottom from / to" when the bottom return is on.
+- [~] **B10 — bottom return mitre shown + noted** (built 2026-11-03, in-app check pending)
+      (Mark: "when bulkhead bottom return is on can you show the edge to be
+      mitred together … in part comment to mitre the pieces on the edge
+      needed"). `ResolvedCasePart.edge_mitre` ('top' | 'bottom' | 'left' |
+      'right', edge-band frame, 45°, outer face long), persisted
+      `case_parts.edge_mitre` (`migration_b10_edge_mitre.sql`, applied;
+      existing 3 mitred bulkheads backfilled). A full-width mitred bottom return
+      sets `top` (its front edge) on `bh:ret_b` and `bottom` on `bh:fascia`. 3D
+      / sheets draw both as 45° side profiles (`partSolids.edgeMitreShape`).
+      Note `edgeMitreNote` (bulkhead.ts): "MITRE 45° front edge to fascia" /
+      "MITRE 45° bottom edge to bottom return" — optimiser comment (cut list,
+      labels; prepended, not doubled), Parts tab comment (until one is typed),
+      3D part info, shop-drawing cut list. Blanks unchanged (nest at the blank,
+      mitre on the saw). Not on curved bulkheads. Tutorial `bulkhead_bottom_mitre`.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 

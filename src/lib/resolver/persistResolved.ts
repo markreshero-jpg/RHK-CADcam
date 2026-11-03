@@ -59,6 +59,7 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       outline:           p.outline ?? null,
       bevel_lo:          p.bevel_lo ?? null,
       bevel_hi:          p.bevel_hi ?? null,
+      ...(p.edge_mitre ? { edge_mitre: p.edge_mitre } : {}),   // long-edge mitre (z_bulkhead B10)
       upright:           !!p.upright,
       // Finger-pull rails carry their sheet grain (z_handles H6); others keep the default.
       ...(p.grain_direction ? { grain_direction: p.grain_direction } : {}),

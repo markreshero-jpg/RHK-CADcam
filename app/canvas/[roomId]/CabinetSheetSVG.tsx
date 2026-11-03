@@ -27,6 +27,7 @@ import { zonePartId, dbPartId, shapedPartLabel, isShapedPanelKey } from '@/src/l
 import { buildPartSolids, prismOutline, type PartSolid, type SolidRole, type Prism, type V3, type View2D } from '@/src/lib/partSolids'
 import type { ShapeSegmentLike } from '@/src/lib/shapePath'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
+import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { binOutlines, binShape } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { cutListDims, cabinetLookups, shapeMark, type CutListDims, type CutListPart, type CutListTable } from '@/src/lib/optimiser/cutListDims'
@@ -539,7 +540,8 @@ export default function CabinetSheetSVG({
       const base = splitBaseKey(p.part_key) as typeof p.part_key
       const piece = splitPieceSuffix(p.part_key, cutBases, rp.split_back_x)
       const label = (CASE_LABELS[base] ?? shapedPartLabel(base) ?? base) + piece
-      add(caseBevelNote(p) ? `${label} ${caseBevelNote(p)}` : label, 'case_parts', { ...p, part_key: base })
+      // Long-edge mitre (bulkhead bottom return / fascia, z_bulkhead B10).
+      add([label, caseBevelNote(p), edgeMitreNote(p)].filter(Boolean).join(' '), 'case_parts', { ...p, part_key: base })
     })
     rp.toekick_parts.filter(p => p.part_key.startsWith('kick')).forEach(p => {
       const label = TK_LABELS[p.part_key] ?? p.part_key

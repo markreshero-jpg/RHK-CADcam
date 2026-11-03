@@ -19,7 +19,8 @@
 //
 // Joints to the fascia: mitre = both blanks run to the outer corner with 45°
 // ends (bevel_lo / bevel_hi, + = inner face shorter); butt = the fascia runs
-// through and the return stops behind it.
+// through and the return stops behind it. The bottom return's mitre runs along
+// the fascia's bottom edge: `edge_mitre` on both (B10).
 //
 // Upright parts use the side:/back:<edge> face-kind frame (DY length, DX
 // height, DZ thickness, turned AY about the outer start corner, local z = 0 the
@@ -85,6 +86,7 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     // Ends show unless mitred or scribed to a wall; the bottom edge shows
     // unless mitred to the bottom return.
     edge_band: band({ bottom: !mB, left: !mR && !(aR > 0), right: !mL && !(aL > 0) }),
+    ...(mB ? { edge_mitre: 'bottom' as const } : {}),
   })
 
   // Side returns, full height. Mitred: from the front corner; butt: behind the fascia.
@@ -129,6 +131,8 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
       X: bx0, Y: 0, Z: front - d, AY: 0,
       material_id: exp,
       edge_band: band({ bottom: full < Zf - 0.5, left: !L.on || bx0 > x0 + 0.5, right: !R.on || bx1 < x1 - 0.5 }),
+      // Mitred: its front edge (band `top`) meets the fascia's bottom edge at 45°.
+      ...(mB ? { edge_mitre: 'top' as const } : {}),
     })
   }
 

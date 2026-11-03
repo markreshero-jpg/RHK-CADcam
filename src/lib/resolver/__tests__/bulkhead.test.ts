@@ -3,7 +3,8 @@ import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material, type ResolvedCasePart } from '../types'
 import { casePlanCorners, caseBox } from '../../jointDrilling'
-import { DEFAULT_BULKHEAD, DEFAULT_SHADOWLINE, normaliseBulkhead, type BulkheadSettings } from '../../bulkhead'
+import { DEFAULT_BULKHEAD, DEFAULT_SHADOWLINE, normaliseBulkhead, edgeMitreNote, type BulkheadSettings } from '../../bulkhead'
+import { partShapes } from '../../partSolids'
 import { cabVExtent, bulkheadOutline } from '../../geometry'
 import type { Room } from '../../types'
 import { isShapedPanelKey } from '../../cabinetShape/partKeys'
@@ -93,6 +94,23 @@ describe('bulkhead parts', () => {
     expect(get(ps, 'bh:fascia')!.edge_band.bottom).toBe(false)
     expect(caseBox(get(ps, 'bh:cleat_h')!).y).toBe(T)
     expect(caseBox(get(ps, 'bh:cleat_v')!).y).toBe(T + TC)
+  })
+
+  it('mitred bottom return: both edges flagged, 45° profiles in 3D, MITRE note (B10)', () => {
+    const ps = parts(cab({ bottom: on('mitre', 300) }))
+    const b = get(ps, 'bh:ret_b')!, f = get(ps, 'bh:fascia')!
+    expect(b.edge_mitre).toBe('top')
+    expect(f.edge_mitre).toBe('bottom')
+    expect(edgeMitreNote(b)).toBe('MITRE 45° front edge to fascia')
+    expect(edgeMitreNote(f)).toBe('MITRE 45° bottom edge to bottom return')
+    const rp = resolveCabinet(cab({ bottom: on('mitre', 300) }))
+    const sb = partShapes(rp).get('case_bh:ret_b')!
+    expect(sb.extrude).toBe('across')
+    expect(sb.pts).toEqual([{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 300 - T, y: T }, { x: 0, y: T }])
+    expect(partShapes(rp).get('case_bh:fascia')!.pts).toEqual([{ x: 0, y: 0 }, { x: T, y: T }, { x: T, y: H }, { x: 0, y: H }])
+    // Butt / part-width: no mitre.
+    expect(get(parts(cab({ bottom: on('butt', 300) })), 'bh:ret_b')!.edge_mitre).toBeUndefined()
+    expect(get(parts(cab({ bottom: { ...on('mitre', 300), from: 100, to: 500 } })), 'bh:fascia')!.edge_mitre).toBeUndefined()
   })
 
   it('no cleat when the bulkhead is lower than a leg, or switched off', () => {
