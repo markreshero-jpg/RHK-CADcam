@@ -1587,6 +1587,24 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.cabEditorOpen },
   ]},
 
+  // Appended 2026-11-04 (z_rangehood R8: the WRH undermount rangehood cabinet).
+  { id: 'rangehood_cabinet', level: 'intermediate', topic: 'cabinets', title: 'Draw an undermount rangehood cabinet',
+    blurb: 'A WRH overhead with the rangehood hole through its bottom and the under panel, a notched shelf and a flue box.',
+    keywords: 'rangehood range hood undermount WRH flue duct hole cut out shelf notch under panel WUP overhead wall appliance', steps: [
+    { id: 'place', title: 'Place a WRH',
+      body: 'Place a cabinet (F3) and pick WRH from Wall › Appliances. It is a pair-of-doors overhead with one fixed shelf. The shelf sits 350 up from the cabinet underside, a 200 × 250 flue notch is cut from the back of the shelf and the top, and a flue box (two sides and a front in carcass board, taped on the front edges) stands on the shelf up to the top. 5mm Dynamic Holes screw it through the shelf and the top.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rangehood) },
+    { id: 'size', title: 'Set the hole size',
+      body: 'Select it. In the Rangehood section of the cabinet panel, type the hole Width and Depth from the rangehood’s cut-out spec. Until you do, the cabinet warns and no hole is cut. Back from front, Off centre and Corner radius place it. The flue width, depth and shelf height can be changed here too.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rangehood?.hole?.w && !!cab.rangehood?.hole?.d) },
+    { id: 'panel', title: 'Add the under panel',
+      body: 'Shift-click the overheads in the run, including the WRH, then right-click one › Add under panel. The WUP goes under them, the doors drop over its front edge, and it gets the same hole, lined up under the cabinet. Move or resize the WRH and the panel’s hole follows. Shelf height is measured from the underside of the under panel.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.UNDER_PANEL) },
+    { id: 'check', title: 'Check it in 3D',
+      body: 'Double-click the WRH and look at the 3D tab: the hole in the bottom, the notched shelf and top, and the flue box. The added holes and notches don’t list in the part’s Cut-outs box; change them in the Rangehood section. To keep a tuned one (e.g. sized for a particular rangehood), right-click › Save to library.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
+
   // Appended 2026-11-04 (z_benchtop_builder: waterfall skirt, RHK6478 island).
   { id: 'waterfall_skirt', level: 'intermediate', topic: 'benchtops', title: 'Add a curved stone skirt to a waterfall',
     blurb: 'A stone piece flush with the apron at one end of a waterfall leg, curving down to the floor.',

@@ -45,7 +45,7 @@
 | # | Item | Notes |
 |---|------|-------|
 | 16 | AC grille in the bulkhead | Ben confirmed 500W x 150H centred over the fridge, painted MDF bulkhead — done. |
-| 17 | **Rangehood cut-out** | Sirius SM927EL520 in the base of WC-04 (delivered 30/10). Mark getting specs to size the cut-out in the cupboard base + under panel. |
+| 17 | **Rangehood cut-out** | Sirius SM927EL520 in the base of WC-04 (delivered 30/10). Mark getting specs to size the cut-out in the cupboard base + under panel. **2026-11-04:** WC-04 is now a rangehood cabinet (shelf 350, flue box, hole centred on the Sirius) — just type the hole W x D in WC-04 › Rangehood; WC-09 follows. |
 | 18 | **Pantry doors — 45° hinges** | The two pantry doors hang on 45° corners; no angled hinge (or hinge block) in the hinge library yet. Pick a hinge. |
 | 19 | **Sink** | Library Abi Ohelu single bowl 380 undermount (cut-out 350 x 410) used in place of the designer's 400 x 460 — confirm the client's sink. Tap = Abi pull-out sink mixer — confirm. |
 | 20 | Fridge | Smeg FAB28RDEG5 Emerald Green (Ben 30/10). Mark: height on the drawing is right. |

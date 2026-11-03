@@ -121,3 +121,8 @@ Everything for this job is in this folder (Mark).
 - 1/11 later: BC-08 kick ran 51 past the gable (behind BC-09) - the square gable-end edge inverted in the kick inset. Fixed in code (57553b7); kick face now stops at the gable's outer face (x 507.5).
 - 1/11 later: BC-08 kick face + sub front now run on 16.5 at each end with 45 ends lying flat on the gable / BC-09 and on the wall (621108d). Kick face blank 625.7 (was 592.7).
 - 1/11: WC-01 / WC-03 doors 300 higher (718 -> 1018, 740-1758); fixed panels 1760-2328 (568). TV 42" (540H) centred on them at 1774-2314 AFFL; TV note moved with it. Script `_tmp-6586-doors300.mjs`.
+
+## 2026-11-04 WC-04 = rangehood cabinet (z_rangehood R8)
+- WC-04 given the WRH rangehood block (same as the library WRH): adjustable shelf → **fixed shelf at 350** from the WC-09 under panel underside (1850 AFFL), 200 x 250 flue notch in the shelf + top, flue box (2 sides + front, carcass board, front edges taped, 237 high) screwed with 5mm Dynamic Holes. Hole and flue **off centre −35.5** so they centre on the Sirius / cooktop (room x 563; WC-04 centre 598.5).
+- **Hole size not set** — WC-04 warns until it is. Enter W x D in WC-04 › Rangehood once the Sirius SM927EL520 cut-out spec is in; WC-09 cuts the same hole under it automatically. Checked with a trial 480 x 260 (WC-04 bottom and WC-09 both 323–803 room x, 50 back from the front), then cleared.
+- Flue offset assumes the hood's outlet is centred on the hood — check against the spec.

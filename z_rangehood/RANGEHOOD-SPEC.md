@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances). Next: R8 (tutorial + RHK6586 WC-04). First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -280,6 +280,18 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
   the item: right-click → Add under panel, as for any overhead run.
 - cabinet-codes skill: `WRH` marked as in the library.
 
+## R8 as built (2026-11-04)
+
+- Tutorial lesson `rangehood_cabinet` "Draw an undermount rangehood cabinet":
+  place WRH → set the hole size → Add under panel → check in 3D.
+- **Fix:** `case_parts_part_key_check` rejected the `rh:` flue box keys, so a
+  WRH's parts failed to persist (`migration_r8_case_part_key_rh.sql`, applied).
+  Found on the first real resolve — the in-memory tests can't see DB checks.
+- RHK6586 WC-04 set up as a rangehood cabinet (fixed shelf, block with hole
+  and flue off centre −35.5 to centre on the Sirius). Checked end to end with a
+  trial 480 × 260 hole: WC-04 bottom and WC-09 under panel cut at the same room
+  x (323–803), no warnings; then the size was cleared (TBC-LIST #17).
+
 ## Phases
 
 | # | What | Status |
@@ -291,7 +303,7 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 | R5 | **Rangehood block** + `resolveRangehood`: hole, shelf + top notch, flue box, joints, sidebar section | [x] 2026-11-02 |
 | R6 | **WUP takes the hole** from the cabinets above it | [x] 2026-11-04 |
 | R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [x] 2026-11-04 |
-| R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [ ] |
+| R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [x] 2026-11-04 |
 
 ## Open
 
