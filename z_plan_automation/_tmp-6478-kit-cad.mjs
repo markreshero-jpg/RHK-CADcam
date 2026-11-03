@@ -13,7 +13,7 @@ const box = { size: 2.5, bgPad: 2, border: 'box', lineSpacing: 1.3, borderWeight
 const inCab = (left, width) => ({ x: left + 30, w: (width - 60) / 20 })
 const txt = (wall, left, width, y, text) => ({ ...el(wall), kind: 'text', geom: { at: { x: inCab(left, width).x, y }, width: inCab(left, width).w }, text, style: note })
 const pto = (wall, x, y) => ({ ...el(wall), kind: 'text', geom: { at: { x, y } }, text: 'PTO', style: { size: 2.5 } })
-const spec = 'SPECIFICATIONS - {room}\n{job}\n\nBENCHTOP\n60mm stone TBA\n\nFRONTS + PANELS\n2 Pac - colour TBC\n\nINTERNALS\nTimbergrain (Sublime Teak) - pocket unit, its overhead, side unit open bay\n\nCARCASS\n16mm Whiteboard'
+const spec = 'SPECIFICATIONS - {room}\n{job}\n\nBENCHTOP\n60mm stone TBA\n\nFRONTS + PANELS\n2 Pac - colour TBC\n\nINTERNALS\nTimbergrain (Sublime Teak) - pocket unit (TC-07), side unit open bay\n\nCARCASS\n16mm Whiteboard'
 const site = 'SITE NOTES\nBack wall 4866 to the seen panel, 831 open to the right wall; left 765 + jamb, 800 opening, 750 wall, stair stringer bay 1110\nCeiling 2710 off slab - 20 floor allowance (TBC) = 2690, 18 shadowline\nRaw stair stringer 1340 off slab (1320 AFF): side unit top 1300\nPlumbing 2190-2580 and 1953-2112 off the back wall (island - check)\nOvens Neff B69FS5CY0A + B69VS73Y0A + Z912BDY0 kit; cooktop Neff T68YYY4C0H; hood Falmec FP3MLD90S2 90\nFridge Liebherr IRBH5120 + freezer SIFNH5128 integrated, niche 1772-1788\nD/W Bosch SMV6HCX03A, niche 815-875: 25 packer under\nSink Meir MKSP-S380440, tap Meir MK17 Piccola (drawn as stand-ins)'
 const rows = [
   { room_id: R, view: 'plan', kind: 'text', geom: { at: { x: 6100, y: 0 }, width: 80 }, text: spec, style: { ...box, block: 'Spec block' } },
