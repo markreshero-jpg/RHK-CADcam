@@ -57,6 +57,7 @@ Robe: 520 carcass, 600 end panel right (S), 200 deep panel left (N) against the 
 - WC-04 `case_back` (left piece) is hidden in plan + elevation + 3D = **Removed**, so the optimiser leaves it out — asked Mark (2026-11-03).
 - BC-02 drawer fronts (200 + 413) grain matched: group GM1, vertical (Mark). Optimiser: one block on sheet 3.
 - Robe (Wall 2) top 2420 → 2400 (Mark): TC-01 / TC-04 panels 2400, TC-02 / TC-03 2320 on the 80 kick, WC-06 bulkhead 140 (auto_h off, hangs from the 2540 ceiling). Walls 1 + 5 stay 2420 / 120. Shelves re-space equally. `_tmp-6542-robe2400.mjs`.
+- Robe end panels TC-01 / TC-04 = **16mm PT Colour Matt – Classic White Matt** (Mark; were Whiteboard): exposed override + the applied panels' material. Spec block updated.
 
 ## Round 6 (Mark 2026-11-03) — `_tmp-6542-study-rev6.mjs`
 - WC-07 bulkhead now stops flush with TC-06's carcass, not over the TC-05 tall end panel: 237 → 3080.5 (dx 2860 → 2843.5), left return 317.5 kept on TC-06's left gable. 0 errors.
