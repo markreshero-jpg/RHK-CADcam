@@ -895,34 +895,61 @@ function emitRoutes(
   // is always the centre (max interior room); only the METHOD comes from the profile.
   // `roomR` = the largest radius that fits inside the pocket. Returns the tool-centre
   // XY after entry, which the caller joins to the clearing path.
-  const enterPocket = (cx: number, cy: number, roomR: number, zTarget: number, step: number): Pt2 => {
-    const cmx = mapX(cx), cmy = mapY(cy)
+  //
+  // The entry is made AT THE CLEARING PATH'S START (pts[0]) and finishes exactly
+  // there, so the path carries straight on. It used to enter at the pocket centre
+  // and then cut one straight G1 to pts[0] at full depth and full feed: a
+  // full-width diagonal slot through solid board, which broke a cutter
+  // (RHK6542-R4 curved face board bend pockets, 2026-11-05).
+  //   ramp    — back and forth along the path's first leg, descending each pass
+  //   helical — a helix about pts[0] when one fits inside the pocket there, else
+  //             the ramp (a raster starts in a corner: no room to helix)
+  //   straight_plunge / pre_drill — plunge at pts[0]
+  // `zFrom` = where material starts: the clearance plane on the first depth
+  // pass, the previous pass's floor after that (fed down through cleared air).
+  const enterPocket = (pts: Pt2[], box: { x0: number; y0: number; x1: number; y1: number }, zFrom: number, zTarget: number, step: number): void => {
+    const s = pts[0]
+    const smx = mapX(s.x), smy = mapY(s.y)
     const strat = p.pocket_entry_strategy || 'helical'
-    if (strat === 'helical' && roomR >= 0.6) {
-      const rr = Math.min(p.helical_radius > 0 ? p.helical_radius : roomR, roomR)
-      const sx = mapX(cx + rr), sy = mapY(cy)
+    const toStart = () => {
+      emit(`G0 X${f(smx)} Y${f(smy)} Z${fz(clearZ)}`)
+      if (zFrom < clearZ - 1e-6) emit(`G1 Z${fz(zFrom)} F${plungeFeed}`)
+    }
+    const room = Math.min(s.x - box.x0, box.x1 - s.x, s.y - box.y0, box.y1 - s.y)
+    if (strat === 'helical' && room >= 0.6) {
+      const rr = Math.min(p.helical_radius > 0 ? p.helical_radius : room, room)
+      const sx = mapX(s.x + rr), sy = mapY(s.y)
       emit(`G0 X${f(sx)} Y${f(sy)} Z${fz(clearZ)}`)
-      const arcs = Math.max(1, Math.ceil((clearZ - zTarget) / Math.max(0.5, step)))
-      const zAt = (t: number) => fz(clearZ + (zTarget - clearZ) * t)
-      for (let a = 1; a <= arcs; a++) fullCircle(emit, f, sx, sy, cmx, cmy, helicalFeed, zAt((a - 0.5) / arcs), zAt(a / arcs))
-      for (let k = 0; k < Math.max(1, p.helical_passes); k++) fullCircle(emit, f, sx, sy, cmx, cmy, cutFeed)   // flat finishing turn(s)
-      return { x: cx + rr, y: cy }
+      if (zFrom < clearZ - 1e-6) emit(`G1 Z${fz(zFrom)} F${plungeFeed}`)
+      const arcs = Math.max(1, Math.ceil((zFrom - zTarget) / Math.max(0.5, step)))
+      const zAt = (t: number) => fz(zFrom + (zTarget - zFrom) * t)
+      for (let a = 1; a <= arcs; a++) fullCircle(emit, f, sx, sy, smx, smy, helicalFeed, zAt((a - 0.5) / arcs), zAt(a / arcs))
+      for (let k = 0; k < Math.max(1, p.helical_passes); k++) fullCircle(emit, f, sx, sy, smx, smy, cutFeed)   // flat finishing turn(s)
+      emit(`G1 X${f(smx)} Y${f(smy)} F${cutFeed}`)   // back to the centre of the cleared circle
+      return
     }
-    if (strat === 'ramp' && roomR >= 0.6) {
-      // Zig-zag ramp along X, centred, bounded to the pocket; laps until at depth.
-      const half = Math.min(roomR, Math.max(1, (p.ramp_in_distance > 0 ? p.ramp_in_distance : 20) / 2))
-      const drop = clearZ - zTarget
+    const leg = pts.length > 1 ? Math.hypot(pts[1].x - s.x, pts[1].y - s.y) : 0
+    if ((strat === 'ramp' || strat === 'helical') && leg >= 1) {
+      // Back and forth along the first leg from pts[0], an even number of passes
+      // so it finishes back on pts[0] at depth.
+      const span = Math.min(leg, p.ramp_in_distance > 0 ? p.ramp_in_distance : 20)
+      const ux = (pts[1].x - s.x) / leg, uy = (pts[1].y - s.y) / leg
+      const ex = mapX(s.x + ux * span), ey = mapY(s.y + uy * span)
+      const drop = zFrom - zTarget
       const run = drop / Math.max(1e-3, Math.tan((p.ramp_in_angle > 0 ? p.ramp_in_angle : 3) * Math.PI / 180))
-      const laps = Math.max(1, Math.ceil(run / (2 * half)))
-      emit(`G0 X${f(mapX(cx - half))} Y${f(cmy)} Z${fz(clearZ)}`)
-      for (let l = 1; l <= laps; l++) emit(`G1 X${f(mapX(l % 2 === 1 ? cx + half : cx - half))} Y${f(cmy)} Z${fz(clearZ + (zTarget - clearZ) * (l / laps))} F${rampFeed}`)
-      return { x: laps % 2 === 1 ? cx + half : cx - half, y: cy }
+      let laps = Math.max(2, Math.ceil(run / span))
+      if (laps % 2) laps++
+      toStart()
+      for (let l = 1; l <= laps; l++) {
+        const out = l % 2 === 1
+        emit(`G1 X${f(out ? ex : smx)} Y${f(out ? ey : smy)} Z${fz(zFrom + (zTarget - zFrom) * (l / laps))} F${rampFeed}`)
+      }
+      return
     }
-    // straight_plunge / pre_drill / too-small fallback: plunge at the centre.
+    // straight_plunge / pre_drill / too-small fallback: plunge at the path start.
     if (strat === 'pre_drill') c('PRE-DRILL pocket entry (drill the entry hole first)')
-    emit(`G0 X${f(cmx)} Y${f(cmy)} Z${fz(safeZ)}`)
+    toStart()
     emit(`G1 Z${fz(zTarget)} F${plungeFeed}`)
-    return { x: cx, y: cy }
   }
 
   // Tool groups, in an order that keeps every PART's steps in sequence (a shaker's
@@ -1046,14 +1073,13 @@ function emitRoutes(
       const stepover = Math.max(0.5, r.toolDiameter * (r.stepoverPct > 0 ? r.stepoverPct : 70) / 100)
       const pts = r.clear ? clearPath(r.fillStrategy, x0, y0, x1, y1, stepover, r.rasterAngleDeg) : outlinePath(x0, y0, x1, y1)
       if (pts.length < 2) continue
-      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
-      const roomR = Math.min((x1 - x0) / 2, (y1 - y0) / 2)
       for (let i = 1; i <= passes; i++) {
         const z = -Math.min(depth, i * step)
         if (r.clear) {
-          // Enter at the centre by the machine profile's strategy, then join the path.
-          enterPocket(cx, cy, roomR, z, step)
-          emit(`G1 X${f(mapX(pts[0].x))} Y${f(mapY(pts[0].y))} Z${fz(z)} F${cutFeed}`)
+          // Enter at the path start by the machine profile's strategy (never a
+          // full-depth link move through solid board), then run the path.
+          const zFrom = i === 1 ? clearZ : -Math.min(depth, (i - 1) * step)
+          enterPocket(pts, { x0, y0, x1, y1 }, zFrom, z, step)
           runPath(pts, z, 1)
         } else {
           // Boundary outline: plunge at the path start (no interior to helix into).

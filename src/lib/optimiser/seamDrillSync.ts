@@ -472,6 +472,9 @@ interface GeneratedRoute {
   output_to_cnc: boolean
   router_tool_id: string | null
   tool_set_id?: string | null
+  // true = cut with the part material's routing tool at nest time (router_tool_id
+  // is only the fallback). Set on the pockets that pick the generic notch cutter.
+  auto_tool?: boolean
   parameters: Record<string, unknown>
 }
 
@@ -537,7 +540,7 @@ export function collectNotchRoutes(rp: ResolvedCabinet, cabinetId: string, toolI
         source_table: side.table, source_cabinet_id: cabinetId, source_part_key: side.key,
         depth: round(side.DZ + 0.2),          // right through, with the usual through-hole overshoot
         output_face: side.face,
-        output_to_cnc: true, router_tool_id: toolId,
+        output_to_cnc: true, router_tool_id: toolId, auto_tool: true,
         parameters: { generated: GENERATED_MARK, kind: 'fprail_notch' },
       }
       // Side footprint (caseFrame): u = depth from the side's back (side.Z), v = height.
@@ -611,7 +614,7 @@ function shapedNotchRoutes(
       source_table: 'case_parts' as const, source_cabinet_id: cabinetId, source_part_key: `case_${panel.part_key}`,
       depth: round(panel.DZ + 0.2),
       output_face: isShapedPanelKey(panel.part_key) ? 'back' : panel.part_key === 'left_side' ? 'left' : 'right',
-      output_to_cnc: true, router_tool_id: toolId, length: null, width: null,
+      output_to_cnc: true, router_tool_id: toolId, auto_tool: true, length: null, width: null,
       parameters: { generated: GENERATED_MARK, kind: 'fprail_notch' },
     }
     rows.push({ ...base, operation_type: 'route', operation_action: 'pocket', operation_key: `fprail_notch_${n}_${atStart ? 0 : 1}`,
@@ -654,7 +657,7 @@ export function collectCurvedPocketRoutes(rp: ResolvedCabinet, cabinetId: string
         length: null, width: null,
         depth: round(bend.depth),
         output_face: 'back',          // the face board machines back face up (kit §6)
-        output_to_cnc: true, router_tool_id: toolId,
+        output_to_cnc: true, router_tool_id: toolId, auto_tool: true,
         parameters: { generated: GENERATED_MARK, kind: 'curved_pocket' },
       })
     })
@@ -686,7 +689,7 @@ export function collectFloatShelfPocketRoutes(rp: ResolvedCabinet, cabinetId: st
         length: null, width: null,
         depth: round(k.depth),
         output_face: 'back',          // the inner (glue) face; the show face is the front
-        output_to_cnc: true, router_tool_id: toolId,
+        output_to_cnc: true, router_tool_id: toolId, auto_tool: true,
         parameters: { generated: GENERATED_MARK, kind: 'float_shelf_pocket' },
       })
     })
@@ -717,7 +720,7 @@ export function collectDrawerBottomRebateRoutes(rp: ResolvedCabinet, cabinetId: 
         length: null, width: null,
         depth: round(p.rebate!.depth),
         output_face: 'bottom',        // the underside — it sits on the runner ledges
-        output_to_cnc: true, router_tool_id: toolId,
+        output_to_cnc: true, router_tool_id: toolId, auto_tool: true,
         parameters: { generated: GENERATED_MARK, kind: 'db_bottom_rebate' },
       })
     })
@@ -799,7 +802,7 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
   const [ins, insR] = await Promise.all([
     rows.length ? supabase.from('part_operations').insert(rows) : null,
     // Every row carries the same columns (door profile rows add a few), so one insert works.
-    notch.rows.length ? supabase.from('part_operations').insert(notch.rows.map(r => ({ angle_az: 0, plane_kind: null, tool_set_id: null, ...r }))) : null,
+    notch.rows.length ? supabase.from('part_operations').insert(notch.rows.map(r => ({ angle_az: 0, plane_kind: null, tool_set_id: null, auto_tool: false, ...r }))) : null,
   ])
   if (ins?.error) { console.error('[seamDrillSync] insert', ins.error); throw ins.error }
   if (insR?.error) { console.error('[seamDrillSync] insert routes', insR.error); throw insR.error }

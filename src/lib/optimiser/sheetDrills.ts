@@ -175,9 +175,9 @@ export async function loadResolvedDrillOps(
   // material-up pass for now — plane_kind is loaded but not yet acted on.
   const routesByKey = new Map<string, RouteOpRaw[]>()
   if (cabIds.length) {
-    const rRows = await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,angle_az,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,output_to_cnc',
+    const rRows = await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,operation_type,operation_action,output_face,plane_kind,pos_x,pos_y,size_dx,size_dy,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm,length,width,angle_az,depth,size_dz,fill_strategy,raster_angle_deg,raster_stepover_pct,router_tool_id,tool_set_id,auto_tool,output_to_cnc',
       cabIds, ['route', 'groove'])
-    type RouteRow = RouteGeom & { router_tool_id: string | null; tool_set_id: string | null; output_to_cnc: boolean | null }
+    type RouteRow = RouteGeom & { router_tool_id: string | null; tool_set_id: string | null; auto_tool?: boolean | null; output_to_cnc: boolean | null }
     // Finger-pull notches + reliefs are already in a gable's resolver outline, so
     // the perimeter cut takes them out in one go (z_handles H6). Their generated
     // pockets / slots only run when the part is cut as a plain rectangle (e.g. a
@@ -190,6 +190,17 @@ export async function loadResolvedDrillOps(
       const { data: toolRows } = await supabase.from('cnc_tools')
         .select('id,tool_number,diameter,max_depth_per_pass,base_feed_rate,plunge_feed_rate,base_spindle_speed,shape_profile').eq('active', true)
       const toolById = new Map((toolRows ?? []).map(t => [t.id as string, t]))
+      // Each nested part's material routing tool (materials.cnc_tool_id), for auto-tool routes.
+      const matToolByKey = new Map<string, string>()
+      const matIds = [...new Set(parts.map(p => p.material_id).filter((m): m is string => !!m))]
+      if (rawRoutes.some(o => o.auto_tool) && matIds.length) {
+        const { data: matRows } = await supabase.from('materials').select('id,cnc_tool_id').in('id', matIds)
+        const toolOfMat = new Map((matRows ?? []).filter(m => m.cnc_tool_id).map(m => [m.id as string, m.cnc_tool_id as string]))
+        for (const p of parts) {
+          const t = p.material_id ? toolOfMat.get(p.material_id) : undefined
+          if (t) matToolByKey.set(drillKey(p.source_table, p.cabinet_instance_id, p.source_part_key), t)
+        }
+      }
       // Resolve a cnc_tools id → concrete router bit, or null (with a warning).
       type Bit = { toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null; feed: number | null; plunge: number | null; rpm: number | null; vAngleDeg: number | null; vTipDia: number | null }
       const numOrNull = (v: unknown) => v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null
@@ -241,8 +252,14 @@ export async function loadResolvedDrillOps(
             if (m.spindle_speed_override != null && m.spindle_speed_override > 0) b.rpm = Number(m.spindle_speed_override)
             resolved.push({ ...geom, ...b })
           }
-        } else if (o.router_tool_id) {
-          const b = bit(o.router_tool_id, label)
+        } else if (o.router_tool_id || o.auto_tool) {
+          // Auto tool (generated pockets: bend pockets, rail notches, shelf slots,
+          // rebates): the part material's own routing tool — the bit its outline
+          // is cut with — so a board never gets another board's cutter (Mark,
+          // 2026-11-05: Satin Board bend pockets ran on Whiteboard's T101). The
+          // stored bit is the fallback when the material has no routing tool.
+          const own = o.auto_tool ? matToolByKey.get(drillKey(o.source_table, o.source_cabinet_id, o.source_part_key)) : undefined
+          const b = bit(own && toolById.has(own) ? own : o.router_tool_id, label)
           if (b) resolved.push({ ...o, ...b })
         } else {
           warnings.add(`Route on ${label}: no router tool or tool set assigned — skipped`)
