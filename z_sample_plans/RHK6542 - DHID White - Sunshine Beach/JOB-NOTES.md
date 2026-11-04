@@ -89,3 +89,7 @@ Robe: 520 carcass, 600 end panel right (S), 200 deep panel left (N) against the 
 - Round 9 (`_tmp-6542-danny-rail.mjs`): rails TC-02 / TC-04 unlocked, now hang at the centre-pillar drop (standard): centre 53.5 under the top underside 1913.5 -> rail 1845-1875 (was 1824), HANGING RAIL notes moved. Finista pillar drops 50 -> 53.5 in the library (71.5 overall, estimated ring from the photo).
 - Study display wall kick (2026-11-03, `_tmp-6542-study-kick.mjs`): TC-06 -> TC-08 joined full length as KICK 3, 2843.5, built to the deepest 335 (TC-06 is 317, so the kick sits 18 further forward there). Set seams: face 1287 / 1556.5 (on the TC-07 / TC-09 joint), sub front 2400 / 443.5, back 443.5 / 2400, all JOIN. 0 errors. Check pending.
 - KICK 3 face re-split for the walnut vertical grain (face max 1200, the sheet width): 517 / 770 / 770 / 786.5 on the TC-06 / TC-07 / TC-09 / TC-10 joints. Sub front + back unchanged (2400 / 443.5, 443.5 / 2400). 0 errors.
+
+## Rangehood Cabinet (room 06981ab6) — 2026-11-04
+
+- Room set to 2pac (Mark): doors "2 Pac Flat 18mm", colour **Resene Alabaster** (new row on the 2pac range, Satin Board 18mm, finish "Satin" — sheen TBC); panels = exposed role on base/wall/tall → Satin Board 18mm. No cabinets drawn yet.
