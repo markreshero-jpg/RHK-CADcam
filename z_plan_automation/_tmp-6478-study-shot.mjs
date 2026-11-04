@@ -20,6 +20,6 @@ try {
   }
   await click(page, 'Plan'); await sleep(4000); await page.screenshot({ path: OUT + 'plan.png' })
   await click(page, 'Elevation'); await sleep(4000)
-  for (const w of ['Wall 1', 'Wall 3']) { console.log(w, await click(page, w, true)); await sleep(4000); await page.screenshot({ path: OUT + w.replace(' ', '') + '.png' }) }
+  for (const w of ['Wall 1', 'Wall 3']) { console.log(w, await page.evaluate(t => { const b = [...document.querySelectorAll('*')].filter(e => e.children.length === 0 && e.textContent.trim() === t && e.offsetParent); b[0]?.click(); return b.length }, w)); await sleep(4000); await page.screenshot({ path: OUT + w.replace(' ', '') + '.png' }) }
   await click(page, '3D'); await sleep(8000); await page.screenshot({ path: OUT + '3d.png' })
 } finally { await browser.close() }
