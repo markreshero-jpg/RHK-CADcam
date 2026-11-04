@@ -686,7 +686,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
         <div className="flex flex-1 overflow-hidden">
 
           {/* Picker sidebar */}
-          <div className="w-44 flex-none border-r border-gray-800 p-2 space-y-1">
+          <div className="w-44 flex-none border-r border-gray-800 p-2 space-y-1 overflow-y-auto">
             <div className="text-[10px] text-gray-600 uppercase tracking-wider px-2 py-1">Available</div>
             {REPORTS.map(rep => (
               <button key={rep.id} data-tour={`report-${rep.id}`} onClick={() => setSelectedReport(rep.id)}
