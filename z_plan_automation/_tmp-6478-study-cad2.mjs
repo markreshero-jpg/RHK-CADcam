@@ -21,7 +21,7 @@ const openings = (base, shelfYs, topY, t = 16.5) => { const out = []; let y = ba
 // ── Wall 1 (offset 0 = nib end): cupboards 100-867, 33 bench to 900, splash 900-1483, open shelves 1483-2383
 const W1_OPEN = openings(1483, [294.5, 589], 883.5)            // 278 / 278 / 278
 for (const [left] of [[240], [1100], [1958]]) vchain('Wall 1', left + 60, W1_OPEN)
-note('Wall 1', 1958, 858, 400, 'PRINTER CUPBOARD - ADJ SHELF 450 OFF THE BOTTOM')
+note('Wall 1', 1958, 858, 380, 'PRINTER CUPBOARD')
 note('Wall 1', 240, 2576, 1400, 'SPLASH PANEL 2 PAC - COLOUR TBC (ONE PIECE 2656)')
 for (const [l, w] of [[240, 860], [1100, 858], [1958, 858]]) note('Wall 1', l, w, 2300, 'OPEN SHELF')
 
@@ -38,7 +38,7 @@ rows.push({ room_id: R, view: 'plan', kind: 'text', geom: { at: { x: 4722, y: 0 
 rows.push({ room_id: R, view: 'plan', kind: 'text', geom: { at: { x: 4722, y: 1300 }, width: 95 }, text: site, cad_layer_id: SITE_LAYER, style: box })
 
 // clear this script's earlier rows: elevation dims on Wall 1 / 3, its notes, the plan spec / site boxes
-const mine = [...rows.filter(r => r.kind === 'text').map(r => r.text), '1 ADJ SHELF', '2 ADJ SHELVES', 'OPEN - 2 FIXED']
+const mine = [...rows.filter(r => r.kind === 'text').map(r => r.text), '1 ADJ SHELF', '2 ADJ SHELVES', 'OPEN - 2 FIXED', 'PRINTER CUPBOARD - ADJ SHELF 450 OFF THE BOTTOM']
 const old = chk('old', await sb.from('room_annotations').select('id,view,kind,text,style').eq('room_id', R))
 const drop = old.filter(a => (a.view === 'elevation' && a.kind === 'dim') || mine.includes(a.text) || a.style?.block === 'Spec block' || /^SITE NOTES/.test(a.text ?? '')).map(a => a.id)
 if (drop.length) chk('del', await sb.from('room_annotations').delete().in('id', drop))
