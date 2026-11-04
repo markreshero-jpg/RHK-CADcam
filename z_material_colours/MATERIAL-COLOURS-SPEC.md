@@ -7,7 +7,7 @@
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
 > **RESUME HERE** → MC0 + MC1 done 2026-10-24: schema applied, 3 colours seeded
-> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour, MC8 tutorials, MC9 grain, MC11 elevation / print grain done. Next: MC7 CSV import (waits on supplier files), MC10 supplier images (optional).
+> (Classic White Matt, Boston Oak Woodmatt, Elegant Oak). MC2 library UI, MC3 resolver, MC4 pickers, MC5 warnings + nest, MC6 fronts colour, MC8 tutorials, MC9 grain, MC11 elevation / print grain, MC12 glass opacity done. Next: MC7 CSV import (waits on supplier files), MC10 supplier images (optional).
 > Grain: generic tinted tile by default, supplier images optional (§8).
 
 ---
@@ -201,6 +201,7 @@ colours is left open.
 - [x] **MC6** (2026-10-25) Fronts colour per class (§5): "Doors / drawers" grid row + resolver precedence; Doors-tab colours on a board-with-colours fall back + warn. Checked live on RHK1234 BC-02: job base fronts → Classic White Matt applied over the Doors tab; with it removed, the Doors-tab colour on bare PT Woodmatt fell back to Boston Oak + "Doors:" warning. Door colour "Elegant Oak" (Laminex Absolute Grain) relinked to the Elegant Oak colour row; the generic "Colour A" / "Colour TBC" door colours stay on their boards (they warn).
 - [ ] **MC7** CSV import of colour lists (when Mark has the files).
 - [x] **MC8** (2026-10-25) Tutorials in a new "Materials & colours" topic: "Pick the job colours" (Basics) and "Add colours to a board" (Intermediate); events mat_board_pick / mat_colour_pick / mat_copy_classes / job_materials_tab / props_saved / board_colour_added; store test added. In-app review by Mark pending.
+- [x] **MC12** (2026-11-05) See-through boards: `materials.opacity` (null = opaque, 0..1; `migration_mc12_opacity.sql`, applied). Display only: room 3D + cabinet edit 3D draw custom parts at layer alpha x material opacity (`matOpacity` in Cabinet3DView). First user: "Glass 6mm – Clear Toughened" at 0.5 (RHK6478 desk glass). Missing custom-part material colours now load on demand (useMaterialColours). Not yet: carcass / front parts, library UI field (set in SQL for now). Check pending.
 
 ### MC1 seed (run after the migration)
 

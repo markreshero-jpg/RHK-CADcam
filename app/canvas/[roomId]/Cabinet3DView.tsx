@@ -1476,6 +1476,11 @@ export function CabinetScene({
     return ov ? { ...info, edge: ov } : info
   }
 
+  // See-through boards (glass): materials.opacity, display only (MC12).
+  function matOpacity(matId: string | null | undefined) {
+    const c = matId ? materialColours?.[matId] : undefined
+    return c && typeof c === 'object' && c.opacity ? c.opacity : 1
+  }
   function matSpec(matId: string, fallback: string) {
     return unpackMatCol(materialColours?.[matId], fallback)
   }
@@ -1932,7 +1937,7 @@ export function CabinetScene({
           grainExt: p.grain_across ? customGrainExt(orient, true) : undefined,
         }
         return (
-          <PartAlpha key={`cust${i}`} a={alpha(customPartItem(p))}><Part
+          <PartAlpha key={`cust${i}`} a={alpha(customPartItem(p)) * matOpacity(p.material_id)}><Part
             b={b}
             faceColors={panelFaceColors(kind, 'custom', s.face, s.back, s.edge)}
             edgeLineColor={outline('carcase', customPartItem(p))}

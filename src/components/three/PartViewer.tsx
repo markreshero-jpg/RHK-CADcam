@@ -68,7 +68,7 @@ export interface PartMeta {
 }
 
 // grain: the material is grained (has_grain) — renders the generic wood grain (MC9).
-export type MatColSpec = { face?: string; back?: string; edge?: string; grain?: boolean }
+export type MatColSpec = { face?: string; back?: string; edge?: string; grain?: boolean; opacity?: number }
 export type MatColMap  = Record<string, string | MatColSpec>
 export type EbSpec     = { thick: number; color: string }
 

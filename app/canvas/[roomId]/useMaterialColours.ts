@@ -7,7 +7,7 @@ import { dbLoadResolvedParts, dbResolveAndPersistCabinet } from './canvasDB'
 import { ebColour } from '@/src/lib/partPalette'
 import { ROOM_CUSTOM_PART_COLS, withLibraryKey } from '@/src/lib/displayLayers/customPartKinds'
 
-export type MatColours  = Record<string, { face?: string; back?: string; edge?: string; grain?: boolean }>
+export type MatColours  = Record<string, { face?: string; back?: string; edge?: string; grain?: boolean; opacity?: number }>
 export type EbByMatId   = Record<string, { thickness: number; color: string | null }>
 
 const CUSTOM_PART_COLS = ROOM_CUSTOM_PART_COLS
@@ -96,7 +96,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       }
       if (matIds.size > 0) {
         const { data } = await supabase
-          .from('materials').select('id, face_colour, back_colour, edge_colour, has_grain')
+          .from('materials').select('id, face_colour, back_colour, edge_colour, has_grain, opacity')
           .in('id', [...matIds])
         if (data) {
           const colours: MatColours = {}
@@ -106,6 +106,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
               back: m.back_colour ?? undefined,
               edge: m.edge_colour ?? undefined,
               grain: m.has_grain || undefined,
+              opacity: m.opacity ?? undefined,
             }
           }
           setMatColours(colours)
@@ -173,10 +174,10 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
     }
     if (missing.size === 0) return
     missing.forEach(id => requestedMats.current.add(id))
-    supabase.from('materials').select('id, face_colour, back_colour, edge_colour, has_grain').in('id', [...missing]).then(({ data }) => {
+    supabase.from('materials').select('id, face_colour, back_colour, edge_colour, has_grain, opacity').in('id', [...missing]).then(({ data }) => {
       if (!data?.length) return
       const colours: MatColours = {}
-      for (const m of data) colours[m.id] = { face: m.face_colour ?? undefined, back: m.back_colour ?? undefined, edge: m.edge_colour ?? undefined, grain: m.has_grain || undefined }
+      for (const m of data) colours[m.id] = { face: m.face_colour ?? undefined, back: m.back_colour ?? undefined, edge: m.edge_colour ?? undefined, grain: m.has_grain || undefined, opacity: m.opacity ?? undefined }
       setMatColours(prev => ({ ...prev, ...colours }))
     })
   }, [resolvedParts, matColours])
