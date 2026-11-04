@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet, ResolvedCustomPart } from '@/src/lib/resolver/types'
@@ -160,6 +160,26 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
     }
     if (Object.keys(colours).length > 0) setMatColours(prev => ({ ...prev, ...colours }))
   }, [])
+
+  // Custom parts can switch to a board nothing else in the room uses (a glass
+  // desk top, a 33 override) after the mount-time load — fetch any material
+  // colours still missing, else 3D draws them in the purple fallback.
+  const requestedMats = useRef(new Set<string>())
+  useEffect(() => {
+    const missing = new Set<string>()
+    for (const rp of resolvedParts.values()) for (const p of rp.custom_parts ?? []) {
+      const id = p.material_id
+      if (id && !matColours[id] && !requestedMats.current.has(id)) missing.add(id)
+    }
+    if (missing.size === 0) return
+    missing.forEach(id => requestedMats.current.add(id))
+    supabase.from('materials').select('id, face_colour, back_colour, edge_colour, has_grain').in('id', [...missing]).then(({ data }) => {
+      if (!data?.length) return
+      const colours: MatColours = {}
+      for (const m of data) colours[m.id] = { face: m.face_colour ?? undefined, back: m.back_colour ?? undefined, edge: m.edge_colour ?? undefined, grain: m.has_grain || undefined }
+      setMatColours(prev => ({ ...prev, ...colours }))
+    })
+  }, [resolvedParts, matColours])
 
   const applyInputEdgebands = useCallback((id: string) => {
     const input = getCachedInput(id)
