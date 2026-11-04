@@ -21,18 +21,15 @@ const openings = (base, shelfYs, topY, t = 16.5) => { const out = []; let y = ba
 // ── Wall 1 (offset 0 = nib end): cupboards 100-867, 33 bench to 900, splash 900-1483, open shelves 1483-2383
 const W1_OPEN = openings(1483, [294.5, 589], 883.5)            // 278 / 278 / 278
 for (const [left] of [[240], [1100], [1958]]) vchain('Wall 1', left + 60, W1_OPEN)
-note('Wall 1', 240, 860, 380, '1 ADJ SHELF')
-note('Wall 1', 1100, 858, 380, '1 ADJ SHELF')
 note('Wall 1', 1958, 858, 400, 'PRINTER CUPBOARD - ADJ SHELF 450 OFF THE BOTTOM')
 note('Wall 1', 240, 2576, 1400, 'SPLASH PANEL 2 PAC - COLOUR TBC (ONE PIECE 2656)')
-for (const [l, w] of [[240, 860], [1100, 858], [1958, 858]]) note('Wall 1', l, w, 2300, 'OPEN - 2 FIXED')
+for (const [l, w] of [[240, 860], [1100, 858], [1958, 858]]) note('Wall 1', l, w, 2300, 'OPEN SHELF')
 
 // ── Wall 3 (offset 0 = window wall): desk top 750, overheads 1500-2353 (under panels 1500-1516.5), 30 BH to 2383
 const W3_OPEN = openings(1500, [278.833, 557.667], 836.5)      // 262.3 x 3, bottom on the under panel line
 for (const left of [822, 2408]) vchain('Wall 3', left + 60, W3_OPEN)
-for (const [left, w] of [[30, 792], [1614, 794], [3200, 792]]) note('Wall 3', left, w, 2300, '2 ADJ SHELVES')
-note('Wall 3', 822, 792, 2300, 'OPEN - 2 FIXED')
-note('Wall 3', 2408, 792, 2300, 'OPEN - 2 FIXED')
+note('Wall 3', 822, 792, 2300, 'OPEN SHELF')
+note('Wall 3', 2408, 792, 2300, 'OPEN SHELF')
 
 // ── Plan: spec block + site notes, clear of the dims (x = wall end + 700)
 const spec = 'SPECIFICATIONS - {room}\n{job}\n\nBENCHTOP\n33mm LX Sublime Teak\n\nDESK TOP\n6mm toughened glass (by RHK)\n\nFRONTS + PANELS\nLX Sublime Teak\n\nCARCASS\nWhiteboard - open boxes Sublime Teak inside\n\nSPLASH PANEL\n2 Pac - colour TBC'
@@ -41,7 +38,7 @@ rows.push({ room_id: R, view: 'plan', kind: 'text', geom: { at: { x: 4722, y: 0 
 rows.push({ room_id: R, view: 'plan', kind: 'text', geom: { at: { x: 4722, y: 1300 }, width: 95 }, text: site, cad_layer_id: SITE_LAYER, style: box })
 
 // clear this script's earlier rows: elevation dims on Wall 1 / 3, its notes, the plan spec / site boxes
-const mine = rows.filter(r => r.kind === 'text').map(r => r.text)
+const mine = [...rows.filter(r => r.kind === 'text').map(r => r.text), '1 ADJ SHELF', '2 ADJ SHELVES', 'OPEN - 2 FIXED']
 const old = chk('old', await sb.from('room_annotations').select('id,view,kind,text,style').eq('room_id', R))
 const drop = old.filter(a => (a.view === 'elevation' && a.kind === 'dim') || mine.includes(a.text) || a.style?.block === 'Spec block' || /^SITE NOTES/.test(a.text ?? '')).map(a => a.id)
 if (drop.length) chk('del', await sb.from('room_annotations').delete().in('id', drop))
