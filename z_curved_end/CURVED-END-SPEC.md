@@ -351,6 +351,22 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - Under panel link (R6) not used — the bottom former is the visible underside.
   - Test `src/lib/resolver/__tests__/curvedRangehood.test.ts`; tutorial `curved_rangehood`.
 
+- [~] **C10** (built 2026-11-05, in-app check pending) **Wall build for WCRVFIXP** (Mark, 2026-11-05: "back
+  sits on top of bottom … side fixing blocks sit between top and bottom … similar to how a wall cabinet is
+  built"; top runs over the back too). Locked as built:
+  - Wall class only, not the curved bulkhead (`curvedEndWallBuild`); base / tall stay on the kit build
+    (fixtures unchanged). Engine param `wallBuild`.
+  - **Top + bottom formers run through to the wall** (`capLoop`: the former loop with its back edge at
+    Dc, not notched for the side blocks; front-block notch kept). Ribs unchanged (stop at the back,
+    notched round the blocks).
+  - **Back and side fixing blocks stand between them** (`betweenH` = Hc − 2T, from y0 + T). Fixing
+    panel and front blocks stay full height.
+  - Joints: back → bottom / top and side block → bottom / top are now screwed **through the former into
+    their ends** (part A = back / block, B = the former, `bore_b` up / down; same construction-method
+    keys `crv_back:former` / `crv_block:former`). Fixing panel → bottom / top runs to the wall; back →
+    fixing panel and block → face board shortened to the between height.
+  - Rangehood: the top's flue notch now runs from the wall (over the back) to the box front.
+
 ## Open
 
 - **Holes via the joints library** (Mark, 2026-10-20: "can we apply our intelli joints … new joints

@@ -82,7 +82,7 @@ export function curvedEndKickH(s: Pick<CurvedEndSettings, 'kick'>, assemblyClass
  *  `kickH` (curvedEndKickH) comes off the height: the engine builds above the kick. */
 export function curvedEndParams(
   s: CurvedEndSettings, box: { DX: number; DY: number; DZ: number }, faceThickness: number, carcassThickness: number,
-  kickH = 0, rangehoodShelfH?: number | null,
+  kickH = 0, rangehoodShelfH?: number | null, wallBuild = false,
 ): CurvedEndParams {
   return {
     W: box.DX, D: box.DZ, H: box.DY - kickH, R: s.R, FT: faceThickness, SK: s.SK, T: carcassThickness, hand: s.hand,
@@ -90,8 +90,14 @@ export function curvedEndParams(
     lighten: s.lighten, B: s.B, onion: s.onion, OS: s.OS, blkS: s.blkS, blkF: s.blkF, ribs: s.ribs,
     // C9: the rangehood's shelf_h is from the cabinet underside; the engine's levels from the carcass bottom.
     ...(rangehoodShelfH != null ? { shelfAt: rangehoodShelfH - kickH - s.SBT } : {}),
+    ...(wallBuild ? { wallBuild } : {}),
   }
 }
+
+/** WCRVFIXP builds like a wall cabinet (Mark, 2026-11-05): top / bottom to the
+ *  wall, back + side blocks between them. Wall class, not the curved bulkhead. */
+export const curvedEndWallBuild = (assemblyClass: string, bulkhead: unknown) =>
+  assemblyClass.startsWith('wall') && !bulkhead
 
 /** Plan outline for the cabinet (plan view, benchtop seeding, obstacles). */
 export function curvedEndFootprint(s: Pick<CurvedEndSettings, 'hand' | 'R'>, dims: FootprintDims): Footprint | null {

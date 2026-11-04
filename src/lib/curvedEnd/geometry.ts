@@ -51,6 +51,11 @@ export interface CurvedEndParams {
    *  rangehood space), the ribs above spaced by the gap rule; `ribs` then counts
    *  every rib incl. the shelf. Rib cut-outs are off. Unset = the kit's layout. */
   shelfAt?: number | null
+  /** Wall build (WCRVFIXP, Mark 2026-11-05: "similar to how a wall cabinet is
+   *  built"; RHK addition): the top and bottom formers run through to the wall
+   *  over / under the back, the back and the side fixing blocks stand between
+   *  them. Ribs unchanged. Unset = the kit's build (back + blocks full height). */
+  wallBuild?: boolean
 }
 
 export const CURVED_END_DEFAULTS: CurvedEndParams = {
@@ -96,6 +101,9 @@ export interface CurvedEndGeometry {
   backX0: number; backW: number
   formerX0: number; formerW: number; formerD: number
   formerLoop: Loop                         // plan frame, anticlockwise
+  /** Wall build: the top / bottom formers' loop — to the wall (d = Dc), not
+   *  notched for side blocks. Null = they use formerLoop. */
+  capLoop: Loop | null
   wrapLoop: Loop                           // face board plan shape (3D)
   pocketLines: [number, number][]
   blocks: CurvedEndBlock[]
@@ -215,7 +223,7 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
     p, double, Dc, Hc, y0: p.SBT, CX, CD, RI, maxGap, gaps: g, pitch, clear,
     levels, holeY: levels.map(y => y + T / 2), arc, ...(shelfLevel != null ? { shelfLevel } : {}),
     wrapLen: 0, pockets: [], ovL: 0, ovR: 0, ovG: 0, fixDepth: 0, backX0: 0, backW: 0,
-    formerX0: 0, formerW: 0, formerD: Dc - T - SK, formerLoop: [], wrapLoop: [], pocketLines: [],
+    formerX0: 0, formerW: 0, formerD: Dc - T - SK, formerLoop: [], capLoop: null, wrapLoop: [], pocketLines: [],
     blocks: [], blkSide: false, blkFront: false, cut: null, cutDepth: T - p.OS, warnings: [], notes: [],
   }
 
@@ -254,6 +262,8 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
   // full-thickness straights, notched through the formers. 100 wide if the straight allows, else 60.
   const pickW = (avail: number) => [BLOCK_WIDE, BLOCK_NARROW].find(v => v <= avail + 1e-9)
   const L = c.formerLoop
+  // Wall build: top / bottom keep the plain outline (side blocks stand on / under them).
+  const cap: Loop | null = p.wallBuild ? L.map(v => [...v] as [number, number, number]) : null
   if (p.blkS) {
     const avail = (Dc - T) - (R + E), wb = pickW(avail)
     if (!wb) c.notes.push(`No room for a side fixing block: the flat side behind the curve is only ${f1(Math.max(0, avail))} long (needs ${BLOCK_NARROW}).`)
@@ -279,13 +289,18 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
         const a = W / 2 - wb / 2, b = W / 2 + wb / 2, i = L.findIndex(v => v[0] === R && v[1] === FT)
         c.blocks.push({ name: 'Block_Front', face: 'front', dir: 1, x0: a, x1: b, d0: FT, d1: FT + T, wb })
         L.splice(i + 1, 0, [a, FT, 0], [a, FT + T, 0], [b, FT + T, 0], [b, FT, 0])
+        if (cap) cap.splice(cap.findIndex(v => v[0] === R && v[1] === FT) + 1, 0, [a, FT, 0], [a, FT + T, 0], [b, FT + T, 0], [b, FT, 0])
       } else {
         c.blocks.push({ name: 'Block_Front', face: 'front', dir: 1, x0: T, x1: T + wb, d0: FT, d1: FT + T, wb })
         const i = L.findIndex(v => v[0] === T && v[1] === FT)
         L.splice(i, 1, [T, FT + T, 0], [T + wb, FT + T, 0], [T + wb, FT, 0])
+        if (cap) cap.splice(cap.findIndex(v => v[0] === T && v[1] === FT), 1, [T, FT + T, 0], [T + wb, FT + T, 0], [T + wb, FT, 0])
       }
     }
   }
+
+  // Wall build: top / bottom run over / under the back to the wall.
+  if (cap) c.capLoop = cap.map(([x, d, b]) => [x, Math.abs(d - (Dc - T)) < 1e-9 ? Dc : d, b])
 
   c.cut = p.lighten ? ribCutout(p, c) : null
 
@@ -357,7 +372,7 @@ export function curvedEndParts(c: CurvedEndGeometry): CurvedEndPart[] {
     pockets: c.pockets.map(([a, b]) => ({ x0: r2(a), x1: r2(b), y0: -OVER, y1: H + OVER, depth: FT - SK })),
   })
   if (!c.double) out.push({ name: 'FixingPanel', material: 'carcass', thickness: T, sizeX: r2(c.fixDepth), sizeY: r2(c.Hc) })
-  out.push({ name: 'Back', material: 'carcass', thickness: T, sizeX: r2(c.backW), sizeY: r2(c.Hc) })
+  out.push({ name: 'Back', material: 'carcass', thickness: T, sizeX: r2(c.backW), sizeY: r2(betweenH(c, 'back')) })
 
   const fw = r2(c.formerW), fd = r2(c.formerD)
   const tx = ([x, d, b]: [number, number, number]): [number, number, number] => [x - c.formerX0, d - SK, b]
@@ -365,17 +380,27 @@ export function curvedEndParts(c: CurvedEndGeometry): CurvedEndPart[] {
   if (hand === 'LH') loop = mirLoop(loop, fw)
   let cut: Loop | null = c.cut ? c.cut.map(tx) : null
   if (cut && hand === 'LH') cut = mirLoop(cut, fw)
+  let capL: Loop | null = c.capLoop ? c.capLoop.map(tx) : null
+  if (capL && hand === 'LH') capL = mirLoop(capL, fw)
   const former = (name: CurvedEndPartName, level: number, withCut: boolean): CurvedEndPart => ({
-    name, material: 'carcass', thickness: T, sizeX: fw, sizeY: fd, level,
-    outline: loopToOutline(loop),
+    name, material: 'carcass', thickness: T, level,
+    ...(capL && (name === 'Top' || name === 'Bottom')
+      ? { sizeX: fw, sizeY: r2(c.Dc - SK), outline: loopToOutline(capL) }
+      : { sizeX: fw, sizeY: fd, outline: loopToOutline(loop) }),
     ...(withCut && cut ? { cutout: { loop: loopToOutline(cut), depth: c.cutDepth } } : {}),
   })
   out.push(former('Bottom', 0, false))
   const ribCut = c.shelfLevel == null   // C9: no rib cut-outs with a rangehood
   for (let i = 1; i < c.gaps; i++) out.push(former(`Rib${i}`, i, ribCut))
   out.push(former('Top', c.gaps, false))
-  for (const k of c.blocks) out.push({ name: k.name, material: 'carcass', thickness: T, sizeX: k.wb, sizeY: r2(c.Hc) })
+  for (const k of c.blocks) out.push({ name: k.name, material: 'carcass', thickness: T, sizeX: k.wb, sizeY: r2(betweenH(c, k.face)) })
   return out
+}
+
+/** Height of an upright: full carcass, or (wall build) between the bottom and
+ *  the top for the back and the side fixing blocks. */
+export function betweenH(c: CurvedEndGeometry, what: 'back' | 'side' | 'front' | 'fix'): number {
+  return c.p.wallBuild && (what === 'back' || what === 'side') ? c.Hc - 2 * c.p.T : c.Hc
 }
 
 export const partFileName = (n: CurvedEndPartName) => (n === 'FaceBoard' ? 'ext_' : 'int_') + n

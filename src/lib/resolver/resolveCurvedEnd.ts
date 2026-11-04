@@ -30,9 +30,9 @@
 import type { CabinetInput, DeclaredSeam, DeclaredSeamGeom, ResolvedCasePart, ResolverError } from './types'
 import { clipOutlineX, sampleOutline, type OutlinePt } from '../shapePath'
 import { spliceNotch } from '../partCutouts'
-import { calcCurvedEnd, curvedEndParts, loopToOutline, mirLoop, type CurvedEndGeometry, type CurvedEndPart, type Loop } from '../curvedEnd/geometry'
+import { betweenH, calcCurvedEnd, curvedEndParts, loopToOutline, mirLoop, type CurvedEndGeometry, type CurvedEndPart, type Loop } from '../curvedEnd/geometry'
 import { calcCurvedKick, type CurvedKick, type CurvedKickParams, type KickRect } from '../curvedEnd/kick'
-import { curvedEndKickH, curvedEndParams, type CurvedEndSettings } from '../curvedEnd/settings'
+import { curvedEndKickH, curvedEndParams, curvedEndWallBuild, type CurvedEndSettings } from '../curvedEnd/settings'
 import { splitThickness } from './resolveBulkhead'
 
 /** Part key per engine part name. */
@@ -93,7 +93,8 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   // the gable side by the panel + its scribe (RH: the gable is at X 0; LH: at X = DX).
   const { pT, inset, s: built } = curvedEndInnerFit(s, FT)
   const shiftX = s.hand === 'RH' ? inset : 0
-  const c = calcCurvedEnd(curvedEndParams(built, { DX: cab.DX - inset, DY: cab.DY, DZ: cab.DZ }, FT, T, lift, cab.rangehood?.shelf_h))
+  const c = calcCurvedEnd(curvedEndParams(built, { DX: cab.DX - inset, DY: cab.DY, DZ: cab.DZ }, FT, T, lift, cab.rangehood?.shelf_h,
+    curvedEndWallBuild(cab.assembly_class, cab.bulkhead)))
   const errors: ResolverError[] = c.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'case' }))
   const warnings: ResolverError[] = c.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' }))
   const parts = curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id)
@@ -103,7 +104,10 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
       // the finished edge, taped (the engine's overhang would leave it raw).
       ...(pT && p.part_key === 'crv:face' ? { edge_band: gableTape(s.grain, cab.exposed_edgeband_id) } : {}),
     }))
-  const seams = curvedEndSeams(c).map(sm => ({ ...sm, geom: { ...sm.geom, origin: { ...sm.geom.origin, x: sm.geom.origin.x + shiftX, y: sm.geom.origin.y + lift } } }))
+  const seams = curvedEndSeams(c).map(sm => ({ ...sm, geom: {
+    ...sm.geom, origin: { ...sm.geom.origin, x: sm.geom.origin.x + shiftX, y: sm.geom.origin.y + lift },
+    ...(sm.geom.bore_b ? { bore_b: { ...sm.geom.bore_b, at: sm.geom.bore_b.at + (sm.geom.bore_b.axis[0] === 'y' ? lift : sm.geom.bore_b.axis[0] === 'x' ? shiftX : 0) } } : {}),
+  } }))
   if (splitH) {
     if (c.double) errors.push({ code: 'CURVED_END', message: 'A shadowline split rail follows a single curve only — not on a double curved end.', part: 'case' })
     else parts.push(curvedSplitRail(c, cab.bulkhead!.split, splitH, cab.split_material!.id))
@@ -410,9 +414,12 @@ export function curvedEndCaseParts(
   const X = (x: number) => (lh ? W - x : x)
   const out: ResolvedCasePart[] = []
 
+  // Wall build (WCRVFIXP): the back + side blocks stand between the bottom and the top.
   const upright = (key: ResolvedCasePart['part_key'], x0: number, x1: number, d0: number, d1: number,
-    outer: '-x' | '+x' | '-d' | '+d') =>
-    out.push(turnedPanel(c, key, { x0, x1, d0, d1 }, outer, { h: c.Hc, y: c.y0, t: T, mat: carcassMat }))
+    outer: '-x' | '+x' | '-d' | '+d', what: 'back' | 'side' | 'front' | 'fix' = 'fix') => {
+    const h = betweenH(c, what)
+    out.push(turnedPanel(c, key, { x0, x1, d0, d1 }, outer, { h, y: c.y0 + (h < c.Hc ? T : 0), t: T, mat: carcassMat }))
+  }
 
   // Face board: flat blank + its bent plan shape. Z = D − d is a reflection
   // (bulges flip); LH mirrors x as well (flips them back).
@@ -433,10 +440,10 @@ export function curvedEndCaseParts(
   })
 
   if (!c.double) upright('crv:fix', 0, T, FT, c.Dc, '-x')
-  upright('crv:back', c.backX0, c.backX0 + c.backW, c.Dc - T, c.Dc, '+d')
+  upright('crv:back', c.backX0, c.backX0 + c.backW, c.Dc - T, c.Dc, '+d', 'back')
   for (const k of c.blocks) {
     const outer = k.face === 'front' ? '-d' : k.dir === 1 ? '+x' : '-x'
-    upright(curvedEndPartKey(k.name), k.x0, k.x1, k.d0, k.d1, outer)
+    upright(curvedEndPartKey(k.name), k.x0, k.x1, k.d0, k.d1, outer, k.face)
   }
 
   // Formers: the engine's part-local outline (front at y 0, already mirrored
@@ -491,16 +498,31 @@ export function curvedEndSeams(c: CurvedEndGeometry): DeclaredSeam[] {
     y: c.y0 + lv,
   }))
 
+  // Wall build (WCRVFIXP): the top / bottom run to the wall over / under the back
+  // and the side blocks, which stand between them — screwed through the former
+  // into their ends (as a wall cabinet's back into its top / bottom).
+  const wb = !!c.p.wallBuild
+  const isCap = (k: string) => wb && (k === 'crv:bottom' || k === 'crv:top')
+  const capFace = (f: { key: string; y: number }) => f.key === 'crv:bottom'
+    ? { y: f.y + T, toward: UP, bore_b: { axis: 'y+' as const, at: f.y } }
+    : { y: f.y, toward: V(0, 0, -1), bore_b: { axis: 'y-' as const, at: f.y + T } }
+  const lowY = c.y0 + (wb ? T : 0)   // where the back / side blocks start
+
   for (const f of formers) {
     if (!c.double) add(CRV_SEAMS.fixFormer, f.key, 'crv:fix', {
-      origin: P(T, FT, f.y), along: V(0, 1, 0), across: UP, toward: V(1, 0, 0), length: c.Dc - T - FT, width: T,
+      origin: P(T, FT, f.y), along: V(0, 1, 0), across: UP, toward: V(1, 0, 0), length: c.Dc - (isCap(f.key) ? 0 : T) - FT, width: T,
     })
-    add(CRV_SEAMS.backFormer, f.key, 'crv:back', {
+    if (isCap(f.key)) {
+      const cf = capFace(f)
+      add(CRV_SEAMS.backFormer, 'crv:back', f.key, {
+        origin: P(c.backX0, c.Dc - T, cf.y), along: V(1, 0, 0), across: V(0, 1, 0), toward: cf.toward, length: c.backW, width: T, bore_b: cf.bore_b,
+      })
+    } else add(CRV_SEAMS.backFormer, f.key, 'crv:back', {
       origin: P(c.backX0, c.Dc - T, f.y), along: V(1, 0, 0), across: UP, toward: V(0, -1, 0), length: c.backW, width: T,
     })
   }
   if (!c.double) add(CRV_SEAMS.fixBack, 'crv:back', 'crv:fix', {
-    origin: P(T, c.Dc, c.y0), along: UP, across: V(0, -1, 0), toward: V(1, 0, 0), length: c.Hc, width: T,
+    origin: P(T, c.Dc, lowY), along: UP, across: V(0, -1, 0), toward: V(1, 0, 0), length: betweenH(c, 'back'), width: T,
   })
 
   for (const k of c.blocks) {
@@ -509,11 +531,18 @@ export function curvedEndSeams(c: CurvedEndGeometry): DeclaredSeam[] {
       // outer face against the face board's flat side; inner face in the formers' notches
       const outerX = k.dir === 1 ? k.x1 : k.x0, innerX = k.dir === 1 ? k.x0 : k.x1
       add(CRV_SEAMS.blockFace, 'crv:face', key, {
-        origin: P(outerX, k.d0, c.y0), along: UP, across: V(0, 1, 0), toward: V(k.dir, 0, 0), length: c.Hc, width: k.wb,
+        origin: P(outerX, k.d0, lowY), along: UP, across: V(0, 1, 0), toward: V(k.dir, 0, 0), length: betweenH(c, 'side'), width: k.wb,
       })
-      for (const f of formers) add(CRV_SEAMS.blockFormer, f.key, key, {
-        origin: P(innerX, k.d0, f.y), along: V(0, 1, 0), across: UP, toward: V(-k.dir, 0, 0), length: k.wb, width: T,
-      })
+      for (const f of formers) {
+        if (isCap(f.key)) {
+          const cf = capFace(f)
+          add(CRV_SEAMS.blockFormer, key, f.key, {
+            origin: P(k.x0, k.d0, cf.y), along: V(0, 1, 0), across: V(1, 0, 0), toward: cf.toward, length: k.wb, width: T, bore_b: cf.bore_b,
+          })
+        } else add(CRV_SEAMS.blockFormer, f.key, key, {
+          origin: P(innerX, k.d0, f.y), along: V(0, 1, 0), across: UP, toward: V(-k.dir, 0, 0), length: k.wb, width: T,
+        })
+      }
     } else {
       add(CRV_SEAMS.blockFace, 'crv:face', key, {
         origin: P(k.x0, k.d0, c.y0), along: UP, across: V(1, 0, 0), toward: V(0, -1, 0), length: c.Hc, width: k.wb,
@@ -530,9 +559,9 @@ export function curvedEndSeams(c: CurvedEndGeometry): DeclaredSeam[] {
  *  overrides list every seam, assigned or not). */
 export function curvedEndSeamsFor(
   s: import('../curvedEnd/settings').CurvedEndSettings, box: { DX: number; DY: number; DZ: number },
-  faceThickness: number, carcassThickness: number, kickH = 0,
+  faceThickness: number, carcassThickness: number, kickH = 0, wallBuild = false,
 ): DeclaredSeam[] {
-  return curvedEndSeams(calcCurvedEnd(curvedEndParams(s, box, faceThickness, carcassThickness, kickH)))
+  return curvedEndSeams(calcCurvedEnd(curvedEndParams(s, box, faceThickness, carcassThickness, kickH, undefined, wallBuild)))
 }
 
 /** Display name of a curved-end part key, e.g. "Rib 2", "Face Board". */

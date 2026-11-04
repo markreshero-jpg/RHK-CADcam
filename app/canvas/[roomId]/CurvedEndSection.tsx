@@ -9,7 +9,7 @@ import { CabinetInstance } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import {
-  normaliseCurvedEnd, curvedEndFootprint, curvedEndParams, curvedEndCode, HAND_OPTIONS,
+  normaliseCurvedEnd, curvedEndFootprint, curvedEndParams, curvedEndWallBuild, curvedEndCode, HAND_OPTIONS,
   type CurvedEndSettings,
 } from '@/src/lib/curvedEnd/settings'
 import { calcCurvedEnd, SKIN_MIN, SKIN_MAX, f1 } from '@/src/lib/curvedEnd/geometry'
@@ -44,7 +44,8 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
   const fit = curvedEndInnerFit(s, FT)
   // C9: a rangehood locks a rib at its shelf height.
   const rh = normaliseRangehood(cabinet.rangehood)
-  const c = calcCurvedEnd(curvedEndParams(fit.s, { DX: cabinet.dx - fit.inset, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH + splitH, rh?.shelf_h))
+  const c = calcCurvedEnd(curvedEndParams(fit.s, { DX: cabinet.dx - fit.inset, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH + splitH, rh?.shelf_h,
+    curvedEndWallBuild(cabinet.assembly_class, cabinet.bulkhead)))
   // Wall curved ends (WCRVFIXP) only; not the curved bulkhead.
   const canRangehood = cabinet.assembly_class.startsWith('wall') && !cabinet.bulkhead
   // C5: the curved kick, checked once the cabinet has resolved (needs the kick boards).

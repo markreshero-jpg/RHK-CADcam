@@ -10,7 +10,7 @@ import { enumerateShapedSeams } from '@/src/lib/resolver/shapedSeams'
 import { shapedPartLabel } from '@/src/lib/cabinetShape/partKeys'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { curvedEndLift, curvedEndSeamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
-import { normaliseCurvedEnd } from '@/src/lib/curvedEnd/settings'
+import { curvedEndWallBuild, normaliseCurvedEnd } from '@/src/lib/curvedEnd/settings'
 import type { SeamJointAssign } from '@/src/lib/resolver/types'
 
 // Compact per-edge joint (drilling) control for the part properties panel.
@@ -89,7 +89,7 @@ export default function PartEdgeJoints({ cabinet, rp, partKey, onUpdate }: {
   const crvLift = crv ? curvedEndLift(crv, cabinet.assembly_class, crvInput) : null
   const declaredSeams = crv
     ? curvedEndSeamsFor(crv, { DX: cabinet.dx, DY: cabinet.dy, DZ: cabinet.dz }, crvInput?.exposed_material.DZ ?? 18, crvInput?.material.DZ ?? 16.5,
-        crvLift!.kickH + crvLift!.splitH)
+        crvLift!.kickH + crvLift!.splitH, curvedEndWallBuild(cabinet.assembly_class, crvInput?.bulkhead))
         .filter(c => c.part_a_key === partKey || c.part_b_key === partKey)
     : []
   const genericByKey = new Map([...shapedSeams, ...declaredSeams].map(c => [c.seam_key, c.generic_key]))

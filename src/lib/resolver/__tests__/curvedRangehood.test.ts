@@ -80,7 +80,7 @@ describe('curved end rangehood (C9)', () => {
     const top = rp.case_parts.find(p => p.part_key === 'crv:top')!
     const depthOf = (p: typeof top) => p.DX - Math.min(...p.outline!.filter(q => q.x > 300 && q.x < 600).map(q => q.y))
     expect(depthOf(ribs[0])).toBeCloseTo(250)
-    expect(depthOf(top)).toBeCloseTo(250)
+    expect(depthOf(top)).toBeCloseTo(250 + 16.5)   // wall build: the top runs over the back to the wall
     for (const r of ribs.slice(1)) expect(depthOf(r)).toBeCloseTo(250 + 16.5 + 1)
     // The curve survives the notch.
     for (const p of [ribs[0], top]) expect(p.outline!.some(q => q.b)).toBe(true)
@@ -254,5 +254,43 @@ describe('clipOutlineX', () => {
     expect(Math.min(...r.map(p => p.x))).toBeCloseTo(90)
     expect(r.some(p => p.b)).toBe(true)
     expect(clipOutlineX(o, 120, 'gt')).toBeNull()
+  })
+})
+
+describe('wall build (WCRVFIXP: back + side blocks between the top and bottom)', () => {
+  const T = 16.5
+  it('runs the top / bottom to the wall and stands the back + side blocks between them', () => {
+    const rp = resolveCabinet(wcrv(null, { blkS: true, blkF: true }))
+    const part = (k: string) => rp.case_parts.find(p => p.part_key === k)!
+    const bot = part('crv:bottom'), top = part('crv:top'), back = part('crv:back'), blk = part('crv:blk_side'), rib = part('crv:rib_1')
+    expect(bot.Z).toBeCloseTo(0); expect(top.Z).toBeCloseTo(0)
+    expect(Math.max(...bot.outline!.map(q => q.y))).toBeCloseTo(bot.DX)
+    expect(rib.DX).toBeCloseTo(bot.DX - T)           // ribs still stop at the back
+    expect(back.Y).toBeCloseTo(bot.Y + T)
+    expect(back.DX).toBeCloseTo(top.Y - (bot.Y + T)) // height between them
+    expect(blk.Y).toBeCloseTo(bot.Y + T)
+    expect(blk.DX).toBeCloseTo(back.DX)
+    // Side block notch in the ribs only; the front block stays full height.
+    expect(bot.outline!.length).toBeLessThan(rib.outline!.length)
+    expect(part('crv:blk_front').DX).toBeCloseTo(top.Y + T - bot.Y)
+    expect(part('crv:fix').DX).toBeCloseTo(top.Y + T - bot.Y)
+  })
+  it('screws the back and side blocks through the bottom / top into their ends', () => {
+    const seams = resolveCurvedEnd(wcrv(null, { blkS: true })).seams
+    const s = (k: string) => seams.find(x => x.seam_key === k)!
+    const bb = s('crv:back|crv:bottom'), bt = s('crv:back|crv:top')
+    expect(bb.geom.bore_b).toEqual({ axis: 'y+', at: 0 })
+    expect(bb.geom.origin.y).toBeCloseTo(T)
+    expect(bt.geom.bore_b?.axis).toBe('y-')
+    expect(s('crv:blk_side|crv:bottom').geom.bore_b?.axis).toBe('y+')
+    expect(seams.some(x => x.seam_key === 'crv:bottom|crv:back')).toBe(false)
+    expect(seams.some(x => x.seam_key === 'crv:rib_1|crv:back')).toBe(true)
+    expect(s('crv:back|crv:fix').geom.length).toBeCloseTo(s('crv:face|crv:blk_side').geom.length)
+  })
+  it('leaves a base curved end on the kit build', () => {
+    const rp = resolveCabinet(wcrv(null, {}, { assembly_class: 'base' }))
+    const bot = rp.case_parts.find(p => p.part_key === 'crv:bottom')!, back = rp.case_parts.find(p => p.part_key === 'crv:back')!
+    expect(back.Y).toBeCloseTo(bot.Y)
+    expect(bot.Z).toBeCloseTo(T)
   })
 })
