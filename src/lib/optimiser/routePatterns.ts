@@ -38,22 +38,40 @@ export function outlinePath(x0: number, y0: number, x1: number, y1: number): Pt2
   return [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }, { x: x0, y: y0 }]
 }
 
-// Raster (zig-zag) lanes at angleDeg (0 = along +X), spaced by stepover mm.
+// Raster (zig-zag) lanes at angleDeg, spaced by stepover mm.
+// angleDeg 0 / null = AUTO: lanes run along the pocket's long side (fewest lanes,
+// fewest direction changes - quickest). Without this a long narrow LED groove
+// running along sheet Y was cleared in hundreds of tiny side-to-side passes.
+// Any other angle (90, 45 ...) is used exactly as set, in sheet coords.
 // Lanes serpentine; the step-across between lanes is left as an implicit G1 by the
 // caller (it runs along the pocket wall, inside the cleared area).
-export function rasterPath(x0: number, y0: number, x1: number, y1: number, stepover: number, angleDeg: number): Pt2[] {
+export function rasterAutoAngle(x0: number, y0: number, x1: number, y1: number): number {
+  return Math.abs(y1 - y0) > Math.abs(x1 - x0) + 1e-6 ? 90 : 0
+}
+
+export function rasterPath(x0: number, y0: number, x1: number, y1: number, stepover: number, angleDeg: number | null | undefined): Pt2[] {
   const step = Math.max(0.5, stepover)
-  const th = ((angleDeg || 0) * Math.PI) / 180
-  const dx = Math.cos(th), dy = Math.sin(th)   // lane direction
+  const ang = angleDeg ? angleDeg : rasterAutoAngle(x0, y0, x1, y1)
+  const th = (ang * Math.PI) / 180
+  // Snap trig so 90/180/270 lanes are exactly axis-aligned (cos 90 = 6e-17 made
+  // the wall lanes fail the clip and vanish).
+  const snap = (v: number) => (Math.abs(v) < 1e-9 ? 0 : Math.abs(Math.abs(v) - 1) < 1e-9 ? Math.sign(v) : v)
+  const dx = snap(Math.cos(th)), dy = snap(Math.sin(th))   // lane direction
   const nx = -dy, ny = dx                       // sweep normal
   const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
   const corners: Pt2[] = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }]
   let tmin = Infinity, tmax = -Infinity
   for (const c of corners) { const t = (c.x - cx) * nx + (c.y - cy) * ny; tmin = Math.min(tmin, t); tmax = Math.max(tmax, t) }
+  // Spread lanes evenly wall to wall (never wider than stepover) so the last lane
+  // sits on the far wall - stepping by a fixed stepover could stop short of it.
+  const range = tmax - tmin
+  const n = Math.max(1, Math.ceil(range / step - 1e-6))
   const out: Pt2[] = []
   let flip = false
-  for (let t = tmin; t <= tmax + 1e-6; t += step) {
-    const seg = clipLineToRect(cx + t * nx, cy + t * ny, dx, dy, x0, y0, x1, y1)
+  for (let i = 0; i <= n; i++) {
+    const t = range < 1e-6 ? tmin : tmin + (range * i) / n
+    if (range < 1e-6 && i > 0) break
+    const seg = clipLineToRect(cx + t * nx, cy + t * ny, dx, dy, x0 - 1e-6, y0 - 1e-6, x1 + 1e-6, y1 + 1e-6)
     if (!seg) continue
     const [a, b] = flip ? [seg[1], seg[0]] : seg
     out.push(a, b)
@@ -80,7 +98,7 @@ export function spiralPath(x0: number, y0: number, x1: number, y1: number, stepo
 // Dispatch by fill strategy. Unknown / null → raster (the safe default).
 export function clearPath(
   strategy: string | null | undefined,
-  x0: number, y0: number, x1: number, y1: number, stepover: number, angleDeg: number,
+  x0: number, y0: number, x1: number, y1: number, stepover: number, angleDeg: number | null | undefined,
 ): Pt2[] {
   if (strategy === 'spiral_out') return spiralPath(x0, y0, x1, y1, stepover, 'out')
   if (strategy === 'spiral_in') return spiralPath(x0, y0, x1, y1, stepover, 'in')

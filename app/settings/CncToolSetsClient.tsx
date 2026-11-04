@@ -371,7 +371,7 @@ function StepFields({ op, ops, tools, thickness, patchOp }: {
         <FieldCard title="Raster angle° · stepover %" diagram={<RasterDiagram angle={op.raster_angle_deg} stepover={op.raster_stepover_pct} />}
           help="Angle turns the lanes (raster fill only). Stepover is the gap between lanes or laps as a % of the tool width; blank = 70%."
           control={<div className="grid grid-cols-2 gap-2">
-            <Num label="Angle°" value={op.raster_angle_deg} onSave={v => patchOp(op.id, { raster_angle_deg: v })} />
+            <Num label="Angle° (0 = auto, long side)" value={op.raster_angle_deg} onSave={v => patchOp(op.id, { raster_angle_deg: v })} />
             <Num label="Stepover %" value={op.raster_stepover_pct} onSave={v => patchOp(op.id, { raster_stepover_pct: v })} />
           </div>} />
       )}

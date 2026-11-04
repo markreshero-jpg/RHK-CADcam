@@ -15,6 +15,7 @@ CV stores lengths in **inches** (× 25.4); feeds/speeds are as entered (mm/min, 
 | T3 | Glass size for ordering: Reports → Glass Order | **built 01/11/26**, in-app check pending |
 | T3b | Tool set section view (sample door section + corner plan) in Settings → CNC Tool Sets | **built 01/11/26**, in-app check pending |
 | T3c | Tool set step fields as cards, each with a live diagram (type, depth, tool on the line, fill, ring, raster, width, clean-up radius, offsets, feed/spindle); only the fields that matter for the step type are shown | **built 01/11/26**, in-app check pending |
+| T3d | Raster angle 0 / blank = auto: lanes run along the pocket's long side on the sheet (quickest, fixes LED grooves cut side-to-side); any other angle used as set. Lanes spread evenly so the last lane sits on the far wall | **built 04/11/26**, machine check pending |
 
 ## Locked decisions (T3, 01/11/26)
 

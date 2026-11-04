@@ -313,7 +313,7 @@ export default function CabinetRoutesPanel({ cabinet, rp, customParts }: { cabin
                             {FILL_STRATEGIES.map(f => <option key={f} value={f}>{f}</option>)}
                           </select>
                         </div>
-                        <Num label="Raster°" value={op.raster_angle_deg} onSave={v => patchOp(op.id, { raster_angle_deg: v })} />
+                        <Num label="Raster° (0=auto)" value={op.raster_angle_deg} onSave={v => patchOp(op.id, { raster_angle_deg: v })} />
                         <Num label="Step %" value={op.raster_stepover_pct} onSave={v => patchOp(op.id, { raster_stepover_pct: v })} />
                       </>}
                     </div>
