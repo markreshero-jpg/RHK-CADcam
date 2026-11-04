@@ -6,6 +6,11 @@
 //     npx vitest run src/lib/optimiser/__tests__/headlessRun.test.ts --silent=false
 //
 // Optional: "cabinets": ["BC-08"], "quality": "fast"|"balanced"|"best".
+// "reresolve": true = resolve + persist the selected rooms' cabinets first (the
+// nest reads the persisted parts — picks up resolver changes not yet re-saved).
+// "byMaterial": true = programs in a sub folder per material.
+// "keepRun": true = a real run number, the run saved (reopen in the optimiser)
+// and its .rhkrun backup written beside the PDFs.
 // Mirrors OptimiserClient Stage 4 run() + Stage6Gcode generate() and signs in
 // as the automation account from .env.local. Writes one program per sheet,
 // sheets.pdf (one page per sheet + a parts list), labels.pdf (102x48) and
@@ -26,7 +31,7 @@ vi.mock('@/src/lib/supabase', async () => {
   return { supabase }
 })
 
-interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean }
+interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean }
 const CFG: RunCfg | null = process.env.OPTI_RUN ? JSON.parse(process.env.OPTI_RUN) : null
 
 describe.skipIf(!CFG)('headless optimiser run', () => {
@@ -56,6 +61,18 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     // ── Snapshot (page.tsx) ──
     const { data: project } = await supabase.from('projects').select('id,name,job_number').eq('id', cfg.project).single()
     if (!project) throw new Error('project not found')
+    if (cfg.reresolve) {
+      const { resolveCabinetFromDB } = await import('../../resolver/resolveCabinetFromDB')
+      const { data: rms } = await supabase.from('rooms').select('id,name').eq('project_id', cfg.project)
+      const want = new Set((cfg.rooms ?? []).map(r => r.toLowerCase()))
+      const roomIds = (rms ?? []).filter(r => !want.size || want.has(String(r.name).toLowerCase())).map(r => r.id)
+      const { data: cabs } = await supabase.from('cabinet_instances').select('id,label').in('room_id', roomIds)
+      const wantCab = new Set((cfg.cabinets ?? []).map(c => c.toLowerCase()))
+      for (const c of (cabs ?? []).filter(c => !wantCab.size || wantCab.has(String(c.label).toLowerCase()))) {
+        const r = await resolveCabinetFromDB(c.id, { quiet: true, awaitPersist: true })
+        lap(`re-resolved ${c.label}: ${r.case_parts.length} case parts, ${r.errors.length} errors`)
+      }
+    }
     const norm = await loadProjectParts(cfg.project)
     const [matR, machR, profR, toolR] = await Promise.all([
       supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
@@ -225,7 +242,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const ds = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
     // Round trip: a real run number (savedRuns.ts) on files, headers, labels, cut sheets.
     const { reserveRunNo, runCode } = await import('../savedRuns')
-    const runNo = cfg.roundTrip ? await reserveRunNo(snap.projectId) : null
+    const runNo = cfg.roundTrip || cfg.keepRun ? await reserveRunNo(snap.projectId) : null
     const runNote = runNo != null ? `RUN ${runCode(snap.jobNumber, runNo)} ${cfg.rooms?.join(', ') ?? 'All rooms'} ${d.toLocaleDateString('en-AU', { day: '2-digit', month: '2-digit', year: '2-digit' })}` : null
     const { sheetNumbers } = await import('../labels')
     const sheetNos = sheetNumbers(nestResult.sheets)
@@ -261,10 +278,17 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     // sheets and labels must never mix across runs (or hit a PDF left open).
     const outDir = join(cfg.out, `${ds}-${String(d.getHours()).padStart(2, '0')}${String(d.getMinutes()).padStart(2, '0')}${String(d.getSeconds()).padStart(2, '0')}`)
     mkdirSync(outDir, { recursive: true })
+    const matDir = (g: { sheet: NestedSheet }) => {
+      if (!cfg.byMaterial) return outDir
+      const name = (g.sheet.materialId ? matById.get(g.sheet.materialId)?.name : null) ?? 'Material'
+      const dir = join(outDir, String(name).replace(/[<>:"/\|?*]/g, '-').trim())
+      mkdirSync(dir, { recursive: true })
+      return dir
+    }
     if (!blocking.length) for (const g of gen) {
       const bytes = new Uint8Array(g.gcode.length)
       for (let i = 0; i < g.gcode.length; i++) bytes[i] = g.gcode.charCodeAt(i) & 0x7f
-      writeFileSync(join(outDir, g.fileName), bytes)
+      writeFileSync(join(matDir(g), g.fileName), bytes)
     }
 
     // ── Cut sheets + parts list (shared with optimiser Stage 7 — cutSheets.ts) ──
@@ -323,10 +347,33 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       roundTrip.deletedGone = !(await runExists(id))
     }
 
+    // ── Keep the run (a real job run): saved + its .rhkrun backup ──
+    let kept: Record<string, unknown> | undefined
+    if (cfg.keepRun && !blocking.length) {
+      const { saveRun, loadRun, runFileText } = await import('../savedRuns')
+      const nested = new Set(Object.values(index).map(p => p.baseUid))
+      const files = gen.map(g => ({ sheetIndex: g.sheet.index, fileName: g.fileName, gcode: g.gcode, outlines: outlinesFor(g.sheet) }))
+      const name = `${runCode(snap.jobNumber, runNo!)} ${cfg.rooms?.join(', ') ?? 'All rooms'}`
+      const { id } = await saveRun({
+        projectId: snap.projectId, name, runNo,
+        state: {
+          nestResult, partIndex: index, selectedUids: [...nested], cutQty: {}, filterRoomIds: [], filterCabinetIds: [], filterMaterialIds: [],
+          includedProjectIds: [snap.projectId], settings: { quality: cfg.quality ?? 'balanced', allowRotation: true }, stock: stockForRun,
+          machineId: snap.machines[0]?.id ?? null, profileId, parts: snap.parts.filter(p => nested.has(p.uid)),
+        },
+        files, drillsBySheet,
+      })
+      const back = await loadRun(id)
+      const text = runFileText({ id, name: back.name, projectId: snap.projectId, jobNumber: snap.jobNumber, run: { runNo: back.snap.runNo, savedAt: back.snap.savedAt, state: back.snap, files: back.files, drillsBySheet: new Map(back.snap.drills) } })
+      const runFile = `${runCode(snap.jobNumber, runNo!)}.rhkrun`
+      writeFileSync(join(outDir, runFile), text)
+      kept = { id, name, runFile }
+    }
+
     const summary = {
-      roundTrip,
+      roundTrip, kept,
       job: snap.jobNumber, rooms: cfg.rooms, materials: cfg.materials, profile: prof?.name, deductEdgeband: deductEb,
-      parts: rows.length, sheets: gen.map((g, i) => ({ n: i + 1, file: g.fileName, parts: g.sheet.placements.length, holes: g.drills.length, routes: g.routes.length, efficiency: Math.round(g.sheet.efficiency * 100) })),
+      parts: rows.length, sheets: gen.map((g, i) => ({ n: i + 1, file: g.fileName, material: g.sheet.materialId ? matById.get(g.sheet.materialId)?.name : null, parts: g.sheet.placements.length, holes: g.drills.length, routes: g.routes.length, efficiency: Math.round(g.sheet.efficiency * 100) })),
       unplaced: nestResult.unplaced.map(u => u.label), notes, drillWarnings, gcodeErrors: blocking, gcodeWarnings: warned,
       zeroHoleParts: rows.filter(r => r.holes === 0).map(r => `${r.cab} ${r.part}`), rowsList: rows,
       grainBlocks: (nestResult.blocks ?? []).map(b => ({ name: b.name, piece: `${b.piece}/${b.pieces}`, fronts: b.memberUids.length, sheet: gen.findIndex(g => g.sheet.placements.some(p => b.memberUids.includes(p.uid))) + 1 })),
