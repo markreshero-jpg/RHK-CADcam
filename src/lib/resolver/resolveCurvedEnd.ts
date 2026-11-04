@@ -13,6 +13,8 @@
 //   crv:back                back — upright, face-kind
 //   crv:bottom / crv:top /  formers — horizontal (box frame of `bottom`), true-
 //   crv:rib_<n>             arc outline (+ fixing-block notches)
+//   crv:rib_<n>_l / _r      rangehood support ribs under the shelf (C9), the
+//                           rib split left / right of the hole
 //   crv:blk_side(_l|_r) /   fixing blocks — upright, face-kind
 //   crv:blk_front
 //
@@ -24,7 +26,7 @@
 // ============================================================
 
 import type { CabinetInput, DeclaredSeam, DeclaredSeamGeom, ResolvedCasePart, ResolverError } from './types'
-import type { OutlinePt } from '../shapePath'
+import { clipOutlineX, type OutlinePt } from '../shapePath'
 import { calcCurvedEnd, curvedEndParts, loopToOutline, mirLoop, type CurvedEndGeometry, type CurvedEndPart, type Loop } from '../curvedEnd/geometry'
 import { calcCurvedKick, type CurvedKick, type CurvedKickParams, type KickRect } from '../curvedEnd/kick'
 import { curvedEndKickH, curvedEndParams, type CurvedEndSettings } from '../curvedEnd/settings'
@@ -111,7 +113,69 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   }
   const out = shiftX ? parts.map(p => ({ ...p, X: p.X + shiftX, ...(p.wrap ? { wrap: { ...p.wrap, pts: p.wrap.pts.map(q => ({ ...q, x: q.x + shiftX })) } } : {}) })) : parts
   if (pT) out.push(curvedInnerPanel(s.hand === 'LH', pT, inset - pT, FT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id))
-  return { parts: out, seams, errors, warnings }
+  const split = splitSupportRibs(cab, c, out, seams)
+  return { parts: split.parts, seams: split.seams, errors, warnings }
+}
+
+/** Where a curved end's rangehood hole sits across the cabinet (C9): centred on
+ *  the inside, + its offset. Null with no rangehood / no hole size yet. */
+export function curvedRangehoodHoleX(cab: CabinetInput): { x0: number; x1: number } | null {
+  const h = cab.rangehood?.hole
+  if (!cab.curved_end || !h || h.w == null || h.d == null) return null
+  const { x0: ix0, x1: ix1 } = curvedEndInterior(cab)
+  const x0 = r2((ix0 + ix1) / 2 + h.offset - h.w / 2)
+  return { x0, x1: r2(x0 + h.w) }
+}
+
+/**
+ * Rangehood support ribs (C9, Mark 2026-11-04): each rib under the shelf is cut
+ * into a left and a right piece at the hole's sides, clear of the rangehood
+ * body — two parts (`crv:rib_<n>_l` / `_r`), true arcs kept. Their seams (back,
+ * fixing panel, blocks) go to whichever piece they land on, those along the
+ * width trimmed to it.
+ */
+function splitSupportRibs(cab: CabinetInput, c: CurvedEndGeometry, parts: ResolvedCasePart[], seams: DeclaredSeam[]) {
+  const hx = curvedRangehoodHoleX(cab)
+  if (!hx || c.shelfLevel == null || c.shelfLevel < 2) return { parts, seams }
+  let P = parts, S = seams
+  for (let i = 1; i < c.shelfLevel; i++) {
+    const key = `crv:rib_${i}` as const
+    const rib = P.find(p => p.part_key === key)
+    if (!rib?.outline) continue
+    const pieces: ResolvedCasePart[] = []
+    for (const [tag, keep, at] of [['l', 'lt', hx.x0], ['r', 'gt', hx.x1]] as const) {
+      const o = clipOutlineX(rib.outline, at - rib.X, keep)
+      if (!o) continue
+      const xs = o.map(q => q.x), ys = o.map(q => q.y)
+      const mx = Math.min(...xs), my = Math.min(...ys), Mx = Math.max(...xs), My = Math.max(...ys)
+      const { cutouts: _c, ...rest } = rib
+      pieces.push({
+        ...rest, part_key: `${key}_${tag}` as const,
+        X: r2(rib.X + mx), DY: r2(Mx - mx), DX: r2(My - my), Z: r2(rib.Z + rib.DX - My),
+        outline: o.map(q => ({ ...q, x: r2(q.x - mx), y: r2(q.y - my) })),
+      })
+    }
+    P = P.flatMap(p => p === rib ? pieces : [p])
+    S = S.flatMap(sm => {
+      if (sm.part_a_key !== key && sm.part_b_key !== key) return [sm]
+      const g = sm.geom
+      return pieces.flatMap(pc => {
+        const lo = pc.X, hi = pc.X + pc.DY
+        const re = (geom: DeclaredSeamGeom) => {
+          const a = sm.part_a_key === key ? pc.part_key : sm.part_a_key, b = sm.part_b_key === key ? pc.part_key : sm.part_b_key
+          return [{ ...sm, seam_key: `${a}|${b}`, part_a_key: a, part_b_key: b, geom }]
+        }
+        if (Math.abs(g.along.x) > 0.5) {
+          const e = g.origin.x + g.along.x * g.length
+          const s0 = Math.max(Math.min(g.origin.x, e), lo), s1 = Math.min(Math.max(g.origin.x, e), hi)
+          if (s1 - s0 < 1) return []
+          return re({ ...g, origin: { ...g.origin, x: r2(g.along.x > 0 ? s0 : s1) }, length: r2(s1 - s0) })
+        }
+        return g.origin.x >= lo - 1 && g.origin.x <= hi + 1 ? re(g) : []
+      })
+    })
+  }
+  return { parts: P, seams: S }
 }
 
 /**
@@ -408,8 +472,8 @@ export function curvedEndSeamsFor(
 export function curvedEndPartLabel(key: string): string | null {
   if (!key.startsWith('crv:')) return null
   const k = key.slice(4)
-  const rib = /^rib_(\d+)$/.exec(k)
-  if (rib) return `Curved End Rib ${rib[1]}`
+  const rib = /^rib_(\d+)(?:_([lr]))?$/.exec(k)
+  if (rib) return `Curved End Rib ${rib[1]}${rib[2] ? (rib[2] === 'l' ? ' (left)' : ' (right)') : ''}`
   const spr = /^kick_spr_(\d+)$/.exec(k)
   if (spr) return `Curved Kick Spreader ${spr[1]}`
   return ({

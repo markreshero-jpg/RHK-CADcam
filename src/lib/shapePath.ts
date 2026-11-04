@@ -347,3 +347,72 @@ export function pointInShape(p: ShapePt, poly: ShapePt[], tolMM = 0): boolean {
   }
   return false
 }
+
+/**
+ * The part of an outline on one side of the vertical line x = `cut` (`keep`
+ * 'lt' = left of it, 'gt' = right), true arcs kept (an arc the line crosses is
+ * split, each piece its own bulge). The cut runs as straight edges along the
+ * line. One piece only — null when nothing (or a sliver) is left.
+ */
+export function clipOutlineX(pts: OutlinePt[], cut: number, keep: 'lt' | 'gt'): OutlinePt[] | null {
+  type Seg = { a: ShapePt; z: ShapePt; b: number; e?: EdgeTag }
+  const side = (x: number) => keep === 'lt' ? x < cut : x > cut
+  const EPS = 1e-6
+  const subs: Seg[] = []
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length]
+    if (!hasBulge(p)) {
+      const ts = (p.x - cut) * (q.x - cut) < 0 ? [(cut - p.x) / (q.x - p.x)] : []
+      const at = (t: number) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t })
+      const ks = [0, ...ts, 1]
+      for (let k = 0; k < ks.length - 1; k++) subs.push({ a: at(ks[k]), z: at(ks[k + 1]), b: 0, e: p.e })
+      continue
+    }
+    const { c, r } = bulgeArc(p, q, p.b!)
+    const th = 4 * Math.atan(p.b!), a0 = Math.atan2(p.y - c.y, p.x - c.x)
+    const at = (t: number) => ({ x: c.x + r * Math.cos(a0 + th * t), y: c.y + r * Math.sin(a0 + th * t) })
+    const ts: number[] = []
+    const k = (cut - c.x) / r
+    if (Math.abs(k) < 1) {
+      const al = Math.acos(k)
+      for (const phi of [al, -al]) {
+        const TAU = 2 * Math.PI
+        const d = th > 0 ? (((phi - a0) % TAU) + TAU) % TAU : (((a0 - phi) % TAU) + TAU) % TAU
+        const t = d / Math.abs(th)
+        if (t > EPS && t < 1 - EPS) ts.push(t)
+      }
+    }
+    const ks = [0, ...ts.sort((x, y) => x - y), 1]
+    for (let j = 0; j < ks.length - 1; j++) {
+      const a = j === 0 ? { x: p.x, y: p.y } : at(ks[j]), z = j === ks.length - 2 ? { x: q.x, y: q.y } : at(ks[j + 1])
+      subs.push({ a, z, b: Math.tan(th * (ks[j + 1] - ks[j]) / 4), e: p.e })
+    }
+  }
+  const mid = (s: Seg) => {
+    if (!s.b) return (s.a.x + s.z.x) / 2
+    const { c, r } = bulgeArc(s.a, s.z, s.b)
+    const a0 = Math.atan2(s.a.y - c.y, s.a.x - c.x)
+    return c.x + r * Math.cos(a0 + 2 * Math.atan(s.b))
+  }
+  const kept = subs.filter(s => Math.hypot(s.z.x - s.a.x, s.z.y - s.a.y) > EPS && side(mid(s)))
+  if (!kept.length) return null
+  const close = (u: ShapePt, v: ShapePt) => Math.hypot(u.x - v.x, u.y - v.y) < 1e-4
+  const out: OutlinePt[] = []
+  let last: ShapePt | null = null
+  const push = (pt: ShapePt, b: number, e?: EdgeTag) => {
+    const o: OutlinePt = { x: Math.round(pt.x * 1e4) / 1e4, y: Math.round(pt.y * 1e4) / 1e4 }
+    if (b) o.b = b
+    if (e) o.e = e
+    out.push(o)
+  }
+  for (const s of kept) {
+    if (last && !close(last, s.a)) push(last, 0)   // along the cut line
+    push(s.a, s.b, s.e)
+    last = s.z
+  }
+  if (last && !close(last, out[0])) push(last, 0)
+  // Area check (chords are enough to spot a sliver).
+  let A = 0
+  for (let i = 0; i < out.length; i++) { const u = out[i], v = out[(i + 1) % out.length]; A += u.x * v.y - v.x * u.y }
+  return out.length >= 3 && Math.abs(A) / 2 > 1 ? out : null
+}

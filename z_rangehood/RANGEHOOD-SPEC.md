@@ -305,7 +305,8 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 
 - Mark: the rangehood as an **option on WCRVFIXP** (curved wall end), hole + flue. Built on this
   spec's code: `resolveRangehood` hands a curved end to `resolveCurvedRangehood` (bottom former, a rib
-  locked at `shelf_h` as the shelf, top former; ribs above notched round the box). The resolver runs
+  locked at `shelf_h` as the shelf, top former; ribs above notched round the box; support ribs under the
+  shelf split left / right of the hole). The resolver runs
   the block on `has_carcass || curved_end`. Details + locked points in z_curved_end C9.
 
 ## Phases

@@ -47,7 +47,7 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Depth', 'Notch depth from the shelf’s back edge — the box sides run this deep', s.flue.d, v => { if (v > 0) flue('d', v) })}
       {row('Off centre', '+ moves the flue right, − left', s.flue.offset, v => flue('offset', v))}
 
-      {row('Shelf height', crv ? 'Cabinet underside to the underside of the rib the flue goes through (no ribs below it)' : 'Cabinet underside (incl. under panel) to the underside of the first fixed shelf', s.shelf_h, v => { if (v > 0) put({ shelf_h: v }) })}
+      {row('Shelf height', crv ? 'Cabinet underside to the underside of the rib the flue goes through (support ribs under it are split round the hole)' : 'Cabinet underside (incl. under panel) to the underside of the first fixed shelf', s.shelf_h, v => { if (v > 0) put({ shelf_h: v }) })}
       <p className="text-[10px] text-gray-600">
         The flue box (2 sides + a front piece, carcass board) stands on the shelf up to the top,
         screwed through both with 5mm Dynamic Holes. The front piece and the sides&rsquo; front edges are taped.

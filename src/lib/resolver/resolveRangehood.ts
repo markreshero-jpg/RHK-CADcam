@@ -22,13 +22,14 @@
 import type { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolverError, Section, InternalFitting } from './types'
 import type { Cutout, PartCutouts } from '../partCutouts'
 import { RH_SEAMS } from '../rangehood'
-import { curvedEndInterior } from './resolveCurvedEnd'
-import type { OutlinePt } from '../shapePath'
+import { curvedEndInterior, curvedRangehoodHoleX } from './resolveCurvedEnd'
+import { sampleOutline, type OutlinePt } from '../shapePath'
 
 /** Corners of a rect (part frame) inside a shaped outline, nothing of the
- *  outline reaching into it. Arcs as chords — inside the chord is inside the curve. */
-function rectInOutline(o: OutlinePt[] | undefined, x0: number, y0: number, x1: number, y1: number): boolean {
-  if (!o?.length) return true
+ *  outline reaching into it (arcs sampled every 2°). */
+function rectInOutline(shape: OutlinePt[] | undefined, x0: number, y0: number, x1: number, y1: number): boolean {
+  if (!shape?.length) return true
+  const o = sampleOutline(shape, 2)   // true arcs (a chord would cut in front of a convex curve)
   const inside = (x: number, y: number) => {
     let r = false
     for (let i = 0, j = o.length - 1; i < o.length; j = i++) {
@@ -208,7 +209,7 @@ function resolveCurvedRangehood(
   const { hole } = rh
   if (hole.w == null || hole.d == null) warn('the hole size isn’t set yet — no hole cut (set it in the sidebar)')
   else if (bottom) {
-    const x0 = r2(centre + hole.offset - hole.w / 2), z1 = r2(cab.DZ - FT - hole.setback), z0 = r2(z1 - hole.d)
+    const x0 = curvedRangehoodHoleX(cab)!.x0, z1 = r2(cab.DZ - FT - hole.setback), z0 = r2(z1 - hole.d)
     const fx = r2(x0 - bottom.X), fy = r2(front(bottom) - z1)
     if (!rectInOutline(bottom.outline, fx, fy, fx + hole.w, fy + hole.d)) warn('the hole runs past the bottom former (into the curve or the back) — no hole cut')
     else {

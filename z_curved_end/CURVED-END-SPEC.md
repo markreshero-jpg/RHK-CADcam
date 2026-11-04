@@ -315,8 +315,13 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - **An option, not a library item**: sidebar tick "Rangehood (hole + flue)" in the Curved end section,
     wall class only (not BHCRVFIXP). Sets `rangehood` = the WRH defaults; the Rangehood section then shows.
   - **Shelf = a rib** locked with its underside at `shelf_h` from the cabinet underside (engine
-    `shelfAt` = shelf_h − lift − SBT). **No ribs under it** (the rangehood space — a note if that span is
-    over the kit's gap); ribs above by the gap rule; a typed rib count = every rib incl. the shelf.
+    `shelfAt` = shelf_h − lift − SBT). Ribs above by the gap rule; a typed rib count = every rib above
+    incl. the shelf. **Support ribs under it** (Mark, 2026-11-04 — replaces "no ribs under it"): evenly
+    spaced, count = round(shelf / upper pitch), bumped until the gap is under the kit's limit (geometry
+    `shelfLevel` = the shelf's index in `levels`). The resolve **splits each into two parts**,
+    `crv:rib_<n>_l` / `_r`, cut flush with the hole's sides (`clipOutlineX`, true arcs kept; piece
+    re-boxed to its outline). Their seams go to the piece they land on (along-the-width ones trimmed).
+    No hole size yet = whole ribs.
     **Rib cut-outs off** with a rangehood. Unset `shelfAt` = the kit layout, fixtures unchanged.
   - **Hole** in `crv:bottom`, centred on the clear inside (fixing panel inner face ↔ face board inside;
     DOUBLE: face board ↔ face board; C8 inset honoured — `curvedEndInterior`), **set back from the face
@@ -328,7 +333,8 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - **Notches on shaped parts**: `spliceNotch` (partCutouts.ts) cuts a notch into one straight,
     unbulged edge of an arc outline (the formers' back edge); anything reaching the curve or a fixing
     block is refused with a warning. `crv:top` + `crv:rib_<n>` now take cut-outs (`isCutoutCaseKey`).
-  - Hole / box running into the curve or a fixing block → RANGEHOOD warning, nothing cut.
+  - Hole / box running into the curve or a fixing block → RANGEHOOD warning, nothing cut. The check
+    samples the true arcs (2026-11-04 fix: it used chords and refused a hole in front of a corner arc).
   - Under panel link (R6) not used — the bottom former is the visible underside.
   - Test `src/lib/resolver/__tests__/curvedRangehood.test.ts`; tutorial `curved_rangehood`.
 

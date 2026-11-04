@@ -6,8 +6,10 @@ import { calcCurvedEnd } from '../../curvedEnd/geometry'
 import { curvedEndFootprint, curvedEndParams, DEFAULT_CURVED_END } from '../../curvedEnd/settings'
 import { normaliseRangehood, type RangehoodSettings } from '../../rangehood'
 import { spliceNotch } from '../../partCutouts'
+import { clipOutlineX } from '../../shapePath'
 import { DEFAULT_RULES, type CabinetInput, type Material } from '../types'
 import { resolveCabinet } from '../resolver'
+import { resolveCurvedEnd } from '../resolveCurvedEnd'
 import { mergeRules } from '../mergeRules'
 
 const carcass: Material = { id: 'carcass', name: 'C16', DZ: 16.5, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
@@ -33,16 +35,23 @@ const ribsOf = (rp: ReturnType<typeof resolveCabinet>) =>
   rp.case_parts.filter(p => /^crv:rib_\d+$/.test(p.part_key)).sort((a, b) => a.Y - b.Y)
 
 describe('curved end rangehood (C9)', () => {
-  it('engine: one rib locked at the shelf, none below, the kit layout untouched without it', () => {
+  it('engine: one rib locked at the shelf, supports under it, the kit layout untouched without it', () => {
     const base = curvedEndParams(DEFAULT_CURVED_END, { DX: 900, DY: 700, DZ: 350 }, 18, 16.5)
     expect(calcCurvedEnd(base).levels).toEqual(calcCurvedEnd({ ...base, shelfAt: undefined }).levels)
+    expect(calcCurvedEnd(base).shelfLevel).toBeUndefined()
     const c = calcCurvedEnd(curvedEndParams(DEFAULT_CURVED_END, { DX: 900, DY: 700, DZ: 350 }, 18, 16.5, 0, 350))
     expect(c.levels[0]).toBe(0)
-    expect(c.levels[1]).toBe(350)
+    expect(c.levels[c.shelfLevel!]).toBe(350)
     expect(c.levels.at(-1)).toBeCloseTo(700 - 16.5)
-    // Above the shelf the gaps keep under the kit's limit.
+    // Above the shelf the gaps keep under the kit's limit; under it too, evenly.
     expect(c.clear).toBeLessThan(c.maxGap)
-    expect(c.notes.some(n => /No ribs under the rangehood shelf/.test(n))).toBe(true)
+    expect(c.shelfLevel).toBeGreaterThan(1)
+    const under = c.levels.slice(0, c.shelfLevel! + 1)
+    for (let i = 1; i < under.length; i++) {
+      expect(under[i] - under[i - 1]).toBeCloseTo(350 / c.shelfLevel!)
+      expect(under[i] - under[i - 1] - 16.5).toBeLessThan(c.maxGap)
+    }
+    expect(c.notes.some(n => /support ribs? under the rangehood shelf/.test(n))).toBe(true)
     // A shelf that can't fit blocks, and the kit layout stays.
     const bad = calcCurvedEnd(curvedEndParams(DEFAULT_CURVED_END, { DX: 900, DY: 700, DZ: 350 }, 18, 16.5, 0, 690))
     expect(bad.warnings.some(w => /rangehood shelf/.test(w))).toBe(true)
@@ -66,7 +75,7 @@ describe('curved end rangehood (C9)', () => {
     const rp = resolveCabinet(wcrv())
     const ribs = ribsOf(rp)
     expect(ribs[0].Y).toBe(350)
-    expect(ribs.every(r => r.Y >= 350)).toBe(true)
+    expect(ribs.every(r => r.Y >= 350)).toBe(true)   // the ones under are split (own test)
     const top = rp.case_parts.find(p => p.part_key === 'crv:top')!
     const depthOf = (p: typeof top) => p.DX - Math.min(...p.outline!.filter(q => q.x > 300 && q.x < 600).map(q => q.y))
     expect(depthOf(ribs[0])).toBeCloseTo(250)
@@ -88,6 +97,45 @@ describe('curved end rangehood (C9)', () => {
     expect(F.DY).toBe(233)
     expect(F.X + F.DY / 2).toBeCloseTo((16.5 + 900 - 18) / 2)
     expect(rp.case_parts.some(p => p.part_key === 'rh:flue_r')).toBe(true)
+  })
+
+  it('splits the support ribs under the shelf left / right of the hole', () => {
+    const rp = resolveCabinet(wcrv())
+    const hole = rp.rangehood_hole!
+    const L = rp.case_parts.filter(p => /^crv:rib_\d+_l$/.test(p.part_key))
+    const R = rp.case_parts.filter(p => /^crv:rib_\d+_r$/.test(p.part_key))
+    expect(L.length).toBeGreaterThan(0)
+    expect(R.length).toBe(L.length)
+    for (const p of [...L, ...R]) expect(p.Y).toBeLessThan(350)
+    // No whole rib left under the shelf.
+    expect(rp.case_parts.some(p => /^crv:rib_\d+$/.test(p.part_key) && p.Y < 350)).toBe(false)
+    for (const p of L) {
+      expect(p.X + p.DY).toBeCloseTo(hole.x0)
+      expect(Math.max(...p.outline!.map(q => q.x))).toBeCloseTo(p.DY)
+      expect(Math.min(...p.outline!.map(q => q.y))).toBeCloseTo(0)
+      expect(Math.max(...p.outline!.map(q => q.y))).toBeCloseTo(p.DX)
+    }
+    for (const p of R) expect(p.X).toBeCloseTo(hole.x1)
+    // RH: the right piece keeps the curve; the left one the straight fixing-panel side.
+    expect(R[0].outline!.some(q => q.b)).toBe(true)
+    // Seams: back trimmed to each piece, fixing panel on the left one only.
+    const seams = resolveCurvedEnd(wcrv()).seams
+    const key = L[0].part_key.replace(/_l$/, '')
+    expect(seams.some(s => s.part_a_key === key)).toBe(false)
+    const backL = seams.find(s => s.part_a_key === `${key}_l` && s.part_b_key === 'crv:back')!
+    const backR = seams.find(s => s.part_a_key === `${key}_r` && s.part_b_key === 'crv:back')!
+    expect(backL.geom.origin.x + backL.geom.length).toBeCloseTo(hole.x0)
+    expect(backR.geom.origin.x).toBeCloseTo(hole.x1)
+    expect(seams.some(s => s.part_a_key === `${key}_l` && s.part_b_key === 'crv:fix')).toBe(true)
+    expect(seams.some(s => s.part_a_key === `${key}_r` && s.part_b_key === 'crv:fix')).toBe(false)
+  })
+
+  it('cuts the hole when it sits in front of where a chord would cross the curve (RHK6542 650 × 400 double)', () => {
+    const rp = resolveCabinet(wcrv(normaliseRangehood({ hole: { w: 495, d: 265, setback: 50 }, shelf_h: 300 }),
+      { hand: 'DOUBLE', R: 160, ribs: 1 }, { DX: 650, DY: 510, DZ: 400, footprint: curvedEndFootprint({ ...DEFAULT_CURVED_END, hand: 'DOUBLE', R: 160 }, { w: 650, d: 400 }) }))
+    expect(rp.warnings.filter(w => w.code === 'RANGEHOOD')).toEqual([])
+    expect(rp.case_parts.find(p => p.part_key === 'crv:bottom')!.cutouts).toHaveLength(1)
+    expect(rp.case_parts.filter(p => /^crv:rib_1_[lr]$/.test(p.part_key))).toHaveLength(2)
   })
 
   it('mirrors for a left-hand curve', () => {
@@ -119,5 +167,24 @@ describe('spliceNotch', () => {
   })
   it('refuses a notch that reaches the curve', () => {
     expect(spliceNotch(o, 100, 50, { x0: 70, x1: 99, y0: 5, y1: 51 }, 'back')).toBeNull()
+  })
+})
+
+describe('clipOutlineX', () => {
+  // 100 × 50, front-right corner a quarter circle R 20 (centre 80, 20).
+  const B = Math.tan(Math.PI / 8)
+  const o = [{ x: 0, y: 0 }, { x: 80, y: 0, b: B }, { x: 100, y: 20 }, { x: 100, y: 50 }, { x: 0, y: 50 }]
+  it('keeps the left of a line through the arc, the arc split on the circle', () => {
+    const l = clipOutlineX(o, 90, 'lt')!
+    expect(Math.max(...l.map(p => p.x))).toBeCloseTo(90)
+    const onArc = l.find(p => p.x === 90 && p.y < 20)!
+    expect(Math.hypot(onArc.x - 80, onArc.y - 20)).toBeCloseTo(20)
+    expect(l.some(p => p.b)).toBe(true)
+  })
+  it('keeps the right piece with the rest of the arc', () => {
+    const r = clipOutlineX(o, 90, 'gt')!
+    expect(Math.min(...r.map(p => p.x))).toBeCloseTo(90)
+    expect(r.some(p => p.b)).toBe(true)
+    expect(clipOutlineX(o, 120, 'gt')).toBeNull()
   })
 })

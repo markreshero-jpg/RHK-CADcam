@@ -260,7 +260,7 @@ export function spliceNotch(pts: OutlinePt[], W: number, D: number, r: Rect, edg
  *  (BHCRVFIXP) bottom former — same frame (kit x across, d back from the front). */
 export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail', 'crv:bottom', 'crv:top'])
 /** Case parts that take cut-outs: the set above + a curved end's ribs (C9 rangehood). */
-export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+$/.test(k)
+export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+(_[lr])?$/.test(k)
 export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
 
 type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }

@@ -98,7 +98,7 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
 
       <div className="grid grid-cols-[1fr_3.5rem_4.5rem] gap-1 items-center"
         title={rh
-          ? `Ribs incl. the rangehood shelf — none under it, the rest above. Auto adds them until the clear gap is under ${c.maxGap}.`
+          ? `Ribs above the rangehood, incl. the shelf rib. Auto adds them until the clear gap is under ${c.maxGap}. Support ribs under the shelf follow the same spacing, each split left / right of the hole.`
           : `Formers between the top and bottom. Auto adds them until the clear gap is under ${c.maxGap}.`}>
         <label className="text-xs text-gray-300">Ribs</label>
         <label className="flex items-center gap-1 text-[10px] text-gray-400">

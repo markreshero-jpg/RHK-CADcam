@@ -84,6 +84,9 @@ export interface CurvedEndGeometry {
   CX: number; CD: number; RI: number      // curve centre, former radius
   maxGap: number; gaps: number; pitch: number; clear: number
   levels: number[]                         // former undersides from the carcass bottom
+  /** Rangehood (C9): index into `levels` of the rib locked at the shelf; the
+   *  levels between 0 and it are the support ribs under it (split round the hole). */
+  shelfLevel?: number
   holeY: number[]                          // former centrelines
   arc: number
   wrapLen: number
@@ -181,6 +184,7 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
   // Rangehood shelf (C9): one rib locked at shelfAt, none under it, the rest above.
   const SL = p.shelfAt
   const shelfNotes: string[] = [], shelfWarnings: string[] = []
+  let shelfLevel: number | undefined
   if (SL != null && Number.isFinite(SL)) {
     const topL = Hc - T, span = topL - SL
     if (SL < T + 20 || span < 2 * T + 20) shelfWarnings.push(`The rangehood shelf (${f1(SL)} up the carcass) doesn’t fit between the bottom and the top.`)
@@ -190,9 +194,18 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
       else while (span / g2 - T >= maxGap && g2 < 60) g2++
       pitch = span / g2
       clear = pitch - T
-      levels = [0, ...Array.from({ length: g2 + 1 }, (_, i) => SL + i * pitch)]
-      g = g2 + 1
-      if (SL - T >= maxGap) shelfNotes.push(`No ribs under the rangehood shelf: the face board spans ${f1(SL - T)} unsupported there (fixing blocks help).`)
+      // Support ribs under the shelf (Mark, 2026-11-04): spaced as near the ribs
+      // above as fits evenly, gaps under the kit's limit; the resolve splits
+      // them left / right of the rangehood hole.
+      let g1 = Math.max(1, Math.round(SL / pitch))
+      while (SL / g1 - T >= maxGap && g1 < 60) g1++
+      while (g1 > 1 && SL / g1 - T < T + 20) g1--
+      const lower = Array.from({ length: g1 - 1 }, (_, i) => (i + 1) * SL / g1)
+      levels = [0, ...lower, ...Array.from({ length: g2 + 1 }, (_, i) => SL + i * pitch)]
+      g = levels.length - 1
+      shelfLevel = g1
+      if (g1 > 1) shelfNotes.push(`${g1 - 1} support rib${g1 > 2 ? 's' : ''} under the rangehood shelf, split left / right of the hole.`)
+      if (SL / g1 - T >= maxGap) shelfNotes.push(`Under the rangehood shelf the face board spans ${f1(SL / g1 - T)} between supports (fixing blocks help).`)
       if (p.lighten) shelfNotes.push('Rib cut-outs are off with a rangehood (the flue notches the ribs).')
     }
   }
@@ -200,7 +213,7 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
 
   const c: CurvedEndGeometry = {
     p, double, Dc, Hc, y0: p.SBT, CX, CD, RI, maxGap, gaps: g, pitch, clear,
-    levels, holeY: levels.map(y => y + T / 2), arc,
+    levels, holeY: levels.map(y => y + T / 2), arc, ...(shelfLevel != null ? { shelfLevel } : {}),
     wrapLen: 0, pockets: [], ovL: 0, ovR: 0, ovG: 0, fixDepth: 0, backX0: 0, backW: 0,
     formerX0: 0, formerW: 0, formerD: Dc - T - SK, formerLoop: [], wrapLoop: [], pocketLines: [],
     blocks: [], blkSide: false, blkFront: false, cut: null, cutDepth: T - p.OS, warnings: [], notes: [],
@@ -358,7 +371,7 @@ export function curvedEndParts(c: CurvedEndGeometry): CurvedEndPart[] {
     ...(withCut && cut ? { cutout: { loop: loopToOutline(cut), depth: c.cutDepth } } : {}),
   })
   out.push(former('Bottom', 0, false))
-  const ribCut = !(c.p.shelfAt != null && c.levels[1] === c.p.shelfAt)   // C9: no rib cut-outs with a rangehood
+  const ribCut = c.shelfLevel == null   // C9: no rib cut-outs with a rangehood
   for (let i = 1; i < c.gaps; i++) out.push(former(`Rib${i}`, i, ribCut))
   out.push(former('Top', c.gaps, false))
   for (const k of c.blocks) out.push({ name: k.name, material: 'carcass', thickness: T, sizeX: k.wb, sizeY: r2(c.Hc) })
