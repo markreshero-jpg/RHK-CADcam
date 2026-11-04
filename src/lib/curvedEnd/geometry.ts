@@ -46,6 +46,11 @@ export interface CurvedEndParams {
   /** Number of ribs between the top and bottom (RHK addition, Mark 2026-10-20).
    *  null = the kit's rule: add ribs until the clear gap is under 170 (250 above a 2 mm skin). */
   ribs?: number | null
+  /** Rangehood shelf (z_curved_end C9 / z_rangehood): the underside of one rib, from
+   *  the carcass bottom. Set = that rib is locked there, no ribs below it (the
+   *  rangehood space), the ribs above spaced by the gap rule; `ribs` then counts
+   *  every rib incl. the shelf. Rib cut-outs are off. Unset = the kit's layout. */
+  shelfAt?: number | null
 }
 
 export const CURVED_END_DEFAULTS: CurvedEndParams = {
@@ -170,12 +175,31 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
   const manualRibs = p.ribs != null && Number.isFinite(p.ribs) && p.ribs >= 0
   if (manualRibs) g = Math.min(60, Math.round(p.ribs!) + 1)
   else while ((Hc - (g + 1) * T) / g >= maxGap && g < 60) g++
-  const pitch = (Hc - T) / g
-  const levels = Array.from({ length: g + 1 }, (_, i) => i * pitch)
+  let pitch = (Hc - T) / g
+  let levels = Array.from({ length: g + 1 }, (_, i) => i * pitch)
+  let clear = (Hc - (g + 1) * T) / g
+  // Rangehood shelf (C9): one rib locked at shelfAt, none under it, the rest above.
+  const SL = p.shelfAt
+  const shelfNotes: string[] = [], shelfWarnings: string[] = []
+  if (SL != null && Number.isFinite(SL)) {
+    const topL = Hc - T, span = topL - SL
+    if (SL < T + 20 || span < 2 * T + 20) shelfWarnings.push(`The rangehood shelf (${f1(SL)} up the carcass) doesn’t fit between the bottom and the top.`)
+    else {
+      let g2 = 1
+      if (manualRibs) g2 = Math.min(60, Math.max(1, Math.round(p.ribs!)))
+      else while (span / g2 - T >= maxGap && g2 < 60) g2++
+      pitch = span / g2
+      clear = pitch - T
+      levels = [0, ...Array.from({ length: g2 + 1 }, (_, i) => SL + i * pitch)]
+      g = g2 + 1
+      if (SL - T >= maxGap) shelfNotes.push(`No ribs under the rangehood shelf: the face board spans ${f1(SL - T)} unsupported there (fixing blocks help).`)
+      if (p.lighten) shelfNotes.push('Rib cut-outs are off with a rangehood (the flue notches the ribs).')
+    }
+  }
   const arc = Math.PI / 2 * R
 
   const c: CurvedEndGeometry = {
-    p, double, Dc, Hc, y0: p.SBT, CX, CD, RI, maxGap, gaps: g, pitch, clear: (Hc - (g + 1) * T) / g,
+    p, double, Dc, Hc, y0: p.SBT, CX, CD, RI, maxGap, gaps: g, pitch, clear,
     levels, holeY: levels.map(y => y + T / 2), arc,
     wrapLen: 0, pockets: [], ovL: 0, ovR: 0, ovG: 0, fixDepth: 0, backX0: 0, backW: 0,
     formerX0: 0, formerW: 0, formerD: Dc - T - SK, formerLoop: [], wrapLoop: [], pocketLines: [],
@@ -264,6 +288,7 @@ export function calcCurvedEnd(input: Partial<CurvedEndParams>): CurvedEndGeometr
   else if (SK < SKIN_MIN) c.notes.push(`Skin ${f1(SK)} mm is under ${SKIN_MIN} mm — too thin, the face board may crack or break through.`)
   else if (SK > SKIN_MAX) c.notes.push(`Skin ${f1(SK)} mm is over ${SKIN_MAX} mm — too thick to bend easily.`)
   // A typed rib count: too many can't fit; too few leaves the face board unsupported.
+  c.warnings.push(...shelfWarnings); c.notes.push(...shelfNotes)
   if (manualRibs && c.clear < 1) c.warnings.push(`Too many ribs for the carcass height: ${g - 1} ribs leave no gap between the formers.`)
   else if (manualRibs && c.clear >= maxGap)
     c.notes.push(`${g - 1} rib${g === 2 ? '' : 's'} leave${g === 2 ? 's' : ''} ${f1(c.clear)} between supports — over the ${maxGap} the kit allows for a ${f1(SK)} mm skin; the face board may flex.`)
@@ -333,7 +358,8 @@ export function curvedEndParts(c: CurvedEndGeometry): CurvedEndPart[] {
     ...(withCut && cut ? { cutout: { loop: loopToOutline(cut), depth: c.cutDepth } } : {}),
   })
   out.push(former('Bottom', 0, false))
-  for (let i = 1; i < c.gaps; i++) out.push(former(`Rib${i}`, i, true))
+  const ribCut = !(c.p.shelfAt != null && c.levels[1] === c.p.shelfAt)   // C9: no rib cut-outs with a rangehood
+  for (let i = 1; i < c.gaps; i++) out.push(former(`Rib${i}`, i, ribCut))
   out.push(former('Top', c.gaps, false))
   for (const k of c.blocks) out.push({ name: k.name, material: 'carcass', thickness: T, sizeX: k.wb, sizeY: r2(c.Hc) })
   return out

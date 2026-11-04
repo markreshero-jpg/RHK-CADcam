@@ -22,6 +22,25 @@
 import type { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolverError, Section, InternalFitting } from './types'
 import type { Cutout, PartCutouts } from '../partCutouts'
 import { RH_SEAMS } from '../rangehood'
+import { curvedEndInterior } from './resolveCurvedEnd'
+import type { OutlinePt } from '../shapePath'
+
+/** Corners of a rect (part frame) inside a shaped outline, nothing of the
+ *  outline reaching into it. Arcs as chords — inside the chord is inside the curve. */
+function rectInOutline(o: OutlinePt[] | undefined, x0: number, y0: number, x1: number, y1: number): boolean {
+  if (!o?.length) return true
+  const inside = (x: number, y: number) => {
+    let r = false
+    for (let i = 0, j = o.length - 1; i < o.length; j = i++) {
+      const a = o[i], b = o[j]
+      if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) r = !r
+    }
+    return r
+  }
+  const e = 0.5
+  return inside(x0 + e, y0 + e) && inside(x1 - e, y0 + e) && inside(x1 - e, y1 - e) && inside(x0 + e, y1 - e)
+    && !o.some(q => q.x > x0 + e && q.x < x1 - e && q.y > y0 + e && q.y < y1 - e)
+}
 
 const r2 = (v: number) => Math.round(v * 100) / 100
 
@@ -60,6 +79,12 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
   if (!rh) return out
   const warn = (message: string) => out.warnings.push({ code: 'RANGEHOOD', message: `Rangehood: ${message}` })
   const add = (id: string, c: Cutout) => { out.cutouts[id] = [...(out.cutouts[id] ?? []), c] }
+
+  // A curved end (z_curved_end C9): its formers stand in — bottom former, a rib
+  // locked at the shelf height (the engine, shelfAt), the top former. Hole and
+  // flue centre on the clear span inside it; the hole sets back from the face
+  // board's inside face (as a WRH's from the carcass front).
+  if (cab.curved_end) return resolveCurvedRangehood(cab, caseParts, out, warn, add)
 
   // ── Hole through the bottom ────────────────────────────────────
   const bottom = caseParts.find(p => p.part_key === 'bottom')
@@ -107,6 +132,16 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
   add(shelfId, notch(shelf, flue.d))
   add('case_full_top', notch(top, topD))
 
+  flueBox(cab, out, { cx0, cx1, zBack, zFront, y0, y1, H, T }, { key: shelfId, Y: shelf.Y }, { key: 'full_top', Y: top.Y, DZ: top.DZ })
+  return out
+}
+
+type BoxAt = { cx0: number; cx1: number; zBack: number; zFront: number; y0: number; y1: number; H: number; T: number }
+/** The flue box (two sides + a front piece) and its seams into the shelf and the top. */
+function flueBox(cab: CabinetInput, out: RangehoodResult, b: BoxAt, shelf: { key: string; Y: number }, top: { key: string; Y: number; DZ: number }) {
+  const flue = cab.rangehood!.flue
+  const { cx0, cx1, zBack, zFront, y0, y1, H, T } = b
+  const shelfId = shelf.key
   // ── Flue box ───────────────────────────────────────────────────
   const mat = cab.material.id, eb = cab.interior_edgeband_id
   const band = (e: { left?: boolean; right?: boolean }) => ({ top: false, bottom: false, left: !!e.left, right: !!e.right, id: eb })
@@ -133,7 +168,7 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
       origin: { ...e.origin, y: y0 }, along: e.along, across, toward: { x: 0, y: 1, z: 0 }, length: e.length, width: T,
       bore_b: { axis: 'y+', at: shelf.Y },
     })
-    seam(RH_SEAMS.top, e.key, 'full_top', {
+    seam(RH_SEAMS.top, e.key, top.key, {
       origin: { ...e.origin, y: y1 }, along: e.along, across, toward: { x: 0, y: -1, z: 0 }, length: e.length, width: T,
       bore_b: { axis: 'y-', at: r2(top.Y + top.DZ) },
     })
@@ -144,5 +179,72 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
       origin: { x, y: y0, z: zFront }, along: { x: 0, y: 1, z: 0 }, across: X, toward: { x: 0, y: 0, z: -1 }, length: H, width: T,
     })
   }
+}
+
+/** Clearance each side of the flue box where it passes up through a rib (C9). */
+export const RH_RIB_CLEAR = 1
+
+/**
+ * Rangehood on a curved end (WCRVFIXP, z_curved_end C9). Its formers are case
+ * parts in the horizontal frame (x across from X, y back from the front edge at
+ * Z + DX): the hole goes in `crv:bottom`, the flue notch in the rib at the
+ * shelf height and `crv:top`, and every rib above the shelf is notched round
+ * the flue box (box outside + RH_RIB_CLEAR) so the box runs shelf → top.
+ */
+function resolveCurvedRangehood(
+  cab: CabinetInput, caseParts: ResolvedCasePart[], out: RangehoodResult,
+  warn: (m: string) => void, add: (id: string, c: Cutout) => void,
+): RangehoodResult {
+  const rh = cab.rangehood!
+  const T = cab.material.DZ, FT = cab.exposed_material.DZ
+  const { x0: ix0, x1: ix1 } = curvedEndInterior(cab)
+  const centre = (ix0 + ix1) / 2
+  const bottom = caseParts.find(p => p.part_key === 'crv:bottom')
+  const top = caseParts.find(p => p.part_key === 'crv:top')
+  const ribs = caseParts.filter(p => /^crv:rib_\d+$/.test(p.part_key)).sort((a, b) => a.Y - b.Y)
+  const front = (p: ResolvedCasePart) => p.Z + p.DX   // a former's front edge (frame y 0)
+
+  // ── Hole through the bottom former ─────────────────────────────
+  const { hole } = rh
+  if (hole.w == null || hole.d == null) warn('the hole size isn’t set yet — no hole cut (set it in the sidebar)')
+  else if (bottom) {
+    const x0 = r2(centre + hole.offset - hole.w / 2), z1 = r2(cab.DZ - FT - hole.setback), z0 = r2(z1 - hole.d)
+    const fx = r2(x0 - bottom.X), fy = r2(front(bottom) - z1)
+    if (!rectInOutline(bottom.outline, fx, fy, fx + hole.w, fy + hole.d)) warn('the hole runs past the bottom former (into the curve or the back) — no hole cut')
+    else {
+      out.hole = { x0, x1: r2(x0 + hole.w), z0, z1 }
+      add('case_crv:bottom', {
+        id: 'rh_hole', kind: 'hole', shape: 'rect', w: hole.w, d: hole.d, radius: hole.radius, depth: null, source: 'rangehood',
+        x: { from: 'left', off: fx }, y: { from: 'front', off: fy },
+      })
+    }
+  }
+
+  // ── Flue: the shelf rib + the top former ───────────────────────
+  const shelf = ribs.length ? ribs.reduce((a, b) => Math.abs(b.Y - rh.shelf_h) < Math.abs(a.Y - rh.shelf_h) ? b : a) : null
+  if (!shelf || Math.abs(shelf.Y - rh.shelf_h) > 0.5) { warn(`no rib at the shelf height ${rh.shelf_h} — check the curved end’s height and scribes`); return out }
+  if (!top) { warn('no top former for the flue to go through'); return out }
+  const { flue } = rh
+  const cx0 = r2(centre - flue.w / 2 + flue.offset), cx1 = r2(cx0 + flue.w)
+  const zBack = shelf.Z, zFront = r2(shelf.Z + flue.d)
+  const y0 = r2(shelf.Y + shelf.DZ), y1 = top.Y, H = r2(y1 - y0)
+  if (cx0 - T < ix0 - 0.5 || cx1 + T > ix1 + 0.5) { warn(`the flue box (${flue.w} + 2 × ${T}) doesn’t fit across the inside`); return out }
+  // Box outside (+ clearance) must sit on the formers' straight back, clear of the curve and the fixing blocks.
+  const C = RH_RIB_CLEAR
+  const bx0 = r2(cx0 - T - C), bx1 = r2(cx1 + T + C), bd = r2(flue.d + T + C)
+  if (!rectInOutline(shelf.outline, bx0 - shelf.X, shelf.DX - bd, bx1 - shelf.X, shelf.DX)) {
+    warn(`the flue box (${flue.d} + ${T} deep) runs into the curve or a fixing block`); return out
+  }
+  if (!(H > 0)) { warn('no room between the shelf and the top for the flue box'); return out }
+
+  const notch = (id: string, part: ResolvedCasePart, x: number, w: number, d: number): Cutout => ({
+    id, kind: 'notch', shape: 'rect', w, d, edge: 'back', source: 'rangehood',
+    x: { from: 'left', off: r2(x - part.X) }, y: { from: 'back', off: 0 },
+  })
+  add(`case_${shelf.part_key}`, notch('rh_flue', shelf, cx0, flue.w, flue.d))
+  add('case_crv:top', notch('rh_flue', top, cx0, flue.w, r2(zFront - top.Z)))
+  for (const rib of ribs.filter(p => p.Y > shelf.Y + 0.5)) add(`case_${rib.part_key}`, notch('rh_flue_box', rib, bx0, r2(bx1 - bx0), bd))
+
+  flueBox(cab, out, { cx0, cx1, zBack, zFront, y0, y1, H, T }, { key: shelf.part_key, Y: shelf.Y }, { key: 'crv:top', Y: top.Y, DZ: top.DZ })
   return out
 }

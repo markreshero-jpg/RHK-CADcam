@@ -88,7 +88,7 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   // the gable side by the panel + its scribe (RH: the gable is at X 0; LH: at X = DX).
   const { pT, inset, s: built } = curvedEndInnerFit(s, FT)
   const shiftX = s.hand === 'RH' ? inset : 0
-  const c = calcCurvedEnd(curvedEndParams(built, { DX: cab.DX - inset, DY: cab.DY, DZ: cab.DZ }, FT, T, lift))
+  const c = calcCurvedEnd(curvedEndParams(built, { DX: cab.DX - inset, DY: cab.DY, DZ: cab.DZ }, FT, T, lift, cab.rangehood?.shelf_h))
   const errors: ResolverError[] = c.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'case' }))
   const warnings: ResolverError[] = c.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' }))
   const parts = curvedEndCaseParts(c, cab.exposed_material.id, cab.material.id, s.grain, cab.exposed_edgeband_id)
@@ -112,6 +112,19 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   const out = shiftX ? parts.map(p => ({ ...p, X: p.X + shiftX, ...(p.wrap ? { wrap: { ...p.wrap, pts: p.wrap.pts.map(q => ({ ...q, x: q.x + shiftX })) } } : {}) })) : parts
   if (pT) out.push(curvedInnerPanel(s.hand === 'LH', pT, inset - pT, FT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id))
   return { parts: out, seams, errors, warnings }
+}
+
+/**
+ * The clear span inside a curved end, across the cabinet (C9 rangehood: the
+ * hole and flue centre on it): between the fixing panel's inner face (or the
+ * left face board on a DOUBLE) and the face board's inside on the curved side.
+ */
+export function curvedEndInterior(cab: Pick<CabinetInput, 'DX' | 'curved_end' | 'exposed_material' | 'material'>): { x0: number; x1: number } {
+  const s = cab.curved_end!
+  const FT = cab.exposed_material.DZ, T = cab.material.DZ
+  const { inset } = curvedEndInnerFit(s, FT)
+  if (s.hand === 'DOUBLE') return { x0: FT, x1: cab.DX - FT }
+  return s.hand === 'LH' ? { x0: FT, x1: cab.DX - inset - T } : { x0: inset + T, x1: cab.DX - FT }
 }
 
 /** Thickness of a curved end's inside face panel (C8): the exposed board when

@@ -8,7 +8,9 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → C7 built 2026-10-24 (`migration_c7_curved_bulkhead.sql` applied): BHCRVFIXP curved bulkhead
+> **RESUME HERE** → C9 built 2026-11-04: rangehood option on WCRVFIXP (hole + flue, rib as the shelf) —
+> **in-app check pending (Mark)**, see C9 below.
+> C7 built 2026-10-24 (`migration_c7_curved_bulkhead.sql` applied): BHCRVFIXP curved bulkhead
 > (curved end hung like a bulkhead, ribs 0) + its shadowline split rail round the curve; first used on RHK6581 J06.
 > **In-app check pending (Mark)**. Tutorial "Put a curved bulkhead over a curved end" added.
 > C5 built 2026-10-21 (no migration: `curved_end.kick`): tick "On a kick" on a base / tall
@@ -306,6 +308,29 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
     edge and covers the panel's front edge. The panel is `D − FT` deep, set in by the scribe, untaped;
     the face board's gable end is taped (it's the finished edge). `curvedEndInnerFit` in
     resolveCurvedEnd.ts is the one place this is worked out (resolver + sidebar summary).
+- [~] **C9** (built 2026-11-04, in-app check pending) **Rangehood in a curved wall end** (Mark, 2026-11-04:
+  "an option in our curved wall cabinet for a rangehood cutout … use any of the code from the WRH";
+  WCRVFIXP, hole **and** flue). Reuses z_rangehood (block, sidebar section, flue box, joints, cut-outs).
+  Locked as built:
+  - **An option, not a library item**: sidebar tick "Rangehood (hole + flue)" in the Curved end section,
+    wall class only (not BHCRVFIXP). Sets `rangehood` = the WRH defaults; the Rangehood section then shows.
+  - **Shelf = a rib** locked with its underside at `shelf_h` from the cabinet underside (engine
+    `shelfAt` = shelf_h − lift − SBT). **No ribs under it** (the rangehood space — a note if that span is
+    over the kit's gap); ribs above by the gap rule; a typed rib count = every rib incl. the shelf.
+    **Rib cut-outs off** with a rangehood. Unset `shelfAt` = the kit layout, fixtures unchanged.
+  - **Hole** in `crv:bottom`, centred on the clear inside (fixing panel inner face ↔ face board inside;
+    DOUBLE: face board ↔ face board; C8 inset honoured — `curvedEndInterior`), **set back from the face
+    board's inside face** (as a WRH's from the carcass front). Reported as `rangehood_hole`.
+  - **Flue** 200 × 250 notch from the back in the shelf rib and `crv:top`, centred like the hole;
+    **every rib above the shelf is notched round the flue box** (box outside + 1 clearance each side /
+    front, `RH_RIB_CLEAR`) so the box runs shelf → top. Box + 5mm Dynamic Holes seams as the WRH
+    (shelf / top keys = the rib's / `crv:top`).
+  - **Notches on shaped parts**: `spliceNotch` (partCutouts.ts) cuts a notch into one straight,
+    unbulged edge of an arc outline (the formers' back edge); anything reaching the curve or a fixing
+    block is refused with a warning. `crv:top` + `crv:rib_<n>` now take cut-outs (`isCutoutCaseKey`).
+  - Hole / box running into the curve or a fixing block → RANGEHOOD warning, nothing cut.
+  - Under panel link (R6) not used — the bottom former is the visible underside.
+  - Test `src/lib/resolver/__tests__/curvedRangehood.test.ts`; tutorial `curved_rangehood`.
 
 ## Open
 

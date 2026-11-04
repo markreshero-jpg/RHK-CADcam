@@ -158,7 +158,7 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
 
   // ── 5b. Rangehood (z_rangehood R5) ─────────────────────────────
   // Flue box parts + their seams; the hole and notches join the cut-outs (6e).
-  const rh = cab.rangehood && cab.has_carcass ? resolveRangehood(cab, caseParts, internalParts) : null
+  const rh = cab.rangehood && (cab.has_carcass || cab.curved_end) ? resolveRangehood(cab, caseParts, internalParts) : null
   if (rh) {
     caseParts.push(...rh.parts)
     declaredSeams.push(...rh.seams)

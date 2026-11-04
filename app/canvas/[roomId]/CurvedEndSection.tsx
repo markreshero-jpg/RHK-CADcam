@@ -15,6 +15,7 @@ import {
 import { calcCurvedEnd, SKIN_MIN, SKIN_MAX, f1 } from '@/src/lib/curvedEnd/geometry'
 import { calcCurvedKick } from '@/src/lib/curvedEnd/kick'
 import { curvedEndInnerFit, curvedEndLift, curvedKickParamsFor } from '@/src/lib/resolver/resolveCurvedEnd'
+import { DEFAULT_RANGEHOOD, normaliseRangehood } from '@/src/lib/rangehood'
 
 const BASE_CODE: Record<string, string> = { base: 'BCRVFIXP', wall: 'WCRVFIXP', tall: 'TCRVFIXP' }
 
@@ -41,7 +42,11 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
   const { kickH, splitH } = curvedEndLift(s, cabinet.assembly_class, cached)
   // C8: an inside face panel (+ its gable scribe) comes off the width the curved end builds in.
   const fit = curvedEndInnerFit(s, FT)
-  const c = calcCurvedEnd(curvedEndParams(fit.s, { DX: cabinet.dx - fit.inset, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH + splitH))
+  // C9: a rangehood locks a rib at its shelf height.
+  const rh = normaliseRangehood(cabinet.rangehood)
+  const c = calcCurvedEnd(curvedEndParams(fit.s, { DX: cabinet.dx - fit.inset, DY: cabinet.dy, DZ: cabinet.dz }, FT, T, kickH + splitH, rh?.shelf_h))
+  // Wall curved ends (WCRVFIXP) only; not the curved bulkhead.
+  const canRangehood = cabinet.assembly_class.startsWith('wall') && !cabinet.bulkhead
   // C5: the curved kick, checked once the cabinet has resolved (needs the kick boards).
   const kick: ReturnType<typeof calcCurvedKick> | null = kickH > 0 && cached ? calcCurvedKick(c, curvedKickParamsFor(cached, kickH)) : null
   const single = s.hand !== 'DOUBLE'
@@ -85,12 +90,16 @@ export default function CurvedEndSection({ cabinet, onUpdate, inp, lbl }: {
         'Exposed panel on the square (gable) side, for when the inside is seen (e.g. an island knee space). It covers the fixing panel and sits behind the face board, which runs over its front edge.')}
       {canKick && tick('On a kick (curved kick)', s.kick, v => put({ kick: v }),
         'Carcass sits up at the kick height; the kick board follows the curve, set back and bent like the face board')}
+      {canRangehood && tick('Rangehood (hole + flue)', !!rh, v => void onUpdate(cabinet.id, { rangehood: v ? DEFAULT_RANGEHOOD : null }),
+        'Undermount rangehood: hole through the bottom former, a rib locked at the shelf height with the flue notch, the top notched, a flue box between — set it in the Rangehood section')}
       {row('Radius', s.R, v => { if (v > 0) put({ R: v }) }, 'Outside radius of the curve')}
       {row('Skin', s.SK, v => { if (v > 0) put({ SK: v }) },
         `Face board left in the bend pocket (pocket depth = board − skin). ${SKIN_MIN}–${SKIN_MAX} mm bends best.`)}
 
       <div className="grid grid-cols-[1fr_3.5rem_4.5rem] gap-1 items-center"
-        title={`Formers between the top and bottom. Auto adds them until the clear gap is under ${c.maxGap}.`}>
+        title={rh
+          ? `Ribs incl. the rangehood shelf — none under it, the rest above. Auto adds them until the clear gap is under ${c.maxGap}.`
+          : `Formers between the top and bottom. Auto adds them until the clear gap is under ${c.maxGap}.`}>
         <label className="text-xs text-gray-300">Ribs</label>
         <label className="flex items-center gap-1 text-[10px] text-gray-400">
           <input type="checkbox" checked={s.ribs == null}

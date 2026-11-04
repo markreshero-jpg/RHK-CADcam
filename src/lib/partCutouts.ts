@@ -209,13 +209,58 @@ export function notchOutline(W: number, D: number, base: OutlinePt[] | undefined
   })
 }
 
+/**
+ * A notch cut into one straight edge of a shaped outline (arcs elsewhere are
+ * fine — z_curved_end C9: the flue notch in a curved former's straight back
+ * edge). The notch must sit inside one straight, unbulged segment on its edge
+ * line and clear every other part of the outline. Null when it can't.
+ */
+export function spliceNotch(pts: OutlinePt[], W: number, D: number, r: Rect, edge: 'front' | 'back' | 'left' | 'right'): OutlinePt[] | null {
+  // Work with the edge as a line y = at (left / right: x ↔ y swapped, a mirror, so bulges flip).
+  const swap = edge === 'left' || edge === 'right'
+  const fwd = (p: OutlinePt): OutlinePt => swap ? { ...p, x: p.y, y: p.x, ...(p.b ? { b: -p.b } : {}) } : p
+  const P = pts.map(fwd)
+  const rr = swap ? { x0: r.y0, x1: r.y1, y0: r.x0, y1: r.x1 } : r
+  const atMax = edge === 'back' || edge === 'right'
+  const at = atMax ? (swap ? W : D) : 0
+  const depth = atMax ? Math.min(at, rr.y1) - rr.y0 : rr.y1 - Math.max(0, rr.y0)
+  const inner = atMax ? at - depth : depth
+  const n = P.length
+  for (let i = 0; i < n; i++) {
+    const a = P[i], b = P[(i + 1) % n]
+    if (a.b && Math.abs(a.b) > 1e-9) continue
+    if (Math.abs(a.y - at) > EPS || Math.abs(b.y - at) > EPS) continue
+    if (Math.min(a.x, b.x) > rr.x0 + EPS || Math.max(a.x, b.x) < rr.x1 - EPS) continue
+    // Nothing else of the outline may reach into the notch.
+    const bad = P.some((q, k) => k !== i && k !== (i + 1) % n
+      && q.x > rr.x0 + EPS && q.x < rr.x1 - EPS && (atMax ? q.y > inner + EPS : q.y < inner - EPS))
+    const mid = (x: number) => insidePoly(P, x, atMax ? inner - 0.5 : inner + 0.5)
+    if (bad) return null
+    // Board left both sides of the notch's inner edge, and the notch itself over the part.
+    if (!mid(rr.x0 + 0.5) || !mid(rr.x1 - 0.5) || !insidePoly(P, (rr.x0 + rr.x1) / 2, atMax ? (inner + at) / 2 : inner / 2)) return null
+    const up = b.x > a.x
+    const near = up ? rr.x0 : rr.x1, far = up ? rr.x1 : rr.x0
+    const ins: OutlinePt[] = []
+    const same = (u: OutlinePt, x: number, y: number) => Math.abs(u.x - x) < EPS && Math.abs(u.y - y) < EPS
+    const aKeep: OutlinePt = same(a, near, at) ? { x: a.x, y: a.y } : a
+    if (!same(a, near, at)) ins.push({ x: r2(near), y: r2(at) })
+    ins.push({ x: r2(near), y: r2(inner) }, { x: r2(far), y: r2(inner) })
+    if (!same(b, far, at)) ins.push({ x: r2(far), y: r2(at), ...(a.e ? { e: a.e } : {}) })
+    const out = [...P.slice(0, i), aKeep, ...ins, ...P.slice(i + 1)]
+    return out.map(fwd)   // the swap is its own inverse
+  }
+  return null
+}
+
 // ── Applying them ─────────────────────────────────────────────────────────────
 
 /** Parts that take cut-outs so far (horizontal shape frame: x along the width
  *  0..DY, y back from the front edge 0..DX). Holes: carcass parts only — the
  *  optimiser reads `cutouts` from case_parts. `crv:bottom` = a curved canopy's
  *  (BHCRVFIXP) bottom former — same frame (kit x across, d back from the front). */
-export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail', 'crv:bottom'])
+export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail', 'crv:bottom', 'crv:top'])
+/** Case parts that take cut-outs: the set above + a curved end's ribs (C9 rangehood). */
+export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+$/.test(k)
 export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
 
 type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }
@@ -236,7 +281,7 @@ export function cutoutTargets(
   internalParts: (CutPart & { part_type: string; sort_order: number; X?: number; Y?: number; Z?: number })[],
 ): CutTarget[] {
   return [
-    ...caseParts.filter(p => CUTOUT_CASE_KEYS.has(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p) })),
+    ...caseParts.filter(p => isCutoutCaseKey(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p) })),
     ...internalParts.filter(p => CUTOUT_INTERNAL_TYPES.has(p.part_type)).map(p => ({ id: `int_${p.part_type}_${p.sort_order}`, part: p, holes: false, at: atOf(p) })),
   ]
 }
@@ -266,6 +311,7 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
     const OVER = 1
     const notchList = list.filter(c => c.kind === 'notch')
     const notches: Rect[] = []
+    const notchEdges: NonNullable<Cutout['edge']>[] = []
     for (const c of notchList) {
       if (c.shape !== 'rect') { warn(c, 'notches are rectangles'); continue }
       if (!c.edge) { warn(c, 'pick the edge it opens to'); continue }
@@ -277,11 +323,20 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
         : { x0: W - w, x1: W + OVER, y0: s.y0, y1: s.y0 + d }
       if (r.x0 < -OVER - EPS || r.x1 > W + OVER + EPS || r.y0 < -OVER - EPS || r.y1 > D + OVER + EPS) { warn(c, 'runs off the part'); continue }
       notches.push(r)
+      notchEdges.push(c.edge)
     }
     if (notches.length) {
-      if (p.outline && !isRectilinear(p.outline)) notchList.forEach(c => warn(c, 'notches need a square-cornered part'))
-      else {
-        const o = notchOutline(W, D, p.outline, notches)
+      let o: OutlinePt[] | null
+      if (p.outline && !isRectilinear(p.outline)) {
+        // Shaped part (arcs): each notch spliced into a straight edge (C9).
+        o = p.outline
+        for (let k = 0; k < notches.length && o; k++) o = spliceNotch(o, W, D, notches[k], notchEdges[k])
+        if (!o) notchList.forEach(c => warn(c, 'on a shaped part a notch must sit on one straight edge, clear of the curves'))
+      } else {
+        o = notchOutline(W, D, p.outline, notches)
+        if (!o) notchList.forEach(c => warn(c, 'the notches cut the part in two'))
+      }
+      {
         if (o) {
           p.outline = o
           // Its gaps in cabinet space (frame y runs back from the front edge at Z + D).
@@ -291,7 +346,6 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
             z0: at.Z + D - Math.min(D, n.y1), z1: at.Z + D - Math.max(0, n.y0),
           })
         }
-        else notchList.forEach(c => warn(c, 'the notches cut the part in two'))
       }
     }
     for (const c of list.filter(c => c.kind === 'hole')) {

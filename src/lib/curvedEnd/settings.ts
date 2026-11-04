@@ -82,12 +82,14 @@ export function curvedEndKickH(s: Pick<CurvedEndSettings, 'kick'>, assemblyClass
  *  `kickH` (curvedEndKickH) comes off the height: the engine builds above the kick. */
 export function curvedEndParams(
   s: CurvedEndSettings, box: { DX: number; DY: number; DZ: number }, faceThickness: number, carcassThickness: number,
-  kickH = 0,
+  kickH = 0, rangehoodShelfH?: number | null,
 ): CurvedEndParams {
   return {
     W: box.DX, D: box.DZ, H: box.DY - kickH, R: s.R, FT: faceThickness, SK: s.SK, T: carcassThickness, hand: s.hand,
     OL: s.OL, OR: s.OR, OG: s.OG, SBK: s.SBK, SBT: s.SBT, STP: s.STP,
     lighten: s.lighten, B: s.B, onion: s.onion, OS: s.OS, blkS: s.blkS, blkF: s.blkF, ribs: s.ribs,
+    // C9: the rangehood's shelf_h is from the cabinet underside; the engine's levels from the carcass bottom.
+    ...(rangehoodShelfH != null ? { shelfAt: rangehoodShelfH - kickH - s.SBT } : {}),
   }
 }
 

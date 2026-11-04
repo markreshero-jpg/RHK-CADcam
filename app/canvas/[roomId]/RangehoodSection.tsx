@@ -27,6 +27,8 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
   const hole = (k: keyof RangehoodSettings['hole'], v: number | null) => put({ hole: { ...s.hole, [k]: v } })
   const flue = (k: keyof RangehoodSettings['flue'], v: number) => put({ flue: { ...s.flue, [k]: v } })
   const unset = s.hole.w == null || s.hole.d == null
+  // z_curved_end C9: on a curved end the formers stand in for the bottom / shelf / top.
+  const crv = !!cabinet.curved_end
 
   return (
     <div className="space-y-2 border-t border-gray-800 pt-3">
@@ -36,7 +38,7 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Width', 'Across the cabinet — the rangehood’s cut-out size. 0 = not set yet', s.hole.w ?? 0, v => hole('w', v > 0 ? v : null))}
       {row('Depth', 'Front to back — the rangehood’s cut-out size. 0 = not set yet', s.hole.d ?? 0, v => hole('d', v > 0 ? v : null))}
       {unset && <p className="text-[10px] text-amber-400">⚠ Hole size not set — no hole is cut until it is.</p>}
-      {row('Back from front', 'From the bottom’s front edge (the gables’ with Bottom Type none — then the hole is only in the under panel) to the front of the hole', s.hole.setback, v => { if (v >= 0) hole('setback', v) })}
+      {row('Back from front', crv ? 'From the inside face of the face board to the front of the hole' : 'From the bottom’s front edge (the gables’ with Bottom Type none — then the hole is only in the under panel) to the front of the hole', s.hole.setback, v => { if (v >= 0) hole('setback', v) })}
       {row('Off centre', '+ moves the hole right, − left', s.hole.offset, v => hole('offset', v))}
       {row('Corner radius', '0 = square corners', s.hole.radius, v => { if (v >= 0) hole('radius', v) })}
 
@@ -45,10 +47,11 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Depth', 'Notch depth from the shelf’s back edge — the box sides run this deep', s.flue.d, v => { if (v > 0) flue('d', v) })}
       {row('Off centre', '+ moves the flue right, − left', s.flue.offset, v => flue('offset', v))}
 
-      {row('Shelf height', 'Cabinet underside (incl. under panel) to the underside of the first fixed shelf', s.shelf_h, v => { if (v > 0) put({ shelf_h: v }) })}
+      {row('Shelf height', crv ? 'Cabinet underside to the underside of the rib the flue goes through (no ribs below it)' : 'Cabinet underside (incl. under panel) to the underside of the first fixed shelf', s.shelf_h, v => { if (v > 0) put({ shelf_h: v }) })}
       <p className="text-[10px] text-gray-600">
         The flue box (2 sides + a front piece, carcass board) stands on the shelf up to the top,
         screwed through both with 5mm Dynamic Holes. The front piece and the sides&rsquo; front edges are taped.
+        {crv && ' Ribs above the shelf are notched round the box. The hole and flue centre on the inside between the fixing panel and the face board.'}
       </p>
     </div>
   )

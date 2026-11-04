@@ -1646,6 +1646,24 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select a line and open Line weight in the CAD tools: 0.05, 0.09 and 0.13 are there as well as 0.18 and up. These do print thinner.',
       canvas: true, done: c => c.annotSelected > 0 },
   ]},
+
+  // Appended 2026-11-04 (z_curved_end C9: rangehood in a curved wall end).
+  { id: 'curved_rangehood', level: 'intermediate', topic: 'cabinets', title: 'Put a rangehood in a curved wall cabinet',
+    blurb: 'A WCRVFIXP with the rangehood hole in its bottom, a rib as the flue shelf and a flue box up to the top.',
+    keywords: 'rangehood range hood undermount curved curve wall WCRVFIXP flue duct hole rib shelf notch overhead', steps: [
+    { id: 'place', title: 'Place a WCRVFIXP',
+      body: 'Place a cabinet (F3) and pick WCRVFIXP from Wall › End Panels. Size it for the rangehood: wide enough for the hole, deep enough for the flue (250 + the board behind the face).',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.curved_end && cab.assembly_class.startsWith('wall')) },
+    { id: 'tick', title: 'Tick Rangehood',
+      body: 'Select it. In the Curved end section tick Rangehood (hole + flue). One rib is locked 350 up from the cabinet underside as the flue shelf. There are no ribs under it (that is the rangehood space) and the rest are spaced above it. Rib cut-outs are turned off.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.curved_end && !!cab.rangehood) },
+    { id: 'size', title: 'Set the hole size',
+      body: 'In the Rangehood section, type the hole Width and Depth from the rangehood’s cut-out spec. The hole and flue centre on the inside, between the fixing panel and the face board. Back from front is measured from the inside face of the face board. If the hole or flue box would run into the curve, the cabinet warns and doesn’t cut it.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.curved_end && !!cab.rangehood?.hole?.w && !!cab.rangehood?.hole?.d) },
+    { id: 'check', title: 'Check it in 3D',
+      body: 'Double-click it and look at the 3D tab: the hole in the bottom former, the flue notch in the shelf rib and the top, the ribs above notched round the flue box, and the box itself (two sides and a front, screwed through the rib and the top).',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
