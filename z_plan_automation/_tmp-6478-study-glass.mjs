@@ -19,11 +19,12 @@ if (!mat) mat = chk('mi', await sb.from('materials').insert({ name: NAME, brand:
 console.log('material', mat.id)
 const cab = chk('c', await sb.from('cabinet_instances').select('id').eq('room_id', R).eq('label', 'BC-11'))[0]
 const parts = chk('cp', await sb.from('cabinet_custom_parts').select('*').eq('cabinet_instance_id', cab.id))
+chk('ovr', await sb.from('cabinet_custom_parts').update({ material_id: mat.id, material_override_id: mat.id }).eq('cabinet_instance_id', cab.id).like('name', 'Desk glass%'))  // role default beats material_id without an override
 if (!parts.some(p => p.name.startsWith('Desk glass'))) {
   const { id: _i, created_at: _c, updated_at: _u, ...base } = parts.find(p => p.name === 'Desk underside 1/2')
   const JN = 1258.5 + 8.25, A = 16.5, B = 3022 - 16.5
   const glass = (n, x, len) => ({ ...base, name: `Desk glass ${n}/2 (6mm toughened, by RHK)`, orientation: 'flat', x, y: 56.5, z: 90, dx: 510, dy: len, dz: 6,
-    material_id: mat.id, material_override_id: null, no_cnc: true, grain_across: false, edge_top: false, edge_bottom: false, edge_left: false, edge_right: false, sort_order: 20 + n })
+    material_id: mat.id, material_override_id: mat.id, no_cnc: true, grain_across: false, edge_top: false, edge_bottom: false, edge_left: false, edge_right: false, sort_order: 20 + n })
   chk('gi', await sb.from('cabinet_custom_parts').insert([glass(1, A, JN - A), glass(2, JN, B - JN)]))
 }
 const browser = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: 'new', args: ['--no-first-run', '--disable-gpu'], protocolTimeout: 300000 })
@@ -35,7 +36,7 @@ try {
   await open()
   console.log(JSON.stringify(await api('updateCabinet', 'BC-11', { dz: 600 })))
   await open()
-  for (const p of chk('cp2', await sb.from('cabinet_custom_parts').select('name,x,y,z,dx,dy,dz,no_cnc').eq('cabinet_instance_id', cab.id).like('name', 'Desk glass%'))) console.log(JSON.stringify(p))
+  for (const p of chk('cp2', await sb.from('cabinet_custom_parts').select('name,x,y,z,dx,dy,dz,no_cnc,material_id,material_override_id').eq('cabinet_instance_id', cab.id).like('name', 'Desk glass%'))) console.log(JSON.stringify(p))
   const issues = await api('getIssues'); let n = 0
   for (const ci of issues) for (const e of [...ci.errors, ...ci.warnings]) { n++; console.log(`  ${ci.label} ${e.code}: ${e.message}`) }
   console.log('issues', n)

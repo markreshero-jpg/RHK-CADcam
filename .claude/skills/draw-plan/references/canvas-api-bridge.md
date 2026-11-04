@@ -76,3 +76,5 @@ literal `x / y / z` (cabinet frame: x along the wall, y up from pos_z, z from th
 `expressions: {}` (the column is NOT NULL; empty = use the literals). Orientation `flat`: dx = depth, dy = length;
 `front`: dx = length, dy = height. Per-piece `no_cnc`, edges, ops (`source_part_key: custom_<part id>`). Re-resolve with a
 no-op `updateCabinet {dz}`. Script: `z_plan_automation/_tmp-6478-study-desk1.mjs`.
+
+- **Custom part material = `material_override_id`.** The resolver writes the part role's scheduled material over `material_id` on every resolve, so a different board (glass, a second colour) only sticks with `material_override_id` set to it too (RHK6478 desk glass, 2026-11-05).
