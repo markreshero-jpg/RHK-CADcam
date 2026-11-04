@@ -338,7 +338,11 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
   - **Flue** 200 × 250 notch from the back in the shelf rib and `crv:top`, centred like the hole;
     **every rib above the shelf is notched round the flue box** (box outside + 1 clearance each side /
     front, `RH_RIB_CLEAR`) so the box runs shelf → top. Box + 5mm Dynamic Holes seams as the WRH
-    (shelf / top keys = the rib's / `crv:top`).
+    (shelf / top keys = the rib's / `crv:top`). **Box → ribs above** (Mark, 2026-11-05): each piece
+    screwed into every rib it passes — seam `rh_flue:rib` (A = rib, B = piece, bored through from inside
+    the box), joint **RH flue rib screw** = one Ø5 centred along the piece, mid the rib
+    (`migration_c9_flue_rib_screw.sql`, applied). `dropVoidDrills` keeps holes in `rh:` parts (the box
+    stands in the rib notches by design).
   - **Notches on shaped parts**: `spliceNotch` (partCutouts.ts) cuts a notch into one straight,
     unbulged edge of an arc outline (the formers' back edge); anything reaching the curve or a fixing
     block is refused with a warning. `crv:top` + `crv:rib_<n>` now take cut-outs (`isCutoutCaseKey`).

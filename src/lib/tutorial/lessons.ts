@@ -1661,7 +1661,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In the Rangehood section, type the hole Width and Depth from the rangehood’s cut-out spec. The hole and flue centre on the inside, between the fixing panel and the face board. Back from front is measured from the inside face of the face board. If the hole or flue box would run into the curve, the cabinet warns and doesn’t cut it.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.curved_end && !!cab.rangehood?.hole?.w && !!cab.rangehood?.hole?.d) },
     { id: 'check', title: 'Check it in 3D',
-      body: 'Double-click it and look at the 3D tab: the hole in the bottom former, the split support ribs either side of it and the two rails they sit into, the flue notch in the shelf rib and the top, the ribs above notched round the flue box, and the box itself (two sides and a front, screwed through the rib and the top).',
+      body: 'Double-click it and look at the 3D tab: the hole in the bottom former, the split support ribs either side of it and the two rails they sit into, the flue notch in the shelf rib and the top, the ribs above notched round the flue box, and the box itself (two sides and a front, screwed through the rib and the top, with one hole through each piece into every rib it passes).',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
 ]

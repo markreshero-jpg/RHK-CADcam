@@ -968,6 +968,9 @@ export function dropVoidDrills<T extends DrillOpPos>(drills: T[], voids: CutoutV
   const E = 0.25, PAST = 2
   const inside = (v: number, a: number, b: number) => v > a + E && v < b - E
   return drills.filter(d => {
+    // The rangehood flue box stands in the notches by design (a curved end's
+    // ribs, C9): holes through its own pieces are never in removed board.
+    if (d.targetPartKey.startsWith('rh:')) return true
     const ax = d.axis[0] as 'x' | 'y' | 'z', sgn = d.axis[1] === '-' ? -1 : 1
     const a0 = d[ax], a1 = d[ax] + sgn * (d.depthLen + PAST)
     const lo = Math.min(a0, a1), hi = Math.max(a0, a1)

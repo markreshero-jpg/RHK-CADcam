@@ -62,4 +62,5 @@ export const RH_SEAMS = {
   shelf: 'rh_flue:shelf',   // shelf → each box piece's bottom edge
   top:   'rh_flue:top',     // top → each box piece's top edge
   front: 'rh_flue:front',   // front piece → each side's front edge
+  rib:   'rh_flue:rib',     // curved end (C9): each box piece screwed into a rib it passes, one centred hole
 } as const

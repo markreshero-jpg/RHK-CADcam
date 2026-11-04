@@ -7,7 +7,8 @@ import { curvedEndFootprint, curvedEndParams, DEFAULT_CURVED_END } from '../../c
 import { normaliseRangehood, type RangehoodSettings } from '../../rangehood'
 import { spliceNotch } from '../../partCutouts'
 import { clipOutlineX } from '../../shapePath'
-import { DEFAULT_RULES, type CabinetInput, type Material } from '../types'
+import { DEFAULT_RULES, type CabinetInput, type JointTypeOp, type Material } from '../types'
+import { cabinetSeamDrills } from '../../jointDrilling'
 import { resolveCabinet } from '../resolver'
 import { resolveCurvedEnd } from '../resolveCurvedEnd'
 import { mergeRules } from '../mergeRules'
@@ -173,6 +174,36 @@ describe('curved end rangehood (C9)', () => {
     const front = Math.min(L.Z + L.DY, 400)
     expect(front).toBeLessThanOrEqual(rib.Z + rib.DX + 0.01)
     expect(rp.warnings.filter(w => /rangehood rail/.test(w.message))).toEqual([])
+  })
+
+  it('screws each flue box piece into every rib it passes: one hole, centred, mid the rib', () => {
+    const one = {
+      id: 'one', joint_type_id: 'one', operation_order: 0, target_part: 'part_b', machine_operation: 'drill', face: 'normal',
+      tool_diameter_mm: 5, depth_mm: 16.7, offset_x_mm: 0, offset_y_mm: 0, offset_z_mm: 0, qty: 1, spacing_mm: null, qty2: 1, spacing2_mm: null,
+      router_tool_id: null, drill_id: null, auto_tool: true, notes: null,
+      expressions: { qty: '1', offset_z_mm: 'D / 2', offset_y_mm: 'CW / 2' },
+    } as unknown as JointTypeOp
+    const rp = resolveCabinet(wcrv(rh, {}, {
+      joint_defaults: { 'rh_flue:rib': 'one' }, joint_type_ops: { one: [one] }, joint_type_names: { one: 'RH flue rib screw' },
+    } as Partial<CabinetInput>))
+    const ribs = ribsOf(rp).slice(1)   // above the shelf
+    expect(ribs.length).toBeGreaterThan(0)
+    const drills = cabinetSeamDrills(rp).filter(d => d.opRef?.startsWith('crv:rib_'))
+    expect(drills).toHaveLength(ribs.length * 3)
+    const L = rp.case_parts.find(p => p.part_key === 'rh:flue_l')!, R = rp.case_parts.find(p => p.part_key === 'rh:flue_r')!
+    const F = rp.case_parts.find(p => p.part_key === 'rh:flue_front')!
+    const cx0 = L.X + 16.5, cx1 = R.X - 16.5
+    for (const rib of ribs) {
+      const at = drills.filter(d => Math.abs(d.y - (rib.Y + 8.25)) < 0.01)
+      const l = at.find(d => d.targetPartKey === 'rh:flue_l')!, r = at.find(d => d.targetPartKey === 'rh:flue_r')!
+      const f = at.find(d => d.targetPartKey === 'rh:flue_front')!
+      // Sides: from inside the box, centred front-to-back on the side.
+      expect(l.axis).toBe('x-'); expect(l.x).toBeCloseTo(cx0); expect(l.z).toBeCloseTo(rib.Z + 250 / 2)
+      expect(r.axis).toBe('x+'); expect(r.x).toBeCloseTo(cx1); expect(r.z).toBeCloseTo(l.z)
+      // Front: centred across it, bored through.
+      expect(f.x).toBeCloseTo(F.X + F.DY / 2)
+      expect(f.depthLen).toBe(16.5)
+    }
   })
 
   it('mirrors for a left-hand curve', () => {

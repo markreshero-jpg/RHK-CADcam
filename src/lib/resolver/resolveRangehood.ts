@@ -247,5 +247,21 @@ function resolveCurvedRangehood(
   for (const rib of ribs.filter(p => p.Y > shelf.Y + 0.5)) add(`case_${rib.part_key}`, notch('rh_flue_box', rib, bx0, r2(bx1 - bx0), bd))
 
   flueBox(cab, out, { cx0, cx1, zBack, zFront, y0, y1, H, T }, { key: shelf.part_key, Y: shelf.Y }, { key: 'crv:top', Y: top.Y, DZ: top.DZ })
+
+  // Each box piece screwed into every rib it passes (Mark, 2026-11-05): one
+  // hole centred along the piece, mid the rib's thickness, bored through the
+  // piece from inside the box (part B = the piece, part A = the rib's notch edge).
+  const UP = { x: 0, y: 1, z: 0 }, AX = { x: 1, y: 0, z: 0 }, AZ = { x: 0, y: 0, z: 1 }
+  for (const rib of ribs.filter(p => p.Y > shelf.Y + 0.5 && p.Y < top.Y - 0.5)) {
+    const pieces = [
+      { key: 'rh:flue_l',     origin: { x: r2(cx0 - T), z: zBack },        along: AZ, length: flue.d,             toward: { x: -1, y: 0, z: 0 } },
+      { key: 'rh:flue_r',     origin: { x: r2(cx1 + T), z: zBack },        along: AZ, length: flue.d,             toward: AX },
+      { key: 'rh:flue_front', origin: { x: r2(cx0 - T), z: r2(zFront + T) }, along: AX, length: r2(flue.w + 2 * T), toward: AZ },
+    ]
+    for (const pc of pieces) out.seams.push({
+      seam_key: `${rib.part_key}|${pc.key}`, generic_key: RH_SEAMS.rib, part_a_key: rib.part_key, part_b_key: pc.key,
+      geom: { origin: { ...pc.origin, y: rib.Y }, along: pc.along, across: UP, toward: pc.toward, length: pc.length, width: rib.DZ },
+    })
+  }
   return out
 }
