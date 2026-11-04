@@ -1,0 +1,15 @@
+{
+  "projectName": "Hafele Test Slider Job",
+  "createProject": true,
+  "clientName": "Hafele test",
+  "roomName": "Robe",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0,    "y": 600, "length": 600,  "angle": 270 },
+    { "x": 0,    "y": 0,   "length": 2300, "angle": 0 },
+    { "x": 2300, "y": 0,   "length": 600,  "angle": 90 }
+  ],
+  "cabinets": [
+    { "def": "T2D/SLD", "wall": 2, "offset": 0, "dx": 2300, "dy": 2100, "dz": 600, "note": "Hafele Slider SC 2 door test" }
+  ]
+}

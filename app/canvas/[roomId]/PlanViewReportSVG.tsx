@@ -554,7 +554,8 @@ export default function PlanViewReportSVG({
             d={`M ${a.x} ${a.y} A ${bf.arc.r} ${bf.arc.r} 0 0 ${sweepFlag(c, a, b)} ${b.x} ${b.y} M ${t0.x} ${t0.y} L ${t1.x} ${t1.y}`}
             fill="none" stroke={INK} strokeWidth={swW} opacity={swP.opacity} strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
         }
-        if (layers.show('door_swings') && !bf) {
+        // Slider SC sliding doors (z_slider_sc) don't swing.
+        if (layers.show('door_swings') && !bf && !resolvedParts?.get(cab.id)?.slider) {
           const baseCross  = wd.x * perp.y - wd.y * perp.x
           const leftSweep  = baseCross > 0 ? 1 : 0
           const rightSweep = 1 - leftSweep

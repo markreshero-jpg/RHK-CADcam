@@ -1678,7 +1678,8 @@ export default function CanvasSVG({
           }
 
           // Door swing arcs — one per column (rows irrelevant in plan view)
-          if (layers.show('door_swings') && !bf) {
+          // Slider SC sliding doors (z_slider_sc) don't swing.
+          if (layers.show('door_swings') && !bf && !resolvedParts?.get(cab.id)?.slider) {
             const swingCol = layers.colorOf('door_swings')
             const swingPaint = swingCol
               ? { fill: swingCol, fillOpacity: 0.08, stroke: swingCol, strokeOpacity: 0.4, opacity: layers.op('door_swings') }
