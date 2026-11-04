@@ -150,6 +150,19 @@ New table `room_annotations` (job data):
 | style | jsonb | sizes in paper mm, plus colours: `{color, size, bold, italic, underline, align, lineSpacing, bg: none/mask/solid, bgColor, bgPad, border: none/box/round, borderColor, borderWeight, borderDash, weight, dash, fill: none/solid/tint, fillColor, fillOpacity, arrowStart, arrowEnd, arrowSize}`. All optional; missing keys use defaults. |
 | sort_order | int | draw order |
 | created_at / updated_at | timestamptz | |
+| origin | text | `auto` / `user`, trigger-set from the inserter (automation@rhk.local = auto). A7 |
+| user_edited_at | timestamptz null | set by trigger on any edit by a non-automation user. A7 |
+
+### Automation vs user CAD (A7, LOCKED, Mark 2026-11-04)
+
+Automation may delete only `origin = 'auto'` rows the user never edited
+(`user_edited_at is null`). User CAD, and automation CAD the user has touched,
+can only be **edited** by automation, never deleted or replaced. Enforced by the
+`room_annotations_delete_guard` trigger (raises "Protected CAD …", also on
+cascades from wall / cabinet / room deletes). The app (any person's login) can
+still delete anything. Escape hatch for an explicit request:
+`force_delete_annotations(ids uuid[])`. The 511 rows that existed before A7 were
+backfilled `user` (no creator was recorded). SQL: `migration_a7_cad_origin_guard.sql`.
 
 - A check constraint ties `view` to its owner columns (elevation needs `wall_id`,
   cabinet_sheet needs `cabinet_id` + `sheet_view`).

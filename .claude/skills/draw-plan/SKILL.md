@@ -638,7 +638,29 @@ Extra fields (full example: `layouts/rhk6456-morris-kitchen.json`):
   re-resolves and re-persists it. Seen on BC-01 for RHK6581.
 - Chrome path override: `CHROME_PATH` env var. Dev port override: `DEV_PORT`.
 - To redo a room: delete its `cabinet_instances` rows (parts cascade), then its
-  `walls`, then rerun — or delete the room row entirely and rerun.
+  `walls`, then rerun — or delete the room row entirely and rerun. If the room
+  has protected CAD (below) those deletes fail; keep the walls / cabinets and
+  edit them instead, or ask Mark.
+
+## Mark's CAD is never deleted (LOCKED, Mark 2026-11-04)
+
+`room_annotations` rows carry `origin` (`auto` = inserted by
+automation@rhk.local, `user` = Mark) and `user_edited_at` (set when Mark edits
+any row in the app). Both are trigger-set (z_CAD_tool A7).
+
+- **Never** wipe-and-reinsert CAD (`delete().eq('room_id', R)` /
+  `.eq('view', 'elevation')`). To redo your own CAD, delete only
+  `origin = 'auto'` rows with `user_edited_at is null`, then insert.
+- CAD Mark drew, or your CAD that Mark has edited, may only be **updated in
+  place** (`update().eq('id', …)`) — never deleted, never replaced by a fresh row.
+  Keep his edits; change only what the revision needs.
+- A DB trigger rejects automation deletes of protected rows ("Protected CAD …"),
+  including cascades from deleting a wall / cabinet / room. On that error, don't
+  work around it: edit the CAD, keep the wall/cabinet, or ask Mark.
+- Prefer updating walls and cabinets in place to delete-and-redraw, since
+  elevation / cabinet-sheet CAD hangs off them.
+- Only when Mark explicitly names items to delete:
+  `sb.rpc('force_delete_annotations', { ids: [...] })`.
 
 ## Deeper references (next to this file)
 
