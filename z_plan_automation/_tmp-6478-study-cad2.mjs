@@ -27,9 +27,8 @@ for (const [l, w] of [[240, 860], [1100, 858], [1958, 858]]) note('Wall 1', l, w
 
 // ── Wall 3 (offset 0 = window wall): desk top 750, overheads 1500-2353 (under panels 1500-1516.5), 30 BH to 2383
 const W3_OPEN = openings(1500, [278.833, 557.667], 836.5)      // 262.3 x 3, bottom on the under panel line
-for (const left of [822, 2408]) vchain('Wall 3', left + 60, W3_OPEN)
-note('Wall 3', 822, 792, 2300, 'OPEN SHELF')
-note('Wall 3', 2408, 792, 2300, 'OPEN SHELF')
+for (const left of [30, 1614, 3200]) vchain('Wall 3', left + 150, W3_OPEN)
+for (const [l, w] of [[30, 792], [1614, 794], [3200, 792]]) note('Wall 3', l, w, 2300, 'OPEN SHELF')
 
 // ── Plan: spec block + site notes, clear of the dims (x = wall end + 700)
 const spec = 'SPECIFICATIONS - {room}\n{job}\n\nBENCHTOP\n33mm LX Sublime Teak\n\nDESK TOP\n6mm toughened glass (by RHK)\n\nFRONTS + PANELS\nLX Sublime Teak\n\nCARCASS\nWhiteboard - open boxes Sublime Teak inside\n\nSPLASH PANEL\n2 Pac - colour TBC'
