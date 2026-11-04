@@ -5,6 +5,7 @@
 // set's per-view items. Docked right so the canvas stays visible; edits preview live.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { evalCalc } from '@/src/lib/calc'
 import {
   LAYER_GROUPS, LAYER_VIEWS, WEIGHT_OPTIONS, OPACITY_OPTIONS, CABINET_FILL_CLASSES, FILL_PATTERNS, itemsForView,
   type FillPattern, type LayerSet, type LayerSetSettings, type LayerStyle, type LayerViewId, type ViewLayerSettings,
@@ -48,23 +49,29 @@ function OffsetInput({ value, onCommit, disabled }: {
 }) {
   const [text, setText] = useState(String(value))
   const justFocused = useRef(false)
-  useEffect(() => { setText(t => (Number(t) === value && t.trim() !== '' ? t : String(value))) }, [value])
+  useEffect(() => { setText(t => (evalCalc(t) === value ? t : String(value))) }, [value])
+  // a plain number applies as you type; a sum (200+100) applies on Enter / blur
+  const plain = (t: string) => /^\s*-?\d*\.?\d+\s*$/.test(t)
   const commit = (t: string) => {
-    const n = Number(t)
-    if (t.trim() !== '' && Number.isFinite(n) && n !== value) onCommit(n)
+    const n = evalCalc(t)
+    if (n != null && n !== value) onCommit(n)
   }
   return (
-    <input type="number" step={25} value={text} disabled={disabled}
+    <input type="text" inputMode="decimal" autoComplete="off" value={text} disabled={disabled}
       title="Offset (mm): extra distance out from what it measures; negative pulls it in. Rows outside move with it."
       onFocus={e => { e.currentTarget.select(); justFocused.current = true }}
       onMouseUp={e => { if (justFocused.current) e.preventDefault(); justFocused.current = false }}
-      onChange={e => { setText(e.target.value); commit(e.target.value) }}
+      onChange={e => { setText(e.target.value); if (plain(e.target.value)) commit(e.target.value) }}
       onKeyDown={e => {
+        if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault(); const n = (evalCalc(text) ?? value) + (e.key === 'ArrowUp' ? 25 : -25); setText(String(n)); commit(String(n)); return
+        }
         if (e.key !== 'Enter') return
         commit(text)
+        const n = evalCalc(text); if (n != null) setText(String(n))
         e.currentTarget.select()
       }}
-      onBlur={() => { if (text.trim() === '' || !Number.isFinite(Number(text))) setText(String(value)) }}
+      onBlur={() => { const n = evalCalc(text); if (n == null) setText(String(value)); else { commit(text); setText(String(n)) } }}
       className="w-14 bg-gray-800 border border-gray-700 rounded px-1 py-0.5 text-[11px] text-gray-300 disabled:opacity-40" />
   )
 }

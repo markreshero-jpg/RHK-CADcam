@@ -14,6 +14,7 @@ import {
   segLength, segAngle, dimLayout, dimText, boundsOf, annotationFramePoints,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
+import { evalCalc } from '@/src/lib/calc'
 import type { AnnotationTool, TypedField } from './useAnnotationTool'
 import type { Wall } from '@/src/lib/types'
 import type { CadFieldValues } from '@/src/lib/annotations/blocks'
@@ -68,7 +69,9 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
         const sg = f === 'y' ? ys : 1   // elevation: Z up, stored y down
         const t = cad.typed[f] != null ? sg * cad.typed[f]! : undefined
         const draft = drafts[f]
-        const shown = t != null ? (draft ?? String(t)) : draft && !Number.isFinite(parseFloat(draft)) ? draft : ''
+        // an unfinished sum ("200+") stays visible; a stale plain number left after a canvas place is hidden
+        const shown = t != null ? (draft ?? String(t)) : draft && evalCalc(draft) == null ? draft : ''
+        const sum = draft != null && /[-+*/(]/.test(draft.trim().slice(1)) ? evalCalc(draft) : null
         return (
           <label key={f} className="flex items-center gap-2">
             <span className="text-[11px] text-gray-400 w-12">{f === 'y' && ys < 0 ? 'Z' : TYPED_LABEL[f][0]}</span>
@@ -77,8 +80,8 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
               onChange={e => {
                 const v = e.target.value
                 setDrafts(d => ({ ...d, [f]: v }))
-                const n = parseFloat(v)
-                cad.setTyped(f, v.trim() && Number.isFinite(n) ? sg * n : undefined)
+                const n = evalCalc(v)   // sums allowed: 200+100, 1200/2, (900-18*2)
+                cad.setTyped(f, n != null ? sg * n : undefined)
               }}
               onKeyDown={e => {
                 if (e.key === 'Tab') {
@@ -93,6 +96,7 @@ function TypedEntryFields({ cad }: { cad: AnnotationTool }) {
               }}
               className={`w-24 h-7 bg-gray-800 border rounded px-1.5 text-sm font-mono outline-none ${t != null ? 'border-yellow-500 text-yellow-200' : 'border-gray-700 text-gray-100'} focus:border-rose-500`} />
             <span className="text-[10px] text-gray-500">{TYPED_LABEL[f][1]}</span>
+            {sum != null && <span className="text-[10px] text-gray-400">= {r1(sum)}</span>}
             {t != null && <span className="text-[10px] text-yellow-400">locked</span>}
           </label>
         )
@@ -135,9 +139,9 @@ function Field({ label, value, onCommit, suffix, w = 'w-20', disabled }: {
   const shown = draft ?? r1(value)
   const commit = () => {
     if (draft == null) return
-    const n = parseFloat(draft)
+    const n = evalCalc(draft)   // sums allowed: 200+100
     setDraft(null)
-    if (Number.isFinite(n) && onCommit && Math.abs(n - value) > 1e-9) onCommit(n)
+    if (n != null && onCommit && Math.abs(n - value) > 1e-9) onCommit(n)
   }
   return (
     <label className="flex items-center gap-1 min-w-0">
@@ -357,7 +361,7 @@ function MultiInfo({ sel, k, cad }: { sel: RoomAnnotation[]; k: number; cad: Ann
     else el.select()
   }, [req?.n])   // eslint-disable-line react-hooks/exhaustive-deps
   if (!b) return null
-  const num = (s?: string) => { const n = s != null && s.trim() ? parseFloat(s) : NaN; return Number.isFinite(n) ? n : null }
+  const num = (s?: string) => evalCalc(s)   // sums allowed: 200+100
   const field = (f: 'x' | 'y', ref: React.RefObject<HTMLInputElement | null>, cur: number) => (
     <label className="flex items-center gap-2">
       <span className="text-[11px] text-gray-400 w-12">{f === 'y' && ys < 0 ? 'Z' : f.toUpperCase()}</span>

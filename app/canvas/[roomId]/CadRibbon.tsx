@@ -14,6 +14,7 @@ import { useTutorial } from '@/src/lib/tutorial/store'
 import type { AnnotationTool, CadTool } from './useAnnotationTool'
 import type { CadLayer } from '@/src/lib/types'
 import { sortCadLayers } from '@/src/lib/annotations/cadLayers'
+import { evalCalc } from '@/src/lib/calc'
 
 const generalId = (list: CadLayer[]) => list.find(l => l.is_default)?.id ?? ''
 
@@ -78,10 +79,25 @@ function Colour({ value, onChange, title }: { value: string; onChange: (c: strin
 function Num({ value, onChange, title, step = 0.5, min, max, w = 'w-12', suffix }: {
   value: number; onChange: (n: number) => void; title: string; step?: number; min?: number; max?: number; w?: string; suffix?: string
 }) {
+  // Text field so sums can be typed (2.5+1, 10/4). A plain number applies as you type;
+  // a sum applies on Enter / blur. Arrow keys step. Esc reverts.
+  const [draft, setDraft] = useState<string | null>(null)
+  const clamp = (n: number) => Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n))
+  const commit = () => { if (draft == null) return; const n = evalCalc(draft); setDraft(null); if (n != null) onChange(clamp(n)) }
   return (
     <label title={title} className="flex items-center gap-0.5 shrink-0">
-      <input type="number" value={value} step={step} min={min} max={max}
-        onChange={e => { const n = parseFloat(e.target.value); if (Number.isFinite(n)) onChange(n) }}
+      <input type="text" inputMode="decimal" autoComplete="off" spellCheck={false} value={draft ?? String(value)}
+        onFocus={e => e.currentTarget.select()}
+        onChange={e => { const v = e.target.value; setDraft(v); if (/^\s*-?\d*\.?\d+\s*$/.test(v)) onChange(clamp(parseFloat(v))) }}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit() }
+          else if (e.key === 'Escape') { e.stopPropagation(); setDraft(null) }
+          else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+            e.preventDefault(); setDraft(null)
+            onChange(clamp(Math.round(((evalCalc(draft) ?? value) + (e.key === 'ArrowUp' ? step : -step)) * 1000) / 1000))
+          }
+        }}
         className={`${w} h-6 bg-gray-800 border border-gray-700 rounded px-1 text-xs text-gray-100 outline-none focus:border-rose-500`} />
       {suffix && <span className="text-[10px] text-gray-500">{suffix}</span>}
     </label>

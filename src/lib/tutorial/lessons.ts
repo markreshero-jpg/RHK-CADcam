@@ -1616,6 +1616,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Foot is where the curve meets the floor and Reach is where it meets the apron underside, both measured from the waterfall’s outer face. The curve is a quarter-ellipse: upright at the floor, flat at the apron. Look at that side’s elevation and the 3D. The Benchtop Supply report lists the skirt as a shaped stone piece with its area.',
       canvas: true, done: c => c.benchtops.some(b => b.segments.some(s => !!s.edge?.waterfall_skirt && s.edge.waterfall_skirt.reach_mm !== 2100)) },
   ]},
+
+  // Appended 2026-11-04 (z_CAD_tool: sums in CAD number fields).
+  { id: 'cad_sums', level: 'basics', topic: 'cad', title: 'Type sums into CAD fields',
+    blurb: 'Every CAD number field takes a sum, e.g. 200+100 or 1200/2.',
+    keywords: 'cad calc calculator sum maths math add subtract plus minus formula arithmetic length angle typed field', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar.',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'line', title: 'Draw a line with a sum for its length',
+      body: 'Pick Line (L) and click a start point. In the Length field in the CAD panel, type a sum like 600+450 (shown as = 1050 next to the field) and press Enter to place it. + - * / and brackets all work, e.g. (900-18*2)/2.',
+      canvas: true, done: (c, s) => c.annotations.filter(a => a.kind === 'line').length > s.annotations.filter(a => a.kind === 'line').length },
+    { id: 'edit', title: 'Use a sum to edit it',
+      body: 'Select the line and change a point’s X or Y in the panel to something like 1200+50. It works the same in the Move to fields, text size and line weight in the ribbon, and dimension offsets in the Layer Manager. A plain number applies as you type; a sum applies on Enter or when you click away. Arrow keys still step the value up and down.',
+      canvas: true, done: c => c.annotSelected > 0 },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
