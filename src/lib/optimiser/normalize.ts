@@ -283,7 +283,9 @@ export function normalizeProject(
     // Back + horizontals: u runs bottom→top (back panels) / back→front where the
     // horizontal 'bottom' flag is the back edge; v runs left→right.
     // A turned island back panel (below) nests w = its width: tape pairs as a side's.
-    const sidePairs = isSide || ((key.startsWith('ibp:') || key.startsWith('lh:')) && r.grain_direction === 'vertical')
+    // So does a vertical-grain finger rail / rail base (nested turned too, below):
+    // its long-edge tape must follow the length onto w.
+    const sidePairs = isSide || ((key.startsWith('ibp:') || key.startsWith('lh:') || key.startsWith('fprail:') || key.startsWith('fpbase:')) && r.grain_direction === 'vertical')
     const eb = ebFields(flagsOf(r), tFor(r),
       sidePairs ? ['left', 'right'] : ['bottom', 'top'],
       sidePairs ? ['bottom', 'top'] : ['left', 'right'])

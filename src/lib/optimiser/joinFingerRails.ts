@@ -74,17 +74,25 @@ export function joinFingerRails(parts: OptiPart[], rects: Map<string, RailWallRe
   return out
 }
 
-// Rails are face-kind panels (DX = height, DY = length): the run adds up along h.
+// Rails are face-kind panels (DX = height, DY = length): the run adds up along h
+// — along w for a vertical-grain rail, which normalize nests turned.
+// Tape: the joined rail takes every member's tape (its long edges; rail ends are
+// never taped), summed per tape product. It was dropped here, so joined rails
+// were missing from the edgeband report / takeoff / labels.
 function joined(run: OptiPart[]): OptiPart {
   const first = run[0]
-  const h = run.reduce((s, p) => s + p.h, 0)
+  const alongW = first.w > first.h
+  const len = run.reduce((s, p) => s + (alongW ? p.w : p.h), 0)
   const labels = run.map(p => p.cabinet_label)
   const note = `Joined rail: ${labels.join(' + ')}`
+  const tape = new Map<string | null, number>()
+  for (const p of run) for (const t of p.eb_tape ?? []) tape.set(t.id, (tape.get(t.id) ?? 0) + t.mm)
+  const eb_tape = [...tape].map(([id, mm]) => ({ id, mm: Math.round(mm * 10) / 10 })).filter(t => t.mm > 0)
   return {
     ...first,
-    h,
+    ...(alongW ? { w: len } : { h: len }),
     cabinet_label: labels.join('/'),
     comment: first.comment ? `${first.comment} · ${note}` : note,
-    eb_tape: undefined,
+    eb_tape: eb_tape.length ? eb_tape : undefined,
   }
 }

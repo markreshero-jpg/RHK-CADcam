@@ -24,6 +24,26 @@ describe('joinFingerRails (z_handles D19)', () => {
     expect(out[0].cabinet_label).toBe('BC-02/BC-03/BC-04')
     expect(out[0].comment).toBe('Joined rail: BC-02 + BC-03 + BC-04')
   })
+  it('the joined rail carries every member rail tape, summed per tape', () => {
+    const out = run([
+      rail('a', 'BC-02', 0, 600, 460, 40, { eb_tape: [{ id: 'oak', mm: 1200 }] }),
+      rail('b', 'BC-03', 600, 900, 460, 40, { eb_tape: [{ id: 'oak', mm: 1800 }] }),
+      rail('c', 'BC-04', 1500, 500, 460, 40, { eb_tape: [{ id: 'oak', mm: 500 }, { id: null, mm: 500 }] }),
+    ])
+    expect(out).toHaveLength(1)
+    expect(out[0].h).toBe(2000)
+    expect(out[0].eb_tape).toEqual([{ id: 'oak', mm: 3500 }, { id: null, mm: 500 }])
+  })
+  it('joins a vertical-grain rail (nested turned) along w', () => {
+    const turned = (id: string, cab: string, x: number, len: number): [OptiPart, RailWallRect] => {
+      const [p, r] = rail(id, cab, x, len)
+      return [{ ...p, w: len, h: 60, grain_direction: 'vertical', eb_tape: [{ id: 'oak', mm: 2 * len }] }, r]
+    }
+    const out = run([turned('a', 'A', 0, 600), turned('b', 'B', 600, 700)])
+    expect(out).toHaveLength(1)
+    expect([out[0].w, out[0].h]).toEqual([1300, 60])
+    expect(out[0].eb_tape).toEqual([{ id: 'oak', mm: 2600 }])
+  })
   it('keeps rails at different heights, depths or boards apart', () => {
     expect(run([rail('a', 'A', 0, 600), rail('b', 'B', 600, 600, 210, 45)])).toHaveLength(2)
     expect(run([rail('a', 'A', 0, 600), rail('b', 'B', 600, 600, 460, 40, { material_id: 'white' })])).toHaveLength(2)
