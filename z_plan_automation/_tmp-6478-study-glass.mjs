@@ -15,7 +15,7 @@ const NAME = 'Glass 6mm – Clear Toughened'
 let mat = chk('m', await sb.from('materials').select('id').eq('name', NAME))[0]
 if (!mat) mat = chk('mi', await sb.from('materials').insert({ name: NAME, brand: 'Generic', finish: 'Clear toughened', dz: 6, sheet_dx: 3660, sheet_dy: 2440,
   has_grain: false, grain_direction: null, active: true, notes: 'Bought-in glass (cut to size by the supplier, not CNC). Use for glass custom parts (desk / shelf tops); glass doors use the Glass Door tool sets.',
-  face_colour: '#bfdfe2', back_colour: '#bfdfe2', edge_colour: '#7fb8bd', colour_name: 'Clear', cnc_tool_id: null }).select('id'))[0]
+  face_colour: '#9cc3dd', back_colour: '#9cc3dd', edge_colour: '#5f8fb0', colour_name: 'Clear', cnc_tool_id: null }).select('id'))[0]
 console.log('material', mat.id)
 const cab = chk('c', await sb.from('cabinet_instances').select('id').eq('room_id', R).eq('label', 'BC-11'))[0]
 const parts = chk('cp', await sb.from('cabinet_custom_parts').select('*').eq('cabinet_instance_id', cab.id))
