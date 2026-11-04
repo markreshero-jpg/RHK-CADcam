@@ -323,16 +323,24 @@ feature. First use: the finishes **spec block** on the plan (RHK6570 vanities).
 
 | `{sinks}` / `{taps}` | sinks / taps placed in the room, one per line: the fixture's **Label** when set (Mark 2026-10-25: placeholder models until the client confirms; ✕ Remove override under the field clears it), else brand (if not in the name) + name + model no. + (W x D x H); repeats as "2 x …" |
 | `{ovens}` / `{cooktops}` / `{rangehoods}` / `{dishwashers}` | appliances by fixture kind (Oven + Cooker → ovens), same line format |
-| `{appliances_other}` / `{appliances}` | appliances of any other kind (microwave, washer…) / every appliance |
+| `{fridges}` / `{freezers}` / `{microwaves}` | by kind (Mark 2026-11-05); a Fridge-kind fixture named "…freezer" (no "fridge") counts as a freezer — the catalog has no Freezer kind yet |
+| `{appliances_other}` / `{appliances}` | appliances of any other kind (washer, dryer, BBQ…) / every appliance |
 | `{bins}` | pull-out bins behind the room's bin fronts (brand + product, e.g. "Nikpol Teramo 74L"; "2 x" for repeats). Bins are no longer counted in `{runners}` lengths (Mark 2026-10-25) |
 
 An unknown token stays as typed; a field with no value shows `-`.
+**Empty fixture sections hide** (Mark 2026-11-05): when a section (heading + lines up to the
+next blank line) holds only fixture fields (`{sinks}` … `{microwaves}`, `{appliances_other}`, `{bins}`,
+`{appliances}`) and none has a value, the heading and section are left out on the canvas / print
+(`fillFields`). Typed text in the section keeps it. Other fields (runners, hinges…) still show `-`.
 
 **Appliance spec block** (Mark, 2026-10-25, trial on RHK6581 J05): a second
 library block, placed under the finishes Spec block — APPLIANCES + SINKS /
-SINK / TAPWARE / OVENS / COOKTOP / RANGEHOOD / DISHWASHER / BIN / OTHER APPLIANCES.
+SINK / TAPWARE / OVENS / COOKTOP / RANGEHOOD / DISHWASHER / BIN / FRIDGE / FREEZER /
+MICROWAVE / OTHER APPLIANCES (standard from 2026-11-05, Mark, after RHK6478 Kitchen).
 Lists only fixtures actually placed (cabinet gaps like a fridge space or an
-integrated DW slot need a fixture to show). Trim sections the room doesn't have.
+integrated DW slot need a fixture to show); sections with nothing placed hide
+themselves, so there's no need to trim. Type a line under a heading to keep it
+for an appliance that isn't placed as a fixture.
 
 ### Phases
 

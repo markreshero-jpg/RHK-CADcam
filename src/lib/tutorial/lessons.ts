@@ -862,7 +862,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Under CAD blocks, click Appliance spec block. It drops in to the right of the walls, below the finishes Spec block if there is one.',
       canvas: true, done: (c, s) => notes(c, true) > notes(s, true) },
     { id: 'fields', title: 'It lists what you placed',
-      body: 'Each section fills from the fixtures in the room: name, brand, model no. and W x D x H, with "2 x" for repeats. If the sink or tap is only a stand-in, type what to show in the fixture’s Label (e.g. "Sink TBC by client"); ✕ Remove override under the field puts the model back. Place or swap a fixture and the block follows. A section with nothing placed shows "-": double-click the block and delete that section.',
+      body: 'Each section fills from the fixtures in the room: name, brand, model no. and W x D x H, with "2 x" for repeats. If the sink or tap is only a stand-in, type what to show in the fixture’s Label (e.g. "Sink TBC by client"); ✕ Remove override under the field puts the model back. Place or swap a fixture and the block follows. Fridges, freezers and microwaves each get their own section. A section with nothing placed (no fridge, say) hides itself, heading too; type a line under a heading to keep it for something that isn’t placed as a fixture.',
       canvas: true, done: c => c.mode === 'cad' },
   ]},
 

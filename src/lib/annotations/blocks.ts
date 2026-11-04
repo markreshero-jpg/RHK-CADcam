@@ -161,6 +161,9 @@ export const CAD_FIELDS: { key: string; label: string }[] = [
   { key: 'cooktops',    label: 'Cooktops' },
   { key: 'rangehoods',  label: 'Rangehoods' },
   { key: 'dishwashers', label: 'Dishwashers' },
+  { key: 'fridges',     label: 'Fridges' },
+  { key: 'freezers',    label: 'Freezers' },
+  { key: 'microwaves',  label: 'Microwaves' },
   { key: 'appliances_other', label: 'Other appliances' },
   { key: 'bins',        label: 'Pull-out bins' },
   { key: 'appliances',  label: 'All appliances' },
@@ -173,7 +176,13 @@ type SpecFixture = Pick<RoomFixture, 'category' | 'kind' | 'name' | 'brand' | 'm
 /** Appliance kinds with their own field; anything else goes to {appliances_other}. */
 const APPLIANCE_FIELDS: Record<string, string> = {
   oven: 'ovens', cooker: 'ovens', cooktop: 'cooktops', rangehood: 'rangehoods', dishwasher: 'dishwashers',
+  fridge: 'fridges', freezer: 'freezers', microwave: 'microwaves',
 }
+
+/** Fields listing placed fixtures: a section (heading + lines up to a blank line)
+ *  holding only these, all empty, is left out when filled (Mark 2026-11-05: no
+ *  FRIDGE heading when there's no fridge). Typed text in a section keeps it. */
+const FIXTURE_FIELDS = new Set(['sinks', 'taps', 'ovens', 'cooktops', 'rangehoods', 'dishwashers', 'fridges', 'freezers', 'microwaves', 'appliances_other', 'bins', 'appliances'])
 
 /** One spec line: the fixture's label as typed (e.g. a placeholder sink "TBC by
  *  client", Mark 2026-10-25), else brand (when the name doesn't already say it) +
@@ -198,13 +207,17 @@ function specLines(xs: SpecFixture[]): string {
 /** {sinks} / {taps} / {ovens} / ... for the fixtures placed in a room. */
 export function fixtureSpecFields(fixtures: SpecFixture[]): CadFieldValues {
   const apps = fixtures.filter(f => f.category === 'appliance')
-  const field = (f: SpecFixture) => APPLIANCE_FIELDS[(f.kind ?? '').trim().toLowerCase()] ?? 'appliances_other'
+  const field = (f: SpecFixture) => {
+    const k = APPLIANCE_FIELDS[(f.kind ?? '').trim().toLowerCase()] ?? 'appliances_other'
+    // the catalog has no Freezer kind yet: a Fridge named "... freezer" is a freezer
+    return k === 'fridges' && /freezer/i.test(f.name) && !/fridge/i.test(f.name) ? 'freezers' : k
+  }
   const out: CadFieldValues = {
     sinks:      specLines(fixtures.filter(f => f.category === 'sink')),
     taps:       specLines(fixtures.filter(f => f.category === 'tap')),
     appliances: specLines(apps),
   }
-  for (const k of ['ovens', 'cooktops', 'rangehoods', 'dishwashers', 'appliances_other']) out[k] = specLines(apps.filter(f => field(f) === k))
+  for (const k of ['ovens', 'cooktops', 'rangehoods', 'dishwashers', 'fridges', 'freezers', 'microwaves', 'appliances_other']) out[k] = specLines(apps.filter(f => field(f) === k))
   return out
 }
 
@@ -212,10 +225,26 @@ export type CadFieldValues = Record<string, string>
 
 const TOKEN = /\{([a-z_]+)\}/g
 
+/** A section whose lines under the heading are only fixture fields, all empty. */
+function emptyFixtureSection(block: string, values: CadFieldValues): boolean {
+  const body = block.split('\n').slice(1).map(l => l.trim()).filter(Boolean)
+  if (!body.length) return false
+  return body.every(l => {
+    const m = /^\{([a-z_]+)\}$/.exec(l)
+    return !!m && FIXTURE_FIELDS.has(m[1]) && m[1] in values && !values[m[1]]?.trim()
+  })
+}
+
 /** Replace `{field}` tokens with their values; unknown tokens stay as typed, a
- *  known field with no value shows "-". */
+ *  known field with no value shows "-". A section listing only fixture fields
+ *  with nothing placed is dropped (heading too). */
 export function fillFields(text: string | null, values: CadFieldValues | null | undefined): string | null {
   if (text == null || !values || !text.includes('{')) return text
+  if ([...text.matchAll(TOKEN)].some(m => FIXTURE_FIELDS.has(m[1]))) {
+    const blocks = text.split(/\n[ \t]*\n/)
+    const kept = blocks.filter((b, i) => i === 0 || !emptyFixtureSection(b, values))
+    if (kept.length !== blocks.length) text = kept.join('\n\n')
+  }
   return text.replace(TOKEN, (m, key: string) =>
     key in values ? (values[key]?.trim() || '-') : CAD_FIELDS.some(f => f.key === key) ? '-' : m)
 }

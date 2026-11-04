@@ -64,10 +64,30 @@ describe('appliance spec fields', () => {
     ])
     expect(v.ovens).toBe('2 x Oven 600 (600 x 600 x 600)')
     expect(v.cooktops).toBe('Induction 900 (900 x 600 x 600)')
-    expect(v.appliances_other).toBe('MW (600 x 600 x 600)')
+    expect(v.microwaves).toBe('MW (600 x 600 x 600)')
+    expect(v.appliances_other).toBe('')
     expect(v.rangehoods).toBe('')
     expect(v.sinks).toBe('Sink (600 x 600 x 600)')
     expect(fillFields('RANGEHOOD\n{rangehoods}', v)).toBe('RANGEHOOD\n-')
     expect(fixtureSpecLine(fx({ category: 'sink', name: 'Abi Zalo', label: ' Sink TBC by client ' }))).toBe('Sink TBC by client')
+  })
+
+  it('splits fridges / freezers; a Fridge-kind named freezer is a freezer', () => {
+    const v = fixtureSpecFields([
+      fx({ kind: 'Fridge', name: 'Liebherr IRBH5120 fridge' }), fx({ kind: 'Fridge', name: 'Liebherr SIFNH5128 freezer' }),
+      fx({ kind: 'Freezer', name: 'Chest' }), fx({ kind: 'Washing machine', name: 'WM' }),
+    ])
+    expect(v.fridges).toBe('Liebherr IRBH5120 fridge (600 x 600 x 600)')
+    expect(v.freezers).toBe('Liebherr SIFNH5128 freezer (600 x 600 x 600)\nChest (600 x 600 x 600)')
+    expect(v.appliances_other).toBe('WM (600 x 600 x 600)')
+  })
+
+  it('drops a section listing only empty fixture fields, keeps typed ones', () => {
+    const v = fixtureSpecFields([fx({ kind: 'Oven', name: 'Oven' })])
+    const t = 'APPLIANCES - {room}\n{job}\n\nOVENS\n{ovens}\n\nFRIDGE\n{fridges}\n\nRANGEHOOD\nFalmec 90\n\nFREEZER\n{freezers}\n\nMICROWAVE\n{microwaves}'
+    expect(fillFields(t, { ...v, room: 'Kitchen', job: 'J1' }))
+      .toBe('APPLIANCES - Kitchen\nJ1\n\nOVENS\nOven (600 x 600 x 600)\n\nRANGEHOOD\nFalmec 90')
+    // other fields don't hide: the finishes block still shows "-"
+    expect(fillFields('X\n\nRUNNERS\n{runners}', { ...v, runners: '' })).toBe('X\n\nRUNNERS\n-')
   })
 })
