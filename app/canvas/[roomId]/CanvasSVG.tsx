@@ -1,4 +1,5 @@
 'use client'
+import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
@@ -1678,6 +1679,14 @@ export default function CanvasSVG({
           }
 
           // Door swing arcs — one per column (rows irrelevant in plan view)
+          // Slider SC tracks + door profiles (z_slider_sc), in place of swings.
+          const slRp = resolvedParts?.get(cab.id)
+          if (slRp?.slider && layers.show('slider')) {
+            nodes.push(<SliderShapesSVG key={`slider-${cab.id}`} rp={slRp} plan
+              project={(x, _y, zz) => ({ x: fo.x + x * wd.x + zz * perp.x, y: fo.y + x * wd.y + zz * perp.y })}
+              stroke={layers.color('slider', '#94a3b8')} strokeWidth={layers.w('slider', 0.6) / lz}
+              dash={`${4 / view.zoom} ${2 / view.zoom}`} opacity={layers.op('slider')} />)
+          }
           // Slider SC sliding doors (z_slider_sc) don't swing.
           if (layers.show('door_swings') && !bf && !resolvedParts?.get(cab.id)?.slider) {
             const swingCol = layers.colorOf('door_swings')

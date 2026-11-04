@@ -1,5 +1,6 @@
 'use client'
 
+import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import { useState, useEffect, useRef, useMemo } from 'react'
 import CabinetFixturesOverlay from './CabinetFixturesOverlay'
 import type { LocalFixtureBox } from '@/src/lib/cabinetContents'
@@ -828,6 +829,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
       <HingeShapes rp={rp} project={proj} />
       <RailBlockShapes rp={rp} project={proj} />
       <BifoldTrackShapes rp={rp} project={proj} />
+      <SliderShapesSVG rp={rp} project={(x, y, z) => (proj as (a: number, b: number, c: number) => { x: number; y: number })(x, y, z)} stroke="#9ca3af" strokeWidth={0.6} nonScaling />
       <SharknoseLinesSVG zones={rp.face_zones} project={(x, y) => ({ x: ox + x, y: oy + dy - y })}
         stroke="#fbbf24" strokeWidth={1} dash="6 4" fontSize={11} />
       {/* Handles (z_handles H2); hole centres shown with the drilling overlay */}
@@ -1123,6 +1125,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
       <HingeShapes rp={rp} project={proj} />
       <RailBlockShapes rp={rp} project={proj} />
       <BifoldTrackShapes rp={rp} project={proj} />
+      <SliderShapesSVG rp={rp} project={(x, y, z) => (proj as (a: number, b: number, c: number) => { x: number; y: number })(x, y, z)} stroke="#9ca3af" strokeWidth={0.6} nonScaling />
       <SlideDrillOverlay drills={slideDrills} perp="y"
         project={(x, _y, z) => ({ x: ox + x, y: oz + z })}
         dirOf={(a: DrillAxis) => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }} />
@@ -1413,6 +1416,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
       <HingeShapes rp={rp} project={proj} />
       <RailBlockShapes rp={rp} project={proj} />
       <BifoldTrackShapes rp={rp} project={proj} />
+      <SliderShapesSVG rp={rp} project={(x, y, z) => (proj as (a: number, b: number, c: number) => { x: number; y: number })(x, y, z)} stroke="#9ca3af" strokeWidth={0.6} nonScaling />
       <SlideDrillOverlay drills={slideDrills} perp="x"
         project={(_x, y, z) => ({ x: oz + z, y: oy + dy - y })}
         dirOf={(a: DrillAxis) => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }} />

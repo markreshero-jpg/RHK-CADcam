@@ -8,6 +8,7 @@
 // All sizes are in physical mm × scale = model mm, so the viewBox stays in model
 // mm and the drawing prints at the correct physical size at 1:scale.
 'use client'
+import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
 import { btSegments, outlinePath, outlinePoints, effectiveProfileId } from '@/src/lib/benchtopGeometry'
@@ -553,6 +554,13 @@ export default function PlanViewReportSVG({
           nodes.push(<path key={`bf-path-${cab.id}`}
             d={`M ${a.x} ${a.y} A ${bf.arc.r} ${bf.arc.r} 0 0 ${sweepFlag(c, a, b)} ${b.x} ${b.y} M ${t0.x} ${t0.y} L ${t1.x} ${t1.y}`}
             fill="none" stroke={INK} strokeWidth={swW} opacity={swP.opacity} strokeDasharray={swDash} style={{ pointerEvents: 'none' }} />)
+        }
+        // Slider SC tracks + door profiles (z_slider_sc), in place of swings.
+        const slRp = resolvedParts?.get(cab.id)
+        if (slRp?.slider && layers.show('slider')) {
+          nodes.push(<SliderShapesSVG key={`slider-${cab.id}`} rp={slRp} plan
+            project={(x, _y, zz) => ({ x: fo.x + x * wd.x + zz * perp.x, y: fo.y + x * wd.y + zz * perp.y })}
+            stroke={INK} strokeWidth={lw('slider', swingSW)} dash={swDash} opacity={layers.op('slider')} />)
         }
         // Slider SC sliding doors (z_slider_sc) don't swing.
         if (layers.show('door_swings') && !bf && !resolvedParts?.get(cab.id)?.slider) {

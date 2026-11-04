@@ -66,6 +66,7 @@ low-res in the viewer to read.
   internal, no kick), tall class, 1 row × 2 or 3 door columns. Codes `T2D/SLD`,
   `T3D/SLD`, `T3D/SLD3` (`/SC` is taken by scribe).
 - **No hinges, no handles** on the doors. The stile is the handle.
+- **No edge banding** on the panels: the edges are inside the aluminium (Mark, 2026-11-04).
 - **Profiles on the takeoff** as `accessory` parts with a cut length, through
   `hardware_accessories` rows (Häfele, `supplier_code` = cat. no.). The bars to buy
   are packed from the stock lengths (`sliderBuyList`, 3 kerf).
@@ -103,7 +104,7 @@ low-res in the viewer to read.
 |---|---|---|
 | S1 | `src/lib/resolver/sliderSC.ts`: profiles, catalogue, panel sizes, door layout, cut list, bar packing, warnings, track sections. Tests `__tests__/sliderSC.test.ts`. | [x] 2026-11-04 |
 | S2 | Resolver: `resolveSlider` after resolveHandles. Rewrites the door zones (panel size, X, Y, Z per track), no hinges or handles, warnings. The aluminium is **not** parts: `ResolvedCabinet.slider` (saved as `resolved_drawer_hw.slider_cfg`) + `sliderProfiles()` give the pieces to draw. RHS sidebar section (profile / finish / rail; the door set is fixed by the item) shown only when SLIDER is set. | [x] 2026-11-04 |
-| S3 | Drawing: 3D tracks and profiles (extruded sections, finish colour), room and modal elevation, plan (doors stacked on their tracks). Display layer item `slider` (Hardware group). | [~] 2026-11-04: 3D built (`SliderProfileModel`, Cabinet3DView). Plan / elevation profiles, slide-open in 3D to do. |
+| S3 | Drawing: 3D tracks and profiles (extruded sections, finish colour), room and modal elevation, plan (doors stacked on their tracks). Display layer item `slider` (Hardware group). | [~] 2026-11-04: 3D (`SliderProfileModel`); plan + Plan View print, room elevation + print, Cabinet Edit modal Elevation / Top / Side (`SliderShapesSVG`, outlines from `sliderPieceOutline`); no door swings in plan. Checked on the Hafele Test Slider Job. Slide-open in 3D, shop drawing sheets (CabinetSheetSVG) to do. |
 | S4 | Takeoff: a "Sliding door profiles" group in `takeoff/hardware.ts`, one line per bar to buy (profile, finish, stock length, Häfele cat. no.), the cut lengths on it. Straight from `sliderSC.ts`, no `hardware_accessories` rows. | [x] 2026-11-04 |
 | S5 | Library rows `T2D/SLD` (2400), `T3D/SLD` (3000), `T3D/SLD3` (3600), 2400 high, 600 deep, Tall › Cabinets (`migration_slider_library.sql`, applied 2026-11-04). Placement filling the recess gap / height: to do (set W/H by hand for now). | [~] |
 | S6 | Tutorial. | [ ] |

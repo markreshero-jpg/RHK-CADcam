@@ -339,3 +339,34 @@ export function sliderProfiles(s: ResolvedSlider, zones: ResolvedFaceZone[]): Sl
 
 /** Aluminium colour per finish (3D / 2D). */
 export const SLIDER_COLOUR: Record<SliderFinish, string> = { white: '#f2f2ee', silver: '#c9cbcd', black: '#26272a' }
+
+// ── 2D outlines (plan / elevation / modal views) ────────────────────────────
+
+type P2 = { x: number; y: number }
+
+/** The piece's two end sections in cabinet (x, y, z). */
+function pieceEnds(p: SliderPiece): [number, number, number][][] {
+  return [p.start, p.start + p.length].map(s =>
+    p.plane === 'zy' ? p.pts.map(([z, y]) => [s, y, z] as [number, number, number])
+                     : p.pts.map(([x, z]) => [x, s, z] as [number, number, number]))
+}
+
+function hull(pts: P2[]): P2[] {
+  const s = [...pts].sort((a, b) => a.x - b.x || a.y - b.y)
+  const cross = (o: P2, a: P2, b: P2) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+  const half = (list: P2[]) => {
+    const h: P2[] = []
+    for (const p of list) { while (h.length >= 2 && cross(h[h.length - 2], h[h.length - 1], p) <= 0) h.pop(); h.push(p) }
+    h.pop(); return h
+  }
+  return [...half(s), ...half([...s].reverse())]
+}
+
+/** A piece's outline in a 2D view: the section itself when the view looks along
+ *  the piece (a stile in plan), else the outline of the extruded bar (the
+ *  envelope of both end sections — a straight bar's silhouette). */
+export function sliderPieceOutline(p: SliderPiece, project: (x: number, y: number, z: number) => P2): P2[] {
+  const [a, b] = pieceEnds(p).map(e => e.map(q => project(q[0], q[1], q[2])))
+  const along = Math.hypot(a[0].x - b[0].x, a[0].y - b[0].y)
+  return along < 1e-6 ? a : hull([...a, ...b])
+}

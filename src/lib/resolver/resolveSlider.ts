@@ -8,7 +8,7 @@
 // Runs after resolveHandles.
 // ============================================================
 
-import type { CabinetInput, ResolvedFaceZone, ResolverError, ResolvedSlider } from './types'
+import { edgeSidesToBanding, type CabinetInput, type ResolvedFaceZone, type ResolverError, type ResolvedSlider } from './types'
 import { SLIDER, sliderDoors, sliderWarnings, doorCount, type SliderOptions } from './sliderSC'
 
 export function sliderOptions(r: CabinetInput['rules']): SliderOptions | null {
@@ -47,6 +47,8 @@ export function resolveSlider(cab: CabinetInput, zones: ResolvedFaceZone[], warn
     z.Z = front - d.dCentre - z.DZ / 2          // back face; the board centred on its track
     z.slider_track = d.track
     z.handle = null
+    // The panel edges are inside the aluminium: no tape (Mark, 2026-11-04).
+    z.edge_band = edgeSidesToBanding([], z.edge_band?.id)
     delete z.hinge_side
   })
   const board = Math.max(...sorted.map(z => z.DZ))

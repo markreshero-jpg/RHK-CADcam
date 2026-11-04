@@ -10,6 +10,7 @@
 // All sizes are physical mm × scale = model mm, so the viewBox stays in model
 // mm and the drawing prints at true 1:scale.
 'use client'
+import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import type { Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, BenchtopEdgeProfile, RoomAnnotation } from '@/src/lib/types'
 import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
@@ -447,6 +448,11 @@ export default function ElevationPrintSVG({
               <HandleHolesSVG key={`hh-${i}`} s={s} project={(px, py) => toSVG(px, py, 0, 0)}
                 color={layers.color('handle_holes', INK2)} strokeWidth={lw('handle_holes', thinSW)} opacity={layers.op('handle_holes')} />
             ))}
+            {/* Slider SC tracks + door profiles (z_slider_sc). */}
+            {layers.show('slider') && (
+              <SliderShapesSVG rp={rp} project={(x, y) => toSVG(x, y, 0, 0)} stroke={layers.color('slider', INK)}
+                strokeWidth={lw('slider', thinSW)} opacity={layers.op('slider')} />
+            )}
 
             {/* Hinge cup + plate bore positions */}
             {/* Hinge + drawer-front drilling are workshop detail, never on the shop drawings (Mark, 2026-10-21). */}

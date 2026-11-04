@@ -1,4 +1,5 @@
 ﻿'use client'
+import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
@@ -1819,6 +1820,13 @@ export default function ElevationSVG({
                         <DrawerMarkersSVG holes={bifoldHoleShapes(rp.face_zones)}
                           project={toSVGPt} color={layers.color('bifold', isLineDrawing ? '#475569' : '#a855f7')}
                           strokeWidth={layers.w('bifold', 0.6) / lz} opacity={layers.op('bifold')} />
+                      )}
+                      {/* Slider SC tracks + door profiles (z_slider_sc). */}
+                      {layers.show('slider') && (
+                        <SliderShapesSVG rp={rp} project={(x, y) => toSVGPt(x, y)}
+                          stroke={layers.color('slider', isLineDrawing ? '#334155' : '#94a3b8')}
+                          fill={isLineDrawing ? 'none' : layers.color('slider', '#cbd5e1')} fillOpacity={isLineDrawing ? 0 : 0.6}
+                          strokeWidth={layers.w('slider', 0.6) / lz} opacity={layers.op('slider')} />
                       )}
                       </g>)}
 
