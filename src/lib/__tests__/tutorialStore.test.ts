@@ -112,7 +112,7 @@ describe('tutorial store', () => {
     const ids = (q: string) => searchLessons(q).map(i => LESSONS[i].id)
     expect(ids('corner join')).toContain('corner_join')
     expect(ids('KICK')).toEqual(expect.arrayContaining(['kick_runs', 'floating_vanity']))
-    expect(ids('print elevation')).toEqual(['print_elevations', 'shop_drawings'])
+    expect(ids('print elevation')).toEqual(['print_elevations', 'shop_drawings', 'report_print_presets', 'open_parts_solid'])
     expect(ids('pdf')).toEqual(expect.arrayContaining(['print_elevations', 'print_plan']))
     expect(ids('zzz')).toEqual([])
     expect(ids('  ')).toEqual([])

@@ -1,5 +1,6 @@
 ﻿'use client'
 import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
+import { rectEdgeSegs, coverOf, anyExposed } from '@/src/lib/exposedEdges'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
@@ -1522,6 +1523,11 @@ export default function ElevationSVG({
                       x: rx + ex, y: ry + displayDy - ey, w: ew, h: eh,
                     })
 
+                    // Open parts solid (layer 'exposed_solid'): fronts drawn in front of the
+                    // cabinet; a case-part edge outside them draws solid, whatever its layer style.
+                    const covers = layers.show('exposed_solid') && faceOpacity > 0
+                      ? rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !!it && layers.show(it) }).map(fz => coverOf(zoneElevRect(fz)))
+                      : null
                     return (<>
                       {rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back' && layers.show(casePartItem(p.part_key))).map((p, i) => {
                         const { ex, ey, ew, eh } = caseElevRect(p)
@@ -1529,6 +1535,24 @@ export default function ElevationSVG({
                         const cit = casePartItem(p.part_key)
                         const fill = layers.colorOf(cit) ?? PART_COLORS[p.part_key] ?? '#b8c8dc'
                         const ldStroke = layers.colorOf(cit) ?? LINE_DRAW_COLORS[p.part_key] ?? '#94a3b8'
+                        const cpP = layers.props(cit, z)
+                        const segs = covers && cpP.strokeDasharray ? rectEdgeSegs({ ex, ey, ew, eh }, covers) : null
+                        if (segs && anyExposed(segs)) {
+                          const stroke = isLineDrawing ? ldStroke : (pastFace ? '#8b9eb0' : (isSel ? '#e2e8f0' : fill))
+                          const sw = layers.w(cit, isLineDrawing ? 1 : (pastFace ? 1 : 0.5)) / lz
+                          return (
+                            <g key={`cp-${i}`} opacity={cpP.opacity} style={{ pointerEvents: 'none' }}>
+                              <rect x={x} y={y} width={w} height={h} stroke="none"
+                                fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : fill)}
+                                fillOpacity={isLineDrawing ? 0 : (pastFace ? 0.9 : 0.6)} />
+                              {segs.map((sg, j) => {
+                                const a = toSVG(sg.x1, sg.y1, 0, 0), b = toSVG(sg.x2, sg.y2, 0, 0)
+                                return <line key={j} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={sw}
+                                  strokeLinecap="square" strokeDasharray={sg.exposed ? undefined : cpP.strokeDasharray} />
+                              })}
+                            </g>
+                          )
+                        }
                         return (
                           <rect key={`cp-${i}`} x={x} y={y} width={w} height={h}
                             fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : fill)}

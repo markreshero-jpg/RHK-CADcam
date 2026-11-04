@@ -146,7 +146,7 @@ ViewLayerSettings = { items?: { [itemId]: { visible?, style?, color?, weight? } 
 
 | Group | Items (id — views) |
 |---|---|
-| Carcase | `carcass_outline` (P,E), `carcass_gables`, `carcass_top`, `carcass_bottom` (P,E,3D), `carcass_back` (P,3D) |
+| Carcase | `carcass_outline` (P,E), `exposed_solid` (E — Open parts solid, see below), `carcass_gables`, `carcass_top`, `carcass_bottom` (P,E,3D), `carcass_back` (P,3D) |
 | Kicks | `kick_faces` (the face board only), `kick_backs` (sub front + back, incl. curved `crv:kick_back`; split out 2026-10-26), `kick_spreaders` (P,E,3D; **plan default hidden**) |
 | Fronts | `doors`, `drawer_fronts` (P,E,3D), `false_panels` (E,3D), `door_swings`, `drawer_lines` (P), `door_chevrons`, `drawer_labels` (E), `front_routes` (3D, default on — hand-drawn routes / grooves / pockets on doors + drawer fronts cut into the front, also in the colour render + shop-drawing 3D; independent of `machining`, Mark 2026-11-01), `grain` (E,3D — timber grain on grained colours: ghost shade + grain lines in elevations / prints, lines in 3D; layer colour / opacity restyle it; z_material_colours MC11, 2026-10-25) |
 | Internals | `internal_outline` (P, default hidden), `adj_shelves`, `fixed_shelves`, `dividers`, `inner_drawers`, `accessories` (E,3D), `shelf_labels`, `inner_drawer_labels` (E) |
@@ -405,6 +405,25 @@ Built:
 - Verification: `z_plan_automation/verify-layers-p3c-3d.mjs` — ghost doors must read
   much paler than solid ones (mean colour of the door run), plus manager screenshots.
 - Not covered: the drei `<Text>` wall labels ignore wall opacity.
+
+### Open parts solid ✅ built 2026-11-05 (pending Mark's check)
+- Mark 2026-11-05: open cupboards (no doors) should show their gables, tops, bottoms and
+  shelves solid, not dashed. Locked: **solid wherever no shown front covers the part,
+  the layer's own style behind a front** — so an open shelf above doors is solid only in
+  the open part. Hiding doors in a set counts as no doors.
+- Layer item `exposed_solid` (Carcase, elevation only, default ON). Off = every part in its
+  own style, as before. Its style / colour do nothing; only visible matters.
+- `src/lib/exposedEdges.ts`: `rectEdgeSegs(rect, covers)` splits a part outline into
+  open / hidden runs against the shown face zones; open slivers under 6 mm on a part that
+  is otherwise hidden (gaps between doors, reveals) stay hidden. Tests in
+  `src/lib/__tests__/exposedEdges.test.ts`.
+- Print (`ElevationPrintSVG` — Elevation Views + shop drawings): case parts and internals
+  (shelves, dividers, inner drawers, accessories) draw as edge lines when any run is open;
+  open runs use the front pen, solid. Drawer boxes / runners / hinges unchanged.
+- Canvas (`ElevationSVG`): internals already draw solid; case parts only change when their
+  layer style is dashed. Section past the face (no fronts drawn) → no covers.
+- Checked headless on RHK6478 Study Wall 1 + 3 (open WC boxes solid, doored WC-12 / WC-14
+  adjustable shelves still dashed).
 
 ### Later modules (must register their items)
 - Decorative items (plants, tables…) → `Decorative` group.

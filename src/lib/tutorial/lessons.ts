@@ -1664,6 +1664,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double-click it and look at the 3D tab: the hole in the bottom former, the split support ribs either side of it and the two rails they sit into, the flue notch in the shelf rib and the top, the ribs above notched round the flue box, and the box itself (two sides and a front, screwed through the rib and the top, with one hole through each piece into every rib it passes).',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-05 (z_display_layers: Open parts solid).
+  { id: 'open_parts_solid', level: 'intermediate', topic: 'reports', title: 'Open cabinets print solid',
+    blurb: 'Shelves, gables, tops and bottoms with no door in front print as solid lines; behind a door they stay dashed.',
+    keywords: 'open shelf shelves exposed no doors solid dashed hidden line elevation print pdf layer bookcase', steps: [
+    { id: 'open', title: 'Open Room Reports',
+      body: 'Click Reports in the menu bar and choose Room Reports….',
+      target: 'menu-Reports', canvas: true, done: c => c.report !== null },
+    { id: 'pick', title: 'Choose Elevation Views',
+      body: 'Click Elevation Views. Look at an open box (no doors): its shelves and dividers print as solid boards. A box with doors still shows its shelves dashed behind the doors. A cabinet that is part open (open shelf above doors) is solid only in the open part.',
+      target: 'report-elevation_view_v2', canvas: true, done: c => c.report === 'elevation_view_v2' },
+    { id: 'toggle', title: 'Turn it off if you want the old look',
+      body: 'It is a layer item: in the LAYERS dropdown top right pick Manage layers…, then Elevation › Carcase › Open parts solid. Untick it in a layer set and every part goes back to its own line style. Hiding Doors in a set counts as no doors, so everything behind them prints solid.',
+      canvas: true, done: c => c.report === 'elevation_view_v2' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
