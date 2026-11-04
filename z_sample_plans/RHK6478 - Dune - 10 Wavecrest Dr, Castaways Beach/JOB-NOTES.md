@@ -71,3 +71,4 @@ Sources: site measure 22.10.26 p4 + markup 26.10.26 "Study only - disregard Buff
 - Appliance spec block added under the finishes Spec block (same x, at the old SITE NOTES slot); SITE NOTES box moved right of the spec block (x + 2300). `_tmp-6478-kit-apspec.mjs`, update in place, no deletes.
 - Live fields: sink / tap / ovens / cooktop / D/W / bins / other (microwave) from the placed fixtures. Typed: Z912BDY0 oven kit, Falmec FP3MLD90S2 rangehood (no hood fixture placed), Liebherr fridge + freezer (no fixtures placed).
 - Stand-in fixture names still read "(drawn as ...)" with the stand-in sizes - set each fixture's Label to clean the lines up if Mark wants. Check pending.
+- Rev 1 (Mark, `_tmp-6478-kit-apspec2.mjs`): "(drawn as ...)" / "(generic ...)" taken out of the 7 fixture names; OTHER APPLIANCES split into FRIDGE / FREEZER (typed, no fixtures) / MICROWAVE ({appliances_other} = the microwave fixture). Check pending.
