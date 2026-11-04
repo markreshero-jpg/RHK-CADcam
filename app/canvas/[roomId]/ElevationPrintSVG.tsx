@@ -34,6 +34,7 @@ import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
 import { tkBoxAABB, caseBoxAABB } from '@/src/lib/jointDrilling'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
+import { splitBaseKey } from '@/src/lib/cabinetSplit'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides } from './dimLabel'
@@ -60,10 +61,12 @@ export interface ElevationPageOptions {
 
 // ── Resolved-part → elevation rect (copied from canvas ElevationSVG) ──────────
 function caseElevRect(p: ResolvedCasePart) {
-  if (p.part_key === 'left_side' || p.part_key === 'right_side')
+  // Height-split pieces (split:<key>:<n>) are drawn as their part.
+  const k = splitBaseKey(p.part_key)
+  if (k === 'left_side' || k === 'right_side')
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
   // Turned / shaped panels and the curved end face board: their front-view bounds.
-  if (isShapedPanelKey(p.part_key) || p.AY || p.wrap || p.upright) {
+  if (isShapedPanelKey(k) || p.AY || p.wrap || p.upright) {
     const b = caseBoxAABB(p)
     return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
   }
@@ -328,7 +331,7 @@ export default function ElevationPrintSVG({
         {rp ? (
           <>
             {/* Case panels (skip back) */}
-            {rp.case_parts.filter(p => p.part_key !== 'back').map((p, i) => {
+            {rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back').map((p, i) => {
               const it = casePartItem(p.part_key)
               if (!layers.show(it)) return null
               const { ex, ey, ew, eh } = caseElevRect(p)

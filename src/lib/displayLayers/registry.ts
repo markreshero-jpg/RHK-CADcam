@@ -7,6 +7,8 @@
 // A new module that draws on the canvas adds its items here and gates rendering
 // through LayerView.show()/props() (see resolve.ts).
 
+import { splitBaseKey } from '@/src/lib/cabinetSplit'
+
 export type LayerViewId = 'plan' | 'elevation' | '3d'
 export const LAYER_VIEWS: { id: LayerViewId; label: string }[] = [
   { id: 'plan',      label: 'Plan' },
@@ -304,7 +306,8 @@ export interface LayerSet {
 }
 
 // Part-key → item mapping helpers so every renderer classifies parts identically.
-export function casePartItem(partKey: string): string {
+export function casePartItem(key: string): string {
+  const partKey = splitBaseKey(key)   // a height-split piece (split:<key>:<n>) is its part
   if (partKey === 'left_side' || partKey === 'right_side') return 'carcass_gables'
   if (partKey === 'bottom') return 'carcass_bottom'
   if (partKey === 'back') return 'carcass_back'

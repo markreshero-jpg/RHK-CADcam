@@ -17,6 +17,7 @@ import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { edgeMitreNote } from '@/src/lib/bulkhead'
+import { splitBaseKey } from '@/src/lib/cabinetSplit'
 import { isShapedPanelKey, isShapedRailKey, shapedPartLabel, zonePartId, parseZonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 
 // ── Palette ────────────────────────────────────────────────────────────────────
@@ -119,7 +120,8 @@ export function viewLabel(cx: number, y: number, text: string) {
 // Cabinet coordinate origin: bottom-left-BACK corner (+X=right, +Y=up, +Z=front)
 
 export function isSidePanel(key: string) {
-  return key === 'left_side' || key === 'right_side'
+  const k = splitBaseKey(key)   // a height-split piece (split:<key>:<n>) is its part
+  return k === 'left_side' || k === 'right_side'
 }
 
 // Shaped-cabinet per-edge parts (z_cabinet_shape) turn about Y; the ortho views
@@ -133,7 +135,7 @@ export function elevRect(p: { X: number; Y: number; DX: number; DY: number; DZ: 
   const isSide = p.part_key ? isSidePanel(p.part_key) : false
   if (isSide) return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
   if (isTurned(p)) { const b = caseBoxAABB(p as ResolvedCasePart); return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h } }
-  if (p.part_key === 'back') return { ex: p.X, ey: p.Y + p.DZ + p.DX, ew: p.DY, eh: p.DX }
+  if (p.part_key && splitBaseKey(p.part_key) === 'back') return { ex: p.X, ey: p.Y + p.DZ + p.DX, ew: p.DY, eh: p.DX }
   return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ }
 }
 // Kick parts use their turned bounds (shaped cabinets turn kick boards, 4b).
@@ -204,7 +206,7 @@ export function intElevRect(p: ResolvedInternalPart) {
 export function topRect(p: ResolvedCasePart) {
   if (isSidePanel(p.part_key)) return { tx: p.X, tz: p.Z, tw: p.DZ, td: p.DX }
   if (isTurned(p)) { const b = caseBoxAABB(p); return { tx: b.x, tz: b.z, tw: b.w, td: b.d } }
-  if (p.part_key === 'back')   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
+  if (splitBaseKey(p.part_key) === 'back')   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DZ }
   return { tx: p.X, tz: p.Z, tw: p.DY, td: p.DX }
 }
 export function tkTopRect(p: ResolvedToekickPart) { const b = tkBoxAABB(p); return { tx: b.x, tz: b.z, tw: b.w, td: b.d } }
@@ -237,7 +239,7 @@ export function zoneTopRect(z: ResolvedFaceZone)      { const b = zoneBoxAABB(z)
 export function sideRect(p: ResolvedCasePart): { sz: number; cy_top: number; sw: number; sh: number } | null {
   if (isSidePanel(p.part_key)) return { sz: p.Z, cy_top: p.Y + p.DY, sw: p.DX, sh: p.DY }
   if (isTurned(p)) { const b = caseBoxAABB(p); return { sz: b.z, cy_top: b.y + b.h, sw: b.d, sh: b.h } }
-  if (p.part_key === 'back')   return { sz: p.Z, cy_top: p.Y + p.DZ + p.DX, sw: p.DZ, sh: p.DX }
+  if (splitBaseKey(p.part_key) === 'back')   return { sz: p.Z, cy_top: p.Y + p.DZ + p.DX, sw: p.DZ, sh: p.DX }
   return { sz: p.Z, cy_top: p.Y + p.DZ, sw: p.DX, sh: p.DZ }
 }
 export function tkSideRect(p: ResolvedToekickPart) { const b = tkBoxAABB(p); return { sz: b.z, cy_top: b.y + b.h, sw: b.d, sh: b.h } }

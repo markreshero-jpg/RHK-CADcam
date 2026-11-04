@@ -13,6 +13,7 @@ import { removedIds, seamPartId } from '@/src/lib/resolver/filterHidden'
 import { sampleOutline } from '@/src/lib/shapePath'
 import type { CutoutVoid } from '@/src/lib/partCutouts'
 import { turnDrill, turnPoint } from '@/src/lib/resolver/hardwareTurn'
+import { splitBaseKey } from '@/src/lib/cabinetSplit'
 
 export function isSide(k: string) { return k === 'left_side' || k === 'right_side' }
 
@@ -80,11 +81,13 @@ export function caseBox(p: ResolvedCasePart): Box {
     const x0 = Math.min(...xs), z0 = Math.min(...zs)
     return { x: x0, y: p.Y, z: z0, w: Math.max(...xs) - x0, h: p.wrap.h, d: Math.max(...zs) - z0 }
   }
-  if (isSide(p.part_key))
+  // A height-split piece (split:left_side:1, loaded from the DB) is laid out like its part.
+  const k = splitBaseKey(p.part_key)
+  if (isSide(k))
     return { x: p.X, y: p.Y, z: p.Z, w: p.DZ, h: p.DY, d: p.DX }
-  if (p.part_key === 'back')
+  if (k === 'back')
     return { x: p.X, y: p.Y + p.DZ, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
-  if (isShapedPanelKey(p.part_key) || p.upright)
+  if (isShapedPanelKey(k) || p.upright)
     return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DX, d: p.DZ }
   return { x: p.X, y: p.Y, z: p.Z, w: p.DY, h: p.DZ, d: p.DX }
 }
@@ -95,7 +98,8 @@ export function caseBox(p: ResolvedCasePart): Box {
 export function casePlanCorners(p: ResolvedCasePart): { x: number; z: number }[] {
   if (p.wrap) return sampleOutline(p.wrap.pts).map(q => ({ x: q.x, z: q.y }))
   const b = caseBox(p)
-  if (p.outline && p.outline.length >= 3 && !isSide(p.part_key) && p.part_key !== 'back' && !isShapedPanelKey(p.part_key) && !p.AY)
+  const k = splitBaseKey(p.part_key)
+  if (p.outline && p.outline.length >= 3 && !isSide(k) && k !== 'back' && !isShapedPanelKey(k) && !p.AY)
     return sampleOutline(p.outline).map(q => ({ x: b.x + q.x, z: b.z + b.d - q.y }))
   const bev = caseBevelOutline(p)
   const local: [number, number][] = bev
@@ -114,8 +118,8 @@ export function casePlanCorners(p: ResolvedCasePart): { x: number; z: number }[]
 // blank; bevel_lo / bevel_hi (+ = inner face shorter) take the corners off.
 export function caseBevelOutline(p: ResolvedCasePart): { x: number; y: number }[] | null {
   if (!p.bevel_lo && !p.bevel_hi) return null
-  const side = isSide(p.part_key)
-  if (!side && p.part_key !== 'back' && !isShapedPanelKey(p.part_key)) return null
+  const k = splitBaseKey(p.part_key), side = isSide(k)
+  if (!side && k !== 'back' && !isShapedPanelKey(k)) return null
   const b = caseBox(p), t = p.DZ, D = Math.PI / 180
   const L = side ? b.d : b.w
   const dLo = t * Math.tan((p.bevel_lo ?? 0) * D), dHi = t * Math.tan((p.bevel_hi ?? 0) * D)
@@ -124,7 +128,7 @@ export function caseBevelOutline(p: ResolvedCasePart): { x: number; y: number }[
   if (!side) // length along x; outer face at the back (z = 0 → y = d)
     return [{ x: outLo, y: b.d }, { x: outHi, y: b.d }, { x: inHi, y: 0 }, { x: inLo, y: 0 }]
   // Sides: length along z (y = d − z); outer face at x = 0 (left) / x = t (right).
-  const xo = p.part_key === 'right_side' ? b.w : 0, xi = b.w - xo
+  const xo = k === 'right_side' ? b.w : 0, xi = b.w - xo
   return [{ x: xo, y: b.d - outLo }, { x: xo, y: b.d - outHi }, { x: xi, y: b.d - inHi }, { x: xi, y: b.d - inLo }]
 }
 

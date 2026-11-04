@@ -46,7 +46,7 @@ import { binOutlines } from '@/src/lib/binGeometry'
 import { wallTopPoints } from '@/src/lib/wallProfile'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG, DrawerMarkersSVG } from './HandleSVG'
 import { useLabelMove, LabelBox } from './useLabelMove'
-import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
+import { normaliseSplit, splitSuggestions, splitBaseKey } from '@/src/lib/cabinetSplit'
 import { doorChevronPoints, hingeEdgeLine } from '@/src/lib/doorChevron'
 import GrainSVG, { GRAIN_INK, useGrainedMaterialIds } from './GrainSVG'
 import { GrainMatchFrontSVG, GrainMatchTagSVG, unionRect } from './GrainMatchSVG'
@@ -69,12 +69,15 @@ import { withFieldsFilled, type CadFieldValues } from '@/src/lib/annotations/blo
 // category's colour is consistent across normal and line-drawing presets.
 
 function caseElevRect(p: ResolvedCasePart) {
-  if (p.part_key === 'left_side' || p.part_key === 'right_side') {
+  // Height-split pieces load from the DB as split:<key>:<n>: draw them as their part
+  // (RHK6478 linen TC-03, 2026-11-05: the upper side piece lay flat, 1676 long).
+  const k = splitBaseKey(p.part_key)
+  if (k === 'left_side' || k === 'right_side') {
     return { ex: p.X, ey: p.Y + p.DY, ew: p.DZ, eh: p.DY }
   }
   // Shaped-cabinet panels / facet rails: their front-view footprint after AY
   // (true-width facet elevations are z_cabinet_shape Phase 5).
-  if (isShapedPanelKey(p.part_key) || p.AY || p.wrap || p.upright) {
+  if (isShapedPanelKey(k) || p.AY || p.wrap || p.upright) {
     const b = caseBoxAABB(p)
     return { ex: b.x, ey: b.y + b.h, ew: b.w, eh: b.h }
   }
@@ -435,7 +438,7 @@ export default function ElevationSVG({
         const y0 = topY + cab.dy - ey, y1 = y0 + eh
         pts.push({ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x0, y: y1 }, { x: x1, y: y1 })
       }
-      rp.case_parts.filter(p => p.part_key !== 'back').forEach(p => { const r = caseElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
+      rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back').forEach(p => { const r = caseElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
       rp.toekick_parts.forEach(p => { const r = tkElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
       rp.internal_parts.forEach(p => { const r = shelfElevRect(p); push(r.ex, r.ey, r.ew, r.eh) })
       ;(rp.internal_slides ?? []).forEach(s => { const r = slideElevRect(s); push(r.ex, r.ey, r.ew, r.eh) })
@@ -488,7 +491,7 @@ export default function ElevationSVG({
       const part = (r: { ex: number; ey: number; ew: number; eh: number } | undefined, src: CadSnapSource) => {
         if (r) box(rx + r.ex, floorY - r.ey, r.ew, r.eh, src)
       }
-      rp.case_parts.filter(p => p.part_key !== 'back').forEach(p => part(caseElevRect(p), 'cabinets'))
+      rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back').forEach(p => part(caseElevRect(p), 'cabinets'))
       rp.toekick_parts.forEach(p => part(tkElevRect(p), 'cabinets'))
       rp.internal_parts.forEach(p => part(shelfElevRect(p), 'cabinets'))
       rp.drawer_stacks.forEach(ds => ds.box_parts.forEach(p => part(drawerBoxPartElevRect(p), 'cabinets')))
@@ -1401,7 +1404,7 @@ export default function ElevationSVG({
                   if (showOutline || (faceOpacity > 0 && cab.has_face && layers.any('doors', 'drawer_fronts', 'false_panels'))) hitRects.push(full)
                   if (layers.any('kick_faces', 'kick_spreaders') && cab.has_toekick && tkH > 0) hitRects.push({ ex: 0, ey: tkH, ew: displayDx, eh: tkH })
                 } else {
-                  for (const p of rpHit.case_parts) if (p.part_key !== 'back' && layers.show(casePartItem(p.part_key))) hitRects.push(caseElevRect(p))
+                  for (const p of rpHit.case_parts) if (splitBaseKey(p.part_key) !== 'back' && layers.show(casePartItem(p.part_key))) hitRects.push(caseElevRect(p))
                   for (const p of rpHit.toekick_parts) if (layers.show(kickPartItem(p.part_key))) hitRects.push(tkElevRect(p))
                   for (const p of rpHit.internal_parts) if (showInt(internalPartItem(p.part_type))) hitRects.push(shelfElevRect(p))
                   if (showInt('inner_drawer_runners')) for (const sl of rpHit.internal_slides ?? []) hitRects.push(slideElevRect(sl))
@@ -1520,7 +1523,7 @@ export default function ElevationSVG({
                     })
 
                     return (<>
-                      {rp.case_parts.filter(p => p.part_key !== 'back' && layers.show(casePartItem(p.part_key))).map((p, i) => {
+                      {rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back' && layers.show(casePartItem(p.part_key))).map((p, i) => {
                         const { ex, ey, ew, eh } = caseElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const cit = casePartItem(p.part_key)

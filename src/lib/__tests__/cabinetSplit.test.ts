@@ -8,6 +8,8 @@ import { mergeRules } from '../resolver/mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type JointTypeOp, type Material, type Section } from '../resolver/types'
 import { buildPersistPayload } from '../resolver/persistResolved'
 import { caseBox } from '../jointDrilling'
+import { casePartItem } from '../displayLayers/registry'
+import { elevRect } from '@/app/canvas/[roomId]/cabinetEditSvgHelpers'
 import { collectDrillRows } from '../optimiser/seamDrillSync'
 import { splitCaseParts, splitSuggestions, splitPieceFor, splitBaseKey, normaliseSplit, cutBaseKeys, splitPieceSuffix, splitPieceNote, SPLIT_LIP } from '../cabinetSplit'
 
@@ -90,6 +92,20 @@ describe('splitCaseParts', () => {
     expect(bhi.DY).toBe(back.DY)
     // top / bottom untouched
     expect(ps.filter(p => p.part_key === 'full_top' || p.part_key === 'bottom')).toEqual(rp.case_parts.filter(p => p.part_key === 'full_top' || p.part_key === 'bottom'))
+  })
+
+  it('a piece keeps its part’s layout (caseBox, layer, elevation) under its split: key', () => {
+    // The canvas loads the pieces from the DB; the upper side drew lying flat, 1676 long
+    // (RHK6478 linen TC-03, 2026-11-05).
+    const ps = splitCaseParts(rp.case_parts, [at])
+    for (const k of ['left_side', 'right_side', 'back']) {
+      const hi = ps.find(p => p.part_key === `split:${k}:1`)!
+      expect(caseBox(hi)).toEqual(caseBox({ ...hi, part_key: k as typeof hi.part_key }))
+      expect(casePartItem(hi.part_key)).toBe(casePartItem(k))
+      expect(elevRect(hi)).toEqual(elevRect({ ...hi, part_key: k }))
+    }
+    const side = ps.find(p => p.part_key === 'split:left_side:1')!
+    expect(caseBox(side)).toMatchObject({ w: side.DZ, h: side.DY })
   })
 
   it('a shaped cabinet’s per-edge back / side panels are cut too, at the same real height', () => {
