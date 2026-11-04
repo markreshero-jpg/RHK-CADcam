@@ -322,6 +322,15 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
     `crv:rib_<n>_l` / `_r`, cut flush with the hole's sides (`clipOutlineX`, true arcs kept; piece
     re-boxed to its outline). Their seams go to the piece they land on (along-the-width ones trimmed).
     No hole size yet = whole ribs.
+    **Rangehood rails** (Mark, 2026-11-04 — the split pieces are only ~75 wide on RHK6542 WC-01):
+    `crv:rh_rail_l` / `_r`, carcass board on edge against each side of the hole (never into it),
+    `RH_RAIL_D` = 70 front to back, as far forward as the curve lets it (front at the deeper of the
+    rib's front at the rail's two faces), bottom former top → shelf rib underside. Each support rib
+    halves into it: an **8.25 (T/2) housing** across the rail's inner face at the rib's height
+    (`pockets`, open both ends → generated route pockets, face up = the inner face), and the rib's
+    cut edge **notched back T/2** over the rail's depth (`spliceNotch`, now testing inside on true
+    arcs). Upright, face-kind (`isCurvedEndUprightKey`). No room / notch refused = no rail + a note.
+    No screws declared yet (glued into the housings).
     **Rib cut-outs off** with a rangehood. Unset `shelfAt` = the kit layout, fixtures unchanged.
   - **Hole** in `crv:bottom`, centred on the clear inside (fixing panel inner face ↔ face board inside;
     DOUBLE: face board ↔ face board; C8 inset honoured — `curvedEndInterior`), **set back from the face

@@ -138,6 +138,43 @@ describe('curved end rangehood (C9)', () => {
     expect(rp.case_parts.filter(p => /^crv:rib_1_[lr]$/.test(p.part_key))).toHaveLength(2)
   })
 
+  it('rails each side of the hole, the support ribs halved into them (RHK6542 WC-01)', () => {
+    const ce = { hand: 'DOUBLE' as const, R: 160, ribs: 1 }
+    const cab = wcrv(normaliseRangehood({ hole: { w: 495, d: 265, setback: 50 }, shelf_h: 350 }), ce,
+      { DX: 650, DY: 510, DZ: 400, footprint: curvedEndFootprint({ ...DEFAULT_CURVED_END, ...ce }, { w: 650, d: 400 }) })
+    const rp = resolveCabinet(cab)
+    const hole = rp.rangehood_hole!
+    const part = (k: string) => rp.case_parts.find(p => p.part_key === k)!
+    const L = part('crv:rh_rail_l'), R = part('crv:rh_rail_r')
+    const bottom = part('crv:bottom'), shelf = rp.case_parts.find(p => p.part_key.startsWith('crv:rib_') && Math.abs(p.Y - bottom.Y - 350) < 0.01)!
+    const ribsL = rp.case_parts.filter(p => /^crv:rib_\d+_l$/.test(p.part_key))
+    expect(ribsL.length).toBeGreaterThan(0)
+    for (const r of [L, R]) {
+      expect(r.DZ).toBe(16.5)
+      expect(r.DY).toBeCloseTo(70)
+      expect(r.Y).toBeCloseTo(bottom.Y + 16.5)
+      expect(r.Y + r.DX).toBeCloseTo(shelf.Y)
+      expect(r.pockets).toHaveLength(ribsL.length)
+      for (const k of r.pockets!) { expect(k.depth).toBeCloseTo(8.25); expect(k.y1 - k.y0).toBeCloseTo(16.5); expect(k.x1 - k.x0).toBeCloseTo(70) }
+    }
+    // Against the hole, never in it: left rail x0 − 16.5 … x0, right x1 … x1 + 16.5.
+    expect(L.AY).toBe(-90); expect(L.X).toBeCloseTo(hole.x0)
+    expect(R.AY).toBe(90); expect(R.X).toBeCloseTo(hole.x1)
+    // Each housing at its rib's height (pocket y down from the rail top).
+    for (const [k, rib] of ribsL.sort((a, b) => a.Y - b.Y).entries()) {
+      const pk = [...L.pockets!].sort((a, b) => b.y0 - a.y0)[k]
+      expect(L.Y + L.DX - pk.y1).toBeCloseTo(rib.Y)
+    }
+    // The rib's cut edge is notched back 8.25 over the rail's depth.
+    const rib = ribsL[0]
+    const xs = rib.outline!.map(q => q.x)
+    expect(xs.some(x => Math.abs(x - (rib.DY - 8.25)) < 0.01)).toBe(true)
+    // The rail sits inside the curve: its front corners are behind the rib's front there.
+    const front = Math.min(L.Z + L.DY, 400)
+    expect(front).toBeLessThanOrEqual(rib.Z + rib.DX + 0.01)
+    expect(rp.warnings.filter(w => /rangehood rail/.test(w.message))).toEqual([])
+  })
+
   it('mirrors for a left-hand curve', () => {
     const rp = resolveCabinet(wcrv(rh, { hand: 'LH' }))
     expect(rp.warnings.filter(w => w.code === 'RANGEHOOD' || w.code === 'CUTOUT_SKIPPED')).toEqual([])

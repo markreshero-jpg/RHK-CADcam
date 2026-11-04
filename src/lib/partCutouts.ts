@@ -16,7 +16,7 @@
 // end (0..DY), y back from its front edge (0..DX).
 // ============================================================
 
-import type { OutlinePt } from './shapePath'
+import { sampleOutline, type OutlinePt } from './shapePath'
 import { evaluateFormula, type FormulaScope } from './formula'
 import type { ResolvedCabinet } from './resolver/types'
 
@@ -234,10 +234,12 @@ export function spliceNotch(pts: OutlinePt[], W: number, D: number, r: Rect, edg
     // Nothing else of the outline may reach into the notch.
     const bad = P.some((q, k) => k !== i && k !== (i + 1) % n
       && q.x > rr.x0 + EPS && q.x < rr.x1 - EPS && (atMax ? q.y > inner + EPS : q.y < inner - EPS))
-    const mid = (x: number) => insidePoly(P, x, atMax ? inner - 0.5 : inner + 0.5)
     if (bad) return null
-    // Board left both sides of the notch's inner edge, and the notch itself over the part.
-    if (!mid(rr.x0 + 0.5) || !mid(rr.x1 - 0.5) || !insidePoly(P, (rr.x0 + rr.x1) / 2, atMax ? (inner + at) / 2 : inner / 2)) return null
+    // Board left both sides of the notch's inner edge, and the notch itself over
+    // the part — true arcs (a chord cuts inside a convex curve: RHK6542's rail notch).
+    const PS = sampleOutline(P, 1)
+    const mid = (x: number) => insidePoly(PS, x, atMax ? inner - 0.5 : inner + 0.5)
+    if (!mid(rr.x0 + 0.5) || !mid(rr.x1 - 0.5) || !insidePoly(PS, (rr.x0 + rr.x1) / 2, atMax ? (inner + at) / 2 : inner / 2)) return null
     const up = b.x > a.x
     const near = up ? rr.x0 : rr.x1, far = up ? rr.x1 : rr.x0
     const ins: OutlinePt[] = []

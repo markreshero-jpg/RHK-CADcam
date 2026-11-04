@@ -15,6 +15,8 @@
 //   crv:rib_<n>             arc outline (+ fixing-block notches)
 //   crv:rib_<n>_l / _r      rangehood support ribs under the shelf (C9), the
 //                           rib split left / right of the hole
+//   crv:rh_rail_l / _r      rangehood rails each side of the hole (C9) — upright,
+//                           face-kind, the support ribs halved into them
 //   crv:blk_side(_l|_r) /   fixing blocks — upright, face-kind
 //   crv:blk_front
 //
@@ -26,7 +28,8 @@
 // ============================================================
 
 import type { CabinetInput, DeclaredSeam, DeclaredSeamGeom, ResolvedCasePart, ResolverError } from './types'
-import { clipOutlineX, type OutlinePt } from '../shapePath'
+import { clipOutlineX, sampleOutline, type OutlinePt } from '../shapePath'
+import { spliceNotch } from '../partCutouts'
 import { calcCurvedEnd, curvedEndParts, loopToOutline, mirLoop, type CurvedEndGeometry, type CurvedEndPart, type Loop } from '../curvedEnd/geometry'
 import { calcCurvedKick, type CurvedKick, type CurvedKickParams, type KickRect } from '../curvedEnd/kick'
 import { curvedEndKickH, curvedEndParams, type CurvedEndSettings } from '../curvedEnd/settings'
@@ -114,6 +117,7 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
   const out = shiftX ? parts.map(p => ({ ...p, X: p.X + shiftX, ...(p.wrap ? { wrap: { ...p.wrap, pts: p.wrap.pts.map(q => ({ ...q, x: q.x + shiftX })) } } : {}) })) : parts
   if (pT) out.push(curvedInnerPanel(s.hand === 'LH', pT, inset - pT, FT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id))
   const split = splitSupportRibs(cab, c, out, seams)
+  warnings.push(...split.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' as const })))
   return { parts: split.parts, seams: split.seams, errors, warnings }
 }
 
@@ -136,7 +140,8 @@ export function curvedRangehoodHoleX(cab: CabinetInput): { x0: number; x1: numbe
  */
 function splitSupportRibs(cab: CabinetInput, c: CurvedEndGeometry, parts: ResolvedCasePart[], seams: DeclaredSeam[]) {
   const hx = curvedRangehoodHoleX(cab)
-  if (!hx || c.shelfLevel == null || c.shelfLevel < 2) return { parts, seams }
+  const notes: string[] = []
+  if (!hx || c.shelfLevel == null || c.shelfLevel < 2) return { parts, seams, notes }
   let P = parts, S = seams
   for (let i = 1; i < c.shelfLevel; i++) {
     const key = `crv:rib_${i}` as const
@@ -175,7 +180,69 @@ function splitSupportRibs(cab: CabinetInput, c: CurvedEndGeometry, parts: Resolv
       })
     })
   }
-  return { parts: P, seams: S }
+  P = addRangehoodRails(c, P, hx, notes)
+  return { parts: P, seams: S, notes }
+}
+
+/** Depth of a rangehood rail front to back (Mark's sketch on RHK6542 WC-01). */
+export const RH_RAIL_D = 70
+
+/** Front edge (smallest y) of a shape at x, true arcs sampled; Infinity off it. */
+function frontAt(shape: OutlinePt[], x: number): number {
+  const o = sampleOutline(shape, 1)
+  let best = Infinity
+  for (let i = 0, j = o.length - 1; i < o.length; j = i++) {
+    const a = o[j], b = o[i]
+    if ((a.x - x) * (b.x - x) > 0 || a.x === b.x) continue
+    best = Math.min(best, a.y + (b.y - a.y) * (x - a.x) / (b.x - a.x))
+  }
+  return best
+}
+
+/**
+ * Rangehood rails (C9, Mark 2026-11-04): the support rib pieces each side of the
+ * hole are narrow, so a rail stands on edge against each side of the hole (never
+ * into it), RH_RAIL_D front to back, as far forward as the curve lets it, from
+ * the bottom former up to the shelf rib. Each support rib halves into it: an
+ * 8.25 (half-thickness) housing across the rail's inner face (a `pockets` route,
+ * open both ends), and the rib's cut edge notched back the same 8.25 over the
+ * rail's depth. `crv:rh_rail_l` / `_r`, upright, inner face toward the rib.
+ */
+function addRangehoodRails(c: CurvedEndGeometry, parts: ResolvedCasePart[], hx: { x0: number; x1: number }, notes: string[]): ResolvedCasePart[] {
+  const T = c.p.T, half = r2(T / 2)
+  const bottom = parts.find(p => p.part_key === 'crv:bottom')
+  const shelf = parts.find(p => p.part_key === `crv:rib_${c.shelfLevel}`)
+  if (!bottom || !shelf) return parts
+  let P = parts
+  for (const tag of ['l', 'r'] as const) {
+    const re = new RegExp(`^crv:rib_[0-9]+_${tag}$`)
+    const pcs = P.filter(p => re.test(p.part_key)).sort((a, b) => a.Y - b.Y)
+    const first = pcs[0]
+    const side = tag === 'l' ? 'left' : 'right'
+    if (!first?.outline) continue
+    if (first.DY < T + 10) { notes.push(`No rangehood rail on the ${side} of the hole: the support rib there is only ${first.DY} wide.`); continue }
+    // The rail across the piece: against its cut edge (left piece: x = DY; right: x = 0).
+    const ra = tag === 'l' ? first.DY - T : 0, rb = tag === 'l' ? first.DY : T
+    const yf = r2(Math.max(frontAt(first.outline, ra + 0.01), frontAt(first.outline, rb - 0.01)))
+    const yb = r2(Math.min(yf + RH_RAIL_D, first.DX))
+    if (!Number.isFinite(yf) || yb - yf < 20) { notes.push(`No rangehood rail on the ${side} of the hole: no room behind the curve.`); continue }
+    const notch = { x0: tag === 'l' ? r2(first.DY - half) : 0, x1: tag === 'l' ? first.DY : half, y0: yf, y1: yb }
+    const cut = pcs.map(pc => spliceNotch(pc.outline!, pc.DY, pc.DX, notch, tag === 'l' ? 'right' : 'left'))
+    if (cut.some(o => !o)) { notes.push(`No rangehood rail on the ${side} of the hole: the rib couldn’t be notched for it.`); continue }
+    P = P.map(p => { const k = pcs.indexOf(p); return k < 0 ? p : { ...p, outline: cut[k]! } })
+    const zb = r2(first.Z + first.DX - yf), za = r2(first.Z + first.DX - yb)
+    const y = r2(bottom.Y + T), h = r2(shelf.Y - y), len = r2(zb - za)
+    P.push({
+      part_key: `crv:rh_rail_${tag}`,
+      DX: h, DY: len, DZ: T,
+      // turnedPanel's frames: outer face toward the hole, the housings on the inner face.
+      X: tag === 'l' ? hx.x0 : hx.x1, Y: y, Z: tag === 'l' ? za : zb, AX: 0, AY: tag === 'l' ? -90 : 90, AZ: 0,
+      material_id: bottom.material_id, edge_band: { ...NO_BAND },
+      // Housings in the pocket frame (x along DY, y down from the top over DX).
+      pockets: pcs.map(pc => { const h0 = r2(pc.Y - y); return { x0: 0, x1: len, y0: r2(h - h0 - T), y1: r2(h - h0), depth: half } }),
+    })
+  }
+  return P
 }
 
 /**
@@ -481,6 +548,7 @@ export function curvedEndPartLabel(key: string): string | null {
     top: 'Curved End Top', bottom: 'Curved End Bottom',
     blk_side: 'Curved End Fixing Block (side)', blk_side_l: 'Curved End Fixing Block (left)',
     blk_side_r: 'Curved End Fixing Block (right)', blk_front: 'Curved End Fixing Block (front)',
+    rh_rail_l: 'Curved End Rangehood Rail (left)', rh_rail_r: 'Curved End Rangehood Rail (right)',
     kick: 'Curved Kick', kick_back: 'Curved Kick Back',
   } as Record<string, string>)[k] ?? null
 }
