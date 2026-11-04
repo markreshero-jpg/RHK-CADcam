@@ -243,6 +243,7 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
     errors:          allErrors,
     warnings:        allWarnings,
     ...(cutoutVoids.length ? { cutout_voids: cutoutVoids } : {}),
+    ...(rh?.hole ? { rangehood_hole: rh.hole } : {}),
   }
 }
 

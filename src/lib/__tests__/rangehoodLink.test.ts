@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import type { CabinetInstance, Wall } from '../types'
 import { normaliseRangehood } from '../rangehood'
-import { rangehoodHoleInCab, mapHoleRect, linkedHoleCutout, panelRangehoodHoles, panelLinkSignature } from '../rangehoodLink'
+import { mapHoleRect, linkedHoleCutout, panelRangehoodHoles, panelLinkSignature } from '../rangehoodLink'
 import { customPartCuts } from '../partCutouts'
 
 // z_rangehood R6: the WUP takes the hole of the WRH sitting on it.
@@ -11,15 +11,10 @@ const cab = (id: string, o: Partial<CabinetInstance>) => ({
   id, room_id: 'r', wall_id: 'w', assembly_class: 'wall', has_carcass: true, is_kick_assembly: false, bulkhead: null,
   pos_x: 0, pos_y: 0, pos_z: 1500, rotation: 0, dx: 600, dy: 720, dz: 330, rule_overrides: {}, rangehood: null, ...o,
 }) as unknown as CabinetInstance
-const bottom = { X: 16.5, Z: 0, DX: 330, DY: 567 }
+const own = { x0: 50, x1: 550, z0: 30, z1: 290 }
 const part = { x: 0, z: 0, dx: 330, dy: 1200 }
 
 describe('WUP takes the rangehood hole (R6)', () => {
-  it('puts the hole where the WRH resolve cuts it', () => {
-    expect(rangehoodHoleInCab(bottom, rh)).toEqual({ x0: 50, x1: 550, z0: 30, z1: 290 })
-    expect(rangehoodHoleInCab(bottom, normaliseRangehood({})!)).toBeNull()   // size not set
-  })
-
   it('maps it into the panel along the wall', () => {
     const wrh = cab('h', { pos_x: 1000, rangehood: rh, rule_overrides: { SCRBT: 18 } })
     const wup = cab('p', { pos_x: 800, dx: 1200, dy: 18, rule_overrides: { UNDER_PANEL: true } })
@@ -46,7 +41,7 @@ describe('WUP takes the rangehood hole (R6)', () => {
     const noScribe = cab('b', { pos_x: 1000, rangehood: rh })
     const past = cab('c', { pos_x: 2100, rangehood: rh, rule_overrides: { SCRBT: 18 } })
     const plain = cab('d', { pos_x: 1400, rule_overrides: { SCRBT: 18 } })
-    const got = panelRangehoodHoles(wup, [on, noScribe, past, plain], wall, [wall], () => bottom)
+    const got = panelRangehoodHoles(wup, [on, noScribe, past, plain], wall, [wall], () => own)
     expect(got.map(g => g.cab.id)).toEqual(['a'])
   })
 

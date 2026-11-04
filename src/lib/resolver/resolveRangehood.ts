@@ -51,6 +51,7 @@ export interface RangehoodResult {
   seams:    DeclaredSeam[]
   cutouts:  PartCutouts            // generated cut-outs by part id (source 'rangehood')
   warnings: ResolverError[]
+  hole?:    { x0: number; x1: number; z0: number; z1: number }   // cabinet frame, for the under panel
 }
 
 export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[], internalParts: ResolvedInternalPart[]): RangehoodResult {
@@ -64,11 +65,20 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
   const bottom = caseParts.find(p => p.part_key === 'bottom')
   const { hole } = rh
   if (hole.w == null || hole.d == null) warn('the hole size isn’t set yet — no hole cut (set it in the sidebar)')
-  else if (!bottom) warn('no carcass bottom to cut the hole in')
-  else add('case_bottom', {
-    id: 'rh_hole', kind: 'hole', shape: 'rect', w: hole.w, d: hole.d, radius: hole.radius, depth: null, source: 'rangehood',
-    x: { from: 'centre', off: hole.offset }, y: { from: 'front', off: hole.setback },
-  })
+  else {
+    // Where it sits: centred on the bottom and back from its front edge — or,
+    // with no bottom (Bottom Type none: the hole is only in the under panel),
+    // centred between the gables and back from their front edges.
+    const L = caseParts.find(p => p.part_key === 'left_side'), R = caseParts.find(p => p.part_key === 'right_side')
+    const cx = bottom ? bottom.X + bottom.DY / 2 : L && R ? (L.X + L.DZ + R.X) / 2 : cab.DX / 2
+    const front = bottom ? bottom.Z + bottom.DX : L ? L.Z + L.DX : cab.DZ
+    const x0 = r2(cx + hole.offset - hole.w / 2), z1 = r2(front - hole.setback)
+    out.hole = { x0, x1: r2(x0 + hole.w), z0: r2(z1 - hole.d), z1 }
+    if (bottom) add('case_bottom', {
+      id: 'rh_hole', kind: 'hole', shape: 'rect', w: hole.w, d: hole.d, radius: hole.radius, depth: null, source: 'rangehood',
+      x: { from: 'centre', off: hole.offset }, y: { from: 'front', off: hole.setback },
+    })
+  }
 
   // ── Flue: the first fixed shelf + the top ──────────────────────
   const shelves = internalParts.filter(p => p.part_type === 'fixed_shelf')

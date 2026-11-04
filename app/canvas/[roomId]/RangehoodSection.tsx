@@ -36,7 +36,7 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Width', 'Across the cabinet — the rangehood’s cut-out size. 0 = not set yet', s.hole.w ?? 0, v => hole('w', v > 0 ? v : null))}
       {row('Depth', 'Front to back — the rangehood’s cut-out size. 0 = not set yet', s.hole.d ?? 0, v => hole('d', v > 0 ? v : null))}
       {unset && <p className="text-[10px] text-amber-400">⚠ Hole size not set — no hole is cut until it is.</p>}
-      {row('Back from front', 'From the bottom’s front edge to the front of the hole', s.hole.setback, v => { if (v >= 0) hole('setback', v) })}
+      {row('Back from front', 'From the bottom’s front edge (the gables’ with Bottom Type none — then the hole is only in the under panel) to the front of the hole', s.hole.setback, v => { if (v >= 0) hole('setback', v) })}
       {row('Off centre', '+ moves the hole right, − left', s.hole.offset, v => hole('offset', v))}
       {row('Corner radius', '0 = square corners', s.hole.radius, v => { if (v >= 0) hole('radius', v) })}
 

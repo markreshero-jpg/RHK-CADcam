@@ -122,6 +122,24 @@ describe('rangehood cabinet (R5)', () => {
     expect(rp.case_parts.find(p => p.part_key === 'bottom')!.cutouts).toHaveLength(1)
   })
 
+  it('reports the hole in cabinet space for the under panel — where the bottom cuts it', () => {
+    const rp = resolveCabinet(wrh(withHole))
+    const bot = rp.case_parts.find(p => p.part_key === 'bottom')!
+    const xs = bot.cutouts![0].pts.map(p => p.x), ys = bot.cutouts![0].pts.map(p => p.y)
+    expect(rp.rangehood_hole).toEqual({
+      x0: bot.X + Math.min(...xs), x1: bot.X + Math.max(...xs),
+      z0: bot.Z + bot.DX - Math.max(...ys), z1: bot.Z + bot.DX - Math.min(...ys),
+    })
+  })
+
+  it('with no bottom: no bottom warning, the hole still placed (centred between the gables) for the under panel', () => {
+    const rp = resolveCabinet(wrh(withHole, { bottom_type: 'none' } as Partial<CabinetInput>))
+    expect(rp.case_parts.some(p => p.part_key === 'bottom')).toBe(false)
+    expect(rp.warnings.filter(w => w.code === 'RANGEHOOD')).toEqual([])
+    const L = rp.case_parts.find(p => p.part_key === 'left_side')!
+    expect(rp.rangehood_hole).toEqual({ x0: 50, x1: 550, z0: L.Z + L.DX - 40 - 260, z1: L.Z + L.DX - 40 })
+  })
+
   it('a plain wall cabinet is untouched', () => {
     const rp = resolveCabinet(wrh(null))
     expect(rp.case_parts.some(p => p.part_key.startsWith('rh:'))).toBe(false)

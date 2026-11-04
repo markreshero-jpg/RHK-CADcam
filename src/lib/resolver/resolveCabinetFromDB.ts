@@ -57,9 +57,9 @@ function customCutsPatch(p: Record<string, unknown>, resolved: ResolvedCabinet, 
 }
 
 // The rangehood holes an under panel takes (z_rangehood R6): the WRHs on its
-// wall sitting on it, each one's bottom resolved in memory (cached input, else
-// a fresh load) so the hole is where its own resolve puts it — no wait on its
-// background persist.
+// wall sitting on it, each one resolved in memory (cached input, else a fresh
+// load) for its `rangehood_hole` — where its own resolve puts the hole, bottom
+// or not — with no wait on its background persist.
 async function underPanelRangehoodHoles(panelId: string) {
   const { data: panel } = await supabase.from('cabinet_instances').select('*').eq('id', panelId).maybeSingle()
   if (!panel?.wall_id) return []
@@ -70,13 +70,13 @@ async function underPanelRangehoodHoles(panelId: string) {
   const wall = (walls ?? []).find(w => w.id === panel.wall_id)
   const on = rangehoodsOverPanel(panel as CabinetInstance, (cabs ?? []) as CabinetInstance[])
   if (!wall || !on.length) return []
-  const bottoms = new Map<string, { X: number; Z: number; DX: number; DY: number } | null>()
+  const holes = new Map<string, NonNullable<ResolvedCabinet['rangehood_hole']> | null>()
   for (const c of on) {
     let input = _inputCache.get(c.id)
     if (!input) { input = await loadCabinetInput(c.id); _inputCache.set(c.id, input) }
-    bottoms.set(c.id, resolveCabinet(input).case_parts.find(p => p.part_key === 'bottom') ?? null)
+    holes.set(c.id, resolveCabinet(input).rangehood_hole ?? null)
   }
-  return panelRangehoodHoles(panel as CabinetInstance, on, wall as Wall, (walls ?? []) as Wall[], c => bottoms.get(c.id) ?? null)
+  return panelRangehoodHoles(panel as CabinetInstance, on, wall as Wall, (walls ?? []) as Wall[], c => holes.get(c.id) ?? null)
 }
 
 // Resolve each custom part against its assembly: (1) evaluate parametric formulas

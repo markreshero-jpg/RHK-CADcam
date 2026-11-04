@@ -12,18 +12,6 @@ import { normaliseRangehood, type RangehoodSettings } from './rangehood'
 /** The hole in a cabinet's own frame: X across, Z from the back (wall) forward. */
 export type HoleRect = { x0: number; x1: number; z0: number; z1: number }
 
-type BottomPart = { X: number; Z: number; DX: number; DY: number }
-
-/** Where the WRH's hole sits in its own frame — the same place resolveRangehood
- *  cuts it in the bottom (centred + offset, setback from the bottom's front edge). */
-export function rangehoodHoleInCab(bottom: BottomPart, rh: RangehoodSettings): HoleRect | null {
-  const { w, d, offset, setback } = rh.hole
-  if (w == null || d == null || !(w > 0) || !(d > 0)) return null
-  const x0 = bottom.X + (bottom.DY - w) / 2 + offset
-  const z1 = bottom.Z + bottom.DX - setback
-  return { x0, x1: x0 + w, z0: z1 - d, z1 }
-}
-
 /** A rect in one cabinet's frame → another's, through plan space. */
 export function mapHoleRect(r: HoleRect, from: CabinetInstance, to: CabinetInstance, wall: Wall, walls: Wall[]): HoleRect {
   const ref = centroid(walls)
@@ -59,17 +47,17 @@ export function rangehoodsOverPanel(panel: CabinetInstance, cabinets: CabinetIns
   return carcassesOverPanel(panel, cabinets).filter(c => !!normaliseRangehood(c.rangehood))
 }
 
-/** Each rangehood over the panel → its hole in the panel's frame. `bottomOf`
- *  gives the WRH's resolved bottom (null = none / not resolvable). */
+/** Each rangehood over the panel → its hole in the panel's frame. `holeOf`
+ *  gives the WRH's resolved `rangehood_hole` (its own frame; null = none) —
+ *  set whether or not it has a bottom. */
 export function panelRangehoodHoles(
   panel: CabinetInstance, cabinets: CabinetInstance[], wall: Wall, walls: Wall[],
-  bottomOf: (c: CabinetInstance) => BottomPart | null,
+  holeOf: (c: CabinetInstance) => HoleRect | null,
 ): { cab: CabinetInstance; rect: HoleRect; rh: RangehoodSettings }[] {
   const out: { cab: CabinetInstance; rect: HoleRect; rh: RangehoodSettings }[] = []
   for (const c of rangehoodsOverPanel(panel, cabinets)) {
     const rh = normaliseRangehood(c.rangehood)!
-    const bottom = bottomOf(c)
-    const own = bottom && rangehoodHoleInCab(bottom, rh)
+    const own = holeOf(c)
     if (own) out.push({ cab: c, rect: mapHoleRect(own, c, panel, wall, walls), rh })
   }
   return out

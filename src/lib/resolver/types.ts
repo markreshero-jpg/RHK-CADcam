@@ -1576,6 +1576,9 @@ export interface ResolvedCabinet {
   // Where notches took board away (z_rangehood), cabinet space — joint holes
   // running into one are dropped (seamDrillsFor). In memory only.
   cutout_voids?: import('../partCutouts').CutoutVoid[]
+  // The rangehood hole in the cabinet's frame (X across, Z from the wall) — the
+  // under panel under it cuts the same (z_rangehood R6). Set even with no bottom.
+  rangehood_hole?: { x0: number; x1: number; z0: number; z1: number }
   // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md): part id → the
   // room views it is hidden in. Visual only — room views filter via filterHiddenParts().
   part_hide_views?: PartHideViews

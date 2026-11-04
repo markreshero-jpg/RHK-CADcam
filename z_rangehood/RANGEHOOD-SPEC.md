@@ -292,6 +292,15 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
   trial 480 × 260 hole: WC-04 bottom and WC-09 under panel cut at the same room
   x (323–803), no warnings; then the size was cleared (TBC-LIST #17).
 
+## No bottom (2026-11-04, RHK6478 WC-03)
+
+- Mark: a WRH can have **Bottom Type none** — the hole is then only in the under
+  panel. `resolveRangehood` always reports the hole in cabinet space
+  (`ResolvedCabinet.rangehood_hole`): on the bottom (centred + offset, setback
+  from its front edge) when there is one, else centred between the gables and
+  back from their front edges — no bottom warning. The under panel link reads
+  `rangehood_hole` (was: the resolved bottom), so it works either way.
+
 ## Phases
 
 | # | What | Status |
