@@ -150,10 +150,10 @@ New table `room_annotations` (job data):
 | style | jsonb | sizes in paper mm, plus colours: `{color, size, bold, italic, underline, align, lineSpacing, bg: none/mask/solid, bgColor, bgPad, border: none/box/round, borderColor, borderWeight, borderDash, weight, dash, fill: none/solid/tint, fillColor, fillOpacity, arrowStart, arrowEnd, arrowSize}`. All optional; missing keys use defaults. |
 | sort_order | int | draw order |
 | created_at / updated_at | timestamptz | |
-| origin | text | `auto` / `user`, trigger-set from the inserter (automation@rhk.local = auto). A7 |
-| user_edited_at | timestamptz null | set by trigger on any edit by a non-automation user. A7 |
+| origin | text | `auto` / `user`, trigger-set from the inserter (automation@rhk.local = auto). G1 |
+| user_edited_at | timestamptz null | set by trigger on any edit by a non-automation user. G1 |
 
-### Automation vs user CAD (A7, LOCKED, Mark 2026-11-04)
+### Automation vs user CAD (G1, LOCKED, Mark 2026-11-04)
 
 Automation may delete only `origin = 'auto'` rows the user never edited
 (`user_edited_at is null`). User CAD, and automation CAD the user has touched,
@@ -161,8 +161,8 @@ can only be **edited** by automation, never deleted or replaced. Enforced by the
 `room_annotations_delete_guard` trigger (raises "Protected CAD …", also on
 cascades from wall / cabinet / room deletes). The app (any person's login) can
 still delete anything. Escape hatch for an explicit request:
-`force_delete_annotations(ids uuid[])`. The 511 rows that existed before A7 were
-backfilled `user` (no creator was recorded). SQL: `migration_a7_cad_origin_guard.sql`.
+`force_delete_annotations(ids uuid[])`. The 511 rows that existed before G1 were
+backfilled `user` (no creator was recorded). SQL: `migration_g1_cad_origin_guard.sql` — **not yet applied live** (approval timed out 2026-11-04).
 
 - A check constraint ties `view` to its owner columns (elevation needs `wall_id`,
   cabinet_sheet needs `cabinet_id` + `sheet_view`).
@@ -269,6 +269,7 @@ Register a new **Annotations** group in `src/lib/displayLayers/registry.ts`:
 | A6c | **Printing:** notes on the Elevation Views report + shop drawings (same frame + roomH) | [x] built 2026-10-23 (ahead of A6b): `ElevationPrintSVG` takes `annotations`, draws the wall's **face**-side notes through `elevationAnnotFrame(roomH)` (the reports print the face side only), grows the viewBox to fit notes off the drawing; Elevation Views report gets an "Annotation colours" toggle (shop drawings read the same saved option); ReportsModal passes all views' notes, the plan sheet still filters to plan. In-app check pending |
 | A6d | **Wall split / rejoin / detach:** remap elevation notes to the new wall ids (or warn) | [ ] |
 | A7 | **Cabinet sheets:** ribbon on the sheet preview (decision 10), cabinet-local frame, sheet toggle, own undo; **decide the cabinet-revision behaviour first** | [ ] |
+| LW1 | **Line weights on screen + finer pens** (Mark, 2026-11-04): weights 0.05 / 0.09 / 0.13 added (`CadRibbon` WEIGHTS). **LWT** button by Snap in the CAD panel: on = canvas draws weights as they print (paper mm × scale, so 0.18 at 1:20 is 3.6 mm wide and swamps fine detail when zoomed in); off = canvas strokes capped at ~1 screen px (`AnnotationLayer` `hairline` prop, from `cad.hairline` = 1/zoom). Per-user pref `cadTrueWeights` (default on). Reports / PDFs / shop drawings never pass `hairline`, so prints keep true weights. Canvas plan + elevation CAD and the cabinet editor CAD; library item notes on the elevation canvas still draw true weight | [x] built 2026-11-04; typecheck only, in-app check pending |
 | A8 | Room copy remap, tutorial lesson (incl. a **continue / baseline dims** lesson — Mark 2026-10-22), mobile view check | [ ] |
 
 ## CAD blocks + live fields (phase C) — decided 2026-10-21

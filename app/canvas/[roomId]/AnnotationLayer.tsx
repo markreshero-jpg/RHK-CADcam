@@ -32,6 +32,9 @@ export interface AnnotationLayerProps {
   cadLayers?:    CadLayerView
   /** Reports: no-print layers drop out as well. */
   printing?:     boolean
+  /** Canvas only (LW1): draw strokes no thicker than this (svg units, ≈ 1 screen px) —
+   *  the CAD line-weight display off. Reports never pass it, so prints keep true weights. */
+  hairline?:     number
   /** Canvas editing (A2): selection outlines, hit areas and grips. Reports omit it. */
   edit?: AnnotationEditProps
 }
@@ -58,7 +61,7 @@ export interface AnnotationEditProps {
 
 const SEL = '#38bdf8'
 
-export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, cadLayers, printing, edit }: AnnotationLayerProps) {
+export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, cadLayers, printing, hairline, edit }: AnnotationLayerProps) {
   if (!annotations.length) return null
   const sorted = [...annotations].sort((a, b) => a.sort_order - b.sort_order)
   return (
@@ -67,7 +70,9 @@ export default function AnnotationLayer({ annotations, frame, paper, layers, pri
         const item = annotLayerItem(a.kind)
         if (layers && !layers.show(item)) return null   // only what's shown is selectable
         if (cadLayers && !(printing ? cadLayers.printable(a) : cadLayers.show(a))) return null
-        const s = printStyle(resolveStyle(a.kind, a.style, cadLayers?.color(a)), printColours)
+        const s0 = printStyle(resolveStyle(a.kind, a.style, cadLayers?.color(a)), printColours)
+        // weights are paper mm × paper scale on screen; hairline caps them at ~1 screen px
+        const s = hairline ? { ...s0, weight: Math.min(s0.weight, hairline / paper), borderWeight: Math.min(s0.borderWeight, hairline / paper) } : s0
         const opacity = layers ? layers.alpha(item) : 1
         const hidden = edit?.hiddenId === a.id
         return (

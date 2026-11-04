@@ -1,5 +1,5 @@
--- z_CAD_tool A7 — protect Mark's CAD from automation (Mark, 2026-11-04).
--- Spec: z_CAD_tool/ANNOTATION-SPEC.md "Automation vs user CAD". Applied live as `cad_a7_origin_guard`.
+-- z_CAD_tool G1 — protect Mark's CAD from automation (Mark, 2026-11-04).
+-- Spec: z_CAD_tool/ANNOTATION-SPEC.md "Automation vs user CAD (G1)". To apply live as `cad_g1_origin_guard`.
 --
 -- origin          'auto' = inserted by the automation login (automation@rhk.local), 'user' = anyone else.
 --                 Set by trigger from who inserts it; callers can't choose it.

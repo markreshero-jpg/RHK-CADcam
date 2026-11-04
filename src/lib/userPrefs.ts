@@ -46,6 +46,9 @@ export interface UserPrefs {
   annotStyleDefaults: Partial<Record<StyleKey, AnnotationStyle>>
   /** CAD object snaps (z_CAD_tool B2): on/off, which kinds, which things to snap to. */
   cadSnap: CadSnapSettings
+  /** CAD line weights on screen (z_CAD_tool LW1): true = drawn at their printed weight,
+   *  false = thin hairlines on the canvas. Prints / PDFs always use the true weight. */
+  cadTrueWeights: boolean
   /** Current CAD layer per job (z_cad_layers): project id → job_cad_layers id. */
   cadLayerCurrent: Record<string, string>
   /** Remembered CAD colours were dropped once for ByLayer (z_cad_layers). */
@@ -113,6 +116,7 @@ const DEFAULTS: UserPrefs = {
   tutorial: DEFAULT_TUTORIAL,
   annotStyleDefaults: {},
   cadSnap: DEFAULT_CAD_SNAP,
+  cadTrueWeights: true,
   cadLayerCurrent: {},
   cadByLayerV1: true,
   planGridOffV1: true,

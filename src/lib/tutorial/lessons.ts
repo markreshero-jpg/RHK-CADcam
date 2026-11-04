@@ -1631,6 +1631,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select the line and change a point’s X or Y in the panel to something like 1200+50. It works the same in the Move to fields, text size and line weight in the ribbon, and dimension offsets in the Layer Manager. A plain number applies as you type; a sum applies on Enter or when you click away. Arrow keys still step the value up and down.',
       canvas: true, done: c => c.annotSelected > 0 },
   ]},
+
+  // Appended 2026-11-04 (z_CAD_tool LW1: line weights on screen + finer pens).
+  { id: 'cad_lwt', level: 'basics', topic: 'cad', title: 'Thin CAD lines for fine detail (LWT)',
+    blurb: 'Show CAD lines as thin hairlines on screen while drawing small detail. Prints keep their weights.',
+    keywords: 'cad lwt line weight lineweight thin thick hairline pen 0.13 0.09 0.05 fine detail zoom', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar.',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'lwt', title: 'Switch LWT off',
+      body: 'Click LWT next to Snap in the CAD tools. When it is yellow, lines show as thick as they print (a 0.18 line at 1:20 is 3.6 mm wide in the drawing, so it swamps a 3 mm shadowline when you zoom in). Off, every CAD line draws as a thin hairline however far you zoom. Reports, PDFs and shop drawings always print the real weights. Click LWT again to check how it will print.',
+      canvas: true, done: c => c.mode === 'cad' },
+    { id: 'pen', title: 'Pick a finer pen if the print needs it',
+      body: 'Select a line and open Line weight in the CAD tools: 0.05, 0.09 and 0.13 are there as well as 0.18 and up. These do print thinner.',
+      canvas: true, done: c => c.annotSelected > 0 },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

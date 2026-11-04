@@ -186,12 +186,12 @@ export function useCabinetCad({ ctx, cabinet, rp, sheet = 'front', viewOn, onEnt
         return <rect key={ownerId(t.kind, t.key)} x={a.x} y={a.y} width={b.x - a.x} height={b.y - a.y} fill="none"
           stroke="#22d3ee" strokeOpacity={0.7} strokeWidth={unit} strokeDasharray={`${6 * unit} ${4 * unit}`} style={{ pointerEvents: 'none' }} />
       })}
-      <AnnotationLayer annotations={libraryNotes.shown} frame={frame} paper={paper} />
+      <AnnotationLayer annotations={libraryNotes.shown} frame={frame} paper={paper} hairline={cad.hairline} />
       {/* Hidden on this cabinet: ghosted here so it can be shown again; the room doesn't draw it. */}
-      <g opacity={0.25}><AnnotationLayer annotations={libraryNotes.hidden} frame={frame} paper={paper} /></g>
-      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(own), cabFields)} frame={frame} paper={paper}
+      <g opacity={0.25}><AnnotationLayer annotations={libraryNotes.hidden} frame={frame} paper={paper} hairline={cad.hairline} /></g>
+      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(own), cabFields)} frame={frame} paper={paper} hairline={cad.hairline}
         edit={{ ...cad.editProps, hittable: cad.editProps.hittable && active }} />
-      {cad.drawPreview && <AnnotationLayer annotations={[cad.drawPreview]} frame={frame} paper={paper} />}
+      {cad.drawPreview && <AnnotationLayer annotations={[cad.drawPreview]} frame={frame} paper={paper} hairline={cad.hairline} />}
       {active && <CadMeasureOverlay live={cad.liveMeasure} frame={frame} zoom={zoom}
         selected={!cad.editing && cad.selected.length === 1 ? cad.selected[0] : null} />}
       {active && cad.snapHit && <CadSnapMarker pt={mapPt(frame, cad.snapHit.pt)} kind={cad.snapHit.kind} size={9 / zoom} />}

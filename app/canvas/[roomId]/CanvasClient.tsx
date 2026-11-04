@@ -840,10 +840,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onPointerDown={cad.onCaptureDown} onPointerMove={cad.onCaptureMove}
           onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
       )}
-      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(viewAnnotations), cadFields)} frame={cadFrame} paper={annotScale} layers={layers} cadLayers={cadLayerV}
+      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(viewAnnotations), cadFields)} frame={cadFrame} paper={annotScale} layers={layers} cadLayers={cadLayerV} hairline={cad.hairline}
         edit={{ ...cad.editProps, hittable: cad.editProps.hittable && mode === 'cad' }} />
       {cad.drawPreview && (
-        <AnnotationLayer annotations={[cad.drawPreview]} frame={cadFrame} paper={annotScale} cadLayers={cadLayerV} />
+        <AnnotationLayer annotations={[cad.drawPreview]} frame={cadFrame} paper={annotScale} cadLayers={cadLayerV} hairline={cad.hairline} />
       )}
       <CadMeasureOverlay live={cad.liveMeasure} frame={cadFrame} zoom={z}
         selected={mode === 'cad' && !cad.editing && cad.selected.length === 1 ? cad.selected[0] : null} />

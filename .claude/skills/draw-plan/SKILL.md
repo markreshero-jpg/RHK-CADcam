@@ -646,7 +646,7 @@ Extra fields (full example: `layouts/rhk6456-morris-kitchen.json`):
 
 `room_annotations` rows carry `origin` (`auto` = inserted by
 automation@rhk.local, `user` = Mark) and `user_edited_at` (set when Mark edits
-any row in the app). Both are trigger-set (z_CAD_tool A7).
+any row in the app). Both are trigger-set (z_CAD_tool G1).
 
 - **Never** wipe-and-reinsert CAD (`delete().eq('room_id', R)` /
   `.eq('view', 'elevation')`). To redo your own CAD, delete only

@@ -1331,6 +1331,10 @@ export function useAnnotationTool({
     finishDrawing()
   }, [finishDrawing])
 
+  // LW1: CAD line-weight display (LWT). Off = hairlines on the canvas; prints unchanged.
+  const [trueWeights, setTrueWeightsS] = useState(() => getUserPrefs().cadTrueWeights)
+  const setTrueWeights = useCallback((on: boolean) => { setTrueWeightsS(on); setUserPrefs({ cadTrueWeights: on }) }, [])
+
   const editProps: AnnotationEditProps = {
     selectedIds: liveSelected,
     hiddenId: editing ? editing.draft.id : null,
@@ -1605,6 +1609,8 @@ export function useAnnotationTool({
     startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, insertItems, cloudMode, setCloudMode, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
     snapHit: active ? snapHit : null,
+    /** LW1: true = printed line weights on screen; hairline = the cap to pass AnnotationLayer. */
+    trueWeights, setTrueWeights, hairline: trueWeights ? undefined : 1 / zoom,
     /** Cursor (frame mm) + the point Δ is measured from while drawing. */
     cursor: active ? cursor : null,
     fromPt: drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null,

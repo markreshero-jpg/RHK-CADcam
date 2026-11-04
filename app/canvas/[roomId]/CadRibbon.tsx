@@ -19,7 +19,7 @@ import { evalCalc } from '@/src/lib/calc'
 const generalId = (list: CadLayer[]) => list.find(l => l.is_default)?.id ?? ''
 
 const PALETTE = ['#dc2626', '#ea580c', '#ca8a04', '#16a34a', '#0891b2', '#2563eb', '#7c3aed', '#111111', '#ffffff']
-const WEIGHTS = [0.18, 0.25, 0.35, 0.5, 0.7, 1]
+const WEIGHTS = [0.05, 0.09, 0.13, 0.18, 0.25, 0.35, 0.5, 0.7, 1]
 const DASHES: { id: DashType; label: string }[] = [
   { id: 'solid', label: 'Solid' }, { id: 'dashed', label: 'Dashed' }, { id: 'dotted', label: 'Dotted' }, { id: 'dashdot', label: 'Dash-dot' },
 ]
@@ -424,6 +424,9 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
 
       <div className="flex items-center gap-1.5 flex-wrap">
         {viewSupported && <SnapMenu snap={snap} onSnap={onSnap} />}
+        <button title={cad.trueWeights ? 'Line weights shown as they print - click for thin lines on screen (prints keep their weights)' : 'Thin lines on screen - click to show line weights as they print'}
+          onMouseDown={keep} onClick={() => cad.setTrueWeights(!cad.trueWeights)}
+          className={`h-7 px-2 rounded text-xs shrink-0 ${cad.trueWeights ? 'bg-yellow-500/90 text-gray-900' : 'text-gray-400 hover:bg-gray-700'}`}>LWT</button>
         <span className="flex items-center gap-0.5 ml-auto" title="Annotation scale">
           <span className="text-xs text-gray-400">1:</span>
           <Pick title="Annotation scale — the canvas shows paper sizes as they print at this scale"
