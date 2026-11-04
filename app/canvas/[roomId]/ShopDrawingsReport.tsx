@@ -522,6 +522,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                 <PlanViewReportSVG
                   walls={walls} cabinets={cabinets} fixtures={fixtures} annotations={planAnnots} benchtops={benchtops}
                   btProfiles={bt3d?.profiles} btDefaultProfile={bt3d && (b => bt3d.info(b).defaultProfileId)}
+                  btThickness={bt3d && (b => bt3d.info(b).thick.total)}
                   resolvedParts={planResolved} svgRef={planRef} hideSpecBlocks={moveSpecs}
                   scale={scaleOf('plan')} layers={planLayers} show={planShow}
                 />

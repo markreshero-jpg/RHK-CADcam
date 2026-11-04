@@ -11,7 +11,7 @@
 import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
-import { btSegments, outlinePath, outlinePoints, effectiveProfileId } from '@/src/lib/benchtopGeometry'
+import { btSegments, outlinePath, outlinePoints, effectiveProfileId, waterfallPlanLines } from '@/src/lib/benchtopGeometry'
 import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
@@ -85,7 +85,7 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false, btProfiles, btDefaultProfile,
+  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false, btProfiles, btDefaultProfile, btThickness,
 }: {
   walls:       Wall[]
   /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
@@ -97,6 +97,8 @@ export default function PlanViewReportSVG({
   /** Edge profiles + each top's default — prints the profile code on exposed edges (benchtop_edges). */
   btProfiles?: Record<string, BenchtopEdgeProfile>
   btDefaultProfile?: (bt: BenchtopInstance) => string | null
+  /** A top's total thickness (mm) — waterfall legs are drawn at it (as the canvas plan). */
+  btThickness?: (bt: BenchtopInstance) => number
   cabinets:    CabinetInstance[]
   resolvedParts?: Map<string, ResolvedCabinet>
   svgRef:      RefObject<SVGSVGElement | null>
@@ -637,6 +639,14 @@ export default function PlanViewReportSVG({
           <g key={`bt-${bt.id}`} opacity={btP.opacity}>
             <path d={outlinePath(segs, bt.cutout_polygons ?? [])} fillRule="evenodd" fill="none"
               stroke={INK} strokeWidth={lw('benchtops', pen('front', P))} strokeLinejoin="miter" strokeDasharray={btP.strokeDasharray} />
+            {btProfiles && btThickness && waterfallPlanLines(segs, btProfiles, btDefaultProfile?.(bt), btThickness(bt)).map(({ i, lines }) => (
+              <g key={`wf${i}`} fill="none" stroke={INK} strokeDasharray={btP.strokeDasharray}>
+                {lines.map((pl, k) => (
+                  <polyline key={k} points={pl.map(q => `${q.x},${q.y}`).join(' ')}
+                    strokeWidth={lw('benchtops', pen(k ? 'thin' : 'front', P))} />
+                ))}
+              </g>
+            ))}
             {layers.show('benchtop_joins') && (bt.joins ?? []).map((j, i) => (
               <line key={i} x1={j.p0.x} y1={j.p0.y} x2={j.p1.x} y2={j.p1.y} opacity={layers.op('benchtop_joins')}
                 stroke={INK} strokeWidth={lw('benchtop_joins', pen('thin', P))} strokeDasharray={`${1.5 * P} ${0.8 * P}`} />

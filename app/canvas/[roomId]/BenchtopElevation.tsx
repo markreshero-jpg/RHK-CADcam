@@ -198,11 +198,32 @@ export default function BenchtopElevation({
         const yEdge = Math.max(yBot, ...aprons.map(a => a.yLow))   // lowest drawn edge (profile codes go under it)
 
         // Band outline: a mitred end-on leg takes the triangle under the 45° joint.
-        const bandPts = [
+        const bandCorners = [
           [t0, yTop], [t1, yTop],
           ...(mR ? [[mR.inner, yBot]] : [[t1, yBand]]),
           ...(mL ? [[mL.inner, yBot]] : [[t0, yBand]]),
-        ].map(q => q.join(',')).join(' ')
+        ]
+        const bandPts = bandCorners.map(q => q.join(',')).join(' ')
+        // Apron strips drawn on their own (the band stops at the slab underside):
+        // the mitred apron and the slab read as one face, so the band's bottom edge
+        // is only drawn where no apron hangs under it (Mark 2026-11-05: no line at
+        // the 20 stone's underside on an apron finish), and the strips have no top edge.
+        const apronSpans = apronCovers ? [] : aprons.map(a => {
+          const p = apronPts(a)
+          return [Math.min(p[0][0], p[1][0]), Math.max(p[0][0], p[1][0])] as [number, number]
+        })
+        const bandBottom = (() => {
+          const [xa, xb] = [Math.min(bandCorners[2][0], bandCorners[3][0]), Math.max(bandCorners[2][0], bandCorners[3][0])]
+          const out: [number, number][] = []
+          let x = xa
+          for (const [a, b] of [...apronSpans].sort((p, q) => p[0] - q[0])) {
+            if (b <= x || a >= xb) continue
+            if (a > x + 0.5) out.push([x, Math.min(a, xb)])
+            x = Math.max(x, b)
+          }
+          if (x < xb - 0.5) out.push([x, xb])
+          return out
+        })()
         const legPts = (l: typeof legs[number]) => {
           if (l.D) return [[l.outer, yTop], [l.outer, roomH], [l.innerD, roomH], [l.innerD, yTop + l.D]]
           if (l.endOn && l.join === 'mitre') {
@@ -244,26 +265,40 @@ export default function BenchtopElevation({
             {/* Top band — its ends follow any mitred end-on legs */}
             <polygon points={bandPts}
               fill={fill} fillOpacity={fillOp}
-              stroke={isSel ? '#f59e0b' : stroke}
+              stroke={apronSpans.length ? 'none' : (isSel ? '#f59e0b' : stroke)}
               strokeWidth={bandW(isSel)}
               strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}
               style={{ cursor: 'pointer' }}
               onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
               <title>{`${bt.label ?? 'Benchtop'} · top ${roundMm(topZ)} · ${thick.total} thick`}</title>
             </polygon>
+            {apronSpans.length > 0 && (
+              <g fill="none" stroke={isSel ? '#f59e0b' : stroke} strokeWidth={bandW(isSel)}
+                strokeDasharray={lp.strokeDasharray} opacity={lp.opacity} style={{ pointerEvents: 'none' }}>
+                <polyline points={[bandCorners[3], bandCorners[0], bandCorners[1], bandCorners[2]].map(q => q.join(',')).join(' ')} />
+                {bandBottom.map(([a, b], k) => <line key={`bb${k}`} x1={a} y1={yBot} x2={b} y2={yBot} />)}
+              </g>
+            )}
             {legs.filter(faceMitre).map(legEl)}
 
-            {/* Apron strips under the band (when they don't cover the whole span) */}
-            {!apronCovers && aprons.map(a => (
-              <polygon key={`ap${a.i}`} points={apronPts(a).map(q => q.join(',')).join(' ')}
-                fill={fill} fillOpacity={fillOp}
-                stroke={isSel ? '#f59e0b' : stroke} strokeWidth={bandW(false)}
-                strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}
-                style={{ cursor: 'pointer' }}
-                onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
-                <title>Mitred apron</title>
-              </polygon>
-            ))}
+            {/* Apron strips under the band (when they don't cover the whole span) —
+                outlined on three sides, open to the slab above */}
+            {!apronCovers && aprons.map(a => {
+              const p = apronPts(a)
+              return (
+                <g key={`ap${a.i}`} opacity={lp.opacity}>
+                  <polygon points={p.map(q => q.join(',')).join(' ')}
+                    fill={fill} fillOpacity={fillOp} stroke="none"
+                    style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
+                    <title>Mitred apron</title>
+                  </polygon>
+                  <polyline points={[p[0], p[3], p[2], p[1]].map(q => q.join(',')).join(' ')}
+                    fill="none" stroke={isSel ? '#f59e0b' : stroke} strokeWidth={bandW(false)}
+                    strokeDasharray={lp.strokeDasharray} style={{ pointerEvents: 'none' }} />
+                </g>
+              )
+            })}
 
             {/* Hit area: a top is only 20–40 mm tall (a few px zoomed out), so pick
                 over at least 16 screen px centred on the band. */}

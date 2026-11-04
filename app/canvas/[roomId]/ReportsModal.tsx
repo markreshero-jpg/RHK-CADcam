@@ -855,6 +855,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   benchtops={drawBenchtops}
                   btProfiles={bt3d?.profiles}
                   btDefaultProfile={drawBtDefaultProfile}
+                  btThickness={drawBtInfo && (b => drawBtInfo(b).thick.total)}
                   quote={drawQuote}
                   annotations={drawPlanAnnots}
                   cabinets={drawCabinets}
@@ -875,6 +876,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   benchtops={drawBenchtops}
                   btProfiles={bt3d?.profiles}
                   btDefaultProfile={drawBtDefaultProfile}
+                  btThickness={drawBtInfo && (b => drawBtInfo(b).thick.total)}
                   annotations={drawPlanAnnots}
                   cabinets={drawCabinets}
                   resolvedParts={drawPlanResolved}

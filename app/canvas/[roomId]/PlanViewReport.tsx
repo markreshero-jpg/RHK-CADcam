@@ -38,9 +38,10 @@ const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'annotColours', label: 'Annotation colours' },
 ]
 
-export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops, btProfiles, btDefaultProfile, quote, batch }: {
+export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops, btProfiles, btDefaultProfile, btThickness, quote, batch }: {
   /** Edge profiles + each top's default — profile codes on exposed edges. */
   btProfiles?: Record<string, BenchtopEdgeProfile>
+  btThickness?: (bt: BenchtopInstance) => number
   btDefaultProfile?: (bt: BenchtopInstance) => string | null
   /** Benchtop Quote report (for stonemasons): own layer-set memory, plus a schedule page. */
   quote?: { tops: QuoteTop[]; totals: QuoteTotals }
@@ -228,6 +229,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
           benchtops={benchtops}
           btProfiles={btProfiles}
           btDefaultProfile={btDefaultProfile}
+          btThickness={btThickness}
           resolvedParts={resolvedParts}
           svgRef={svgRef}
           scale={scale}

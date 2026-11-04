@@ -11,7 +11,7 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import { wallFrame, type WallSide } from '@/src/lib/benchtopAnchor'
 import { wrapLabel } from '@/src/lib/textWrap'
-import { fixtureDisplayName } from '@/src/lib/fixtureDisplayName'
+import { fixtureDisplayName, fixtureIntegrated } from '@/src/lib/fixtureDisplayName'
 import { planShapePath } from '@/src/lib/fixturePlanShape'
 import { stretchedElevShape } from '@/src/lib/fixtureStretch'
 import { fixtureOnFace, fixtureLayer, openingOnWall, elevationFrame, elevLeftSide, type StretchSide, type FixtureSnap } from '@/src/lib/fixtureGeometry'
@@ -249,6 +249,8 @@ export default function FixturesElevation({
       {fixtures.map(fx => {
         const id = fixtureLayer(fx.category, fx.kind)
         if (!layers.show(id)) return null
+        // Integrated D/W: hidden behind its cabinet's front (fixtureIntegrated).
+        if (fixtureIntegrated(fx)) return null
         if (fx.category === 'opening') {
           // Holes are cut under the cabinets by OpeningHoles; this is the frame + symbol.
           const o = openingOnWall(fx, wall, side, roomCx)
@@ -334,7 +336,7 @@ export function FixturesElevationPrint({ fixtures, wall, side = 'face', roomCx, 
     <g fontFamily="Arial, Helvetica, sans-serif">
       {fixtures.map(fx => {
         const id = fixtureLayer(fx.category, fx.kind)
-        if (fx.category === 'opening' || !layers.show(id)) return null
+        if (fx.category === 'opening' || !layers.show(id) || fixtureIntegrated(fx)) return null
         const on = fixtureOnFace(fx, f)
         if (!on) return null
         const lp = layers.props(id, 4 / P)

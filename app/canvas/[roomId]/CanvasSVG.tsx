@@ -4,7 +4,7 @@ import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
 import {
-  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, waterfallReturn,
+  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, waterfallReturn, waterfallPlanLines,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
 import { edgeTape, tapeable, tapeOverridden, tapeColour } from '@/src/lib/benchtopEdgeband'
@@ -328,38 +328,15 @@ export default function CanvasSVG({
               {/* Waterfall legs: the leg's footprint under the edge, inset by the top's
                   thickness (same strip as waterfallLegs / elevation / 3D). Drawn like
                   the outline: its inner face as a line in the top's colour + weight. */}
-              {btThickness && (() => {
-                const t = btThickness(bt)
-                if (!(t > 0)) return null
-                return segs.map((s, i) => {
-                  if (s.type !== 'line' || s.edge?.wall || s.edge?.joint) return null
-                  const pid = effectiveProfileId(s, defaultProfileId)
-                  if (!pid || edgeProfiles?.[pid]?.generates !== 'waterfall') return null
-                  const n = outwardNormal(segs, i)
-                  // Built-up ends (apron deeper than the top): face piece the drop
-                  // wide, 45° to the leg, and the return behind it.
-                  const bu = waterfallBuildUp(segs, i, edgeProfiles ?? {}, defaultProfileId, t)
-                  const L = segLength(s)
-                  const d = { x: (s.p1.x - s.p0.x) / L, y: (s.p1.y - s.p0.y) / L }
-                  const at = (a: number, u: number) => `${s.p0.x + d.x * a - n.x * u},${s.p0.y + d.y * a - n.y * u}`
-                  const lines = [[[bu.start ? t : 0, t], [bu.end ? L - t : L, t]]]
-                  const R = Math.min(waterfallReturn(s), Math.max(0, L - 2 * t))
-                  for (const [D, a0, sg] of [[bu.start, 0, 1], [bu.end, L, -1]]) {
-                    if (!D) continue
-                    const A = (a: number) => a0 + sg * a
-                    lines.push([[A(0), 0], [A(t), t]], [[A(t), t], [A(t), D - t], [A(t + R), D - t], [A(t + R), D], [A(0), D]], [[A(t), D - t], [A(t), D]])
-                  }
-                  return (
-                    <g key={`wf${i}`} stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
-                      opacity={layers.op('benchtops')} fill="none" style={{ pointerEvents: 'none' }}>
-                      {lines.map((pl, k) => (
-                        <polyline key={k} points={pl.map(([a, u]) => at(a, u)).join(' ')}
-                          strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / lz * (k ? 0.75 : 1)} />
-                      ))}
-                    </g>
-                  )
-                })
-              })()}
+              {btThickness && waterfallPlanLines(segs, edgeProfiles ?? {}, defaultProfileId, btThickness(bt)).map(({ i, lines }) => (
+                <g key={`wf${i}`} stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
+                  opacity={layers.op('benchtops')} fill="none" style={{ pointerEvents: 'none' }}>
+                  {lines.map((pl, k) => (
+                    <polyline key={k} points={pl.map(q => `${q.x},${q.y}`).join(' ')}
+                      strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / lz * (k ? 0.75 : 1)} />
+                  ))}
+                </g>
+              ))}
 
               {/* Edge finishes: wall edges grey, exposed edges in their profile colour + code */}
               {showEdges && !edging && segs.map((s, i) => {

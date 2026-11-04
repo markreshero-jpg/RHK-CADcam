@@ -43,6 +43,12 @@ decided 2026-10-18) — see "Openings (P5)" at the bottom.
 9. **Access**: `fixture_catalog` = `library_read` + `admin_write`;
    `room_fixtures` = `job_access` via `can_access_room(room_id)`.
 
+- **Integrated dishwasher (Mark 2026-11-05, RHK6478 kitchen):** a Dishwasher fixture
+  linked to a cabinet (`cabinet_id`) — or named "integrated" (not "semi") — is integrated:
+  it labels **"Integrated DW"** on the drawings (unless it has its own display name) and is
+  **not drawn in elevation** (screen or print); the cabinet front in front of it is all that
+  shows. Plan still draws its footprint. `fixtureIntegrated()` in `src/lib/fixtureDisplayName.ts`.
+
 ## Data model
 
 `fixture_catalog` (library)

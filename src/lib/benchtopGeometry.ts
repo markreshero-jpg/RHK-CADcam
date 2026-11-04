@@ -576,6 +576,41 @@ export function waterfallBuildUp(
   return { start, end, depth: Math.max(T, start, end) }
 }
 
+/**
+ * Waterfall legs in PLAN: each leg's footprint under its edge as polylines in
+ * room coords — the inner face a top-thickness in from the edge, and for a
+ * built-up end (apron deeper than the top) the 45° face piece and the return
+ * behind it. Shared by the canvas plan and the printed plan (Mark 2026-11-05:
+ * the plan sheets showed no waterfall end).
+ */
+export function waterfallPlanLines(
+  segs: BenchtopSegment[],
+  profiles: Record<string, Pick<BenchtopEdgeProfile, 'generates' | 'apron_drop_mm'>>,
+  defaultProfileId: string | null | undefined, t: number,
+): { i: number; lines: P[][] }[] {
+  if (!(t > 0)) return []
+  const out: { i: number; lines: P[][] }[] = []
+  segs.forEach((s, i) => {
+    if (s.type !== 'line' || s.edge?.wall || s.edge?.joint) return
+    const pid = effectiveProfileId(s, defaultProfileId)
+    if (!pid || profiles[pid]?.generates !== 'waterfall') return
+    const n = outwardNormal(segs, i)
+    const bu = waterfallBuildUp(segs, i, profiles, defaultProfileId, t)
+    const L = segLength(s)
+    const d = { x: (s.p1.x - s.p0.x) / L, y: (s.p1.y - s.p0.y) / L }
+    const at = (a: number, u: number): P => ({ x: s.p0.x + d.x * a - n.x * u, y: s.p0.y + d.y * a - n.y * u })
+    const lines: [number, number][][] = [[[bu.start ? t : 0, t], [bu.end ? L - t : L, t]]]
+    const R = Math.min(waterfallReturn(s), Math.max(0, L - 2 * t))
+    for (const [D, a0, sg] of [[bu.start, 0, 1], [bu.end, L, -1]] as const) {
+      if (!D) continue
+      const A = (a: number) => a0 + sg * a
+      lines.push([[A(0), 0], [A(t), t]], [[A(t), t], [A(t), D - t], [A(t + R), D - t], [A(t + R), D], [A(0), D]], [[A(t), D - t], [A(t), D]])
+    }
+    out.push({ i, lines: lines.map(pl => pl.map(([a, u]) => at(a, u))) })
+  })
+  return out
+}
+
 // ── Join lines ───────────────────────────────────────────────────────────────
 
 // Where the line through `a` along direction `dir` crosses the outline —
