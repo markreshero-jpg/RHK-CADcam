@@ -91,19 +91,35 @@ export function toSheet(ox: number, oy: number, pl: { x: number; y: number; w: n
 // face_zones = doors nest cup-side up, and for carcass gables (caseFrame);
 // '-' for everything else). Shared by drills and routes so both land
 // identically on the blank.
-export function ebShift(part: PartRef, outputFace: string | null | undefined): { sx: number; sy: number } {
+export function ebShift(part: PartRef, outputFace: string | null | undefined, unmirrored = false): { sx: number; sy: number } {
   if (!part.deduct) return { sx: 0, sy: 0 }
-  const upPos = part.source_table === 'face_zones'
-    || (part.source_table === 'case_parts' && (part.source_part_key === 'case_left_side' || part.source_part_key === 'case_right_side'))
-  const mirrored = outputFace != null && POS_FACES.has(outputFace) !== upPos
+  const mirrored = !unmirrored && onDownFace(part, outputFace)
   return { sx: (mirrored ? part.eb_w2 : part.eb_w1) ?? 0, sy: part.eb_h1 ?? 0 }
 }
+
+// Does this op enter the part's DOWN face (the one away from the machine in
+// today's single program)? Its pos_x is stored pre-mirrored for flipping the part
+// on its own (projectToFrame / collectDoorProfileRoutes). Ops with no entry face
+// (hand ops) count as the up face, as they always have.
+export function onDownFace(part: Pick<PartRef, 'source_table' | 'source_part_key'>, outputFace: string | null | undefined): boolean {
+  const upPos = part.source_table === 'face_zones'
+    || (part.source_table === 'case_parts' && (part.source_part_key === 'case_left_side' || part.source_part_key === 'case_right_side'))
+  return outputFace != null && POS_FACES.has(outputFace) !== upPos
+}
+
+// 6th face nesting (two-sided spec §0). Sheet program A runs face up as today; the
+// sheet is then flipped over its long edge for program Z. On a two-sided sheet a
+// down-face op is un-mirrored back to where it really sits seen from above in
+// program A's frame (gcode.ts mirrors the whole sheet for Z), and goes to Z — unless
+// it cuts right through, which program A can do from the top.
+export type ProgramFace = 'A' | 'Z'
 
 export function buildSheetDrills(
   sheet: NestedSheet,
   partByUid: Map<string, PartRef>,
   opsByKey: Map<string, DrillOpRaw[]>,
   defaultDepth: number,
+  twoSided = false,   // sheet runs as programs A + Z (see ProgramFace)
 ): SheetDrill[] {
   const drills: SheetDrill[] = []
   for (const pl of sheet.placements) {
@@ -114,11 +130,14 @@ export function buildSheetDrills(
     for (const op of ops) {
       // Edgeband-deducted blank: shift holes by the tape on the edge that became
       // the blank origin (shared with routes via ebShift).
-      const { sx, sy } = ebShift(part, op.output_face)
+      const down = twoSided && onDownFace(part, op.output_face)
+      const { sx, sy } = ebShift(part, op.output_face, down)
       for (const hole of expand(op)) {
-        const p = toSheet(hole.ox - sx, hole.oy - sy, pl)
+        const depth = hole.depth ?? defaultDepth
+        const p = toSheet((down ? part.w - hole.ox : hole.ox) - sx, hole.oy - sy, pl)
         drills.push({
-          x: p.x, y: p.y, diameter: hole.d, depth: hole.depth ?? defaultDepth, passes: hole.passes, pocket: hole.pocket ?? undefined,
+          x: p.x, y: p.y, diameter: hole.d, depth, passes: hole.passes, pocket: hole.pocket ?? undefined,
+          ...(twoSided ? { program: down && depth < defaultDepth - 1e-6 ? 'Z' as const : 'A' as const } : {}),
           ...(op.tipExtra ? { tipExtra: op.tipExtra } : {}),
           ...(op.throughAdj != null ? { throughAdj: op.throughAdj } : {}),
         })

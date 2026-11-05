@@ -1318,7 +1318,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Tool on the line: edge inside the line (normal) or centre on it (V chamfer, VJ). square_off cleans the corner radius the step before it left; type a Clean-up radius to set it yourself. Ring width on a pocket clears only that band in from the edge. Offsets inset the step (negative grows it outward). A depth over the board thickness cuts right through. Each tool uses its own feed and rpm from CNC Tool Setup, unless the step has a Feed or Spindle override.',
       done: (c, s) => ev(c, 'tool_sets_view') > ev(s, 'tool_sets_view') },
     { id: 'glass', title: 'Glass doors',
-      body: 'The Glass door profile (Settings → Doors) cuts everything from the back with the Glass Door tool set: a 15.9 × 6.35 rebate for 6mm glass, the rebate corners squared with the 6mm, then the opening cut right through. Glass-only sheets cut face down like any other sheet. If a sheet also has shaker or VJ doors (front face), the optimiser warns: nest them on separate sheets until the two-sided program is built.',
+      body: 'The Glass door profile (Settings → Doors) cuts everything from the back with the Glass Door tool set: a 15.9 × 6.35 rebate for 6mm glass, the rebate corners squared with the 6mm, then the opening cut right through. Glass-only sheets cut face down like any other sheet. A sheet with shaker or VJ doors as well gets the 6th face pair (program A then Z), so both faces are cut right.',
       done: (c, s) => ev(c, 'tool_sets_view') > ev(s, 'tool_sets_view') },
     { id: 'section', title: 'See it in section',
       body: 'Above the steps, Section through a sample door shows what the set does: the door edge on the left, the line 60 in, each step’s cut shaded in its colour with its tool drawn in place. Click ▸ on a step to draw its tool solid. Change Board to see a different thickness (a through cut follows it). The corner plan beside it shows the radius each step leaves in an inside corner, e.g. R20 → R3 → R1 for the shaker.',
@@ -1678,6 +1678,24 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'toggle', title: 'Turn it off if you want the old look',
       body: 'It is a layer item: in the LAYERS dropdown top right pick Manage layers…, then Elevation › Carcase › Open parts solid. Untick it in a layer set and every part goes back to its own line style. Hiding Doors in a set counts as no doors, so everything behind them prints solid.',
       canvas: true, done: c => c.report === 'elevation_view_v2' },
+  ]},
+
+  // Appended 2026-11-05 (z_part_view two-sided spec §0 step 2: 6th face nesting).
+  { id: 'sixth_face', level: 'advanced', topic: 'production', title: '6th face: two programs and a flip',
+    blurb: 'Sheets with work on both faces (shaker / VJ doors with hinge holes) cut as program A, flip, program Z.',
+    keywords: 'sixth 6th face two sided flip program A Z shaker vj door hinge back front trim datum cnc gcode optimiser', steps: [
+    { id: 'open', title: 'Open the optimiser',
+      body: 'Click Production in the menu bar and choose Generate CNC… Nest the job as usual.',
+      target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
+    { id: 'pair', title: 'A sheet with both faces makes a pair',
+      body: 'At G-code, a sheet where any part has work on both faces (a shaker door with hinge cups on its back, a gable drilled both sides) gives two files: …_01A then …_01Z, tagged "6th face A - then flip" and "6th face Z - after flip". Every other sheet is one program as before. Cuts that go right through don’t count, they’re made from the top in program A.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'run', title: 'Run A, flip, run Z',
+      body: 'Program A: load the sheet back face up (the header says face DOWN). It drills and routes the back, then trims 5mm off the X0 end and the outside long edge. The parts stay in the sheet. Flip the whole sheet over the long edge and push the two trimmed edges into X0 / Y0. Program Z: face routes (shaker, VJ) and then every part cut out. Keep the sheet trim at 5 or more on those edges, or the optimiser warns that a part sits in the trim.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'sim', title: 'Simulate the pair',
+      body: '▶ Simulate shows program Z on the sheet as it lies after the flip: 5mm smaller each way and mirrored top to bottom. Saved runs, the run file and Download all keep both programs.',
+      done: c => c.path.endsWith('/optimiser') },
   ]},
 ]
 

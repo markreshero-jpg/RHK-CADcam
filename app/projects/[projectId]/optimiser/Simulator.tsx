@@ -22,7 +22,9 @@ import { wheelZoomFactor } from '@/src/lib/wheelZoom'
 import ToolProfilePreview from '@/src/components/ToolProfilePreview'
 import SimCanvas3D from './SimCanvas3D'
 
-export interface SimFile { sheetIndex: number; fileName: string; gcode: string; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]> }
+// sheet: the sheet as this program sees it, when it isn't the nested one (6th face
+// program Z: flipped + trimmed).
+export interface SimFile { sheetIndex: number; fileName: string; gcode: string; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]>; sheet?: NestedSheet }
 // The output datum the G-code was posted with, so the simulator can map the
 // machine coordinates BACK to the canonical internal frame it renders in
 // (bottom-left origin, Y up, top-of-material Z = 0 with cuts negative).
@@ -106,7 +108,7 @@ export default function Simulator({
   }, [])
 
   const file = files[sel]
-  const sheet = useMemo(() => sheets.find(s => s.index === file?.sheetIndex), [sheets, file])
+  const sheet = useMemo(() => file?.sheet ?? sheets.find(s => s.index === file?.sheetIndex), [sheets, file])
   const prog = useMemo<ParsedProgram>(() => {
     const raw = parseGcode(file?.gcode ?? '', drillBlock
       ? { drillBank: { xMcode: drillBlock.xBankMcode, yMcode: drillBlock.yBankMcode } } : undefined)
@@ -197,7 +199,7 @@ export default function Simulator({
           <label className="text-[11px] text-ink-subtle">Sheet</label>
           <select value={sel} onChange={e => setSel(Number(e.target.value))}
             className="bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent">
-            {files.map((f, i) => <option key={f.sheetIndex} value={i}>{i + 1}. {f.fileName}</option>)}
+            {files.map((f, i) => <option key={f.fileName} value={i}>{i + 1}. {f.fileName}</option>)}
           </select>
           <button onClick={onClose} className="ml-2 px-3 py-1 text-xs rounded-lg border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Close ✕</button>
         </div>

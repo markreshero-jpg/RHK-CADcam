@@ -187,6 +187,8 @@ export interface SheetDrill {
   // When set, this hole can't be drilled (no matching bit) and is routed as a
   // circular pocket with the given router bit (helical ram-in).
   pocket?: { toolNumber: number; toolDiameter: number } & ToolCutData
+  // Two-sided sheet only (6th face, drills.ts ProgramFace): the program it runs in.
+  program?: 'A' | 'Z'
 }
 
 // A router bit's own cutting data (cnc_tools feed / plunge / spindle). Absent or
@@ -194,6 +196,7 @@ export interface SheetDrill {
 // placement) keeps each part's tool-set steps in their order across tool groups.
 export interface ToolCutData { feed?: number | null; plunge?: number | null; rpm?: number | null; partKey?: string
   cutWidth?: number   // width the bit cuts at this depth (V-bit < diameter) — display only
+  program?: 'A' | 'Z' // two-sided sheet only (6th face): the program it runs in
 }
 
 // An internal routing feature projected into sheet space (bottom-left origin),
@@ -255,6 +258,11 @@ export interface GcodeInput {
   // cut-outs, z_curved_end C4): cut to thickness − skin, never through. 0 /
   // absent = through, like a benchtop cutout.
   holeSkins?: Record<string, number[]>
+  // 6th face program A (generateSheetPrograms): drill + route the back, trim the two
+  // reference edges, and leave the parts in the sheet (no perimeters / cut-outs).
+  sixthFaceA?: { trim: number }
+  // A line under the header saying which program this is and what to do.
+  programNote?: string[]
 }
 
 // Modal compaction (spec §5.8 / Anderson .anc). Drops words that are unchanged
@@ -622,6 +630,8 @@ export function generateSheetGcode(input: GcodeInput): string {
     if (p.dust_extraction_enabled) { c('Dust extraction on'); emit(p.coolant_on_code) }   // dust extraction on
   }
 
+  input.programNote?.forEach(l => c(l))
+
   // ── 4. ALL drilling (before routing — non-negotiable) ────────────────────────
   if (realDrills.length) {
     if (input.drillBlock) {
@@ -686,7 +696,22 @@ export function generateSheetGcode(input: GcodeInput): string {
       routePerimeter(emitR, f, fz, { x: 0, y: 0, w: 0, h: 0, label: `${pl.label} cutout ${i + 1}` }, d, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, start, toolR, input.toolNumber, h, true)
     })
   }
-  emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {
+  // 6th face program A: trim the two reference edges instead of cutting parts out.
+  if (input.sixthFaceA) emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {
+    for (const t of sixthFaceTrims(sheet, p, input.sixthFaceA!.trim, toolR)) {
+      cR(t.label)
+      const passes = Math.max(1, Math.ceil(throughDepth / Math.max(0.1, stepDown) - 1e-6))
+      for (let i = 1; i <= passes; i++) {
+        const z = -Math.min(throughDepth, i * stepDown)
+        // Plunge off the sheet on the side away from the fences, cut towards them.
+        emitR(`G0 X${f(mapX(t.from.x))} Y${f(mapY(t.from.y))} Z${fz(safeZ)}`)
+        emitR(`G1 Z${fz(z)} F${f(p.plunge_feed_rate)}`)
+        emitR(`G1 X${f(mapX(t.to.x))} Y${f(mapY(t.to.y))} F${f(p.base_feed_rate)}`)
+        emitR(`G0 Z${fz(safeZ)}`)
+      }
+    }
+  })
+  else emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {
     if (p.cutter_compensation !== 'off' && toolR <= 0) cR('WARN: cutter compensation requested but routing tool diameter unknown - parts may cut undersized')
     if (hasSkin) {
       // Phase 1: rough every part down to the onion-skin depth (parts stay held).
@@ -1649,14 +1674,142 @@ export function postFromProfile(row: Record<string, unknown> | null, tool?: { ba
   }
 }
 
+// ── 6th face nesting (z_part_view two-sided spec §0) ─────────────────────────
+// A sheet whose parts need work on both faces runs as two programs:
+//   A  back-face drilling + routes, then trim the end at X0 and the long edge away
+//      from the Y fence (SIXTH_FACE_TRIM, outline tool). Parts stay in the sheet.
+//   flip the sheet over its long edge; push the two trimmed edges into X0 / Y0.
+//   Z  face routes (shaker, VJ ...) + every perimeter, on the sheet as it now lies.
+// Everything is laid out in program A's frame (drills.ts un-mirrors the down-face
+// ops); program Z is that frame mirrored across the long edge and shifted so the
+// trimmed edges are the new datum edges.
+export const SIXTH_FACE_TRIM = 5
+
+// Fence (datum) edges in sheet coords: x = 0 or W, y = 0 or H.
+function datumEdges(sheet: NestedSheet, p: PostProfile) {
+  return {
+    xAtW: p.origin_corner === 'top_right' || p.origin_corner === 'bottom_right',
+    yAtH: p.origin_corner === 'top_left' || p.origin_corner === 'top_right',
+    W: sheet.stock.w, H: sheet.stock.h,
+  }
+}
+
+// The two trim cuts of program A, tool centre (sheet coords): `trim` mm off the
+// datum X end and off the long edge AWAY from the Y fence, the bit on the waste
+// side. Each starts off the sheet on the side away from the fences (plunge in air)
+// and runs to the fence edge.
+export function sixthFaceTrims(sheet: NestedSheet, p: PostProfile, trim: number, toolR: number): { label: string; from: { x: number; y: number }; to: { x: number; y: number } }[] {
+  const { xAtW, yAtH, W, H } = datumEdges(sheet, p)
+  const clear = toolR + 2
+  const xLine = xAtW ? W - trim + toolR : trim - toolR       // along the X-datum end
+  const yLine = yAtH ? trim - toolR : H - trim + toolR       // along the outside long edge
+  return [
+    { label: `Trim ${trim}mm off the X0 end`,
+      from: { x: xLine, y: yAtH ? -clear : H + clear }, to: { x: xLine, y: yAtH ? H : 0 } },
+    { label: `Trim ${trim}mm off the outside long edge`,
+      from: { x: xAtW ? -clear : W + clear, y: yLine }, to: { x: xAtW ? W : 0, y: yLine } },
+  ]
+}
+
+// Program A frame -> program Z frame (after the flip + push into the fences).
+export function sixthFaceZMap(sheet: NestedSheet, p: PostProfile, trim: number) {
+  const { xAtW, yAtH, H } = datumEdges(sheet, p)
+  const x = (v: number) => xAtW ? v : v - trim
+  const y = (v: number) => yAtH ? H - v : H - trim - v
+  return { x, y, pt: (q: { x: number; y: number }) => ({ x: x(q.x), y: y(q.y) }) }
+}
+
+// The sheet as program Z sees it: trimmed stock, every placement mirrored.
+export function sixthFaceZSheet(sheet: NestedSheet, p: PostProfile, trim: number): NestedSheet {
+  const m = sixthFaceZMap(sheet, p, trim)
+  const { xAtW, yAtH } = datumEdges(sheet, p)
+  const st = sheet.stock
+  // Nest margins follow their edges through the flip (top <-> bottom); the two
+  // trimmed edges lose the trim.
+  const left = Math.max(0, st.trimLeft - (xAtW ? 0 : trim)), right = Math.max(0, st.trimRight - (xAtW ? trim : 0))
+  const top = Math.max(0, st.trimBottom - (yAtH ? trim : 0)), bottom = Math.max(0, st.trimTop - (yAtH ? 0 : trim))
+  return {
+    ...sheet,
+    stock: { ...st, w: st.w - trim, h: st.h - trim, trimLeft: left, trimRight: right, trimTop: top, trimBottom: bottom },
+    placements: sheet.placements.map(pl => ({ ...pl, x: m.x(pl.x), y: m.y(pl.y + pl.h) })),
+  }
+}
+
+export interface SheetProgram {
+  program: 'A' | 'Z' | null       // null = an ordinary one-program sheet
+  gcode: string
+  sheet: NestedSheet              // the sheet in this program's frame (Z: flipped + trimmed)
+  outlines?: Record<string, { x: number; y: number }[]>
+  holes?: Record<string, { x: number; y: number }[][]>
+  warnings: string[]
+}
+
+// One sheet -> its program(s). Two-sided when any drill / route is tagged for Z.
+export function generateSheetPrograms(input: GcodeInput, trim = SIXTH_FACE_TRIM): SheetProgram[] {
+  const routes = input.routes ?? []
+  const twoSided = input.drills.some(d => d.program === 'Z') || routes.some(r => r.program === 'Z')
+  if (!twoSided) return [{ program: null, gcode: generateSheetGcode(input), sheet: input.sheet, outlines: input.outlines, holes: input.holes, warnings: [] }]
+
+  const { sheet, profile: p } = input
+  const warnings: string[] = []
+  // Parts must sit clear of the trimmed strips, or Z would cut them short.
+  const { xAtW, yAtH, W, H } = datumEdges(sheet, p)
+  for (const pl of sheet.placements) {
+    const inX = xAtW ? pl.x + pl.w > W - trim + 1e-6 : pl.x < trim - 1e-6
+    const inY = yAtH ? pl.y < trim - 1e-6 : pl.y + pl.h > H - trim + 1e-6
+    if (inX || inY) warnings.push(`${pl.label} is inside the ${trim}mm 6th face trim - set the sheet trim to at least ${trim} on the X0 end and the outside long edge`)
+  }
+  const edge = sheet.stock.w >= sheet.stock.h ? 'long' : 'short'
+  const a = generateSheetGcode({
+    ...input,
+    drills: input.drills.filter(d => d.program !== 'Z'),
+    routes: routes.filter(r => r.program !== 'Z'),
+    outlines: undefined, holes: undefined, holeSkins: undefined,
+    sixthFaceA: { trim },
+    // The machine header says which way up to load; program A runs the back face up.
+    profile: p.header_template ? { ...p, header_template: p.header_template.replace(/face UP/gi, 'face DOWN - 6TH FACE A') } : p,
+    programNote: [
+      'PROGRAM A OF 2 (6TH FACE) - BACK FACE UP, PARTS STAY IN THE SHEET',
+      `THEN FLIP OVER THE ${edge.toUpperCase()} EDGE, TRIMMED EDGES TO X0/Y0, RUN PROGRAM Z`,
+      ...warnings.map(w => `WARN: ${w}`),
+    ],
+  })
+
+  const m = sixthFaceZMap(sheet, p, trim)
+  const zSheet = sixthFaceZSheet(sheet, p, trim)
+  const mapPts = (pts: { x: number; y: number }[]) => pts.map(m.pt)
+  const outlines = input.outlines && Object.fromEntries(Object.entries(input.outlines).map(([k, v]) => [k, mapPts(v)]))
+  const holes = input.holes && Object.fromEntries(Object.entries(input.holes).map(([k, v]) => [k, v.map(mapPts)]))
+  const zRoutes: SheetRoute[] = routes.filter(r => r.program === 'Z').map(r => r.kind === 'groove'
+    ? { ...r, x1: m.x(r.x1), y1: m.y(r.y1), x2: m.x(r.x2), y2: m.y(r.y2) }
+    : { ...r, x: m.x(r.x), y: m.y(r.y + r.h) })
+  const z = generateSheetGcode({
+    ...input,
+    sheet: zSheet,
+    drills: input.drills.filter(d => d.program === 'Z').map(d => ({ ...d, x: m.x(d.x), y: m.y(d.y) })),
+    routes: zRoutes,
+    outlines, holes,
+    programNote: [
+      'PROGRAM Z OF 2 (6TH FACE) - RUN AFTER PROGRAM A, FACE UP',
+      `Flipped over the ${edge} edge, trimmed edges at X0/Y0. Face routes, parts out`,
+      ...warnings.map(w => `WARN: ${w}`),
+    ],
+  })
+  return [
+    { program: 'A', gcode: a, sheet, warnings },
+    { program: 'Z', gcode: z, sheet: zSheet, outlines, holes, warnings },
+  ]
+}
+
 // File name (spec §5.8.3).
-export function gcodeFileName(opts: { batch: boolean; jobNumber: string | null; dateStr: string; materialCode: string; sheetNumber: number; ext?: string; runNo?: number | null }): string {
+export function gcodeFileName(opts: { batch: boolean; jobNumber: string | null; dateStr: string; materialCode: string; sheetNumber: number; ext?: string; runNo?: number | null; program?: 'A' | 'Z' | null }): string {
   // The extension is a controller/file-browser convention, not a format, so it
   // comes from the machine profile (file_extension). The machine's known-good
   // files are .anc. Leading dots and anything unsafe for a filename are stripped.
   const ext = (opts.ext ?? DEFAULT_POST.file_extension).replace(/[^A-Za-z0-9]+/g, '') || 'nc'
   const mat = (opts.materialCode || 'MAT').replace(/[^A-Za-z0-9]+/g, '').slice(0, 12) || 'MAT'
-  const n = String(opts.sheetNumber).padStart(2, '0')
+  // 6th face pair: RHK6570_R3_Whiteboard16_01A.anc then ..._01Z.anc.
+  const n = String(opts.sheetNumber).padStart(2, '0') + (opts.program ?? '')
   // Saved run number (RHK6570_R3_…) so runs for one job never overwrite each other on the server.
   const job = (opts.jobNumber || 'JOB').replace(/[^A-Za-z0-9]+/g, '')
   if (opts.runNo) return `${opts.batch ? `BATCH_${job}` : job}_R${opts.runNo}_${mat}_${n}.${ext}`

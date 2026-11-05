@@ -16,7 +16,7 @@
 
 import type { NestedSheet } from './nest'
 import type { SheetRoute } from './gcode'
-import { drillKey, toSheet, ebShift, type PartRef } from './drills'
+import { drillKey, toSheet, ebShift, onDownFace, type PartRef } from './drills'
 
 export interface RouteOpRaw {
   source_table: string
@@ -157,6 +157,8 @@ export function buildSheetRoutes(
   sheet: NestedSheet,
   partByUid: Map<string, PartRef>,
   routesByKey: Map<string, RouteOpRaw[]>,
+  twoSided = false,   // sheet runs as programs A + Z (drills.ts ProgramFace)
+  thickness = Infinity,
 ): SheetRoute[] {
   const out: SheetRoute[] = []
   for (const pl of sheet.placements) {
@@ -167,8 +169,12 @@ export function buildSheetRoutes(
     for (const op of ops) {
       const depth = routeDepth(op)
       if (!(depth > 0)) continue                    // no depth → nothing to cut (loader warns)
-      const { sx, sy } = ebShift(part, op.output_face)
-      const map = (ox: number, oy: number) => toSheet(ox - sx, oy - sy, pl)
+      // Two-sided sheet: a down-face route is un-mirrored to where it sits seen from
+      // above and goes to program Z (a through cut stays in A, from the top).
+      const down = twoSided && onDownFace(part, op.output_face)
+      const { sx, sy } = ebShift(part, op.output_face, down)
+      const map = (ox: number, oy: number) => toSheet((down ? part.w - ox : ox) - sx, oy - sy, pl)
+      const prog = twoSided ? { program: down && depth < thickness - 1e-6 ? 'Z' as const : 'A' as const } : {}
 
       if (op.operation_type === 'groove') {
         const len = op.length ?? 0, w = Math.max(op.width ?? op.toolDiameter, 0.5)
@@ -179,7 +185,7 @@ export function buildSheetRoutes(
         out.push({
           kind: 'groove', label: pl.label, x1: a.x, y1: a.y, x2: b.x, y2: b.y,
           width: w, depth, toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
-          feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid, cutWidth: cutWidthAt(op, depth),
+          feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid, cutWidth: cutWidthAt(op, depth), ...prog,
         })
         continue
       }
@@ -202,7 +208,7 @@ export function buildSheetRoutes(
         onLine: !!op.on_line,
         ringWidth: op.ring_width ?? null,
         // A square_off never falls back to a full lap: no radius → gcode warns + skips.
-        corners: op.corners_cleanup_r != null ? { cleanupR: op.corners_cleanup_r } : null,
+        corners: op.corners_cleanup_r != null ? { cleanupR: op.corners_cleanup_r } : null, ...prog,
       })
     }
   }

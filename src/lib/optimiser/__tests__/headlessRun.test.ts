@@ -44,7 +44,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { buildGrainBlocks, expandGrainBlocks } = await import('../grainBlocks')
     const { cutBlank, placedOutline, placedHoles } = await import('../shapes')
     const { loadSheetDrills, nestedParts } = await import('../sheetDrills')
-    const { generateSheetGcode, postFromProfile, gcodeFileName } = await import('../gcode')
+    const { generateSheetPrograms, postFromProfile, gcodeFileName } = await import('../gcode')
     const { validateGcode, errorsOf, warningsOf, formatFinding } = await import('../gcodeValidate')
     type NestPartInput = import('../nest').NestPartInput
     type GroupStock = import('../nest').GroupStock
@@ -255,7 +255,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         ? { base_feed_rate: tool.base_feed_rate as number | null, base_spindle_speed: tool.base_spindle_speed as number | null, plunge_feed_rate: tool.plunge_feed_rate as number | null }
         : undefined)
       if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
-      const gcode = generateSheetGcode({
+      const programs = generateSheetPrograms({
         sheet, thickness: sheet.thickness, profile: post, drills, routes,
         toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
         toolDiameter: tool?.diameter != null ? Number(tool.diameter) : undefined,
@@ -266,8 +266,15 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         programNumber: `O${String(oBase + i).padStart(4, '0')}`,
         drillBlock, outlines: outlinesFor(sheet), holes: holesFor(sheet), holeSkins: holeSkinsFor(sheet), runNote, sheetNo: sheetNos.get(sheet.index)!.no,
       })
-      const fileName = gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: sheetNos.get(sheet.index)!.no, ext: post.file_extension, runNo })
-      return { sheet, fileName, gcode, drills, routes, findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }) }
+      // 6th face: a two-sided sheet is a program pair (…_01A then …_01Z).
+      const progFiles = programs.map(pr => ({
+        sheetIndex: sheet.index, program: pr.program ?? undefined, simSheet: pr.program ? pr.sheet : undefined, outlines: pr.outlines, holes: pr.holes,
+        fileName: gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: sheetNos.get(sheet.index)!.no, ext: post.file_extension, runNo, program: pr.program }),
+        gcode: pr.gcode,
+      }))
+      const fileName = progFiles.map(f => f.fileName).join(' then ')
+      const gcode = progFiles.map(f => f.gcode).join('')
+      return { sheet, fileName, gcode, progFiles, sixthWarn: programs[0].warnings, drills, routes, findings: progFiles.flatMap(f => validateGcode(f.gcode, { maxCommentLength: post.max_comment_length })) }
     })
     const blocking = gen.flatMap(g => errorsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
     const warned = gen.flatMap(g => warningsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
@@ -285,10 +292,10 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       mkdirSync(dir, { recursive: true })
       return dir
     }
-    if (!blocking.length) for (const g of gen) {
-      const bytes = new Uint8Array(g.gcode.length)
-      for (let i = 0; i < g.gcode.length; i++) bytes[i] = g.gcode.charCodeAt(i) & 0x7f
-      writeFileSync(join(matDir(g), g.fileName), bytes)
+    if (!blocking.length) for (const g of gen) for (const pf of g.progFiles) {
+      const bytes = new Uint8Array(pf.gcode.length)
+      for (let i = 0; i < pf.gcode.length; i++) bytes[i] = pf.gcode.charCodeAt(i) & 0x7f
+      writeFileSync(join(matDir(g), pf.fileName), bytes)
     }
 
     // ── Cut sheets + parts list (shared with optimiser Stage 7 — cutSheets.ts) ──
@@ -314,7 +321,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     if (cfg.roundTrip && !blocking.length) {
       const { saveRun, listRuns, loadRun, deleteRun, runFileText, parseRunFile, runExists } = await import('../savedRuns')
       const nested = new Set(Object.values(index).map(p => p.baseUid))
-      const files = gen.map(g => ({ sheetIndex: g.sheet.index, fileName: g.fileName, gcode: g.gcode, outlines: outlinesFor(g.sheet) }))
+      const files = gen.flatMap(g => g.progFiles)
       const { id } = await saveRun({
         projectId: snap.projectId, name: `${snap.jobNumber} headless round trip`, runNo,
         state: {
@@ -333,7 +340,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         roundTrip = {
           listed: listed ? `${listed.sheets} sheets, ${listed.parts} parts` : 'MISSING',
           layoutSame: canon(back.snap.nestResult) === canon(nestResult),
-          gcodeSame: back.files.length === gen.length && back.files.every((f, i) => f.gcode === gen[i].gcode && f.fileName === gen[i].fileName),
+          gcodeSame: back.files.length === gen.flatMap(g => g.progFiles).length && back.files.every((f, i) => f.gcode === gen.flatMap(g => g.progFiles)[i].gcode && f.fileName === gen.flatMap(g => g.progFiles)[i].fileName),
           holesSame: canon(back.snap.drills) === canon([...drillsBySheet]),
           parts: back.snap.parts.length, placementRows: count, runNo: back.snap.runNo,
           snapshotKB: Math.round(JSON.stringify(back.snap).length / 1024),
@@ -341,7 +348,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
           runFile: (() => {
             const text = runFileText({ id, name: back.name, projectId: snap.projectId, jobNumber: snap.jobNumber, run: { runNo: back.snap.runNo, savedAt: back.snap.savedAt, state: back.snap, files: back.files, drillsBySheet: new Map(back.snap.drills) } })
             const rf = parseRunFile(text)
-            return { kB: Math.round(text.length / 1024), layoutSame: canon(rf.file.snapshot.nestResult) === canon(nestResult), gcodeSame: rf.files.every((x, i) => x.gcode === gen[i].gcode), runNo: rf.file.snapshot.runNo }
+            return { kB: Math.round(text.length / 1024), layoutSame: canon(rf.file.snapshot.nestResult) === canon(nestResult), gcodeSame: rf.files.every((x, i) => x.gcode === gen.flatMap(g => g.progFiles)[i].gcode), runNo: rf.file.snapshot.runNo }
           })(),
         }
       } finally { await deleteRun(id) }
@@ -353,7 +360,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     if (cfg.keepRun && !blocking.length) {
       const { saveRun, loadRun, runFileText } = await import('../savedRuns')
       const nested = new Set(Object.values(index).map(p => p.baseUid))
-      const files = gen.map(g => ({ sheetIndex: g.sheet.index, fileName: g.fileName, gcode: g.gcode, outlines: outlinesFor(g.sheet) }))
+      const files = gen.flatMap(g => g.progFiles)
       const name = `${runCode(snap.jobNumber, runNo!)} ${cfg.rooms?.join(', ') ?? 'All rooms'}`
       const { id } = await saveRun({
         projectId: snap.projectId, name, runNo,
@@ -374,7 +381,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const summary = {
       roundTrip, kept,
       job: snap.jobNumber, rooms: cfg.rooms, materials: cfg.materials, profile: prof?.name, deductEdgeband: deductEb,
-      parts: rows.length, sheets: gen.map((g, i) => ({ n: i + 1, file: g.fileName, material: g.sheet.materialId ? matById.get(g.sheet.materialId)?.name : null, parts: g.sheet.placements.length, holes: g.drills.length, routes: g.routes.length, efficiency: Math.round(g.sheet.efficiency * 100) })),
+      parts: rows.length, sheets: gen.map((g, i) => ({ n: i + 1, file: g.fileName, material: g.sheet.materialId ? matById.get(g.sheet.materialId)?.name : null, parts: g.sheet.placements.length, ...(g.sixthWarn.length ? { sixthFaceWarnings: g.sixthWarn } : {}), holes: g.drills.length, routes: g.routes.length, efficiency: Math.round(g.sheet.efficiency * 100) })),
       unplaced: nestResult.unplaced.map(u => u.label), notes, drillWarnings, gcodeErrors: blocking, gcodeWarnings: warned,
       zeroHoleParts: rows.filter(r => r.holes === 0).map(r => `${r.cab} ${r.part}`), rowsList: rows,
       grainBlocks: (nestResult.blocks ?? []).map(b => ({ name: b.name, piece: `${b.piece}/${b.pieces}`, fronts: b.memberUids.length, sheet: gen.findIndex(g => g.sheet.placements.some(p => b.memberUids.includes(p.uid))) + 1 })),

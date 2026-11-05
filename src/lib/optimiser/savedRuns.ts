@@ -24,6 +24,11 @@ type Pt = { x: number; y: number }
 export interface SavedRunFile {
   sheetIndex: number; fileName: string; gcode: string
   outlines?: Record<string, Pt[]>; holes?: Record<string, Pt[][]>
+  // 6th face pair on a two-sided sheet (gcode.ts generateSheetPrograms): program A
+  // is kept in nest_sheets.gcode_a, Z in gcode. simSheet = the sheet as the program
+  // sees it (Z: flipped + trimmed), for the simulator.
+  program?: 'A' | 'Z'
+  simSheet?: NestResult['sheets'][number]
 }
 
 /** The run behind the current layout, in memory. Only valid while
@@ -109,10 +114,11 @@ export async function saveRun(inp: RunInput & { projectId: string; name: string;
   // FINISHED size, pre-rotation) — rotation / sheet_x / sheet_y place it.
   const partShape = new Map(state.parts.map(p => [p.uid, p.shape?.op_polygon?.length ? p.shape.op_polygon : null]))
   for (const [i, sheet] of state.nestResult.sheets.entries()) {
-    const file = inp.files.find(f => f.sheetIndex === sheet.index)
+    const file = inp.files.find(f => f.sheetIndex === sheet.index && f.program !== 'A')
+    const fileA = inp.files.find(f => f.sheetIndex === sheet.index && f.program === 'A')
     const { data: ns, error: sErr } = await supabase.from('nest_sheets').insert({
       nest_job_id: jobId, material_id: sheet.materialId, sheet_number: i + 1,
-      efficiency: sheet.efficiency, gcode: file?.gcode ?? null,
+      efficiency: sheet.efficiency, gcode: file?.gcode ?? null, ...(fileA ? { gcode_a: fileA.gcode } : {}),
       sheet_dx: sheet.stock.w, sheet_dy: sheet.stock.h, is_offcut: sheet.stock.isOffcut, sheet_label: sheet.stock.label,
     }).select('id').single()
     if (sErr || !ns) throw new Error(sErr?.message ?? 'sheet insert failed')
@@ -159,12 +165,14 @@ export async function loadRun(id: string): Promise<{ name: string; snap: RunSnap
   if (error || !job) throw new Error(error?.message ?? 'run not found')
   const snap = (job as { snapshot: RunSnapshot }).snapshot
   if (snap?.v !== 2) throw new Error('This run was saved before runs could be reopened.')
-  const { data: sheets } = await supabase.from('nest_sheets').select('sheet_number,gcode').eq('nest_job_id', id)
-  const gcodeByNo = new Map((sheets ?? []).map(s => [s.sheet_number as number, (s.gcode as string | null) ?? '']))
+  const { data: sheets } = await supabase.from('nest_sheets').select('sheet_number,gcode,gcode_a').eq('nest_job_id', id)
+  const rowByNo = new Map((sheets ?? []).map(s => [s.sheet_number as number, s as { gcode: string | null; gcode_a: string | null }]))
   const files = snap.nestResult.sheets.flatMap((s, i) => {
-    const f = snap.files.find(x => x.sheetIndex === s.index)
-    const gcode = gcodeByNo.get(i + 1)
-    return f && gcode ? [{ ...f, gcode }] : []
+    const row = rowByNo.get(i + 1)
+    return snap.files.filter(x => x.sheetIndex === s.index).flatMap(f => {
+      const gcode = f.program === 'A' ? row?.gcode_a : row?.gcode
+      return gcode ? [{ ...f, gcode }] : []
+    })
   })
   return { name: (job as { name: string | null }).name ?? 'Run', snap, files }
 }
@@ -177,7 +185,8 @@ export interface RunFile {
   kind: typeof RUN_FILE_KIND; v: 1
   id: string | null; name: string; projectId: string; jobNumber: string | null
   snapshot: RunSnapshot
-  gcode: [number, string][]    // sheetIndex → program
+  gcode: [number, string][]    // sheetIndex → program (6th face: program Z)
+  gcodeA?: [number, string][]  // sheetIndex → 6th face program A
 }
 
 export function runFileName(jobNumber: string | null, runNo: number | null | undefined, savedAt: string): string {
@@ -188,7 +197,8 @@ export function runFileText(f: Omit<RunFile, 'kind' | 'v' | 'snapshot' | 'gcode'
   const file: RunFile = {
     kind: RUN_FILE_KIND, v: 1, id: f.id, name: f.name, projectId: f.projectId, jobNumber: f.jobNumber,
     snapshot: buildSnapshot(f.run),
-    gcode: f.run.files.map(x => [x.sheetIndex, x.gcode]),
+    gcode: f.run.files.filter(x => x.program !== 'A').map(x => [x.sheetIndex, x.gcode]),
+    gcodeA: f.run.files.filter(x => x.program === 'A').map(x => [x.sheetIndex, x.gcode]),
   }
   return JSON.stringify(file)
 }
@@ -197,8 +207,11 @@ export function parseRunFile(text: string): { file: RunFile; files: SavedRunFile
   let file: RunFile
   try { file = JSON.parse(text) } catch { throw new Error('That isn’t a run file.') }
   if (file?.kind !== RUN_FILE_KIND || file.snapshot?.v !== 2) throw new Error('That isn’t a run file.')
-  const gcode = new Map(file.gcode)
-  const files = file.snapshot.files.flatMap(f => gcode.has(f.sheetIndex) ? [{ ...f, gcode: gcode.get(f.sheetIndex)! }] : [])
+  const gcode = new Map(file.gcode), gcodeA = new Map(file.gcodeA ?? [])
+  const files = file.snapshot.files.flatMap(f => {
+    const g = (f.program === 'A' ? gcodeA : gcode).get(f.sheetIndex)
+    return g ? [{ ...f, gcode: g }] : []
+  })
   return { file, files }
 }
 

@@ -9,7 +9,7 @@
 // ============================================================
 
 import { supabase } from '@/src/lib/supabase'
-import { buildSheetDrills, groupDrillOps, drillKey, type DrillOpRaw, type PartRef } from './drills'
+import { buildSheetDrills, groupDrillOps, drillKey, onDownFace, type DrillOpRaw, type PartRef } from './drills'
 import { buildSheetRoutes, groupRouteOps, expandToolSetMember, type RouteOpRaw, type RouteGeom, type ToolSetMember } from './routes'
 import { resolveDrillTool, type DrillLibItem, type RouterToolItem } from './resolveDrillTools'
 import { syncSeamDrillOperations } from './seamDrillSync'
@@ -285,14 +285,14 @@ export async function loadResolvedDrillOps(
 // Safe to call on every nest edit.
 export function projectSheetDrills(sheets: NestedSheet[], ops: ResolvedDrillOps): Map<number, SheetDrill[]> {
   const bySheet = new Map<number, SheetDrill[]>()
-  for (const sheet of sheets) bySheet.set(sheet.index, buildSheetDrills(sheet, ops.partByUid, ops.opsByKey, sheet.thickness))
+  for (const sheet of sheets) bySheet.set(sheet.index, buildSheetDrills(sheet, ops.partByUid, ops.opsByKey, sheet.thickness, isTwoSidedSheet(sheet, ops)))
   return bySheet
 }
 
 // Same, for routing features (grooves / routes / pockets).
 export function projectSheetRoutes(sheets: NestedSheet[], ops: ResolvedDrillOps): Map<number, SheetRoute[]> {
   const bySheet = new Map<number, SheetRoute[]>()
-  for (const sheet of sheets) bySheet.set(sheet.index, buildSheetRoutes(sheet, ops.partByUid, ops.routesByKey))
+  for (const sheet of sheets) bySheet.set(sheet.index, buildSheetRoutes(sheet, ops.partByUid, ops.routesByKey, isTwoSidedSheet(sheet, ops), sheet.thickness))
   return bySheet
 }
 
@@ -302,26 +302,28 @@ export async function loadSheetDrills(
   opts: { sync?: boolean | 'force'; blockDiameters?: number[]; routerTools?: RouterToolItem[]; preferredPocketToolNumber?: number | null; deductEdgeband?: boolean } = {},
 ): Promise<SheetDrillsResult> {
   const ops = await loadResolvedDrillOps(parts, opts)
-  return { bySheet: projectSheetDrills(sheets, ops), routesBySheet: projectSheetRoutes(sheets, ops), warnings: [...ops.warnings, ...mixedFaceWarnings(sheets, ops)] }
+  return { bySheet: projectSheetDrills(sheets, ops), routesBySheet: projectSheetRoutes(sheets, ops), warnings: ops.warnings }
 }
 
-// One program machines one face. A sheet whose parts need routing on BOTH faces
-// (a shaker / VJ front with a glass door's back rebate) needs the 6th-face flip
-// (two-sided spec, step 2 — not built), so say so instead of cutting one face wrong.
-// Back-only sheets (glass doors) cut face down like every other sheet.
-export function mixedFaceWarnings(sheets: NestedSheet[], ops: ResolvedDrillOps): string[] {
-  const out: string[] = []
-  sheets.forEach((sheet, i) => {
-    let front = false, back = false
-    for (const pl of sheet.placements) {
-      const part = ops.partByUid.get(pl.baseUid)
-      if (!part) continue
-      for (const r of ops.routesByKey.get(drillKey(part.source_table, part.cabinet_instance_id, part.source_part_key)) ?? []) {
-        if (r.plane_kind === 'face_front') front = true
-        else if (r.plane_kind === 'face_back') back = true
-      }
+// 6th face nesting (two-sided spec §0): a sheet runs as program A + flip + program Z
+// when any part on it has work on BOTH faces (a shaker / VJ front with hinge cups
+// on its back; a gable drilled both sides). Cuts that go right through don't count
+// (they're made from either face). Every other sheet is one program, as before:
+// a part with work on one face only is right whichever way up it's cut.
+export function isTwoSidedSheet(sheet: NestedSheet, ops: ResolvedDrillOps): boolean {
+  const th = sheet.thickness
+  for (const pl of sheet.placements) {
+    const part = ops.partByUid.get(pl.baseUid)
+    if (!part) continue
+    const key = drillKey(part.source_table, part.cabinet_instance_id, part.source_part_key)
+    let up = false, down = false
+    const see = (face: string | null | undefined, depth: number | null | undefined) => {
+      if (depth == null || !(depth > 0) || depth >= th - 1e-6) return   // through (or nothing)
+      if (onDownFace(part, face)) down = true; else up = true
     }
-    if (front && back) out.push(`Sheet ${i + 1}: front-face routing (shaker / VJ) and back-face routing (glass rebate) on one sheet needs the 6th-face flip, which isn't built yet. Nest those doors on separate sheets.`)
-  })
-  return out
+    for (const d of ops.opsByKey.get(key) ?? []) see(d.output_face, d.depth)
+    for (const r of ops.routesByKey.get(key) ?? []) see(r.output_face, r.depth ?? r.size_dz)
+    if (up && down) return true
+  }
+  return false
 }

@@ -1,6 +1,6 @@
 # Phase B — Two-Sided Machining (6th face nesting)
 
-**Status:** step 1 (face routes) DONE + machine-checked 2026-11-05 (Mark: shaker routes working well). Step 2 (A/Z split, trims, flip) NOT STARTED. Phase A (editor + tagging) is done — see
+**Status:** step 1 (face routes) DONE + machine-checked 2026-11-05 (Mark: shaker routes working well). Step 2 (A/Z split, trims, flip) BUILT 2026-11-05, machine test pending (see §0 Step 2 as built). Phase A (editor + tagging) is done — see
 "Phase A recap" below and `memory/door-face-front-back.md`. Method locked with Mark
 2026-10-31 (§0) — it follows Cabinet Vision's 6th face nesting.
 
@@ -39,11 +39,42 @@ sheet that needs it runs as **two programs with a whole-sheet flip between**.
    are evaluated in `resolveFace.ts` (`evaluateProfileOps`) for drawing only. So
    step 1 = write door-profile ops as `face_front` route/groove part_operations and
    check they cut right on a test door.
-2. **Then 6th face** — split A/Z programs, trims, flip mirror.
+2. **Then 6th face** — split A/Z programs, trims, flip mirror. BUILT 2026-11-05.
 
-### Still to decide
-- File naming for the pair (e.g. `…_01A.anc` / `…_01Z.anc`) and labels: which program
-  prints labels (Z, since it cuts the parts out).
+### Decided 2026-11-05 (Mark)
+- File names: `…_01A.anc` then `…_01Z.anc` (`gcodeFileName` `program`).
+- Labels: nothing tied to the programs — labels print as before.
+- No hold-downs (onion skin / tabs) on the face routes — answers §5 Q5.
+
+### Step 2 as built (2026-11-05)
+- **Face of an op** = the existing pre-mirror rule (`drills.ts onDownFace`, same as
+  `ebShift`): an op is on the DOWN face when its `output_face` sign differs from the
+  part's up sign (doors + gables `+`, everything else `-`). Face A = the up face of
+  today's single program (doors: the back / hinge side). Hand ops have no
+  `output_face` and stay on the up face (program A), as they always cut.
+- **Two-sided sheet** (`sheetDrills.ts isTwoSidedSheet`): any part on it with a
+  non-through op on each face. Through cuts don't count and run in A from the top.
+  Every other sheet is byte-identical to before (one program, stored mirrors kept).
+- On a two-sided sheet a down-face op is **un-mirrored** (pos_x → w − pos_x, then the
+  u-min tape shift) to where it really sits seen from above, tagged `program: 'Z'`.
+  The stored mirror was for flipping one part over its own height axis; the whole
+  sheet flips over the long edge instead.
+- `gcode.ts generateSheetPrograms`: A = up-face drills + routes, then the two
+  `SIXTH_FACE_TRIM` (5mm) cuts with the outline tool, no perimeters. The trims sit on
+  the datum X end and the long edge AWAY from the Y fence (from `origin_corner`),
+  plunge off the sheet away from the fences and run towards them. Z = the sheet
+  mirrored across the long edge and shifted so the trimmed edges are the datum
+  (`sixthFaceZMap`: top_left → x − 5, y → H − y), stock 5 smaller each way; Z-tagged
+  drills + routes, then every perimeter / cut-out. Program notes under the header;
+  A swaps the template's "face UP" to "face DOWN - 6TH FACE A".
+- Warns (Stage 6 + program comment) when a part sits inside a trim strip.
+- Stage 6 lists both files with an A / Z chip; the simulator draws Z on the flipped
+  sheet (`SimFile.sheet`). Saved runs: A in `nest_sheets.gcode_a` (migration
+  `nest_sheets_gcode_a`), Z in `gcode`; run file `gcodeA`. headlessRun writes both.
+- RHK6592 Kitchen (headless): 5 Satin Board door sheets → A/Z pairs, 9 Whiteboard
+  carcass sheets single; no validation errors, no trim warnings.
+- Not yet: Stage 5 / cut sheet pictures show both faces' holes from above (no A/Z
+  split); circular-hole entry still helical only.
 
 ---
 
@@ -173,12 +204,12 @@ real route emitter:
 ## 5. Open questions / decisions before starting
 
 1. ~~One program or two?~~ **Two programs, A then Z (§0).**
-2. **Flip axis** — assumed over the long axis (§0), to confirm with Mark.
+2. ~~Flip axis~~ **Over the long edge (confirmed, §0).**
 3. **Front-face tooling:** which router bit / tool number for front profiles &
    grooves — per material, per op, or a fixed "front profile" tool?
 4. ~~Registration~~ **Program A trims the outside long edge + X0 end; flipped
    sheet pushed into X0/Y0 (§0).**
-5. **Do front ops need onion-skin/tabs** like the perimeter, or full-depth?
+5. ~~Do front ops need onion-skin/tabs~~ **No (Mark 2026-11-05).**
 6. **Scope of route emit:** only grooves/pockets, or also arbitrary drawn paths
    (Phase 3 "stored outline" territory)?
 

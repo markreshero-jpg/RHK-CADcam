@@ -117,6 +117,7 @@ orders by level / topic, not array position.
 | Advanced › Benchtops | Reshape a benchtop | Have a top → right-click → Edit shape → change the outline + save (a top's segments differ from the start) |
 | Advanced › Production | Cut list and CNC | Production → Generate CNC… (path ends /optimiser) → back to the canvas |
 | Intermediate › Production | Finger-pull rails and knock-in blocks | Read-only: joined rails in the optimiser cut list, blocks in 3D (`finger_rail_runs`) |
+| Advanced › Production | 6th face: two programs and a flip | Read-only in the optimiser: A/Z pair, run A, flip over the long edge, run Z, simulate |
 
 ## Phases
 

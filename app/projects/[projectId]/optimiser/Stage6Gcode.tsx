@@ -12,7 +12,8 @@
 import { useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
-import { generateSheetGcode, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
+import { generateSheetPrograms, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
+import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
@@ -23,7 +24,9 @@ import Simulator, { type SimCoord, type SimDrillCoord } from './Simulator'
 import { pickSaveFolder, saveBlob, saveBlobAs, type SaveTarget } from '@/src/lib/saveAs'
 
 interface SimState { coord: SimCoord | null; drillBlock: DrillBlockConfig | null; drillCoord: SimDrillCoord | null }
-interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[]; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]> }
+// program: 6th face pair (A then Z) on a two-sided sheet; simSheet = the sheet as
+// that program sees it (Z: flipped + trimmed), for the simulator.
+interface GenFile { sheetIndex: number; fileName: string; gcode: string; lines: number; findings: Finding[]; outlines?: Record<string, { x: number; y: number }[]>; holes?: Record<string, { x: number; y: number }[][]>; program?: 'A' | 'Z'; simSheet?: NestedSheet }
 
 function dateStamp() {
   const d = new Date()
@@ -67,7 +70,7 @@ export default function Stage6Gcode() {
   const sim0 = (current?.sim ?? null) as SimState | null
 
   const [files, setFiles] = useState<GenFile[]>(() => current?.files.map(f => ({ ...f, lines: f.gcode.split('\n').length, findings: [] })) ?? [])
-  const [preview, setPreview] = useState<number | null>(() => current?.files[0]?.sheetIndex ?? null)
+  const [preview, setPreview] = useState<string | null>(() => current?.files[0]?.fileName ?? null)
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState<string | null>(() => current?.id ? savedNote(current.savedAt) : null)
   const [saveFailed, setSaveFailed] = useState(false)
@@ -227,7 +230,8 @@ export default function Stage6Gcode() {
       // Sheet numbers restart per material (Whiteboard 01-10, then LX 01-05). The
       // O-number stays unique across the whole run.
       const sheetNos = sheetNumbers(nestResult.sheets)
-      const gen: GenFile[] = nestResult.sheets.map((sheet, i) => {
+      const sixthWarn: string[] = []
+      const gen: GenFile[] = nestResult.sheets.flatMap((sheet, i) => {
         const drills = sheetDrills.get(sheet.index) ?? []
         const routes = sheetRoutes.get(sheet.index) ?? []
         const mat = sheet.materialId ? matById.get(sheet.materialId) : undefined
@@ -239,7 +243,7 @@ export default function Stage6Gcode() {
         if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
         const outlines = outlinesFor(sheet)
         const holes = holesFor(sheet)
-        const gcode = generateSheetGcode({
+        const programs = generateSheetPrograms({
           sheet, thickness: sheet.thickness, profile: post, drills, routes,
           toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
           toolDiameter: tool?.diameter != null ? Number(tool.diameter) : undefined,
@@ -254,13 +258,16 @@ export default function Stage6Gcode() {
           holes,
           holeSkins: holeSkinsFor(sheet),
         })
-        const fileName = gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: sheetNos.get(sheet.index)!.no, ext: post.file_extension, runNo })
-        return {
-          sheetIndex: sheet.index, fileName,
-          gcode, lines: gcode.split('\n').length,
-          findings: validateGcode(gcode, { maxCommentLength: post.max_comment_length }),
-          outlines, holes,
-        }
+        const sheetNo = sheetNos.get(sheet.index)!.no
+        if (programs[0].warnings.length) sixthWarn.push(...programs[0].warnings.map(w => `Sheet ${sheetNo} (6th face): ${w}`))
+        return programs.map(pr => ({
+          sheetIndex: sheet.index,
+          fileName: gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: sheetNo, ext: post.file_extension, runNo, program: pr.program }),
+          gcode: pr.gcode, lines: pr.gcode.split('\n').length,
+          findings: validateGcode(pr.gcode, { maxCommentLength: post.max_comment_length }),
+          outlines: pr.outlines, holes: pr.holes,
+          ...(pr.program ? { program: pr.program, simSheet: pr.sheet } : {}),
+        }))
       })
 
       // Two materials can share a file-name code (Whiteboard 16.5 / Whiteboard 16 →
@@ -269,7 +276,7 @@ export default function Stage6Gcode() {
       const nameCount = new Map<string, number>()
       for (const g of gen) nameCount.set(g.fileName, (nameCount.get(g.fileName) ?? 0) + 1)
       gen.forEach((g, i) => {
-        if (nameCount.get(g.fileName)! > 1) g.fileName = g.fileName.replace(/_(\d{2,})(\.[^.]+)$/, `_${String(i + 1).padStart(2, '0')}x$2`)
+        if (nameCount.get(g.fileName)! > 1) g.fileName = g.fileName.replace(/_(\d{2,})([AZ]?)(\.[^.]+)$/, `_${String(g.sheetIndex + 1).padStart(2, '0')}x$2$3`)
       })
 
       // Hard gate: a program with errors is never offered for download, and is
@@ -284,15 +291,15 @@ export default function Stage6Gcode() {
         setError(`Export blocked: ${blocking.length} validation error(s) — the program would not load or would crash the machine.`)
         return
       }
-      setPostWarnings(warned)
+      setPostWarnings([...sixthWarn, ...warned])
 
       setFiles(gen)
-      setPreview(gen[0]?.sheetIndex ?? null)
+      setPreview(gen[0]?.fileName ?? null)
       // Save straight away — the run can then be reopened from Stage 1.
       const sim: SimState = { coord: coordNow, drillBlock: drillBlock ?? null, drillCoord: drillCoordNow }
       const run = {
         id: null, runNo, name: runName(runNo), savedAt: new Date().toISOString(), nest: nestResult,
-        files: gen.map(({ sheetIndex, fileName, gcode, outlines, holes }) => ({ sheetIndex, fileName, gcode, outlines, holes })),
+        files: gen.map(({ sheetIndex, fileName, gcode, outlines, holes, program, simSheet }) => ({ sheetIndex, fileName, gcode, outlines, holes, ...(program ? { program, simSheet } : {}) })),
         drillsBySheet: new Map<number, SheetDrill[]>([...sheetDrills].map(([k, v]) => [k, v.map(d => ({ x: d.x, y: d.y, diameter: d.diameter }))])),
         sim,
       }
@@ -369,7 +376,7 @@ export default function Stage6Gcode() {
     try { await save(current, current.id) } finally { setBusy(false) }
   }
 
-  const previewFile = files.find(f => f.sheetIndex === preview)
+  const previewFile = files.find(f => f.fileName === preview)
 
   return (
     <div className="h-full flex overflow-hidden">
@@ -422,10 +429,13 @@ export default function Stage6Gcode() {
           ) : (
             <div className="space-y-1.5 max-w-2xl">
               {files.map(file => (
-                <div key={file.sheetIndex}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${preview === file.sheetIndex ? 'border-accent bg-accent/10' : 'border-edge-strong hover:bg-surface-2'}`}
-                  onClick={() => setPreview(file.sheetIndex)}>
+                <div key={file.fileName}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border cursor-pointer transition-colors ${preview === file.fileName ? 'border-accent bg-accent/10' : 'border-edge-strong hover:bg-surface-2'}`}
+                  onClick={() => setPreview(file.fileName)}>
                   <span className="text-xs font-mono text-ink flex-1">{file.fileName}</span>
+                  {file.program && <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-3 text-ink-muted"
+                    title={file.program === 'A' ? '6th face: back face + trims. Then flip the sheet over the long edge, trimmed edges to X0 / Y0.' : '6th face: run after program A, sheet flipped. Face routes + parts out.'}>
+                    {file.program === 'A' ? '6th face A - then flip' : '6th face Z - after flip'}</span>}
                   <span className="text-[11px] text-ink-subtle">{file.lines} lines</span>
                   <button onClick={e => { e.stopPropagation(); download(file.fileName, file.gcode) }}
                     className="text-[11px] px-2 py-0.5 rounded border border-edge-strong text-ink-muted hover:bg-surface-3 transition-colors">Download</button>
@@ -446,7 +456,7 @@ export default function Stage6Gcode() {
 
       {simulating && nestResult && (
         <Simulator
-          files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode, outlines: f.outlines, holes: f.holes }))}
+          files={files.map(f => ({ sheetIndex: f.sheetIndex, fileName: f.fileName, gcode: f.gcode, outlines: f.outlines, holes: f.holes, sheet: f.simSheet }))}
           sheets={nestResult.sheets}
           coord={coord ?? undefined}
           drillBlock={simDrillBlock ?? undefined}

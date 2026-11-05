@@ -64,7 +64,7 @@ export default function CutSheetsPanel() {
     cutSheetsPdf({
       nest: nestResult, partByUid: new Map(snap.parts.map(p => [p.uid, p])), drillsBySheet: drills, deductEb,
       jobNumber: snap.jobNumber, projectName: snap.projectName, scope, materialName: matName,
-      fileNames: savedDrills ? nestResult.sheets.map(s => savedRun!.files.find(f => f.sheetIndex === s.index)?.fileName) : undefined,
+      fileNames: savedDrills ? nestResult.sheets.map(s => savedRun!.files.filter(f => f.sheetIndex === s.index).map(f => f.fileName).join(" then ") || undefined) : undefined,
       runCode: savedDrills && savedRun!.runNo != null ? runCode(snap.jobNumber, savedRun!.runNo) : null,
     }, { sheets: sheetsOn, holes: opts.holes, partsList: opts.partsList }).then(doc => {
       if (dead) return
