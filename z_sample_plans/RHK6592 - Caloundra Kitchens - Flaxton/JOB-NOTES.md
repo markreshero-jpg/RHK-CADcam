@@ -222,3 +222,8 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
   flue notch 200 x 250 in the fixed shelf (350) + top, flue box. Resolver clean.
 - Front (false panel + doors) waiting on Mark: the face grid has no zone span, so a full-width false panel under a pair
   of doors needs one column (single 600 door) or two half false panels.
+
+## Rev 18 (Mark 2026-11-05) — `_tmp-6592-rev18.mjs`
+
+- Kitchen BC-03 oven space 604 -> 600: open row 600 -> 596 (+ the 2 gaps each side = 600 between the false panels), false
+  panels top + bottom unlocked = 63 each (bottom 0-63, top 663-726). Resolver clean.
