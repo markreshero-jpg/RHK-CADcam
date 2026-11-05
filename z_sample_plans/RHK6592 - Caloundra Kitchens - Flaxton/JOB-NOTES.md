@@ -174,3 +174,13 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 - Rev 11's BC-04 custom "Kick return face" removed. BC-04's kick detached into its own kick assembly **KICK 3** (kick_runs
   row + detach transform + assembly, as the canvas Detach does), dx 98 = x 618 -> 520 to meet KICK 1's face (40 past the
   filler into the void). Face only: KICK 3 hidden_parts tk_kick_sub_front_1 + tk_kick_back_2 (not made). Resolver clean.
+- Rev 12b: rev 12's hidden_parts did nothing; KICK 3 sub front + back REMOVED via part_hide_views
+  (tk_kick_sub_front_100, tk_kick_back_200 in all 3 views = not made). Removal = part_hide_views, not hidden_parts.
+
+## Rev 13 (Mark 2026-11-05) — `_tmp-6592-rev13.mjs`
+
+- BC-03 false panel wasn't showing in 3D: zone_0_1 was hidden in all three views (= removed, not made; set before this
+  session). Unhidden, so it's drawn + made again.
+- TC-01 (PT end panel, open shelving left end) lifted onto the kick: pos_z 110, 2090.
+- KICK 2 runs west under TC-01 into KICK 1's face: offset 520, dx 2472 (520 -> 2992), inside corner butt at x 520.
+  Resolver clean.
