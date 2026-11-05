@@ -267,3 +267,7 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 - Dune (RHK6478) kitchen re-resolved for the no-bottom back fix (42 cabinets, clean) — `_tmp-reresolve-room.mjs`.
 - Rangehood cover now runs up to the fixed shelf (shelf height), not a fixed 260: WC-03 cover 332 (18 -> 350), hinge
   notches unchanged. Stored cover h dropped. Kitchen re-resolved, clean.
+- Rev 25 (2026-11-06, Mark): KICK 2 in the Kitchen and the Butlers split on the sub front only, at 2000
+  (kick_runs split_mode manual, face_splits {}, sub_splits {2000}; the back mirrors it). Kitchen: face 2413 one
+  piece, sub 2000 / 413, back 413 / 2000. Butlers: face 2472 one piece, sub 2000 / 472, back 472 / 2000. Both rooms
+  re-resolved clean. The faces stay over the sheet; Mark is sourcing longer 18 satin pieces for them.
