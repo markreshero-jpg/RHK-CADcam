@@ -112,9 +112,9 @@ const rScale = (n: number) => String(Math.round(n))
 const YSign = createContext(1)
 
 /** A Y coordinate field: shows Z (up) on an elevation; onCommit gets frame y. */
-function YField({ value, onCommit, bare, w }: { value: number; onCommit?: (n: number) => void; bare?: boolean; w?: string }) {
+function YField({ value, onCommit, bare, w, inputRef }: { value: number; onCommit?: (n: number) => void; bare?: boolean; w?: string; inputRef?: React.Ref<HTMLInputElement> }) {
   const ys = useContext(YSign)
-  return <Field label={bare ? undefined : ys < 0 ? 'Z' : 'Y'} value={ys * value} w={w} onCommit={onCommit && (n => onCommit(ys * n))} />
+  return <Field label={bare ? undefined : ys < 0 ? 'Z' : 'Y'} value={ys * value} w={w} inputRef={inputRef} onCommit={onCommit && (n => onCommit(ys * n))} />
 }
 const r1 = (n: number) => String(Math.round(n * 10) / 10)
 
@@ -132,8 +132,9 @@ const polyLen = (pts: Pt[], closed: boolean, bulges?: number[]) =>
   pts.reduce((s, p, i) => (i === pts.length - 1 && !closed) ? s : s + bulgeSegLength(p, pts[(i + 1) % pts.length], bulges?.[i] ?? 0), 0)
 
 /** A number field that commits on Enter or blur (Esc reverts) — one undo step per edit. */
-function Field({ label, value, onCommit, suffix, w = 'w-20', disabled }: {
+function Field({ label, value, onCommit, suffix, w = 'w-20', disabled, inputRef }: {
   label?: string; value: number; onCommit?: (n: number) => void; suffix?: string; w?: string; disabled?: boolean
+  inputRef?: React.Ref<HTMLInputElement>
 }) {
   const [draft, setDraft] = useState<string | null>(null)
   const shown = draft ?? r1(value)
@@ -146,7 +147,7 @@ function Field({ label, value, onCommit, suffix, w = 'w-20', disabled }: {
   return (
     <label className="flex items-center gap-1 min-w-0">
       {label && <span className="text-[10px] text-gray-500 w-4 shrink-0">{label}</span>}
-      <input value={shown} disabled={disabled || !onCommit} inputMode="decimal"
+      <input ref={inputRef} value={shown} disabled={disabled || !onCommit} inputMode="decimal"
         onChange={e => setDraft(e.target.value)} onBlur={commit}
         onKeyDown={e => {
           if (e.key === 'Enter') { e.preventDefault(); commit(); (e.target as HTMLInputElement).blur() }
@@ -393,12 +394,28 @@ function MultiInfo({ sel, k, cad }: { sel: RoomAnnotation[]; k: number; cad: Ann
 function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k: number }) {
   const ys = useContext(YSign)
   const set = (geom: RoomAnnotation['geom']) => cad.patchGeom(a.id, geom)
+  // CM2: clicking an object's centre + lands in its Centre X field (Tab = Y, Enter moves).
+  const ctrRef = useRef<HTMLInputElement>(null)
+  const creq = cad.centreFocusReq
+  useEffect(() => {
+    if (!creq || creq.id !== a.id || Date.now() - creq.t > 1500) return
+    requestAnimationFrame(() => { ctrRef.current?.focus(); ctrRef.current?.select() })
+  }, [creq?.n])   // eslint-disable-line react-hooks/exhaustive-deps
+  /** Centre X / Y fields: a new value moves the whole object so its centre lands there. */
+  const centreFields = (c: Pt, moveTo: (p: Pt) => void) => <>
+    <div className="text-[10px] text-gray-500 mb-1 mt-2">Centre</div>
+    <div className="flex gap-2"><Field label="X" value={c.x} inputRef={ctrRef} onCommit={n => moveTo({ x: n, y: c.y })} /><YField value={c.y} onCommit={n => moveTo({ x: c.x, y: n })} /></div>
+  </>
   switch (a.kind) {
     case 'line':
     case 'cloud': {
       const g = a.geom as LineGeom, pts = g.pts ?? [], closed = a.kind === 'cloud' || !!g.closed
       return <>
         <PointTable pts={pts} closed={closed} bulges={g.bulges} onPoint={(i, p) => set({ ...g, pts: pts.map((q, j) => j === i ? p : q) })} />
+        {closed && pts.length >= 3 && (() => {
+          const c = { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length }
+          return centreFields(c, t => set({ ...g, pts: pts.map(p => ({ x: p.x + t.x - c.x, y: p.y + t.y - c.y })) }))
+        })()}
         <div className="mt-2">
           <Row k={closed ? 'Perimeter' : 'Total length'} v={`${r1(polyLen(pts, closed, g.bulges))} mm`} />
           {closed && <Row k="Area" v={`${r1(polyArea(sampleBulged(pts, g.bulges, true)) / 1e6)} m²`} />}
@@ -426,8 +443,11 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
           <Field label="H" value={h} onCommit={n => n > 0 && set({ ...g, b: { x: g.b.x, y: g.a.y + sy * n } })} />
         </div>
         <div className="flex gap-2 mt-1.5"><Field label="∠" value={g.rot ?? 0} onCommit={n => set({ ...g, rot: ((n % 360) + 360) % 360 })} suffix="°" w="w-16" /></div>
+        {(() => {
+          const c = { x: (g.a.x + g.b.x) / 2, y: (g.a.y + g.b.y) / 2 }
+          return centreFields(c, t => set({ ...g, a: { x: g.a.x + t.x - c.x, y: g.a.y + t.y - c.y }, b: { x: g.b.x + t.x - c.x, y: g.b.y + t.y - c.y } }))
+        })()}
         <div className="mt-2">
-          <Row k="Centre" v={`${r1((g.a.x + g.b.x) / 2)}, ${r1(ys * (g.a.y + g.b.y) / 2)}`} />
           <Row k="Area" v={`${r1((a.kind === 'rect' ? w * h : Math.PI * w * h / 4) / 1e6)} m²`} />
         </div>
       </>
@@ -459,7 +479,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       const conv = (svg: number) => ((-svg % 360) + 360) % 360
       return <>
         <div className="text-[10px] text-gray-500 mb-1">Centre</div>
-        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><YField value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.c.x} inputRef={ctrRef} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><YField value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
         <div className="flex gap-2 mt-1.5"><Field label="R" value={g.r} onCommit={n => n > 0 && set({ ...g, r: n })} suffix="mm" w="w-16" /></div>
         <div className="flex gap-2 mt-1.5">
           <Field label="↶" value={conv(g.a1)} onCommit={n => set({ ...g, a1: -n })} suffix="° from" w="w-14" />
@@ -481,7 +501,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       if (!g?.c) return null
       return <>
         <div className="text-[10px] text-gray-500 mb-1">Centre</div>
-        <div className="flex gap-2"><Field label="X" value={g.c.x} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><YField value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
+        <div className="flex gap-2"><Field label="X" value={g.c.x} inputRef={ctrRef} onCommit={n => set({ ...g, c: { x: n, y: g.c.y } })} /><YField value={g.c.y} onCommit={n => set({ ...g, c: { x: g.c.x, y: n } })} /></div>
         <div className="flex gap-2 mt-1.5">
           <Field label="R" value={g.r} onCommit={n => n > 0 && set({ ...g, r: n })} w="w-16" />
           <Field label="Ø" value={g.r * 2} onCommit={n => n > 0 && set({ ...g, r: n / 2 })} w="w-16" />

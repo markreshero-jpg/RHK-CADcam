@@ -281,6 +281,8 @@ export function useAnnotationTool({
   const [focusReq, setFocusReq] = useState<{ field: TypedField; n: number; seed?: string } | null>(null)
   // Several selected: Tab → the panel's X field (then Y) to move them by their extents' top-left.
   const [selFocusReq, setSelFocusReq] = useState<{ n: number; seed?: string } | null>(null)
+  /** CM2: an object's centre + was clicked -> the panel focuses its Centre X field. */
+  const [centreFocusReq, setCentreFocusReq] = useState<{ n: number; id: string; t: number } | null>(null)
   // Cloud tool: drag / click-click a rectangle, or click the corners of a freehand one.
   const [cloudMode, setCloudMode] = useState<'rect' | 'free'>('rect')
   // Click-click placement (B1): first click armed the shape, the next click finishes it.
@@ -1394,6 +1396,14 @@ export function useAnnotationTool({
     onGrip: (e, id, grip: AnnotGrip) => {
       const a = annRef.current.find(x => x.id === id)
       if (!a) return
+      if (grip === 'centre') {   // CM2: select it; drag moves it by its centre, a click lands in Centre X
+        if (editing) commitEdit()
+        if (!active) enterCad()
+        setSelectedIds(new Set([id]))
+        setCentreFocusReq(r => ({ n: (r?.n ?? 0) + 1, id, t: Date.now() }))
+        beginDrag({ kind: 'move', start: toFrame(e, !e.shiftKey), orig: new Map([[id, a.geom]]), moved: false }, { x: e.clientX, y: e.clientY })
+        return
+      }
       if (grip.startsWith('e')) {   // side bar: slide that side parallel
         beginDrag({ kind: 'edge', id, i: Number(grip.slice(1)), start: toFrame(e, false), orig: a.geom, moved: false }, { x: e.clientX, y: e.clientY })
         return
@@ -1615,7 +1625,7 @@ export function useAnnotationTool({
     cursor: active ? cursor : null,
     fromPt: drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null,
     ribbonSize, applyLength, applyAngle, applyBoxSize, liveMeasure, patchGeom,
-    typed, typedFields, setTyped, commitTyped, clearTyped, focusReq, selFocusReq, moveSelectionTo,
+    typed, typedFields, setTyped, commitTyped, clearTyped, focusReq, selFocusReq, centreFocusReq, moveSelectionTo,
     /** Text block size helper for the editor overlay. */
     layoutFor: (a: RoomAnnotation, text: string) => {
       const s = resolveStyle(a.kind, a.style)

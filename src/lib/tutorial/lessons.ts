@@ -1649,11 +1649,14 @@ export const LESSONS: TutorialLesson[] = [
 
   // Appended 2026-11-06 (z_CAD_tool CM1: centre marks).
   { id: 'cad_centres', level: 'basics', topic: 'cad', title: 'Centre marks on CAD objects',
-    blurb: 'In CAD mode every circle, arc, box, ellipse, cloud and closed shape shows a small + at its centre.',
-    keywords: 'cad centre center mark marks point cross circle arc box ellipse snap middle', steps: [
+    blurb: 'In CAD mode every circle, arc, box, ellipse, cloud and closed shape shows a small + at its centre. Click it to type where the centre goes.',
+    keywords: 'cad centre center mark marks point cross circle arc box ellipse snap middle move position x y rectangle', steps: [
     { id: 'open', title: 'Turn on CAD mode',
       body: 'Press F7, or click CAD in the left sidebar. In the cabinet editor, open the Elevation tab and turn on CAD. Each object with a centre shows a faint blue + there; select one and its + gets bigger.',
       target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'move', title: 'Move a shape by its centre',
+      body: 'Click the + in the middle of a box (or ellipse, circle, cloud, closed shape). It selects and the cursor lands in Centre X in the CAD panel: type the new X (sums work, e.g. 1200+300), Tab to Y, type it and press Enter. The shape moves so its centre sits there. Dragging the + moves the shape by its centre, snapping as it goes.',
+      canvas: true, done: c => c.annotSelected > 0 },
     { id: 'snap', title: 'Snap to it',
       body: 'With Snap on (and Centres ticked in the Snap ▾ menu), draw a line and move near a + : a round snap marker shows and the point locks to the centre. The marks only show on screen; they never print.',
       canvas: true, done: (c, s) => c.annotations.length > s.annotations.length },

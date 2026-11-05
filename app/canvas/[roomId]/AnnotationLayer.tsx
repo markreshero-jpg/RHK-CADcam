@@ -44,7 +44,7 @@ export interface AnnotationLayerProps {
 
 /** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
  *  the midpoint of segment N→N+1 to insert a vertex there. cN: box / ellipse corner N. */
-export type AnnotGrip = 'rotate' | 'width' | 'size' | 'offset' | `v${number}` | `m${number}` | `c${number}`
+export type AnnotGrip = 'rotate' | 'width' | 'size' | 'offset' | 'centre' | `v${number}` | `m${number}` | `c${number}`
   | 'arcS' | 'arcE' | 'arcM' | 'rad' | `e${number}` | 'dimAt'
 
 export interface AnnotationEditProps {
@@ -109,8 +109,15 @@ function centreMarksOf(a: RoomAnnotation, f: AnnotFrame, edit: AnnotationEditPro
   return pts.map((p0, i) => {
     const p = mapPt(f, p0)
     return (
-      <path key={`ctr${i}`} d={`M${p.x - r} ${p.y}H${p.x + r}M${p.x} ${p.y - r}V${p.y + r}`}
-        stroke={SEL} strokeWidth={hw / (sel ? 7 : 10)} opacity={sel ? 1 : 0.6} fill="none" />
+      <g key={`ctr${i}`}>
+        <path d={`M${p.x - r} ${p.y}H${p.x + r}M${p.x} ${p.y - r}V${p.y + r}`}
+          stroke={SEL} strokeWidth={hw / (sel ? 7 : 10)} opacity={sel ? 1 : 0.6} fill="none" />
+        {/* CM2: click = select + type a new centre in the panel; drag = move it by its centre */}
+        {edit.hittable && <circle cx={p.x} cy={p.y} r={hw * 0.6} fill="transparent" style={{ pointerEvents: 'all', cursor: 'move' }}
+          onPointerDown={e => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, 'centre') } }}>
+          <title>Centre - click to type X / Y for it, or drag to move by the centre</title>
+        </circle>}
+      </g>
     )
   })
 }
