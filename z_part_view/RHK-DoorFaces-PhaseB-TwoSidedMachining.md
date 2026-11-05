@@ -1,6 +1,6 @@
 # Phase B — Two-Sided Machining (6th face nesting)
 
-**Status:** NOT STARTED. Design/spec only. Phase A (editor + tagging) is done — see
+**Status:** step 1 (face routes) DONE + machine-checked 2026-11-05 (Mark: shaker routes working well). Step 2 (A/Z split, trims, flip) NOT STARTED. Phase A (editor + tagging) is done — see
 "Phase A recap" below and `memory/door-face-front-back.md`. Method locked with Mark
 2026-10-31 (§0) — it follows Cabinet Vision's 6th face nesting.
 
@@ -33,7 +33,7 @@ sheet that needs it runs as **two programs with a whole-sheet flip between**.
 - Answers §5 Q1 (two programs), Q2 (flip axis) and Q4 (registration).
 
 ### Build order (agreed 2026-10-31)
-1. **Face routes first** — BUILT 2026-10-31 (`collectDoorProfileRoutes`, seamDrillSync; grooves take `angle_az`), machine test pending. Shaker, VJ etc. machined in today's single program. The
+1. **Face routes first** — BUILT 2026-10-31 (`collectDoorProfileRoutes`, seamDrillSync; grooves take `angle_az`), shaker checked on the machine 2026-11-05 (VJ / Beaded still untested). Shaker, VJ etc. machined in today's single program. The
    route/groove emitter already exists (`routes.ts`, 6816dd7, reads `route`/`groove`
    part_operations), but **door profile ops never become part_operations**: they
    are evaluated in `resolveFace.ts` (`evaluateProfileOps`) for drawing only. So
