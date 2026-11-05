@@ -125,3 +125,24 @@ the carcass, 16s against walls = fillers on the kick, seen vanity panels to the 
 - Job Handle Holes = Don't drill (rule_overrides.HANDLE_DRILL false, set 2026-10-29), so no holes are machined.
 - BC-11 top two drawer fronts 170 -> 180 (locked rows 1 + 2) to line up with BC-08's 4 x 180; bottom drawer
   382 -> 362 (`_tmp-6592-dr.mjs go 180`). Resolver clean.
+
+## Rev 8 — Flavio's edited plans (Liam email 2026-11-04, Mark 2026-11-05)
+
+Source: `_JOBS/.../RHK6592 .../SITE CHECK MEASURES/` (floating shelf.pdf, Pantry wall.pdf, pantry cabinets.pdf).
+Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (canvas bridge).
+
+- 2pac colour (`334dab4c`) renamed **Dulux White on White Satin**; kitchen + butlers spec blocks updated.
+- Butlers Wall 1 (sink / blind) 2230 -> **2290** site measure: room 60 deeper (Wall 1 + Wall 3 2290, Wall 4 at y 2290,
+  south run moved 60 south, same offsets). Mark: sink cupboard BC-02 750 -> **810** (40 filler + 860 blind kept).
+  KICK 1 1710. Sink + tap re-linked (sink y 1565, tap y 1323.5). Their 16 panels ignored — ours stay 18 (board);
+  entry space kept at 1395 as drawn.
+- Butlers south top (BT2): **20 stone waterfall** at the entry end, outside the 18 end panel BC-08 (which stays);
+  top 2540 OA incl the leg (was 20 overhang past the panel). BT1 1690.
+- **WC-01 FLSHLF** floating shelf on Wall 4, 2540 (= the top incl waterfall, west wall to the waterfall face),
+  double build 2 x 18 2pac satin = 36, underside 1500 (600 above the 900 bench), seen left (entry) only. No LED.
+  Depth = library default 250 (not given).
+- **TC-05 broom cupboard** 450 x 2200 (T2D re-gridded to one door), RH hinge, door Flat Panel 16mm PT Classic White
+  Matt (zone style + material_overrides.door_face), carcass 281.5 = 300 OA incl the door; no shelves; own kick.
+  **TC-06 TEPF** 16.5 PT at 3008.5, 300 OA. The doorway past TC-04 is gone (there was no doorway object, only the
+  TC-04 note). Open shelving kept at 6 adj shelves (their drawing shows 8 — Mark: leave).
+- All resolver clean.
