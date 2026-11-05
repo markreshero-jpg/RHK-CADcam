@@ -236,3 +236,9 @@ Open: Entry J01 Paperbark variation (DO NOT CUT until approved); Play ceiling 24
 - Entry J01 = run **R5** (66 parts; Oyster Grey 7, Elegant Oak 6 (sheet 6 = one kick face piece, 3%), Whiteboard 1). All placed. R2 on the server moved to Entry J01/_superseded R2 (R4 local only).
 - Living J06 = run **R3** (61 parts; Whiteboard 10, Desert Dune 4, MDF 10mm 1). All placed, no warnings.
 - Server: \server\Data\CNCFiles\RHK6581 - Lee Smith - 38 Howard St, Grange\<room>\ (material sub folders + cut sheets / labels PDFs + .rhkrun).
+
+### Rev 2 APPROVED — Katherine 2026-11-04 (email "REVISED Shop Drawings For Approval")
+- Attachment "RHK6581 - Lee Smith - Shop Drawings Rev 2 - 02.11.26 - KB Approved.pdf": stamped APPROVED 4/11/2026 on Entry J01, Laundry J02 + J03, Kitchen J05 + Butler's J04, Living J06, Play J07 + J07M, WIR J11, Master Store J12. Robes (Bed 1 J09, Bed 2/3 J08) and Storage J10 not in the set — "robes will come tomorrow".
+- Entry J01 plan: handwritten "oyster grey" → internals PT Oyster Grey Matt (done, see Machining). Spec block on the drawing still reads Paperbark — update it.
+- Kitchen sheet 2 (plan) + sheet 3 (Wall 1): "5 x floating shelves as discussed. client to provide brackets". Sheet 4 (Butler's Wall 2, TC-06–TC-09 open talls) NOT stamped approved, note "5 x floating shelves as discussed" → butler's open talls become 5 full-length floating shelves (we supply shelves, Katherine sources brackets — her 2026-11-04 email). REDRAW BUTLER'S WALL 2 BEFORE CUTTING THE KITCHEN.
+- Calen's site notes: J03 washer GPO moved clear of the gables (49–67, 687–705, 1325–1343); upstairs landing storage switch moved (KB to confirm dimension); island power for D/W + charging — electrician aware; delivery Tue 24th, street access noted.
