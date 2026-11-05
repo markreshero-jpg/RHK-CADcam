@@ -264,6 +264,11 @@ export interface ConstructionRules {
   // Marks a run's under panel (BUP / WUP) — not a construction rule: it only keeps
   // the panel from blocking the carcasses over it and out of the dim chains.
   UNDER_PANEL?: boolean
+  // Panel door profile (DOOR_SYSTEM_SPEC §Panel profiles): an end panel / island
+  // back panel cut with the room / job door style's profile (e.g. the Shaker
+  // route), one per panel piece. The value is the cabinet face its seen side is
+  // on. Unset = plain board (the default). Cabinet layer.
+  PANEL_PROFILE?: 'left' | 'right' | 'front' | 'back'
 
   // Face neighbours + side reveals (z_doorFace_module §Neighbours). Cabinet layer.
   // NBRL / NBRR lock a side's neighbour (else the auto-detected left/right_neighbour_type);
@@ -759,9 +764,19 @@ export interface KickRunInput {
   sub_splits?:        number[] | null    // manual: sub front seams; back = mirrored
 }
 
+// Panel door profile (rules.PANEL_PROFILE): the room / job door style's routing
+// ops, evaluated per panel piece by src/lib/panelProfile.ts.
+export interface PanelProfileSpec {
+  face:         'left' | 'right' | 'front' | 'back'
+  profile_type: NonNullable<ResolvedDoorStyleInput['profile_type']>
+  ops:          RawProfileOp[]
+}
+
 // ── Cabinet Input ─────────────────────────────────────────────
 // Everything the resolver needs to know about a cabinet
 export interface CabinetInput {
+  // Panel door profile (rules.PANEL_PROFILE + the room / job door style). Absent = none.
+  panel_profile?: PanelProfileSpec | null
   // Identity
   id:             string
   assembly_class: 'base' | 'wall' | 'tall' | 'base_corner' | 'wall_corner' | 'tall_corner'
@@ -1541,6 +1556,8 @@ export interface ResolvedOpenZone {
 
 export interface ResolvedCabinet {
   cabinet_id:    string
+  // Panel door profile carried from the input (src/lib/panelProfile.ts evaluates it per piece).
+  panel_profile?: PanelProfileSpec
   // Standalone custom parts (fillers/panels/end panels). Optional — only populated
   // by the room-canvas loader; the cabinet editor reads cabinet_custom_parts directly.
   custom_parts?: ResolvedCustomPart[]

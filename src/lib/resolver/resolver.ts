@@ -243,6 +243,7 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
     seam_joints:     seamJoints,
     ...(cab.split?.at.length ? { split_at: cab.split.at } : {}),
     ...(cab.split?.back_x?.length ? { split_back_x: cab.split.back_x } : {}),
+    ...(cab.panel_profile ? { panel_profile: cab.panel_profile } : {}),   // DOOR_SYSTEM_SPEC §Panel profiles
     hinge_instances: hingeInstances,
     ...(slider ? { slider } : {}),
     ...(bifold ? { bifold: { hand: bifold.hand, bottom: r.BIFOLD_BOTTOM ?? 'above', centre: r.BIFOLD_CENTRE ?? 'standard' } } : {}),

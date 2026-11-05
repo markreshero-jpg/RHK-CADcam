@@ -11,7 +11,7 @@ import {
 import { mergeRules, rulesForClass } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
 import { mergeVjLayout } from '../doorProfile'
-import type { VjLayout } from './types'
+import type { VjLayout, PanelProfileSpec } from './types'
 import { normaliseBulkhead } from '../bulkhead'
 import { normaliseSplit } from '../cabinetSplit'
 import { normaliseFloatShelf } from '../floatShelf'
@@ -892,6 +892,12 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     ? (await resolveDoorStyles(ONE_DOOR, roomStyleId, effectiveJobStyleId, doorColourOverride))['0_0']
     : undefined
   const doorThickness = oneDoor ? oneDoor.thickness_mm + (oneDoor.facing?.thickness_mm ?? 0) : undefined
+  // Panel door profile (DOOR_SYSTEM_SPEC §Panel profiles): an end panel / island
+  // back panel opted in (cabinet rules.PANEL_PROFILE) takes the room / job door
+  // style's routing ops — the same Shaker route as the doors.
+  const panelFace = rules.PANEL_PROFILE
+  const panelProfile: PanelProfileSpec | null = panelFace && oneDoor?.profile_type && oneDoor.ops.length
+    ? { face: panelFace, profile_type: oneDoor.profile_type, ops: oneDoor.ops } : null
 
   // Shaped cabinets (z_cabinet_shape Phase 3): the other front facets' grids
   // resolve their styles under `${edgeId}.${row}_${col}`, and '*' carries the
@@ -988,6 +994,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     rangehood:       normaliseRangehood(cab.rangehood),
     part_cutouts:    normalisePartCutouts(cab.part_cutouts),
     back_panel:      normaliseBackPanel(cab.back_panel),
+    ...(panelProfile ? { panel_profile: panelProfile } : {}),
     left_neighbour:  (cab.left_neighbour_type  ?? 'wall') as CabinetInput['left_neighbour'],
     right_neighbour: (cab.right_neighbour_type ?? 'wall') as CabinetInput['right_neighbour'],
     exposed_interior: cab.exposed_interior,

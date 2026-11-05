@@ -18,7 +18,7 @@ import { persistResolved } from '@/src/lib/resolver/persistResolved'
 import type {
   ResolvedCabinet, ResolvedSeamJoint, JointTypeOp, SeamJointAssign,
   CabinetInput, HingeHardwareInput, HingePlateInput, HingeRuleInput, ExistingHingeInput, HingeBoreHole,
-  FaceGridInput, PartHideViews, PartHideView, BifoldHole, ResolvedBifold, ResolvedSlider,
+  FaceGridInput, PartHideViews, PartHideView, BifoldHole, ResolvedBifold, ResolvedSlider, PanelProfileSpec,
 } from '@/src/lib/resolver/types'
 import { rowToJointTypeOp, JOINT_OP_SELECT, seamAssignJoint, seamAssignRows } from '@/src/lib/resolver/types'
 import type { ConstructionRules } from '@/src/lib/resolver/types'
@@ -40,7 +40,7 @@ const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 // df_markers: drawer front marker pricks (z_handles D22), absent before 2026-10-29.
 type DrawerHw = Pick<ResolvedCabinet, 'drawer_stacks' | 'internal_slides'> & Partial<Pick<ResolvedCabinet, 'hinge_instances' | 'warnings'>>
   & { df_markers?: { row_index: number; col_index: number; holes: { x: number; y: number }[] }[] }
-  & { bifold?: { row_index: number; col_index: number; role: 'outer' | 'leading'; holes: BifoldHole[] }[]; bifold_cfg?: ResolvedBifold; slider_cfg?: ResolvedSlider }
+  & { bifold?: { row_index: number; col_index: number; role: 'outer' | 'leading'; holes: BifoldHole[] }[]; bifold_cfg?: ResolvedBifold; slider_cfg?: ResolvedSlider; panel_profile?: PanelProfileSpec }
 
 // `needsResolve` (optional) collects cabinets whose saved copy can't be drawn
 // as-is and needs a live resolve: drawers but no saved drawer hardware (saved
@@ -286,6 +286,8 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       const z = built.face_zones.find(fz => !fz.facet && fz.row_index === m.row_index && fz.col_index === m.col_index)
       if (z) { z.bifold_role = m.role; if (m.holes.length) z.bifold_holes = m.holes }
     }
+    const panelProfile = drawerHwById.get(id)?.panel_profile
+    if (panelProfile) built.panel_profile = panelProfile
     const bifoldCfg = drawerHwById.get(id)?.bifold_cfg
     if (bifoldCfg) built.bifold = bifoldCfg
     const sliderCfg = drawerHwById.get(id)?.slider_cfg

@@ -723,6 +723,31 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
           )
         })()}
 
+        {/* Panel door profile (DOOR_SYSTEM_SPEC §Panel profiles) — rule_overrides.PANEL_PROFILE:
+            end panels / island back panels cut with the door style's profile (Shaker route). */}
+        {!cabinet.has_face && !cabinet.has_carcass && (() => {
+          const ov = (cabinet.rule_overrides ?? {}) as Record<string, unknown>
+          return (
+            <div>
+              <p className={lbl}>Panel Profile</p>
+              <select className={inp} value={String(ov.PANEL_PROFILE ?? '')}
+                onChange={e => {
+                  const next = { ...ov }
+                  if (e.target.value) next.PANEL_PROFILE = e.target.value
+                  else delete next.PANEL_PROFILE
+                  void onUpdate(cabinet.id, { rule_overrides: next as typeof cabinet.rule_overrides })
+                }}>
+                <option value="">None — plain board</option>
+                <option value="left">Door profile, seen face left</option>
+                <option value="right">Door profile, seen face right</option>
+                <option value="front">Door profile, seen face front</option>
+                <option value="back">Door profile, seen face back</option>
+              </select>
+              <p className="text-[10px] text-gray-600 mt-1">Cuts the room / job door style's profile (e.g. the Shaker route) on the panel's seen face, one per piece, like the doors. End panels: left / right; island back panels: front.</p>
+            </div>
+          )
+        })()}
+
         {/* Floating (z_floating) — rule_overrides.FLOAT */}
         {canFloat(cabinet) && (() => {
           const floating = isFloating(cabinet)

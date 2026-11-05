@@ -30,6 +30,7 @@ import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
 import { doorProfilePrimitives } from '@/src/lib/doorProfile'
+import { panelProfileTargets, seenFacePoint, type PanelProfileTarget } from '@/src/lib/panelProfile'
 import type { ResolvedDoorProfile, DoorFacing } from '@/src/lib/resolver/types'
 import { isKickSidePart } from '@/src/lib/resolver/types'
 import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
@@ -446,6 +447,28 @@ function DoorProfile3D({ profile, b, color = '#5a4a32' }: {
   if (!geo) return null
   return (
     // printLines: the shop-drawing line capture traces these too (hiddenLine.ts).
+    <lineSegments geometry={geo} renderOrder={1} userData={{ printLines: true }}>
+      <lineBasicMaterial color={color} />
+    </lineSegments>
+  )
+}
+
+// Panel profile lines on a panel's seen face (any facing), a hair proud of it.
+function PanelProfile3D({ t, color = '#5a4a32' }: { t: PanelProfileTarget; color?: string }) {
+  const geo = useMemo(() => {
+    const prims = doorProfilePrimitives(t.profile, { w: t.w, h: t.h, thickness: t.thickness })
+    const pts: THREE.Vector3[] = []
+    const at = (u: number, v: number) => { const q = seenFacePoint(t, u, v, 0.3); return new THREE.Vector3(q.x, q.y, q.z) }
+    const seg = (x1: number, y1: number, x2: number, y2: number) => { pts.push(at(x1, y1), at(x2, y2)) }
+    for (const ir of prims.insetRects) {
+      const x0 = ir.x, y0 = ir.y, x1 = ir.x + ir.w, y1 = ir.y + ir.h
+      seg(x0, y0, x1, y0); seg(x1, y0, x1, y1); seg(x1, y1, x0, y1); seg(x0, y1, x0, y0)
+    }
+    for (const gl of prims.grooveLines) seg(gl.x1, gl.y1, gl.x2, gl.y2)
+    return pts.length ? new THREE.BufferGeometry().setFromPoints(pts) : null
+  }, [t])
+  if (!geo) return null
+  return (
     <lineSegments geometry={geo} renderOrder={1} userData={{ printLines: true }}>
       <lineBasicMaterial color={color} />
     </lineSegments>
@@ -1954,6 +1977,11 @@ export function CabinetScene({
           /></PartAlpha>
         )
       })}
+      {/* Panel door profiles (DOOR_SYSTEM_SPEC §Panel profiles): the Shaker route on
+          opted-in end panels / island back panel pieces, drawn like a door's. */}
+      {(rp.panel_profile ? panelProfileTargets({ ...rp, custom_parts: customParts ?? rp.custom_parts }) : [])
+        .filter(t => show(t.source_table === 'custom_parts' ? 'applied_panels' : casePartItem(t.part_key.slice(5))))
+        .map(t => <PanelProfile3D key={`pp-${t.id}`} t={t} />)}
       {showDrilling && rp.seam_joints.length > 0 && (
         <SeamJointOverlay seamJoints={rp.seam_joints} boxByKey={boxByKey} wire={wire} />
       )}

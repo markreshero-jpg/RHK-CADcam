@@ -1712,6 +1712,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Set Under panel skin (e.g. 0.3) and the under panel’s rangehood hole is cut to that much short of through, so the waste stays put on the sheet. Break it out after. 0 cuts it through.',
       canvas: true, done: c => c.cabinets.some(cab => Number(cab.rangehood?.panel_skin ?? 0) > 0) },
   ]},
+
+  // Appended 2026-11-05 (z_doorFace_module §Panel profiles, RHK6592 island).
+  { id: 'panel_profile', level: 'intermediate', topic: 'cabinets', title: 'Put the door profile on an end panel',
+    blurb: 'Cut the Shaker (or any door style) route on an end panel or island back panel, one per panel piece, like the doors.',
+    keywords: 'shaker panel end panel island back panel IBPF BEPF profile route frame door style face route', steps: [
+    { id: 'pick', title: 'Pick the panel’s seen face',
+      body: 'Select an end panel (e.g. a BEPF) or an island back panel. In the cabinet panel, set Panel Profile to the side you see: left or right for an end panel (the side away from the cabinet it covers), front for an island back panel. It takes the room / job door style’s profile — on a Shaker job, the same 60 frame and pocket as the doors.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.PANEL_PROFILE) },
+    { id: 'check', title: 'Check it',
+      body: 'Look at it in 3D (and the elevation for an island back panel): the frame line is drawn on the seen face. An island back panel in three pieces gets one frame per piece. The optimiser cuts it on that face with the door style’s tool set, the same as the doors (on a two-sided sheet, in program Z). Set Panel Profile back to None for a plain board.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.PANEL_PROFILE) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

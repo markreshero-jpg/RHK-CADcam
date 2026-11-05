@@ -26,6 +26,7 @@ import { railBlockEnds } from '@/src/lib/resolver/railBlocks'
 import { MARKER_DIA, MARKER_DEPTH } from '@/src/lib/resolver/resolveDrawerMarkers'
 import { backTopMarker } from '@/src/lib/slideDrilling'
 import { doorProfileCuts } from '@/src/lib/doorProfile'
+import { panelProfileTargets } from '@/src/lib/panelProfile'
 
 const GENERATED_MARK = 'seam_joint'
 
@@ -456,7 +457,7 @@ const NOTCH_OVERRUN = 5
 const NOTCH_TOOL_DIA = 10
 
 interface GeneratedRoute {
-  source_table: 'case_parts' | 'internal_parts' | 'drawer_box_parts' | 'face_zones'
+  source_table: 'case_parts' | 'internal_parts' | 'drawer_box_parts' | 'face_zones' | 'custom_parts'
   source_cabinet_id: string
   source_part_key: string
   operation_type: 'route' | 'groove'
@@ -514,6 +515,45 @@ export function collectDoorProfileRoutes(rp: ResolvedCabinet, cabinetId: string)
       } else {
         rows.push({ ...base, operation_type: 'route', operation_action: c.clear ? 'pocket' : null, operation_key: `door_profile_${c.opIndex}`,
           pos_x: round(mx(c.x + c.w / 2)), pos_y: round(c.y + c.h / 2), size_dx: round(c.w), size_dy: round(c.h), length: null, width: null })
+      }
+    }
+  }
+  return { rows }
+}
+
+// Panel door profiles (DOOR_SYSTEM_SPEC §Panel profiles): an opted-in panel
+// cabinet's pieces (island back panel pieces, applied end panels) take the same
+// profile cuts as a door, one set per piece. As on a door the seen face is the
+// down face: output 'front' / plane face_front, pos_x pre-mirrored across the
+// part's DX — so a two-sided sheet cuts them in program Z, like the doors.
+export function collectPanelProfileRoutes(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedRoute[] } {
+  rp = filterRemovedParts(rp)
+  const rows: GeneratedRoute[] = []
+  for (const t of panelProfileTargets(rp)) {
+    const nest = (u: number, v: number) => { const q = t.toNest(u, v); return { px: t.nestW - q.px, py: q.py } }
+    for (const c of doorProfileCuts(t.profile, { w: t.w, h: t.h, thickness: t.thickness })) {
+      const seen = c.face === 'front'
+      const base = {
+        source_table: t.source_table, source_cabinet_id: cabinetId, source_part_key: t.part_key,
+        depth: round(c.depth),
+        output_face: seen ? 'front' : 'back', plane_kind: seen ? 'face_front' : 'face_back',
+        output_to_cnc: true, router_tool_id: c.router_tool_id, tool_set_id: c.tool_set_id,
+        parameters: { generated: GENERATED_MARK, kind: 'panel_profile' },
+      }
+      // A back-face op (a door profile's own back cut) is on the up face: not mirrored.
+      const at = (u: number, v: number) => seen ? nest(u, v) : (() => { const q = t.toNest(u, v); return { px: q.px, py: q.py } })()
+      if (c.kind === 'groove') {
+        const a = at(c.x1, c.y1), b = at(c.x2, c.y2)
+        const alongY = Math.abs(a.px - b.px) < 0.001
+        rows.push({ ...base, operation_type: 'groove', operation_action: null, operation_key: `panel_profile_${c.opIndex}_${c.lineIndex}`,
+          pos_x: round(alongY ? a.px : Math.min(a.px, b.px)), pos_y: round(alongY ? Math.min(a.py, b.py) : a.py),
+          size_dx: null, size_dy: null, length: round(Math.hypot(b.px - a.px, b.py - a.py)), width: c.width,
+          ...(alongY ? { angle_az: 90 } : {}) })
+      } else {
+        const a = at(c.x, c.y), b = at(c.x + c.w, c.y + c.h)
+        rows.push({ ...base, operation_type: 'route', operation_action: c.clear ? 'pocket' : null, operation_key: `panel_profile_${c.opIndex}`,
+          pos_x: round((a.px + b.px) / 2), pos_y: round((a.py + b.py) / 2),
+          size_dx: round(Math.abs(b.px - a.px)), size_dy: round(Math.abs(b.py - a.py)), length: null, width: null })
       }
     }
   }
@@ -785,6 +825,7 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
   const rebates = collectDrawerBottomRebateRoutes(rp, cabinetId, cutter)
   notch.rows.push(...rebates.rows)
   notch.rows.push(...collectDoorProfileRoutes(rp, cabinetId).rows)
+  notch.rows.push(...collectPanelProfileRoutes(rp, cabinetId).rows)
   if (hasRebates && rebates.skipped) console.warn(`[seamDrillSync] ${rebates.skipped} drawer bottom rebate pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasSlots && slots.skipped) console.warn(`[seamDrillSync] ${slots.skipped} floating shelf slot pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasBends && bends.skipped) console.warn(`[seamDrillSync] ${bends.skipped} curved end bend pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)

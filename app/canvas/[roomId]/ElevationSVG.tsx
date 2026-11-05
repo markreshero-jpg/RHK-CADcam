@@ -26,6 +26,8 @@ import SnapToolbar from './SnapToolbar'
 import { usePinchZoom } from './usePinchZoom'
 import { useRightDragPan } from './useRightDragPan'
 import { SlideShape, slideBox3, doorProfileSvg } from './cabinetEditSvgHelpers'
+import { panelProfileTargets } from '@/src/lib/panelProfile'
+import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import { useSlideTriangles, triKey, modelSilhouettePath, modelSilhouetteOutline, type SlideModelFormat } from '@/src/lib/slideSilhouette'
 import { accessoryToCab } from '@/src/components/three/AccessoryModel'
 import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
@@ -1874,6 +1876,23 @@ export default function ElevationSVG({
                         )
                       })}
 
+                      {/* Panel door profiles (DOOR_SYSTEM_SPEC §Panel profiles) on panels seen face-on from the front. */}
+                      {rp.panel_profile && panelProfileTargets(rp).filter(t => t.normal.z === 1 && layers.show(t.source_table === 'custom_parts' ? 'applied_panels' : casePartItem(t.part_key.slice(5)))).map(t => {
+                        const prims = doorProfilePrimitives(t.profile, { w: t.w, h: t.h, thickness: t.thickness })
+                        const stroke = isLineDrawing ? '#475569' : '#94a3b8'
+                        return (
+                          <g key={`pp-${t.id}`} style={{ pointerEvents: 'none' }}>
+                            {prims.insetRects.map((ir, j) => {
+                              const { x, y, w, h } = toSVG(t.origin.x + ir.x, t.origin.y + ir.y + ir.h, ir.w, ir.h)
+                              return <rect key={j} x={x} y={y} width={w} height={h} fill="none" stroke={stroke} strokeWidth={(isLineDrawing ? 0.6 : 0.5) / z} strokeOpacity={0.85} />
+                            })}
+                            {prims.grooveLines.map((gl, j) => {
+                              const a = toSVGPt(t.origin.x + gl.x1, t.origin.y + gl.y1), b = toSVGPt(t.origin.x + gl.x2, t.origin.y + gl.y2)
+                              return <line key={`g${j}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={(isLineDrawing ? 0.6 : 0.5) / z} strokeOpacity={0.85} />
+                            })}
+                          </g>
+                        )
+                      })}
                       {/* Ghost grain on grained added parts seen face-on. */}
                       {(rp.custom_parts ?? []).map((p, i) => {
                         if (!p.show_in_room || !grainOn(p.material_id) || !layers.show(customPartItem(p))) return null

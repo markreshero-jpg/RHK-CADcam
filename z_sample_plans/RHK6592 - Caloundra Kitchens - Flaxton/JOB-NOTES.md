@@ -236,3 +236,11 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 - Under panels (WUP, full carcass depth, Satin 18 2pac): WC-06 under WC-04 (300), WC-07 under WC-03 (380), WC-08 under
   WC-02 (300); WC-02/03/04 scribed up 18. Separate panels because WC-03 is 380 deep. WC-07 hole 500 x 347 with a 0.3
   onion skin. Resolver clean.
+
+## Rev 19 (Mark 2026-11-05) — `_tmp-6592-rev19.mjs` (+ DOOR_SYSTEM_SPEC §14 panel profiles)
+
+- Shaker route on the island end panel BC-12 + the island back panel BC-01, 60 in all round like the doors (Shaker — 2pac
+  pocket, 5 deep, Shaker Door tool set). New opt-in `rule_overrides.PANEL_PROFILE` (sidebar Panel Profile): BC-12 = right
+  (east end of the island run), BC-01 = front (outer face). Routes checked off the resolved cabinets: BC-12 one pocket
+  460 x 720 (580 x 840 panel), BC-01 one per piece, 3 x 760 x 690.3 (880 x 810.3). Resolver clean. 3D shows the 3 frames on
+  BC-01; BC-12 (east end) not seen in the headless camera — check in the app. Optimiser regenerates the routes at Stage 6.

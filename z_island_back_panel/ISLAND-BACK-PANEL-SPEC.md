@@ -47,3 +47,5 @@
 - Labels come out as base-class `BC-xx` (rename by hand).
 - IBPK: the island's exposed back kick below the panel isn't generated here.
 - Pieces aren't snapped to the cabinet joins behind (equal split only).
+- Panel profile (2026-11-05, DOOR_SYSTEM_SPEC §14): `rule_overrides.PANEL_PROFILE = 'front'` puts the door style's profile
+  (Shaker route) on each `ibp:<n>` piece's outer face, one per piece. Opt-in; first use RHK6592 BC-01.

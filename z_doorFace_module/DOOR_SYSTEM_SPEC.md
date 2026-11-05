@@ -536,3 +536,33 @@ the handle overrides — survives re-resolve).
 **UI**: Job Properties → Doors and Room Properties → Doors (VJ lines); cabinet sidebar
 (VJ lines, only on cabinets with a VJ front); Cabinet Edit → Face Grid → a VJ door →
 VJ lines (this front). Tutorial `vj_layout`.
+
+## 14. PANEL PROFILES (built 2026-11-05, in-app check pending)
+
+Mark (RHK6592): end panels and the island back panel take the Shaker route, one per
+panel piece, 60 in all round like the doors.
+
+**Decisions**
+1. **Opt-in per cabinet**, cabinet layer: `rule_overrides.PANEL_PROFILE` =
+   `'left' | 'right' | 'front' | 'back'` — the cabinet face the panel's seen side is on.
+   Unset = plain board, so every other job stays as it was (job pinning).
+2. **Profile = the room / job door style** (the one-door style the loader already
+   resolves for `t.door`), evaluated at each piece's own size — no separate panel style.
+   Carried as `CabinetInput.panel_profile` → `ResolvedCabinet.panel_profile`, and saved in
+   `resolved_drawer_hw.panel_profile` so the room draws it on load.
+3. **Pieces**: island back panel `ibp:<n>` case parts (one route each) and applied end
+   panels (custom parts from the `applied_panel` library part, side or front standing).
+   A face that doesn't match the piece (end panel set to front) cuts nothing.
+4. **Machining as doors**: the seen face is the down face — output `front`, plane
+   `face_front`, pos_x pre-mirrored across the part's DX — so a two-sided sheet cuts it
+   in program Z with the door style's tool set. `collectPanelProfileRoutes`
+   (seamDrillSync), `kind: 'panel_profile'`.
+5. **Drawn** in 3D on the seen face (`PanelProfile3D`) and in the cabinet's front
+   elevation when the seen face is the front (island back panels). End panels are
+   edge-on in the front elevation.
+
+**Code**: `src/lib/panelProfile.ts` (targets, seen-face + nest frames), loader +
+resolver carry, `collectPanelProfileRoutes`, Cabinet3DView / ElevationSVG overlays,
+sidebar **Panel Profile** select (panel items: no face, no carcass). Test
+`src/lib/optimiser/__tests__/panelProfileRoutes.test.ts`. Tutorial `panel_profile`.
+First job: RHK6592 kitchen BC-12 (right) + BC-01 (front, 3 pieces).

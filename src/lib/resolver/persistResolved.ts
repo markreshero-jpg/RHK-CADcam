@@ -208,6 +208,8 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       ...(resolved.bifold ? { bifold_cfg: resolved.bifold } : {}),
       // Slider SC settings + door tracks (z_slider_sc).
       ...(resolved.slider ? { slider_cfg: resolved.slider } : {}),
+      // Panel door profile (DOOR_SYSTEM_SPEC §Panel profiles) — the room draws it on load.
+      ...(resolved.panel_profile ? { panel_profile: resolved.panel_profile } : {}),
       // Drawer front marker pricks (z_handles D22), by front.
       df_markers:      resolved.face_zones.filter(z => z.marker_holes?.length)
         .map(z => ({ row_index: z.row_index, col_index: z.col_index, holes: z.marker_holes })),
