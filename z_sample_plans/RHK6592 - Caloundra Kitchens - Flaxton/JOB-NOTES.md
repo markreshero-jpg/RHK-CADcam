@@ -158,4 +158,13 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
   (material_override_id), bottom long edge taped (E1L), against the wall, top at the 880 bench underside.
 - Tall handles: new D26 schedule "Off floor" = 1000 to the handle centre on every handle schedule's tall-door row.
   TC-05 handle centre 1000 AFF (110 kick + 890).
-- Open: BC-02 kick return into the void + return face to BC-05 (asked Mark); D/W space cleat?
+- Kick return + D/W cleat done in rev 11.
+
+## Rev 11 (Mark 2026-11-05) — `_tmp-6592-rev11.mjs`
+
+- Void corner kick, Mark's option B: KICK 1 carries on south into the void to the south-wall kick line (offset 502, dx 1788;
+  face front x 520 = 40 setback like the south wall's front at y 1770). BC-04's own kick face hidden
+  (`tk_kick_front_face_0`) and replaced by a custom part on BC-04 "Kick return face" 98 x 110 x 18 Satin Board 18 White,
+  x 520 -> 618 (BC-05), front at y 1770, butting KICK 1's face in the inside corner. (Kick end returns TOERETL only turn
+  back to the wall, so they couldn't reach BC-05.)
+- D/W space wall cleat WC-04 (same as WC-02 / WC-03). Resolver clean.
