@@ -248,3 +248,11 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 ## Rev 21 (Mark 2026-11-05) — `_tmp-6592-rev21-steps.json` via `_tmp-6592-rr.mjs`
 
 - Kitchen BC-01 island back panel 880 -> 840 high (floor up, 3 pieces 840 x ~810, shaker routes follow). Resolver clean.
+
+## Rev 22 (Mark 2026-11-05) — `_tmp-6592-rev22.mjs` + `_tmp-6592-rev22-steps.json` / `-rev22b-steps.json`
+
+- Overheads either side of the rangehood WC-02 / WC-04 300 -> 380 deep like WC-03; end panel WC-05 380 (applied panel
+  400 x 695).
+- One full under panel: WC-08 widened to 1543 x 380 under WC-02..WC-04 (offset 1906); WC-06 / WC-07 deleted (made by
+  automation in rev 20). Rangehood hole 500 x 347 at x 499-999, 0.3 onion skin. WC-02/03/04 still scribed up 18.
+- Shaker routes (PANEL_PROFILE): WC-05 seen face right, BC-05 (small cupboard end) left. Resolver clean.
