@@ -270,3 +270,8 @@ _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults
   meet its outer face (Mark: panel 900, shelves 386). BC-16 right neighbour = end panel.
 - Open: FLSHLF still has our cleat + back/side rebates — check against the client's brackets. Benchtop 3 still starts
   at 400 off Wall 2 (end panel face at 386).
+
+## Island knee-space under panel (Mark 2026-11-06)
+- New BC-20 BUP, LX ABS Grain 18 Elegant Oak, 2036 x 580 (BC-02 2000 + 18 onto each curved end BC-01 / BC-03),
+  x 3300–5336 on the island wall, underside 840 = flush with the stone apron bottom; sits on top of the curved ends
+  and the IBPF back panel (all 840 high). Front long edge taped; ends + back hidden under the stone.
