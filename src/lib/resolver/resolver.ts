@@ -190,7 +190,7 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
     : []
   // Rangehood hood cover (z_rangehood R9): its D notches follow the hinges just resolved.
   if (cab.rangehood?.cover && cab.has_carcass && !cab.curved_end) {
-    const cov = rangehoodCover(cab, caseParts, hingeInstances)
+    const cov = rangehoodCover(cab, caseParts, hingeInstances, internalParts)
     if (cov.part) caseParts.push(cov.part)
     allWarnings.push(...cov.warnings)
   }

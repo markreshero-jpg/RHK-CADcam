@@ -141,14 +141,16 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
  * Hood cover panel (RHK6592 WC-03, Mark 2026-11-05): carcass board standing
  * between the gables, flush with their front edges, from the bottom of the
  * inside (the bottom's top face, else the gables' bottom edge — Bottom Type
- * none, on the under panel) up `cover.h`. It hides the hood body behind the
+ * none, on the under panel) up to the underside of the fixed shelf the flue
+ * goes through (the one nearest `shelf_h`; no shelf → `shelf_h` from the
+ * underside) — Mark 2026-11-05: "should go up to shelf height". It hides the hood body behind the
  * doors. Every hinge whose plate is on a gable gets a D notch in the cover's
  * edge on that side — `notch_w` in × `notch_h` tall, centred on the plate,
  * inner corners `notch_r` — so the hinge clears it shut. Notches follow the
  * resolved hinges (run after resolveHinges). Face-kind part (rh: key), outline
  * in the face frame: x across [0..DY] from the left, y down from its top.
  */
-export function rangehoodCover(cab: CabinetInput, caseParts: ResolvedCasePart[], hinges: ResolvedHingeInstance[]): { part: ResolvedCasePart | null; warnings: ResolverError[] } {
+export function rangehoodCover(cab: CabinetInput, caseParts: ResolvedCasePart[], hinges: ResolvedHingeInstance[], internalParts: ResolvedInternalPart[] = []): { part: ResolvedCasePart | null; warnings: ResolverError[] } {
   const cover = cab.rangehood?.cover
   const warnings: ResolverError[] = []
   if (!cover) return { part: null, warnings }
@@ -158,9 +160,13 @@ export function rangehoodCover(cab: CabinetInput, caseParts: ResolvedCasePart[],
   const bottom = caseParts.find(p => p.part_key === 'bottom')
   const T = cab.material.DZ
   const x0 = r2(L.X + L.DZ), W = r2(R.X - x0)
-  const y0 = r2(bottom ? bottom.Y + bottom.DZ : L.Y), H = cover.h
+  const shelf_h = cab.rangehood!.shelf_h
+  const shelves = internalParts.filter(p => p.part_type === 'fixed_shelf')
+  const shelf = shelves.length ? shelves.reduce((a, b) => Math.abs(b.Y - shelf_h) < Math.abs(a.Y - shelf_h) ? b : a) : null
+  const y0 = r2(bottom ? bottom.Y + bottom.DZ : L.Y), H = r2((shelf ? shelf.Y : shelf_h) - y0)
   const front = r2(L.Z + L.DX)
   if (!(W > 0)) { warn('no room between the gables'); return { part: null, warnings } }
+  if (!(H > 0)) { warn('the shelf is at or below the bottom of the inside'); return { part: null, warnings } }
 
   // D notches: per gable, the plate centre heights (cabinet Y) of its hinges.
   const nw = Math.min(cover.notch_w, W / 2 - 1), nh = cover.notch_h
@@ -176,7 +182,7 @@ export function rangehoodCover(cab: CabinetInput, caseParts: ResolvedCasePart[],
     const yc = r2(y0 + H - y)
     if (yc + nh / 2 <= 0 || yc - nh / 2 >= H) continue   // hinge clear of the cover
     if (yc - nh / 2 < 0 || yc + nh / 2 > H) {
-      warn(`a ${side} hinge at ${r2(y - y0)} up is too near the cover's ${yc - nh / 2 < 0 ? 'top' : 'bottom'} for its ${nh} notch — move the hinge or change the cover height`)
+      warn(`a ${side} hinge at ${r2(y - y0)} up is too near the cover's ${yc - nh / 2 < 0 ? 'top' : 'bottom'} for its ${nh} notch — move the hinge or the shelf height`)
       continue
     }
     at[side].push(yc)

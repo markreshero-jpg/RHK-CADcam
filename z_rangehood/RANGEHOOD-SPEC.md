@@ -316,10 +316,11 @@ rangehood body. it will need D shape cutouts in it for the hinges to clear when 
 with 15 radius corners, have them move up or down with the hinges … onion skin (leave 0.3 on) the under panel
 rangehood cutout".
 
-- `rangehood.cover: { h, notch_w, notch_h, notch_r } | null` (default null; sidebar Height 0 = none, defaults
-  40 / 80 / 15) and `rangehood.panel_skin` (default 0 = through) — `src/lib/rangehood.ts`.
+- `rangehood.cover: { notch_w, notch_h, notch_r } | null` (default null; sidebar tick "Cover panel up to the shelf",
+  defaults 40 / 80 / 15). **Height = up to the fixed shelf's underside** (the shelf nearest `shelf_h`; none → `shelf_h`)
+  — Mark 2026-11-05 "should go up to shelf height value" (first built as a fixed `h`, 260; a stored `h` is ignored) and `rangehood.panel_skin` (default 0 = through) — `src/lib/rangehood.ts`.
 - `rangehoodCover` (resolveRangehood.ts), run in resolver.ts **after resolveHinges** (6b) so the notches follow the
-  resolved hinges: part `rh:cover` (face-kind rh: key, carcass board, top edge interior-taped), DX = h, DY = between
+  resolved hinges: part `rh:cover` (face-kind rh: key, carcass board, top edge interior-taped), DX = up to the shelf, DY = between
   the gables, at the gables' front edges − T, from the bottom's top face (Bottom Type none: the gables' bottom edge,
   i.e. on the under panel). Each hinge whose plate target is a gable → a D notch on that edge, centred on the plate
   drills' mean Y, `notch_w` in × `notch_h`, inner corners `notch_r` (bulge arcs), edge corners square. A notch that

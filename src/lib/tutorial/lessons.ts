@@ -1703,7 +1703,7 @@ export const LESSONS: TutorialLesson[] = [
     blurb: 'A carcass-board cover panel behind the doors with D notches that follow the hinges, and an onion skin in the under panel hole.',
     keywords: 'rangehood range hood cover panel false panel behind doors hide body hinge notch D cutout onion skin under panel WRH bottom none', steps: [
     { id: 'cover', title: 'Turn on the hood cover',
-      body: 'Select the rangehood cabinet (a WRH). In the Rangehood section, set Hood cover Height (e.g. 260 for a hood body about 255 high). A carcass-board panel stands between the gables, flush with their front edges, from the bottom of the inside up that high, so the hood body is hidden when the doors are open. 0 turns it off.',
+      body: 'Select the rangehood cabinet (a WRH). In the Rangehood section, tick Cover panel up to the shelf. A carcass-board panel stands between the gables, flush with their front edges, from the bottom of the inside up to the underside of the fixed shelf (the Shelf height), so the hood body is hidden when the doors are open. Change Shelf height and the cover follows.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rangehood?.cover) },
     { id: 'notch', title: 'The hinge notches follow the hinges',
       body: 'Every hinge whose plate lands on the cover gets a D notch in its edge (default 40 in × 80 tall, 15 radius corners), centred on the plate, so the hinge clears it when shut. Move the hinges on the doors and the notches move with them. Keep each hinge at least half the notch height away from the cover’s top and bottom edges (the cabinet warns if not). For a hood that drops in from below, set the cabinet’s Bottom Type to none so the hole is only in the under panel.',

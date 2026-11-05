@@ -19,11 +19,11 @@ export interface RangehoodSettings {
   flue: { w: number; d: number; offset: number }
   shelf_h: number   // cabinet underside (incl. under panel) → first fixed shelf underside
   // Hood cover (RHK6592 WC-03): a carcass-board panel standing between the gables,
-  // flush with their front edges, from the bottom of the inside up `h` — hides the
-  // hood body behind the doors. D notches (w in from the gable × h tall, inner
+  // flush with their front edges, from the bottom of the inside up to the underside
+  // of the fixed shelf (shelf_h; Mark 2026-11-05) — hides the hood body behind the doors. D notches (w in from the gable × h tall, inner
   // corners r) at every hinge on a gable whose plate falls on it, so the hinges
   // clear when shut; they follow the hinges. null = none.
-  cover: { h: number; notch_w: number; notch_h: number; notch_r: number } | null
+  cover: { notch_w: number; notch_h: number; notch_r: number } | null
   // Onion skin left in the under panel's rangehood hole (mm, 0 = cut through).
   panel_skin: number
 }
@@ -36,7 +36,7 @@ export const DEFAULT_RANGEHOOD: RangehoodSettings = {
   panel_skin: 0,
 }
 
-export const DEFAULT_RANGEHOOD_COVER = { h: 260, notch_w: 40, notch_h: 80, notch_r: 15 }
+export const DEFAULT_RANGEHOOD_COVER = { notch_w: 40, notch_h: 80, notch_r: 15 }
 
 export const isRangehood = (c: Pick<CabinetInstance, 'rangehood'> | null | undefined): boolean => !!c?.rangehood
 
@@ -58,8 +58,7 @@ export function normaliseRangehood(s: unknown): RangehoodSettings | null {
     },
     flue: { w: pos(f.w, d.flue.w), d: pos(f.d, d.flue.d), offset: num(f.offset, d.flue.offset) },
     shelf_h: pos(o.shelf_h, d.shelf_h),
-    cover: o.cover && typeof o.cover === 'object' && size(o.cover.h) != null ? {
-      h: size(o.cover.h)!,
+    cover: o.cover && typeof o.cover === 'object' ? {
       notch_w: pos(o.cover.notch_w, DEFAULT_RANGEHOOD_COVER.notch_w),
       notch_h: pos(o.cover.notch_h, DEFAULT_RANGEHOOD_COVER.notch_h),
       notch_r: Math.max(0, num(o.cover.notch_r, DEFAULT_RANGEHOOD_COVER.notch_r)),

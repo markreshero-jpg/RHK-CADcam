@@ -261,3 +261,9 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 
 - Bottom Type none: the back now runs down to the gables' bottom edge (resolveCase). WC-03 back 660.5 tall from the under
   panel (was stopping 16.5 up where the bottom was). Kitchen re-resolved, clean.
+
+## Rev 24 (Mark 2026-11-05)
+
+- Dune (RHK6478) kitchen re-resolved for the no-bottom back fix (42 cabinets, clean) — `_tmp-reresolve-room.mjs`.
+- Rangehood cover now runs up to the fixed shelf (shelf height), not a fixed 260: WC-03 cover 332 (18 -> 350), hinge
+  notches unchanged. Stored cover h dropped. Kitchen re-resolved, clean.

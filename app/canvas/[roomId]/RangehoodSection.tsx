@@ -52,8 +52,10 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
 
       {!crv && <>
         <p className={lbl}>Hood cover (behind the doors)</p>
-        {row('Height', 'Carcass-board panel between the gables, flush with their front edges, from the bottom of the inside up — hides the hood body. 0 = none', s.cover?.h ?? 0,
-          v => put({ cover: v > 0 ? { ...(s.cover ?? DEFAULT_RANGEHOOD_COVER), h: v } : null }))}
+        <label className="flex items-center gap-2 text-xs text-gray-300" title="Carcass-board panel between the gables, flush with their front edges, from the bottom of the inside up to the shelf — hides the hood body">
+          <input type="checkbox" checked={!!s.cover} onChange={e => put({ cover: e.target.checked ? { ...DEFAULT_RANGEHOOD_COVER } : null })} />
+          Cover panel up to the shelf
+        </label>
         {s.cover && <>
           {row('Hinge notch in', 'D notch at each hinge on it, in from the gable', s.cover.notch_w, v => { if (v > 0) put({ cover: { ...s.cover!, notch_w: v } }) })}
           {row('Hinge notch tall', 'Notch height, centred on the hinge plate — it follows the hinges', s.cover.notch_h, v => { if (v > 0) put({ cover: { ...s.cover!, notch_h: v } }) })}
