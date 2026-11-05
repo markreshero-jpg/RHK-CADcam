@@ -66,6 +66,10 @@ describe('6th face nesting', () => {
     // the outside (bottom) long edge at y = 5 - 6 = -1, run from beyond the far end to X0.
     expect(a.gcode).toMatch(/G0 X-1\.? Y-1208\.?/)
     expect(a.gcode).toMatch(/G0 X2408\.? Y-1201\.?/)
+    // Long edge first from the far end, then the X0 end, finishing at X0 / Y0.
+    expect(a.gcode.indexOf('off the outside long edge')).toBeLessThan(a.gcode.indexOf('off the X0 end'))
+    const trimTail = a.gcode.slice(a.gcode.indexOf('off the X0 end'))
+    expect(trimTail).toMatch(/X-1\.? Y0\.?/)
   })
 
   it('a one-face sheet is the same program as before', () => {

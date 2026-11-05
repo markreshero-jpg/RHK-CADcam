@@ -1696,19 +1696,20 @@ function datumEdges(sheet: NestedSheet, p: Datum) {
 }
 
 // The two trim cuts of program A, tool centre (sheet coords): `trim` mm off the
-// datum X end and off the long edge AWAY from the Y fence, the bit on the waste
-// side. Each starts off the sheet on the side away from the fences (plunge in air)
-// and runs to the fence edge.
+// long edge AWAY from the Y fence and off the datum X end, the bit on the waste
+// side. In that order (Mark, 2026-11-05): start off the far end of the sheet
+// (plunge in air), run the long edge back to the X0 end, then run the X0 end up
+// to the Y fence, so the head finishes at X0 / Y0, the least travel.
 export function sixthFaceTrims(sheet: NestedSheet, p: PostProfile, trim: number, toolR: number): { label: string; from: { x: number; y: number }; to: { x: number; y: number } }[] {
   const { xAtW, yAtH, W, H } = datumEdges(sheet, p)
   const clear = toolR + 2
   const xLine = xAtW ? W - trim + toolR : trim - toolR       // along the X-datum end
   const yLine = yAtH ? trim - toolR : H - trim + toolR       // along the outside long edge
   return [
-    { label: `Trim ${trim}mm off the X0 end`,
-      from: { x: xLine, y: yAtH ? -clear : H + clear }, to: { x: xLine, y: yAtH ? H : 0 } },
     { label: `Trim ${trim}mm off the outside long edge`,
       from: { x: xAtW ? -clear : W + clear, y: yLine }, to: { x: xAtW ? W : 0, y: yLine } },
+    { label: `Trim ${trim}mm off the X0 end`,
+      from: { x: xLine, y: yAtH ? -clear : H + clear }, to: { x: xLine, y: yAtH ? H : 0 } },
   ]
 }
 
