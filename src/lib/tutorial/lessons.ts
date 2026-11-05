@@ -1724,6 +1724,17 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Look at it in 3D (and the elevation for an island back panel): the frame line is drawn on the seen face. An island back panel in three pieces gets one frame per piece. The optimiser cuts it on that face with the door style’s tool set, the same as the doors (on a two-sided sheet, in program Z). Set Panel Profile back to None for a plain board.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.PANEL_PROFILE) },
   ]},
+  // Appended 2026-11-06 (Mark, RHK6592: narrow fillers move on the bed).
+  { id: 'narrow_filler_cut', level: 'beginner', topic: 'production', title: 'Narrow fillers are cut at 70',
+    blurb: 'A filler under 60 wide is nested and cut at 70 so it doesn’t move on the machine; its comment says what to cut it down to.',
+    keywords: 'filler narrow small strip 70 cut size hand cut comment optimiser label moves bed BFK TFK', steps: [
+    { id: 'nest', title: 'Nest the job',
+      body: 'Production → Generate CNC… Any part named Filler that is under 60 wide (an 18 face filler on a BFK / TFK) is nested and cut at 70 wide, plus its edge tape. The cabinet, 3D and Parts tab keep the true size.',
+      target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
+    { id: 'label', title: 'Read the comment',
+      body: 'The part comment (on the label, sticker and cut sheet) reads e.g. “CUT AT 70, hand cut to 16 wide (18 after edging)”. Cut it down on the saw to that size, then edge it. Fillers 60 or wider, on-edge fillers and shaped fillers cut at their own size.',
+      done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -76,6 +76,25 @@ function ebFields(flags: EdgeFlags, t: number | undefined, wPair: EdgePair, hPai
 // (w = larger, h = smaller). Only safe for parts without a grain direction,
 // since it may swap w/h. Used for on-edge toe-kick spreaders whose thickness
 // would otherwise be read off the wrong axis.
+// Narrow fillers (Mark 2026-11-06, RHK6592): a filler strip under 60 wide moves on
+// the bed when it's cut at ~30-40, so it's nested and cut at 70 and the part comment
+// gives the size to cut it down to by hand. The model / Parts tab keep the true size.
+export const FILLER_MIN_MACHINE_W = 60
+export const FILLER_MACHINE_CUT_W = 70
+const r1 = (n: number) => Math.round(n * 10) / 10
+export function widenNarrowFiller(p: OptiPart, name: string): void {
+  if (!/filler/i.test(name) || p.shape || p.cut_holes?.length) return
+  const across = p.w <= p.h ? 'w' : 'h'
+  const [e1, e2] = across === 'w' ? [p.eb_w1, p.eb_w2] : [p.eb_h1, p.eb_h2]
+  const finished = p[across]
+  if (!(finished < FILLER_MIN_MACHINE_W)) return
+  const cut = r1(finished - (e1 ?? 0) - (e2 ?? 0))   // the machine's cut size (tape deducted)
+  p[across] = FILLER_MACHINE_CUT_W + (e1 ?? 0) + (e2 ?? 0)   // the machine cuts it at 70
+  const note = `CUT AT ${FILLER_MACHINE_CUT_W}, hand cut to ${cut} wide` + (cut !== finished ? ` (${r1(finished)} after edging)` : '')
+  const c = (p.comment ?? '').trim()
+  p.comment = c ? `${note}. ${c}` : note
+}
+
 export function canonicalPanelDims(dx: number, dy: number, dz: number): { w: number; h: number; thickness: number } {
   const [w, h, thickness] = [dx, dy, dz].sort((a, b) => b - a)
   return { w, h, thickness }
@@ -460,6 +479,7 @@ export function normalizeProject(
     // Grain across (e.g. a front-on wall cleat with horizontal grain): nest turned.
     const last = parts[parts.length - 1]
     if (r.grain_across && last?.source_part_id === r.id) last.grain_across = true
+    if (last?.source_part_id === r.id) widenNarrowFiller(last, String(r.name ?? ''))
   }
 
   return { rooms, cabinets, parts }

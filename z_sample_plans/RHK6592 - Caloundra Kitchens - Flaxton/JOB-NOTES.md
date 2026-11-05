@@ -271,3 +271,7 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
   (kick_runs split_mode manual, face_splits {}, sub_splits {2000}; the back mirrors it). Kitchen: face 2413 one
   piece, sub 2000 / 413, back 413 / 2000. Butlers: face 2472 one piece, sub 2000 / 472, back 472 / 2000. Both rooms
   re-resolved clean. The faces stay over the sheet; Mark is sourcing longer 18 satin pieces for them.
+- Rev 26 (2026-11-06, Mark): Kitchen BC-07 (BFK) filler changed to match the others: 70 wide on edge, 18 front showing
+  (side, z = cab.d + 2 + t.exposed - 70, front long edge + top taped). Room re-resolved clean.
+  New optimiser rule (all jobs): fillers under 60 wide are nested + cut at 70 (plus tape) with the part comment
+  "CUT AT 70, hand cut to N wide" (normalize.ts widenNarrowFiller).
