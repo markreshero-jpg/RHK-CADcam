@@ -447,7 +447,13 @@ export function normalizeProject(
   for (const r of ccp) {
     const flags: EdgeFlags = { top: !!r.edge_top, bottom: !!r.edge_bottom, left: !!r.edge_left, right: !!r.edge_right }
     const t = r.material_id ? matEb.get(r.material_id as string) : undefined
-    const eb = ebFields(flags, t, ['left', 'right'], ['bottom', 'top'])
+    // Flat (horizontal) customs band like a case horizontal: top / bottom = the
+    // front / back long edges (across w = DX), left / right = the ends (along the
+    // length) — as edgeStrips() draws them. Side / front customs keep the side
+    // pairs. (RHK6581 WC-04 split top cap: the front tape was deducted off the length.)
+    const flat = String(r.orientation ?? 'flat') === 'flat'
+    const eb = flat ? ebFields(flags, t, ['bottom', 'top'], ['left', 'right'])
+                    : ebFields(flags, t, ['left', 'right'], ['bottom', 'top'])
     // Empty typeKey: custom parts already carry a user-typed name column, so there's
     // no type-level default to apply. A per-part rename still overrides it.
     push('custom_parts', r, `custom_${r.id}`, { typeKey: '', base: String(r.name ?? 'Custom') }, null, 0, undefined, eb)

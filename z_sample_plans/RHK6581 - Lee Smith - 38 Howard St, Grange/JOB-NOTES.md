@@ -232,6 +232,7 @@ Open: Entry J01 Paperbark variation (DO NOT CUT until approved); Play ceiling 24
 
 ### Machining — ground floor (2026-11-05)
 - Entry J01 HOLD lifted (Mark): internals (interior + shelf) changed Paperbark → **PT Colour Matt 16mm – Oyster Grey Matt** (new colour row `74898df6`, copied from Black Matt; face colour #b4b0a7 is a placeholder). Fronts / panels stay Elegant Oak.
-- Entry J01 = run **R2** (60 parts; Oyster Grey 7 sheets, Elegant Oak 5, Whiteboard 1). **UNPLACED, too long for a 2415 sheet — cut by hand:** Top Cap 479 x 2519 (Elegant Oak), Toekick Sub Front + Toekick Back 2502 x 83.5 (Whiteboard).
+- Entry J01 first run R2 left Top Cap 2519 + kick sub front / back 2502 unplaced → (Mark) WC-04 Top Cap split into 2 custom parts joined over TC-03's right face (x 536): left 536 (front + left end edged), right `cab.w - 536` = 1985 (front edged); comments 'JOIN … EDGE FRONT AFTER JOINING'. KICK 1 run → manual seams: face 834 / 1668 (unchanged), sub front 2400 + 102, back mirrored.
+- Entry J01 = run **R5** (66 parts; Oyster Grey 7, Elegant Oak 6 (sheet 6 = one kick face piece, 3%), Whiteboard 1). All placed. R2 on the server moved to Entry J01/_superseded R2 (R4 local only).
 - Living J06 = run **R3** (61 parts; Whiteboard 10, Desert Dune 4, MDF 10mm 1). All placed, no warnings.
 - Server: \server\Data\CNCFiles\RHK6581 - Lee Smith - 38 Howard St, Grange\<room>\ (material sub folders + cut sheets / labels PDFs + .rhkrun).

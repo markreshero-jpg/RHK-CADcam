@@ -53,7 +53,7 @@ describe('snapshot eb_tape + report', () => {
       edge_band_top: true, edge_band_bottom: true, edge_band_left: true, edge_band_right: true, edge_band_id: 'eb2' }],
     [], new Map(),
     // Custom end panel 600 × 900 in the board material, one long edge: takes eb1 by material.
-    [{ id: 'x', cabinet_instance_id: 'c1', name: 'End panel', dx: 600, dy: 900, dz: 18, material_id: 'm18', edge_right: true }],
+    [{ id: 'x', cabinet_instance_id: 'c1', name: 'End panel', orientation: 'side', dx: 600, dy: 900, dz: 18, material_id: 'm18', edge_right: true }],
     new Map([['eb1', 1]])).parts
 
   it('metres per part match the hand calc (thickness unknown still counts)', () => {
@@ -111,7 +111,7 @@ describe('snapshot eb_tape + report', () => {
   it('a banded part with no tape anywhere lands on "Tape not set"', () => {
     const parts = normalizeProject({ id: 'p', name: 'p', job_number: null }, [{ id: 'room', name: 'R' }],
       [{ id: 'c1', label: 'C', assembly_class: 'base', room_id: 'room' }], [], [], [], [], [], new Map(),
-      [{ id: 'x', cabinet_instance_id: 'c1', name: 'Filler', dx: 50, dy: 720, dz: 18, material_id: 'mX', edge_left: true }]).parts
+      [{ id: 'x', cabinet_instance_id: 'c1', name: 'Filler', orientation: 'front', dx: 50, dy: 720, dz: 18, material_id: 'mX', edge_left: true }]).parts
     const r = buildEdgebandReport(parts, new Map(), 0)
     expect(r.totals).toMatchObject([{ id: null, name: 'Tape not set', m: 0.72 }])
   })
