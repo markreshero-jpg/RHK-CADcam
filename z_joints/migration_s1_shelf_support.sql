@@ -13,3 +13,9 @@ where not exists (select 1 from hardware_accessories where supplier_code = 'SSW.
 update joint_type_operations set fitting_id = (select id from hardware_accessories where supplier_code = 'SSW.WH.FG')
 where joint_type_id in ('3fe377e6-e842-41f6-a3b0-c7a767c000c7', 'f78dc261-1eb0-4339-927d-49cdfc345e1c')
   and target_part = 'part_b' and face = 'normal' and machine_operation = 'drill';
+
+-- 2026-11-05: the third adj shelf pin joint ("x2 Rows - 4 @ 64", used per
+-- cabinet on RHK6550) gets the same support — it was missed above.
+update joint_type_operations set fitting_id = (select id from hardware_accessories where supplier_code = 'SSW.WH.FG')
+where joint_type_id = '9e8430fe-80b8-47f1-8d9f-d01af724c690'
+  and target_part = 'part_b' and face = 'normal' and machine_operation = 'drill' and fitting_id is null;

@@ -44,7 +44,10 @@ describe.skipIf(!CFG)('headless takeoff', () => {
     const { data: defs } = await supabase.from('cabinet_definitions').select('id,name').in('id', defIds)
     const code = new Map((defs ?? []).map(d => [d.id, d.name]))
     const raw = await dbLoadResolvedParts((cabs ?? []).map(c => c.id))
-    const resolved = new Map([...raw].map(([k, v]) => [k, filterRemovedParts(v)]))
+    const saved = new Map([...raw].map(([k, v]) => [k, filterRemovedParts(v)]))
+    // Method-default fitting joints (shelf supports), as the Reports hook adds them.
+    const { fittingSeamCabIds, loadFittingSeams, withFittingSeams } = await import('../methodSeams')
+    const resolved = withFittingSeams(saved, await loadFittingSeams(fittingSeamCabIds(saved)))
     lap(`${cabs?.length} cabinets, ${resolved.size} resolved`)
 
     const q = async (t: string, cols: string) => new Map((((await supabase.from(t).select(cols)).data ?? []) as unknown as Record<string, string>[]).map(r => [r.id, { name: r.name, brand: r.brand, code: r.supplier_code }]))

@@ -14,7 +14,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, CabinetInstance } from '@/src/lib/types'
-import type { ResolvedCabinet } from '@/src/lib/resolver/types'
+import type { ResolvedCabinet, ResolvedSeamJoint } from '@/src/lib/resolver/types'
+import { fittingSeamCabIds, loadFittingSeams, withFittingSeams } from '@/src/lib/takeoff/methodSeams'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { NormalizedProject } from '@/src/lib/optimiser/normalize'
 import type { OptiMaterial, OptiProfile, OptiTool } from '@/src/lib/optimiser/types'
@@ -114,6 +115,21 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
     return () => { cancelled = true }
   }, [active, products])
 
+  // Fitting-carrying joints from the construction method (adj shelf supports,
+  // Cabineo connectors) — the saved rebuild only knows per-cabinet picks
+  // (takeoff/methodSeams.ts). The pick list waits for them.
+  const fitKey = useMemo(() => fittingSeamCabIds(resolved).join(','), [resolved])
+  const [methodSeams, setMethodSeams] = useState<{ key: string; byCab: Map<string, ResolvedSeamJoint[]> } | null>(null)
+  useEffect(() => {
+    if (!active || methodSeams?.key === fitKey) return
+    let cancelled = false
+    void loadFittingSeams(fitKey ? fitKey.split(',') : [], () => cancelled)
+      .then(byCab => { if (!cancelled) setMethodSeams({ key: fitKey, byCab }) })
+    return () => { cancelled = true }
+  }, [active, fitKey, methodSeams?.key])
+  const seamsPending = methodSeams?.key !== fitKey
+  const withMethodSeams = useMemo(() => methodSeams ? withFittingSeams(resolved, methodSeams.byCab) : resolved, [resolved, methodSeams])
+
   // Saved part snapshot (as the optimiser loads it) + the nest / tape inputs.
   useEffect(() => {
     if (!active || !project || opti) return
@@ -159,7 +175,7 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
   }, [active, opti, roomKey, nested?.key])
 
   const data = useMemo<TakeoffData | null>(() => {
-    if (!codes || !products) return null
+    if (!codes || !products || seamsPending) return null   // shelf supports not in yet
     const ids = rooms.map(r => r.id)
     const tc: TakeoffCab[] = cabinets.map(c => ({
       id: c.id, room_id: c.room_id, label: c.label ?? null, assembly_class: c.assembly_class,
@@ -167,7 +183,7 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
     }))
     const defOf = new Map(cabinets.map(c => [c.id, c.cabinet_definition_id]))
     const codeOf = (c: TakeoffCab) => { const d = defOf.get(c.id); return d ? codes.get(d) ?? null : null }
-    const hw = buildHardware(ids, tc, resolved, products)
+    const hw = buildHardware(ids, tc, withMethodSeams, products)
     const eb = opti ? buildEdgebandReport(opti.norm.parts.filter(p => ids.includes(p.room_id)), opti.eb, tapeWaste, ids, opti.boards) : null
     const nest = nested?.key === roomKey ? nested.res : null
     const roomsOut: TakeoffRoom[] = rooms.map((room, i) => {
@@ -192,9 +208,9 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
       tape: eb?.totals ?? [],
       tapeWaste,
     }
-  }, [codes, products, rooms, cabinets, resolved, opti, nested, roomKey, tapeWaste])
+  }, [codes, products, seamsPending, rooms, cabinets, withMethodSeams, opti, nested, roomKey, tapeWaste])
 
-  return { data, loading: !data || !opti, nesting: !!opti && nested?.key !== roomKey }
+  return { data, loading: !data || !opti || seamsPending, nesting: !!opti && nested?.key !== roomKey }
 }
 
 // ── Shared bits ──────────────────────────────────────────────────────────────

@@ -33,6 +33,14 @@ Checks: `src/lib/takeoff/__tests__/hardware.test.ts`; real-job dry run
   places (Lamello Cabineo, z_joints C4) are counted: group **Connectors**, one per
   set of the joint op that carries the fitting (same sets as the CNC + 3D),
   named from Materials → Accessories. Other fasteners still not counted.
+- **D3b Adjustable shelf supports (Mark, 2026-11-05).** Shelf pins are on the
+  pick list: group **Shelf supports**, one per pin set the adj shelf joint
+  drills (the hole under the shelf — 4 per plain shelf, more where the shelf
+  has back rows: L corners, deep shelves). Product = the joint op's fitting
+  (Furnware SSW, all three adj shelf joints). The Reports rebuild doesn't know
+  the construction method's joint defaults, so cabinets with internal parts are
+  re-resolved (not saved) for their fitting joints — `src/lib/takeoff/methodSeams.ts`;
+  the pick list waits for them.
 - **D4 Pick list layout.** Room → product totals (qty + tick + which cabinets), not per cabinet.
 
 ## Rules (as built)
@@ -79,4 +87,4 @@ Checks: `src/lib/takeoff/__tests__/hardware.test.ts`; real-job dry run
 - Bulkhead cleats / fascias longer than the sheet (e.g. 2631 on a 2415 board)
   show as "too big for a sheet" and aren't in the sheet count. Decide whether
   they're bought as lengths (a takeoff line) or the board list needs a longer stock.
-- Derived hardware (shelf pins, legs, fasteners) if wanted later (D3).
+- Derived hardware (legs, fasteners) if wanted later (D3). Shelf pins done (D3b).
