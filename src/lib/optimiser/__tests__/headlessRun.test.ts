@@ -43,7 +43,8 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { nest } = await import('../nest')
     const { buildGrainBlocks, expandGrainBlocks } = await import('../grainBlocks')
     const { cutBlank, placedOutline, placedHoles } = await import('../shapes')
-    const { loadSheetDrills, nestedParts } = await import('../sheetDrills')
+    const { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts } = await import('../sheetDrills')
+    const { anchorSixthFace } = await import('../sixthFaceLayout')
     const { generateSheetPrograms, postFromProfile, gcodeFileName } = await import('../gcode')
     const { validateGcode, errorsOf, warningsOf, formatFinding } = await import('../gcodeValidate')
     type NestPartInput = import('../nest').NestPartInput
@@ -150,7 +151,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       gapFor: m => (m != null ? margins.byMaterial[m] : undefined) ?? margins.fallback,
       allowRotation: true,
     })
-    const nestResult = expandGrainBlocks(nest(gm.parts, stockForRun, {
+    let nestResult = expandGrainBlocks(nest(gm.parts, stockForRun, {
       quality: cfg.quality ?? 'balanced', allowRotation: true,
       marginByMaterial: margins.byMaterial, defaultMargin: margins.fallback,
     }), gm.blocks, index, gm.warnings)
@@ -205,8 +206,12 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const routerTools = (toolRows ?? []).filter(t => t.diameter != null && Number(t.diameter) > 0)
       .map(t => ({ id: t.id as string, diameter: Number(t.diameter), tool_number: toolNum(t.tool_number), name: (t.name as string | null) ?? null, auto_select: (t.auto_select as boolean | null) ?? null, feed: (t.base_feed_rate as number | null) ?? null, plunge: (t.plunge_feed_rate as number | null) ?? null, rpm: (t.base_spindle_speed as number | null) ?? null }))
     const preferredPocketToolNumber = profile?.pocket_router_tool_number != null ? Number(profile.pocket_router_tool_number) : null
-    const { bySheet: sheetDrills, routesBySheet: sheetRoutes, warnings: drillWarnings } =
-      await loadSheetDrills(nestedParts(snap.parts, index), nestResult.sheets, { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
+    const drillOps = await loadResolvedDrillOps(nestedParts(snap.parts, index), { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
+    // 6th face sheets against the trimmed edges, as Stage 5 / 6 (sixthFaceLayout.ts).
+    nestResult = anchorSixthFace(nestResult, s => isTwoSidedSheet(s, drillOps), { origin_corner: (prof?.origin_corner as string | null) ?? 'top_left' })
+    const sheetDrills = projectSheetDrills(nestResult.sheets, drillOps)
+    const sheetRoutes = projectSheetRoutes(nestResult.sheets, drillOps)
+    const drillWarnings = drillOps.warnings
     lap(`drilling synced + loaded`)
 
     const jobInt = parseInt((snap.jobNumber ?? '').match(/\d+/)?.[0] ?? '', 10)

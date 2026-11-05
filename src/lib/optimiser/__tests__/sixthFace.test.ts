@@ -95,3 +95,33 @@ describe('6th face nesting', () => {
     expect(gcodeFileName({ batch: false, jobNumber: 'RHK6570', dateStr: '', materialCode: 'Whiteboard16', sheetNumber: 1, ext: 'anc', runNo: 3 })).toBe('RHK6570_R3_Whiteboard16_01.anc')
   })
 })
+
+import { anchorSixthFaceSheet, anchorSixthFace } from '../sixthFaceLayout'
+
+describe('6th face layout: parts against the trimmed edges', () => {
+  // Nested from the fence corner (top_left): parts at the top of the 1200 sheet.
+  const nested: NestedSheet = {
+    ...sheet,
+    placements: [
+      { uid: 'a', baseUid: 'a', label: 'A', x: 10, y: 690, w: 400, h: 500, rotated: false },
+      { uid: 'b', baseUid: 'b', label: 'B', x: 420, y: 890, w: 300, h: 300, rotated: false },
+    ],
+  }
+  it('turns the layout over to the outside long edge and sits it on the 5mm trim lines', () => {
+    const a = anchorSixthFaceSheet(nested, post)
+    // y' = 1200 - y - h, then shifted so the lowest part sits on y = 5; x onto x = 5.
+    expect(a.placements[0]).toMatchObject({ x: 5, y: 5, w: 400, h: 500 })
+    expect(a.placements[1]).toMatchObject({ x: 415, y: 5, w: 300, h: 300 })
+    // Program Z: those parts now sit on the fences (x 0, top edge of the 1195 sheet).
+    const progs = generateSheetPrograms({ sheet: a, thickness: 18, profile: post, drills: [{ x: 50, y: 50, diameter: 5, depth: 10, program: 'Z' }], toolNumber: 1, toolDiameter: 12 })
+    expect(progs[1].sheet.placements[0]).toMatchObject({ x: 0, y: 1195 - 500 })
+    expect(progs[0].warnings).toEqual([])
+  })
+  it('is idempotent, and leaves one-program sheets alone', () => {
+    const a = anchorSixthFaceSheet(nested, post)
+    expect(anchorSixthFaceSheet(a, post)).toBe(a)
+    const nest = { sheets: [nested], unplaced: [] }
+    expect(anchorSixthFace(nest, () => false, post)).toBe(nest)
+    expect(anchorSixthFace(nest, () => true, post).sheets[0].placements[0].y).toBe(5)
+  })
+})

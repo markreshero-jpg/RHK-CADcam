@@ -14,6 +14,7 @@ import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/opt
 import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, isTwoSidedSheet, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
+import { anchorSixthFace } from '@/src/lib/optimiser/sixthFaceLayout'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import { sheetNumbers, sheetPartOrder } from '@/src/lib/optimiser/labels'
@@ -111,6 +112,17 @@ export default function Stage5Edit() {
     catch (e) { console.error('[Stage5] regenerate drills', e) }
     finally { setDrillsLoading(false) }
   }
+  // 6th face sheets nest against the two trimmed edges (sixthFaceLayout.ts). Done
+  // to a fresh nest only: never after a hand edit, never to a saved run's layout.
+  const editCount = useOptiStore(s => s.editPast.length)
+  const savedNest = useOptiStore(s => s.savedRun?.nest ?? null)
+  const setNestQuiet = useOptiStore(s => s.setNestQuiet)
+  const originCorner = snap?.profiles.find(pr => pr.id === profileId)?.origin_corner ?? 'top_left'
+  useEffect(() => {
+    if (!drillOps || !nestResult || editCount > 0 || savedNest === nestResult) return
+    const anchored = anchorSixthFace(nestResult, s => isTwoSidedSheet(s, drillOps), { origin_corner: originCorner })
+    if (anchored !== nestResult) setNestQuiet(anchored)
+  }, [drillOps, nestResult, editCount, savedNest, originCorner, setNestQuiet])
   const drillsBySheet = useMemo(
     () => (drillOps && nestResult ? projectSheetDrills(nestResult.sheets, drillOps) : new Map<number, SheetDrill[]>()),
     [drillOps, nestResult],

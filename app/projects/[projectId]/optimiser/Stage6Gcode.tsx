@@ -15,7 +15,8 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetPrograms, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
-import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
+import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts } from '@/src/lib/optimiser/sheetDrills'
+import { anchorSixthFace } from '@/src/lib/optimiser/sixthFaceLayout'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
 import { sheetNumbers } from '@/src/lib/optimiser/labels'
@@ -187,9 +188,18 @@ export default function Stage6Gcode() {
       // Nest was laid out at cut size when the profile deducts edgebanding —
       // holes must shift onto the deducted blanks to match.
       const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
-      const { bySheet: sheetDrills, routesBySheet: sheetRoutes, warnings: drillWarnings } =
-        await loadSheetDrills(nestedParts(snap.parts, partIndex), nestResult.sheets, { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
-      setDrillNotes(drillWarnings)
+      const drillOps = await loadResolvedDrillOps(nestedParts(snap.parts, partIndex), { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
+      // 6th face sheets against the trimmed edges (sixthFaceLayout.ts), as Stage 5
+      // does — a fresh nest only, never after a hand edit or a saved run's layout.
+      const st0 = useOptiStore.getState()
+      let nest = nestResult
+      if (st0.editPast.length === 0 && st0.savedRun?.nest !== nestResult) {
+        nest = anchorSixthFace(nestResult, s => isTwoSidedSheet(s, drillOps), { origin_corner: post0.origin_corner })
+        if (nest !== nestResult) st0.setNestQuiet(nest)
+      }
+      const sheetDrills = projectSheetDrills(nest.sheets, drillOps)
+      const sheetRoutes = projectSheetRoutes(nest.sheets, drillOps)
+      setDrillNotes(drillOps.warnings)
 
       // Program number (O-word) derived from the job number, unique per sheet.
       const jobInt = parseInt((snap.jobNumber ?? '').match(/\d+/)?.[0] ?? '', 10)
@@ -198,7 +208,7 @@ export default function Stage6Gcode() {
       // Shaped parts (O4): the perimeter cut follows each part's outline — the
       // same placement transform the sheet preview and the holes use.
       const partByUid = new Map(snap.parts.map(p => [p.uid, p]))
-      const outlinesFor = (sheet: (typeof nestResult.sheets)[number]) => {
+      const outlinesFor = (sheet: (typeof nest.sheets)[number]) => {
         const out: Record<string, { x: number; y: number }[]> = {}
         for (const pl of sheet.placements) {
           const part = partByUid.get(pl.baseUid)
@@ -208,7 +218,7 @@ export default function Stage6Gcode() {
         return out
       }
       // Benchtop sink / cooktop cutouts: cut inside each part before its perimeter.
-      const holesFor = (sheet: (typeof nestResult.sheets)[number]) => {
+      const holesFor = (sheet: (typeof nest.sheets)[number]) => {
         const out: Record<string, { x: number; y: number }[][]> = {}
         for (const pl of sheet.placements) {
           const part = partByUid.get(pl.baseUid)
@@ -218,7 +228,7 @@ export default function Stage6Gcode() {
         return out
       }
       // Rib cut-outs (z_curved_end C4): the onion skin each hole leaves.
-      const holeSkinsFor = (sheet: (typeof nestResult.sheets)[number]) => {
+      const holeSkinsFor = (sheet: (typeof nest.sheets)[number]) => {
         const out: Record<string, number[]> = {}
         for (const pl of sheet.placements) {
           const skins = partByUid.get(pl.baseUid)?.cut_hole_skins
@@ -229,9 +239,9 @@ export default function Stage6Gcode() {
 
       // Sheet numbers restart per material (Whiteboard 01-10, then LX 01-05). The
       // O-number stays unique across the whole run.
-      const sheetNos = sheetNumbers(nestResult.sheets)
+      const sheetNos = sheetNumbers(nest.sheets)
       const sixthWarn: string[] = []
-      const gen: GenFile[] = nestResult.sheets.flatMap((sheet, i) => {
+      const gen: GenFile[] = nest.sheets.flatMap((sheet, i) => {
         const drills = sheetDrills.get(sheet.index) ?? []
         const routes = sheetRoutes.get(sheet.index) ?? []
         const mat = sheet.materialId ? matById.get(sheet.materialId) : undefined
@@ -298,7 +308,7 @@ export default function Stage6Gcode() {
       // Save straight away — the run can then be reopened from Stage 1.
       const sim: SimState = { coord: coordNow, drillBlock: drillBlock ?? null, drillCoord: drillCoordNow }
       const run = {
-        id: null, runNo, name: runName(runNo), savedAt: new Date().toISOString(), nest: nestResult,
+        id: null, runNo, name: runName(runNo), savedAt: new Date().toISOString(), nest,
         files: gen.map(({ sheetIndex, fileName, gcode, outlines, holes, program, simSheet }) => ({ sheetIndex, fileName, gcode, outlines, holes, ...(program ? { program, simSheet } : {}) })),
         drillsBySheet: new Map<number, SheetDrill[]>([...sheetDrills].map(([k, v]) => [k, v.map(d => ({ x: d.x, y: d.y, diameter: d.diameter, ...(d.program ? { program: d.program } : {}) }))])),
         sim,
