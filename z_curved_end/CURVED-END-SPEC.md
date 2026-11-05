@@ -343,6 +343,14 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
     the box), joint **RH flue rib screw** = one Ø5 centred along the piece, mid the rib
     (`migration_c9_flue_rib_screw.sql`, applied). `dropVoidDrills` keeps holes in `rh:` parts (the box
     stands in the rib notches by design).
+    **Superseded 2026-11-06 (Mark, RHK6581 WC-02: "the false front cover on the flue won't be able to be
+    removed as the curved end ribs are in the way"):** the box is built **in segments rib to rib** —
+    every rib above the shelf takes the same flue notch as the shelf (flue only, no box clearance), and
+    segment n stands from the level below's top face to the level above's underside (keys
+    `rh:flue_l` / `_r` / `_front` for segment 1, `…_2`, `…_3` above; labels "Flue Box Front 2" …).
+    Joints: each segment `rh_flue:top` down through the level above; only segment 1 `rh_flue:shelf` up
+    through the shelf (a screw from both sides of a rib would share the holes). `rh_flue:rib` is no
+    longer declared (key + joint kept). `RH_RIB_CLEAR` still sets the box's clearance check to the curve.
   - **Notches on shaped parts**: `spliceNotch` (partCutouts.ts) cuts a notch into one straight,
     unbulged edge of an arc outline (the formers' back edge); anything reaching the curve or a fixing
     block is refused with a warning. `crv:top` + `crv:rib_<n>` now take cut-outs (`isCutoutCaseKey`).

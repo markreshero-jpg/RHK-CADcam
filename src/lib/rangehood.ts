@@ -74,12 +74,16 @@ const RH_LABELS: Record<string, string> = {
   'rh:flue_front': 'Flue Box Front',
   'rh:cover':      'Rangehood Cover Panel',
 }
-export const rangehoodPartLabel = (k: string): string | undefined => RH_LABELS[k]
+// A curved end's flue box segments above the first (rh:flue_l_2 …) → "Flue Box Left Side 2".
+export const rangehoodPartLabel = (k: string): string | undefined => {
+  const m = /^(rh:flue_(?:l|r|front))_(\d+)$/.exec(k)
+  return m ? `${RH_LABELS[m[1]]} ${m[2]}` : RH_LABELS[k]
+}
 
 /** Construction-method default keys for the flue box joints (seeded with 5mm Dynamic Holes). */
 export const RH_SEAMS = {
   shelf: 'rh_flue:shelf',   // shelf → each box piece's bottom edge
   top:   'rh_flue:top',     // top → each box piece's top edge
   front: 'rh_flue:front',   // front piece → each side's front edge
-  rib:   'rh_flue:rib',     // curved end (C9): each box piece screwed into a rib it passes, one centred hole
+  rib:   'rh_flue:rib',     // curved end (C9): no longer declared — the box is built rib to rib (2026-11-06); kept for the seeded default
 } as const

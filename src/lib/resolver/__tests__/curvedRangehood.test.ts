@@ -1,6 +1,6 @@
 // z_curved_end C9: a rangehood in a curved wall end (WCRVFIXP) — hole in the
 // bottom former, a rib locked at the shelf height (none below), flue notch in
-// it + the top former, ribs above notched round the flue box, the box itself.
+// it, every rib above + the top former, the flue box built rib to rib.
 import { describe, it, expect } from 'vitest'
 import { calcCurvedEnd } from '../../curvedEnd/geometry'
 import { curvedEndFootprint, curvedEndParams, DEFAULT_CURVED_END } from '../../curvedEnd/settings'
@@ -8,7 +8,6 @@ import { normaliseRangehood, type RangehoodSettings } from '../../rangehood'
 import { spliceNotch } from '../../partCutouts'
 import { clipOutlineX } from '../../shapePath'
 import { DEFAULT_RULES, type CabinetInput, type JointTypeOp, type Material } from '../types'
-import { cabinetSeamDrills } from '../../jointDrilling'
 import { resolveCabinet } from '../resolver'
 import { resolveCurvedEnd } from '../resolveCurvedEnd'
 import { mergeRules } from '../mergeRules'
@@ -72,7 +71,7 @@ describe('curved end rangehood (C9)', () => {
     expect(rp.rangehood_hole).toEqual({ x0: centre - 250, x1: centre + 250, z0: 350 - 58 - 260, z1: 292 })
   })
 
-  it('notches the shelf rib and the top, and every rib above round the box', () => {
+  it('notches the shelf rib, every rib above and the top with the flue', () => {
     const rp = resolveCabinet(wcrv())
     const ribs = ribsOf(rp)
     expect(ribs[0].Y).toBe(350)
@@ -81,23 +80,31 @@ describe('curved end rangehood (C9)', () => {
     const depthOf = (p: typeof top) => p.DX - Math.min(...p.outline!.filter(q => q.x > 300 && q.x < 600).map(q => q.y))
     expect(depthOf(ribs[0])).toBeCloseTo(250)
     expect(depthOf(top)).toBeCloseTo(250 + 16.5)   // wall build: the top runs over the back to the wall
-    for (const r of ribs.slice(1)) expect(depthOf(r)).toBeCloseTo(250 + 16.5 + 1)
+    for (const r of ribs.slice(1)) expect(depthOf(r)).toBeCloseTo(250)   // the flue only — the box stops at each rib
     // The curve survives the notch.
     for (const p of [ribs[0], top]) expect(p.outline!.some(q => q.b)).toBe(true)
     expect(rp.cutout_voids?.length).toBe(ribs.length + 1)
   })
 
-  it('builds the flue box shelf → top, screwed into the rib and the top former', () => {
+  it('builds the flue box in segments rib to rib, shelf → top (RHK6581 WC-02: the front cover comes off)', () => {
     const rp = resolveCabinet(wcrv())
-    const shelf = ribsOf(rp)[0], top = rp.case_parts.find(p => p.part_key === 'crv:top')!
-    const L = rp.case_parts.find(p => p.part_key === 'rh:flue_l')!
-    const F = rp.case_parts.find(p => p.part_key === 'rh:flue_front')!
-    expect(L.Y).toBe(350 + 16.5)
-    expect(L.DX).toBeCloseTo(top.Y - (350 + 16.5))
-    expect(L.Z).toBeCloseTo(shelf.Z + 250)
-    expect(F.DY).toBe(233)
-    expect(F.X + F.DY / 2).toBeCloseTo((16.5 + 900 - 18) / 2)
-    expect(rp.case_parts.some(p => p.part_key === 'rh:flue_r')).toBe(true)
+    const ribs = ribsOf(rp), top = rp.case_parts.find(p => p.part_key === 'crv:top')!
+    expect(ribs.length).toBeGreaterThan(1)
+    const lows = ribs, highs = [...ribs.slice(1), top]
+    lows.forEach((lo, i) => {
+      const s = i ? `_${i + 1}` : ''
+      const L = rp.case_parts.find(p => p.part_key === `rh:flue_l${s}`)!
+      const R = rp.case_parts.find(p => p.part_key === `rh:flue_r${s}`)!
+      const F = rp.case_parts.find(p => p.part_key === `rh:flue_front${s}`)!
+      for (const p of [L, R, F]) {
+        expect(p.Y).toBeCloseTo(lo.Y + 16.5)
+        expect(p.DX).toBeCloseTo(highs[i].Y - (lo.Y + 16.5))
+      }
+      expect(L.Z).toBeCloseTo(lo.Z + 250)
+      expect(F.DY).toBe(233)
+      expect(F.X + F.DY / 2).toBeCloseTo((16.5 + 900 - 18) / 2)
+    })
+    expect(rp.case_parts.filter(p => p.part_key.startsWith('rh:flue_front'))).toHaveLength(ribs.length)
   })
 
   it('splits the support ribs under the shelf left / right of the hole', () => {
@@ -176,34 +183,25 @@ describe('curved end rangehood (C9)', () => {
     expect(rp.warnings.filter(w => /rangehood rail/.test(w.message))).toEqual([])
   })
 
-  it('screws each flue box piece into every rib it passes: one hole, centred, mid the rib', () => {
+  it('fixes each segment down through the level above; only the first up through the shelf', () => {
     const one = {
       id: 'one', joint_type_id: 'one', operation_order: 0, target_part: 'part_b', machine_operation: 'drill', face: 'normal',
       tool_diameter_mm: 5, depth_mm: 16.7, offset_x_mm: 0, offset_y_mm: 0, offset_z_mm: 0, qty: 1, spacing_mm: null, qty2: 1, spacing2_mm: null,
-      router_tool_id: null, drill_id: null, auto_tool: true, notes: null,
-      expressions: { qty: '1', offset_z_mm: 'D / 2', offset_y_mm: 'CW / 2' },
+      router_tool_id: null, drill_id: null, auto_tool: true, notes: null, expressions: { qty: '1' },
     } as unknown as JointTypeOp
-    const rp = resolveCabinet(wcrv(rh, {}, {
-      joint_defaults: { 'rh_flue:rib': 'one' }, joint_type_ops: { one: [one] }, joint_type_names: { one: 'RH flue rib screw' },
-    } as Partial<CabinetInput>))
-    const ribs = ribsOf(rp).slice(1)   // above the shelf
-    expect(ribs.length).toBeGreaterThan(0)
-    const drills = cabinetSeamDrills(rp).filter(d => d.opRef?.startsWith('crv:rib_'))
-    expect(drills).toHaveLength(ribs.length * 3)
-    const L = rp.case_parts.find(p => p.part_key === 'rh:flue_l')!, R = rp.case_parts.find(p => p.part_key === 'rh:flue_r')!
-    const F = rp.case_parts.find(p => p.part_key === 'rh:flue_front')!
-    const cx0 = L.X + 16.5, cx1 = R.X - 16.5
-    for (const rib of ribs) {
-      const at = drills.filter(d => Math.abs(d.y - (rib.Y + 8.25)) < 0.01)
-      const l = at.find(d => d.targetPartKey === 'rh:flue_l')!, r = at.find(d => d.targetPartKey === 'rh:flue_r')!
-      const f = at.find(d => d.targetPartKey === 'rh:flue_front')!
-      // Sides: from inside the box, centred front-to-back on the side.
-      expect(l.axis).toBe('x-'); expect(l.x).toBeCloseTo(cx0); expect(l.z).toBeCloseTo(rib.Z + 250 / 2)
-      expect(r.axis).toBe('x+'); expect(r.x).toBeCloseTo(cx1); expect(r.z).toBeCloseTo(l.z)
-      // Front: centred across it, bored through.
-      expect(f.x).toBeCloseTo(F.X + F.DY / 2)
-      expect(f.depthLen).toBe(16.5)
-    }
+    const defaults = Object.fromEntries(['rh_flue:shelf', 'rh_flue:top', 'rh_flue:front', 'rh_flue:rib'].map(k => [k, 'one']))
+    const rp = resolveCabinet(wcrv(rh, {}, { joint_defaults: defaults, joint_type_ops: { one: [one] }, joint_type_names: { one: 'screw' } } as Partial<CabinetInput>))
+    const ribs = ribsOf(rp), top = rp.case_parts.find(p => p.part_key === 'crv:top')!
+    const keys = rp.seam_joints.filter(s => s.declared && s.seam_key.includes('rh:flue')).map(s => s.seam_key)
+    const into = (b: string) => keys.filter(k => k.startsWith('rh:flue') && k.endsWith(`|${b}`) && !k.includes('|rh:'))
+    // The shelf: segment 1's three pieces only.
+    expect(into(ribs[0].part_key).sort()).toEqual(['rh:flue_front', 'rh:flue_l', 'rh:flue_r'].map(k => `${k}|${ribs[0].part_key}`))
+    // Each rib above + the top: the three pieces of the segment under it.
+    ribs.slice(1).forEach((r, i) => expect(into(r.part_key).sort()).toEqual(['rh:flue_front', 'rh:flue_l', 'rh:flue_r'].map(k => `${k}_${i + 1 === 1 ? '' : i + 1}`.replace(/_$/, '') + `|${r.part_key}`)))
+    expect(into(top.part_key)).toHaveLength(3)
+    // No rib screws through the pieces any more; front → sides per segment.
+    expect(keys.some(k => k.startsWith('crv:rib_'))).toBe(false)
+    expect(keys.filter(k => /\|rh:flue_front/.test(k))).toHaveLength(2 * ribs.length)
   })
 
   it('mirrors for a left-hand curve', () => {

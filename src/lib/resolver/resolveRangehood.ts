@@ -216,20 +216,28 @@ export function rangehoodCover(cab: CabinetInput, caseParts: ResolvedCasePart[],
 }
 
 type BoxAt = { cx0: number; cx1: number; zBack: number; zFront: number; y0: number; y1: number; H: number; T: number }
-/** The flue box (two sides + a front piece) and its seams into the shelf and the top. */
-function flueBox(cab: CabinetInput, out: RangehoodResult, b: BoxAt, shelf: { key: string; Y: number }, top: { key: string; Y: number; DZ: number }) {
+/** Part keys of flue box segment `n` (1 = the original keys; a curved end's
+ *  segments above each rib get `_2`, `_3`, … — RHK6581 WC-02, Mark 2026-11-06). */
+export const flueKeys = (n = 1): { l: `rh:${string}`; r: `rh:${string}`; front: `rh:${string}` } => {
+  const s = n > 1 ? `_${n}` : ''
+  return { l: `rh:flue_l${s}` as const, r: `rh:flue_r${s}`, front: `rh:flue_front${s}` }
+}
+
+/** The flue box (two sides + a front piece) and its seams into the level below
+ *  (`shelf`, null = none) and the level above (`top`). `n` = segment number. */
+function flueBox(cab: CabinetInput, out: RangehoodResult, b: BoxAt, shelf: { key: string; Y: number } | null, top: { key: string; Y: number; DZ: number }, n = 1) {
   const flue = cab.rangehood!.flue
   const { cx0, cx1, zBack, zFront, y0, y1, H, T } = b
-  const shelfId = shelf.key
+  const K = flueKeys(n)
   // ── Flue box ───────────────────────────────────────────────────
   const mat = cab.material.id, eb = cab.interior_edgeband_id
   const band = (e: { left?: boolean; right?: boolean }) => ({ top: false, bottom: false, left: !!e.left, right: !!e.right, id: eb })
   // Left side: turned +90° (outer face at X, runs front → back) — front end = local x 0.
-  out.parts.push({ part_key: 'rh:flue_l', DX: H, DY: flue.d, DZ: T, X: r2(cx0 - T), Y: y0, Z: zFront, AX: 0, AY: 90, AZ: 0, material_id: mat, edge_band: band({ left: true }) })
+  out.parts.push({ part_key: K.l, DX: H, DY: flue.d, DZ: T, X: r2(cx0 - T), Y: y0, Z: zFront, AX: 0, AY: 90, AZ: 0, material_id: mat, edge_band: band({ left: true }) })
   // Right side: turned −90° (outer face at X, runs back → front) — front end = local x DY.
-  out.parts.push({ part_key: 'rh:flue_r', DX: H, DY: flue.d, DZ: T, X: r2(cx1 + T), Y: y0, Z: zBack, AX: 0, AY: -90, AZ: 0, material_id: mat, edge_band: band({ right: true }) })
+  out.parts.push({ part_key: K.r, DX: H, DY: flue.d, DZ: T, X: r2(cx1 + T), Y: y0, Z: zBack, AX: 0, AY: -90, AZ: 0, material_id: mat, edge_band: band({ right: true }) })
   // Front piece across both sides' front edges.
-  out.parts.push({ part_key: 'rh:flue_front', DX: H, DY: r2(flue.w + 2 * T), DZ: T, X: r2(cx0 - T), Y: y0, Z: zFront, AX: 0, AY: 0, AZ: 0, material_id: mat, edge_band: band({ left: true, right: true }) })
+  out.parts.push({ part_key: K.front, DX: H, DY: r2(flue.w + 2 * T), DZ: T, X: r2(cx0 - T), Y: y0, Z: zFront, AX: 0, AY: 0, AZ: 0, material_id: mat, edge_band: band({ left: true, right: true }) })
 
   // ── Joints (A = screwed into its edge, B = drilled through) ─────
   const seam = (generic: string, a: string, b: string, geom: DeclaredSeam['geom']) =>
@@ -237,13 +245,13 @@ function flueBox(cab: CabinetInput, out: RangehoodResult, b: BoxAt, shelf: { key
   const X = { x: 1, y: 0, z: 0 }, Z = { x: 0, y: 0, z: 1 }
   // Each piece's bottom / top edge strip: origin at its corner, along its length, across its thickness.
   const edges = [
-    { key: 'rh:flue_l',     origin: { x: r2(cx0 - T), z: zBack },  along: Z, length: flue.d },
-    { key: 'rh:flue_r',     origin: { x: cx1,         z: zBack },  along: Z, length: flue.d },
-    { key: 'rh:flue_front', origin: { x: r2(cx0 - T), z: zFront }, along: X, length: r2(flue.w + 2 * T) },
+    { key: K.l,     origin: { x: r2(cx0 - T), z: zBack },  along: Z, length: flue.d },
+    { key: K.r,     origin: { x: cx1,         z: zBack },  along: Z, length: flue.d },
+    { key: K.front, origin: { x: r2(cx0 - T), z: zFront }, along: X, length: r2(flue.w + 2 * T) },
   ]
   for (const e of edges) {
     const across = e.along === Z ? X : Z
-    seam(RH_SEAMS.shelf, e.key, shelfId, {
+    if (shelf) seam(RH_SEAMS.shelf, e.key, shelf.key, {
       origin: { ...e.origin, y: y0 }, along: e.along, across, toward: { x: 0, y: 1, z: 0 }, length: e.length, width: T,
       // Bored down from the shelf's top face (a through hole, same hole): bored up
       // from below the optimiser mirrors the holes for a turned-over part but not
@@ -256,22 +264,22 @@ function flueBox(cab: CabinetInput, out: RangehoodResult, b: BoxAt, shelf: { key
     })
   }
   // Front piece → each side's front edge: up the height, bored back from its front face.
-  for (const [key, x] of [['rh:flue_l', r2(cx0 - T)], ['rh:flue_r', cx1]] as const) {
-    seam(RH_SEAMS.front, key, 'rh:flue_front', {
+  for (const [key, x] of [[K.l, r2(cx0 - T)], [K.r, cx1]] as const) {
+    seam(RH_SEAMS.front, key, K.front, {
       origin: { x, y: y0, z: zFront }, along: { x: 0, y: 1, z: 0 }, across: X, toward: { x: 0, y: 0, z: -1 }, length: H, width: T,
     })
   }
 }
 
-/** Clearance each side of the flue box where it passes up through a rib (C9). */
+/** Clearance each side of the flue box: it must sit clear of the curve / fixing blocks by this (C9). */
 export const RH_RIB_CLEAR = 1
 
 /**
  * Rangehood on a curved end (WCRVFIXP, z_curved_end C9). Its formers are case
  * parts in the horizontal frame (x across from X, y back from the front edge at
  * Z + DX): the hole goes in `crv:bottom`, the flue notch in the rib at the
- * shelf height and `crv:top`, and every rib above the shelf is notched round
- * the flue box (box outside + RH_RIB_CLEAR) so the box runs shelf → top.
+ * shelf height, every rib above it and `crv:top`, and the flue box is built in
+ * segments rib to rib (so each front cover comes off — Mark 2026-11-06).
  */
 function resolveCurvedRangehood(
   cab: CabinetInput, caseParts: ResolvedCasePart[], out: RangehoodResult,
@@ -323,26 +331,26 @@ function resolveCurvedRangehood(
     id, kind: 'notch', shape: 'rect', w, d, edge: 'back', source: 'rangehood',
     x: { from: 'left', off: r2(x - part.X) }, y: { from: 'back', off: 0 },
   })
+  // The flue box is built in segments between the levels (Mark 2026-11-06,
+  // RHK6581 WC-02): a box running up through the ribs traps its front cover, so
+  // every rib above the shelf takes the same flue notch as the shelf and each
+  // segment stands rib to rib — its front comes off between two ribs.
+  const above = ribs.filter(p => p.Y > shelf.Y + 0.5 && p.Y < top.Y - 0.5)
   add(`case_${shelf.part_key}`, notch('rh_flue', shelf, cx0, flue.w, flue.d))
+  for (const rib of above) add(`case_${rib.part_key}`, notch('rh_flue', rib, cx0, flue.w, r2(zFront - rib.Z)))
   add('case_crv:top', notch('rh_flue', top, cx0, flue.w, r2(zFront - top.Z)))
-  for (const rib of ribs.filter(p => p.Y > shelf.Y + 0.5)) add(`case_${rib.part_key}`, notch('rh_flue_box', rib, bx0, r2(bx1 - bx0), bd))
 
-  flueBox(cab, out, { cx0, cx1, zBack, zFront, y0, y1, H, T }, { key: shelf.part_key, Y: shelf.Y }, { key: 'crv:top', Y: top.Y, DZ: top.DZ })
-
-  // Each box piece screwed into every rib it passes (Mark, 2026-11-05): one
-  // hole centred along the piece, mid the rib's thickness, bored through the
-  // piece from inside the box (part B = the piece, part A = the rib's notch edge).
-  const UP = { x: 0, y: 1, z: 0 }, AX = { x: 1, y: 0, z: 0 }, AZ = { x: 0, y: 0, z: 1 }
-  for (const rib of ribs.filter(p => p.Y > shelf.Y + 0.5 && p.Y < top.Y - 0.5)) {
-    const pieces = [
-      { key: 'rh:flue_l',     origin: { x: r2(cx0 - T), z: zBack },        along: AZ, length: flue.d,             toward: { x: -1, y: 0, z: 0 } },
-      { key: 'rh:flue_r',     origin: { x: r2(cx1 + T), z: zBack },        along: AZ, length: flue.d,             toward: AX },
-      { key: 'rh:flue_front', origin: { x: r2(cx0 - T), z: r2(zFront + T) }, along: AX, length: r2(flue.w + 2 * T), toward: AZ },
-    ]
-    for (const pc of pieces) out.seams.push({
-      seam_key: `${rib.part_key}|${pc.key}`, generic_key: RH_SEAMS.rib, part_a_key: rib.part_key, part_b_key: pc.key,
-      geom: { origin: { ...pc.origin, y: rib.Y }, along: pc.along, across: UP, toward: pc.toward, length: pc.length, width: rib.DZ },
-    })
-  }
+  // Segment n: from the level below's top face to the level above's underside.
+  // Fixed down through the level above into its top edges; only the first is
+  // also fixed up through the shelf (a screw from each side of a rib would land
+  // in the same holes).
+  const lows: ResolvedCasePart[] = [shelf, ...above], highs: ResolvedCasePart[] = [...above, top]
+  lows.forEach((lo, i) => {
+    const hi = highs[i]
+    const sy0 = r2(lo.Y + lo.DZ), sy1 = hi.Y, sH = r2(sy1 - sy0)
+    if (!(sH > 0)) { warn(`no room for flue box segment ${i + 1} between ${lo.part_key} and ${hi.part_key}`); return }
+    flueBox(cab, out, { cx0, cx1, zBack, zFront, y0: sy0, y1: sy1, H: sH, T },
+      i === 0 ? { key: shelf.part_key, Y: shelf.Y } : null, { key: hi.part_key, Y: hi.Y, DZ: hi.DZ }, i + 1)
+  })
   return out
 }
