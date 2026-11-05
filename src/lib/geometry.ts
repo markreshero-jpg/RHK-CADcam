@@ -715,3 +715,22 @@ export function gridDots(
       dots.push({ x, y })
   return dots.length <= MAX_GRID_DOTS ? dots : []
 }
+
+/** Plan draw order (low → high, by underside height) so what's higher overlaps what's
+ *  below it, on the canvas plan and the plan print alike. Kick assemblies go under
+ *  everything; floor units at their pos_z; under panels / floating shelves at their own
+ *  pos_z (a bench or desk top over its base units, a floating run's under panel below its
+ *  raised carcasses); bulkheads, then wall units on top (hung from the top line unless WALLZ). RHK6478 Study: the desk top drew over the overheads (Mark 2026-11-05). */
+export function planDrawRank(c: {
+  is_kick_assembly?: boolean | null; rule_overrides?: { UNDER_PANEL?: unknown } | null
+  assembly_class: string; pos_z?: number | null; bulkhead?: unknown; float_shelf?: unknown
+}): number {
+  if (c.is_kick_assembly) return -1
+  if (c.rule_overrides?.UNDER_PANEL || c.float_shelf) return Number(c.pos_z ?? 0)
+  // Bulkheads: just under the overheads — same footprint, and on top they'd grey out the
+  // overhead names (RHK6478 Study WC-17 / WC-18).
+  if (c.bulkhead) return 1e5 - 1
+  if (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') return wallZOf(c) ?? 1e5
+  // A tall unit over a base at the same floor height (it's the taller one).
+  return Number(c.pos_z ?? 0) + (c.assembly_class === 'tall' || c.assembly_class === 'tall_corner' ? 0.5 : 0)
+}

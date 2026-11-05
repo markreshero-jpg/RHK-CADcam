@@ -435,6 +435,12 @@ Built:
   Checked headless: Study Wall 1 with Line Drawing Print — open WC-06/07/08 print sides,
   top, bottom, shelves; doored base cabs still have no gables.
 
+### Plan draw order ✅ 2026-11-05
+- Canvas plan and plan print share `planDrawRank` (`src/lib/geometry.ts`): low → high by
+  underside — kick assemblies, floor units (pos_z, tall over base), under panels / floating
+  shelves at their own pos_z (desk tops, benches), bulkheads, then overheads on top. The plan
+  print used DB order, so the RHK6478 Study desk top (BC-11) painted over the overheads.
+
 ### Kick dims on the prints ✅ built 2026-11-05 (pending Mark's check)
 - Mark 2026-11-05: shop drawings on the Kicks set didn't show kick depths / lengths; put the
   kick height on the plan too ("normally the only sheet that gets printed off").

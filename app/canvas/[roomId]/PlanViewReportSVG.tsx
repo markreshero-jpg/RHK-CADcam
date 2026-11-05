@@ -26,6 +26,7 @@ import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
   cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabT,
   cabinetToPlan, cabinetPlanFrame,
+  planDrawRank,
 } from '@/src/lib/geometry'
 import { GrainMatchPlanSVG } from './GrainMatchSVG'
 import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
@@ -361,8 +362,8 @@ export default function PlanViewReportSVG({
         )
       })}
 
-      {/* ── Cabinets — parts per layer set; kick assemblies (under) first ── */}
-      {[...cabinets].sort((a, b) => (a.is_kick_assembly ? 0 : 1) - (b.is_kick_assembly ? 0 : 1)).map(cab => {
+      {/* ── Cabinets — parts per layer set; low → high like the canvas (kicks + under panels first, overheads last) ── */}
+      {[...cabinets].sort((a, b) => planDrawRank(a) - planDrawRank(b)).map(cab => {
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return null
         const rp       = resolvedParts?.get(cab.id)

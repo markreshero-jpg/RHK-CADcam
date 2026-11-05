@@ -19,6 +19,7 @@ import {
   wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallPieces, wallInwardNormal, centroid,
   cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan, cabinetPlanFrame,
   gridDots,
+  planDrawRank,
 } from '@/src/lib/geometry'
 import { GrainMatchPlanSVG } from './GrainMatchSVG'
 import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
@@ -1126,14 +1127,9 @@ export default function CanvasSVG({
         })}
 
         {/* ── Cabinets ── rendered low→high so overheads overlap bases in plan */}
-        {[...cabinets].sort((a, b) => {
-          // Kick assemblies first (underneath): where a kick and its member cabinets
-          // are both shown, the cabinet above wins the click. A run's under panel
-          // (BUP / WUP, z_floating) likewise sits under its carcasses.
-          const order: Record<string, number> = { base: 0, base_corner: 0, tall: 1, tall_corner: 1, wall: 2, wall_corner: 2 }
-          const rank = (c: CabinetInstance) => c.is_kick_assembly || c.rule_overrides?.UNDER_PANEL ? -1 : (order[c.assembly_class] ?? 0)
-          return rank(a) - rank(b)
-        }).map(cab => {
+        {/* Kick assemblies first (underneath): where a kick and its member cabinets are both
+            shown, the cabinet above wins the click. Under panels likewise sit under. */}
+        {[...cabinets].sort((a, b) => planDrawRank(a) - planDrawRank(b)).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return null
           const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx))
