@@ -189,7 +189,7 @@ export function useCabinetCad({ ctx, cabinet, rp, sheet = 'front', viewOn, onEnt
       <AnnotationLayer annotations={libraryNotes.shown} frame={frame} paper={paper} hairline={cad.hairline} />
       {/* Hidden on this cabinet: ghosted here so it can be shown again; the room doesn't draw it. */}
       <g opacity={0.25}><AnnotationLayer annotations={libraryNotes.hidden} frame={frame} paper={paper} hairline={cad.hairline} /></g>
-      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(own), cabFields)} frame={frame} paper={paper} hairline={cad.hairline}
+      <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(own), cabFields)} frame={frame} paper={paper} hairline={cad.hairline} centreMarks={active}
         edit={{ ...cad.editProps, hittable: cad.editProps.hittable && active }} />
       {cad.drawPreview && <AnnotationLayer annotations={[cad.drawPreview]} frame={frame} paper={paper} hairline={cad.hairline} />}
       {active && <CadMeasureOverlay live={cad.liveMeasure} frame={frame} zoom={zoom}

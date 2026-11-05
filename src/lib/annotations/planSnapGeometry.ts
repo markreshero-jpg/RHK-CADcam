@@ -57,7 +57,8 @@ export function planSnapGeometry({ walls, cabinets, resolved, fixtures, benchtop
     switch (a.kind) {
       case 'line': {
         const lg = a.geom as LineGeom, pts = lg.pts ?? []
-        if (!lg.bulges?.some(Boolean)) { addOutline(g, pts, 'annotations', !!lg.closed, own); break }
+        // closed shapes snap to (and mark) their centre, like boxes and clouds
+        if (!lg.bulges?.some(Boolean)) { addOutline(g, pts, 'annotations', !!lg.closed, own, !!lg.closed); break }
         // With fillet arcs: corners as ends, straight sides' middles, arc middles + centres,
         // and the sampled outline for nearest / intersection.
         const smp = sampleBulged(pts, lg.bulges, !!lg.closed)
@@ -69,6 +70,8 @@ export function planSnapGeometry({ walls, cabinets, resolved, fixtures, benchtop
           const arc = bulgeArc(p, q, bg)
           if (arc) g.points.push({ p: arc.c, kind: 'centre', src: 'annotations', owner: own })
         }
+        if (lg.closed && pts.length >= 3)
+          g.points.push({ p: { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length }, kind: 'centre', src: 'annotations', owner: own })
         break
       }
       case 'cloud': addOutline(g, (a.geom as LineGeom).pts ?? [], 'annotations', true, own, true); break
@@ -130,6 +133,14 @@ export function planSnapGeometry({ walls, cabinets, resolved, fixtures, benchtop
     }
   }
   return g
+}
+
+/** Centre points of one annotation (frame mm): the same points the Centres snap uses —
+ *  circle / arc / fillet centres, box / ellipse / cloud / closed-line middles. Drawn as
+ *  centre marks on the canvas in CAD mode. */
+export function annotationCentres(a: RoomAnnotation): Pt[] {
+  const g = planSnapGeometry({ walls: [], cabinets: [], fixtures: [], benchtops: [], annotations: [a], paperToFrame: 1 })
+  return g.points.filter(p => p.kind === 'centre').map(p => p.p)
 }
 
 /** Box / ellipse points turned by the box's rotation about its centre. */

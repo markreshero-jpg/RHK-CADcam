@@ -1647,6 +1647,18 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.annotSelected > 0 },
   ]},
 
+  // Appended 2026-11-06 (z_CAD_tool CM1: centre marks).
+  { id: 'cad_centres', level: 'basics', topic: 'cad', title: 'Centre marks on CAD objects',
+    blurb: 'In CAD mode every circle, arc, box, ellipse, cloud and closed shape shows a small + at its centre.',
+    keywords: 'cad centre center mark marks point cross circle arc box ellipse snap middle', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar. In the cabinet editor, open the Elevation tab and turn on CAD. Each object with a centre shows a faint blue + there; select one and its + gets bigger.',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'snap', title: 'Snap to it',
+      body: 'With Snap on (and Centres ticked in the Snap ▾ menu), draw a line and move near a + : a round snap marker shows and the point locks to the centre. The marks only show on screen; they never print.',
+      canvas: true, done: (c, s) => c.annotations.length > s.annotations.length },
+  ]},
+
   // Appended 2026-11-04 (z_curved_end C9: rangehood in a curved wall end).
   { id: 'curved_rangehood', level: 'intermediate', topic: 'cabinets', title: 'Put a rangehood in a curved wall cabinet',
     blurb: 'A WCRVFIXP with the rangehood hole in its bottom, a rib as the flue shelf and a flue box up to the top.',

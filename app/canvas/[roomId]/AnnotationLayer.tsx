@@ -17,6 +17,7 @@ import {
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, printStyle, dashPattern, type ResolvedStyle, type ArrowType } from '@/src/lib/annotations/style'
 import type { CadLayerView } from '@/src/lib/annotations/cadLayers'
+import { annotationCentres } from '@/src/lib/annotations/planSnapGeometry'
 
 const FONT = 'Arial, Helvetica, sans-serif'
 
@@ -35,6 +36,8 @@ export interface AnnotationLayerProps {
   /** Canvas only (LW1): draw strokes no thicker than this (svg units, ≈ 1 screen px) —
    *  the CAD line-weight display off. Reports never pass it, so prints keep true weights. */
   hairline?:     number
+  /** Canvas CAD mode: a small + on every object's centre (needs `edit` for its size). Never printed. */
+  centreMarks?:  boolean
   /** Canvas editing (A2): selection outlines, hit areas and grips. Reports omit it. */
   edit?: AnnotationEditProps
 }
@@ -61,7 +64,7 @@ export interface AnnotationEditProps {
 
 const SEL = '#38bdf8'
 
-export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, cadLayers, printing, hairline, edit }: AnnotationLayerProps) {
+export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, cadLayers, printing, hairline, centreMarks, edit }: AnnotationLayerProps) {
   if (!annotations.length) return null
   const sorted = [...annotations].sort((a, b) => a.sort_order - b.sort_order)
   return (
@@ -88,11 +91,28 @@ export default function AnnotationLayer({ annotations, frame, paper, layers, pri
               </g>
             )}
             {edit?.selectedIds.has(a.id) && selection(a, s, frame, paper, edit)}
+            {centreMarks && edit && !hidden && centreMarksOf(a, frame, edit)}
           </g>
         )
       })}
     </g>
   )
+}
+
+/** Centre marks (CAD mode): a screen-sized + at each centre; bigger and brighter on a
+ *  selected object. Same points as the Centres snap. */
+function centreMarksOf(a: RoomAnnotation, f: AnnotFrame, edit: AnnotationEditProps): React.ReactNode {
+  const pts = annotationCentres(a)
+  if (!pts.length) return null
+  const sel = edit.selectedIds.has(a.id), hw = edit.hitWidth
+  const r = hw * (sel ? 0.7 : 0.45)
+  return pts.map((p0, i) => {
+    const p = mapPt(f, p0)
+    return (
+      <path key={`ctr${i}`} d={`M${p.x - r} ${p.y}H${p.x + r}M${p.x} ${p.y - r}V${p.y + r}`}
+        stroke={SEL} strokeWidth={hw / (sel ? 7 : 10)} opacity={sel ? 1 : 0.6} fill="none" />
+    )
+  })
 }
 
 /** Text block outline in svg (4 corners), padding included. */
