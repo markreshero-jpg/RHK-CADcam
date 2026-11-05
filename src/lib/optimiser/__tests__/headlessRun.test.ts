@@ -11,6 +11,8 @@
 // "byMaterial": true = programs in a sub folder per material.
 // "keepRun": true = a real run number, the run saved (reopen in the optimiser)
 // and its .rhkrun backup written beside the PDFs.
+// "nestOnly": true = write <out>/nest-input.json (parts + stock + settings, the
+// exact nest() input) and stop before Stage 6 — for comparing nest changes.
 // Mirrors OptimiserClient Stage 4 run() + Stage6Gcode generate() and signs in
 // as the automation account from .env.local. Writes one program per sheet,
 // sheets.pdf (one page per sheet + a parts list), labels.pdf (102x48) and
@@ -31,7 +33,7 @@ vi.mock('@/src/lib/supabase', async () => {
   return { supabase }
 })
 
-interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean }
+interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean; nestOnly?: boolean }
 const CFG: RunCfg | null = process.env.OPTI_RUN ? JSON.parse(process.env.OPTI_RUN) : null
 
 describe.skipIf(!CFG)('headless optimiser run', () => {
@@ -151,10 +153,17 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       gapFor: m => (m != null ? margins.byMaterial[m] : undefined) ?? margins.fallback,
       allowRotation: true,
     })
-    let nestResult = expandGrainBlocks(nest(gm.parts, stockForRun, {
+    const nestSettings = {
       quality: cfg.quality ?? 'balanced', allowRotation: true,
       marginByMaterial: margins.byMaterial, defaultMargin: margins.fallback,
-    }), gm.blocks, index, gm.warnings)
+    } as const
+    if (cfg.nestOnly) {
+      mkdirSync(cfg.out, { recursive: true })
+      writeFileSync(join(cfg.out, 'nest-input.json'), JSON.stringify({ parts: gm.parts, stock: stockForRun, settings: nestSettings, matNames: Object.fromEntries(snap.materials.map(m => [m.id, m.name])) }))
+      lap(`nestOnly: ${gm.parts.length} parts → ${join(cfg.out, 'nest-input.json')}`)
+      return
+    }
+    let nestResult = expandGrainBlocks(nest(gm.parts, stockForRun, nestSettings), gm.blocks, index, gm.warnings)
     for (const w of nestResult.warnings ?? []) notes.push(`grain match: ${w}`)
     for (const u of nestResult.unplaced) notes.push(`UNPLACED (too big): ${u.label} ${u.w}x${u.h}`)
     lap(`nested ${parts.length} parts → ${nestResult.sheets.length} sheet(s)`)

@@ -602,7 +602,7 @@ function Stage3Settings() {
               ))}
             </div>
             <p className="text-[11px] text-ink-subtle mt-1">
-              {settings.quality === 'fast' ? 'Single pass — fastest.' : settings.quality === 'balanced' ? 'Light annealing (~8 passes).' : 'Full annealing (~40 passes).'}
+              {settings.quality === 'fast' ? 'Single pass — fastest.' : settings.quality === 'balanced' ? 'Tries 40 packings, keeps the best (fills gaps, squeezes the last sheet).' : 'Tries 216 packings — slowest, tightest.'}
             </p>
           </div>
         </div>
