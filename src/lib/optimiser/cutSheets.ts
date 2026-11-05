@@ -8,10 +8,11 @@
 import type { jsPDF as JsPDF } from 'jspdf'
 import type { OptiPart } from './types'
 import type { NestResult } from './nest'
-import { placedOutline } from './shapes'
+import { placedOutline, placedHoles } from './shapes'
 import { blockRectOn, grainMatchTags, grainMatchLine } from './grainBlocks'
 import { grainMatchColour } from '../grainMatch'
 import { partNumbers, sheetPartOrder, holesIn, sheetNumbers } from './labels'
+import type { SheetRoute } from './gcode'
 
 type Drill = { x: number; y: number; diameter: number }
 
@@ -44,6 +45,9 @@ export interface CutSheetsInput {
   nest: NestResult
   partByUid: Map<string, OptiPart>
   drillsBySheet: Map<number, Drill[]>
+  // Routing features per sheet (pockets, grooves, notches, profile routes), in
+  // sheet coords — exactly what the G-code cuts. Drawn when opt.routes.
+  routesBySheet?: Map<number, SheetRoute[]>
   deductEb: boolean
   jobNumber: string | null
   projectName: string
@@ -57,6 +61,7 @@ export interface CutSheetsInput {
 export interface CutSheetsOptions {
   sheets?: Set<number> | null                // sheet numbers (1-based) to print; null = all
   holes: boolean
+  routes?: boolean
   partsList: boolean
 }
 
@@ -82,7 +87,7 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5)
     const eff = (sheet.efficiency * 100).toFixed(0)
     const file = inp.fileNames?.[si]
-    doc.text(`${inp.materialName(sheet.materialId)}  ·  Sheet ${sheetNos.get(sheet.index)!.no} of ${sheetNos.get(sheet.index)!.of}  ·  ${W} × ${H}  ·  ${sheet.placements.length} parts  ·  ${drills.length} holes  ·  ${eff}% used${file ? `  ·  ${file}` : ''}`, M, M + 10)
+    doc.text(`${inp.materialName(sheet.materialId)}  ·  Sheet ${sheetNos.get(sheet.index)!.no} of ${sheetNos.get(sheet.index)!.of}  ·  ${W} × ${H}  ·  ${sheet.placements.length} parts  ·  ${drills.length} holes${opt.routes ? `  ·  ${inp.routesBySheet?.get(sheet.index)?.length ?? 0} routes` : ''}  ·  ${eff}% used${file ? `  ·  ${file}` : ''}`, M, M + 10)
     doc.text(`${inp.runCode ? `Run ${inp.runCode}   ` : ''}${dateTxt}`, PW - M, M + 4, { align: 'right' })
 
     const top = M + 15
@@ -108,6 +113,16 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
         const pts = local.map(q => [X(pl.x + q.x), Y(pl.y + q.y)] as [number, number])
         doc.lines(pts.slice(1).map((q, i) => [q[0] - pts[i][0], q[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], 'FD', true)
       } else doc.rect(X(pl.x), Y(pl.y + pl.h), pl.w * s, pl.h * s, 'FD')
+      // Through cut-outs (rangehood hole, rib cut-outs, benchtop sinks): white holes.
+      if (opt.routes) {
+        doc.setFillColor(255, 255, 255); doc.setDrawColor(30, 90, 200); doc.setLineWidth(0.2)
+        for (const h of placedHoles(p as Parameters<typeof placedHoles>[0], pl, inp.deductEb)) {
+          if (h.length < 3) continue
+          const hp = h.map(q => [X(pl.x + q.x), Y(pl.y + q.y)] as [number, number])
+          doc.lines(hp.slice(1).map((q, i) => [q[0] - hp[i][0], q[1] - hp[i][1]]), hp[0][0], hp[0][1], [1, 1], 'FD', true)
+        }
+        doc.setDrawColor(20); doc.setLineWidth(0.3)
+      }
       // Holes as small circles (true size, min 0.35 mm so 5 mm pins show).
       if (opt.holes) {
         doc.setDrawColor(200, 40, 40); doc.setLineWidth(0.12)
@@ -140,6 +155,37 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
         doc.setFontSize(detail[i]); doc.text(l, cx, ty, { align: 'center' })
       })
     }
+    // Routes (Mark, 2026-11-05: show every route on the cut sheet). Blue: a
+    // cleared pocket is filled, an outline-only route is its rectangle, a groove
+    // is a band its width; each tagged with tool + depth when it fits.
+    const routes = opt.routes ? inp.routesBySheet?.get(sheet.index) ?? [] : []
+    for (const r of routes) {
+      doc.setDrawColor(30, 90, 200); doc.setFillColor(205, 222, 250); doc.setLineWidth(0.15)
+      let tx: number, ty: number, room: number
+      if (r.kind === 'groove') {
+        const L = Math.hypot(r.x2 - r.x1, r.y2 - r.y1) || 1
+        const nx = -(r.y2 - r.y1) / L * r.width / 2, ny = (r.x2 - r.x1) / L * r.width / 2
+        const q = [[r.x1 + nx, r.y1 + ny], [r.x2 + nx, r.y2 + ny], [r.x2 - nx, r.y2 - ny], [r.x1 - nx, r.y1 - ny]].map(([x, y]) => [X(x), Y(y)] as [number, number])
+        doc.lines(q.slice(1).map((v, i) => [v[0] - q[i][0], v[1] - q[i][1]]), q[0][0], q[0][1], [1, 1], 'FD', true)
+        tx = X((r.x1 + r.x2) / 2); ty = Y((r.y1 + r.y2) / 2); room = L * s
+      } else {
+        if (r.corners) continue                                 // corner clean-up: same rectangle as its pocket
+        const fill = r.clear && !(r.ringWidth != null && r.ringWidth > 0)
+        doc.rect(X(r.x), Y(r.y + r.h), r.w * s, r.h * s, fill ? 'FD' : 'S')
+        if (r.clear && r.ringWidth != null && r.ringWidth > 0) {
+          const b = r.ringWidth
+          doc.setLineDashPattern([0.6, 0.6], 0)
+          if (r.w > 2 * b && r.h > 2 * b) doc.rect(X(r.x + b), Y(r.y + r.h - b), (r.w - 2 * b) * s, (r.h - 2 * b) * s, 'S')
+          doc.setLineDashPattern([], 0)
+        }
+        tx = X(r.x + r.w / 2); ty = Y(r.y + r.h / 2); room = Math.max(r.w, r.h) * s
+      }
+      const tag = `T${r.toolNumber} ${Math.round(r.depth * 10) / 10}d`
+      doc.setFontSize(5); doc.setTextColor(30, 90, 200)
+      if (doc.getTextWidth(tag) < room) doc.text(tag, tx, ty + 0.6, { align: 'center' })
+      doc.setTextColor(0); doc.setDrawColor(20)
+    }
+
     // Grain match blocks (z_grain_match G5): dashed outline in the group colour + tag.
     for (const b of nest.blocks ?? []) {
       const r = blockRectOn(sheet, b)
@@ -158,7 +204,7 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
       doc.setDrawColor(40); doc.setLineWidth(0.3); doc.setFont('helvetica', 'normal')
     }
     doc.setFontSize(7); doc.setTextColor(110)
-    doc.text(`Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  "grain across" = grain runs along the width (horizontal grain match).${opt.holes ? '  Red circles = drilling.' : ''}`, M, PH - M + 3)
+    doc.text(`Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  "grain across" = grain runs along the width (horizontal grain match).${opt.holes ? '  Red circles = drilling.' : ''}${routes.length ? '  Blue = routing (filled = pocket cleared, T = tool, d = depth).' : ''}`, M, PH - M + 3)
     doc.setTextColor(0)
   })
 

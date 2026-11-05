@@ -294,12 +294,13 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     // ── Cut sheets + parts list (shared with optimiser Stage 7 — cutSheets.ts) ──
     const { cutSheetsPdf, cutSheetRows } = await import('../cutSheets')
     const drillsBySheet = new Map(gen.map(g => [g.sheet.index, g.drills]))
+    const routesBySheet = new Map(gen.map(g => [g.sheet.index, g.routes]))
     const rows = cutSheetRows(nestResult, partByUid, drillsBySheet)
     const doc = await cutSheetsPdf({
-      nest: nestResult, partByUid, drillsBySheet, deductEb, jobNumber: snap.jobNumber, projectName: snap.projectName,
+      nest: nestResult, partByUid, drillsBySheet, routesBySheet, deductEb, jobNumber: snap.jobNumber, projectName: snap.projectName,
       scope: cfg.rooms?.join(', ') ?? 'All rooms', materialName: id => (id ? matById.get(id)?.name : null) ?? '',
       fileNames: gen.map(g => g.fileName), date: d, runCode: runNo != null ? runCode(snap.jobNumber, runNo) : null,
-    }, { holes: true, partsList: true })
+    }, { holes: true, routes: true, partsList: true })
     writeFileSync(join(outDir, 'sheets.pdf'), Buffer.from(doc.output('arraybuffer')))
 
     // ── Part labels (shared with optimiser Stage 7 — labels.ts) ──
