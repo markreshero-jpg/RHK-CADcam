@@ -27,6 +27,11 @@ export interface ValidateOptions {
   /** Plausible drill-cycle feed band (V9), mm/min. */
   drillFeedMin?: number
   drillFeedMax?: number
+  /** V11 depth limit: the lowest absolute Z any move may reach, in the program's
+   *  own frame (zDepthLimit in gcode.ts). Omitted = no depth check. With
+   *  zAxisUp false (+Z down) it is the highest Z instead. */
+  zFloor?: number
+  zAxisUp?: boolean
 }
 
 const DEFAULTS = { maxCommentLength: 80, drillFeedMin: 500, drillFeedMax: 6000 }
@@ -194,6 +199,30 @@ export function validateGcode(program: string, opts: ValidateOptions = {}): Find
       }
     }
   })
+
+  // -- V11. Too deep (Mark, 2026-11-05) ----------------------------------------
+  // Nothing may go more than 1mm past the bottom of the board: a wrong depth
+  // cuts into the spoilboard or the bed. Every Z word in absolute (G90) mode
+  // counts - moves and drill-cycle hole bottoms alike. G91 blocks and the
+  // G28 / G30 / G53 lines (home, machine coordinates) aren't work positions.
+  if (o.zFloor != null && Number.isFinite(o.zFloor)) {
+    const sign = o.zAxisUp === false ? -1 : 1
+    const limit = sign * o.zFloor
+    let incremental = false
+    lines.forEach((l, i) => {
+      const code = codeOf(l).toUpperCase()
+      if (/\bG0*91\b/.test(code)) incremental = true
+      if (/\bG0*90\b/.test(code)) incremental = false
+      if (incremental || /\bG(?:28|30|53)\b/.test(code)) return
+      for (const m of code.matchAll(/Z\s*([-+]?(?:\d+\.?\d*|\.\d+))/g)) {
+        const z = Number(m[1])
+        if (Number.isFinite(z) && z * sign < o.zFloor! - 1e-6) {
+          add('V11', 'error', i + 1, l, `TOO DEEP: Z${m[1]} is more than 1mm past the bottom of the board (limit Z${limit.toFixed(1)}). Check the op depth and the tool's break-through.`)
+          break
+        }
+      }
+    })
+  }
 
   return findings
 }

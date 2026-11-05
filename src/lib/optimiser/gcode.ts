@@ -476,7 +476,7 @@ export function generateSheetGcode(input: GcodeInput): string {
   // reference: spoilboard zero = bottom of material, so add the material thickness
   // (the machine's work offset / surfacing skim handles the spoilboard itself —
   // spoilboard_thickness is deliberately NOT used here). Flip sign if +Z is down.
-  const zOff = p.material_surface_z === 'spoilboard' ? thickness : 0
+  const zOff = zDatumOffset(p, thickness)
   const zSign = p.z_axis_up === false ? -1 : 1
   const fz = (v: number) => f((v + zOff) * zSign)
   // XY datum. Internal sheet coords are bottom-left origin (x from left, y from
@@ -1832,4 +1832,14 @@ export function gcodeFileName(opts: { batch: boolean; jobNumber: string | null; 
   return opts.batch
     ? `BATCH_${opts.dateStr}_${mat}_${n}.${ext}`
     : `${job}_${mat}_${n}.${ext}`
+}
+
+/** Shift from the internal top-of-material frame (top = 0, +up) to the profile's Z datum. */
+export const zDatumOffset = (p: Pick<PostProfile, 'material_surface_z'>, thickness: number) =>
+  p.material_surface_z === 'spoilboard' ? thickness : 0
+
+/** Validator V11 options: nothing more than `allowance` mm past the bottom of
+ *  the board (Mark, 2026-11-05). Anderson (spoilboard zero) gives Z-1.0. */
+export function zDepthLimit(p: Pick<PostProfile, 'material_surface_z' | 'z_axis_up'>, thickness: number, allowance = 1) {
+  return { zFloor: -thickness - allowance + zDatumOffset(p, thickness), zAxisUp: p.z_axis_up !== false }
 }

@@ -12,7 +12,7 @@
 import { useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { useOptiStore } from '@/src/lib/optimiser/store'
-import { generateSheetPrograms, postFromProfile, gcodeFileName, type PostProfile } from '@/src/lib/optimiser/gcode'
+import { generateSheetPrograms, postFromProfile, gcodeFileName, zDepthLimit, type PostProfile } from '@/src/lib/optimiser/gcode'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
 import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts } from '@/src/lib/optimiser/sheetDrills'
@@ -274,7 +274,7 @@ export default function Stage6Gcode() {
           sheetIndex: sheet.index,
           fileName: gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: sheetNo, ext: post.file_extension, runNo, program: pr.program }),
           gcode: pr.gcode, lines: pr.gcode.split('\n').length,
-          findings: validateGcode(pr.gcode, { maxCommentLength: post.max_comment_length }),
+          findings: validateGcode(pr.gcode, { maxCommentLength: post.max_comment_length, ...zDepthLimit(post, sheet.thickness) }),
           outlines: pr.outlines, holes: pr.holes,
           ...(pr.program ? { program: pr.program, simSheet: pr.sheet } : {}),
         }))

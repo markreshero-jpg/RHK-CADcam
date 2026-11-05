@@ -161,3 +161,33 @@ describe('V9 / V10 — warnings do not block export', () => {
     expect(warningsOf(validateGcode(wrap(`(${longest})`)))).toEqual([])
   })
 })
+
+// V11 (Mark, 2026-11-05): nothing more than 1mm past the bottom of the board.
+import { zDepthLimit, DEFAULT_POST } from '../gcode'
+describe('V11 - too deep', () => {
+  const anderson = zDepthLimit({ material_surface_z: 'spoilboard', z_axis_up: true }, 18)
+  const prog = (body: string) => ['%', 'O0001', 'G90 G0 Z38.', body, 'G91 G28 Z0', 'M30', '%', ''].join('\r\n')
+  it('Anderson (spoilboard zero): limit is Z-1.0', () => {
+    expect(anderson.zFloor).toBe(-1)
+  })
+  it('the gold reference passes with the depth check on', () => {
+    expect(errorsOf(validateGcode(fixture(GOLD), anderson)).map(formatFinding)).toEqual([])
+  })
+  it('through cut at Z-0.2 and Z-1.0 are fine; Z-1.2 is an error', () => {
+    expect(errorsOf(validateGcode(prog('G1 Z-0.2 F3000.'), anderson))).toEqual([])
+    expect(errorsOf(validateGcode(prog('G1 Z-1. F3000.'), anderson))).toEqual([])
+    const e = errorsOf(validateGcode(prog('G1 X10. Y-20. Z-1.2 F3000.'), anderson))
+    expect(e.map(f => f.check)).toEqual(['V11'])
+    expect(e[0].message).toMatch(/TOO DEEP: Z-1\.2/)
+  })
+  it('catches a drill cycle bottom too, but ignores G91 / G28 home lines', () => {
+    expect(errorsOf(validateGcode(prog('G98 G81 X5. Y-5. Z-3. R38. F3000.\r\nG80'), anderson)).map(f => f.check)).toEqual(['V11'])
+    expect(errorsOf(validateGcode(prog('G91 G0 Z-50.\r\nG90'), anderson))).toEqual([])
+  })
+  it('top-of-material zero: limit is minus thickness minus 1', () => {
+    const top = zDepthLimit({ ...DEFAULT_POST, material_surface_z: 'top_of_material' }, 18)
+    expect(top.zFloor).toBe(-19)
+    expect(errorsOf(validateGcode(prog('G1 Z-18.2 F3000.'), top))).toEqual([])
+    expect(errorsOf(validateGcode(prog('G1 Z-19.5 F3000.'), top)).map(f => f.check)).toEqual(['V11'])
+  })
+})

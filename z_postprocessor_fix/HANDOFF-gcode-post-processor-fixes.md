@@ -176,6 +176,7 @@ Checks:
 | V8 | File opens with `%` and closes with `M30` followed by `%` | Error |
 | V9 | Feed rate on any drill cycle within the configured drill feed range | Warning |
 | V10 | Comment length within controller limit | Warning |
+| V11 | No absolute Z more than 1mm past the bottom of the board (Anderson spoilboard zero: below Z-1.0). Drill-cycle hole bottoms count; G91 / G28 / G30 / G53 lines skipped. Limit from `zDepthLimit(profile, thickness)` (Mark, 2026-11-05) | Error (blocks export) |
 
 Errors block export and surface to the user with the offending line number and content. Warnings surface but allow export.
 

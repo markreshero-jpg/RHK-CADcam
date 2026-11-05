@@ -45,7 +45,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { cutBlank, placedOutline, placedHoles } = await import('../shapes')
     const { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts } = await import('../sheetDrills')
     const { anchorSixthFace } = await import('../sixthFaceLayout')
-    const { generateSheetPrograms, postFromProfile, gcodeFileName } = await import('../gcode')
+    const { generateSheetPrograms, postFromProfile, gcodeFileName, zDepthLimit } = await import('../gcode')
     const { validateGcode, errorsOf, warningsOf, formatFinding } = await import('../gcodeValidate')
     type NestPartInput = import('../nest').NestPartInput
     type GroupStock = import('../nest').GroupStock
@@ -279,7 +279,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       }))
       const fileName = progFiles.map(f => f.fileName).join(' then ')
       const gcode = progFiles.map(f => f.gcode).join('')
-      return { sheet, fileName, gcode, progFiles, sixthWarn: programs[0].warnings, drills, routes, findings: progFiles.flatMap(f => validateGcode(f.gcode, { maxCommentLength: post.max_comment_length })) }
+      return { sheet, fileName, gcode, progFiles, sixthWarn: programs[0].warnings, drills, routes, findings: progFiles.flatMap(f => validateGcode(f.gcode, { maxCommentLength: post.max_comment_length, ...zDepthLimit(post, sheet.thickness) })) }
     })
     const blocking = gen.flatMap(g => errorsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
     const warned = gen.flatMap(g => warningsOf(g.findings).map(f => `${g.fileName}  ${formatFinding(f)}`))
