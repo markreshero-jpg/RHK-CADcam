@@ -49,7 +49,7 @@ import { grainMatchColour, grainMatchTag, grainMatchTagCabs } from '@/src/lib/gr
 import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotations/owner'
 import { wallTopPoints } from '@/src/lib/wallProfile'
 import { FillPatternDef, fillPaint } from './FillPattern'
-import { rectEdgeSegs, coverOf, anyExposed } from '@/src/lib/exposedEdges'
+import { rectEdgeSegs, coverOf, anyExposed, EXPOSED_BOARD_ITEMS } from '@/src/lib/exposedEdges'
 import { kickLocal, kickChain, kickHeightMarks } from '@/src/lib/kickDims'
 
 /** Report-only page extras (not drawing layers). */
@@ -314,35 +314,43 @@ export default function ElevationPrintSVG({
     const faceFill = lineDrawing ? 'none' : FACE_SHADE
     // Open parts solid (layer 'exposed_solid'): the fronts drawn in front of this
     // cabinet. A part edge outside them is in the open and prints as a solid board line.
+    // Every front the cabinet has counts (even one the set hides): "open" = no front
+    // there, not "front switched off" (Mark, 2026-11-05).
     const covers = rp && layers.show('exposed_solid')
-      ? rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !!it && layers.show(it) }).map(fz => coverOf(zoneElevRect(fz)))
+      ? rp.face_zones.filter(fz => !!faceZoneItem(fz.face_type)).map(fz => coverOf(zoneElevRect(fz)))
       : null
     type ERect = { ex: number; ey: number; ew: number; eh: number }
-    // Part outline as edges: open runs solid (`open` pen), hidden runs in the layer style.
+    // Part outline as edges: open runs solid at full strength (`open` pen), hidden runs
+    // in the layer style (`hidden` null = the item is switched off → not drawn).
     // null = nothing in the open → the caller draws its normal rect.
-    const openEdges = (key: string, r: ERect, opacity: number,
-      hidden: { stroke: string; w: number; dash?: string }, open: { stroke: string; w: number }) => {
+    const openEdges = (key: string, r: ERect,
+      hidden: { stroke: string; w: number; dash?: string; opacity: number } | null, open: { stroke: string; w: number; opacity: number }) => {
       if (!covers) return null
       const segs = rectEdgeSegs(r, covers)
       if (!anyExposed(segs)) return null
       return (
-        <g key={key} opacity={opacity}>
+        <g key={key}>
           {segs.map((sg, j) => {
+            if (!sg.exposed && !hidden) return null
+            const pen = sg.exposed ? open : hidden!
             const a = toSVG(sg.x1, sg.y1, 0, 0), b = toSVG(sg.x2, sg.y2, 0, 0)
             return <line key={j} x1={a.x} y1={a.y} x2={b.x} y2={b.y} strokeLinecap="square"
-              stroke={sg.exposed ? open.stroke : hidden.stroke} strokeWidth={sg.exposed ? open.w : hidden.w}
-              strokeDasharray={sg.exposed ? undefined : hidden.dash} />
+              stroke={pen.stroke} strokeWidth={pen.w} opacity={pen.opacity}
+              strokeDasharray={sg.exposed ? undefined : hidden!.dash} />
           })}
         </g>
       )
     }
+    // A board item the set hides still prints where it's in the open.
+    const showOrOpen = (it: string) => layers.show(it) || (!!covers && EXPOSED_BOARD_ITEMS.has(it))
     // Internal / hardware outline: layer style, else the report's fine dash.
     // `openSolid` (shelves / dividers / inner drawers): in the open it prints as a board.
     const fineRect = (key: string, item: string, r: ERect, openSolid = false) => {
       const pp = lp(item)
-      const hiddenPen = { stroke: INK3, w: lw(item, dashSW), dash: pp.strokeDasharray ?? dash }
-      const edges = openSolid ? openEdges(key, r, pp.opacity, hiddenPen, { stroke: INK2, w: lw(item, partSW) }) : null
-      if (edges) return edges
+      const shown = layers.show(item)
+      const hiddenPen = { stroke: INK3, w: lw(item, dashSW), dash: pp.strokeDasharray ?? dash, opacity: pp.opacity }
+      const edges = openSolid ? openEdges(key, r, shown ? hiddenPen : null, { stroke: INK2, w: lw(item, partSW), opacity: layers.op(item) }) : null
+      if (edges || !shown) return edges
       const { x, y, w, h } = toSVG(r.ex, r.ey, r.ew, r.eh)
       return <rect key={key} x={x} y={y} width={w} height={h} fill="none" stroke={hiddenPen.stroke} opacity={pp.opacity}
         strokeWidth={hiddenPen.w} strokeDasharray={hiddenPen.dash} />
@@ -373,9 +381,10 @@ export default function ElevationPrintSVG({
             {/* Case panels (skip back) */}
             {rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back').map((p, i) => {
               const it = casePartItem(p.part_key)
-              if (!layers.show(it)) return null
+              if (!showOrOpen(it)) return null
               const { ex, ey, ew, eh } = caseElevRect(p)
               const pp = lp(it)
+              const shown = layers.show(it)
               // Finger-pull rails: only the strip seen through the gap between the fronts
               // (Mark, 2026-10-27: the rail's edges behind the fronts printed as double lines).
               const spans: [number, number][] = p.part_key.startsWith('fprail:')
@@ -385,8 +394,9 @@ export default function ElevationPrintSVG({
                 : [[ey - eh, ey]]
               if (!p.part_key.startsWith('fprail:')) {
                 const pen = { stroke: INK2, w: lw(it, partSW) }
-                const edges = openEdges(`cp-${i}`, { ex, ey, ew, eh }, pp.opacity, { ...pen, dash: pp.strokeDasharray }, pen)
-                if (edges) return edges
+                const edges = openEdges(`cp-${i}`, { ex, ey, ew, eh },
+                  shown ? { ...pen, dash: pp.strokeDasharray, opacity: pp.opacity } : null, { ...pen, opacity: layers.op(it) })
+                if (edges || !shown) return edges
               }
               return spans.map(([lo, hi], j) => {
                 const { x, y, w, h } = toSVG(ex, hi, ew, hi - lo)
@@ -531,7 +541,7 @@ export default function ElevationPrintSVG({
             {/* Internals — shelves / dividers / accessories / inner drawers + pull-outs */}
             {rp.internal_parts.map((p, i) => {
               const it = internalPartItem(p.part_type)
-              return layers.show(it) ? fineRect(`ip-${i}`, it, shelfElevRect(p), true) : null
+              return showOrOpen(it) ? fineRect(`ip-${i}`, it, shelfElevRect(p), true) : null
             })}
             {layers.show('inner_drawer_runners') && (rp.internal_slides ?? []).map((s, i) =>
               fineRect(`is-${i}`, 'inner_drawer_runners', slideElevRect(s)))}

@@ -410,7 +410,7 @@ Built:
 - Mark 2026-11-05: open cupboards (no doors) should show their gables, tops, bottoms and
   shelves solid, not dashed. Locked: **solid wherever no shown front covers the part,
   the layer's own style behind a front** — so an open shelf above doors is solid only in
-  the open part. Hiding doors in a set counts as no doors.
+  the open part.
 - Layer item `exposed_solid` (Carcase, elevation only, default ON). Off = every part in its
   own style, as before. Its style / colour do nothing; only visible matters.
 - `src/lib/exposedEdges.ts`: `rectEdgeSegs(rect, covers)` splits a part outline into
@@ -424,6 +424,16 @@ Built:
   layer style is dashed. Section past the face (no fronts drawn) → no covers.
 - Checked headless on RHK6478 Study Wall 1 + 3 (open WC boxes solid, doored WC-12 / WC-14
   adjustable shelves still dashed).
+- **Rev 2026-11-05 (Mark: "doesn't show exposed parts as I wanted")** — the shop-drawing set
+  Line Drawing Print *hides* gables / tops / bottoms and Face elevation ghosts them, so open
+  boxes printed with no sides at all. Now: (1) **a hidden or ghosted board item still draws
+  its open runs, solid and full strength** — `EXPOSED_BOARD_ITEMS` = gables, top, bottom,
+  adj / fixed shelves, dividers; hidden runs of a hidden item aren't drawn, a ghosted item's
+  hidden runs stay ghosted. (2) **Covers = every front the cabinet has**, shown or not —
+  hiding doors in a set no longer makes a cabinet "open" (supersedes the line above).
+  Canvas follows the same rules (case parts as edge lines; open shelves full strength).
+  Checked headless: Study Wall 1 with Line Drawing Print — open WC-06/07/08 print sides,
+  top, bottom, shelves; doored base cabs still have no gables.
 
 ### Kick dims on the prints ✅ built 2026-11-05 (pending Mark's check)
 - Mark 2026-11-05: shop drawings on the Kicks set didn't show kick depths / lengths; put the

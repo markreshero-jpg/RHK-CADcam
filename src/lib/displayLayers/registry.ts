@@ -90,7 +90,7 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'split_lines',     group: 'carcase', label: 'Split lines', views: ['elevation'], default: ON,
     hint: 'Where the sides and back of a height-split cabinet are cut (z_cabinet_split)' },
   { id: 'exposed_solid',   group: 'carcase', label: 'Open parts solid', views: ['elevation'], default: ON,
-    hint: 'Gables, tops, bottoms, shelves and dividers draw solid wherever no door / drawer front / false panel covers them; behind a front they keep their own style. Off = every part in its own style (Mark, 2026-11-05)' },
+    hint: 'Gables, tops, bottoms, shelves and dividers draw solid wherever no door / drawer front / false panel covers them; even when those items are hidden or ghosted in the set; behind a front they keep their own style. Off = every part in its own style (Mark, 2026-11-05)' },
   { id: 'carcass_gables', group: 'carcase', label: 'Gables',       views: ALL, default: ON },
   { id: 'finger_rails',   group: 'carcase', label: 'Finger pull rails', views: ALL, default: ON,
     viewDefaults: { plan: { visible: false } },

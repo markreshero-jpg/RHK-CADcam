@@ -77,3 +77,10 @@ export function rectEdgeSegs(r: { ex: number; ey: number; ew: number; eh: number
 export function anyExposed(segs: EdgeSeg[]): boolean {
   return segs.some(s => s.exposed)
 }
+
+/** The board items "Open parts solid" brings out in the open even when the layer
+ *  set hides or ghosts them (e.g. Line Drawing Print hides the gables / tops /
+ *  bottoms): an open cabinet should still print its sides, top, bottom and shelves. */
+export const EXPOSED_BOARD_ITEMS: ReadonlySet<string> = new Set([
+  'carcass_gables', 'carcass_top', 'carcass_bottom', 'adj_shelves', 'fixed_shelves', 'dividers',
+])

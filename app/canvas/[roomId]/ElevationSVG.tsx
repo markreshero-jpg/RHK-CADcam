@@ -1,6 +1,6 @@
 ﻿'use client'
 import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
-import { rectEdgeSegs, coverOf, anyExposed } from '@/src/lib/exposedEdges'
+import { rectEdgeSegs, coverOf, anyExposed, EXPOSED_BOARD_ITEMS } from '@/src/lib/exposedEdges'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
@@ -1527,34 +1527,42 @@ export default function ElevationSVG({
 
                     // Open parts solid (layer 'exposed_solid'): fronts drawn in front of the
                     // cabinet; a case-part edge outside them draws solid, whatever its layer style.
-                    const covers = layers.show('exposed_solid') && faceOpacity > 0
-                      ? rp.face_zones.filter(fz => { const it = faceZoneItem(fz.face_type); return !!it && layers.show(it) }).map(fz => coverOf(zoneElevRect(fz)))
+                    // Every front the cabinet has counts, even one the set hides ("open" = no front).
+                    const covers = layers.show('exposed_solid')
+                      ? rp.face_zones.filter(fz => !!faceZoneItem(fz.face_type)).map(fz => coverOf(zoneElevRect(fz)))
                       : null
+                    // A board item the set hides still draws where it's in the open.
+                    const showOrOpen = (it: string) => layers.show(it) || (!!covers && EXPOSED_BOARD_ITEMS.has(it))
                     return (<>
-                      {rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back' && layers.show(casePartItem(p.part_key))).map((p, i) => {
+                      {rp.case_parts.filter(p => splitBaseKey(p.part_key) !== 'back' && showOrOpen(casePartItem(p.part_key))).map((p, i) => {
                         const { ex, ey, ew, eh } = caseElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const cit = casePartItem(p.part_key)
                         const fill = layers.colorOf(cit) ?? PART_COLORS[p.part_key] ?? '#b8c8dc'
                         const ldStroke = layers.colorOf(cit) ?? LINE_DRAW_COLORS[p.part_key] ?? '#94a3b8'
                         const cpP = layers.props(cit, z)
-                        const segs = covers && cpP.strokeDasharray ? rectEdgeSegs({ ex, ey, ew, eh }, covers) : null
+                        const shown = layers.show(cit)
+                        // Dashed, ghosted or switched-off parts: the open stretches draw solid at full strength.
+                        const segs = covers && (!shown || cpP.strokeDasharray || layers.style(cit) === 'ghost') ? rectEdgeSegs({ ex, ey, ew, eh }, covers) : null
                         if (segs && anyExposed(segs)) {
                           const stroke = isLineDrawing ? ldStroke : (pastFace ? '#8b9eb0' : (isSel ? '#e2e8f0' : fill))
                           const sw = layers.w(cit, isLineDrawing ? 1 : (pastFace ? 1 : 0.5)) / lz
                           return (
-                            <g key={`cp-${i}`} opacity={cpP.opacity} style={{ pointerEvents: 'none' }}>
-                              <rect x={x} y={y} width={w} height={h} stroke="none"
+                            <g key={`cp-${i}`} style={{ pointerEvents: 'none' }}>
+                              {shown && <rect x={x} y={y} width={w} height={h} stroke="none" opacity={cpP.opacity}
                                 fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : fill)}
-                                fillOpacity={isLineDrawing ? 0 : (pastFace ? 0.9 : 0.6)} />
+                                fillOpacity={isLineDrawing ? 0 : (pastFace ? 0.9 : 0.6)} />}
                               {segs.map((sg, j) => {
+                                if (!sg.exposed && !shown) return null
                                 const a = toSVG(sg.x1, sg.y1, 0, 0), b = toSVG(sg.x2, sg.y2, 0, 0)
                                 return <line key={j} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={sw}
+                                  opacity={sg.exposed ? layers.op(cit) : cpP.opacity}
                                   strokeLinecap="square" strokeDasharray={sg.exposed ? undefined : cpP.strokeDasharray} />
                               })}
                             </g>
                           )
                         }
+                        if (!shown) return null
                         return (
                           <rect key={`cp-${i}`} x={x} y={y} width={w} height={h}
                             fill={isLineDrawing ? 'none' : (pastFace ? 'url(#section-hatch)' : fill)}
@@ -1600,8 +1608,14 @@ export default function ElevationSVG({
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         return <GrainSVG key={`tkg-${i}`} x={x} y={y} w={w} h={h} dir={p.grain_direction === 'horizontal' ? 'h' : 'v'} {...grainProps} />
                       })}
-                      {rp.internal_parts.filter(p => showInt(internalPartItem(p.part_type))).map((p, i) => {
-                        const intEffP = layers.props(internalPartItem(p.part_type), z)
+                      {rp.internal_parts.map(p => {
+                        // Shelves / dividers in the open draw at full strength, even when the set hides or ghosts them.
+                        const it = internalPartItem(p.part_type)
+                        const open = !!covers && EXPOSED_BOARD_ITEMS.has(it) && anyExposed(rectEdgeSegs(shelfElevRect(p), covers))
+                        return { p, open, on: showInt(it) || open }
+                      }).filter(q => q.on).map(({ p, open }, i) => {
+                        const intP = layers.props(internalPartItem(p.part_type), z)
+                        const intEffP = open ? { ...intP, opacity: layers.op(internalPartItem(p.part_type)) } : intP
                         const { ex, ey, ew, eh } = shelfElevRect(p)
                         const { x, y, w, h } = toSVG(ex, ey, ew, eh)
                         const iit = internalPartItem(p.part_type)
