@@ -209,3 +209,16 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 
 - Main bath TC-02 hinge 2 890 -> 860 on both doors (hinges [100, 860, 1485, 1880]), clear of the 916 shelf hole. Resolver clean.
 - Rangehood: Mark finding the specs.
+
+## Rev 17 (Mark 2026-11-05) — `_tmp-6592-rev17.mjs`
+
+- Appliances (Liam email "Appliances for Flaxton", Appliances Online invoice SO09306356, delivery 15/11/26) saved to
+  `_JOBS/.../RHK6592 .../APPLIANCES/` with the appliance list + Bosch DHL555BAU spec sheet. All Bosch: PVS631HC1H induction,
+  HBA572ES3A oven, DHL555BAU 53cm half-integrated rangehood + DHZ5605 recirc kit, SMU6HAS01A D/W, WAN28227AU washer,
+  WQG24203AU dryer.
+- Kitchen WC-03 -> rangehood cabinet: 380 deep (was 300; proud of the 300 overheads), height kept 1505-2200 (Mark;
+  Bosch min above the cooktop is 650, this gives ~605). Rangehood block: hole 500 x 347 (Bosch 500-3 x 350-3) at 16.5 from
+  the front, centred = x 50-550 / z 16.5-363.5, so the 380 flange sits flush with the carcass and the hole clears the back;
+  flue notch 200 x 250 in the fixed shelf (350) + top, flue box. Resolver clean.
+- Front (false panel + doors) waiting on Mark: the face grid has no zone span, so a full-width false panel under a pair
+  of doors needs one column (single 600 door) or two half false panels.
