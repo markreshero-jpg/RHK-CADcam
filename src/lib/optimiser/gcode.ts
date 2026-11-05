@@ -672,11 +672,11 @@ export function generateSheetGcode(input: GcodeInput): string {
   // for now — plane_kind/front-face flip is Phase B §3a/b/d, not yet built.
   if (input.routes?.length) emitRoutes(emitRouterSection, f, fz, input.routes, p, mapX, mapY, safeZ, thickness)
 
-  // ── 5-6. ALL routing — inside-out, travel-ordered ──────────────────────────
+  // ── 5-6. ALL routing — inside-out, smallest part first ──────────────────────────
   // Runs through the same section helper as the pocket and internal-feature
   // sections, so the tool-change block, work offset and head tracking are
   // identical wherever a tool is called.
-  const ordered = orderByTravel(sheet)
+  const ordered = orderSmallFirst(sheet)
   const toolR = (input.toolDiameter ?? 0) / 2
   const outlineOf = (pl: { uid: string }) => {
     const o = input.outlines?.[pl.uid]
@@ -714,14 +714,16 @@ export function generateSheetGcode(input: GcodeInput): string {
   else emitRouterSection(input.toolNumber, input.toolDiameter, (emitR, cR) => {
     if (p.cutter_compensation !== 'off' && toolR <= 0) cR('WARN: cutter compensation requested but routing tool diameter unknown - parts may cut undersized')
     if (hasSkin) {
-      // Phase 1: rough every part down to the onion-skin depth (parts stay held).
+      // Phase 1: rough every part down to the onion-skin depth (parts stay held),
+      // smallest first.
       cR('Roughing pass - leave onion skin')
       for (const pl of ordered) {
         cutHoles(emitR, cR, pl, roughDepth, 0)
         cR(`Part ${pl.label}`)
         routePerimeter(emitR, f, fz, pl, roughDepth, stepDown, safeZ, thickness, p, mapX, mapY, flipWinding, 0, toolR, input.toolNumber, outlineOf(pl))
       }
-      // Phase 2: separate every part — cut through the remaining skin.
+      // Phase 2: separate every part — cut through the remaining skin, smallest
+      // first again so the big parts are the last to come free.
       cR('Separation pass - cut through onion skin')
       for (const pl of ordered) {
         cutHoles(emitR, cR, pl, throughDepth, roughDepth)
@@ -1278,18 +1280,31 @@ function emitGangDrilling(
 }
 
 // Nearest-neighbour travel order between part start corners (origin_corner=BL).
-function orderByTravel(sheet: NestedSheet) {
-  const parts = [...sheet.placements]
-  if (parts.length <= 2) return parts
-  const out = [parts.shift()!]
-  while (parts.length) {
-    const last = out[out.length - 1]
-    let bi = 0, bd = Infinity
-    for (let i = 0; i < parts.length; i++) {
-      const d = (parts[i].x - last.x) ** 2 + (parts[i].y - last.y) ** 2
-      if (d < bd) { bd = d; bi = i }
+// Part cut order: SMALLEST first, biggest last (Mark 2026-11-06). Small parts
+// are the ones that shift once their kerf is cut, so they go while the sheet
+// around them is still whole; the big parts (most vacuum) hold to the end.
+// Used for BOTH onion-skin loops: every part is roughed (held by the skin)
+// smallest → biggest, then separated smallest → biggest again. Parts of about
+// the same size (within 10% area) are taken nearest-next to keep travel short.
+function orderSmallFirst(sheet: NestedSheet) {
+  const parts = [...sheet.placements].sort((a, b) => a.w * a.h - b.w * b.h)
+  const out: typeof parts = []
+  let i = 0
+  while (i < parts.length) {
+    const top = parts[i].w * parts[i].h * 1.1
+    let j = i
+    while (j < parts.length && parts[j].w * parts[j].h <= top + 1e-6) j++
+    const band = parts.slice(i, j)
+    while (band.length) {
+      const last = out[out.length - 1]
+      let bi = 0
+      if (last) {
+        let bd = Infinity
+        band.forEach((q, k) => { const d = (q.x - last.x) ** 2 + (q.y - last.y) ** 2; if (d < bd) { bd = d; bi = k } })
+      }
+      out.push(band.splice(bi, 1)[0])
     }
-    out.push(parts.splice(bi, 1)[0])
+    i = j
   }
   return out
 }
