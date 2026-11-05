@@ -78,3 +78,11 @@ literal `x / y / z` (cabinet frame: x along the wall, y up from pos_z, z from th
 no-op `updateCabinet {dz}`. Script: `z_plan_automation/_tmp-6478-study-desk1.mjs`.
 
 - **Custom part material = `material_override_id`.** The resolver writes the part role's scheduled material over `material_id` on every resolve, so a different board (glass, a second colour) only sticks with `material_override_id` set to it too (RHK6478 desk glass, 2026-11-05).
+
+## Removing a system part (not made) — `part_hide_views`, NOT `hidden_parts`
+
+A generated part is removed (off cut lists / optimiser / CNC / costing, Cabinet Vision "hide") only when it's hidden in
+all three views: `cabinet_instances.part_hide_views = { "<id>": ["plan","elevation","3d"] }`. Ids: `tk_<part_key>_<sort_order>`
+(kick-run assemblies: face 0, sub front 100+i, back 200+i), `case_<key>`, `zone_<row>_<col>`… (filterHidden.ts).
+`hidden_parts` does nothing for this (RHK6592 KICK 3, 2026-11-05). Check `part_hide_views` first when Mark says a part
+"isn't showing" — a removed front (BC-03 false panel, zone_0_1) also vanishes from 3D.

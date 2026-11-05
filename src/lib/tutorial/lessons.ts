@@ -1688,7 +1688,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click Production in the menu bar and choose Generate CNC… Nest the job as usual.',
       target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
     { id: 'pair', title: 'A sheet with both faces makes a pair',
-      body: 'At G-code, a sheet where any part has work on both faces (a shaker door with hinge cups on its back, a gable drilled both sides) gives two files: …_01A then …_01Z, tagged "6th face A - then flip" and "6th face Z - after flip". Every other sheet is one program as before. Cuts that go right through don’t count, they’re made from the top in program A.',
+      body: 'At G-code, a sheet where any part has work on both faces (a shaker door with hinge cups on its back, a gable drilled both sides) gives two files: …_01A then …_01Z, tagged "6th face A - then flip" and "6th face Z - after flip". In Stage 5 those sheets say 6th face after the sheet number. Every other sheet is one program as before. Cuts that go right through don’t count, they’re made from the top in program A.',
       done: c => c.path.endsWith('/optimiser') },
     { id: 'run', title: 'Run A, flip, run Z',
       body: 'Program A: load the sheet back face up (the header says face DOWN). It drills and routes the back, then trims 5mm off the X0 end and the outside long edge. The parts stay in the sheet. Flip the whole sheet over the long edge and push the two trimmed edges into X0 / Y0. Program Z: face routes (shaker, VJ) and then every part cut out. Keep the sheet trim at 5 or more on those edges, or the optimiser warns that a part sits in the trim.',

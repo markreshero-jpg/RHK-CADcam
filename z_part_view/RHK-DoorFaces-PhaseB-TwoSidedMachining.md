@@ -73,6 +73,7 @@ sheet that needs it runs as **two programs with a whole-sheet flip between**.
   `nest_sheets_gcode_a`), Z in `gcode`; run file `gcodeA`. headlessRun writes both.
 - RHK6592 Kitchen (headless): 5 Satin Board door sheets → A/Z pairs, 9 Whiteboard
   carcass sheets single; no validation errors, no trim warnings.
+- Stage 5 marks a two-sided sheet "6th face" after its number (sheet list, title, toolbar).
 - Not yet: Stage 5 / cut sheet pictures show both faces' holes from above (no A/Z
   split); circular-hole entry still helical only.
 

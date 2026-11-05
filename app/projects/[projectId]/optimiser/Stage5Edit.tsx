@@ -13,7 +13,7 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
 import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
-import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
+import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, isTwoSidedSheet, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import { sheetNumbers, sheetPartOrder } from '@/src/lib/optimiser/labels'
@@ -115,6 +115,12 @@ export default function Stage5Edit() {
     () => (drillOps && nestResult ? projectSheetDrills(nestResult.sheets, drillOps) : new Map<number, SheetDrill[]>()),
     [drillOps, nestResult],
   )
+  // Sheets that will run as a 6th face pair (program A, flip, program Z) at G-code.
+  const sixthFace = useMemo(
+    () => new Set(drillOps && nestResult ? nestResult.sheets.filter(s => isTwoSidedSheet(s, drillOps)).map(s => s.index) : []),
+    [drillOps, nestResult],
+  )
+  const SIXTH_TIP = '6th face: parts on this sheet are machined on both faces. G-code makes two programs - A (back face + 5mm trims), flip the sheet over the long edge, then Z (face routes + parts out).'
   const routesBySheet = useMemo(
     () => (drillOps && nestResult ? projectSheetRoutes(nestResult.sheets, drillOps) : new Map<number, SheetRoute[]>()),
     [drillOps, nestResult],
@@ -219,7 +225,7 @@ export default function Stage5Edit() {
                 {isOpen && g.sheets.map(s => (
                   <button key={s.index} onClick={() => setCurrentSheet(s.index)}
                     className={`w-full text-left pl-5 pr-3 py-1.5 flex items-center justify-between gap-2 text-[11px] transition-colors ${s.index === sheet.index ? 'bg-accent/15 text-accent-ink' : 'text-ink-muted hover:bg-surface-2'}`}>
-                    <span className="truncate">Sheet {sheetNo(s)}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
+                    <span className="truncate">Sheet {sheetNo(s)}{sixthFace.has(s.index) && <span className="text-amber-400" title={SIXTH_TIP}> · 6th face</span>}{s.stock.isOffcut ? ' (offcut)' : ''}</span>
                     <span className="font-mono text-ink-subtle shrink-0">{(s.efficiency * 100).toFixed(0)}% · {s.placements.length}</span>
                   </button>
                 ))}
@@ -240,7 +246,7 @@ export default function Stage5Edit() {
           <button disabled={!selectedUid} onClick={() => selectedUid && cutToClipboard(selectedUid)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 transition-colors">Cut</button>
           <button disabled={!clipboard.length} onClick={() => pasteClipboard(sheet.index)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 transition-colors">Paste{clipboard.length ? ` (${clipboard.length})` : ''}</button>
           <button disabled={!selectedUid} onClick={() => selectedUid && removeToUnplaced(selectedUid)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-red-900/30 hover:text-red-300 disabled:opacity-40 transition-colors">Delete</button>
-          <span className="ml-auto text-ink-subtle">{matLabel(sheet)} · Sheet {sheetNo(sheet)} · {(sheet.efficiency * 100).toFixed(1)}%{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
+          <span className="ml-auto text-ink-subtle">{matLabel(sheet)} · Sheet {sheetNo(sheet)}{sixthFace.has(sheet.index) ? ' · 6th face' : ''} · {(sheet.efficiency * 100).toFixed(1)}%{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
         </div>
 
         {editError && (
@@ -260,6 +266,7 @@ export default function Stage5Edit() {
             style={zoom > 1 ? { padding: Math.min(240, (zoom - 1) * 240) } : undefined}>
             <div className="text-lg font-semibold text-ink flex items-center gap-3">
               <span>Sheet {sheetNo(sheet)}
+                {sixthFace.has(sheet.index) && <span className="ml-2 align-middle text-[11px] font-normal px-1.5 py-0.5 rounded border border-amber-600/60 text-amber-400 bg-amber-900/15" title={SIXTH_TIP}>6th face</span>}
                 <span className="text-ink-subtle text-sm font-normal"> of {sheetNos.get(sheet.index)?.of ?? nestResult.sheets.length} · {matLabel(sheet)} · {sheet.stock.w}×{sheet.stock.h}mm{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
               </span>
               <button onClick={() => setShowDrills(s => !s)}
