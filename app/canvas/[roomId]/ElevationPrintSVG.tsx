@@ -50,6 +50,7 @@ import { ownedBy, elevationOwner, elevationAnnotFrame } from '@/src/lib/annotati
 import { wallTopPoints } from '@/src/lib/wallProfile'
 import { FillPatternDef, fillPaint } from './FillPattern'
 import { rectEdgeSegs, coverOf, anyExposed } from '@/src/lib/exposedEdges'
+import { kickLocal, kickChain, kickHeightMarks } from '@/src/lib/kickDims'
 
 /** Report-only page extras (not drawing layers). */
 export interface ElevationPageOptions {
@@ -239,7 +240,17 @@ export default function ElevationPrintSVG({
   const bulkheadChainY = -9.5 * P
   const openingChainY  = -3 * P
   const floorChainY    = roomH + 6 * P
-  const overallY       = roomH + 13 * P
+  // Kicks (dim_kicks): board lengths + height marks, from the resolved kicks.
+  const elevKicks = !layers.show('dim_kicks') ? [] : wallCabs.flatMap(c => {
+    const k = kickLocal(resolvedParts?.get(c.id))
+    if (!k) return []
+    const x = elevX(c)
+    return [{ x0: x + k.x0, x1: x + k.x1, top: cabBottomZ(c, room, wall) + k.top, depth: k.depth }]
+  })
+  // Kick row under the floor-cabinet widths; the overall steps out a row past it.
+  const floorShown = layers.show('dim_elev_floor_chain')
+  const kickChainY     = floorShown ? roomH + 13 * P : floorChainY
+  const overallY       = roomH + (elevKicks.length && floorShown ? 20 : 13) * P
   const heightChainX   = -13 * P
   const titleY         = (wallCabs.some(c => !!c.bulkhead || !!c.float_shelf) ? -13.5 : -12) * P   // clear of the bulkhead row
 
@@ -252,7 +263,7 @@ export default function ElevationPrintSVG({
   const padL = 20 * P + (benchLanes + (showWallH ? 1 : 0)) * benchDimStep
   const padR = 11 * P
   const padT = 16 * P
-  const padB = 18 * P
+  const padB = (elevKicks.length && floorShown ? 25 : 18) * P
   // CAD notes on the side printed, in the canvas elevation frame.
   const notes = annotations.filter(a => ownedBy(a, elevationOwner(wall.id, side)) && layers.show(annotLayerItem(a.kind)))
   const noteFrame = elevationAnnotFrame(roomH)
@@ -889,6 +900,36 @@ export default function ElevationPrintSVG({
           {layers.show('dim_elev_wall_chain') && (overheadCabs.length > 0 || fxWall.length > 0) && hChain(computeElevChain(overheadCabs, wall, fxWall, elevX), overheadChainY, 'oh', 'dim_elev_wall_chain')}
           {layers.show('dim_elev_wall_chain') && bulkheadCabs.length > 0 && hChain(computeElevChain(bulkheadCabs, wall, [], elevX), bulkheadChainY, 'bh', 'dim_elev_wall_chain')}
           {layers.show('dim_elev_floor_chain') && (floorCabs.length > 0 || fxFloor.length > 0) && hChain(computeElevChain(floorCabs, wall, fxFloor, elevX), floorChainY, 'fl', 'dim_elev_floor_chain')}
+          {/* Kicks (dim_kicks): board lengths + gaps under the floor-cabinet widths, and a
+              height dim just inside the start of each kick (butting kicks at one height share it). */}
+          {layers.show('dim_kicks') && (() => {
+            const kicks = elevKicks
+            if (!kicks.length) return null
+            const chainY = kickChainY
+            const segs = kickChain(kicks.map(k => ({ t0: k.x0, t1: k.x1, depth: k.depth, top: k.top, side: 'face' as const })), wall.length)
+            const lineW = lw('dim_kicks', thinSW)
+            return (
+              <g key="kicks">
+                {hChain(segs, chainY, 'kc', 'dim_kicks')}
+                <g pointerEvents="none" opacity={layers.op('dim_kicks')}>
+                  {kickHeightMarks(kicks).map((m, i) => {
+                    const x = m.x + 4 * P, y0 = roomH, y1 = roomH - m.top, my = (y0 + y1) / 2
+                    return (
+                      <g key={i}>
+                        <line x1={x} y1={y0} x2={x} y2={y1} stroke={INK} strokeWidth={lineW} />
+                        <line x1={x - tk} y1={y0} x2={x + tk} y2={y0} stroke={INK} strokeWidth={lineW} />
+                        <line x1={x - tk} y1={y1} x2={x + tk} y2={y1} stroke={INK} strokeWidth={lineW} />
+                        <g transform={`rotate(-90,${x},${my})`}>
+                          <DimLabel x={x} y={my} label={roundMm(m.top)} fs={dimFs} col={INK} bg="white" padY={0.7}
+                            side={dimLabelFits(roundMm(m.top), m.top, dimFs) ? 0 : 1} fontFamily="Arial, Helvetica, sans-serif" />
+                        </g>
+                      </g>
+                    )
+                  })}
+                </g>
+              </g>
+            )
+          })()}
           {layers.show('dim_elev_height') && heightChain()}
           {layers.show('dim_elev_bench') && benchDims()}
           {showWallH && wallHeightDim()}

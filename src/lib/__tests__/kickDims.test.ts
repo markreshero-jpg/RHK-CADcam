@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { kickChain, kickHeightMarks, type KickSpan } from '../kickDims'
+import { kickChain, kickHeightMarks, kickRuns, type KickSpan } from '../kickDims'
 
-const span = (t0: number, t1: number, depth = 500): KickSpan => ({ t0, t1, depth, side: 'face' })
+const span = (t0: number, t1: number, depth = 500, top = 100): KickSpan => ({ t0, t1, depth, top, side: 'face' })
 
 describe('kickChain', () => {
   it('measures kicks, the gaps between them and to the wall ends', () => {
@@ -38,5 +38,23 @@ describe('kickHeightMarks', () => {
       { x0: 600, x1: 1200, top: 120 },
       { x0: 1800, x1: 2400, top: 120 },
     ])).toEqual([{ x: 0, top: 150 }, { x: 600, top: 120 }, { x: 1800, top: 120 }])
+  })
+
+  it('an end panel gap (18) between kicks of one height keeps one mark', () => {
+    expect(kickHeightMarks([
+      { x0: 30, x1: 630, top: 100 },
+      { x0: 648, x1: 1648, top: 100 },
+    ])).toEqual([{ x: 30, top: 100 }])
+  })
+})
+
+describe('kickRuns', () => {
+  it('joins butting kicks of the same height + depth, splits on a change or a gap', () => {
+    expect(kickRuns([span(0, 600), span(600, 1200), span(1200, 1800, 560), span(2000, 2600, 560)])).toEqual([
+      { t0: 0, t1: 1200, top: 100, depth: 500 },
+      { t0: 1200, t1: 1800, top: 100, depth: 560 },
+      { t0: 2000, t1: 2600, top: 100, depth: 560 },
+    ])
+    expect(kickRuns([span(0, 600), span(600, 1200, 500, 150)]).map(r => r.top)).toEqual([100, 150])
   })
 })

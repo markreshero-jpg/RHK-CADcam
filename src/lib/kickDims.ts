@@ -38,6 +38,8 @@ export function kickLocal(rp: ResolvedCabinet | undefined): KickLocal | null {
 export interface KickSpan {
   t0: number; t1: number
   depth: number
+  /** Floor → top of the kick board. */
+  top: number
   side: 'face' | 'back'
 }
 
@@ -60,7 +62,7 @@ export function kickPlanSpans(
       return (p.x - wall.pos_x) * wd.x + (p.y - wall.pos_y) * wd.y
     }
     const a = t(k.x0), b = t(k.x1)
-    out.push({ t0: Math.min(a, b), t1: Math.max(a, b), depth: k.depth, side: cabWallSide(cab, wall) })
+    out.push({ t0: Math.min(a, b), t1: Math.max(a, b), depth: k.depth, top: k.top, side: cabWallSide(cab, wall) })
   }
   return out.sort((a, b) => a.t0 - b.t0)
 }
@@ -86,15 +88,29 @@ export function kickChain(spans: KickSpan[], wallLength: number): KickSeg[] {
   return segs
 }
 
-/** Elevation kick-height marks: one per kick, skipping a kick that butts the
- *  previous one at the same height (a run of equal kicks gets one dim). */
+/** Elevation kick-height marks: one per kick, skipping a kick that carries on from
+ *  the previous one at the same height — butting, or across a gap of up to
+ *  SAME_RUN_GAP (an end panel standing to the floor between them). */
+const SAME_RUN_GAP = 60
 export function kickHeightMarks(kicks: { x0: number; x1: number; top: number }[]): { x: number; top: number }[] {
   const marks: { x: number; top: number }[] = []
   let prev: { x1: number; top: number } | null = null
   for (const k of [...kicks].sort((a, b) => a.x0 - b.x0)) {
-    const continues = prev && Math.abs(k.x0 - prev.x1) < 1 && Math.abs(k.top - prev.top) < 0.5
+    const continues = prev && k.x0 - prev.x1 > -1 && k.x0 - prev.x1 < SAME_RUN_GAP && Math.abs(k.top - prev.top) < 0.5
     if (!continues) marks.push({ x: k.x0, top: k.top })
     prev = { x1: k.x1, top: k.top }
   }
   return marks
+}
+
+/** Kick runs to label on the plan: butting kicks with the same height and depth
+ *  join into one run (a joined run already is one), so a run gets one label. */
+export function kickRuns(spans: KickSpan[]): { t0: number; t1: number; top: number; depth: number }[] {
+  const runs: { t0: number; t1: number; top: number; depth: number }[] = []
+  for (const s of [...spans].sort((a, b) => a.t0 - b.t0)) {
+    const last = runs[runs.length - 1]
+    if (last && s.t0 < last.t1 + 1 && Math.abs(s.top - last.top) < 0.5 && Math.abs(s.depth - last.depth) < 0.5) last.t1 = Math.max(last.t1, s.t1)
+    else runs.push({ t0: s.t0, t1: s.t1, top: s.top, depth: s.depth })
+  }
+  return runs
 }

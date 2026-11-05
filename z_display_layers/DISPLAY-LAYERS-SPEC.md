@@ -425,6 +425,20 @@ Built:
 - Checked headless on RHK6478 Study Wall 1 + 3 (open WC boxes solid, doored WC-12 / WC-14
   adjustable shelves still dashed).
 
+### Kick dims on the prints ✅ built 2026-11-05 (pending Mark's check)
+- Mark 2026-11-05: shop drawings on the Kicks set didn't show kick depths / lengths; put the
+  kick height on the plan too ("normally the only sheet that gets printed off").
+- `dim_kicks` now prints. Plan View / shop drawings plan (`PlanViewReportSVG`): KICK row
+  (boards + gaps, in the base row's place when that row is hidden), kick depth at the wall
+  ends (stacked past the overhead / benchtop depths), and `KICK H 100` on each kick run
+  (`kickRuns`: butting kicks of one height + depth share a label; ` D …` added when a run's
+  depth differs from the wall-end depths; skipped when it won't fit along the run).
+- Elevation print (`ElevationPrintSVG`): kick length row under the floor-cabinet widths (the
+  overall steps out a row) + kick height marks. `kickHeightMarks` now also merges kicks of
+  one height across a gap under 60 (an end panel to the floor) — canvas too.
+- Kicks layer set: elevation `dim_kicks` switched on (DB, 2026-11-05).
+- Canvas plan unchanged (no height labels on screen).
+
 ### Later modules (must register their items)
 - Decorative items (plants, tables…) → `Decorative` group.
 - Appliances (bought-in) → `Appliances` group.

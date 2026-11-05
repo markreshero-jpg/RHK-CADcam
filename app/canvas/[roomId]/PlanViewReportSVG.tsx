@@ -14,6 +14,7 @@ import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstan
 import { btSegments, outlinePath, outlinePoints, effectiveProfileId, waterfallPlanLines } from '@/src/lib/benchtopGeometry'
 import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
+import { kickPlanSpans, kickChain, kickRuns, type KickSpan } from '@/src/lib/kickDims'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { OpeningSymbol, FixturesPlanPrint, fixturePrintBoxes } from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
@@ -121,7 +122,7 @@ export default function PlanViewReportSVG({
   const P  = scale   // 1 physical mm in model mm
   // Layer props at a "zoom" that makes the layer dash pattern 1.6 / 0.8 paper mm.
   const lp = (id: string) => layers.props(id, 5 / P)
-  const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_benchtop', 'dim_wall_overall', 'dim_openings'] as const
+  const dimIds = ['dim_wall_chain', 'dim_base_chain', 'dim_benchtop', 'dim_wall_overall', 'dim_openings', 'dim_kicks'] as const
   const showDims = layers.any(...dimIds)
   // Dimension chains measure only cabinets the layer set draws.
   const chainCabs = cabinets.filter(c => !c.rule_overrides?.UNDER_PANEL && planShowsCabinet(c, layers, resolvedParts?.get(c.id)))   // an under panel lies under its run
@@ -687,6 +688,7 @@ export default function PlanViewReportSVG({
           withOpenings = false,
           fx: FixtureChainSpan[] = [],
           tops: BenchtopSpan[] = [],
+          kicks: KickSpan[] = [],
         ) => {
           const baseFx = fx.filter(s => s.row === 'floor'), wallFx = fx.filter(s => s.row === 'wall')
           // Doors / windows row (z_fixtures P5): wall start → jambs → wall end.
@@ -714,7 +716,13 @@ export default function PlanViewReportSVG({
           }
           if (tops.length && tc < w.length - 0.5) topSegs.push({ from: tc, to: w.length, label: roundMm(w.length - tc) })
           const ts = topSegs.length ? ROW_TOP_STEP : 0
-          const rowOverall = ROW_OVERALL + bh + ts + (openSegs.length ? ROW_OPEN_STEP : 0)
+          // Kick row (`dim_kicks`): kick boards + gaps, outside the base / benchtop rows
+          // (in the base row's place when that row is hidden, as on the Kicks set).
+          const baseShown = layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0)
+          const kickSegs: Seg[] = kicks.length ? kickChain(kicks, w.length) : []
+          const kickDist = ROW_BASE + bh + (baseShown || ts ? ts + ROW_TOP_STEP : 0)
+          const ks = kickSegs.length ? Math.max(0, kickDist + ROW_TOP_STEP - (ROW_OVERALL + bh + ts)) : 0
+          const rowOverall = ROW_OVERALL + bh + ts + ks + (openSegs.length ? ROW_OPEN_STEP : 0)
           const baseSegs    = computeChain(baseCabs, w, baseFx)
           const wallCabSegs = computeChain(ohCabs, w, wallFx)
           const overallSeg: Seg[] = [{ from: 0, to: w.length, label: roundMm(w.length) }]
@@ -727,7 +735,8 @@ export default function PlanViewReportSVG({
               {showBh && dimLine(w, chainDir, depthOffset + ROW_WALLCAB + ROW_BH_STEP, computeChain(bhCabs, w), `bh-${key}`, 'dim_wall_chain', 'BULKHEAD')}
               {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE + bh, baseSegs, `bc-${key}`, 'dim_base_chain', 'BASE')}
               {topSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE + bh + ROW_TOP_STEP, topSegs, `bt-${key}`, 'dim_benchtop', 'BENCHTOP')}
-              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh + ts, openSegs, `op-${key}`, 'dim_openings', 'OPENINGS')}
+              {kickSegs.length > 0 && dimLine(w, chainDir, depthOffset + kickDist, kickSegs, `kc-${key}`, 'dim_kicks', 'KICK')}
+              {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh + ts + ks, openSegs, `op-${key}`, 'dim_openings', 'OPENINGS')}
               {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'WALL')}
               {topSegs.length > 0 && (
                 <>
@@ -741,6 +750,43 @@ export default function PlanViewReportSVG({
                   {depthDim(w, depthDir, w.length, wallDz,  1, `wdd1-${key}`, 'dim_wall_chain', backOffset)}
                 </>
               )}
+              {/* Kick depth (cabinet back → kick face) at the wall ends, one row past the others. */}
+              {kickSegs.length > 0 && (() => {
+                const kStep = topStep + (topSegs.length > 0 ? 1 : 0)
+                const k0 = [...kicks].sort((a, b) => a.t0 - b.t0)[0], kL = [...kicks].sort((a, b) => b.t1 - a.t1)[0]
+                return (
+                  <>
+                    {depthDim(w, depthDir, 0,        k0.depth, -1, `kd0-${key}`, 'dim_kicks', backOffset, kStep)}
+                    {depthDim(w, depthDir, w.length, kL.depth,  1, `kd1-${key}`, 'dim_kicks', backOffset, kStep)}
+                  </>
+                )
+              })()}
+              {/* Kick height (+ depth when it differs from the wall-end depths) on each kick run,
+                  between the wall and the kick face. The plan is often the only kick sheet printed. */}
+              {kickSegs.length > 0 && (() => {
+                const wd = wallDir(w)
+                const textAngle = Math.cos(toRad(w.angle)) < -0.001 ? w.angle + 180 : w.angle
+                const sorted = [...kicks].sort((a, b) => a.t0 - b.t0)
+                const endDepths = [sorted[0].depth, [...kicks].sort((a, b) => b.t1 - a.t1)[0].depth]
+                const fs = layers.w('dim_kicks', dimFS * 0.9)
+                return (
+                  <g pointerEvents="none" opacity={layers.op('dim_kicks')}>
+                    {kickRuns(kicks).map((r, i) => {
+                      const mid = (r.t0 + r.t1) / 2
+                      const off = backOffset + r.depth / 2
+                      const x = w.pos_x + mid * wd.x + depthDir.x * off, y = w.pos_y + mid * wd.y + depthDir.y * off
+                      const showD = !endDepths.some(d => Math.abs(d - r.depth) < 0.5)
+                      const text = `KICK H ${roundMm(r.top)}${showD ? ` D ${roundMm(r.depth)}` : ''}`
+                      if (text.length * fs * 0.6 > r.t1 - r.t0 + fs) return null
+                      dimPts.push({ x, y })
+                      return (
+                        <text key={i} x={x} y={y} transform={`rotate(${textAngle}, ${x}, ${y})`} textAnchor="middle"
+                          dominantBaseline="middle" fontSize={fs} fill={INK} fontFamily="Arial, Helvetica, sans-serif">{text}</text>
+                      )
+                    })}
+                  </g>
+                )
+              })()}
             </g>
           )
         }
@@ -757,11 +803,13 @@ export default function PlanViewReportSVG({
         const hasOut = outBase.length > 0 || outWall.length > 0 || outFx.length > 0
         const wTops = topsByWall.get(w.id) ?? []
         const inTops = wTops.filter(s => s.side === 'face'), outTops = wTops.filter(s => s.side === 'back')
+        const wKicks = layers.show('dim_kicks') ? kickPlanSpans(chainCabs, w, resolvedParts, cx) : []
+        const inKicks = wKicks.filter(k => k.side === 'face'), outKicks = wKicks.filter(k => k.side === 'back')
 
         // Perimeter wall with cabinets only on the room side (the common case): keep
         // the historic single chain on the empty outward side, depth dims inward.
         if (w.wall_type !== 'island' && !hasOut) {
-          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0, 0, true, inFx, inTops)}</g>
+          return <g key={`dim-${w.id}`}>{renderSide(`m-${w.id}`, out, inward, allBase, allWall, 0, 0, true, inFx, inTops, inKicks)}</g>
         }
 
         // Island, or a perimeter wall with back-side cabinets: dimension each occupied
@@ -770,8 +818,8 @@ export default function PlanViewReportSVG({
         const outBackOffset = w.wall_type === 'island' ? 0 : w.thickness
         return (
           <g key={`dim-${w.id}`}>
-            {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, false, inFx, inTops)}
-            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, true, outFx, outTops)}
+            {hasIn && renderSide(`in-${w.id}`, inward, inward, inBase, inWall, sideDepth([...inBase, ...inWall]), 0, false, inFx, inTops, inKicks)}
+            {(hasOut || !hasIn) && renderSide(`out-${w.id}`, out, out, outBase, outWall, sideDepth([...outBase, ...outWall]), outBackOffset, true, outFx, outTops, outKicks)}
           </g>
         )
       })}

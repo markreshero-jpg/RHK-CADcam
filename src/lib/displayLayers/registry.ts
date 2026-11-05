@@ -242,7 +242,7 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'dim_elev_floor_chain', group: 'dimensions', label: 'Floor cabinet widths', views: ['elevation'], default: ON },
   { id: 'dim_elev_wall_chain',  group: 'dimensions', label: 'Overhead cabinet widths', views: ['elevation'], default: ON },
   { id: 'dim_kicks',            group: 'dimensions', label: 'Kicks',              views: ['plan', 'elevation'], default: OFF,
-    hint: 'Plan: kick board lengths + kick depth at the wall ends; elevation: kick height' },
+    hint: 'Plan: kick board lengths + kick depth at the wall ends (prints also write KICK H … on each kick, + D … where its depth differs); elevation: kick height (prints also add a kick length row under the floor-cabinet widths)' },
   { id: 'dim_openings',         group: 'dimensions', label: 'Doors & windows',    views: ['plan', 'elevation'], default: ON,
     hint: 'Plan: a row to the door / window jambs; elevation: widths + sill and head heights' },
 
