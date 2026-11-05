@@ -72,7 +72,7 @@ Checks: `src/lib/takeoff/__tests__/hardware.test.ts`; real-job dry run
 | T3 | Takeoff report (counts, finger pulls, sheets, tape, hardware) + print + tutorial `takeoff_reports` | ✅ built 2026-10-27 |
 | T4 | CSV / Excel export of the takeoff for the quoting system | not started — needs the quoting system's import format |
 | T6 | Rooms share pages on print, each kept whole (`break-inside: avoid`); Page per room tick box; check `z_plan_automation/verify-room-packing.mjs` (RHK6592 pick list 6 → 3 pages) | built 2026-11-02 |
-| T5 | Cut-length stickers: Hardware Pick List → **Cut stickers (n)** — one sticker per cut piece (hanging rails, linear handle strips): job, room, type, product + code, Cab #, cut length, n of N. Size / printer / nudge = Optimiser → Labels settings (102 × 48 default). Code `src/lib/takeoff/cutStickers.ts` (shared pager `labelPagesPdf` in optimiser/labels.ts) | built 2026-10-30, in-app check pending |
+| T5 | Cut-length stickers: Hardware Pick List → **Cut stickers (n)** — one sticker per cut piece (hanging rails, linear handle strips): job, room, type, product + code, Cab #, cut length, n of N. Size / printer / nudge = Optimiser → Labels settings (102 × 48 default). Code `src/lib/takeoff/cutStickers.ts` (shared pager `labelPagesPdf` in optimiser/labels.ts). 2026-11-05: the button opens a print modal (`app/canvas/[roomId]/CutStickersModal.tsx`) sharing Stage 7's print panel (`src/components/labels/LabelPrintPanel.tsx`: size / printer / offset, preview, Print / Download PDF); pick by room, type or sticker number, numbers stay n of N of the whole list | built 2026-10-30, modal 2026-11-05, in-app check pending |
 
 ## Open
 

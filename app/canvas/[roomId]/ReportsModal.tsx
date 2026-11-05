@@ -3,7 +3,6 @@ import { isKickJoinPiece } from '@/src/lib/resolver/resolveKickRun'
 import { useState, useEffect, useMemo, useCallback, useRef, type ComponentProps } from 'react'
 import { startCombined, finishCombined, cancelCombined, armSave, armSaveFolder, armPrint, disarmSave } from './pdfCombine'
 import { usePrintPresets, PrintPresetBar, currentSets, applyPresetSets, type PrintPreset } from './PrintPresets'
-import { pickSaveFile, saveBlob } from '@/src/lib/saveAs'
 import { supabase } from '@/src/lib/supabase'
 import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
@@ -38,8 +37,8 @@ import { EdgebandSheet, edgebandPrintHtml } from './EdgebandReport'
 import { useTakeoff, HardwarePickSheet, TakeoffSheet } from './TakeoffReport'
 import { hardwarePickPrintHtml, takeoffPrintHtml } from './TakeoffPrint'
 import { useGlassOrder, GlassOrderSheet, glassOrderPrintHtml } from './GlassOrderReport'
-import { buildCutStickers, cutStickersPdf } from '@/src/lib/takeoff/cutStickers'
-import { loadLabelSettings } from '@/src/lib/optimiser/labels'
+import { buildCutStickers } from '@/src/lib/takeoff/cutStickers'
+import CutStickersModal from './CutStickersModal'
 import { buildEdgebandReport, type EdgebandProduct, type EdgebandBoard } from '@/src/lib/optimiser/edgebandLength'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { OptiPart } from '@/src/lib/optimiser/types'
@@ -550,15 +549,9 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   const cutStickers = useMemo(() => takeoff.data
     ? buildCutStickers(project?.name ?? '', takeoff.data.rooms.map(r => ({ name: r.room.name, lines: r.hardware })))
     : [], [takeoff.data, project?.name])
-  async function downloadCutStickers() {
-    const st = loadLabelSettings()
-    const name = `${project?.job_number || project?.name || 'job'} ${scope === 'room' ? `${room.name} ` : ''}cut stickers ${st.w}x${st.h}.pdf`
-    // Save As first, on the click (the dialog can't open after the PDF is built).
-    const target = await pickSaveFile(name)
-    if (target === null) return
-    const doc = await cutStickersPdf(cutStickers, st)
-    await saveBlob(doc.output('blob'), name, target)
-  }
+  // Print modal like the optimiser's Stage 7 labels (CutStickersModal).
+  const [stickersOpen, setStickersOpen] = useState(false)
+  const stickerFileBase = `${project?.job_number || project?.name || 'job'}${scope === 'room' ? ` ${room.name}` : ''}`
 
   // Print presets (PrintPresets.tsx): paper, scale, layer sets, page per room.
   const printPresets = usePrintPresets()
@@ -663,6 +656,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onPointerDown={e => { if (e.target === e.currentTarget) onClose() }}>
+      {stickersOpen && <CutStickersModal stickers={cutStickers} fileBase={stickerFileBase} onClose={() => setStickersOpen(false)} />}
       <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl flex flex-col" style={{ width: 'min(1600px, 96vw)', height: '94vh' }}>
 
         {/* Header */}
@@ -746,8 +740,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   </label>
                 )}
                 {selectedReport === 'hardware_pick' && cutStickers.length > 0 && (
-                  <button onClick={() => void downloadCutStickers()}
-                    title="One sticker per cut piece (hanging rails, linear handles) — label size from Optimiser → Labels"
+                  <button onClick={() => setStickersOpen(true)}
+                    title="Print one sticker per cut piece (hanging rails, linear handles) — same label settings as Optimiser → Labels"
                     className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-gray-200 rounded transition-colors">
                     Cut stickers ({cutStickers.length})
                   </button>
