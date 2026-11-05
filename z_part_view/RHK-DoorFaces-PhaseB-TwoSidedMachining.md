@@ -62,7 +62,7 @@ sheet that needs it runs as **two programs with a whole-sheet flip between**.
 - `gcode.ts generateSheetPrograms`: A = up-face drills + routes, then the two
   `SIXTH_FACE_TRIM` (5mm) cuts with the outline tool, no perimeters. The trims sit on
   the datum X end and the long edge AWAY from the Y fence (from `origin_corner`),
-  plunge off the sheet away from the fences and run towards them. Z = the sheet
+  plunge off the sheet away from the fences and run towards them: the outside long edge first from the far end, then the X0 end, finishing at X0/Y0 (Mark 2026-11-05). Each plunge is `SIXTH_FACE_OVERRUN` (30) + the bit radius past the nominal edge, so an over-length board leaves no tag on the trimmed edge to foul the back fence after the flip. Z = the sheet
   mirrored across the long edge and shifted so the trimmed edges are the datum
   (`sixthFaceZMap`: top_left → x − 5, y → H − y), stock 5 smaller each way; Z-tagged
   drills + routes, then every perimeter / cut-out. Program notes under the header;

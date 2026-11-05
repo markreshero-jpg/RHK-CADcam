@@ -1684,6 +1684,10 @@ export function postFromProfile(row: Record<string, unknown> | null, tool?: { ba
 // ops); program Z is that frame mirrored across the long edge and shifted so the
 // trimmed edges are the new datum edges.
 export const SIXTH_FACE_TRIM = 5
+// Program A's trims plunge this far (+ the bit radius) past the sheet's nominal
+// edge: a board a little over 2415 long (or 1211 wide) then has its whole 5mm strip
+// cleared, leaving no tag on the trimmed edge to foul the back fence after the flip.
+export const SIXTH_FACE_OVERRUN = 30
 
 // Fence (datum) edges in sheet coords: x = 0 or W, y = 0 or H.
 type Datum = Pick<PostProfile, 'origin_corner'>
@@ -1699,10 +1703,11 @@ function datumEdges(sheet: NestedSheet, p: Datum) {
 // long edge AWAY from the Y fence and off the datum X end, the bit on the waste
 // side. In that order (Mark, 2026-11-05): start off the far end of the sheet
 // (plunge in air), run the long edge back to the X0 end, then run the X0 end up
-// to the Y fence, so the head finishes at X0 / Y0, the least travel.
+// to the Y fence, so the head finishes at X0 / Y0, the least travel. Each plunge
+// is SIXTH_FACE_OVERRUN past the sheet's nominal edge (over-length boards).
 export function sixthFaceTrims(sheet: NestedSheet, p: PostProfile, trim: number, toolR: number): { label: string; from: { x: number; y: number }; to: { x: number; y: number } }[] {
   const { xAtW, yAtH, W, H } = datumEdges(sheet, p)
-  const clear = toolR + 2
+  const clear = SIXTH_FACE_OVERRUN + toolR
   const xLine = xAtW ? W - trim + toolR : trim - toolR       // along the X-datum end
   const yLine = yAtH ? trim - toolR : H - trim + toolR       // along the outside long edge
   return [

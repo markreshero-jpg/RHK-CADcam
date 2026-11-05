@@ -62,10 +62,11 @@ describe('6th face nesting', () => {
     // The VJ groove at 100 in from the door's edge, 50 up from its bottom (now y 1190).
     // Machine Y = y - H (top_left origin): 1140 - 1195 = -55.
     expect(z.gcode).toMatch(/X105\.? Y-55\.?/)
-    // Trims: the X0 end at x = 5 - 6 = -1, run from below the sheet up to the fence;
-    // the outside (bottom) long edge at y = 5 - 6 = -1, run from beyond the far end to X0.
-    expect(a.gcode).toMatch(/G0 X-1\.? Y-1208\.?/)
-    expect(a.gcode).toMatch(/G0 X2408\.? Y-1201\.?/)
+    // Trims: the outside (bottom) long edge at y = 5 - 6 = -1, from 30 + 6 past the far
+    // end (over-length boards) to X0; then the X0 end at x = -1, from 36 below the
+    // sheet up to the fence.
+    expect(a.gcode).toMatch(/X2436\.? Y-1201\.?/)
+    expect(a.gcode).toMatch(/G0 X-1\.? Y-1236\.?/)
     // Long edge first from the far end, then the X0 end, finishing at X0 / Y0.
     expect(a.gcode.indexOf('off the outside long edge')).toBeLessThan(a.gcode.indexOf('off the X0 end'))
     const trimTail = a.gcode.slice(a.gcode.indexOf('off the X0 end'))
