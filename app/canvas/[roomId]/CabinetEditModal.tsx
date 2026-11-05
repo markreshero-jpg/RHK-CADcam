@@ -564,10 +564,13 @@ export default function CabinetEditModal({
     const info = rp ? cutoutPartInfo(rp, partId) : null
     if (!info) return null
     const cp = partId.startsWith('custom_') ? customParts.find(p => p.id === partId.slice(7)) : null
-    const list = cp ? normaliseCutoutList(cp.part_cutouts) : (normalisePartCutouts(cabinet.part_cutouts)[partId] ?? [])
+    const own = cp ? normaliseCutoutList(cp.part_cutouts) : (normalisePartCutouts(cabinet.part_cutouts)[partId] ?? [])
+    // The resolve's own (rangehood hole / flue notches) show first, locked; only the user's are saved.
+    const gen = cp ? [] : (rp?.generated_cutouts?.[partId] ?? [])
+    const list = [...gen, ...own]
     return (
       <PartCutoutsPanel key={`cut_${partId}`} className="relative w-full" W={info.W} D={info.D} DZ={info.DZ}
-        holesAllowed={info.holes} list={list} scope={formulaScope} onChange={next => { void saveCutouts(partId, next) }} />
+        holesAllowed={info.holes} list={list} scope={formulaScope} onChange={next => { void saveCutouts(partId, next.filter(c => !gen.some(g => g === c))) }} />
     )
   }
 

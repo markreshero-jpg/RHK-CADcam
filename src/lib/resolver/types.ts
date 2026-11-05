@@ -1602,6 +1602,10 @@ export interface ResolvedCabinet {
   // The rangehood hole in the cabinet's frame (X across, Z from the wall) — the
   // under panel under it cuts the same (z_rangehood R6). Set even with no bottom.
   rangehood_hole?: { x0: number; x1: number; z0: number; z1: number }
+  // Cut-outs the resolve generates itself (the rangehood's hole / flue notches),
+  // by part id — Cabinet Edit's Cut-outs panel lists them read-only above the
+  // user's (they're never in part_cutouts). In memory only.
+  generated_cutouts?: import('../partCutouts').PartCutouts
   // Per-view part hiding (z_display_layers/PART-HIDE-SPEC.md): part id → the
   // room views it is hidden in. Visual only — room views filter via filterHiddenParts().
   part_hide_views?: PartHideViews
