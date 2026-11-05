@@ -1737,7 +1737,7 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.PANEL_PROFILE) },
   ]},
   // Appended 2026-11-06 (Mark, RHK6592: narrow fillers move on the bed).
-  { id: 'narrow_filler_cut', level: 'beginner', topic: 'production', title: 'Narrow fillers are cut at 70',
+  { id: 'narrow_filler_cut', level: 'basics', topic: 'production', title: 'Narrow fillers are cut at 70',
     blurb: 'A filler under 60 wide is nested and cut at 70 so it doesn’t move on the machine; its comment says what to cut it down to.',
     keywords: 'filler narrow small strip 70 cut size hand cut comment optimiser label moves bed BFK TFK', steps: [
     { id: 'nest', title: 'Nest the job',
