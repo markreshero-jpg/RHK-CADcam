@@ -244,3 +244,7 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
   (east end of the island run), BC-01 = front (outer face). Routes checked off the resolved cabinets: BC-12 one pocket
   460 x 720 (580 x 840 panel), BC-01 one per piece, 3 x 760 x 690.3 (880 x 810.3). Resolver clean. 3D shows the 3 frames on
   BC-01; BC-12 (east end) not seen in the headless camera — check in the app. Optimiser regenerates the routes at Stage 6.
+
+## Rev 21 (Mark 2026-11-05) — `_tmp-6592-rev21-steps.json` via `_tmp-6592-rr.mjs`
+
+- Kitchen BC-01 island back panel 880 -> 840 high (floor up, 3 pieces 840 x ~810, shaker routes follow). Resolver clean.
