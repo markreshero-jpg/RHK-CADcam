@@ -184,3 +184,17 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 - TC-01 (PT end panel, open shelving left end) lifted onto the kick: pos_z 110, 2090.
 - KICK 2 runs west under TC-01 into KICK 1's face: offset 520, dx 2472 (520 -> 2992), inside corner butt at x 520.
   Resolver clean.
+
+## Rev 14 (Mark 2026-11-05) — `_tmp-6592-rev14.mjs`
+
+- Pre-nest check (kitchen + butlers): resolver clean. Butlers KICK 2 (2472) and WC-01 floating shelf (2540) are longer than
+  the 2415 sheet. Mark: cut by hand (or a bigger sheet set in the optimiser next run). No change.
+- Bathroom vanity kick faces (main KICK 1 / KICK 2, ensuite KICK 1) -> PT Colour Matt 16mm – Classic White Matt to match
+  the doors (room_toekick_materials face; was Whiteboard 16.5, same thickness). Spec blocks: "Kick 140: PT 16mm Classic
+  White Matt (to match doors)".
+- Shaker panels: end / fridge / filler / island back panels are "Applied Panel" custom parts (IBPF = ibp case parts) on
+  plain board. Face routes (collectDoorProfileRoutes) only run on face zones (doors, drawer fronts, false panels), so the
+  panels can't get a shaker route yet. Nothing in Caloundra's documents calls them flat. Open for Mark.
+- Main bath TC-02 now flags HINGE_SHELF_HOLE_CLASH: hinge 2 at ~890 over the 916 shelf hole (both doors). Not caused by
+  the kick change; open.
+- Rangehood still to do (Mark).
