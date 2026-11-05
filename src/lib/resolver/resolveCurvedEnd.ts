@@ -503,8 +503,12 @@ export function curvedEndSeams(c: CurvedEndGeometry): DeclaredSeam[] {
   // into their ends (as a wall cabinet's back into its top / bottom).
   const wb = !!c.p.wallBuild
   const isCap = (k: string) => wb && (k === 'crv:bottom' || k === 'crv:top')
+  // Both caps are bored DOWN from their top face (through holes, so the same
+  // hole either way). Bored up from below, the optimiser mirrors the holes for a
+  // part turned over but not the curved outline — they landed at the curved
+  // front instead of along the wall edge (RHK6542-R4, 2026-11-05).
   const capFace = (f: { key: string; y: number }) => f.key === 'crv:bottom'
-    ? { y: f.y + T, toward: UP, bore_b: { axis: 'y+' as const, at: f.y } }
+    ? { y: f.y + T, toward: UP, bore_b: { axis: 'y-' as const, at: f.y + T } }
     : { y: f.y, toward: V(0, 0, -1), bore_b: { axis: 'y-' as const, at: f.y + T } }
   const lowY = c.y0 + (wb ? T : 0)   // where the back / side blocks start
 

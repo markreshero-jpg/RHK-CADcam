@@ -88,7 +88,7 @@ describe('rangehood cabinet (R5)', () => {
     const drills = cabinetSeamDrills(rp)
     const inShelf = drills.filter(d => d.targetPartKey === 'int_fixed_shelf_0')
     expect(inShelf).toHaveLength(6)                                  // 2 per piece
-    expect(inShelf.every(d => d.axis === 'y+' && d.y === shelf.Y && d.depthLen === 16.5)).toBe(true)
+    expect(inShelf.every(d => d.axis === 'y-' && d.y === shelf.Y + shelf.DZ && d.depthLen === 16.5)).toBe(true)
     const inTop = drills.filter(d => d.targetPartKey === 'full_top')
     expect(inTop.filter(d => d.seamKey?.startsWith('rh:'))).toHaveLength(6)
     expect(inTop.filter(d => d.seamKey?.startsWith('rh:')).every(d => d.axis === 'y-' && d.y === top.Y + top.DZ)).toBe(true)

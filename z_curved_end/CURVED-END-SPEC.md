@@ -366,6 +366,11 @@ The rules are the kit's `SPEC.md` §2–§5 and §7, unchanged. These points are
     keys `crv_back:former` / `crv_block:former`). Fixing panel → bottom / top runs to the wall; back →
     fixing panel and block → face board shortened to the between height.
   - Rangehood: the top's flue notch now runs from the wall (over the back) to the box front.
+  - **All `bore_b` holes in shaped flat parts are bored DOWN from the top face** (2026-11-05, RHK6542-R4):
+    bored up (`y+`) the optimiser mirrors the holes across the depth for a turned-over part but not the
+    resolver outline, so the bottom's back / block screws landed at the curved front and the flue box
+    holes in the shelf rib (and the WRH fixed shelf) at the wrong end. They are through holes, so the
+    same hole from the top. Don't declare `y+` bores on outlined parts until the optimiser mirrors outlines.
 
 ## Open
 

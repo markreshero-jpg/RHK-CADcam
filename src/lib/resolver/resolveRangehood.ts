@@ -167,7 +167,10 @@ function flueBox(cab: CabinetInput, out: RangehoodResult, b: BoxAt, shelf: { key
     const across = e.along === Z ? X : Z
     seam(RH_SEAMS.shelf, e.key, shelfId, {
       origin: { ...e.origin, y: y0 }, along: e.along, across, toward: { x: 0, y: 1, z: 0 }, length: e.length, width: T,
-      bore_b: { axis: 'y+', at: shelf.Y },
+      // Bored down from the shelf's top face (a through hole, same hole): bored up
+      // from below the optimiser mirrors the holes for a turned-over part but not
+      // the notched outline, putting them at the wrong end (RHK6542-R4).
+      bore_b: { axis: 'y-', at: y0 },   // y0 = the shelf's top face
     })
     seam(RH_SEAMS.top, e.key, top.key, {
       origin: { ...e.origin, y: y1 }, along: e.along, across, toward: { x: 0, y: -1, z: 0 }, length: e.length, width: T,

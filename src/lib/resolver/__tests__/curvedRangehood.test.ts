@@ -279,10 +279,10 @@ describe('wall build (WCRVFIXP: back + side blocks between the top and bottom)',
     const seams = resolveCurvedEnd(wcrv(null, { blkS: true })).seams
     const s = (k: string) => seams.find(x => x.seam_key === k)!
     const bb = s('crv:back|crv:bottom'), bt = s('crv:back|crv:top')
-    expect(bb.geom.bore_b).toEqual({ axis: 'y+', at: 0 })
+    expect(bb.geom.bore_b).toEqual({ axis: 'y-', at: 16.5 })
     expect(bb.geom.origin.y).toBeCloseTo(T)
     expect(bt.geom.bore_b?.axis).toBe('y-')
-    expect(s('crv:blk_side|crv:bottom').geom.bore_b?.axis).toBe('y+')
+    expect(s('crv:blk_side|crv:bottom').geom.bore_b?.axis).toBe('y-')
     expect(seams.some(x => x.seam_key === 'crv:bottom|crv:back')).toBe(false)
     expect(seams.some(x => x.seam_key === 'crv:rib_1|crv:back')).toBe(true)
     expect(s('crv:back|crv:fix').geom.length).toBeCloseTo(s('crv:face|crv:blk_side').geom.length)
