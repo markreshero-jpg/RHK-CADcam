@@ -243,3 +243,12 @@ Open: Entry J01 Paperbark variation (DO NOT CUT until approved); Play ceiling 24
 - Kitchen sheet 2 (plan) + sheet 3 (Wall 1): "5 x floating shelves as discussed. client to provide brackets". Sheet 4 (Butler's Wall 2, TC-06–TC-09 open talls) NOT stamped approved, note "5 x floating shelves as discussed" → butler's open talls become 5 full-length floating shelves (we supply shelves, Katherine sources brackets — her 2026-11-04 email). REDRAW BUTLER'S WALL 2 BEFORE CUTTING THE KITCHEN.
 - Calen's site notes: J03 washer GPO moved clear of the gables (49–67, 687–705, 1325–1343); upstairs landing storage switch moved (KB to confirm dimension); island power for D/W + charging — electrician aware; delivery Tue 24th, street access noted.
 - 2026-11-05 (Mark): Entry BC-01 (960 D2-SL, 2 drawers side by side + centre divider) → 2 separate single-drawer cabinets: BC-01 480 (536–1016, edited in place) + new BC-02 480 (1016–1496), same D2-SL settings, single drawer face (477 x 328), BC-02 in the KICK 1 run. Entry re-run as **R6** (70 parts, all placed, no warnings); R5 on the server moved to Entry J01/_superseded R5. Shop drawing Entry elevation now shows BC-01 + BC-02 — re-export if the client copy is needed.
+
+## WC-02 rangehood canopy → built-in rangehood setup (2026-11-06)
+Mark: set it up the same way as RHK6542 WC-01. WC-02 changed from BHCRVFIXP (curved bulkhead) to WCRVFIXP
+(curved wall cabinet) with the Rangehood option on, so it builds the same way: Miele DA 2578 hole 670 x 370 in the bottom
+(centred, setback 23 = 39 each side front/back), 1 support rib under the shelf split L/R of the hole, rangehood rails
+either side, shelf rib at 350 with the flue box (200 x 250, default) above. WALLZ 1500 keeps the underside where it was
+(2509 wall - 1009). The hand-entered bottom cut-out was replaced by the rangehood hole. Backup row in
+_bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults, check against the DA 2578 sheet;
+4 ribs leave 194 between supports (kit wants < 170).
