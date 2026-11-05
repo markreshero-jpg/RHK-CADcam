@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { PartMeta } from '@/src/components/three/PartViewer'
 import { isFiringRole } from '@/src/lib/partOps/enums'
-import { pointInShape, type ShapePt } from '@/src/lib/shapePath'
+import { pointInShape, sampleOutline, type ShapePt } from '@/src/lib/shapePath'
 import { syncMasterSlaves } from '@/src/lib/optimiser/masterSlaveSync'
 import { syncSeamDrillOperations } from '@/src/lib/optimiser/seamDrillSync'
 import { opFrameMirrored } from '@/src/lib/optimiser/partFootprint'
@@ -22,6 +22,43 @@ import {
   jointSnapshotPatch, loadJointTypes, validateOp, worst,
   type AddKind, type Issue, type JointType,
 } from './partEditorCore'
+
+// Resolver cut-outs (rangehood hole in a bottom / under panel, curved-end rib
+// cut-outs) as read-only CUT-OUT rows: virtual — never stored, the optimiser cuts
+// them from the part's `cutouts` (normalize cutoutsToOp). Shape frame (y-down,
+// as `outline`) → op frame by the same mapping the validation below uses:
+// swap → pos_x = u − sy, pos_y = sx; else pos_x = sx, pos_y = v − sy.
+// Each shows as its bounding rectangle, depth = thickness − onion skin.
+export function cutoutOps(part: PartMeta, u: number, v: number, n: number): PartOp[] {
+  if (!part.cutouts?.length) return []
+  const swap = part.panelKind !== 'side' && !part.dxIsWidth
+  const r = (x: number) => Math.round(x * 100) / 100
+  return part.cutouts.map((c, i) => {
+    const pts = sampleOutline(c.pts, 2)
+    const xs = pts.map(q => q.x), ys = pts.map(q => q.y)
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys)
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2
+    const skin = Number(c.skin) || 0
+    return {
+      id: `cutout_${part.id}_${i}`, source_table: 'virtual', source_part_id: null, source_cabinet_id: null, source_part_key: part.id,
+      operation_type: 'route', operation_action: 'pocket', operation_role: 'local', joint_type_id: null,
+      operation_key: `cutout_${i}`, router_tool_id: null, drill_id: null, auto_tool: true, tool_set_id: null,
+      depth: r(n - skin), diameter: null, width: null, length: null,
+      pos_x: r(swap ? u - cy : cx), pos_y: r(swap ? cx : v - cy), pos_z: null,
+      size_dx: r(swap ? y1 - y0 : x1 - x0), size_dy: r(swap ? x1 - x0 : y1 - y0), size_dz: null,
+      angle_ax: 0, angle_ay: 0, angle_az: 0,
+      repeat_count: null, repeat_spacing: null, repeat_axis: null,
+      offset_top_mm: null, offset_bottom_mm: null, offset_left_mm: null, offset_right_mm: null,
+      fill_strategy: null, raster_angle_deg: null, raster_stepover_pct: null,
+      output_face: null, plane_kind: 'face_front', plane_edge_index: null,
+      is_master: false, master_operation_id: null, slave_table: null, slave_part_id: null,
+      output_to_cnc: true, sort_order: 100000 + i,
+      parameters: { generated: 'cutout', kind: 'cut-out', virtual: true, skin,
+        note: skin > 0 ? `Cut-out, ${skin} onion skin left (break out after)` : 'Cut-out, through' },
+      created_at: '', updated_at: '',
+    }
+  })
+}
 
 // shapePoly: the part's saved outline, sampled, in the shape/display frame
 // (mm, y-down, authored face-front) — adds an "outside the outline" warning
@@ -145,7 +182,10 @@ export function usePartOps(cabinetId: string, part: PartMeta, shapePoly?: ShapeP
     if (fn) await fn()
   }
 
-  const selected = ops.find(o => o.id === selectedId) ?? null
+  // The stored ops + this part's read-only resolver cut-outs (listed last).
+  const cutOps = useMemo(() => cutoutOps(part, u, v, n), [part, u, v, n])
+  const allOps = useMemo(() => cutOps.length ? [...ops, ...cutOps] : ops, [ops, cutOps])
+  const selected = allOps.find(o => o.id === selectedId) ?? null
   const sel = selected ? classify(selected) : null
   const selLocked = !!sel?.generated   // generated rows are read-only (spec §3.1)
 
@@ -160,7 +200,7 @@ export function usePartOps(cabinetId: string, part: PartMeta, shapePoly?: ShapeP
     const swap = part.panelKind !== 'side' && !part.dxIsWidth
     const mirror = part.panelKind === 'side' && (part.id.includes('right_side') !== opFrameMirrored(part.id))
     const sh = swap ? u : v
-    for (const op of ops) {
+    for (const op of allOps) {
       const issues = validateOp(op, u, v, n)
       if (shapePoly && shapePoly.length > 2) {
         const px = op.pos_x ?? 0, py = op.pos_y ?? 0
@@ -173,12 +213,12 @@ export function usePartOps(cabinetId: string, part: PartMeta, shapePoly?: ShapeP
       m[op.id] = issues
     }
     return m
-  }, [ops, u, v, n, part, shapePoly])
+  }, [allOps, u, v, n, part, shapePoly])
   const levels = useMemo(() => {
     const m: Record<string, 'error' | 'warn' | undefined> = {}
-    for (const op of ops) m[op.id] = worst(issuesById[op.id])
+    for (const op of allOps) m[op.id] = worst(issuesById[op.id])
     return m
-  }, [ops, issuesById])
+  }, [allOps, issuesById])
   const errorCount = Object.values(levels).filter(l => l === 'error').length
   const warnCount  = Object.values(levels).filter(l => l === 'warn').length
   const selIssues  = selected ? (issuesById[selected.id] ?? []) : []
@@ -299,7 +339,7 @@ export function usePartOps(cabinetId: string, part: PartMeta, shapePoly?: ShapeP
   // Convert a generated op into a hand-owned one by stripping parameters.generated
   // (spec §3.1). It then survives the next sync (which only wipes generated rows).
   async function convertToManual() {
-    if (!selected || !sel?.generated) return
+    if (!selected || !sel?.generated || selected.parameters?.virtual) return
     const id = selected.id
     const oldParams = selected.parameters
     const newParams: Record<string, unknown> = { ...(selected.parameters ?? {}) }
@@ -334,8 +374,8 @@ export function usePartOps(cabinetId: string, part: PartMeta, shapePoly?: ShapeP
   return {
     // part frame
     u, v, n,
-    // data + selection
-    ops, loading, selectedId, setSelectedId, selected, sel, selLocked,
+    // data + selection (incl. the read-only cut-out rows)
+    ops: allOps, loading, selectedId, setSelectedId, selected, sel, selLocked,
     // validation
     issuesById, levels, errorCount, warnCount, selIssues, allGenerated,
     // firing + joints

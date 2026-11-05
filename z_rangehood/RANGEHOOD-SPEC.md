@@ -331,6 +331,12 @@ rangehood cutout".
 - Tutorial `rangehood_cover`. Test `src/lib/__tests__/rangehoodCover.test.ts`.
 - Hinge heights stay manual on the doors (WC-03: [200, 595]); the cover warns if a hinge is too near its edges.
 
+- Part Editor (Mark 2026-11-05: "it shows in 3D … in part editor there is no route"): resolver cut-outs (the
+  bottom / under panel rangehood hole, curved-end rib cut-outs) now list as read-only **CUT-OUT** rows — virtual
+  (`cutoutOps` in partEditor/usePartOps.ts, never stored; the optimiser still cuts them from `cutouts`), shown as
+  their bounding rect pocket, depth = thickness − onion skin. PartMeta carries `cutouts` (case parts with an
+  outline, flat custom parts from the resolved custom part). Test `src/lib/__tests__/partEditorCutouts.test.ts`.
+
 ## Phases
 
 | # | What | Status |

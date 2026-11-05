@@ -65,6 +65,10 @@ export interface PartMeta {
   // the footprint, z_cabinet_shape) in the Shape Editor frame — the Part Editor
   // shows it when the part has no drawn shape of its own.
   outline?: OutlinePt[]
+  // Resolver cut-outs (holes / pockets: rangehood hole, curved-end rib cut-outs) in
+  // the same frame as `outline`; skin = onion skin left (0 = through). The Part
+  // Editor lists them as read-only CUT-OUT rows (the optimiser cuts them from here).
+  cutouts?: { pts: OutlinePt[]; skin: number }[]
 }
 
 // grain: the material is grained (has_grain) — renders the generic wood grain (MC9).

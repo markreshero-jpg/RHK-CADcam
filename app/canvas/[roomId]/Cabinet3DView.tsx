@@ -1,4 +1,5 @@
 'use client'
+import type { OutlinePt } from '@/src/lib/shapePath'
 
 import PartInfoCard from './PartInfoCard'
 import { GrainContext, FrontGrainAcrossContext } from '@/src/components/three/woodGrain'
@@ -149,7 +150,7 @@ function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
     // Curved end face board: face kind, so its extruded-up walls take the face colour (as mitred doors).
     panelKind: p.wrap ? 'face' : isSide(p.part_key) ? 'side' : p.part_key === 'back' || isShapedPanelKey(p.part_key) || p.upright ? 'face' : 'horizontal',
     materialId: p.material_id,
-    ...(p.outline && (!p.AY || isShapedPanelKey(p.part_key)) ? { outline: p.outline } : {}),
+    ...(p.outline && (!p.AY || isShapedPanelKey(p.part_key)) ? { outline: p.outline, ...(p.cutouts?.length ? { cutouts: p.cutouts } : {}) } : {}),
     ...(caseBevelNote(p) ? { detail: `${caseBevelNote(p)} — cut ${Math.round(isSide(p.part_key) ? p.DX : p.DY)} long` } : {}),
     // Long-edge mitre (z_bulkhead B10): the comment box's default until one is typed.
     ...(edgeMitreNote(p) ? { comment: edgeMitreNote(p) } : {}),
@@ -1958,6 +1959,11 @@ export function CabinetScene({
           dxIsWidth: orient === 'front' || undefined,
           materialId: p.material_id ?? undefined,
           grainExt: p.grain_across ? customGrainExt(orient, true) : undefined,
+          // Resolver-cut outline + holes (R3: flat customs, e.g. the under panel's rangehood hole).
+          ...(() => {
+            const rc = (orient === 'flat' ? rp.custom_parts?.find(c => c.id === p.id) : undefined) as { outline?: OutlinePt[] | null; cutouts?: { pts: OutlinePt[]; skin: number }[] | null } | undefined
+            return { ...(rc?.outline && rc.outline.length >= 3 ? { outline: rc.outline } : {}), ...(rc?.cutouts?.length ? { cutouts: rc.cutouts } : {}) }
+          })(),
         }
         return (
           <PartAlpha key={`cust${i}`} a={alpha(customPartItem(p)) * matOpacity(p.material_id)}><Part
