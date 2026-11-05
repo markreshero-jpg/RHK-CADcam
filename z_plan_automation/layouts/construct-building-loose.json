@@ -1,0 +1,20 @@
+{
+  "_notes": ["Construct Building: loose white cover strips (Mark's email 2026-11-05). All Whiteboard 16.5. One TEPF carrier per piece; parts rewritten to fixed sizes, standing face-on to the wall, by _tmp-cb-loose.mjs."],
+  "projectName": "Construct Building",
+  "createProject": true,
+  "roomName": "Loose Parts",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0, "y": 1500, "length": 1500, "angle": 270 },
+    { "x": 0, "y": 0, "length": 2400, "angle": 0 }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 2, "offset": 0,    "dx": 16.5, "dy": 587, "dz": 600 },
+    { "def": "TEPF", "wall": 2, "offset": 700,  "dx": 16.5, "dy": 430, "dz": 600 },
+    { "def": "TEPF", "wall": 2, "offset": 900,  "dx": 16.5, "dy": 476, "dz": 600 },
+    { "def": "TEPF", "wall": 2, "offset": 1100, "dx": 16.5, "dy": 300, "dz": 600 },
+    { "def": "TEPF", "wall": 2, "offset": 1300, "dx": 16.5, "dy": 300, "dz": 600 },
+    { "def": "TEPF", "wall": 2, "offset": 1500, "dx": 16.5, "dy": 300, "dz": 600 },
+    { "def": "TEPF", "wall": 2, "offset": 1700, "dx": 16.5, "dy": 300, "dz": 600 }
+  ]
+}
