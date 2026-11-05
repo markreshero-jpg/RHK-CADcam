@@ -316,6 +316,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { cutSheetsPdf, cutSheetRows } = await import('../cutSheets')
     const drillsBySheet = new Map(gen.map(g => [g.sheet.index, g.drills]))
     const routesBySheet = new Map(gen.map(g => [g.sheet.index, g.routes]))
+    writeFileSync(join(outDir, 'layout.json'), JSON.stringify({ ...nestResult, routesBySheet: [...routesBySheet] }))   // the exact layout + routes the PDFs + programs use
     const rows = cutSheetRows(nestResult, partByUid, drillsBySheet)
     const doc = await cutSheetsPdf({
       nest: nestResult, partByUid, drillsBySheet, routesBySheet, deductEb, jobNumber: snap.jobNumber, projectName: snap.projectName,
