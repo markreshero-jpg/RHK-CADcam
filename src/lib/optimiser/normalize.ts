@@ -22,6 +22,7 @@ import { edgeMitreNote, type MitreEdge } from '@/src/lib/bulkhead'
 import { backPanelPartLabel } from '@/src/lib/backPanel'
 import { cutBaseKeys, splitBaseKey, splitPieceNote, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 import { facedDoorNote } from '@/src/lib/facedDoor'
+import type { TapeByMaterial } from './scheduleTapes'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -110,6 +111,7 @@ export function normalizeProject(
   systemNames: Record<string, string> = {},       // parts_library: key → name (active rows)
   sizeOvByCab: SizeOvByCab = new Map(),           // cabinet → part_pos_overrides (sw/sh/sd → effective dims, O1)
   shapesByCab: ShapesByCab = new Map(),           // cabinet → latest shape revision per part (O2)
+  tapeByMat: TapeByMaterial = new Map(),          // board → schedule tape, for custom parts with no part on the same board
 ): NormalizedProject {
   const rooms: OptiRoom[] = roomsRaw.map(r => ({ id: r.id, name: r.name }))
   const roomById = new Map(rooms.map(r => [r.id, r]))
@@ -246,6 +248,11 @@ export function normalizeProject(
     const t = tFor(r); const mat = r.material_id as string | null
     if (t != null && mat && !matEb.has(mat)) matEb.set(mat, t)
     if (r.edge_band_id && mat && !matEbId.has(mat)) matEbId.set(mat, r.edge_band_id as string)
+  }
+  // No part on that board in the run (a job of only loose custom parts): the schedule's tape.
+  for (const [mat, tape] of tapeByMat) {
+    if (!matEb.has(mat)) matEb.set(mat, tape.thickness)
+    if (!matEbId.has(mat)) matEbId.set(mat, tape.id)
   }
   // The tape product a part's banded edges take — same fallback as bandOf.
   const tapeIdOf = (table: SourceTable, r: Row): string | null => {

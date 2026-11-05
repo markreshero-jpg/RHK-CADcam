@@ -7,6 +7,7 @@ import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from '@/src/lib/optimis
 import { normalizeBenchtopParts, benchtopEbIds, BENCHTOP_PART_SELECT, type RawBenchtop } from '@/src/lib/optimiser/benchtopParts'
 import { loadFrontWallRects, loadRailWallRects } from '@/src/lib/frontWallRects'
 import { joinFingerRails } from '@/src/lib/optimiser/joinFingerRails'
+import { loadScheduleTapes } from '@/src/lib/optimiser/scheduleTapes'
 import { attachWallRects } from '@/src/lib/optimiser/grainBlocks'
 import OptimiserClient from './OptimiserClient'
 
@@ -73,7 +74,8 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
-    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab)
+    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab,
+    await loadScheduleTapes(supabase, projectId, roomIds))
   // Where grain-matched fronts hang, for their nest blocks (z_grain_match G4).
   attachWallRects(norm.parts, await loadFrontWallRects(supabase, cabs.filter(c => c.grain_match).map(c => c.id)))
   // Finger-pull rails run the whole run, split at a cabinet junction past 2400 (z_handles D19).

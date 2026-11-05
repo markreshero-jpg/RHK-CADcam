@@ -13,6 +13,7 @@ import { buildSizeOvByCab, type SizeOv } from './sizeOverrides'
 import { buildShapesByCab, SHAPE_SELECT, type ShapeRow } from './shapes'
 import { loadFrontWallRects, loadRailWallRects } from '../frontWallRects'
 import { joinFingerRails } from './joinFingerRails'
+import { loadScheduleTapes } from './scheduleTapes'
 import { attachWallRects } from './grainBlocks'
 import { normalizeBenchtopParts, benchtopEbIds, BENCHTOP_PART_SELECT, type RawBenchtop } from './benchtopParts'
 
@@ -81,7 +82,8 @@ async function loadCabinetParts(project: { id: string; name: string; job_number:
     (cpR.data ?? []) as Record<string, unknown>[], (ipR.data ?? []) as Record<string, unknown>[],
     (tpR.data ?? []) as Record<string, unknown>[], (fzR.data ?? []) as Record<string, unknown>[],
     (dbR.data ?? []) as Record<string, unknown>[], commentsByCab,
-    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab)
+    (ccR.data ?? []) as Record<string, unknown>[], ebThickness, namesByCab, systemNames, sizeOvByCab, shapesByCab,
+    await loadScheduleTapes(supabase, projectId, roomIds))
   // Where grain-matched fronts hang, for their nest blocks (z_grain_match G4).
   attachWallRects(norm.parts, await loadFrontWallRects(supabase, cabs.filter(c => c.grain_match).map(c => c.id)))
   // Finger-pull rails run the whole run, split at a cabinet junction past 2400 (z_handles D19).
