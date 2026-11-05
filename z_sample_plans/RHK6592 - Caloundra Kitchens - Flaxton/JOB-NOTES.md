@@ -204,3 +204,8 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 - Bathroom wall fillers on edge: main bath TC-01 + BC-05, ensuite BC-01. Was a 16 flat face strip (library BFK / TFK =
   flat face, cab.w wide); now the Filler custom part is orientation side, 70 deep x 16.5 thick, front flush with the old
   face (z = cab.d + 2 + t.exposed - 70), front long edge (right) + top taped. Library BFK / BFF / TFK / TFF unchanged.
+
+## Rev 16 (Mark 2026-11-05) — `_tmp-6592-rev16.mjs`
+
+- Main bath TC-02 hinge 2 890 -> 860 on both doors (hinges [100, 860, 1485, 1880]), clear of the 916 shelf hole. Resolver clean.
+- Rangehood: Mark finding the specs.
