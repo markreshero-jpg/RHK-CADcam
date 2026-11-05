@@ -766,6 +766,9 @@ export interface CabinetInput {
   id:             string
   assembly_class: 'base' | 'wall' | 'tall' | 'base_corner' | 'wall_corner' | 'tall_corner'
   label?:         string
+  // Cabinet bottom above the floor (instance pos_z; a kick-run member sits on its
+  // kick). Cabinet frame y = 0 is this height. Used for heights off the floor (D26).
+  pos_z?:         number
 
   // Master dimensions
   DX:             number   // overall width
@@ -1013,6 +1016,9 @@ export interface HandleScheduleEntryInput {
   offset_from_edge_mm: number                      // grip edge → nearest hole line
   inset_from_side_mm:  number | null               // doors: non-hinged edge → hole line; null = centred
   orientation:         'horizontal' | 'vertical'
+  // Tall doors (D26): handle centre this high off the floor, over the edge
+  // offset. null = use offset_from_edge_mm.
+  height_aff_mm?:      number | null
 }
 
 // One resolved grip on a face zone. x / y = handle centre in zone-local mm

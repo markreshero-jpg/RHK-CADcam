@@ -427,3 +427,25 @@ describe('set back SQ edge finger pull (D24)', () => {
     expect(fr.Y + fr.DX).toBeCloseTo(plain.Y + plain.DX)
   })
 })
+
+describe('tall door handle height off the floor (D26)', () => {
+  const tallSched = { ...schedule, door_tall: { handle: bar160, offset_from_edge_mm: 50, inset_from_side_mm: 50, orientation: 'vertical' as const, height_aff_mm: 1000 } }
+  const oneDoor = { rows: [{ row_index: 0, height_locked: false }], cols: [{ col_index: 0, width_locked: false }],
+    zones: [{ row_index: 0, col_index: 0, face_type: 'door' as const, hinge_side: 'right' as const }] }
+  const tall = (o: Partial<CabinetInput> = {}) => cab({ assembly_class: 'tall', DX: 450, DY: 2100, face_grid: oneDoor, handle_schedule: tallSched, ...o })
+
+  it('handle centre sits 1000 off the floor (own kick: frame y 0 = floor)', () => {
+    const [z] = resolveCabinet(tall()).face_zones
+    expect(z.Y + z.handle!.y!).toBeCloseTo(1000)
+  })
+
+  it('kick-run member: pos_z lifts the frame, centre still 1000 AFF', () => {
+    const [z] = resolveCabinet(tall({ has_toekick: false, DY: 2090, pos_z: 110 })).face_zones
+    expect(110 + z.Y + z.handle!.y!).toBeCloseTo(1000)
+  })
+
+  it('a cabinet or front offset still wins over the height', () => {
+    const [z] = resolveCabinet(tall({ hardware_overrides: { handle_offset: 50 } })).face_zones
+    expect(z.handle!.y).toBeCloseTo(z.DY - 50 - 80)
+  })
+})

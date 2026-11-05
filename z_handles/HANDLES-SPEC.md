@@ -527,6 +527,21 @@ top-edge grip's front top). BC-01's 150 top front under a 60 gap auto-picked a
   (wall-unit drawers, rare).
 - Tests: `drawerFingerRailClear.test.ts`.
 
+**D26. Tall door handles at a height off the floor (Mark, 2026-11-05 — RHK6592 broom TC-05).**
+"Move handle down 1000mm to centre off floor … change this in all handle schedules for talls."
+Built 2026-11-05, in-app check pending.
+- `handle_schedule_entries.height_aff_mm` (`migration_d26_tall_aff.sql`, applied): the handle
+  centre above the floor on tall doors. Every `door_tall` row was set to **1000** (incl. the
+  Lip Pull schedule's old 1262-from-top). Blank = the From edge offset as before.
+- Resolver: centre = `height_aff_mm − cab.pos_z − zone.Y` (zone-local). `CabinetInput.pos_z`
+  is the instance pos_z, so a kick-run member (sits at the kick) and a cabinet with its own
+  kick (frame from the floor) both land at 1000. A front's `handle_offset` (D14) or the
+  cabinet's `hardware_overrides.handle_offset` (D18) still wins. If the handle wouldn't fit
+  on the door at that height, it falls back to the edge offset.
+- Library → Schedules → Handles: "Off floor" column on the Tall doors row.
+- Applies to other jobs' talls on their next re-resolve, unless they carry an offset override.
+- Tests: `handles.test.ts` (D26 block).
+
 **D16. 3D handle models (user, 2026-10-15) — H8.** Bought handles can carry
 an uploaded GLB / STL / OBJ so 3D shows the real handle.
 - **Reuse, don't rebuild.** Same loader as slides and fixtures

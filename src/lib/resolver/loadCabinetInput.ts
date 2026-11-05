@@ -969,6 +969,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     id:              cab.id,
     assembly_class:  cab.assembly_class,
     label:           cab.label ?? undefined,
+    pos_z:           Number(cab.pos_z ?? 0),
     DX:              Number(cab.dx),
     DY:              Number(cab.dy),
     DZ:              Number(cab.dz),
@@ -1337,7 +1338,7 @@ function loadHandleScheduleId(roomId: string, projectId: string | undefined) {
 function loadHandleScheduleEntries(scheduleId: string, products: Record<string, HandleProductInput>) {
   return cachedCascade(`handleentries:${scheduleId}`, async () => {
     const [entriesRes, schedRes] = await Promise.all([
-      supabase.from('handle_schedule_entries').select('role, handle_id, offset_from_edge_mm, inset_from_side_mm, orientation').eq('schedule_id', scheduleId),
+      supabase.from('handle_schedule_entries').select('role, handle_id, offset_from_edge_mm, inset_from_side_mm, orientation, height_aff_mm').eq('schedule_id', scheduleId),
       supabase.from('handle_schedules').select('handle_id').eq('id', scheduleId).maybeSingle(),
     ])
     const out: Partial<Record<HandleRole, HandleScheduleEntryInput>> = {}
@@ -1348,6 +1349,7 @@ function loadHandleScheduleEntries(scheduleId: string, products: Record<string, 
         offset_from_edge_mm: Number(e.offset_from_edge_mm ?? 50),
         inset_from_side_mm:  e.inset_from_side_mm == null ? null : Number(e.inset_from_side_mm),
         orientation:         (e.orientation as 'horizontal' | 'vertical') ?? 'horizontal',
+        height_aff_mm:       e.height_aff_mm == null ? null : Number(e.height_aff_mm),
       }
     }
     // Legacy single-handle schedule: same handle on every role.

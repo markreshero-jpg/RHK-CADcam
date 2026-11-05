@@ -6,6 +6,7 @@
 //   • grip edge = top on base/tall, bottom on wall (D5); a door hinged on its
 //     top or bottom edge grips on the opposite edge
 //   • offset_from_edge_mm = grip edge → the handle's nearest hole line
+//   • tall doors: height_aff_mm (D26) = handle centre off the floor, over the offset
 //   • doors: inset_from_side_mm = non-hinged edge → nearest hole line;
 //     drawers (and null inset) centre left to right
 // Positionless grips (push-to-open, sharknose, rail, channel) resolve with
@@ -104,6 +105,16 @@ export function resolveHandle(cab: CabinetInput, zone: ResolvedFaceZone): Resolv
     // so its centre is half the bore centres further in.
     const fromEdge = offset + (orientation === 'vertical' ? half : 0)
     y = edge === 'top' ? zone.DY - fromEdge : fromEdge
+    // D26: tall doors take the schedule's height off the floor (handle centre)
+    // unless the front or cabinet sets its own offset; kept only while the
+    // whole handle fits on the door.
+    const aff = role === 'door_tall' && zoneIn?.handle_offset == null && cabPos.offset == null
+      ? entry?.height_aff_mm ?? null : null
+    if (aff != null) {
+      const yc = aff - (cab.pos_z ?? 0) - zone.Y
+      const reach = orientation === 'vertical' ? half : 0
+      if (yc - reach >= 0 && yc + reach <= zone.DY) y = yc
+    }
 
     // Along the grip edge: centred, or `inset` from the non-hinged side edge.
     const side = zone.hinge_side === 'left' ? 'right' : zone.hinge_side === 'right' ? 'left' : null

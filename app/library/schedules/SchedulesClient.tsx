@@ -79,6 +79,7 @@ type HandleEntryRow = {
   offset_from_edge_mm: number
   inset_from_side_mm: number | null
   orientation: 'horizontal' | 'vertical'
+  height_aff_mm: number | null   // tall doors (D26): handle centre off the floor
 }
 type HwSlideItem   = { id: string; name: string; brand: string | null; nominal_length: number | null; box_height: number | null }
 type SlideEntryRow = { id: string; depth_threshold: number; height_threshold: number; slide_id: string }
@@ -211,7 +212,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       setHandleEntries({})
       const { data } = await supabase
         .from('handle_schedule_entries')
-        .select('role, handle_id, offset_from_edge_mm, inset_from_side_mm, orientation')
+        .select('role, handle_id, offset_from_edge_mm, inset_from_side_mm, orientation, height_aff_mm')
         .eq('schedule_id', id)
       const map: Partial<Record<HandleRoleKey, HandleEntryRow>> = {}
       for (const r of (data ?? []) as (HandleEntryRow & { role: HandleRoleKey })[]) {
@@ -220,6 +221,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           offset_from_edge_mm: Number(r.offset_from_edge_mm),
           inset_from_side_mm: r.inset_from_side_mm == null ? null : Number(r.inset_from_side_mm),
           orientation: r.orientation,
+          height_aff_mm: r.height_aff_mm == null ? null : Number(r.height_aff_mm),
         }
       }
       setHandleEntries(map)
@@ -235,6 +237,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       handle_id: null, offset_from_edge_mm: 50,
       inset_from_side_mm: def.inset ? 50 : null,
       orientation: role === 'drawer' ? 'horizontal' : 'vertical',
+      height_aff_mm: null,
     }
     const next = { ...cur, ...patch }
     setHandleEntries(prev => ({ ...prev, [role]: next }))
@@ -805,13 +808,13 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     const kindTag = (k?: string) => (k && k !== 'hardware' ? ` [${k}]` : '')
     return (
       <div className="flex flex-col gap-2">
-        <div className="grid grid-cols-[6rem_minmax(0,1fr)_5rem_5rem_7rem] gap-2 text-[9px] text-ink-subtle uppercase tracking-wide">
-          <span>Role</span><span>Handle</span><span className="text-right">From edge</span><span className="text-right">From side</span><span>Orientation</span>
+        <div className="grid grid-cols-[6rem_minmax(0,1fr)_5rem_5rem_5rem_7rem] gap-2 text-[9px] text-ink-subtle uppercase tracking-wide">
+          <span>Role</span><span>Handle</span><span className="text-right">From edge</span><span className="text-right">From side</span><span className="text-right">Off floor</span><span>Orientation</span>
         </div>
         {HANDLE_ROLES.map(({ role, label, inset }) => {
           const e = handleEntries[role]
           return (
-            <div key={role} className="grid grid-cols-[6rem_minmax(0,1fr)_5rem_5rem_7rem] gap-2 items-center">
+            <div key={role} className="grid grid-cols-[6rem_minmax(0,1fr)_5rem_5rem_5rem_7rem] gap-2 items-center">
               <span className="text-xs text-ink-muted">{label}</span>
               <select value={e?.handle_id ?? ''} onChange={ev => saveHandleEntry(role, { handle_id: ev.target.value || null })} className={sel}>
                 <option value="">— no handle —</option>
@@ -834,6 +837,18 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
                   }}
                 />
               ) : <span className="text-[10px] text-ink-subtle text-right">centred</span>}
+              {role === 'door_tall' ? (
+                <input
+                  key={`f-${selectedId}-${role}-${e?.height_aff_mm ?? ''}`}
+                  type="number" placeholder="—" title="Handle centre off the floor (tall doors). Blank = From edge." defaultValue={e?.height_aff_mm ?? ''} className={num}
+                  onBlur={ev => {
+                    const raw = ev.target.value.trim()
+                    const v = raw === '' ? null : Number(raw)
+                    if (v !== null && !Number.isFinite(v)) return
+                    if (v !== (e?.height_aff_mm ?? null)) saveHandleEntry(role, { height_aff_mm: v })
+                  }}
+                />
+              ) : <span />}
               <select value={e?.orientation ?? (role === 'drawer' ? 'horizontal' : 'vertical')} onChange={ev => saveHandleEntry(role, { orientation: ev.target.value as HandleEntryRow['orientation'] })} className={sel}>
                 <option value="horizontal">Horizontal</option>
                 <option value="vertical">Vertical</option>
@@ -843,6 +858,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         })}
         <p className="text-[10px] text-ink-subtle pt-1">
           From edge = grip edge (top; bottom on wall doors) to the handle&apos;s nearest hole. From side = door&apos;s non-hinged edge to the hole line; blank centres it.
+          Off floor (tall doors) = handle centre above the floor, used instead of From edge; blank uses From edge.
           One handle per role. Change a size per cabinet rather than by width.
         </p>
       </div>

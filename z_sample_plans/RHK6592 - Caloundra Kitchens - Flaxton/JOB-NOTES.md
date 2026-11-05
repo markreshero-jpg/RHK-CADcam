@@ -146,3 +146,16 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
   **TC-06 TEPF** 16.5 PT at 3008.5, 300 OA. The doorway past TC-04 is gone (there was no doorway object, only the
   TC-04 note). Open shelving kept at 6 adj shelves (their drawing shows 8 — Mark: leave).
 - All resolver clean.
+
+## Rev 9 / 10 (Mark 2026-11-05) — `_tmp-6592-rev9.mjs`, `_tmp-6592-rev10.mjs`
+
+- TC-04 (PT panel between the open shelving and the broom) deleted; broom TC-05 now 2542–2992, end TEPF TC-06 at 2992.
+  TC-05 joined into KICK 2's run by DB (kick_run_id + detach transform; the bridge joinKicks won't add to an existing
+  run), KICK 2 602 -> 2992 (2390).
+- WC-01 floating shelf 300 deep OA.
+- BC-03 blind false panel flat: zone door_style_id 2 Pac Flat 18mm + door_colour_id 334dab4c (no shaker route).
+- Wall cleats WC-02 (washer) / WC-03 (dryer): WUP + UNDER_PANEL, one custom part 610 x 70 x 16.5 Whiteboard 16.5
+  (material_override_id), bottom long edge taped (E1L), against the wall, top at the 880 bench underside.
+- Tall handles: new D26 schedule "Off floor" = 1000 to the handle centre on every handle schedule's tall-door row.
+  TC-05 handle centre 1000 AFF (110 kick + 890).
+- Open: BC-02 kick return into the void + return face to BC-05 (asked Mark); D/W space cleat?
