@@ -197,7 +197,9 @@ export function resolveCaseParts(
   // lands at TK+SCRBT (butts_into_back) or on top of the bottom, TK+SCRBT+bottomT
   // (back_on_bottom). p.DZ is the BACK's thickness, so an 18 back on a 33 bottom
   // stores Y = bottom top − 18.
-  const backY = bottomBackJoin === 'butts_into_back' ? TK + r.SCRBT - backT : TK + r.SCRBT + bottomT - backT
+  // No bottom (Bottom Type none): nothing to stand on, so the back runs down to
+  // the gables' bottom edge, TK + SCRBT (Mark, 2026-11-05, RHK6592 WC-03).
+  const backY = bottomBackJoin === 'butts_into_back' || bottomType === 'none' ? TK + r.SCRBT - backT : TK + r.SCRBT + bottomT - backT
 
   // Top joinery trims the back's top face by topT when the top sits over it.
   // SCRT: back panel stops at DY - SCRT (scribe material on sides above).

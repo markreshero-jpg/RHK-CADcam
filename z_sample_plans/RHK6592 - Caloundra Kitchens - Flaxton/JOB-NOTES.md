@@ -256,3 +256,8 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 - One full under panel: WC-08 widened to 1543 x 380 under WC-02..WC-04 (offset 1906); WC-06 / WC-07 deleted (made by
   automation in rev 20). Rangehood hole 500 x 347 at x 499-999, 0.3 onion skin. WC-02/03/04 still scribed up 18.
 - Shaker routes (PANEL_PROFILE): WC-05 seen face right, BC-05 (small cupboard end) left. Resolver clean.
+
+## Rev 23 (Mark 2026-11-05) — resolver fix
+
+- Bottom Type none: the back now runs down to the gables' bottom edge (resolveCase). WC-03 back 660.5 tall from the under
+  panel (was stopping 16.5 up where the bottom was). Kitchen re-resolved, clean.

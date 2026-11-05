@@ -57,6 +57,16 @@ describe('BOTTOM_TYPE', () => {
     expect(left.Y).toBe(withBottom.Y - 18)
   })
 
+  it('none: the back runs down to the gables’ bottom edge (back_on_bottom or butts_into_back)', () => {
+    for (const BOTTOM_BACK_JOIN of ['back_on_bottom', 'butts_into_back'] as const) {
+      const ps = parts({ BOTTOM_BACK_JOIN }, 'none')
+      const back = ps.find(p => p.part_key === 'back')!, left = ps.find(p => p.part_key === 'left_side')!
+      expect(back.Y + back.DZ).toBeCloseTo(left.Y)                        // 3D bottom face on the gables' bottom edge
+      expect(back.Y + back.DZ + back.DX).toBeCloseTo(parts({ BOTTOM_BACK_JOIN }).find(p => p.part_key === 'back')!.Y
+        + parts({ BOTTOM_BACK_JOIN }).find(p => p.part_key === 'back')!.DZ + parts({ BOTTOM_BACK_JOIN }).find(p => p.part_key === 'back')!.DX)   // top unchanged
+    }
+  })
+
   it('rail seams fall back to the bottom panel joints', () => {
     expect(toGenericSeamKey('bottom_front_rail:left_side')).toBe('bottom:left_side')
     expect(toGenericSeamKey('bottom_back_rail:right_side')).toBe('bottom:right_side')
