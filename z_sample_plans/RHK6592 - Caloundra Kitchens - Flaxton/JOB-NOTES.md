@@ -168,3 +168,9 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
   x 520 -> 618 (BC-05), front at y 1770, butting KICK 1's face in the inside corner. (Kick end returns TOERETL only turn
   back to the wall, so they couldn't reach BC-05.)
 - D/W space wall cleat WC-04 (same as WC-02 / WC-03). Resolver clean.
+
+## Rev 12 (Mark 2026-11-05) — `_tmp-6592-rev12.mjs`
+
+- Rev 11's BC-04 custom "Kick return face" removed. BC-04's kick detached into its own kick assembly **KICK 3** (kick_runs
+  row + detach transform + assembly, as the canvas Detach does), dx 98 = x 618 -> 520 to meet KICK 1's face (40 past the
+  filler into the void). Face only: KICK 3 hidden_parts tk_kick_sub_front_1 + tk_kick_back_2 (not made). Resolver clean.
