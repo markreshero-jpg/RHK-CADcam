@@ -19,3 +19,16 @@ where joint_type_id in ('3fe377e6-e842-41f6-a3b0-c7a767c000c7', 'f78dc261-1eb0-4
 update joint_type_operations set fitting_id = (select id from hardware_accessories where supplier_code = 'SSW.WH.FG')
 where joint_type_id = '9e8430fe-80b8-47f1-8d9f-d01af724c690'
   and target_part = 'part_b' and face = 'normal' and machine_operation = 'drill' and fitting_id is null;
+
+-- 2026-11-05 (Mark): "Backs On Back" construction method gets the same shelf
+-- joints as Standard (adj_shelf:side / adj_shelf:back / fixed_shelf:side), per
+-- class — it had none, so its shelves weren't drilled or counted.
+update construction_method_schedule_rows b
+set joint_defaults = coalesce(b.joint_defaults, '{}'::jsonb) || jsonb_strip_nulls(jsonb_build_object(
+  'adj_shelf:side',   st.joint_defaults->'adj_shelf:side',
+  'adj_shelf:back',   st.joint_defaults->'adj_shelf:back',
+  'fixed_shelf:side', st.joint_defaults->'fixed_shelf:side'))
+from construction_method_schedule_rows st
+join construction_method_schedules ss on ss.id = st.schedule_id and ss.name = 'Standard'
+where b.schedule_id = (select id from construction_method_schedules where name = 'Backs On Back')
+  and st.assembly_class = b.assembly_class;
