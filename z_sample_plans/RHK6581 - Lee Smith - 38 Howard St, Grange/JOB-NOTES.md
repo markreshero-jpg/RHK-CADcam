@@ -275,3 +275,9 @@ _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults
 - New BC-20 BUP, LX ABS Grain 18 Elegant Oak, 2036 x 580 (BC-02 2000 + 18 onto each curved end BC-01 / BC-03),
   x 3300–5336 on the island wall, underside 840 = flush with the stone apron bottom; sits on top of the curved ends
   and the IBPF back panel (all 840 high). Front long edge taped; ends + back hidden under the stone.
+
+## Elegant Oak oversize panels split at 2400 (Mark 2026-11-06)
+- Elegant Oak sheet 2415 (2405 usable). Split in place, two parts in one assembly: TC-03 + TC-04 applied end panels
+  (700 x 2470) and TC-13 filler (32 x 2470) → bottom piece 2400 (dy "2400", top end untaped) + top piece 70 at y 2400
+  (dy "cab.h - 2400", bottom end untaped). Part comments "JOIN THEN EDGE · …" on every piece. TC-12 panel is 2370
+  (on the kick) — fits, not split. Backup _bak_rhk6581_split2400_ccp_20261106 / _ci_.
