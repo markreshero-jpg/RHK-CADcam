@@ -116,6 +116,7 @@ export interface OptiProfile {
   margin_use_tool_dia: boolean | null     // include routing tool Ø in the margin
   margin_use_entry_offset: boolean | null // include the approach offset in the margin
   deduct_edgeband: boolean | null  // nest parts at cut size (finished − tape per banded edge)
+  origin_corner?: string | null    // machine datum corner (6th face cut sheets: which edges trim, how Z mirrors)
 }
 
 // Cut (unfinished) size of a part = finished size minus the edgeband thickness on

@@ -24,6 +24,7 @@ export default function CutSheetsPanel() {
   const savedRun = useOptiStore(s => s.savedRun)
   const savedDrills = savedRun && savedRun.nest === nestResult ? savedRun.drillsBySheet : null
   const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
+  const originCorner = snap.profiles.find(p => p.id === profileId)?.origin_corner ?? 'top_left'
 
   const [opts, setOpts] = useState({ holes: true, partsList: true })
   useEffect(() => {
@@ -35,7 +36,9 @@ export default function CutSheetsPanel() {
     return next
   })
 
-  const [drills, setDrills] = useState<Map<number, { x: number; y: number; diameter: number }[]> | null>(null)
+  const [drills, setDrills] = useState<Map<number, { x: number; y: number; diameter: number; program?: 'A' | 'Z' }[]> | null>(null)
+  // 6th face sheets: their page shows program A on top, program Z below.
+  const [sixthFace, setSixthFace] = useState<Set<number>>(new Set())
   const [error, setError] = useState<string | null>(null)
   const [sheetsOn, setSheetsOn] = useState<Set<number> | null>(null)   // null = all
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
@@ -43,10 +46,21 @@ export default function CutSheetsPanel() {
 
   useEffect(() => {
     if (!nestResult?.sheets.length) return
-    if (savedDrills) { setDrills(savedDrills); return }   // holes as machined
+    if (savedDrills) {   // holes as machined; the run's A / Z files mark its 6th face sheets
+      setDrills(savedDrills)
+      setSixthFace(new Set(savedRun!.files.filter(f => f.program).map(f => f.sheetIndex)))
+      return
+    }
     let dead = false
     loadSheetDrills(nestedParts(snap.parts, partIndex), nestResult.sheets, { sync: true, deductEdgeband: deductEb })
-      .then(r => { if (!dead) setDrills(r.bySheet) })
+      .then(r => {
+        if (dead) return
+        setDrills(r.bySheet)
+        const z = new Set<number>()
+        for (const [k, v] of r.bySheet) if (v.some(d => d.program === 'Z')) z.add(k)
+        for (const [k, v] of r.routesBySheet) if (v.some(d => d.program === 'Z')) z.add(k)
+        setSixthFace(z)
+      })
       .catch(e => { if (!dead) setError(e instanceof Error ? e.message : String(e)) })
     return () => { dead = true }
   }, [nestResult, partIndex, snap, deductEb, savedDrills])
@@ -66,13 +80,14 @@ export default function CutSheetsPanel() {
       jobNumber: snap.jobNumber, projectName: snap.projectName, scope, materialName: matName,
       fileNames: savedDrills ? nestResult.sheets.map(s => savedRun!.files.filter(f => f.sheetIndex === s.index).map(f => f.fileName).join(" then ") || undefined) : undefined,
       runCode: savedDrills && savedRun!.runNo != null ? runCode(snap.jobNumber, savedRun!.runNo) : null,
+      sixthFace, datum: { origin_corner: originCorner },
     }, { sheets: sheetsOn, holes: opts.holes, partsList: opts.partsList }).then(doc => {
       if (dead) return
       url = URL.createObjectURL(doc.output('blob'))
       setPdfUrl(url)
     }).catch(e => setError(e instanceof Error ? e.message : String(e)))
     return () => { dead = true; if (url) URL.revokeObjectURL(url) }
-  }, [nestResult, drills, snap, deductEb, scope, sheetsOn, opts, savedDrills, savedRun])
+  }, [nestResult, drills, snap, deductEb, scope, sheetsOn, opts, savedDrills, savedRun, sixthFace, originCorner])
 
   if (!nestResult?.sheets.length) {
     return <p className="text-xs text-ink-subtle text-center py-12">Nothing nested — run Stage 4 first.</p>

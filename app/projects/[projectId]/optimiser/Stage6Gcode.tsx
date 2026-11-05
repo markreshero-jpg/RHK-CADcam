@@ -300,7 +300,7 @@ export default function Stage6Gcode() {
       const run = {
         id: null, runNo, name: runName(runNo), savedAt: new Date().toISOString(), nest: nestResult,
         files: gen.map(({ sheetIndex, fileName, gcode, outlines, holes, program, simSheet }) => ({ sheetIndex, fileName, gcode, outlines, holes, ...(program ? { program, simSheet } : {}) })),
-        drillsBySheet: new Map<number, SheetDrill[]>([...sheetDrills].map(([k, v]) => [k, v.map(d => ({ x: d.x, y: d.y, diameter: d.diameter }))])),
+        drillsBySheet: new Map<number, SheetDrill[]>([...sheetDrills].map(([k, v]) => [k, v.map(d => ({ x: d.x, y: d.y, diameter: d.diameter, ...(d.program ? { program: d.program } : {}) }))])),
         sim,
       }
       setSavedRun(run)

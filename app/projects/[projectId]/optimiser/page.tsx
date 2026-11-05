@@ -47,7 +47,7 @@ export default async function OptimiserPage({ params }: { params: Promise<{ proj
   const [matR, machR, profR, toolR, projR, sysNamesR] = await Promise.all([
     supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
     supabase.from('cnc_machines').select('id,name,brand,model,table_dx,table_dy,gcode_dialect,is_default').eq('active', true).order('name'),
-    supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default,nest_pad,tool_entry_offset,margin_use_tool_dia,margin_use_entry_offset,deduct_edgeband'),
+    supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default,nest_pad,tool_entry_offset,margin_use_tool_dia,margin_use_entry_offset,deduct_edgeband,origin_corner'),
     supabase.from('cnc_tools').select('id,diameter').eq('active', true),
     supabase.from('projects').select('id,name,job_number').order('created_at', { ascending: false }),
     supabase.from('parts_library').select('key,name').eq('active', true),

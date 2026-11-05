@@ -74,6 +74,7 @@ sheet that needs it runs as **two programs with a whole-sheet flip between**.
 - RHK6592 Kitchen (headless): 5 Satin Board door sheets → A/Z pairs, 9 Whiteboard
   carcass sheets single; no validation errors, no trim warnings.
 - Stage 5 marks a two-sided sheet "6th face" after its number (sheet list, title, toolbar).
+- Cut sheets (Stage 7 + headless): a 6th face page is two half-page pictures, A (sheet as loaded, A holes + routes, orange bands on the trimmed edges) over Z (sixthFaceZMap: flipped + trimmed, Z routes, parts mirrored); labels drawn after routes. Saved drills keep `program`; the machine `origin_corner` comes in on OptiProfile.
 - Not yet: Stage 5 / cut sheet pictures show both faces' holes from above (no A/Z
   split); circular-hole entry still helical only.
 

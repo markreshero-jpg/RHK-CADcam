@@ -12,9 +12,10 @@ import { placedOutline, placedHoles } from './shapes'
 import { blockRectOn, grainMatchTags, grainMatchLine } from './grainBlocks'
 import { grainMatchColour } from '../grainMatch'
 import { partNumbers, sheetPartOrder, holesIn, sheetNumbers } from './labels'
-import type { SheetRoute } from './gcode'
+import { sixthFaceZMap, sixthFaceTrimStrips, SIXTH_FACE_TRIM, type SheetRoute, type PostProfile } from './gcode'
 
-type Drill = { x: number; y: number; diameter: number }
+// program: 6th face (drills.ts ProgramFace) — which half of the page it shows in.
+type Drill = { x: number; y: number; diameter: number; program?: 'A' | 'Z' }
 
 export interface CutSheetRow {
   no: number; sheet: number; sheetNo: number; materialId: string | null; cab: string; part: string
@@ -56,6 +57,11 @@ export interface CutSheetsInput {
   fileNames?: (string | undefined)[]         // G-code program per sheet, when known
   runCode?: string | null                    // saved run, e.g. RHK6570-R3
   date?: Date
+  // 6th face sheets (sheet index): the page shows program A on top and the sheet
+  // as it lies for program Z (flipped over the long edge, trimmed) below. The
+  // machine datum corner says which edges are trimmed and how Z mirrors.
+  sixthFace?: Set<number>
+  datum?: Pick<PostProfile, 'origin_corner'>
 }
 
 export interface CutSheetsOptions {
@@ -90,17 +96,62 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
     doc.text(`${inp.materialName(sheet.materialId)}  ·  Sheet ${sheetNos.get(sheet.index)!.no} of ${sheetNos.get(sheet.index)!.of}  ·  ${W} × ${H}  ·  ${sheet.placements.length} parts  ·  ${drills.length} holes${opt.routes ? `  ·  ${inp.routesBySheet?.get(sheet.index)?.length ?? 0} routes` : ''}  ·  ${eff}% used${file ? `  ·  ${file}` : ''}`, M, M + 10)
     doc.text(`${inp.runCode ? `Run ${inp.runCode}   ` : ''}${dateTxt}`, PW - M, M + 4, { align: 'right' })
 
-    const top = M + 15
-    const s = Math.min((PW - 2 * M) / W, (PH - top - M - 6) / H)
-    const ox = M, oy = top
-    const X = (x: number) => ox + x * s, Y = (y: number) => oy + (H - y) * s
-    doc.setDrawColor(40); doc.setLineWidth(0.4); doc.rect(ox, oy, W * s, H * s, 'S')
-    doc.setLineDashPattern([1.2, 1], 0); doc.setLineWidth(0.15); doc.setDrawColor(140)
-    doc.rect(X(sheet.stock.trimLeft), Y(H - sheet.stock.trimTop), (W - sheet.stock.trimLeft - sheet.stock.trimRight) * s, (H - sheet.stock.trimTop - sheet.stock.trimBottom) * s, 'S')
-    doc.setLineDashPattern([], 0)
-    // Machine origin hint (sheet bottom-left).
-    doc.setFontSize(6.5); doc.setTextColor(120); doc.text('0,0', ox + 0.6, oy + H * s - 0.8); doc.setTextColor(0)
+    const allRoutes = opt.routes ? inp.routesBySheet?.get(sheet.index) ?? [] : []
+    const routes = allRoutes
+    // One picture, or (6th face) two: A = the sheet as loaded, Z = flipped + trimmed.
+    // Everything is laid out in program A's frame; a view maps it to its picture.
+    type Pt = { x: number; y: number }
+    type View = { tag: string | null; W: number; H: number; T: (q: Pt) => Pt; drills: Drill[]; routes: SheetRoute[]; trims: boolean }
+    const datum = inp.datum ?? { origin_corner: 'top_left' }
+    const sixth = !!inp.sixthFace?.has(sheet.index)
+    const views: View[] = sixth
+      ? [
+          { tag: 'PROGRAM A  -  back face up: back drilling + routes, 5mm trimmed off the orange edges, parts stay in. Then flip over the long edge.',
+            W, H, T: q => q, drills: drills.filter(d => d.program !== 'Z'), routes: allRoutes.filter(r => r.program !== 'Z'), trims: true },
+          { tag: 'PROGRAM Z  -  after the flip, trimmed edges to X0 / Y0: face routes, then every part cut out.',
+            W: W - SIXTH_FACE_TRIM, H: H - SIXTH_FACE_TRIM, T: sixthFaceZMap(sheet, datum).pt, drills: drills.filter(d => d.program === 'Z'), routes: allRoutes.filter(r => r.program === 'Z'), trims: false },
+        ]
+      : [{ tag: null, W, H, T: q => q, drills, routes: allRoutes, trims: false }]
 
+    const areaTop = M + 15, areaH = PH - areaTop - M - 6
+    const slotH = areaH / views.length
+    views.forEach((v, vi) => {
+    const top = areaTop + vi * slotH + (v.tag ? 5 : 0)
+    const s = Math.min((PW - 2 * M) / v.W, (slotH - (v.tag ? 7 : 0)) / v.H)
+    const ox = M, oy = top
+    if (v.tag) {
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(150, 90, 0)
+      doc.text(v.tag, M, top - 1.6)
+      doc.setTextColor(0); doc.setFont('helvetica', 'normal')
+    }
+    // A-frame sheet coords → this picture (y up on the sheet, down on the page).
+    const P = (x: number, y: number) => { const t = v.T({ x, y }); return [ox + t.x * s, oy + (v.H - t.y) * s] as [number, number] }
+    const X = (x: number) => P(x, 0)[0]
+    const Y = (y: number) => P(0, y)[1]
+    // A sheet-space rectangle on the picture (a mirrored view swaps its corners).
+    const rectP = (x: number, y: number, w: number, h: number, style: string) => {
+      const a = P(x, y), b = P(x + w, y + h)
+      doc.rect(Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]), style)
+    }
+    doc.setDrawColor(40); doc.setLineWidth(0.4); doc.rect(ox, oy, v.W * s, v.H * s, 'S')
+    if (v.trims) {
+      // 5mm is a hair at this scale (and under the parts): mark each trimmed edge
+      // with a 1.2mm orange band just outside the sheet.
+      doc.setFillColor(240, 130, 70)
+      const B = 1.2, SW = v.W * s, SH = v.H * s
+      for (const t of sixthFaceTrimStrips(sheet, datum)) {
+        const a = P(t.x, t.y), b = P(t.x + t.w, t.y + t.h)
+        const x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]), w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1])
+        if (w < h) doc.rect(x < ox + SW / 2 ? ox - B : ox + SW, oy, B, SH, 'F')     // an end
+        else doc.rect(ox, y < oy + SH / 2 ? oy - B : oy + SH, SW, B, 'F')             // a long edge
+      }
+    }
+    doc.setLineDashPattern([1.2, 1], 0); doc.setLineWidth(0.15); doc.setDrawColor(140)
+    rectP(sheet.stock.trimLeft, sheet.stock.trimBottom, W - sheet.stock.trimLeft - sheet.stock.trimRight, H - sheet.stock.trimTop - sheet.stock.trimBottom, 'S')
+    doc.setLineDashPattern([], 0)
+    // Machine origin hint (picture bottom-left).
+    doc.setFontSize(6.5); doc.setTextColor(120); doc.text('0,0', ox + 0.6, oy + v.H * s - 0.8); doc.setTextColor(0)
+    const labelJobs: (() => void)[] = []
     for (const pl of sheet.placements) {
       const p = partByUid.get(pl.baseUid)
       if (!p) continue
@@ -108,17 +159,17 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
       doc.setDrawColor(20); doc.setLineWidth(0.3); doc.setFillColor(236, 240, 245)
       if (local) {
         // Shaped part: its placement rectangle dashed, the cut outline solid.
-        doc.setLineDashPattern([0.8, 0.8], 0); doc.setLineWidth(0.1); doc.rect(X(pl.x), Y(pl.y + pl.h), pl.w * s, pl.h * s, 'S')
+        doc.setLineDashPattern([0.8, 0.8], 0); doc.setLineWidth(0.1); rectP(pl.x, pl.y, pl.w, pl.h, 'S')
         doc.setLineDashPattern([], 0); doc.setLineWidth(0.3)
-        const pts = local.map(q => [X(pl.x + q.x), Y(pl.y + q.y)] as [number, number])
+        const pts = local.map(q => P(pl.x + q.x, pl.y + q.y))
         doc.lines(pts.slice(1).map((q, i) => [q[0] - pts[i][0], q[1] - pts[i][1]]), pts[0][0], pts[0][1], [1, 1], 'FD', true)
-      } else doc.rect(X(pl.x), Y(pl.y + pl.h), pl.w * s, pl.h * s, 'FD')
+      } else rectP(pl.x, pl.y, pl.w, pl.h, 'FD')
       // Through cut-outs (rangehood hole, rib cut-outs, benchtop sinks): white holes.
       if (opt.routes) {
         doc.setFillColor(255, 255, 255); doc.setDrawColor(30, 90, 200); doc.setLineWidth(0.2)
         for (const h of placedHoles(p as Parameters<typeof placedHoles>[0], pl, inp.deductEb)) {
           if (h.length < 3) continue
-          const hp = h.map(q => [X(pl.x + q.x), Y(pl.y + q.y)] as [number, number])
+          const hp = h.map(q => P(pl.x + q.x, pl.y + q.y))
           doc.lines(hp.slice(1).map((q, i) => [q[0] - hp[i][0], q[1] - hp[i][1]]), hp[0][0], hp[0][1], [1, 1], 'FD', true)
         }
         doc.setDrawColor(20); doc.setLineWidth(0.3)
@@ -126,65 +177,71 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
       // Holes as small circles (true size, min 0.35 mm so 5 mm pins show).
       if (opt.holes) {
         doc.setDrawColor(200, 40, 40); doc.setLineWidth(0.12)
-        for (const hd of holesIn(pl, drills)) doc.circle(X(hd.x), Y(hd.y), Math.max(0.35, hd.diameter / 2 * s), 'S')
+        for (const hd of holesIn(pl, v.drills)) { const c = P(hd.x, hd.y); doc.circle(c[0], c[1], Math.max(0.35, hd.diameter / 2 * s), 'S') }
         doc.setDrawColor(20)
       }
-      // Label: number big, then cabinet + part + cut size when it fits.
-      const cx = X(pl.x + pl.w / 2), cy = Y(pl.y + pl.h / 2)
-      const bw = pl.w * s - 1.5, bh = pl.h * s
-      const no = String(nos.get(pl.uid))
-      const cutW = pl.rotated ? pl.h : pl.w, cutH = pl.rotated ? pl.w : pl.h
-      const lines = [`${p.cabinet_label}  ${p.label}`, `${Math.round(cutH * 10) / 10} × ${Math.round(cutW * 10) / 10}${pl.rotated ? ' (R)' : ''}${p.grain_across ? ' grain across' : ''}`]
-      const fit = (txt: string, max: number, min: number) => {
-        let f = max
-        doc.setFontSize(f)
-        while (f > min && doc.getTextWidth(txt) > bw) { f -= 0.5; doc.setFontSize(f) }
-        return doc.getTextWidth(txt) <= bw ? f : 0
-      }
-      doc.setFont('helvetica', 'bold')
-      const nfs = Math.min(fit(no, 11, 5), bh / 0.3528 * 0.55)
-      const detail = bh > 9 ? lines.map(l => { doc.setFont('helvetica', 'normal'); return fit(l, 7, 4.5) }) : [0, 0]
-      const shown = detail.filter(f => f > 0).length
-      const blockH = (nfs > 0 ? nfs * 0.3528 : 0) + shown * 2.8
-      let ty = cy - blockH / 2 + (nfs > 0 ? nfs * 0.3528 * 0.8 : 0)
-      if (nfs > 0) { doc.setFont('helvetica', 'bold'); doc.setFontSize(nfs); doc.text(no, cx, ty, { align: 'center' }) }
-      doc.setFont('helvetica', 'normal')
-      lines.forEach((l, i) => {
-        if (!detail[i]) return
-        ty += 2.8
-        doc.setFontSize(detail[i]); doc.text(l, cx, ty, { align: 'center' })
+      // Label (drawn after the routes, so a pocket never covers it): number big,
+      // then cabinet + part + cut size when it fits.
+      labelJobs.push(() => {
+        // Label: number big, then cabinet + part + cut size when it fits.
+        const [cx, cy] = P(pl.x + pl.w / 2, pl.y + pl.h / 2)
+        const bw = pl.w * s - 1.5, bh = pl.h * s
+        const no = String(nos.get(pl.uid))
+        const cutW = pl.rotated ? pl.h : pl.w, cutH = pl.rotated ? pl.w : pl.h
+        const lines = [`${p.cabinet_label}  ${p.label}`, `${Math.round(cutH * 10) / 10} × ${Math.round(cutW * 10) / 10}${pl.rotated ? ' (R)' : ''}${p.grain_across ? ' grain across' : ''}`]
+        const fit = (txt: string, max: number, min: number) => {
+          let f = max
+          doc.setFontSize(f)
+          while (f > min && doc.getTextWidth(txt) > bw) { f -= 0.5; doc.setFontSize(f) }
+          return doc.getTextWidth(txt) <= bw ? f : 0
+        }
+        doc.setFont('helvetica', 'bold')
+        const nfs = Math.min(fit(no, 11, 5), bh / 0.3528 * 0.55)
+        const detail = bh > 9 ? lines.map(l => { doc.setFont('helvetica', 'normal'); return fit(l, 7, 4.5) }) : [0, 0]
+        const shown = detail.filter(f => f > 0).length
+        const blockH = (nfs > 0 ? nfs * 0.3528 : 0) + shown * 2.8
+        let ty = cy - blockH / 2 + (nfs > 0 ? nfs * 0.3528 * 0.8 : 0)
+        if (nfs > 0) { doc.setFont('helvetica', 'bold'); doc.setFontSize(nfs); doc.text(no, cx, ty, { align: 'center' }) }
+        doc.setFont('helvetica', 'normal')
+        lines.forEach((l, i) => {
+          if (!detail[i]) return
+          ty += 2.8
+          doc.setFontSize(detail[i]); doc.text(l, cx, ty, { align: 'center' })
+        })
       })
     }
     // Routes (Mark, 2026-11-05: show every route on the cut sheet). Blue: a
     // cleared pocket is filled, an outline-only route is its rectangle, a groove
     // is a band its width; each tagged with tool + depth when it fits.
-    const routes = opt.routes ? inp.routesBySheet?.get(sheet.index) ?? [] : []
-    for (const r of routes) {
+    for (const r of v.routes) {
       doc.setDrawColor(30, 90, 200); doc.setFillColor(205, 222, 250); doc.setLineWidth(0.15)
       let tx: number, ty: number, room: number
       if (r.kind === 'groove') {
         const L = Math.hypot(r.x2 - r.x1, r.y2 - r.y1) || 1
         const nx = -(r.y2 - r.y1) / L * r.width / 2, ny = (r.x2 - r.x1) / L * r.width / 2
-        const q = [[r.x1 + nx, r.y1 + ny], [r.x2 + nx, r.y2 + ny], [r.x2 - nx, r.y2 - ny], [r.x1 - nx, r.y1 - ny]].map(([x, y]) => [X(x), Y(y)] as [number, number])
+        const q = [[r.x1 + nx, r.y1 + ny], [r.x2 + nx, r.y2 + ny], [r.x2 - nx, r.y2 - ny], [r.x1 - nx, r.y1 - ny]].map(([x, y]) => P(x, y))
         doc.lines(q.slice(1).map((v, i) => [v[0] - q[i][0], v[1] - q[i][1]]), q[0][0], q[0][1], [1, 1], 'FD', true)
-        tx = X((r.x1 + r.x2) / 2); ty = Y((r.y1 + r.y2) / 2); room = L * s
+        ;[tx, ty] = P((r.x1 + r.x2) / 2, (r.y1 + r.y2) / 2); room = L * s
       } else {
         if (r.corners) continue                                 // corner clean-up: same rectangle as its pocket
         const fill = r.clear && !(r.ringWidth != null && r.ringWidth > 0)
-        doc.rect(X(r.x), Y(r.y + r.h), r.w * s, r.h * s, fill ? 'FD' : 'S')
+        rectP(r.x, r.y, r.w, r.h, fill ? 'FD' : 'S')
         if (r.clear && r.ringWidth != null && r.ringWidth > 0) {
           const b = r.ringWidth
           doc.setLineDashPattern([0.6, 0.6], 0)
-          if (r.w > 2 * b && r.h > 2 * b) doc.rect(X(r.x + b), Y(r.y + r.h - b), (r.w - 2 * b) * s, (r.h - 2 * b) * s, 'S')
+          if (r.w > 2 * b && r.h > 2 * b) rectP(r.x + b, r.y + b, r.w - 2 * b, r.h - 2 * b, 'S')
           doc.setLineDashPattern([], 0)
         }
-        tx = X(r.x + r.w / 2); ty = Y(r.y + r.h / 2); room = Math.max(r.w, r.h) * s
+        // Tag at the top inside edge, clear of the part label in the middle.
+        const ca = P(r.x, r.y), cb = P(r.x + r.w, r.y + r.h)
+        tx = (ca[0] + cb[0]) / 2; ty = Math.min(ca[1], cb[1]) + 1.6; room = Math.abs(cb[0] - ca[0])
       }
       const tag = `T${r.toolNumber} ${Math.round(r.depth * 10) / 10}d`
       doc.setFontSize(5); doc.setTextColor(30, 90, 200)
       if (doc.getTextWidth(tag) < room) doc.text(tag, tx, ty + 0.6, { align: 'center' })
       doc.setTextColor(0); doc.setDrawColor(20)
     }
+    labelJobs.forEach(f => f())
 
     // Grain match blocks (z_grain_match G5): dashed outline in the group colour + tag.
     for (const b of nest.blocks ?? []) {
@@ -193,18 +250,21 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
       const hex = grainMatchColour(b).slice(1)
       const rgb = [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number]
       const pad = 1.2
+      const ca = P(r.x, r.y), cb = P(r.x + r.w, r.y + r.h)
+      const bx = Math.min(ca[0], cb[0]), by = Math.min(ca[1], cb[1])
       doc.setDrawColor(...rgb); doc.setLineWidth(0.5); doc.setLineDashPattern([2, 1], 0)
-      doc.rect(X(r.x) - pad, Y(r.y + r.h) - pad, r.w * s + 2 * pad, r.h * s + 2 * pad, 'S')
+      doc.rect(bx - pad, by - pad, r.w * s + 2 * pad, r.h * s + 2 * pad, 'S')
       doc.setLineDashPattern([], 0)
       const tag = `${b.name} ${b.direction === 'horizontal' ? 'grain across' : 'grain up'}${b.pieces > 1 ? `  ${b.piece}/${b.pieces}` : ''}`
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7)
       const tw = doc.getTextWidth(tag) + 2
-      doc.setFillColor(...rgb); doc.rect(X(r.x) - pad, Y(r.y + r.h) - pad, tw, 3.4, 'F')
-      doc.setTextColor(255); doc.text(tag, X(r.x) - pad + 1, Y(r.y + r.h) - pad + 2.5); doc.setTextColor(0)
+      doc.setFillColor(...rgb); doc.rect(bx - pad, by - pad, tw, 3.4, 'F')
+      doc.setTextColor(255); doc.text(tag, bx - pad + 1, by - pad + 2.5); doc.setTextColor(0)
       doc.setDrawColor(40); doc.setLineWidth(0.3); doc.setFont('helvetica', 'normal')
     }
+    })
     doc.setFontSize(7); doc.setTextColor(110)
-    doc.text(`Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  "grain across" = grain runs along the width (horizontal grain match).${opt.holes ? '  Red circles = drilling.' : ''}${routes.length ? '  Blue = routing (filled = pocket cleared, T = tool, d = depth).' : ''}`, M, PH - M + 3)
+    doc.text(`Sizes are cut size, length (grain) × width.  (R) = turned 90° on the sheet.  "grain across" = grain runs along the width (horizontal grain match).${opt.holes ? '  Red circles = drilling.' : ''}${routes.length ? '  Blue = routing (filled = pocket cleared, T = tool, d = depth).' : ''}${sixth ? '  Orange = 6th face trim.' : ''}`, M, PH - M + 3)
     doc.setTextColor(0)
   })
 

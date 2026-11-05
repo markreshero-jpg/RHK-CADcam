@@ -1686,7 +1686,8 @@ export function postFromProfile(row: Record<string, unknown> | null, tool?: { ba
 export const SIXTH_FACE_TRIM = 5
 
 // Fence (datum) edges in sheet coords: x = 0 or W, y = 0 or H.
-function datumEdges(sheet: NestedSheet, p: PostProfile) {
+type Datum = Pick<PostProfile, 'origin_corner'>
+function datumEdges(sheet: NestedSheet, p: Datum) {
   return {
     xAtW: p.origin_corner === 'top_right' || p.origin_corner === 'bottom_right',
     yAtH: p.origin_corner === 'top_left' || p.origin_corner === 'top_right',
@@ -1712,7 +1713,7 @@ export function sixthFaceTrims(sheet: NestedSheet, p: PostProfile, trim: number,
 }
 
 // Program A frame -> program Z frame (after the flip + push into the fences).
-export function sixthFaceZMap(sheet: NestedSheet, p: PostProfile, trim: number) {
+export function sixthFaceZMap(sheet: NestedSheet, p: Datum, trim: number = SIXTH_FACE_TRIM) {
   const { xAtW, yAtH, H } = datumEdges(sheet, p)
   const x = (v: number) => xAtW ? v : v - trim
   const y = (v: number) => yAtH ? H - v : H - trim - v
@@ -1720,7 +1721,7 @@ export function sixthFaceZMap(sheet: NestedSheet, p: PostProfile, trim: number) 
 }
 
 // The sheet as program Z sees it: trimmed stock, every placement mirrored.
-export function sixthFaceZSheet(sheet: NestedSheet, p: PostProfile, trim: number): NestedSheet {
+export function sixthFaceZSheet(sheet: NestedSheet, p: Datum, trim: number = SIXTH_FACE_TRIM): NestedSheet {
   const m = sixthFaceZMap(sheet, p, trim)
   const { xAtW, yAtH } = datumEdges(sheet, p)
   const st = sheet.stock
@@ -1733,6 +1734,15 @@ export function sixthFaceZSheet(sheet: NestedSheet, p: PostProfile, trim: number
     stock: { ...st, w: st.w - trim, h: st.h - trim, trimLeft: left, trimRight: right, trimTop: top, trimBottom: bottom },
     placements: sheet.placements.map(pl => ({ ...pl, x: m.x(pl.x), y: m.y(pl.y + pl.h) })),
   }
+}
+
+// The two strips program A trims off (sheet coords), for drawing.
+export function sixthFaceTrimStrips(sheet: NestedSheet, p: Datum, trim: number = SIXTH_FACE_TRIM): { x: number; y: number; w: number; h: number }[] {
+  const { xAtW, yAtH, W, H } = datumEdges(sheet, p)
+  return [
+    { x: xAtW ? W - trim : 0, y: 0, w: trim, h: H },
+    { x: 0, y: yAtH ? 0 : H - trim, w: W, h: trim },
+  ]
 }
 
 export interface SheetProgram {

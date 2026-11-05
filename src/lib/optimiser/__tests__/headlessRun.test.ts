@@ -77,7 +77,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const [matR, machR, profR, toolR] = await Promise.all([
       supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
       supabase.from('cnc_machines').select('id,name,brand,model,table_dx,table_dy,gcode_dialect,is_default').eq('active', true).order('name'),
-      supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default,nest_pad,tool_entry_offset,margin_use_tool_dia,margin_use_entry_offset,deduct_edgeband'),
+      supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default,nest_pad,tool_entry_offset,margin_use_tool_dia,margin_use_entry_offset,deduct_edgeband,origin_corner'),
       supabase.from('cnc_tools').select('id,diameter').eq('active', true),
     ])
     const snap: OptiSnapshot = {
@@ -305,6 +305,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const rows = cutSheetRows(nestResult, partByUid, drillsBySheet)
     const doc = await cutSheetsPdf({
       nest: nestResult, partByUid, drillsBySheet, routesBySheet, deductEb, jobNumber: snap.jobNumber, projectName: snap.projectName,
+      sixthFace: new Set(gen.filter(g => g.progFiles.length > 1).map(g => g.sheet.index)), datum: { origin_corner: (prof?.origin_corner as string | null) ?? 'top_left' },
       scope: cfg.rooms?.join(', ') ?? 'All rooms', materialName: id => (id ? matById.get(id)?.name : null) ?? '',
       fileNames: gen.map(g => g.fileName), date: d, runCode: runNo != null ? runCode(snap.jobNumber, runNo) : null,
     }, { holes: true, routes: true, partsList: true })

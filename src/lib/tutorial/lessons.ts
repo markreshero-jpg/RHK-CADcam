@@ -1694,7 +1694,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Program A: load the sheet back face up (the header says face DOWN). It drills and routes the back, then trims 5mm off the X0 end and the outside long edge. The parts stay in the sheet. Flip the whole sheet over the long edge and push the two trimmed edges into X0 / Y0. Program Z: face routes (shaker, VJ) and then every part cut out. Keep the sheet trim at 5 or more on those edges, or the optimiser warns that a part sits in the trim.',
       done: c => c.path.endsWith('/optimiser') },
     { id: 'sim', title: 'Simulate the pair',
-      body: '▶ Simulate shows program Z on the sheet as it lies after the flip: 5mm smaller each way and mirrored top to bottom. Saved runs, the run file and Download all keep both programs.',
+      body: '▶ Simulate shows program Z on the sheet as it lies after the flip: 5mm smaller each way and mirrored top to bottom. Saved runs, the run file and Download all keep both programs. On the cut sheets a 6th face page is split: program A on the top half (orange = the trimmed edges), program Z below, laid out as the sheet lies after the flip.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
 ]

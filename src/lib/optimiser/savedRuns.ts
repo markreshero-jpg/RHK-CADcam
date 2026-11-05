@@ -18,7 +18,7 @@ import type { OptiPart } from './types'
 import type { NestResult, NestPartInput, GroupStock } from './nest'
 import type { PreOptSettings } from './store'
 
-export type SheetDrill = { x: number; y: number; diameter: number }
+export type SheetDrill = { x: number; y: number; diameter: number; program?: 'A' | 'Z' }   // program: 6th face half
 type Pt = { x: number; y: number }
 
 export interface SavedRunFile {
