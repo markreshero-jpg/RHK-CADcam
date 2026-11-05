@@ -252,3 +252,21 @@ either side, shelf rib at 350 with the flue box (200 x 250, default) above. WALL
 (2509 wall - 1009). The hand-entered bottom cut-out was replaced by the rangehood hole. Backup row in
 _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults, check against the DA 2578 sheet;
 4 ribs leave 194 between supports (kit wants < 170).
+- 2026-11-06 flue box now built in segments rib to rib (code change 4a4118a): shelf→rib 3, rib 3→rib 4, rib 4→top,
+  each ~194 high, so each front cover comes off between two ribs. Ribs above the shelf take the 200 x 250 flue notch only.
+- Miele DA 2578 docs saved to \server\Data\_JOBS\RHK6500 - 6599\RHK6581 - Lee Smith- 38 Howard St Grange\APPLIANCES
+  (AU/NZ op + install manual, installation plan, data sheet, install drawing). Manual p33: cut-out 670 x 370, back edge
+  25 from the back of the cabinet bottom (ours 39), bottom 16–35 thick; body 293 + 30 spigot above the 3 mm lip
+  (~326 from the underside, our shelf rib at 350 clears it); Ø150 outlet on top, centred, ~100 in from the cut-out back
+  edge (fits the 200 x 250 flue notch); can go out the rear. p35: min 600 over electric (650 recommended, p36).
+
+## Butler's Wall 2 → 5 floating shelves (Mark 2026-11-06, per KB-approved set "5 x floating shelves as discussed")
+- Removed TC-06 (30 filler), TC-07 / TC-08 (796 open talls), TC-09 (33 filler), WC-06 (30 white BH) and KICK 3.
+  Rows backed up in _bak_rhk6581_butlers_w2_20261106 (+ _bak_rhk6581_kick3_20261106).
+- New FLSHLF WC-06 … WC-10, PT Classic White Matt 16 double (33 thick), 1660 long (wall 1655 + 5), 386 deep,
+  square ends — right end scribed to the R474 curve on site (Mark). 5 equal clear gaps of 375.3 floor (0) to ceiling (2417):
+  undersides 375.3 / 783.7 / 1192 / 1600.3 / 2008.7. Client supplies the brackets (KB 4/11).
+- New BC-19 BEPF 18 end panel (copy of BC-15, 580 x 900) on BC-16's right side, 386–404 off Wall 2; shelves 386 deep
+  meet its outer face (Mark: panel 900, shelves 386). BC-16 right neighbour = end panel.
+- Open: FLSHLF still has our cleat + back/side rebates — check against the client's brackets. Benchtop 3 still starts
+  at 400 off Wall 2 (end panel face at 386).
