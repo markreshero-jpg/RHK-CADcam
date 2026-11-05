@@ -487,9 +487,13 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
   const scale = Math.min(MAX_W / W, MAX_H / H) * zoom
   const pxW = W * scale, pxH = H * scale
   const svgRef = useRef<SVGSVGElement>(null)
-  // gx / gy = the dragged rect's live spot: the part, or a grain match block's
-  // bounding rect (block = its members + where that rect started).
+  // gx / gy = the dragged rect's live spot under the cursor (free: it may overlap
+  // other parts while dragging) — the part, or a grain match block's bounding
+  // rect (block = its members + where that rect started). sx / sy = where it
+  // lands on release: the nearest legal spot (gap + trims), shown as a ghost;
+  // null = nowhere on the sheet, so it goes back where it was. (Mark, 2026-11-05)
   const [drag, setDrag] = useState<{ uid: string; offX: number; offY: number; gx: number; gy: number
+    sx: number | null; sy: number | null
     block?: { uids: Set<string>; x0: number; y0: number; w: number; h: number } } | null>(null)
   // Cursor anchor captured on wheel, consumed after the zoom re-renders to keep
   // the point under the cursor fixed (zoom-to-cursor). Fraction within the SVG +
@@ -542,8 +546,8 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
     const { mx, my } = toMm(e.clientX, e.clientY)
     const b = blockFor(uid)
     const r = b ? blockRectOn(sheet, b) : null
-    if (b && r) setDrag({ uid, offX: mx - r.x, offY: my - r.y, gx: r.x, gy: r.y, block: { uids: new Set(b.memberUids), x0: r.x, y0: r.y, w: r.w, h: r.h } })
-    else setDrag({ uid, offX: mx - p.x, offY: my - p.y, gx: p.x, gy: p.y })
+    if (b && r) setDrag({ uid, offX: mx - r.x, offY: my - r.y, gx: r.x, gy: r.y, sx: r.x, sy: r.y, block: { uids: new Set(b.memberUids), x0: r.x, y0: r.y, w: r.w, h: r.h } })
+    else setDrag({ uid, offX: mx - p.x, offY: my - p.y, gx: p.x, gy: p.y, sx: p.x, sy: p.y })
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
   }
   function onPointerMove(e: React.PointerEvent) {
@@ -551,14 +555,20 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
     const { mx, my } = toMm(e.clientX, e.clientY)
     const part = sheet.placements.find(p => p.uid === drag.uid)!
     const gap = gapForSheet(sheet)
-    const pos = drag.block
-      ? findNearestValid(sheet, drag.block.uids, drag.block.w, drag.block.h, mx - drag.offX, my - drag.offY, gap)
-      : findNearestValid(sheet, drag.uid, part.w, part.h, mx - drag.offX, my - drag.offY, gap)
-    if (pos) setDrag({ ...drag, gx: pos.x, gy: pos.y })
+    const w = drag.block ? drag.block.w : part.w, h = drag.block ? drag.block.h : part.h
+    // Follow the cursor freely (kept on the sheet); work out the landing spot.
+    const gx = Math.max(0, Math.min(W - w, mx - drag.offX))
+    const gy = Math.max(0, Math.min(H - h, my - drag.offY))
+    const pos = findNearestValid(sheet, drag.block ? drag.block.uids : drag.uid, w, h, gx, gy, gap)
+    setDrag({ ...drag, gx, gy, sx: pos?.x ?? null, sy: pos?.y ?? null })
   }
   function onPointerUp() {
-    if (drag?.block) { onMoveBlock([...drag.block.uids], drag.gx - drag.block.x0, drag.gy - drag.block.y0); setDrag(null) }
-    else if (drag) { onMove(drag.uid, drag.gx, drag.gy); setDrag(null) }
+    if (!drag) return
+    if (drag.sx != null && drag.sy != null) {
+      if (drag.block) onMoveBlock([...drag.block.uids], drag.sx - drag.block.x0, drag.sy - drag.block.y0)
+      else onMove(drag.uid, drag.sx, drag.sy)
+    }
+    setDrag(null)
   }
 
   const fy = (y: number, h: number) => (H - y - h) * scale
@@ -653,6 +663,20 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
         )
       })}
       {routes.length > 0 && <SheetRoutes routes={routes} H={H} scale={scale} />}
+      {/* Drag landing ghost: where the part / block will sit when released. */}
+      {drag && (() => {
+        const part = sheet.placements.find(p => p.uid === drag.uid)
+        const w = drag.block ? drag.block.w : part?.w ?? 0, h = drag.block ? drag.block.h : part?.h ?? 0
+        const moved = Math.abs(drag.gx - (drag.sx ?? drag.gx)) > 0.5 || Math.abs(drag.gy - (drag.sy ?? drag.gy)) > 0.5
+        if (drag.sx == null || drag.sy == null) return (
+          <rect x={drag.gx * scale} y={fy(drag.gy, h)} width={w * scale} height={h * scale}
+            fill="#ef4444" fillOpacity={0.18} stroke="#ef4444" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
+        )
+        return moved ? (
+          <rect x={drag.sx * scale} y={fy(drag.sy, h)} width={w * scale} height={h * scale}
+            fill="#22c55e" fillOpacity={0.12} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3" style={{ pointerEvents: 'none' }} />
+        ) : null
+      })()}
       {/* Drill holes (sheet space, BL origin) — same source as Stage 6 G-code.
           Drawn at EXACT diameter (so ⌀5 vs ⌀8 vs ⌀35 read true-to-scale — zoom in
           to inspect). A real ⌀5 on a 2400mm sheet is ~1px when zoomed out, so a

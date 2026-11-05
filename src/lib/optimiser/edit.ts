@@ -56,9 +56,15 @@ export function findNearestValid(
   const cy = clamp(desiredY, u.y0, maxY)
   if (freeAt(cx, cy, w, h, others, sheet.stock, gap)) return { x: cx, y: cy }
 
-  const xs = new Set<number>([u.x0, cx])
-  const ys = new Set<number>([u.y0, cy])
-  for (const o of others) { xs.add(o.x + o.w + gap); ys.add(o.y + o.h + gap); xs.add(o.x); ys.add(o.y) }
+  // Every edge a part can butt against: the sheet's usable edges, and each other
+  // part's four sides at the gap (right of / above it AND left of / below it, so
+  // a part dropped just short of a neighbour lands beside it, not across the sheet).
+  const xs = new Set<number>([u.x0, maxX, cx])
+  const ys = new Set<number>([u.y0, maxY, cy])
+  for (const o of others) {
+    xs.add(o.x + o.w + gap); xs.add(o.x - w - gap); xs.add(o.x); xs.add(o.x + o.w - w)
+    ys.add(o.y + o.h + gap); ys.add(o.y - h - gap); ys.add(o.y); ys.add(o.y + o.h - h)
+  }
 
   let best: { x: number; y: number; d: number } | null = null
   for (const x of xs) for (const y of ys) {
