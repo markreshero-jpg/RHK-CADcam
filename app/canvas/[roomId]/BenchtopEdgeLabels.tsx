@@ -6,6 +6,7 @@
 // labels on prints). Text reads along the edge, never upside down. Sizes are model
 // mm; the caller scales them for zoom / 1:P.
 'use client'
+import { roundMm } from '@/src/lib/format'
 import type { BenchtopSegment } from '@/src/lib/types'
 import { segMid, segLength, outwardNormal, outlineCentroid, overallSize, longAxis, outlinePoints } from '@/src/lib/benchtopGeometry'
 import { pointInPolygon } from '@/src/lib/fixtureGeometry'
@@ -57,7 +58,7 @@ export default function BenchtopEdgeLabels({ segs, name, sizes, codes, fs, gap, 
   avoid?: Box[]
 }) {
   const size = overallSize(segs)
-  const sizeText = `${Math.round(size.length)} × ${Math.round(size.depth)}`
+  const sizeText = `${roundMm(size.length)} × ${roundMm(size.depth)}`
   // A shallow top has no room for a second line: the size goes after the name.
   const inline = size.depth < fs * 10
   // Name block width (Arial ≈ 0.55 em a character) and its extent above / below the name line.
@@ -80,7 +81,7 @@ export default function BenchtopEdgeLabels({ segs, name, sizes, codes, fs, gap, 
             {sizes && (
               <text x={pin.x} y={pin.y} transform={`rotate(${a} ${pin.x} ${pin.y})`}
                 textAnchor="middle" dominantBaseline="middle" fontSize={fs} fill={fill}>
-                {Math.round(len)}{s.type === 'line' ? '' : ' arc'}
+                {roundMm(len)}{s.type === 'line' ? '' : ' arc'}
               </text>
             )}
             {code && (

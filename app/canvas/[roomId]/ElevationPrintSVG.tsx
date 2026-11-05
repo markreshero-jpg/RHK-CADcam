@@ -719,12 +719,12 @@ export default function ElevationPrintSVG({
     const segs: { fromY: number; toY: number; label: string }[] = []
     let cursorY = roomH
     if (baseDy > 0) {
-      if (kickH > 0) { const kickTopY = roomH - kickH; segs.push({ fromY: kickTopY, toY: cursorY, label: `${kickH}` }); cursorY = kickTopY }
+      if (kickH > 0) { const kickTopY = roomH - kickH; segs.push({ fromY: kickTopY, toY: cursorY, label: `${roundMm(kickH)}` }); cursorY = kickTopY }
       // A raised cabinet (floating, z_floating) starts at its own bottom height.
       const lift = cabBottomZ(baseCabEl!, room, wall)
       if (lift > 0.5) { const liftY = roomH - kickH - lift; segs.push({ fromY: liftY, toY: cursorY, label: `${roundMm(lift)}` }); cursorY = liftY }
       const baseCarcTopY = roomH - lift - baseDy
-      segs.push({ fromY: baseCarcTopY, toY: cursorY, label: `${baseDy - kickH}` }); cursorY = baseCarcTopY
+      segs.push({ fromY: baseCarcTopY, toY: cursorY, label: `${roundMm(baseDy - kickH)}` }); cursorY = baseCarcTopY
       // Benchtop on this wall: its thickness above the carcase.
       const benchZ = benchHeights[0] ?? 0
       if (benchZ > roomH - cursorY + 0.5) { const benchY = roomH - benchZ; segs.push({ fromY: benchY, toY: cursorY, label: `${roundMm(cursorY - benchY)}` }); cursorY = benchY }
@@ -737,7 +737,7 @@ export default function ElevationPrintSVG({
       const overheadBotY = roomH - (wcTopZ - overheadDy)
       const overheadTopY = roomH - wcTopZ
       if (overheadBotY < cursorY - 0.5) segs.push({ fromY: overheadBotY, toY: cursorY, label: `${roundMm(cursorY - overheadBotY)}` })
-      segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` }); cursorY = overheadTopY
+      segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${roundMm(overheadDy)}` }); cursorY = overheadTopY
       cursorY = stackShelfSegs(segs, cursorY, roomH, shelfSpans, Infinity, mm => `${roundMm(mm)}`)
     }
     // Bulkhead: hangs from the ceiling (z_bulkhead), its own segment.
@@ -749,7 +749,7 @@ export default function ElevationPrintSVG({
       cursorY = bhTopY
     }
     if (cursorY > 0.5) segs.push({ fromY: 0, toY: cursorY, label: `${roundMm(cursorY)}` })
-    if (segs.length === 0) segs.push({ fromY: 0, toY: roomH, label: `${roomH}` })
+    if (segs.length === 0) segs.push({ fromY: 0, toY: roomH, label: `${roundMm(roomH)}` })
 
     const boundaries = Array.from(new Set(segs.flatMap(s => [s.fromY, s.toY])))
     const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.toY - s.fromY })), dimFs)

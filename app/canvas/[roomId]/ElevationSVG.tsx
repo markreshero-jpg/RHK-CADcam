@@ -2556,7 +2556,7 @@ export default function ElevationSVG({
                 if (overheadBotY < cursorY - 0.5) {
                   segs.push({ fromY: overheadBotY, toY: cursorY, label: `${roundMm(cursorY - overheadBotY)}` })
                 }
-                segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${overheadDy}` })
+                segs.push({ fromY: overheadTopY, toY: overheadBotY, label: `${roundMm(overheadDy)}` })
                 cursorY = overheadTopY
                 cursorY = stackShelfSegs(segs, cursorY, roomH, shelfSpans, Infinity, mm => `${roundMm(mm)}`)
               }
@@ -2575,7 +2575,7 @@ export default function ElevationSVG({
               }
 
               if (segs.length === 0) {
-                segs.push({ fromY: 0, toY: roomH, label: `${roomH}` })
+                segs.push({ fromY: 0, toY: roomH, label: `${roundMm(roomH)}` })
               }
 
               const chainX = -70 / z - layers.offset('dim_elev_height')

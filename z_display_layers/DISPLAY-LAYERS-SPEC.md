@@ -438,6 +438,9 @@ Built:
   one height across a gap under 60 (an end panel to the floor) — canvas too.
 - Kicks layer set: elevation `dim_kicks` switched on (DB, 2026-11-05).
 - Canvas plan unchanged (no height labels on screen).
+- 0.1 mm everywhere (Mark 2026-11-05): kick row labels were whole mm (`Math.round` in
+  `kickChain`); benchtop sizes / edge lengths (`BenchtopEdgeLabels`) too; a few elevation
+  height-chain labels printed the raw value. All now `roundMm` like every other dim row.
 
 ### Later modules (must register their items)
 - Decorative items (plants, tables…) → `Decorative` group.

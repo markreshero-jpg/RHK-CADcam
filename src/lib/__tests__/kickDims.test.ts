@@ -14,6 +14,10 @@ describe('kickChain', () => {
     ])
   })
 
+  it('labels to 0.1 mm like the other dimension rows', () => {
+    expect(kickChain([span(16.5, 1216.25)], 1800).map(s => s.label)).toEqual([16.5, 1199.8, 583.8])
+  })
+
   it('keeps butting kicks as separate boards and merges overlaps', () => {
     expect(kickChain([span(0, 600), span(600, 1200)], 1200).map(s => s.label)).toEqual([600, 600])
     expect(kickChain([span(0, 700), span(600, 1200)], 1200).map(s => s.label)).toEqual([1200])

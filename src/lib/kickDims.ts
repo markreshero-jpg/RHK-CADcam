@@ -8,6 +8,7 @@
 // back (= the wall face the cabinet sits on).
 
 import type { CabinetInstance, Wall } from './types'
+import { roundMm } from './format'
 import type { ResolvedCabinet } from './resolver/types'
 import { tkBoxAABB } from './jointDrilling'
 import { cabinetToPlan, cabWallPerp, cabWallSide, wallDir, wallInwardNormal, type RoomRef } from './geometry'
@@ -80,11 +81,11 @@ export function kickChain(spans: KickSpan[], wallLength: number): KickSeg[] {
   const segs: KickSeg[] = []
   let cursor = 0
   for (const m of merged) {
-    if (m.t0 > cursor + 0.5) segs.push({ from: cursor, to: m.t0, label: Math.round(m.t0 - cursor) })
-    segs.push({ from: m.t0, to: m.t1, label: Math.round(m.t1 - m.t0) })
+    if (m.t0 > cursor + 0.5) segs.push({ from: cursor, to: m.t0, label: roundMm(m.t0 - cursor) })
+    segs.push({ from: m.t0, to: m.t1, label: roundMm(m.t1 - m.t0) })
     cursor = m.t1
   }
-  if (merged.length && cursor < wallLength - 0.5) segs.push({ from: cursor, to: wallLength, label: Math.round(wallLength - cursor) })
+  if (merged.length && cursor < wallLength - 0.5) segs.push({ from: cursor, to: wallLength, label: roundMm(wallLength - cursor) })
   return segs
 }
 
