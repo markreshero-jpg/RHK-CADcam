@@ -198,3 +198,9 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 - Main bath TC-02 now flags HINGE_SHELF_HOLE_CLASH: hinge 2 at ~890 over the 916 shelf hole (both doors). Not caused by
   the kick change; open.
 - Rangehood still to do (Mark).
+
+## Rev 15 (Mark 2026-11-05) — `_tmp-6592-rev15.mjs`
+
+- Bathroom wall fillers on edge: main bath TC-01 + BC-05, ensuite BC-01. Was a 16 flat face strip (library BFK / TFK =
+  flat face, cab.w wide); now the Filler custom part is orientation side, 70 deep x 16.5 thick, front flush with the old
+  face (z = cab.d + 2 + t.exposed - 70), front long edge (right) + top taped. Library BFK / BFF / TFK / TFF unchanged.
