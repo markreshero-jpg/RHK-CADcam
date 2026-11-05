@@ -10,6 +10,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
 import { loadSheetDrills, nestedParts } from '@/src/lib/optimiser/sheetDrills'
 import { cutSheetsPdf } from '@/src/lib/optimiser/cutSheets'
+import type { SheetRoute } from '@/src/lib/optimiser/gcode'
 import { runCode } from '@/src/lib/optimiser/savedRuns'
 import { sheetNumbers } from '@/src/lib/optimiser/labels'
 import { pickSaveFile, saveBlob } from '@/src/lib/saveAs'
@@ -26,7 +27,7 @@ export default function CutSheetsPanel() {
   const deductEb = snap.profiles.find(p => p.id === profileId)?.deduct_edgeband === true
   const originCorner = snap.profiles.find(p => p.id === profileId)?.origin_corner ?? 'top_left'
 
-  const [opts, setOpts] = useState({ holes: true, partsList: true })
+  const [opts, setOpts] = useState({ holes: true, routes: true, partsList: true })
   useEffect(() => {
     try { const raw = localStorage.getItem(STORE_KEY); if (raw) setOpts(o => ({ ...o, ...JSON.parse(raw) })) } catch { /* ignore */ }
   }, [])
@@ -39,6 +40,8 @@ export default function CutSheetsPanel() {
   const [drills, setDrills] = useState<Map<number, { x: number; y: number; diameter: number; program?: 'A' | 'Z' }[]> | null>(null)
   // 6th face sheets: their page shows program A on top, program Z below.
   const [sixthFace, setSixthFace] = useState<Set<number>>(new Set())
+  // Routes (shaker / VJ / pockets, blue) — the same ones the G-code cuts.
+  const [routes, setRoutes] = useState<Map<number, SheetRoute[]> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [sheetsOn, setSheetsOn] = useState<Set<number> | null>(null)   // null = all
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
@@ -49,12 +52,14 @@ export default function CutSheetsPanel() {
     if (savedDrills) {   // holes as machined; the run's A / Z files mark its 6th face sheets
       setDrills(savedDrills)
       setSixthFace(new Set(savedRun!.files.filter(f => f.program).map(f => f.sheetIndex)))
-      return
     }
     let dead = false
-    loadSheetDrills(nestedParts(snap.parts, partIndex), nestResult.sheets, { sync: true, deductEdgeband: deductEb })
+    // A saved run keeps its holes but not its routes: read those (no re-sync) for the pictures.
+    loadSheetDrills(nestedParts(snap.parts, partIndex), nestResult.sheets, { sync: !savedDrills, deductEdgeband: deductEb })
       .then(r => {
         if (dead) return
+        setRoutes(r.routesBySheet)
+        if (savedDrills) return
         setDrills(r.bySheet)
         const z = new Set<number>()
         for (const [k, v] of r.bySheet) if (v.some(d => d.program === 'Z')) z.add(k)
@@ -80,14 +85,14 @@ export default function CutSheetsPanel() {
       jobNumber: snap.jobNumber, projectName: snap.projectName, scope, materialName: matName,
       fileNames: savedDrills ? nestResult.sheets.map(s => savedRun!.files.filter(f => f.sheetIndex === s.index).map(f => f.fileName).join(" then ") || undefined) : undefined,
       runCode: savedDrills && savedRun!.runNo != null ? runCode(snap.jobNumber, savedRun!.runNo) : null,
-      sixthFace, datum: { origin_corner: originCorner },
-    }, { sheets: sheetsOn, holes: opts.holes, partsList: opts.partsList }).then(doc => {
+      sixthFace, datum: { origin_corner: originCorner }, routesBySheet: routes ?? undefined,
+    }, { sheets: sheetsOn, holes: opts.holes, routes: opts.routes && !!routes, partsList: opts.partsList }).then(doc => {
       if (dead) return
       url = URL.createObjectURL(doc.output('blob'))
       setPdfUrl(url)
     }).catch(e => setError(e instanceof Error ? e.message : String(e)))
     return () => { dead = true; if (url) URL.revokeObjectURL(url) }
-  }, [nestResult, drills, snap, deductEb, scope, sheetsOn, opts, savedDrills, savedRun, sixthFace, originCorner])
+  }, [nestResult, drills, snap, deductEb, scope, sheetsOn, opts, savedDrills, savedRun, sixthFace, originCorner, routes])
 
   if (!nestResult?.sheets.length) {
     return <p className="text-xs text-ink-subtle text-center py-12">Nothing nested — run Stage 4 first.</p>
@@ -137,6 +142,9 @@ export default function CutSheetsPanel() {
           <h3 className="text-xs font-semibold text-ink">Show</h3>
           <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
             <input type="checkbox" checked={opts.holes} onChange={e => update({ holes: e.target.checked })} /> Drilling (red circles)
+          </label>
+          <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
+            <input type="checkbox" checked={opts.routes} onChange={e => update({ routes: e.target.checked })} /> Routing (blue: shaker, VJ, pockets)
           </label>
           <label className="flex items-center gap-2 text-xs text-ink-muted cursor-pointer">
             <input type="checkbox" checked={opts.partsList} onChange={e => update({ partsList: e.target.checked })} /> Parts list at the end
