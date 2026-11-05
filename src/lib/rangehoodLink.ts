@@ -29,13 +29,15 @@ export function mapHoleRect(r: HoleRect, from: CabinetInstance, to: CabinetInsta
 }
 
 /** A flat custom part's box in its cabinet's frame (customExtents 'flat'). */
-type FlatPart = { x: number; z: number; dx: number; dy: number }
+type FlatPart = { x: number; z: number; dx: number; dy: number; dz?: number }
 
-/** The hole as a cut-out on the panel's flat part (x from its left, y back from its front edge). */
+/** The hole as a cut-out on the panel's flat part (x from its left, y back from its front edge).
+ *  The rangehood's panel_skin leaves an onion skin (a pocket that deep short of through). */
 export function linkedHoleCutout(id: string, r: HoleRect, rh: RangehoodSettings, part: FlatPart): Cutout {
   const r2 = (v: number) => Math.round(v * 100) / 100
+  const depth = rh.panel_skin > 0 && part.dz && part.dz > rh.panel_skin ? r2(part.dz - rh.panel_skin) : null
   return {
-    id: `rh_link_${id}`, kind: 'hole', shape: 'rect', source: 'linked', depth: null,
+    id: `rh_link_${id}`, kind: 'hole', shape: 'rect', source: 'linked', depth,
     w: r2(r.x1 - r.x0), d: r2(r.z1 - r.z0), radius: rh.hole.radius,
     x: { from: 'left', off: r2(r.x0 - part.x) },
     y: { from: 'front', off: r2(part.z + part.dx - r.z1) },

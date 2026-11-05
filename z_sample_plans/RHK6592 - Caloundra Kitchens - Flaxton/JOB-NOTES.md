@@ -227,3 +227,12 @@ Scripts `_tmp-6592-rev8db.mjs` (DB, edits in place) then `_tmp-6592-rev8.mjs` (c
 
 - Kitchen BC-03 oven space 604 -> 600: open row 600 -> 596 (+ the 2 gaps each side = 600 between the false panels), false
   panels top + bottom unlocked = 63 each (bottom 0-63, top 663-726). Resolver clean.
+
+## Rev 20 (Mark 2026-11-05) — `_tmp-6592-rev20.mjs` (+ z_rangehood R9)
+
+- Kitchen WC-03 rangehood (Bosch DHL555BAU): Bottom Type none (hole only in the under panel). Hood cover `rh:cover`
+  (new, z_rangehood R9): Whiteboard 16.5 between the gables, flush with their front, 260 up from the under panel, top
+  edge taped, D notches 40 x 80 r15 at each hinge, following the hinges. Door hinges [200, 595] (bottom >= 200).
+- Under panels (WUP, full carcass depth, Satin 18 2pac): WC-06 under WC-04 (300), WC-07 under WC-03 (380), WC-08 under
+  WC-02 (300); WC-02/03/04 scribed up 18. Separate panels because WC-03 is 380 deep. WC-07 hole 500 x 347 with a 0.3
+  onion skin. Resolver clean.

@@ -1697,6 +1697,21 @@ export const LESSONS: TutorialLesson[] = [
       body: '▶ Simulate shows program Z on the sheet as it lies after the flip: 5mm smaller each way and mirrored top to bottom. Saved runs, the run file and Download all keep both programs. On the cut sheets a 6th face page is split: program A on the top half (orange = the trimmed edges), program Z below, laid out as the sheet lies after the flip.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
+
+  // Appended 2026-11-05 (z_rangehood R9: hood cover panel + under panel onion skin, RHK6592 WC-03).
+  { id: 'rangehood_cover', level: 'intermediate', topic: 'cabinets', title: 'Hide the hood body behind the rangehood doors',
+    blurb: 'A carcass-board cover panel behind the doors with D notches that follow the hinges, and an onion skin in the under panel hole.',
+    keywords: 'rangehood range hood cover panel false panel behind doors hide body hinge notch D cutout onion skin under panel WRH bottom none', steps: [
+    { id: 'cover', title: 'Turn on the hood cover',
+      body: 'Select the rangehood cabinet (a WRH). In the Rangehood section, set Hood cover Height (e.g. 260 for a hood body about 255 high). A carcass-board panel stands between the gables, flush with their front edges, from the bottom of the inside up that high, so the hood body is hidden when the doors are open. 0 turns it off.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rangehood?.cover) },
+    { id: 'notch', title: 'The hinge notches follow the hinges',
+      body: 'Every hinge whose plate lands on the cover gets a D notch in its edge (default 40 in × 80 tall, 15 radius corners), centred on the plate, so the hinge clears it when shut. Move the hinges on the doors and the notches move with them. Keep each hinge at least half the notch height away from the cover’s top and bottom edges (the cabinet warns if not). For a hood that drops in from below, set the cabinet’s Bottom Type to none so the hole is only in the under panel.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rangehood?.cover) },
+    { id: 'skin', title: 'Leave an onion skin in the under panel hole',
+      body: 'Set Under panel skin (e.g. 0.3) and the under panel’s rangehood hole is cut to that much short of through, so the waste stays put on the sheet. Break it out after. 0 cuts it through.',
+      canvas: true, done: c => c.cabinets.some(cab => Number(cab.rangehood?.panel_skin ?? 0) > 0) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

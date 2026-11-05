@@ -33,7 +33,7 @@ import { resolveFloatShelf } from './resolveFloatShelf'
 import { railSupportSeams } from './railSupportSeams'
 import { resolveBackPanel } from './resolveBackPanel'
 import { applyPartCutouts, cutoutTargets, type CutoutVoid, type PartCutouts } from '../partCutouts'
-import { resolveRangehood, withRangehoodShelf } from './resolveRangehood'
+import { resolveRangehood, withRangehoodShelf, rangehoodCover } from './resolveRangehood'
 import { buildFormulaScope } from '../formula/context'
 import { resolveSlider } from './resolveSlider'
 
@@ -188,6 +188,12 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
   const hingeInstances = (cab.has_face && cab.hinge_hardware)
     ? resolveHinges(cab, zones, caseParts, internalParts, shapedHw, allWarnings)
     : []
+  // Rangehood hood cover (z_rangehood R9): its D notches follow the hinges just resolved.
+  if (cab.rangehood?.cover && cab.has_carcass && !cab.curved_end) {
+    const cov = rangehoodCover(cab, caseParts, hingeInstances)
+    if (cov.part) caseParts.push(cov.part)
+    allWarnings.push(...cov.warnings)
+  }
   // Bi-fold carriage / guide / centre hinge holes, at the outer door's hinge heights.
   if (bifold) resolveBifoldHoles(bifold, r, caseParts, internalParts, hingeInstances, allWarnings)
 

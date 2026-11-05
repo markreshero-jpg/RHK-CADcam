@@ -19,7 +19,7 @@
 // DX height, DZ thickness, turned AY about the outer start corner).
 // ============================================================
 
-import type { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolverError, Section, InternalFitting } from './types'
+import type { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolvedHingeInstance, ResolverError, Section, InternalFitting } from './types'
 import type { Cutout, PartCutouts } from '../partCutouts'
 import { RH_SEAMS } from '../rangehood'
 import { curvedEndInterior, curvedRangehoodHoleX } from './resolveCurvedEnd'
@@ -135,6 +135,78 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
 
   flueBox(cab, out, { cx0, cx1, zBack, zFront, y0, y1, H, T }, { key: shelfId, Y: shelf.Y }, { key: 'full_top', Y: top.Y, DZ: top.DZ })
   return out
+}
+
+/**
+ * Hood cover panel (RHK6592 WC-03, Mark 2026-11-05): carcass board standing
+ * between the gables, flush with their front edges, from the bottom of the
+ * inside (the bottom's top face, else the gables' bottom edge — Bottom Type
+ * none, on the under panel) up `cover.h`. It hides the hood body behind the
+ * doors. Every hinge whose plate is on a gable gets a D notch in the cover's
+ * edge on that side — `notch_w` in × `notch_h` tall, centred on the plate,
+ * inner corners `notch_r` — so the hinge clears it shut. Notches follow the
+ * resolved hinges (run after resolveHinges). Face-kind part (rh: key), outline
+ * in the face frame: x across [0..DY] from the left, y down from its top.
+ */
+export function rangehoodCover(cab: CabinetInput, caseParts: ResolvedCasePart[], hinges: ResolvedHingeInstance[]): { part: ResolvedCasePart | null; warnings: ResolverError[] } {
+  const cover = cab.rangehood?.cover
+  const warnings: ResolverError[] = []
+  if (!cover) return { part: null, warnings }
+  const warn = (message: string) => warnings.push({ code: 'RANGEHOOD', message: `Rangehood cover: ${message}` })
+  const L = caseParts.find(p => p.part_key === 'left_side'), R = caseParts.find(p => p.part_key === 'right_side')
+  if (!L || !R) { warn('needs both gables'); return { part: null, warnings } }
+  const bottom = caseParts.find(p => p.part_key === 'bottom')
+  const T = cab.material.DZ
+  const x0 = r2(L.X + L.DZ), W = r2(R.X - x0)
+  const y0 = r2(bottom ? bottom.Y + bottom.DZ : L.Y), H = cover.h
+  const front = r2(L.Z + L.DX)
+  if (!(W > 0)) { warn('no room between the gables'); return { part: null, warnings } }
+
+  // D notches: per gable, the plate centre heights (cabinet Y) of its hinges.
+  const nw = Math.min(cover.notch_w, W / 2 - 1), nh = cover.notch_h
+  const rr = Math.min(cover.notch_r, nw, nh / 2)
+  const at: Record<'left' | 'right', number[]> = { left: [], right: [] }
+  for (const h of hinges) {
+    const side = h.mount_target?.part_key === 'left_side' ? 'left' : h.mount_target?.part_key === 'right_side' ? 'right' : null
+    if (!side) continue
+    const drills = h.plate_drills.length ? h.plate_drills : h.cup_drills
+    if (!drills.length) continue
+    const y = drills.reduce((s, d) => s + d.y, 0) / drills.length
+    // Face frame y runs down from the cover's top.
+    const yc = r2(y0 + H - y)
+    if (yc + nh / 2 <= 0 || yc - nh / 2 >= H) continue   // hinge clear of the cover
+    if (yc - nh / 2 < 0 || yc + nh / 2 > H) {
+      warn(`a ${side} hinge at ${r2(y - y0)} up is too near the cover's ${yc - nh / 2 < 0 ? 'top' : 'bottom'} for its ${nh} notch — move the hinge or change the cover height`)
+      continue
+    }
+    at[side].push(yc)
+  }
+  for (const s of ['left', 'right'] as const) at[s].sort((a, b) => a - b)
+
+  const B = Math.tan(Math.PI / 8)   // 90° arc bulge; − on the notch's inside corners
+  const pts: OutlinePt[] = [{ x: 0, y: 0, e: 'top' }, { x: W, y: 0 }]
+  // Right edge, top → bottom.
+  for (const yc of at.right) {
+    const a = r2(yc - nh / 2), b = r2(yc + nh / 2), xi = r2(W - nw)
+    pts.push({ x: W, y: a }, { x: r2(xi + rr), y: a, b: -B }, { x: xi, y: r2(a + rr) }, { x: xi, y: r2(b - rr), b: -B }, { x: r2(xi + rr), y: b }, { x: W, y: b })
+  }
+  pts.push({ x: W, y: H }, { x: 0, y: H })
+  // Left edge, bottom → top.
+  for (const yc of [...at.left].reverse()) {
+    const a = r2(yc - nh / 2), b = r2(yc + nh / 2)
+    pts.push({ x: 0, y: b }, { x: r2(nw - rr), y: b, b: -B }, { x: nw, y: r2(b - rr) }, { x: nw, y: r2(a + rr), b: -B }, { x: r2(nw - rr), y: a }, { x: 0, y: a })
+  }
+  // Drop zero-length runs (rr = half the notch, or a notch at a corner).
+  const outline = pts.filter((p, i) => { const q = pts[(i + 1) % pts.length]; return Math.hypot(q.x - p.x, q.y - p.y) > 0.01 })
+  const notched = at.left.length + at.right.length > 0
+
+  const part: ResolvedCasePart = {
+    part_key: 'rh:cover', DX: H, DY: W, DZ: T, X: x0, Y: y0, Z: r2(front - T), AX: 0, AY: 0, AZ: 0,
+    material_id: cab.material.id,
+    edge_band: { top: true, bottom: false, left: false, right: false, id: cab.interior_edgeband_id },
+    ...(notched ? { outline } : {}),
+  }
+  return { part, warnings }
 }
 
 type BoxAt = { cx0: number; cx1: number; zBack: number; zFront: number; y0: number; y1: number; H: number; T: number }

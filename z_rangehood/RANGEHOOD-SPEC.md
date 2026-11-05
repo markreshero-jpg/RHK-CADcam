@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -309,6 +309,27 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
   shelf split left / right of the hole, halved into a rail each side of it). The resolver runs
   the block on `has_carcass || curved_end`. Details + locked points in z_curved_end C9.
 
+## R9 as built (2026-11-05, RHK6592 WC-03 — Bosch DHL555BAU)
+
+Mark: "we need false panel (in carcass material) to sit behind the doors flush with front carcass. this hides the
+rangehood body. it will need D shape cutouts in it for the hinges to clear when they are shut - 40 wide x 80 high
+with 15 radius corners, have them move up or down with the hinges … onion skin (leave 0.3 on) the under panel
+rangehood cutout".
+
+- `rangehood.cover: { h, notch_w, notch_h, notch_r } | null` (default null; sidebar Height 0 = none, defaults
+  40 / 80 / 15) and `rangehood.panel_skin` (default 0 = through) — `src/lib/rangehood.ts`.
+- `rangehoodCover` (resolveRangehood.ts), run in resolver.ts **after resolveHinges** (6b) so the notches follow the
+  resolved hinges: part `rh:cover` (face-kind rh: key, carcass board, top edge interior-taped), DX = h, DY = between
+  the gables, at the gables' front edges − T, from the bottom's top face (Bottom Type none: the gables' bottom edge,
+  i.e. on the under panel). Each hinge whose plate target is a gable → a D notch on that edge, centred on the plate
+  drills' mean Y, `notch_w` in × `notch_h`, inner corners `notch_r` (bulge arcs), edge corners square. A notch that
+  would run off the cover's top / bottom warns and is skipped. No joints (fixed by hand). Not on curved ends.
+- Under panel: `linkedHoleCutout` takes the panel thickness; `panel_skin > 0` → the linked hole is a pocket
+  `dz − skin` deep (cut-outs `skin`, existing onion-skin path).
+- Sidebar: Under panel skin + Hood cover (Height, Hinge notch in / tall, Notch radius) in the Rangehood section.
+- Tutorial `rangehood_cover`. Test `src/lib/__tests__/rangehoodCover.test.ts`.
+- Hinge heights stay manual on the doors (WC-03: [200, 595]); the cover warns if a hinge is too near its edges.
+
 ## Phases
 
 | # | What | Status |
@@ -321,6 +342,7 @@ cabinet's frame to the panel's. Moving or resizing the WRH (or the WUP) moves it
 | R6 | **WUP takes the hole** from the cabinets above it | [x] 2026-11-04 |
 | R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [x] 2026-11-04 |
 | R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [x] 2026-11-04 |
+| R9 | Hood cover panel (hinge D notches) + under panel onion skin; first use RHK6592 WC-03 | [x] 2026-11-05 (in-app check pending) |
 
 ## Open
 

@@ -104,7 +104,7 @@ export async function resolveCustomParts(cabinetId: string, resolved: ResolvedCa
     const sized = { ...p, ...patch }
     // An under panel's flat part takes the holes of the rangehoods on it (R6).
     const linked = (sized.orientation ?? 'flat') === 'flat'
-      ? holes.map(h => linkedHoleCutout(h.cab.id, h.rect, h.rh, { x: Number(sized.x), z: Number(sized.z), dx: Number(sized.dx), dy: Number(sized.dy) }))
+      ? holes.map(h => linkedHoleCutout(h.cab.id, h.rect, h.rh, { x: Number(sized.x), z: Number(sized.z), dx: Number(sized.dx), dy: Number(sized.dy), dz: Number(sized.dz) }))
       : []
     Object.assign(patch, customCutsPatch(sized, resolved, scope, linked))
     if (Object.keys(patch).length > 0) {

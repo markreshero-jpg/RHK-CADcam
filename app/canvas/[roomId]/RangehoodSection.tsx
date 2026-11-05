@@ -7,7 +7,7 @@
 
 import { CabinetInstance } from '@/src/lib/types'
 import CalcInput from '@/src/components/CalcInput'
-import { normaliseRangehood, type RangehoodSettings } from '@/src/lib/rangehood'
+import { normaliseRangehood, DEFAULT_RANGEHOOD_COVER, type RangehoodSettings } from '@/src/lib/rangehood'
 
 export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
   cabinet: CabinetInstance
@@ -48,6 +48,20 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Off centre', '+ moves the flue right, − left', s.flue.offset, v => flue('offset', v))}
 
       {row('Shelf height', crv ? 'Cabinet underside to the underside of the rib the flue goes through (support ribs under it are split round the hole)' : 'Cabinet underside (incl. under panel) to the underside of the first fixed shelf', s.shelf_h, v => { if (v > 0) put({ shelf_h: v }) })}
+      {row('Under panel skin', 'Onion skin left in the under panel’s hole (e.g. 0.3) — broken out after the sheet is cut. 0 = cut through', s.panel_skin, v => { if (v >= 0) put({ panel_skin: v }) })}
+
+      {!crv && <>
+        <p className={lbl}>Hood cover (behind the doors)</p>
+        {row('Height', 'Carcass-board panel between the gables, flush with their front edges, from the bottom of the inside up — hides the hood body. 0 = none', s.cover?.h ?? 0,
+          v => put({ cover: v > 0 ? { ...(s.cover ?? DEFAULT_RANGEHOOD_COVER), h: v } : null }))}
+        {s.cover && <>
+          {row('Hinge notch in', 'D notch at each hinge on it, in from the gable', s.cover.notch_w, v => { if (v > 0) put({ cover: { ...s.cover!, notch_w: v } }) })}
+          {row('Hinge notch tall', 'Notch height, centred on the hinge plate — it follows the hinges', s.cover.notch_h, v => { if (v > 0) put({ cover: { ...s.cover!, notch_h: v } }) })}
+          {row('Notch radius', 'Inside corner radius of the D notch', s.cover.notch_r, v => { if (v >= 0) put({ cover: { ...s.cover!, notch_r: v } }) })}
+          <p className="text-[10px] text-gray-600">Keep the hinges clear of the cover&rsquo;s top and bottom edges (half the notch height) — set them on the doors.</p>
+        </>}
+      </>}
+
       <p className="text-[10px] text-gray-600">
         The flue box (2 sides + a front piece, carcass board) stands on the shelf up to the top,
         screwed through both with 5mm Dynamic Holes. The front piece and the sides&rsquo; front edges are taped.
