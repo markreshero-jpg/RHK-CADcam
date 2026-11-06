@@ -294,6 +294,12 @@ function Stage2Parts() {
     [snap.cabinets, filterRoomIds],
   )
 
+  const partCountByCab = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const p of snap.parts) m.set(p.cabinet_instance_id, (m.get(p.cabinet_instance_id) ?? 0) + 1)
+    return m
+  }, [snap.parts])
+
   const filtered = useMemo(() => snap.parts.filter(p =>
     (filterRoomIds.length === 0 || filterRoomIds.includes(p.room_id)) &&
     (filterCabinetIds.length === 0 || filterCabinetIds.includes(p.cabinet_instance_id)) &&
@@ -362,7 +368,8 @@ function Stage2Parts() {
       {/* Filters */}
       <div className="flex-none px-8 pt-3 pb-3 space-y-3 border-b border-edge">
         <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
-        <ChipFilter label="Cabinets" options={cabOptions.map(c => ({ id: c.id, label: c.label }))} selected={filterCabinetIds} onChange={setFilterCabinets} />
+        <RoomCabinetPicker rooms={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))}
+          cabinets={cabOptions} partCount={partCountByCab} selected={filterCabinetIds} onChange={setFilterCabinets} />
         <ChipFilter label="Materials" options={jobMaterials.map(m => ({ id: m.id, label: noColour.has(m.id) ? `${m.name} ⚠` : m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
       </div>
 
@@ -510,6 +517,82 @@ function ChipFilter({ label, options, selected, onChange }: {
             {o.label}
           </button>
         ))}
+      </div>
+    </div>
+  )
+}
+
+// Cabinet filter summarised by room (Mark 2026-11-06): one line per room with
+// its cabinet count — tick the room to pick all its cabinets, open it to pick
+// single ones. Empty selection = all cabinets (same as the old chip row).
+function RoomCabinetPicker({ rooms, cabinets, partCount, selected, onChange }: {
+  rooms: { id: string; label: string }[]
+  cabinets: { id: string; label: string; room_id: string }[]
+  partCount: Map<string, number>
+  selected: string[]
+  onChange: (ids: string[]) => void
+}) {
+  const [open, setOpen] = useState<Set<string>>(new Set())
+  const sel = new Set(selected)
+  const groups = rooms
+    .map(r => ({ ...r, cabs: cabinets.filter(c => c.room_id === r.id) }))
+    .filter(g => g.cabs.length > 0)
+  const toggleOpen = (id: string) => setOpen(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
+  const toggleCab = (id: string) => onChange(sel.has(id) ? selected.filter(x => x !== id) : [...selected, id])
+  const toggleRoom = (ids: string[]) => {
+    const allOn = ids.every(id => sel.has(id))
+    onChange(allOn ? selected.filter(x => !ids.includes(x)) : [...new Set([...selected, ...ids])])
+  }
+  const allOpen = groups.length > 0 && groups.every(g => open.has(g.id))
+  return (
+    <div className="flex items-start gap-3">
+      <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider w-16 shrink-0 pt-1.5">Cabinets</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <button onClick={() => onChange([])}
+            className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${selected.length === 0 ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}>All</button>
+          <button onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map(g => g.id)))}
+            className="px-2 py-1 text-[11px] text-ink-subtle hover:text-ink">{allOpen ? 'Collapse all' : 'Expand all'}</button>
+          {selected.length > 0 && <span className="text-[11px] text-ink-subtle">{selected.length} cabinet{selected.length === 1 ? '' : 's'} picked</span>}
+        </div>
+        <div className="max-h-64 overflow-auto border border-edge rounded divide-y divide-edge">
+          {groups.map(g => {
+            const ids = g.cabs.map(c => c.id)
+            const on = ids.filter(id => sel.has(id)).length
+            const parts = ids.reduce((a, id) => a + (partCount.get(id) ?? 0), 0)
+            const isOpen = open.has(g.id)
+            const picked = g.cabs.filter(c => sel.has(c.id))
+            return (
+              <div key={g.id}>
+                <div className="flex items-center gap-2 px-2 py-1 text-[11px] hover:bg-surface-2/60">
+                  <input type="checkbox" checked={on === ids.length}
+                    ref={el => { if (el) el.indeterminate = on > 0 && on < ids.length }}
+                    onChange={() => toggleRoom(ids)} title="Pick / unpick every cabinet in this room" />
+                  <button onClick={() => toggleOpen(g.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
+                    <span className="text-ink-subtle w-3">{isOpen ? '▾' : '▸'}</span>
+                    <span className="text-ink font-medium truncate">{g.label}</span>
+                    <span className="text-ink-subtle shrink-0">· {ids.length} cab{ids.length === 1 ? '' : 's'} · {parts} parts</span>
+                    {on > 0 && <span className="text-accent-ink shrink-0">· {on === ids.length ? 'all picked' : `${on} picked`}</span>}
+                    {!isOpen && on > 0 && on < ids.length && (
+                      <span className="text-ink-subtle truncate">({picked.map(c => c.label).join(', ')})</span>
+                    )}
+                  </button>
+                </div>
+                {isOpen && (
+                  <div className="flex flex-wrap gap-1.5 px-7 pb-2 pt-0.5">
+                    {g.cabs.map(c => (
+                      <button key={c.id} onClick={() => toggleCab(c.id)}
+                        className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${sel.has(c.id) ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}>
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          {groups.length === 0 && <div className="px-2 py-2 text-[11px] text-ink-subtle">No cabinets.</div>}
+        </div>
       </div>
     </div>
   )
