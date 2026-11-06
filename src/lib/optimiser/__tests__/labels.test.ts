@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { labelsPdf, a4Grid, sheetNumbers, buildAllLabels, HAND_CUT_KEY, DEFAULT_LABEL_SETTINGS, type LabelData, type LabelLookups } from '../labels'
+import { labelsPdf, a4Grid, sheetNumbers, buildAllLabels, buildLabelData, HAND_CUT_KEY, DEFAULT_LABEL_SETTINGS, type LabelData, type LabelLookups } from '../labels'
 import type { NestedSheet, NestResult, NestPartInput } from '../nest'
 import type { OptiPart } from '../types'
 
@@ -52,5 +52,21 @@ describe('part labels (optimiser Stage 7)', () => {
     const hand = out.filter(l => l.handCut)
     expect(hand.map(l => [l.sheetKey, l.partNo, l.len])).toEqual([[HAND_CUT_KEY, 1, 2600], [HAND_CUT_KEY, 2, 2600]])
     expect((await labelsPdf(hand, DEFAULT_LABEL_SETTINGS)).getNumberOfPages()).toBe(2)
+  })
+  it('left gable: front tape drawn on the edge its (mirrored) drilling puts at the front', () => {
+    // RHK6581 BC-04 (Mark 2026-11-06): both gables tape the front = edge_band_right = w2.
+    // The left gable's ops are stored mirrored (front rail holes at x 8.25), so on
+    // the label its tape must be the x = 0 edge; the right gable keeps x = w.
+    const gable = (key: string) => ({
+      uid: key, source_table: 'case_parts', source_part_id: key, source_part_key: key, cabinet_instance_id: 'c', cabinet_label: 'BC-04',
+      room_id: 'r', room_name: 'Laundry J03', project_id: 'p', job_number: null, label: key, default_label: key, part_type_key: key,
+      w: 560, h: 780, thickness: 16.5, eb_w1: 0, eb_w2: 1, eb_h1: 0, eb_h2: 0, eb_on: [false, true, false, false], eb_missing: false, material_id: 'wb', grain_direction: null,
+    }) as unknown as OptiPart
+    const look: LabelLookups = { projectName: 'RHK6581', cabType: new Map(), tapeName: new Map(), colourName: new Map(), matName: () => 'Whiteboard 16.5mm' }
+    const pl = { uid: 'x', baseUid: 'x', label: 'x', x: 5, y: 5, w: 560, h: 780, rotated: false }
+    const tapedX = (key: string) => buildLabelData(gable(key), pl, 1, 1, [], false, look, undefined, 'finished')
+      .pic.edges.filter(e => e[2]).map(([a, b]) => [a.x, b.x])
+    expect(tapedX('case_left_side')).toEqual([[0, 0]])
+    expect(tapedX('case_right_side')).toEqual([[560, 560]])
   })
 })

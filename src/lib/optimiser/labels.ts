@@ -124,6 +124,12 @@ export function buildLabelData(
   const size = dims === 'cut' ? { w: Wc, h: Hc } : { w: p.w, h: p.h }
   // Banded sides from eb_on, so a 0 mm "no tape" band (sprayed round-over) still shows.
   const [onW1, onW2, onH1, onH2] = p.eb_on ?? [p.eb_w1 > 0, p.eb_w2 > 0, p.eb_h1 > 0, p.eb_h2 > 0]
+  // A left gable is machined inside face up, so its drilling is stored mirrored
+  // across its depth (front edge at x = 0 on the sheet; drills.onDownFace, same
+  // rule as shapes' blank_mirror). The holes come off the sheet that way, so the
+  // tape has to follow or it lands on the back edge (Mark, 2026-11-06).
+  const leftGable = p.source_table === 'case_parts' && p.source_part_key === 'case_left_side'
+  const [picW1, picW2] = leftGable ? [onW2, onW1] : [onW1, onW2]
   const lEdges = (onW1 ? 1 : 0) + (onW2 ? 1 : 0)
   const wEdges = (onH1 ? 1 : 0) + (onH2 ? 1 : 0)
   const tapes = [...new Set((p.eb_tape ?? []).map(t => (t.id && look.tapeName.get(t.id)) || ''))].filter(Boolean).join(', ')
@@ -148,7 +154,7 @@ export function buildLabelData(
       edges.push([toBlank(a), toBlank(b), taped])
     })
   } else {
-    edges.push([{ x: 0, y: 0 }, { x: 0, y: Hc }, onW1], [{ x: Wc, y: 0 }, { x: Wc, y: Hc }, onW2],
+    edges.push([{ x: 0, y: 0 }, { x: 0, y: Hc }, picW1], [{ x: Wc, y: 0 }, { x: Wc, y: Hc }, picW2],
       [{ x: 0, y: 0 }, { x: Wc, y: 0 }, onH1], [{ x: 0, y: Hc }, { x: Wc, y: Hc }, onH2])
   }
   // Holes: sheet → placement-local → blank frame (undo the placement turn).
