@@ -539,7 +539,11 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   }, [ebParts, ebProducts, ebBoards, ebWaste, rooms])
 
   // Hardware Pick List + Takeoff (z_takeoff): loads + nests only while one is open.
-  const takeoff = useTakeoff({ active: selectedReport === 'hardware_pick' || selectedReport === 'takeoff', project, rooms, cabinets: allCabinets, resolved: allResolved })
+  // Job Reports: the pick list lists only the ticked rooms (same Rooms row as the drawing
+  // reports), its job totals and cut stickers too (Mark, 2026-11-07).
+  const pickRooms = useMemo(() => scope === 'job' && selectedReport === 'hardware_pick' ? jobRooms.filter(r => !roomsOff.has(r.id)) : rooms,
+    [scope, selectedReport, jobRooms, roomsOff, rooms])
+  const takeoff = useTakeoff({ active: selectedReport === 'hardware_pick' || selectedReport === 'takeoff', project, rooms: pickRooms, cabinets: allCabinets, resolved: allResolved })
   const glassOrder = useGlassOrder({ active: selectedReport === 'glass_order', rooms, cabinets: allCabinets, resolved: allResolved })
 
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
@@ -809,6 +813,27 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                     Download {tickedRooms.length} room{tickedRooms.length === 1 ? '' : 's'}
                   </button>
                 </>)}
+              </div>
+            )}
+
+            {/* Job Reports › Hardware Pick List: which rooms it lists. */}
+            {scope === 'job' && selectedReport === 'hardware_pick' && jobRooms.length > 1 && (
+              <div data-pick-rooms className="flex flex-wrap items-center gap-1.5 px-4 py-2 border-b border-gray-800 shrink-0">
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1" title="Tick the rooms to list">Rooms:</span>
+                {jobRooms.map(r => {
+                  const on = !roomsOff.has(r.id)
+                  return (
+                    <button key={r.id} title={on ? 'Leave this room out' : 'Include this room'}
+                      className={`inline-flex items-center gap-1 rounded text-xs border px-1.5 py-0.5 ${on ? 'border-gray-600 text-gray-300' : 'border-gray-800 text-gray-500'}`}
+                      onClick={() => setRoomsOff(prev => {
+                        const next = new Set(prev)
+                        if (next.has(r.id)) next.delete(r.id); else next.add(r.id)
+                        return next
+                      })}>{on ? '☑' : '☐'} {r.name}</button>
+                  )
+                })}
+                <button className="px-1.5 py-0.5 text-[11px] text-gray-400 hover:text-gray-200" onClick={() => setRoomsOff(new Set())}>All</button>
+                <button className="px-1.5 py-0.5 text-[11px] text-gray-400 hover:text-gray-200" onClick={() => setRoomsOff(new Set(jobRooms.map(r => r.id)))}>None</button>
               </div>
             )}
 

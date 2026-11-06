@@ -1750,6 +1750,17 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The part comment (on the label, sticker and cut sheet) reads e.g. “CUT AT 70, hand cut to 16 wide (18 after edging)”. Cut it down on the saw to that size, then edge it. Fillers 60 or wider, on-edge fillers and shaped fillers cut at their own size.',
       done: () => true },
   ]},
+  // Appended 2026-11-07 (z_takeoff T7 — pick list room filter).
+  { id: 'pick_list_rooms', level: 'basics', topic: 'reports', title: 'Pick list for some rooms only',
+    blurb: 'In Job Reports, tick which rooms the Hardware Pick List lists — totals, print and cut stickers follow.',
+    keywords: 'hardware pick list rooms room filter tick some rooms job reports picking', steps: [
+    { id: 'open', title: 'Open the pick list for the job',
+      body: 'Click Reports in the menu bar → Job Reports…, then Hardware Pick List.',
+      target: 'menu-Reports', canvas: true, done: c => c.report === 'hardware_pick' },
+    { id: 'rooms', title: 'Tick the rooms',
+      body: 'The Rooms row under the toolbar has a tick box per room (All / None at the end). Untick a room and it drops out of the list, the Job totals, Print / PDF and Cut stickers. The ticks are the same ones the drawing reports use for which rooms to download.',
+      done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
