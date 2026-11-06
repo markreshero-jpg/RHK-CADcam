@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03); R10 2026-11-07 bottom skin (RHK6581 WC-02). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -327,6 +327,10 @@ rangehood cutout".
   would run off the cover's top / bottom warns and is skipped. No joints (fixed by hand). Not on curved ends.
 - Under panel: `linkedHoleCutout` takes the panel thickness; `panel_skin > 0` → the linked hole is a pocket
   `dz − skin` deep (cut-outs `skin`, existing onion-skin path).
+- **R10 2026-11-07 — bottom skin** (Mark, RHK6581 WC-02: "the cutout is very close to the edge and the piece snaps
+  while cutting"): `rangehood.bottom_skin` (default 0 = through), sidebar row "Bottom skin". > 0 → the hole in the
+  carcass bottom (WRH) / curved bottom former (C9) is a pocket `DZ − skin` deep — the slug stays held through both
+  onion-skin passes, broken out after. Same cut-out `skin` → G-code `holeSkins` path as the under panel.
 - Sidebar: Under panel skin + Hood cover (Height, Hinge notch in / tall, Notch radius) in the Rangehood section.
 - Tutorial `rangehood_cover`. Test `src/lib/__tests__/rangehoodCover.test.ts`.
 - Hinge heights stay manual on the doors (WC-03: [200, 595]); the cover warns if a hinge is too near its edges.

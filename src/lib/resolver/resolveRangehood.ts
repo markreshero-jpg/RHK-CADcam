@@ -101,7 +101,7 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
     const x0 = r2(cx + hole.offset - hole.w / 2), z1 = r2(front - hole.setback)
     out.hole = { x0, x1: r2(x0 + hole.w), z0: r2(z1 - hole.d), z1 }
     if (bottom) add('case_bottom', {
-      id: 'rh_hole', kind: 'hole', shape: 'rect', w: hole.w, d: hole.d, radius: hole.radius, depth: null, source: 'rangehood',
+      id: 'rh_hole', kind: 'hole', shape: 'rect', w: hole.w, d: hole.d, radius: hole.radius, depth: skinDepth(rh, bottom.DZ), source: 'rangehood',
       x: { from: 'centre', off: hole.offset }, y: { from: 'front', off: hole.setback },
     })
   }
@@ -271,6 +271,11 @@ function flueBox(cab: CabinetInput, out: RangehoodResult, b: BoxAt, shelf: { key
   }
 }
 
+/** The bottom's hole depth: thickness − bottom_skin (a pocket that leaves the
+ *  onion skin, broken out after the sheet is cut), null = through. */
+const skinDepth = (rh: { bottom_skin: number }, dz: number): number | null =>
+  rh.bottom_skin > 0 && dz > rh.bottom_skin ? r2(dz - rh.bottom_skin) : null
+
 /** Clearance each side of the flue box: it must sit clear of the curve / fixing blocks by this (C9). */
 export const RH_RIB_CLEAR = 1
 
@@ -304,7 +309,7 @@ function resolveCurvedRangehood(
     else {
       out.hole = { x0, x1: r2(x0 + hole.w), z0, z1 }
       add('case_crv:bottom', {
-        id: 'rh_hole', kind: 'hole', shape: 'rect', w: hole.w, d: hole.d, radius: hole.radius, depth: null, source: 'rangehood',
+        id: 'rh_hole', kind: 'hole', shape: 'rect', w: hole.w, d: hole.d, radius: hole.radius, depth: skinDepth(rh, bottom.DZ), source: 'rangehood',
         x: { from: 'left', off: fx }, y: { from: 'front', off: fy },
       })
     }

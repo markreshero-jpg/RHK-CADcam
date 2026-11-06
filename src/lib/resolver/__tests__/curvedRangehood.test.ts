@@ -71,6 +71,14 @@ describe('curved end rangehood (C9)', () => {
     expect(rp.rangehood_hole).toEqual({ x0: centre - 250, x1: centre + 250, z0: 350 - 58 - 260, z1: 292 })
   })
 
+  it('leaves the bottom skin in the hole when set (RHK6581 WC-02: the strip beside it snapped)', () => {
+    const through = resolveCabinet(wcrv()).case_parts.find(p => p.part_key === 'crv:bottom')!
+    expect(through.cutouts![0].skin).toBe(0)
+    const held = resolveCabinet(wcrv({ ...rh, bottom_skin: 0.5 })).case_parts.find(p => p.part_key === 'crv:bottom')!
+    expect(held.cutouts).toHaveLength(1)
+    expect(held.cutouts![0].skin).toBeCloseTo(0.5)
+  })
+
   it('notches the shelf rib, every rib above and the top with the flue', () => {
     const rp = resolveCabinet(wcrv())
     const ribs = ribsOf(rp)

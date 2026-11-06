@@ -26,6 +26,10 @@ export interface RangehoodSettings {
   cover: { notch_w: number; notch_h: number; notch_r: number } | null
   // Onion skin left in the under panel's rangehood hole (mm, 0 = cut through).
   panel_skin: number
+  // Onion skin left in the hole through the carcass bottom / curved bottom former
+  // (mm, 0 = cut through) — keeps the slug held so a thin strip beside the hole
+  // doesn't snap while the part is cut (Mark, RHK6581 WC-02, 2026-11-07).
+  bottom_skin: number
 }
 
 export const DEFAULT_RANGEHOOD: RangehoodSettings = {
@@ -34,6 +38,7 @@ export const DEFAULT_RANGEHOOD: RangehoodSettings = {
   shelf_h: 350,
   cover: null,
   panel_skin: 0,
+  bottom_skin: 0,
 }
 
 export const DEFAULT_RANGEHOOD_COVER = { notch_w: 40, notch_h: 80, notch_r: 15 }
@@ -47,7 +52,7 @@ const size = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 
 // Tolerates partial / legacy stored values.
 export function normaliseRangehood(s: unknown): RangehoodSettings | null {
   if (!s || typeof s !== 'object') return null
-  const o = s as Partial<{ hole: Record<string, unknown>; flue: Record<string, unknown>; shelf_h: unknown; cover: Record<string, unknown> | null; panel_skin: unknown }>
+  const o = s as Partial<{ hole: Record<string, unknown>; flue: Record<string, unknown>; shelf_h: unknown; cover: Record<string, unknown> | null; panel_skin: unknown; bottom_skin: unknown }>
   const h = o.hole ?? {}, f = o.flue ?? {}, d = DEFAULT_RANGEHOOD
   return {
     hole: {
@@ -64,6 +69,7 @@ export function normaliseRangehood(s: unknown): RangehoodSettings | null {
       notch_r: Math.max(0, num(o.cover.notch_r, DEFAULT_RANGEHOOD_COVER.notch_r)),
     } : null,
     panel_skin: Math.max(0, num(o.panel_skin, d.panel_skin)),
+    bottom_skin: Math.max(0, num(o.bottom_skin, d.bottom_skin)),
   }
 }
 

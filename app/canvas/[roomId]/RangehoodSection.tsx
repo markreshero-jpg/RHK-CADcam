@@ -48,6 +48,7 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Off centre', '+ moves the flue right, − left', s.flue.offset, v => flue('offset', v))}
 
       {row('Shelf height', crv ? 'Cabinet underside to the underside of the rib the flue goes through (support ribs under it are split round the hole)' : 'Cabinet underside (incl. under panel) to the underside of the first fixed shelf', s.shelf_h, v => { if (v > 0) put({ shelf_h: v }) })}
+      {row('Bottom skin', 'Onion skin left in the hole through the bottom (e.g. 0.5) — holds the cut-out in so a thin strip beside it doesn’t snap; broken out after the sheet is cut. 0 = cut through', s.bottom_skin, v => { if (v >= 0) put({ bottom_skin: v }) })}
       {row('Under panel skin', 'Onion skin left in the under panel’s hole (e.g. 0.3) — broken out after the sheet is cut. 0 = cut through', s.panel_skin, v => { if (v >= 0) put({ panel_skin: v }) })}
 
       {!crv && <>
