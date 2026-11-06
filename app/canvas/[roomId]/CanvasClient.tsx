@@ -3499,6 +3499,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             <div className="relative flex-1 flex min-w-0">
             <CanvasSVG
               svgRef={svgRef}
+              room={room}
               planGrid={planGrid}
               walls={walls}
               cabinets={cabinets}

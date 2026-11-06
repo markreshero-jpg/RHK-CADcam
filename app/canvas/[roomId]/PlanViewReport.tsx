@@ -224,6 +224,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
         <PlanViewReportSVG
           walls={walls}
           cabinets={cabinets}
+          room={room}
           fixtures={fixtures}
           annotations={annotations}
           benchtops={benchtops}

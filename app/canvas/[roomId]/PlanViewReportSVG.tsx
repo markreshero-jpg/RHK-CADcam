@@ -10,7 +10,7 @@
 'use client'
 import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import type { ReactNode, RefObject } from 'react'
-import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
+import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile, Room } from '@/src/lib/types'
 import { btSegments, outlinePath, outlinePoints, effectiveProfileId, waterfallPlanLines } from '@/src/lib/benchtopGeometry'
 import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
@@ -26,7 +26,7 @@ import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
   cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabT,
   cabinetToPlan, cabinetPlanFrame,
-  planDrawRank,
+  planDrawOrder,
 } from '@/src/lib/geometry'
 import { GrainMatchPlanSVG } from './GrainMatchSVG'
 import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
@@ -87,9 +87,11 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false, btProfiles, btDefaultProfile, btThickness,
+  walls, cabinets, room, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false, btProfiles, btDefaultProfile, btThickness,
 }: {
   walls:       Wall[]
+  /** The room — cabinet heights for the ceiling-down draw order (planDrawOrder). */
+  room?:       Room
   /** Placed fixtures — doors / windows (z_fixtures P5) split the walls and draw their symbol. */
   fixtures?:   RoomFixture[]
   /** CAD annotations (z_CAD_tool), plan rows — drawn on top, paper-mm sized at this scale. */
@@ -362,8 +364,8 @@ export default function PlanViewReportSVG({
         )
       })}
 
-      {/* ── Cabinets — parts per layer set; low → high like the canvas (kicks + under panels first, overheads last) ── */}
-      {[...cabinets].sort((a, b) => planDrawRank(a) - planDrawRank(b)).map(cab => {
+      {/* ── Cabinets — parts per layer set; looking down from the ceiling: by real top height, highest drawn last ── */}
+      {planDrawOrder(cabinets, walls, room).map(cab => {
         const wall = walls.find(w => w.id === cab.wall_id)
         if (!wall) return null
         const rp       = resolvedParts?.get(cab.id)

@@ -2,7 +2,7 @@
 import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
-import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile } from '@/src/lib/types'
+import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile, Room } from '@/src/lib/types'
 import {
   btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, waterfallReturn, waterfallPlanLines,
   edgePath, edgeProfileColor, effectiveProfileId,
@@ -19,7 +19,7 @@ import {
   wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallPieces, wallInwardNormal, centroid,
   cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan, cabinetPlanFrame,
   gridDots,
-  planDrawRank,
+  planDrawOrder,
 } from '@/src/lib/geometry'
 import { GrainMatchPlanSVG } from './GrainMatchSVG'
 import { useGrainMatchGroups } from '@/src/lib/grainMatchStore'
@@ -69,6 +69,8 @@ interface CanvasSVGProps {
   planGrid: PlanGridPrefs
   svgRef: React.RefObject<SVGSVGElement | null>
   walls: Wall[]
+  /** The room — cabinet heights for the ceiling-down draw order (planDrawOrder). */
+  room?: Room
   cabinets: CabinetInstance[]
   view: ViewState
   svgSize: { w: number; h: number }
@@ -199,7 +201,7 @@ interface CanvasSVGProps {
 }
 
 export default function CanvasSVG({
-  svgRef, walls, cabinets, view, svgSize, selected, mode, armedDef, onCanvasDrop, layers, planGrid,
+  svgRef, walls, cabinets, room, view, svgSize, selected, mode, armedDef, onCanvasDrop, layers, planGrid,
   drawStart, drawCursor, drawThickness, placeGhost, clipboard, clipboardGroup, cabDrag, cabMoveDrag, cabResize, multiSelect, multiWalls = [], marquee, cursor,
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onWallEndPointerDown, alignGuides = [], onCabinetPointerDown, pickHoverId, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
@@ -1126,10 +1128,9 @@ export default function CanvasSVG({
           )
         })}
 
-        {/* ── Cabinets ── rendered low→high so overheads overlap bases in plan */}
-        {/* Kick assemblies first (underneath): where a kick and its member cabinets are both
-            shown, the cabinet above wins the click. Under panels likewise sit under. */}
-        {[...cabinets].sort((a, b) => planDrawRank(a) - planDrawRank(b)).map(cab => {
+        {/* ── Cabinets ── looking down from the ceiling: by real top height, highest drawn
+            last (and on top for clicks); kick assemblies always underneath. */}
+        {planDrawOrder(cabinets, walls, room).map(cab => {
           const wall = walls.find(w => w.id === cab.wall_id)
           if (!wall) return null
           const perp = cabWallPerp(cab, wall, wallInwardNormal(wall, cx))

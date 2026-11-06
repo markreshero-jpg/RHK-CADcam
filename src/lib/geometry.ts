@@ -716,21 +716,24 @@ export function gridDots(
   return dots.length <= MAX_GRID_DOTS ? dots : []
 }
 
-/** Plan draw order (low → high, by underside height) so what's higher overlaps what's
- *  below it, on the canvas plan and the plan print alike. Kick assemblies go under
- *  everything; floor units at their pos_z; under panels / floating shelves at their own
- *  pos_z (a bench or desk top over its base units, a floating run's under panel below its
- *  raised carcasses); bulkheads, then wall units on top (hung from the top line unless WALLZ). RHK6478 Study: the desk top drew over the overheads (Mark 2026-11-05). */
-export function planDrawRank(c: {
-  is_kick_assembly?: boolean | null; rule_overrides?: { UNDER_PANEL?: unknown } | null
-  assembly_class: string; pos_z?: number | null; bulkhead?: unknown; float_shelf?: unknown
-}): number {
-  if (c.is_kick_assembly) return -1
-  if (c.rule_overrides?.UNDER_PANEL || c.float_shelf) return Number(c.pos_z ?? 0)
-  // Bulkheads: just under the overheads — same footprint, and on top they'd grey out the
-  // overhead names (RHK6478 Study WC-17 / WC-18).
-  if (c.bulkhead) return 1e5 - 1
-  if (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') return wallZOf(c) ?? 1e5
-  // A tall unit over a base at the same floor height (it's the taller one).
-  return Number(c.pos_z ?? 0) + (c.assembly_class === 'tall' || c.assembly_class === 'tall_corner' ? 0.5 : 0)
+/** Plan draw order: what you'd see looking down from the ceiling (Mark, 2026-11-07) —
+ *  cabinets sort by their real top height in the room (cabBottomZ + dy, same rule as
+ *  every elevation), lowest first, so the higher one is drawn over the lower one. Ties:
+ *  the higher underside wins (a bench on its bases), then the stored order. Kick
+ *  assemblies always go under. Without the room (no heights) falls back to class order. */
+export function planDrawRank(c: CabinetInstance, room: Room | null | undefined, wall?: Wall | null): number {
+  if (c.is_kick_assembly) return -1e6
+  if (room) {
+    const bottom = cabBottomZ(c, room, wall)
+    return bottom + Number(c.dy) + bottom * 1e-6
+  }
+  if (c.rule_overrides?.UNDER_PANEL || c.float_shelf) return Number(c.pos_z ?? 0) + Number(c.dy)
+  const order: Record<string, number> = { base: 0, base_corner: 0, tall: 1, tall_corner: 1, wall: 2, wall_corner: 2 }
+  return (order[c.assembly_class] ?? 0) * 1e4 + (c.bulkhead ? 1e4 : 0)
+}
+
+/** Cabinets in plan draw order (see planDrawRank). */
+export function planDrawOrder<T extends CabinetInstance>(cabs: T[], walls: Wall[], room: Room | null | undefined): T[] {
+  const rank = new Map(cabs.map(c => [c.id, planDrawRank(c, room, walls.find(w => w.id === c.wall_id))]))
+  return [...cabs].sort((a, b) => rank.get(a.id)! - rank.get(b.id)!)
 }
