@@ -343,6 +343,11 @@ export function normalizeProject(
     // back's DX is its height, which nests as w, so the grain runs along w
     // (Mark, RHK6542 WC-04 2026-11-03 — was cut along the width).
     if ((pieceOf === 'back' || pieceOf.startsWith('back:')) && last?.source_part_id === r.id) last.grain_across = true
+    // So do the other upright panels stored height-as-DX: shaped-cabinet sides
+    // (side:<edge>, e.g. RHK6586 WC-10 / BC-07 angled sides) and a curved end's
+    // inside face panel (crv:inner, unless its curved end runs horizontal grain) —
+    // both were nesting their grain across (Mark, RHK6581 BC-01 / BC-03 2026-11-07).
+    if ((pieceOf.startsWith('side:') || (pieceOf === 'crv:inner' && r.grain_direction !== 'horizontal')) && last?.source_part_id === r.id) last.grain_across = true
     if (railStrip && last?.source_part_id === r.id) last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
     if (splitNote && last?.source_part_id === r.id) last.comment = last.comment ? `${splitNote} · ${last.comment}` : splitNote
     // Long-edge mitre (bulkhead bottom return / fascia, z_bulkhead B10): nested

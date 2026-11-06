@@ -119,7 +119,7 @@ export function resolveCurvedEnd(cab: CabinetInput): { parts: ResolvedCasePart[]
     else errors.push(...k.warnings.map(m => ({ code: 'CURVED_END', message: m, part: 'toekick' as const })))
   }
   const out = shiftX ? parts.map(p => ({ ...p, X: p.X + shiftX, ...(p.wrap ? { wrap: { ...p.wrap, pts: p.wrap.pts.map(q => ({ ...q, x: q.x + shiftX })) } } : {}) })) : parts
-  if (pT) out.push(curvedInnerPanel(s.hand === 'LH', pT, inset - pT, FT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id))
+  if (pT) out.push({ ...curvedInnerPanel(s.hand === 'LH', pT, inset - pT, FT, cab.DX, cab.DZ, c.p.H, lift, cab.exposed_material.id), grain_direction: s.grain })
   const split = splitSupportRibs(cab, c, out, seams)
   warnings.push(...split.notes.map(m => ({ code: 'CURVED_END_NOTE', message: m, part: 'case' as const })))
   return { parts: split.parts, seams: split.seams, errors, warnings }
