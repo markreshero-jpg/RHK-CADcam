@@ -39,6 +39,9 @@ export interface BulkheadSettings {
   width:  number                // shadowline strip width (front to back)
   front:  'doors' | 'carcase'   // front face flush with the overhead doors / carcase
   auto_h: boolean               // height follows ceiling − wall-cab top until typed
+  /** B11: mm added to the auto height (+ = taller, the bottom drops below the
+   *  wall-cab top; − = shorter, it stops above it). Top stays at the ceiling. */
+  h_adjust?: number
   cleat:  boolean
   left:   BulkheadReturn
   right:  BulkheadReturn
@@ -102,6 +105,7 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
     width:  b.width != null && b.width > 0 ? b.width : SL_WIDTH,
     front:  b.front === 'carcase' ? 'carcase' : 'doors',
     auto_h: sl ? false : b.auto_h ?? DEFAULT_BULKHEAD.auto_h,
+    ...(!sl && typeof b.h_adjust === 'number' && Number.isFinite(b.h_adjust) && b.h_adjust !== 0 ? { h_adjust: b.h_adjust } : {}),
     cleat:  sl ? false : b.cleat ?? DEFAULT_BULKHEAD.cleat,
     left:   r(b.left, DEFAULT_BULKHEAD.left),
     right:  r(b.right, DEFAULT_BULKHEAD.right),
@@ -121,7 +125,9 @@ export function ceilingZ(wall: Wall | null | undefined, room: Room): number {
   return wall?.height ?? room.room_dy ?? 2400
 }
 
-/** Auto height: from the wall-cabinet top up to the ceiling (the soffit drop). */
-export function bulkheadAutoHeight(wall: Wall | null | undefined, room: Room): number {
-  return Math.round(ceilingZ(wall, room) - wallCabTop(wall, room))
+/** Auto height: from the wall-cabinet top up to the ceiling (the soffit drop),
+ *  plus the bulkhead's height adjust (B11) when given. */
+export function bulkheadAutoHeight(wall: Wall | null | undefined, room: Room, b?: { h_adjust?: number } | null): number {
+  const adj = typeof b?.h_adjust === 'number' && Number.isFinite(b.h_adjust) ? b.h_adjust : 0
+  return Math.round(ceilingZ(wall, room) - wallCabTop(wall, room) + adj)
 }

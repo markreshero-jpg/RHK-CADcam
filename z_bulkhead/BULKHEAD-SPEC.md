@@ -11,7 +11,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
+> **RESUME HERE** → B11 height adjust built 2026-11-07, check pending. B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
 > B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
 > migration_c7; no schema change) — in-app check pending, with B5. B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
@@ -87,6 +87,7 @@ underside when the bulkhead isn't sitting on cabinets.
   {
     front: 'doors' | 'carcase',
     auto_h: boolean,                // height follows ceiling − wall-cab top
+    h_adjust?: number,              // B11: + taller / − shorter than the auto height
     cleat: boolean,
     left:   { on: boolean, depth: number, joint: 'mitre' | 'butt' },
     right:  { on: boolean, depth: number, joint: 'mitre' | 'butt' },
@@ -181,6 +182,15 @@ underside when the bulkhead isn't sitting on cabinets.
       labels; prepended, not doubled), Parts tab comment (until one is typed),
       3D part info, shop-drawing cut list. Blanks unchanged (nest at the blank,
       mitre on the saw). Not on curved bulkheads. Tutorial `bulkhead_bottom_mitre`.
+- [~] **B11 — height adjust** (built 2026-11-07, in-app check pending) (Mark:
+      "a field called height adjust on the bulkhead, negative and positive").
+      `bulkhead.h_adjust` (mm) is added to the auto height (ceiling − wall-cab
+      top): + = taller, the bottom drops below the overhead tops; − = shorter,
+      it stops above them. The top stays at the ceiling and it keeps following
+      soffit / ceiling edits. Typing an adjust turns "Height to ceiling" back
+      on; typing H directly still turns it off (adjust kept, unused until
+      re-ticked). No schema change (jsonb). Not for shadowlines. Sidebar
+      "Height adjust" under Height to ceiling. Tutorial `bulkhead_height_adjust`.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 

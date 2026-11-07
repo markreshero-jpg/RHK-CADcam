@@ -1778,6 +1778,15 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Type in Search to find parts by name, cabinet, room, board or a size (e.g. 560) — matching groups open. Click a column heading to sort the parts inside each group; drag a heading to move the column. Select shown / Deselect shown act on what the search shows.',
       done: () => true },
   ]},
+
+  // Appended 2026-11-07 (z_bulkhead B11 — height adjust).
+  { id: 'bulkhead_height_adjust', level: 'intermediate', topic: 'cabinets', title: 'Adjust a bulkhead\'s height',
+    blurb: 'Make a bulkhead taller or shorter than the ceiling-to-overhead gap while it still follows the ceiling.',
+    keywords: 'bulkhead height adjust taller shorter drop overlap gap ceiling BH', steps: [
+    { id: 'adjust', title: 'Type a height adjust',
+      body: 'Select the bulkhead (BH). In the bulkhead section type a number in Height adjust: + makes it taller (e.g. 20 drops the bottom 20 below the overhead tops), − makes it shorter (e.g. -10 stops it 10 above them). The top stays at the ceiling, and it keeps following soffit / ceiling changes with the adjust added. 0 takes it off.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead?.h_adjust) },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

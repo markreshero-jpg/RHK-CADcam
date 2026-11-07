@@ -34,7 +34,7 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
   const put = (next: Partial<BulkheadSettings>, extra: Partial<CabinetInstance> = {}) =>
     void onUpdate(cabinet.id, { bulkhead: { ...b, ...next }, ...extra })
   const putRet = (k: typeof RETURNS[number][0], r: Partial<BulkheadReturn>) => put({ [k]: { ...b[k], ...r } })
-  const autoH = room ? bulkheadAutoHeight(wall, room) : null
+  const autoH = room ? bulkheadAutoHeight(wall, room, b) : null
   const putSplit = (sp: Partial<BulkheadSplit>) => put({ split: { ...b.split, ...sp } })
   // Ticking the split on picks the default rail board when none is set.
   const splitOn = (on: boolean) => putSplit({ on, ...(on && !b.split.material_id
@@ -89,6 +89,17 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
             e.target.checked && autoH != null && autoH > 0 ? { dy: autoH } : {})} />
         Height to ceiling{autoH != null && autoH > 0 ? ` (${autoH})` : ''}
       </label>
+      <div className="grid grid-cols-[1fr_4.5rem] gap-1 items-center"
+        title="Added to the height to ceiling. + = taller (the bottom drops below the overhead tops), − = shorter (it stops above them). The top stays at the ceiling. Typing one turns Height to ceiling back on.">
+        <label className="text-xs text-gray-300">Height adjust</label>
+        <CalcInput value={b.h_adjust ?? 0} decimals={1}
+          onCommit={v => {
+            const next = { ...b, auto_h: true, h_adjust: v !== 0 ? v : undefined }
+            const h = room ? bulkheadAutoHeight(wall, room, next) : 0
+            put({ auto_h: true, h_adjust: next.h_adjust }, h > 0 ? { dy: h } : {})
+          }}
+          className={inp + ' text-right'} />
+      </div>
       {!curved && <>
         {RETURNS.map(([k, name]) => (
           <div key={k} className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-1 items-center">

@@ -1479,7 +1479,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   useEffect(() => {
     for (const c of cabinets) {
       if (!c.bulkhead?.auto_h) continue
-      const h = bulkheadAutoHeight(walls.find(w => w.id === c.wall_id), room)
+      const h = bulkheadAutoHeight(walls.find(w => w.id === c.wall_id), room, c.bulkhead)
       if (h > 0 && Math.abs(h - c.dy) >= 0.5) void handleUpdateCabinet(c.id, { dy: h })
     }
   }, [cabinets, walls, room, handleUpdateCabinet])
@@ -1583,7 +1583,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
     // Bulkhead (z_bulkhead): fills from the wall-cab top up to this wall's ceiling.
     if (data.bulkhead?.auto_h) {
-      const h = bulkheadAutoHeight(wall, room)
+      const h = bulkheadAutoHeight(wall, room, data.bulkhead)
       if (h > 0) data.dy = h
     }
     // Floating shelf (z_floating_shelf): underside at this wall's overhead bottom.
