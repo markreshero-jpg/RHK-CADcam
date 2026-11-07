@@ -1761,6 +1761,23 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The Rooms row under the toolbar has a tick box per room (All / None at the end). Untick a room and it drops out of the list, the Job totals, Print / PDF and Cut stickers. The ticks are the same ones the drawing reports use for which rooms to download.',
       done: () => true },
   ]},
+  // Appended 2026-11-07 (optimiser Stage 2 — one grouped, sortable parts list).
+  { id: 'optimiser_parts_list', level: 'advanced', topic: 'production', title: 'Pick parts to nest (Stage 2)',
+    blurb: 'Stage 2 is one list grouped by room and cabinet — tick a room, cabinet or part to nest it; search and sort.',
+    keywords: 'optimiser optimizer stage 2 parts list pick select deselect all room cabinet group sort search nest tick', steps: [
+    { id: 'open', title: 'Open the optimiser on Parts',
+      body: 'Production → Generate CNC…, pick the machine, then Next to Stage 2 · Parts.',
+      target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
+    { id: 'group', title: 'Rooms and cabinets fold up',
+      body: 'Group (Room › Cabinet, Room, Cabinet, None) sets how the list is grouped. Click a room or cabinet row to open or shut it; Expand all / Collapse all do the lot. Cabinets run in name order (BC-2 before BC-10).',
+      done: () => true },
+    { id: 'tick', title: 'Tick what to nest',
+      body: 'The tick box on a room or cabinet row ticks all its parts (a dash = some ticked; n/m ticked shows how many). Deselect all clears the job — then tick only the rooms or cabinets you want. Unticked parts are greyed and are not nested.',
+      done: () => true },
+    { id: 'find', title: 'Search and sort',
+      body: 'Type in Search to find parts by name, cabinet, room, board or a size (e.g. 560) — matching groups open. Click a column heading to sort the parts inside each group; drag a heading to move the column. Select shown / Deselect shown act on what the search shows.',
+      done: () => true },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

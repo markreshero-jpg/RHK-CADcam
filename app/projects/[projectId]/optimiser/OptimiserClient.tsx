@@ -288,18 +288,6 @@ function Stage2Parts() {
     return snap.materials.filter(m => used.has(m.id) || filterMaterialIds.includes(m.id))
   }, [snap.parts, snap.materials, filterMaterialIds])
   const noColour = useMemo(() => colourNotChosen(snap), [snap])
-  // Cabinet filter options reflect the room filter.
-  const cabOptions = useMemo(
-    () => snap.cabinets.filter(c => filterRoomIds.length === 0 || filterRoomIds.includes(c.room_id)),
-    [snap.cabinets, filterRoomIds],
-  )
-
-  const partsByCab = useMemo(() => {
-    const m = new Map<string, OptiPart[]>()
-    for (const p of snap.parts) { const a = m.get(p.cabinet_instance_id); if (a) a.push(p); else m.set(p.cabinet_instance_id, [p]) }
-    return m
-  }, [snap.parts])
-
   const filtered = useMemo(() => snap.parts.filter(p =>
     (filterRoomIds.length === 0 || filterRoomIds.includes(p.room_id)) &&
     (filterCabinetIds.length === 0 || filterCabinetIds.includes(p.cabinet_instance_id)) &&
@@ -332,6 +320,74 @@ function Stage2Parts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, sort, cutQty, matName])
 
+  // ── One list (Mark 2026-11-07): group by room / cabinet with collapsible
+  // header rows that tick their parts, search box, sortable columns. Search and
+  // collapse are view-only — what nests is still the ticks + Rooms / Materials.
+  const [groupBy, setGroupByState] = useState<GroupBy>(() => stage2Mem.groupBy)
+  const setGroupBy = (g: GroupBy) => { remember('groupBy', g); setGroupByState(g) }
+  const [search, setSearchState] = useState(() => stage2Mem.search)
+  const setSearch = (v: string) => { remember('search', v); setSearchState(v) }
+  const [openMap, setOpenMapState] = useState<Map<string, boolean>>(() => stage2Mem.open)
+  const setOpenMap = (m: Map<string, boolean>) => { remember('open', m); setOpenMapState(m) }
+
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return sortedFiltered
+    return sortedFiltered.filter(p => {
+      const d = dispDims(p)
+      return [p.label, p.cabinet_label, p.room_name, p.material_id ? matName.get(p.material_id) : '', p.comment ?? '',
+        fmtMm(d.w), fmtMm(d.h), String(p.thickness)].some(t => (t ?? '').toLowerCase().includes(q))
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sortedFiltered, search, matName, deductEb])
+
+  // Rooms start shut once there are a few of them; cabinets start shut. A search opens everything.
+  const isOpen = (key: string): boolean => {
+    if (search.trim()) return true
+    const v = openMap.get(key)
+    if (v != null) return v
+    return key.startsWith('r:') ? snap.rooms.length <= 2 : false
+  }
+  function toggleOpen(key: string) { const m = new Map(openMap); m.set(key, !isOpen(key)); setOpenMap(m) }
+  function setAllOpen(on: boolean) {
+    const m = new Map<string, boolean>()
+    for (const p of shown) { m.set(`r:${p.room_id}`, on); m.set(`c:${p.cabinet_instance_id}`, on) }
+    setOpenMap(m)
+  }
+
+  const roomOrder = useMemo(() => new Map(snap.rooms.map((r, i) => [r.id, i])), [snap.rooms])
+  const rows = useMemo((): ListRow[] => {
+    if (groupBy === 'none') return shown.map(p => ({ kind: 'part', p }))
+    const out: ListRow[] = []
+    const byKey = (parts: OptiPart[], key: (p: OptiPart) => string) => {
+      const m = new Map<string, OptiPart[]>()
+      for (const p of parts) { const a = m.get(key(p)); if (a) a.push(p); else m.set(key(p), [p]) }
+      return [...m.values()]
+    }
+    const cabGroups = (parts: OptiPart[], depth: number, withRoom: boolean) => {
+      const g = byKey(parts, p => p.cabinet_instance_id)
+        .sort((a, b) => nat(a[0].cabinet_label, b[0].cabinet_label) || nat(a[0].room_name, b[0].room_name))
+      for (const ps of g) {
+        const key = `c:${ps[0].cabinet_instance_id}`
+        out.push({ kind: 'group', key, depth, label: ps[0].cabinet_label, sub: withRoom ? ps[0].room_name : undefined, parts: ps, cabs: 0 })
+        if (isOpen(key)) for (const p of ps) out.push({ kind: 'part', p })
+      }
+    }
+    if (groupBy === 'cabinet') { cabGroups(shown, 0, true); return out }
+    const rooms = byKey(shown, p => p.room_id)
+      .sort((a, b) => (roomOrder.get(a[0].room_id) ?? 0) - (roomOrder.get(b[0].room_id) ?? 0))
+    for (const ps of rooms) {
+      const key = `r:${ps[0].room_id}`
+      const label = isBatch && ps[0].job_number ? `${ps[0].job_number} · ${ps[0].room_name}` : ps[0].room_name
+      out.push({ kind: 'group', key, depth: 0, label, parts: ps, cabs: new Set(ps.map(p => p.cabinet_instance_id)).size })
+      if (!isOpen(key)) continue
+      if (groupBy === 'room') for (const p of ps) out.push({ kind: 'part', p })
+      else cabGroups(ps, 1, false)
+    }
+    return out
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, groupBy, openMap, search, roomOrder, isBatch])
+
   const selectedParts = snap.parts.filter(p => selectedUids.has(p.uid))
   const totalArea = selectedParts.reduce((a, p) => a + (p.w * p.h * (cutQty[p.uid] ?? 1)) / 1e6, 0)
 
@@ -340,11 +396,8 @@ function Stage2Parts() {
     if (on) setSelected([...new Set([...selectedUids, ...uids])])
     else { const drop = new Set(uids); setSelected([...selectedUids].filter(u => !drop.has(u))) }
   }
-  function selectAllShown() { setSelected([...new Set([...selectedUids, ...filtered.map(p => p.uid)])]) }
-  function deselectAllShown() {
-    const shown = new Set(filtered.map(p => p.uid))
-    setSelected([...selectedUids].filter(u => !shown.has(u)))
-  }
+  function selectAllShown() { setPartsOn(shown.map(p => p.uid), true) }
+  function deselectAllShown() { setPartsOn(shown.map(p => p.uid), false) }
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -373,21 +426,40 @@ function Stage2Parts() {
       {/* Filters */}
       <div className="flex-none px-8 pt-3 pb-3 space-y-3 border-b border-edge">
         <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
-        <RoomCabinetPicker rooms={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))}
-          cabinets={cabOptions} partsByCab={partsByCab} fmtMm={fmtMm} dims={dispDims} matName={matName} selected={filterCabinetIds} onChange={setFilterCabinets}
-          partOn={selectedUids} setPartsOn={setPartsOn} />
+        {filterCabinetIds.length > 0 && (
+          <div className="flex items-center gap-3 text-[11px]">
+            <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider w-16 shrink-0">Cabinets</span>
+            <span className="text-amber-500">Only {filterCabinetIds.length} cabinet{filterCabinetIds.length === 1 ? '' : 's'} (from a saved run)</span>
+            <button onClick={() => setFilterCabinets([])} className="px-2 py-0.5 rounded border border-edge-strong text-ink-muted hover:bg-surface-2">Clear</button>
+          </div>
+        )}
         <ChipFilter label="Materials" options={jobMaterials.map(m => ({ id: m.id, label: noColour.has(m.id) ? `${m.name} ⚠` : m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
       </div>
 
       {/* Actions + summary */}
-      <div className="flex-none px-8 py-2 flex items-center gap-3 text-xs border-b border-edge">
+      <div className="flex-none px-8 py-2 flex items-center gap-2 flex-wrap text-xs border-b border-edge">
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search part, cabinet, room, board, size…"
+          className="w-64 bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent" />
+        {search && <button onClick={() => setSearch('')} className="text-ink-subtle hover:text-ink" title="Clear search">✕</button>}
+        <span className="text-ink-subtle ml-2">Group</span>
+        <div className="flex rounded border border-edge-strong overflow-hidden">
+          {GROUP_OPTS.map(o => (
+            <button key={o.id} onClick={() => setGroupBy(o.id)}
+              className={`px-2 py-1 text-[11px] ${groupBy === o.id ? 'bg-accent text-white' : 'text-ink-muted hover:bg-surface-2'}`}>{o.label}</button>
+          ))}
+        </div>
+        {groupBy !== 'none' && <>
+          <button onClick={() => setAllOpen(true)} className="px-2 py-1 text-[11px] text-ink-subtle hover:text-ink">Expand all</button>
+          <button onClick={() => setAllOpen(false)} className="px-2 py-1 text-[11px] text-ink-subtle hover:text-ink">Collapse all</button>
+        </>}
+        <span className="w-px h-4 bg-edge-strong mx-1" />
         <button onClick={() => setPartsOn(snap.parts.map(p => p.uid), true)} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors" title="Tick every part in the job, whatever the filters show">Select all</button>
         <button onClick={() => setSelected([])} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors" title="Untick every part in the job, whatever the filters show">Deselect all</button>
         <span className="w-px h-4 bg-edge-strong" />
         <button onClick={selectAllShown} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Select shown</button>
         <button onClick={deselectAllShown} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Deselect shown</button>
         <span className="ml-auto text-ink-subtle">
-          {selectedUids.size} part{selectedUids.size === 1 ? '' : 's'} selected · {totalArea.toFixed(2)} m² · showing {filtered.length} of {snap.parts.length}
+          {selectedUids.size} part{selectedUids.size === 1 ? '' : 's'} selected · {totalArea.toFixed(2)} m² · showing {shown.length} of {snap.parts.length}
         </span>
       </div>
 
@@ -406,8 +478,35 @@ function Stage2Parts() {
             </tr>
           </thead>
           <tbody>
-            {sortedFiltered.length === 0 && <tr><td colSpan={partColOrder.length} className="border-b border-r border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters.</td></tr>}
-            {sortedFiltered.map((p, i) => {
+            {shown.length === 0 && <tr><td colSpan={partColOrder.length} className="border-b border-r border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters{search ? ' / search' : ''}.</td></tr>}
+            {rows.map((r, i) => {
+              if (r.kind === 'group') {
+                const uids = r.parts.map(p => p.uid)
+                const n = uids.filter(u => selectedUids.has(u)).length
+                const open = isOpen(r.key)
+                const room = r.key.startsWith('r:')
+                return (
+                  <tr key={r.key} className={room ? 'bg-surface-2' : 'bg-surface-2/45'}>
+                    <td colSpan={partColOrder.length} className="border-b border-r border-edge-strong/70 px-2 py-1">
+                      <div className="flex items-center gap-2" style={{ paddingLeft: r.depth * 22 }}>
+                        <input type="checkbox" checked={n === uids.length}
+                          ref={el => { if (el) el.indeterminate = n > 0 && n < uids.length }}
+                          onChange={() => setPartsOn(uids, n < uids.length)} title="Tick / untick these parts for nesting" />
+                        <button onClick={() => toggleOpen(r.key)} className="flex items-center gap-1.5 text-left min-w-0">
+                          <span className="text-ink-subtle w-3">{open ? '▾' : '▸'}</span>
+                          <span className={`truncate ${room ? 'text-ink font-semibold' : 'text-ink font-medium'}`}>{r.label}</span>
+                          {r.sub && <span className="text-ink-subtle truncate">· {r.sub}</span>}
+                        </button>
+                        <span className="text-ink-subtle shrink-0">
+                          {room && groupBy === 'room-cab' ? `· ${r.cabs} cab${r.cabs === 1 ? '' : 's'} ` : ''}· {uids.length} part{uids.length === 1 ? '' : 's'}
+                        </span>
+                        <span className={`tabular-nums text-[10px] shrink-0 ${n === 0 ? 'text-ink-subtle' : n === uids.length ? 'text-emerald-500' : 'text-amber-500'}`}>{n}/{uids.length} ticked</span>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              }
+              const p = r.p
               const on = selectedUids.has(p.uid)
               return (
                 <tr key={p.uid} className={`${i % 2 ? 'bg-surface/40' : ''} hover:bg-surface ${on ? '' : 'opacity-55'}`}>
@@ -531,152 +630,18 @@ function ChipFilter({ label, options, selected, onChange }: {
   )
 }
 
-// Cabinet filter summarised by room (Mark 2026-11-06): one line per room with
-// its cabinet count — tick the room to pick all its cabinets, open it to pick
-// single ones. Empty selection = all cabinets (same as the old chip row).
-// The ✓ / ✕ buttons on each room row and cabinet tick / untick that room's or
-// cabinet's PARTS for nesting (Mark 2026-11-07) — separate from the filter pick.
-// Cabinets drop down too: open one to tick / untick its single parts.
-function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, dims, matName, selected, onChange, partOn, setPartsOn }: {
-  rooms: { id: string; label: string }[]
-  cabinets: { id: string; label: string; room_id: string }[]
-  partsByCab: Map<string, OptiPart[]>
-  fmtMm: (v: number) => string
-  dims: (p: OptiPart) => { w: number; h: number }
-  matName: Map<string, string>
-  selected: string[]
-  onChange: (ids: string[]) => void
-  partOn: Set<string>
-  setPartsOn: (uids: string[], on: boolean) => void
-}) {
-  const uidsOf = (cabIds: string[]) => cabIds.flatMap(id => (partsByCab.get(id) ?? []).map(p => p.uid))
-  // Part rows + the per-room header share one column grid so they line up.
-  // Fixed column widths (not stretched) so sizes sit next to the name on a wide
-  // screen; cells carry the same grid lines as the parts table.
-  const PART_GRID = 'grid grid-cols-[16rem_4.5rem_4.5rem_3rem_11rem] w-max ml-14 border-l border-edge-strong'
-  const CELL = 'px-1.5 py-0.5 border-r border-b border-edge/70 min-w-0'
-  const [openCabs, setOpenCabs] = useState<Set<string>>(new Set())
-  const toggleOpenCab = (id: string) => setOpenCabs(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  // Checkbox = are this room's / cabinet's parts ticked for nesting (tri-state).
-  const PartTick = ({ uids }: { uids: string[] }) => {
-    const n = uids.filter(u => partOn.has(u)).length
-    return (
-      <input type="checkbox" checked={uids.length > 0 && n === uids.length} disabled={uids.length === 0}
-        ref={el => { if (el) el.indeterminate = n > 0 && n < uids.length }}
-        onChange={() => setPartsOn(uids, n < uids.length)} title="Tick / untick these parts for nesting" />
-    )
-  }
-  const PartCount = ({ uids }: { uids: string[] }) => {
-    const n = uids.filter(u => partOn.has(u)).length
-    return (
-      <span className={`tabular-nums text-[10px] shrink-0 ${n === 0 ? 'text-ink-subtle' : n === uids.length ? 'text-emerald-500' : 'text-amber-500'}`}
-        title="Parts ticked for nesting">{n}/{uids.length} ticked</span>
-    )
-  }
-  // Funnel: show only this room / cabinet in the table below (the filter).
-  const FilterBtn = ({ on, onClick }: { on: boolean; onClick: () => void }) => (
-    <button onClick={onClick} title={on ? 'Showing in the table — click to stop filtering to it' : 'Show only this in the table below'}
-      className={`px-1.5 rounded text-[10px] shrink-0 ${on ? 'bg-accent text-white' : 'text-ink-subtle hover:text-ink hover:bg-surface-2'}`}>show</button>
-  )
-  const [open, setOpen] = useState<Set<string>>(new Set())
-  const sel = new Set(selected)
-  const groups = rooms
-    // Cabinets A→Z with numbers in number order (BC-2 before BC-10).
-    .map(r => ({ ...r, cabs: cabinets.filter(c => c.room_id === r.id).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' })) }))
-    .filter(g => g.cabs.length > 0)
-  const toggleOpen = (id: string) => setOpen(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const toggleCab = (id: string) => onChange(sel.has(id) ? selected.filter(x => x !== id) : [...selected, id])
-  const toggleRoom = (ids: string[]) => {
-    const allOn = ids.every(id => sel.has(id))
-    onChange(allOn ? selected.filter(x => !ids.includes(x)) : [...new Set([...selected, ...ids])])
-  }
-  const allOpen = groups.length > 0 && groups.every(g => open.has(g.id))
-  return (
-    <div className="flex items-start gap-3">
-      <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider w-16 shrink-0 pt-1.5">Cabinets</span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 mb-1.5">
-          <button onClick={() => onChange([])}
-            className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${selected.length === 0 ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}
-            title="Show every cabinet in the table (clears the show filters)">Show all</button>
-          <button onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map(g => g.id)))}
-            className="px-2 py-1 text-[11px] text-ink-subtle hover:text-ink">{allOpen ? 'Collapse all' : 'Expand all'}</button>
-          {selected.length > 0 && <span className="text-[11px] text-ink-subtle">showing {selected.length} cabinet{selected.length === 1 ? '' : 's'}</span>}
-          <span className="ml-auto text-[10px] text-ink-subtle">Tick boxes = parts sent to nest · “show” = filter the table</span>
-        </div>
-        <div className="max-h-96 overflow-auto border border-edge rounded divide-y divide-edge">
-          {groups.map(g => {
-            const ids = g.cabs.map(c => c.id)
-            const on = ids.filter(id => sel.has(id)).length
-            const roomUids = uidsOf(ids)
-            const parts = roomUids.length
-            const isOpen = open.has(g.id)
-            const picked = g.cabs.filter(c => sel.has(c.id))
-            return (
-              <div key={g.id}>
-                <div className="flex items-center gap-2 px-2 py-1 text-[11px] hover:bg-surface-2/60">
-                  <PartTick uids={roomUids} />
-                  <button onClick={() => toggleOpen(g.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
-                    <span className="text-ink-subtle w-3">{isOpen ? '▾' : '▸'}</span>
-                    <span className="text-ink font-medium truncate">{g.label}</span>
-                    <span className="text-ink-subtle shrink-0">· {ids.length} cab{ids.length === 1 ? '' : 's'} · {parts} parts</span>
-                    {!isOpen && on > 0 && on < ids.length && (
-                      <span className="text-ink-subtle truncate">(showing {picked.map(c => c.label).join(', ')})</span>
-                    )}
-                  </button>
-                  <PartCount uids={roomUids} />
-                  <FilterBtn on={on === ids.length} onClick={() => toggleRoom(ids)} />
-                </div>
-                {isOpen && (
-                  <div className="pb-1">
-                    <div className={`${PART_GRID} text-[10px] font-semibold uppercase tracking-wider text-ink-muted bg-surface-2 border-t mt-1`}>
-                      <span className={`${CELL} border-b-edge-strong`}>Part</span>
-                      <span className={`${CELL} border-b-edge-strong text-right`}>Width <span className="font-normal normal-case text-ink-subtle">DX</span></span>
-                      <span className={`${CELL} border-b-edge-strong text-right`}>Height <span className="font-normal normal-case text-ink-subtle">DY</span></span>
-                      <span className={`${CELL} border-b-edge-strong text-right`}>Thk</span>
-                      <span className={`${CELL} border-b-edge-strong`}>Material</span>
-                    </div>
-                    {g.cabs.map(c => {
-                      const cabParts = partsByCab.get(c.id) ?? []
-                      const cabOpen = openCabs.has(c.id)
-                      return (
-                        <div key={c.id}>
-                          <div className="flex items-center gap-2 pl-7 pr-2 py-0.5 text-[11px] hover:bg-surface-2/60">
-                            <PartTick uids={cabParts.map(p => p.uid)} />
-                            <button onClick={() => toggleOpenCab(c.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
-                              <span className="text-ink-subtle w-3">{cabOpen ? '▾' : '▸'}</span>
-                              <span className={`truncate ${sel.has(c.id) ? 'text-accent-ink font-medium' : 'text-ink'}`}>{c.label}</span>
-                              <span className="text-ink-subtle shrink-0">· {cabParts.length} part{cabParts.length === 1 ? '' : 's'}</span>
-                            </button>
-                            <PartCount uids={cabParts.map(p => p.uid)} />
-                            <FilterBtn on={sel.has(c.id)} onClick={() => toggleCab(c.id)} />
-                          </div>
-                          {cabOpen && cabParts.map((p, i) => (
-                            <label key={p.uid} className={`${PART_GRID} ${i === 0 ? 'border-t border-t-edge/70' : ''} text-[11px] hover:bg-surface-2/60 cursor-pointer ${partOn.has(p.uid) ? '' : 'opacity-55'}`}>
-                              <span className={`${CELL} flex items-center gap-2`}>
-                                <input type="checkbox" checked={partOn.has(p.uid)} onChange={() => setPartsOn([p.uid], !partOn.has(p.uid))} title="Tick this part for nesting" />
-                                <span className="text-ink truncate">{p.label}</span>
-                              </span>
-                              <span className={`${CELL} font-mono tabular-nums text-ink-muted text-right`}>{fmtMm(dims(p).w)}</span>
-                              <span className={`${CELL} font-mono tabular-nums text-ink-muted text-right`}>{fmtMm(dims(p).h)}</span>
-                              <span className={`${CELL} font-mono tabular-nums text-ink-muted text-right`}>{p.thickness}</span>
-                              <span className={`${CELL} text-ink-muted truncate`}>{p.material_id ? (matName.get(p.material_id) ?? '—') : 'no material'}</span>
-                            </label>
-                          ))}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-          {groups.length === 0 && <div className="px-2 py-2 text-[11px] text-ink-subtle">No cabinets.</div>}
-        </div>
-      </div>
-    </div>
-  )
-}
+// Stage 2 list grouping. Kept at module level so it survives moving between stages.
+type GroupBy = 'room-cab' | 'room' | 'cabinet' | 'none'
+const GROUP_OPTS: { id: GroupBy; label: string }[] = [
+  { id: 'room-cab', label: 'Room › Cabinet' }, { id: 'room', label: 'Room' }, { id: 'cabinet', label: 'Cabinet' }, { id: 'none', label: 'None' },
+]
+const stage2Mem: { groupBy: GroupBy; search: string; open: Map<string, boolean> } = { groupBy: 'room-cab', search: '', open: new Map() }
+function remember<K extends keyof typeof stage2Mem>(k: K, v: (typeof stage2Mem)[K]) { stage2Mem[k] = v }
+type ListRow =
+  | { kind: 'group'; key: string; depth: number; label: string; sub?: string; parts: OptiPart[]; cabs: number }
+  | { kind: 'part'; p: OptiPart }
+// Names A→Z with numbers in number order (BC-2 before BC-10).
+const nat = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })
 
 // Materials some cabinet fell back to because no colour was chosen for a board
 // with colours (COLOUR_NOT_CHOSEN, z_material_colours MC5).
