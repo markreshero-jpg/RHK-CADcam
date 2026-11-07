@@ -294,9 +294,9 @@ function Stage2Parts() {
     [snap.cabinets, filterRoomIds],
   )
 
-  const partCountByCab = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const p of snap.parts) m.set(p.cabinet_instance_id, (m.get(p.cabinet_instance_id) ?? 0) + 1)
+  const partUidsByCab = useMemo(() => {
+    const m = new Map<string, string[]>()
+    for (const p of snap.parts) { const a = m.get(p.cabinet_instance_id); if (a) a.push(p.uid); else m.set(p.cabinet_instance_id, [p.uid]) }
     return m
   }, [snap.parts])
 
@@ -335,6 +335,11 @@ function Stage2Parts() {
   const selectedParts = snap.parts.filter(p => selectedUids.has(p.uid))
   const totalArea = selectedParts.reduce((a, p) => a + (p.w * p.h * (cutQty[p.uid] ?? 1)) / 1e6, 0)
 
+  // Tick / untick parts for nesting regardless of the filters (whole job, a room, a cabinet).
+  function setPartsOn(uids: string[], on: boolean) {
+    if (on) setSelected([...new Set([...selectedUids, ...uids])])
+    else { const drop = new Set(uids); setSelected([...selectedUids].filter(u => !drop.has(u))) }
+  }
   function selectAllShown() { setSelected([...new Set([...selectedUids, ...filtered.map(p => p.uid)])]) }
   function deselectAllShown() {
     const shown = new Set(filtered.map(p => p.uid))
@@ -369,12 +374,16 @@ function Stage2Parts() {
       <div className="flex-none px-8 pt-3 pb-3 space-y-3 border-b border-edge">
         <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
         <RoomCabinetPicker rooms={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))}
-          cabinets={cabOptions} partCount={partCountByCab} selected={filterCabinetIds} onChange={setFilterCabinets} />
+          cabinets={cabOptions} partUids={partUidsByCab} selected={filterCabinetIds} onChange={setFilterCabinets}
+          partOn={selectedUids} setPartsOn={setPartsOn} />
         <ChipFilter label="Materials" options={jobMaterials.map(m => ({ id: m.id, label: noColour.has(m.id) ? `${m.name} ⚠` : m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
       </div>
 
       {/* Actions + summary */}
       <div className="flex-none px-8 py-2 flex items-center gap-3 text-xs border-b border-edge">
+        <button onClick={() => setPartsOn(snap.parts.map(p => p.uid), true)} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors" title="Tick every part in the job, whatever the filters show">Select all</button>
+        <button onClick={() => setSelected([])} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors" title="Untick every part in the job, whatever the filters show">Deselect all</button>
+        <span className="w-px h-4 bg-edge-strong" />
         <button onClick={selectAllShown} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Select shown</button>
         <button onClick={deselectAllShown} className="px-2.5 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">Deselect shown</button>
         <span className="ml-auto text-ink-subtle">
@@ -525,13 +534,31 @@ function ChipFilter({ label, options, selected, onChange }: {
 // Cabinet filter summarised by room (Mark 2026-11-06): one line per room with
 // its cabinet count — tick the room to pick all its cabinets, open it to pick
 // single ones. Empty selection = all cabinets (same as the old chip row).
-function RoomCabinetPicker({ rooms, cabinets, partCount, selected, onChange }: {
+// The ✓ / ✕ buttons on each room row and cabinet tick / untick that room's or
+// cabinet's PARTS for nesting (Mark 2026-11-07) — separate from the filter pick.
+function RoomCabinetPicker({ rooms, cabinets, partUids, selected, onChange, partOn, setPartsOn }: {
   rooms: { id: string; label: string }[]
   cabinets: { id: string; label: string; room_id: string }[]
-  partCount: Map<string, number>
+  partUids: Map<string, string[]>
   selected: string[]
   onChange: (ids: string[]) => void
+  partOn: Set<string>
+  setPartsOn: (uids: string[], on: boolean) => void
 }) {
+  const uidsOf = (cabIds: string[]) => cabIds.flatMap(id => partUids.get(id) ?? [])
+  const PartBtns = ({ uids }: { uids: string[] }) => {
+    const n = uids.filter(u => partOn.has(u)).length
+    return (
+      <span className="inline-flex items-center gap-0.5 shrink-0">
+        <span className={`tabular-nums text-[10px] mr-0.5 ${n === 0 ? 'text-ink-subtle' : n === uids.length ? 'text-emerald-500' : 'text-amber-500'}`}
+          title="Parts ticked for nesting">{n}/{uids.length}</span>
+        <button onClick={() => setPartsOn(uids, true)} disabled={n === uids.length}
+          className="px-1 rounded text-[10px] text-ink-subtle hover:text-emerald-500 hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent" title="Select all these parts">✓</button>
+        <button onClick={() => setPartsOn(uids, false)} disabled={n === 0}
+          className="px-1 rounded text-[10px] text-ink-subtle hover:text-red-400 hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent" title="Deselect all these parts">✕</button>
+      </span>
+    )
+  }
   const [open, setOpen] = useState<Set<string>>(new Set())
   const sel = new Set(selected)
   const groups = rooms
@@ -559,7 +586,8 @@ function RoomCabinetPicker({ rooms, cabinets, partCount, selected, onChange }: {
           {groups.map(g => {
             const ids = g.cabs.map(c => c.id)
             const on = ids.filter(id => sel.has(id)).length
-            const parts = ids.reduce((a, id) => a + (partCount.get(id) ?? 0), 0)
+            const roomUids = uidsOf(ids)
+            const parts = roomUids.length
             const isOpen = open.has(g.id)
             const picked = g.cabs.filter(c => sel.has(c.id))
             return (
@@ -577,14 +605,18 @@ function RoomCabinetPicker({ rooms, cabinets, partCount, selected, onChange }: {
                       <span className="text-ink-subtle truncate">({picked.map(c => c.label).join(', ')})</span>
                     )}
                   </button>
+                  <PartBtns uids={roomUids} />
                 </div>
                 {isOpen && (
                   <div className="flex flex-wrap gap-1.5 px-7 pb-2 pt-0.5">
                     {g.cabs.map(c => (
-                      <button key={c.id} onClick={() => toggleCab(c.id)}
-                        className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${sel.has(c.id) ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}>
-                        {c.label}
-                      </button>
+                      <span key={c.id} className="inline-flex items-center gap-1 pr-1 rounded-full border border-edge">
+                        <button onClick={() => toggleCab(c.id)} title="Filter to this cabinet"
+                          className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${sel.has(c.id) ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}>
+                          {c.label}
+                        </button>
+                        <PartBtns uids={partUids.get(c.id) ?? []} />
+                      </span>
                     ))}
                   </div>
                 )}
