@@ -369,7 +369,8 @@ export function cutoutPartInfo(rp: Pick<ResolvedCabinet, 'case_parts' | 'interna
   { W: number; D: number; DZ: number; holes: boolean } | null {
   if (partId.startsWith('custom_')) {
     const p = rp.custom_parts?.find(c => `custom_${c.id}` === partId)
-    return p && (p.orientation ?? 'flat') === 'flat' ? { W: Number(p.dy), D: Number(p.dx), DZ: Number(p.dz), holes: true } : null
+    const o = p?.orientation ?? 'flat'
+    return p && (o === 'flat' || o === 'side') ? { W: Number(p.dy), D: Number(p.dx), DZ: Number(p.dz), holes: true } : null
   }
   const t = cutoutTargets(rp.case_parts, rp.internal_parts ?? []).find(x => x.id === partId)
   return t ? { W: t.part.DY, D: t.part.DX, DZ: t.part.DZ, holes: t.holes } : null
@@ -394,9 +395,15 @@ type CustomCutRow = { id: string; orientation?: string | null; dx: number; dy: n
 
 /**
  * A custom part's cut-outs → the `outline` + `cutouts` the optimiser and 3D
- * read (null when it has none). Flat parts only so far (the WUP's Under Panel):
- * same horizontal frame as a carcass bottom — x along its length (dy), y back
- * from its front edge (dx).
+ * read (null when it has none). Flat parts (the WUP's Under Panel) and side
+ * parts (an applied panel / WF-L wall filler standing side-on).
+ *
+ * Cut in the horizontal frame as a carcass bottom: x along its length (dy),
+ * y back from its front edge (dx). On a SIDE part dy is its height, so the
+ * cut-out anchors read x 'left' = bottom, 'right' = top (front / back as usual).
+ * A side part's result is then written in the gable frame every side-panel
+ * outline uses (resolver finger-pull notches, Shape Editor, optimiser
+ * shapeFrameFor 'side'): x = depth from the back (0..dx), y = down from the top (0..dy).
  */
 export function customPartCuts(p: CustomCutRow, list: Cutout[], scope?: FormulaScope): {
   outline: OutlinePt[] | null; cutouts: { pts: OutlinePt[]; skin: number }[] | null; warnings: Issue[]
@@ -404,8 +411,23 @@ export function customPartCuts(p: CustomCutRow, list: Cutout[], scope?: FormulaS
   if (!list.length) return { outline: null, cutouts: null, warnings: [] }
   const id = `custom_${p.id}`
   const part: CutPart = { DX: Number(p.dx), DY: Number(p.dy), DZ: Number(p.dz) }
-  const targets = (p.orientation ?? 'flat') === 'flat' ? [{ id, part, holes: true }] : []
+  const orient = p.orientation ?? 'flat'
+  const side = orient === 'side'
+  const targets = orient === 'flat' || side ? [{ id, part, holes: true }] : []
   const warnings = applyPartCutouts(targets, { [id]: list }, scope)
-  return { outline: part.outline ?? null, cutouts: part.cutouts?.length ? part.cutouts : null, warnings }
+  // Horizontal (u along dy from the bottom, v back from the front) → gable frame.
+  // The swap is a mirror, which flips the winding: walk the points backwards to
+  // keep it. An edge's tag / bulge sits on its start point, so each point takes
+  // them from the one before it in the old order (bulge: mirror + reverse = same sign).
+  const toSide = (pts: OutlinePt[]): OutlinePt[] => {
+    const n = pts.length
+    return pts.map((_, k) => {
+      const at = pts[n - 1 - k], src = pts[(2 * n - 2 - k) % n]
+      return { x: r2(part.DX - at.y), y: r2(part.DY - at.x), ...(src.e ? { e: src.e } : {}), ...(src.b ? { b: src.b } : {}) }
+    })
+  }
+  const outline = part.outline ? (side ? toSide(part.outline) : part.outline) : null
+  const cutouts = part.cutouts?.length ? (side ? part.cutouts.map(c => ({ ...c, pts: toSide(c.pts) })) : part.cutouts) : null
+  return { outline, cutouts, warnings }
 }
 

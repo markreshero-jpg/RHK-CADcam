@@ -130,3 +130,11 @@ Done in Rev 4 (2026-11-07); see below.
 - **BC-13 689** (`_tmp-6595-bc13fix.mjs`): the draw left the island's last front drawer bank at 672.5 (layout + page 4 say 689),
   leaving a 17 gap to the waterfall. Set back to 689 through the canvas API; resolves clean. Cause not found: no script
   set 672.5, so the canvas placement trimmed it by 16.5 when drawn.
+- **WC-10 fillers (built 2026-11-07):** new library item **WF-L** (`cf3eea4b`, `_tmp-wfl-def.mjs`): WEP-style side panel
+  with a formula notch (`cab.h - 70` x `cab.d - 70` off the back-top), so the legs stay 70 at any size. Placed WC-15 (x 0)
+  + WC-16 (x 872), 436 x 690 x 18 LX Abs Grain Sublime Teak, front + bottom edges taped; WC-10 890 -> 854 at x 18
+  (`_tmp-6595-wfl-place.mjs`, `_tmp-6595-wfl-fix.mjs`). Code: side custom parts take notches (partCutouts / partSolids).
+  A 16.5 teak board (LX Colour 16mm Sublime Teak) exists if Mark wants 16.5 instead.
+- **Island back (Mark):** BFK 70 (BC-14) at the Wall 5 end of BC-01, BC-01 616.5 -> 546.5 (`_tmp-6595-bfk.mjs`).
+  BC-01/02/03 + BC-14 in Sublime Teak 18: door style = the job's upper style, fronts via the cabinet `door_face`
+  override (the job colour grid beat the zones' own door_colour_id), exposed = teak 18 (`_tmp-6595-doorface.mjs`).

@@ -181,9 +181,39 @@ describe('part cut-outs (R3 custom parts)', () => {
     expect(f.warnings).toEqual([])
     const fb = bbox(f.cutouts![0].pts)
     expect(fb.x1 - fb.x0).toBeCloseTo(500)
-    const side = customPartCuts({ ...panel, orientation: 'side' }, [hole()])
-    expect(side.outline).toBeNull()
-    expect(side.warnings[0].message).toMatch(/not supported yet/)
+    const front = customPartCuts({ ...panel, orientation: 'front' }, [hole()])
+    expect(front.outline).toBeNull()
+    expect(front.warnings[0].message).toMatch(/not supported yet/)
+  })
+
+  // WF-L wall filler (RHK6595 WC-10, Mark 2026-11-07): a side panel 436 deep x 690
+  // tall with the back-top corner notched out, leaving a 70 front leg + 70 bottom leg.
+  it('notches a side part into an L, written in the gable frame', () => {
+    const fil = { id: 'wfl', orientation: 'side', dx: 436, dy: 690, dz: 18 }
+    const L = notch({ id: 'L', edge: 'back', w: 'cab.h - 70', d: 'cab.d - 70', x: { from: 'right', off: 0 }, y: { from: 'back', off: 0 } })
+    const rp = resolveCabinet(cab({}))
+    const ci = cab({})
+    const scope = buildFormulaScope(rp, ci)
+    const H = ci.DY, D = ci.DZ   // cab.h / cab.d
+    const cut = customPartCuts({ ...fil, dx: D, dy: H }, [L], scope)
+    expect(cut.warnings).toEqual([])
+    expect(cut.outline).toHaveLength(6)
+    expect(area(cut.outline!)).toBeCloseTo(70 * H + 70 * D - 70 * 70)
+    // Gable frame: x = depth from the back, y = down from the top. The front
+    // leg runs the full height at x = D − 70..D, the bottom leg the full depth.
+    const b = bbox(cut.outline!)
+    expect([b.x0, b.x1, b.y0, b.y1]).toEqual([0, D, 0, H])
+    const has = (x: number, y: number) => cut.outline!.some(p => Math.abs(p.x - x) < 0.01 && Math.abs(p.y - y) < 0.01)
+    expect(has(D - 70, 0)).toBe(true)        // top of the front leg, inside corner side
+    expect(has(D - 70, H - 70)).toBe(true)   // the L's inside corner
+    expect(has(0, H - 70)).toBe(true)        // back end of the bottom leg
+    // 3D picks it up with tagged edges (front = right, bottom = bottom) for the tape.
+    rp.custom_parts = [{ ...fil, dx: D, dy: H, outline: cut.outline } as unknown as NonNullable<typeof rp.custom_parts>[number]]
+    const s = partShapes(rp).get('custom_wfl')!
+    expect(s.edges!.some(e => e.e === 'right')).toBe(true)
+    expect(s.edges!.some(e => e.e === 'bottom')).toBe(true)
+    // Optimiser: side frame, no swap.
+    expect(shapeFrameFor('custom_parts', 'side', 'custom_wfl').swap).toBe(false)
   })
 
   it('normalises the stored list', () => {
@@ -204,7 +234,8 @@ describe('cut-outs editor helpers (R4)', () => {
     expect(cutoutPartInfo(rp, 'case_bottom')).toEqual({ W: bot.DY, D: bot.DX, DZ: bot.DZ, holes: true })
     expect(cutoutPartInfo(rp, 'int_fixed_shelf_0')!.holes).toBe(false)
     expect(cutoutPartInfo(rp, 'custom_up')).toEqual({ W: 1200, D: 330, DZ: 18, holes: true })
-    expect(cutoutPartInfo(rp, 'custom_ep')).toBeNull()
+    // Side customs take them too (WF-L): W = its height (dy), D = its depth (dx).
+    expect(cutoutPartInfo(rp, 'custom_ep')).toEqual({ W: 700, D: 330, DZ: 18, holes: true })
     expect(cutoutPartInfo(rp, 'case_left_side')).toBeNull()
   })
 

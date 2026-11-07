@@ -1961,7 +1961,7 @@ export function CabinetScene({
           grainExt: p.grain_across ? customGrainExt(orient, true) : undefined,
           // Resolver-cut outline + holes (R3: flat customs, e.g. the under panel's rangehood hole).
           ...(() => {
-            const rc = (orient === 'flat' ? rp.custom_parts?.find(c => c.id === p.id) : undefined) as { outline?: OutlinePt[] | null; cutouts?: { pts: OutlinePt[]; skin: number }[] | null } | undefined
+            const rc = (orient === 'flat' || orient === 'side' ? rp.custom_parts?.find(c => c.id === p.id) : undefined) as { outline?: OutlinePt[] | null; cutouts?: { pts: OutlinePt[]; skin: number }[] | null } | undefined
             return { ...(rc?.outline && rc.outline.length >= 3 ? { outline: rc.outline } : {}), ...(rc?.cutouts?.length ? { cutouts: rc.cutouts } : {}) }
           })(),
         }
