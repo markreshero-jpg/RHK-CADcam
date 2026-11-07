@@ -138,3 +138,6 @@ Done in Rev 4 (2026-11-07); see below.
 - **Island back (Mark):** BFK 70 (BC-14) at the Wall 5 end of BC-01, BC-01 616.5 -> 546.5 (`_tmp-6595-bfk.mjs`).
   BC-01/02/03 + BC-14 in Sublime Teak 18: door style = the job's upper style, fronts via the cabinet `door_face`
   override (the job colour grid beat the zones' own door_colour_id), exposed = teak 18 (`_tmp-6595-doorface.mjs`).
+- **Push-to-open (Mark):** new catalogue handle **K-Push Tech Long Concealed (buffer)** (`3b00f8ae`, Furnware DPC5B.WH.FG,
+  white, grip `push`, price TBC: trade login) on every BC-01/02/03 door, replacing the generic "Push to open"
+  (`_tmp-6595-kpush.mjs`).
