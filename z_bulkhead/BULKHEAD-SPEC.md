@@ -11,7 +11,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B11 height adjust built 2026-11-07, check pending. B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
+> **RESUME HERE** → B12 cleat butt joint built 2026-11-07 (migration b12 applied), check pending. B11 height adjust built 2026-11-07, check pending. B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
 > B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
 > migration_c7; no schema change) — in-app check pending, with B5. B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
@@ -193,6 +193,20 @@ underside when the bulkhead isn't sitting on cabinets.
       on; typing H directly still turns it off (the top stays at ceiling +
       adjust). No schema change (jsonb). Not for shadowlines. Sidebar
       "Height adjust" under Height to ceiling. Tutorial `bulkhead_height_adjust`.
+- [~] **B12 — cleat butt joint** (built 2026-11-07, in-app check pending) (Mark:
+      "run the bh:cleat_v to bottom and have the H butt into it … edge bottom
+      of v. H needs a joint (dynamic 5mm holes) on the edge that hits the V").
+      Supersedes decision 6's leg layout: `bh:cleat_v` is the full 100 from the
+      cleat bottom (y0) with its bottom edge taped (carcass / interior tape);
+      `bh:cleat_h` is 100 − carcass thickness deep and butts into the
+      upright's back face. Declared seam `bh:cleat_h|bh:cleat_v`, CM default
+      key `bh:cleat` (`bulkheadCleatSeams`, resolveBulkhead.ts) — seeded to
+      **5mm Dynamic Holes** on every base / wall / tall schedule row
+      (`migration_b12_cleat_joint.sql`, applied; a key already set wins).
+      Holes bore through the upright from its back face, centred on the flat
+      leg's thickness. Construction Methods › Wall › joint defaults lists it
+      under "Bulkheads (BH)". Supersedes "Hand-fixed: no seams / drilling" for
+      the cleat only.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 

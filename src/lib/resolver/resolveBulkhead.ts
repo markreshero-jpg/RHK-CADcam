@@ -12,7 +12,10 @@
 //   bh:cleat_v / _h      L fixing cleat (two 100 mm legs, carcass board) behind
 //                        the fascia's bottom edge — lifted by the bottom
 //                        return's thickness when that's on; none when the
-//                        bulkhead is lower than a leg
+//                        bulkhead is lower than a leg. The upright runs to the
+//                        bottom (bottom edge taped); the flat butts into its
+//                        back face, joined by the declared seam `bh:cleat`
+//                        (bulkheadCleatSeams, B12)
 //   bh:split             shadowline split rail (B7): flat, its own board, under
 //                        everything else, front edge `setback` behind the
 //                        front face; the parts above lift by its thickness
@@ -28,7 +31,7 @@
 // along Z, DZ thickness). Hand-fixed: no seams / drilling.
 // ============================================================
 
-import type { CabinetInput, ConstructionRules, ResolvedCasePart, EdgeBanding } from './types'
+import type { CabinetInput, ConstructionRules, DeclaredSeam, ResolvedCasePart, EdgeBanding } from './types'
 import { resolveFaceZ } from './mergeRules'
 import { BH_CLEAT_LEG } from '../bulkhead'
 
@@ -142,19 +145,21 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     const back = Zf - t           // fascia back face
     const hx0 = Math.max(x0, xLo(back - BH_CLEAT_LEG)), hx1 = Math.min(x1, xHi(back - BH_CLEAT_LEG))
     const vx0 = Math.max(x0, xLo(back - tc)), vx1 = Math.min(x1, xHi(back - tc))
+    // Flat leg butts into the upright's back face (B12, Mark 2026-11-07).
     push({
       part_key: 'bh:cleat_h',
-      DX: BH_CLEAT_LEG, DY: hx1 - hx0, DZ: tc,
+      DX: BH_CLEAT_LEG - tc, DY: hx1 - hx0, DZ: tc,
       X: hx0, Y: y0, Z: back - BH_CLEAT_LEG, AY: 0,
       material_id: cab.material.id,
       edge_band: band({}),
     })
+    // Upright leg runs to the bottom; its bottom edge shows — taped (carcass tape).
     push({
       part_key: 'bh:cleat_v',
-      DX: BH_CLEAT_LEG - tc, DY: vx1 - vx0, DZ: tc,
-      X: vx1, Y: y0 + tc, Z: back, AY: 180,
+      DX: BH_CLEAT_LEG, DY: vx1 - vx0, DZ: tc,
+      X: vx1, Y: y0, Z: back, AY: 180,
       material_id: cab.material.id,
-      edge_band: band({}),
+      edge_band: { top: false, bottom: true, left: false, right: false, id: cab.interior_edgeband_id },
     })
   }
   if (ts > 0) {
@@ -257,4 +262,29 @@ function resolveShadowline(cab: CabinetInput): ResolvedCasePart[] {
   ret('bh:sl_ret_l', L)
   ret('bh:sl_ret_r', R)
   return out
+}
+
+/** Construction-method default key for the cleat joint (seeded 5mm Dynamic Holes). */
+export const BH_CLEAT_SEAM = 'bh:cleat'
+
+/**
+ * The cleat's flat leg (A) into the upright (B), B12: the flat's front edge
+ * meets the upright's back face along the width; holes go through the upright
+ * from that face, centred on the flat's thickness.
+ */
+export function bulkheadCleatSeams(caseParts: ResolvedCasePart[]): DeclaredSeam[] {
+  const h = caseParts.find(p => p.part_key === 'bh:cleat_h')
+  const v = caseParts.find(p => p.part_key === 'bh:cleat_v')
+  if (!h || !v) return []
+  return [{
+    seam_key: 'bh:cleat_h|bh:cleat_v', generic_key: BH_CLEAT_SEAM,
+    part_a_key: 'bh:cleat_h', part_b_key: 'bh:cleat_v',
+    geom: {
+      origin: { x: h.X, y: h.Y, z: h.Z + h.DX },
+      along:  { x: 1, y: 0, z: 0 },
+      across: { x: 0, y: 1, z: 0 },
+      toward: { x: 0, y: 0, z: -1 },
+      length: h.DY, width: h.DZ,
+    },
+  }]
 }

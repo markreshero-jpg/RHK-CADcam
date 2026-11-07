@@ -196,6 +196,14 @@ export function curvedEndSeamParts(): SeamPart[] {
   ]
 }
 
+// Bulkheads (z_bulkhead B12): the cleat's flat leg butts into the upright.
+export function bulkheadSeamParts(): SeamPart[] {
+  return [{
+    partKey: 'bh:cleat_h', label: 'Bulkhead cleat (flat)',
+    edges: [{ edgeLabel: 'Into the upright', seamKey: 'bh:cleat', joinsLabel: 'Cleat upright' }],
+  }]
+}
+
 // ── Per-cabinet seam assignment state (shared by JointsPanel / PartEdgeJoints) ─
 
 export interface SeamAssignState {

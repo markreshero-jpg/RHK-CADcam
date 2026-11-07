@@ -2,12 +2,13 @@ import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver'
 import { mergeRules } from '../mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material, type ResolvedCasePart } from '../types'
-import { casePlanCorners, caseBox } from '../../jointDrilling'
+import { casePlanCorners, caseBox, cabinetSeamDrills } from '../../jointDrilling'
 import { DEFAULT_BULKHEAD, DEFAULT_SHADOWLINE, normaliseBulkhead, edgeMitreNote, type BulkheadSettings } from '../../bulkhead'
 import { partShapes } from '../../partSolids'
 import { cabVExtent, bulkheadOutline } from '../../geometry'
 import type { Room } from '../../types'
 import { isShapedPanelKey } from '../../cabinetShape/partKeys'
+import { bulkheadCleatSeams } from '../resolveBulkhead'
 
 // z_bulkhead B2: fascia + returns + L cleat from the bulkhead settings.
 const board = (t: number, id = `m${t}`): Material => ({ id, name: `Board ${t}`, DZ: t, sheet_dx: 2400, sheet_dy: 1200, has_grain: false })
@@ -53,8 +54,13 @@ describe('bulkhead parts', () => {
     const cv = get(ps, 'bh:cleat_v')!, ch = get(ps, 'bh:cleat_h')!
     expect(cv.material_id).toBe('carcass')
     expect(plan(cv)).toEqual({ x0: 0, x1: W, z0: D - T - TC, z1: D - T })
-    expect(caseBox(cv)).toMatchObject({ y: TC, h: 100 - TC })
-    expect(caseBox(ch)).toMatchObject({ x: 0, w: W, y: 0, h: TC, z: D - T - 100, d: 100 })
+    // B12: the upright runs to the bottom (bottom edge taped), the flat butts into it.
+    expect(caseBox(cv)).toMatchObject({ y: 0, h: 100 })
+    expect(cv.edge_band).toMatchObject({ bottom: true, top: false, left: false, right: false })
+    expect(caseBox(ch)).toMatchObject({ x: 0, w: W, y: 0, h: TC, z: D - T - 100, d: 100 - TC })
+    const [s] = bulkheadCleatSeams(ps)
+    expect(s).toMatchObject({ seam_key: 'bh:cleat_h|bh:cleat_v', generic_key: 'bh:cleat', part_a_key: 'bh:cleat_h', part_b_key: 'bh:cleat_v' })
+    expect(s.geom).toMatchObject({ origin: { x: 0, y: 0, z: D - T - TC }, length: W, width: TC })
   })
 
   it('mitred side returns: blanks run to the outer corners with 45° ends', () => {
@@ -93,7 +99,7 @@ describe('bulkhead parts', () => {
     expect(b.edge_band).toMatchObject({ top: false, bottom: true, left: false, right: false })
     expect(get(ps, 'bh:fascia')!.edge_band.bottom).toBe(false)
     expect(caseBox(get(ps, 'bh:cleat_h')!).y).toBe(T)
-    expect(caseBox(get(ps, 'bh:cleat_v')!).y).toBe(T + TC)
+    expect(caseBox(get(ps, 'bh:cleat_v')!).y).toBe(T)
   })
 
   it('mitred bottom return: both edges flagged, 45° profiles in 3D, MITRE note (B10)', () => {
@@ -194,3 +200,25 @@ describe('bulkhead parts', () => {
     expect(normaliseBulkhead({ ...DEFAULT_BULKHEAD, right: { on: false, depth: 600, joint: 'mitre', angle: 89 } })!.right.angle).toBe(75)
   })
 })
+
+describe('cleat joint (B12)', () => {
+  it('5mm Dynamic Holes on bh:cleat: through the upright from its back face, mid the flat leg', () => {
+    const op = {
+      id: 'op1', joint_type_id: 'dyn', operation_order: 1, target_part: 'part_b', machine_operation: 'drill', face: 'normal',
+      tool_diameter_mm: 5, depth_mm: 15, offset_x_mm: 0, offset_y_mm: 0, offset_z_mm: 50, qty: 1, spacing_mm: null, qty2: 1, spacing2_mm: null,
+      stopped: false, expressions: { qty: 'Math.ceil((D - 100) / 280) + 1', depth_mm: 'T', spacing_mm: '(D - 100) / Math.ceil((D - 100) / 280)', offset_y_mm: 'CW / 2' },
+    }
+    const rp = resolveCabinet(cab({}, { joint_defaults: { 'bh:cleat': 'dyn' }, joint_type_ops: { dyn: [op as never] } }))
+    const sj = rp.seam_joints.find(j => j.seam_key === 'bh:cleat_h|bh:cleat_v')!
+    expect(sj).toBeTruthy()
+    const holes = cabinetSeamDrills(rp).flatMap(d => (d as { drills?: unknown[] }).drills ?? [d]) as { x: number; y: number; z: number; axis: string; targetPartKey: string }[]
+    const mine = holes.filter(h => h.targetPartKey === 'bh:cleat_v')
+    expect(mine.length).toBe(Math.ceil((W - 100) / 280) + 1)
+    for (const h of mine) {
+      expect(h.y).toBeCloseTo(TC / 2)
+      expect(h.z).toBeCloseTo(D - T - TC)
+      expect(h.axis).toBe('z+')
+    }
+  })
+})
+

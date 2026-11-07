@@ -27,7 +27,7 @@ import { bifoldPair, bifoldHandles, resolveBifoldHoles } from './resolveBifold'
 import { fingerRails, fingerRailParts, notchPanels, pushFrontRailBack, type FingerRail } from './resolveFingerRails'
 import { shapedFingerRails } from './resolveShapedFingerRails'
 import { resolveFillerCleats } from './resolveFillerCleats'
-import { resolveBulkhead } from './resolveBulkhead'
+import { resolveBulkhead, bulkheadCleatSeams } from './resolveBulkhead'
 import { resolveCurvedEnd } from './resolveCurvedEnd'
 import { resolveFloatShelf } from './resolveFloatShelf'
 import { railSupportSeams } from './railSupportSeams'
@@ -178,6 +178,8 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
   // the joint type operations ready for display and drilling export.
   // Hanging rail end supports declare their gable seam (z_accessories A8).
   declaredSeams.push(...railSupportSeams(caseParts, internalParts))
+  // Bulkhead cleat: flat leg into the upright (z_bulkhead B12).
+  if (cab.bulkhead) declaredSeams.push(...bulkheadCleatSeams(caseParts))
   const seamJoints = resolveJoints(cab, caseParts, internalParts, declaredSeams)
   // Upright panels meeting off square get no CNC holes — fixed by hand.
   if (cab.footprint) {

@@ -23,7 +23,7 @@ import {
   EDGING_LABELS, EDGING_GROUPS, EDGE_SIDES, EDGE_LABELS,
   effectiveRule, effectiveEdgeSides, sidesEqual, computeDelta,
 } from '@/src/lib/constructionRuleConfig'
-import { carcaseSeamParts, internalSeamParts, curvedEndSeamParts, toGenericSeamKey, type SeamPart } from '@/src/lib/cabinetSeams'
+import { carcaseSeamParts, internalSeamParts, curvedEndSeamParts, bulkheadSeamParts, toGenericSeamKey, type SeamPart } from '@/src/lib/cabinetSeams'
 import { ebColour } from '@/src/lib/partPalette'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -583,6 +583,10 @@ export default function ConstructionMethodsClient({ embedded }: { embedded?: boo
                             Curved ends (BCRVFIXP / WCRVFIXP / TCRVFIXP) — every former and block inherits its family&apos;s joint
                           </p>
                           {curvedEndSeamParts().map(renderSeamPart)}
+                          {classTab === 'wall' && <>
+                            <p className="text-[10px] text-ink-subtle uppercase tracking-wider pt-3 pb-1">Bulkheads (BH)</p>
+                            {bulkheadSeamParts().map(renderSeamPart)}
+                          </>}
                         </div>
                       )
                     })()}
