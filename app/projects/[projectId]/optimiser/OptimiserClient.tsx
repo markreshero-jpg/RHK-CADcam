@@ -551,19 +551,27 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, select
   const uidsOf = (cabIds: string[]) => cabIds.flatMap(id => (partsByCab.get(id) ?? []).map(p => p.uid))
   const [openCabs, setOpenCabs] = useState<Set<string>>(new Set())
   const toggleOpenCab = (id: string) => setOpenCabs(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
-  const PartBtns = ({ uids }: { uids: string[] }) => {
+  // Checkbox = are this room's / cabinet's parts ticked for nesting (tri-state).
+  const PartTick = ({ uids }: { uids: string[] }) => {
     const n = uids.filter(u => partOn.has(u)).length
     return (
-      <span className="inline-flex items-center gap-0.5 shrink-0">
-        <span className={`tabular-nums text-[10px] mr-0.5 ${n === 0 ? 'text-ink-subtle' : n === uids.length ? 'text-emerald-500' : 'text-amber-500'}`}
-          title="Parts ticked for nesting">{n}/{uids.length}</span>
-        <button onClick={() => setPartsOn(uids, true)} disabled={n === uids.length}
-          className="px-1 rounded text-[10px] text-ink-subtle hover:text-emerald-500 hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent" title="Select all these parts">✓</button>
-        <button onClick={() => setPartsOn(uids, false)} disabled={n === 0}
-          className="px-1 rounded text-[10px] text-ink-subtle hover:text-red-400 hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent" title="Deselect all these parts">✕</button>
-      </span>
+      <input type="checkbox" checked={uids.length > 0 && n === uids.length} disabled={uids.length === 0}
+        ref={el => { if (el) el.indeterminate = n > 0 && n < uids.length }}
+        onChange={() => setPartsOn(uids, n < uids.length)} title="Tick / untick these parts for nesting" />
     )
   }
+  const PartCount = ({ uids }: { uids: string[] }) => {
+    const n = uids.filter(u => partOn.has(u)).length
+    return (
+      <span className={`tabular-nums text-[10px] shrink-0 ${n === 0 ? 'text-ink-subtle' : n === uids.length ? 'text-emerald-500' : 'text-amber-500'}`}
+        title="Parts ticked for nesting">{n}/{uids.length} ticked</span>
+    )
+  }
+  // Funnel: show only this room / cabinet in the table below (the filter).
+  const FilterBtn = ({ on, onClick }: { on: boolean; onClick: () => void }) => (
+    <button onClick={onClick} title={on ? 'Showing in the table — click to stop filtering to it' : 'Show only this in the table below'}
+      className={`px-1.5 rounded text-[10px] shrink-0 ${on ? 'bg-accent text-white' : 'text-ink-subtle hover:text-ink hover:bg-surface-2'}`}>show</button>
+  )
   const [open, setOpen] = useState<Set<string>>(new Set())
   const sel = new Set(selected)
   const groups = rooms
@@ -582,10 +590,12 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, select
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 mb-1.5">
           <button onClick={() => onChange([])}
-            className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${selected.length === 0 ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}>All</button>
+            className={`px-2.5 py-1 rounded-full text-[11px] transition-colors ${selected.length === 0 ? 'bg-accent text-white' : 'bg-surface-2 text-ink-muted hover:text-ink'}`}
+            title="Show every cabinet in the table (clears the show filters)">Show all</button>
           <button onClick={() => setOpen(allOpen ? new Set() : new Set(groups.map(g => g.id)))}
             className="px-2 py-1 text-[11px] text-ink-subtle hover:text-ink">{allOpen ? 'Collapse all' : 'Expand all'}</button>
-          {selected.length > 0 && <span className="text-[11px] text-ink-subtle">{selected.length} cabinet{selected.length === 1 ? '' : 's'} picked</span>}
+          {selected.length > 0 && <span className="text-[11px] text-ink-subtle">showing {selected.length} cabinet{selected.length === 1 ? '' : 's'}</span>}
+          <span className="ml-auto text-[10px] text-ink-subtle">Tick boxes = parts sent to nest · “show” = filter the table</span>
         </div>
         <div className="max-h-96 overflow-auto border border-edge rounded divide-y divide-edge">
           {groups.map(g => {
@@ -598,19 +608,17 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, select
             return (
               <div key={g.id}>
                 <div className="flex items-center gap-2 px-2 py-1 text-[11px] hover:bg-surface-2/60">
-                  <input type="checkbox" checked={on === ids.length}
-                    ref={el => { if (el) el.indeterminate = on > 0 && on < ids.length }}
-                    onChange={() => toggleRoom(ids)} title="Pick / unpick every cabinet in this room" />
+                  <PartTick uids={roomUids} />
                   <button onClick={() => toggleOpen(g.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
                     <span className="text-ink-subtle w-3">{isOpen ? '▾' : '▸'}</span>
                     <span className="text-ink font-medium truncate">{g.label}</span>
                     <span className="text-ink-subtle shrink-0">· {ids.length} cab{ids.length === 1 ? '' : 's'} · {parts} parts</span>
-                    {on > 0 && <span className="text-accent-ink shrink-0">· {on === ids.length ? 'all picked' : `${on} picked`}</span>}
                     {!isOpen && on > 0 && on < ids.length && (
-                      <span className="text-ink-subtle truncate">({picked.map(c => c.label).join(', ')})</span>
+                      <span className="text-ink-subtle truncate">(showing {picked.map(c => c.label).join(', ')})</span>
                     )}
                   </button>
-                  <PartBtns uids={roomUids} />
+                  <PartCount uids={roomUids} />
+                  <FilterBtn on={on === ids.length} onClick={() => toggleRoom(ids)} />
                 </div>
                 {isOpen && (
                   <div className="pb-1">
@@ -620,13 +628,14 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, select
                       return (
                         <div key={c.id}>
                           <div className="flex items-center gap-2 pl-7 pr-2 py-0.5 text-[11px] hover:bg-surface-2/60">
-                            <input type="checkbox" checked={sel.has(c.id)} onChange={() => toggleCab(c.id)} title="Filter the table to this cabinet" />
+                            <PartTick uids={cabParts.map(p => p.uid)} />
                             <button onClick={() => toggleOpenCab(c.id)} className="flex items-center gap-1.5 min-w-0 flex-1 text-left">
                               <span className="text-ink-subtle w-3">{cabOpen ? '▾' : '▸'}</span>
                               <span className={`truncate ${sel.has(c.id) ? 'text-accent-ink font-medium' : 'text-ink'}`}>{c.label}</span>
                               <span className="text-ink-subtle shrink-0">· {cabParts.length} part{cabParts.length === 1 ? '' : 's'}</span>
                             </button>
-                            <PartBtns uids={cabParts.map(p => p.uid)} />
+                            <PartCount uids={cabParts.map(p => p.uid)} />
+                            <FilterBtn on={sel.has(c.id)} onClick={() => toggleCab(c.id)} />
                           </div>
                           {cabOpen && cabParts.map(p => (
                             <label key={p.uid} className={`flex items-center gap-2 pl-14 pr-2 py-0.5 text-[11px] hover:bg-surface-2/60 cursor-pointer ${partOn.has(p.uid) ? '' : 'opacity-55'}`}>
