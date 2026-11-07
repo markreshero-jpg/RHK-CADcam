@@ -479,6 +479,25 @@ function Stage2Parts() {
           </thead>
           <tbody>
             {shown.length === 0 && <tr><td colSpan={partColOrder.length} className="border-b border-r border-edge/70 px-2 py-8 text-center text-ink-subtle">No parts match the current filters{search ? ' / search' : ''}.</td></tr>}
+            {shown.length > 0 && (() => {
+              // "All" row above the rooms (Mark 2026-11-07): ticks / unticks every
+              // part in the list (what the filters + search show).
+              const n = shown.filter(p => selectedUids.has(p.uid)).length
+              return (
+                <tr className="bg-surface-3/60">
+                  <td colSpan={partColOrder.length} className="border-b border-r border-edge-strong px-2 py-1">
+                    <label className="flex items-center gap-2 cursor-pointer w-max">
+                      <input type="checkbox" checked={n === shown.length}
+                        ref={el => { if (el) el.indeterminate = n > 0 && n < shown.length }}
+                        onChange={() => setPartsOn(shown.map(p => p.uid), n < shown.length)} title="Tick / untick every part in the list" />
+                      <span className="text-ink font-semibold">{groupBy === 'cabinet' ? 'All cabinets' : groupBy === 'none' ? 'All parts' : 'All rooms'}</span>
+                      <span className="text-ink-subtle">· {shown.length} part{shown.length === 1 ? '' : 's'}{search ? ' (search)' : ''}</span>
+                      <span className={`tabular-nums text-[10px] ${n === 0 ? 'text-ink-subtle' : n === shown.length ? 'text-emerald-500' : 'text-amber-500'}`}>{n}/{shown.length} ticked</span>
+                    </label>
+                  </td>
+                </tr>
+              )
+            })()}
             {rows.map((r, i) => {
               if (r.kind === 'group') {
                 const uids = r.parts.map(p => p.uid)
