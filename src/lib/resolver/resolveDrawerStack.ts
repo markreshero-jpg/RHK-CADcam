@@ -183,6 +183,10 @@ export function resolveDrawerStacks(
   // Finger-pull backing rails (z_handles H6). A bin's usable height stops under
   // the lowest one above it: nothing inside can rise past it.
   backingRails: { bottom: number; x0: number; x1: number }[] = [],
+  // Underside of the carcass top (full top / front + back rails). A top drawer's
+  // front runs up past it to the top reveal, so the front height alone over-states
+  // the room: the box has to stay under this (RHK6595 BC-05/06, Mark 2026-11-07).
+  carcassTop: number = Infinity,
 ): DrawerStackResolution {
   const errors:   ResolverError[] = []
   const warnings: ResolverError[] = []
@@ -378,7 +382,7 @@ export function resolveDrawerStacks(
     // FPRAIL_BOX_CLEAR keeps a gap under the rail: a box that just touches it
     // (0.5 under a mid rail, RHK6478 Kitchen BC-01..03, Mark 2026-11-04) still clashes.
     const railFit = railCap === Infinity ? Infinity : railCap - FPRAIL_BOX_CLEAR
-    const fitH = Math.min(openingHeight - lift, railFit - boxBottom)
+    const fitH = Math.min(openingHeight - lift, railFit - boxBottom, carcassTop - boxBottom)
 
     const slide = findSlide(depthHere, fitH, slideProducts, slideSchedule, slideOverride, { clearance })
 
@@ -388,7 +392,9 @@ export function resolveDrawerStacks(
         code: 'NO_SLIDE_FITS',
         message: `Drawer ${zoneRef}: nothing in ${source} fits a ${round1(openingHeight)}mm opening` +
           (clearance > 0 ? ` with ${round1(clearance)}mm clearance above the box` : '') +
-          (fitH < openingHeight - lift - EPS ? ` under the finger-pull backing rail (${round1(fitH)}mm clear)` : '') +
+          (fitH < openingHeight - lift - EPS
+            ? ` under the ${carcassTop - boxBottom <= railFit - boxBottom ? 'carcass top' : 'finger-pull backing rail'} (${round1(fitH)}mm clear)`
+            : '') +
           ` at ${round1(depthHere)}mm available depth`,
         part: 'drawer_box',
       })
@@ -441,6 +447,14 @@ export function resolveDrawerStacks(
       warnings.push({
         code: 'DRAWER_FPRAIL_CLASH',
         message: `Drawer ${zoneRef}: ${round1(boxHeight)}mm box top at ${round1(boxBottom + boxHeight)} is ${round1(boxBottom + boxHeight - railCap) > 0 ? `${round1(boxBottom + boxHeight - railCap)}mm into` : `only ${round1(railCap - boxBottom - boxHeight)}mm under`} the finger-pull backing rail (bottom ${round1(railCap)}, keep ${FPRAIL_BOX_CLEAR} clear) — use a lower box`,
+        part: 'drawer_box',
+      })
+    }
+
+    if (boxBottom + boxHeight > carcassTop + EPS) {
+      warnings.push({
+        code: 'DRAWER_TOP_CLASH',
+        message: `Drawer ${zoneRef}: ${round1(boxHeight)}mm box top at ${round1(boxBottom + boxHeight)} is ${round1(boxBottom + boxHeight - carcassTop)}mm into the carcass top (underside ${round1(carcassTop)}) — use a lower box`,
         part: 'drawer_box',
       })
     }

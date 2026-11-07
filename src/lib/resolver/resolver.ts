@@ -143,14 +143,21 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
   }
 
   // ── 5. Drawer Stacks ──────────────────────────────────────────
-  // Resolves one drawer box + two slides per drawer_face zone
+  // Resolves one drawer box + two slides per drawer_face zone.
+  // The carcass top's underside caps the top drawer's box (its front runs up past it).
+  const topMembers = cab.has_carcass && !cab.footprint
+    ? caseParts.filter(p => p.part_key === 'full_top' || p.part_key === 'front_rail' ||
+        // an upright back rail stands behind the runner-length box; a flat one lies over it
+        (p.part_key === 'back_rail' && !(p as { upright?: boolean }).upright))
+    : []
+  const carcassTop = Math.min(Infinity, ...topMembers.map(p => p.Y))
   const {
     stacks: drawerStacks,
     errors: drawerErrors,
     warnings: drawerWarnings,
   } = cab.has_face
     ? resolveDrawerStacks(cab, r, zones, shapedHw ? z => drawerOpening(shapedHw, z, r) : undefined,
-        internalParts.filter(p => p.part_type === 'divider'), backingRails)
+        internalParts.filter(p => p.part_type === 'divider'), backingRails, carcassTop)
     : { stacks: [], errors: [], warnings: [] }
   allErrors.push(...drawerErrors)
   allWarnings.push(...drawerWarnings)
