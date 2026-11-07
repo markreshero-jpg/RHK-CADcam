@@ -581,7 +581,8 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, dims, matName, 
   const [open, setOpen] = useState<Set<string>>(new Set())
   const sel = new Set(selected)
   const groups = rooms
-    .map(r => ({ ...r, cabs: cabinets.filter(c => c.room_id === r.id) }))
+    // Cabinets A→Z with numbers in number order (BC-2 before BC-10).
+    .map(r => ({ ...r, cabs: cabinets.filter(c => c.room_id === r.id).sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: 'base' })) }))
     .filter(g => g.cabs.length > 0)
   const toggleOpen = (id: string) => setOpen(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const toggleCab = (id: string) => onChange(sel.has(id) ? selected.filter(x => x !== id) : [...selected, id])
