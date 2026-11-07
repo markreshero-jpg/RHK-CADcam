@@ -572,6 +572,21 @@ default 20 → 600 model mm), measured from the outermost wall face on that side
 at 2984 + 90 thick → outer face 3074 → blocks at x 3700 (were 3300, on the
 dims). Stack SITE NOTES under the spec block at the same x.
 
+## Markup (every room, Mark 2026-11-07)
+
+After the spec block, mark up the plan + elevations per
+`z_CAD_tool/MARKUP-STANDARD.md`: appliances / fixtures not drawn (e.g. the
+dishwasher in its space), colour callouts, TBC queries (clouded, on the
+Questions for Client layer) and site / install notes. Insert only, and check
+the result with a report shot.
+
+## Wall cabinet between two walls needs fillers (Mark 2026-11-07)
+
+A wall cabinet boxed in by walls on both sides (e.g. an open box over the
+fridge, WC-10 on RHK6595) gets a filler each side against the wall, never a
+carcass straight to the wall. The cabinet narrows by the two fillers. Flag it
+when drawing; don't wait for Mark to spot it.
+
 ## Layout JSON schema
 
 ```json

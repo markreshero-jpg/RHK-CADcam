@@ -109,3 +109,19 @@ Done in Rev 4 (2026-11-07); see below.
   it is still drawn at 128 centres x 140 long until the size is known. Schedule `f9dfa969` was renamed "Handle House Maleny C138".
   **The builder drills and supplies the handles themselves.**
 - Cooktop position: the plan / benchtop pages are unchanged, so it stays where it is.
+
+## Markup + waterfall (2026-11-07)
+
+- **Markup** per the new standard `z_CAD_tool/MARKUP-STANDARD.md` (`_tmp-6595-markup.mjs`, `_tmp-6595-markup2.mjs`):
+  18 notes, all `style.src = 'markup-std'`, insert only (Mark's wine-rack question + arrows untouched).
+  - General: dashed DW box + "re-using existing freestanding 600" (elevation + plan), sink/tap models, oven model (Wall 6),
+    fridge existing (Wall 4), open box + cubbies Sublime Teak 18 (Wall 4).
+  - Questions for Client: clouded bulkheads "colour TBC" (Wall 2 + Wall 4), handle C138 size TBC.
+    **The plans give no bulkhead colour**; the renders show it matching the overheads.
+  - Site notes: bulkheads oversized, cut on site; overheads push to open. Electrical: recessed LED strip, pendants owner supplied.
+- **Island waterfall** (`_tmp-6595-waterfall.mjs`): Benchtop 1 east edge 2986 -> 3006, WF profile, mitred (20 leg inside the
+  edge, 2016 overall per page 4). Before-state saved in `_tmp-6595-bt1-before.json`. Both tops set to the 20mm Stone schedule
+  (`_tmp-6595-btsched.mjs`); they had none. Depth left at the auto-built 904 (plan says 900).
+- **WC-10 fillers (Mark):** WC-10 is 890 wall to wall and needs a filler each side. New library item **WF-L** planned (one 16.5
+  board between the cabinet side and the wall, L-shaped in side view: 70 front leg full height + 70 bottom leg full depth,
+  front + bottom edges edged, colour to match the cabinet = Sublime Teak). Not built yet: side custom parts can't take a notch.
