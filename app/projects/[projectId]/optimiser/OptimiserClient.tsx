@@ -374,7 +374,7 @@ function Stage2Parts() {
       <div className="flex-none px-8 pt-3 pb-3 space-y-3 border-b border-edge">
         <ChipFilter label="Rooms" options={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))} selected={filterRoomIds} onChange={setFilterRooms} />
         <RoomCabinetPicker rooms={snap.rooms.map(r => ({ id: r.id, label: isBatch ? `${snap.parts.find(p => p.room_id === r.id)?.job_number ?? ''} ${r.name}`.trim() : r.name }))}
-          cabinets={cabOptions} partsByCab={partsByCab} fmtMm={fmtMm} matName={matName} selected={filterCabinetIds} onChange={setFilterCabinets}
+          cabinets={cabOptions} partsByCab={partsByCab} fmtMm={fmtMm} dims={dispDims} matName={matName} selected={filterCabinetIds} onChange={setFilterCabinets}
           partOn={selectedUids} setPartsOn={setPartsOn} />
         <ChipFilter label="Materials" options={jobMaterials.map(m => ({ id: m.id, label: noColour.has(m.id) ? `${m.name} ⚠` : m.name }))} selected={filterMaterialIds} onChange={setFilterMaterials} />
       </div>
@@ -537,11 +537,12 @@ function ChipFilter({ label, options, selected, onChange }: {
 // The ✓ / ✕ buttons on each room row and cabinet tick / untick that room's or
 // cabinet's PARTS for nesting (Mark 2026-11-07) — separate from the filter pick.
 // Cabinets drop down too: open one to tick / untick its single parts.
-function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, selected, onChange, partOn, setPartsOn }: {
+function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, dims, matName, selected, onChange, partOn, setPartsOn }: {
   rooms: { id: string; label: string }[]
   cabinets: { id: string; label: string; room_id: string }[]
   partsByCab: Map<string, OptiPart[]>
   fmtMm: (v: number) => string
+  dims: (p: OptiPart) => { w: number; h: number }
   matName: Map<string, string>
   selected: string[]
   onChange: (ids: string[]) => void
@@ -549,6 +550,8 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, select
   setPartsOn: (uids: string[], on: boolean) => void
 }) {
   const uidsOf = (cabIds: string[]) => cabIds.flatMap(id => (partsByCab.get(id) ?? []).map(p => p.uid))
+  // Part rows + the per-room header share one column grid so they line up.
+  const PART_GRID = 'grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_3rem_11rem] gap-x-2 items-center'
   const [openCabs, setOpenCabs] = useState<Set<string>>(new Set())
   const toggleOpenCab = (id: string) => setOpenCabs(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
   // Checkbox = are this room's / cabinet's parts ticked for nesting (tri-state).
@@ -622,6 +625,13 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, select
                 </div>
                 {isOpen && (
                   <div className="pb-1">
+                    <div className={`${PART_GRID} pl-14 pr-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-subtle bg-surface-2/50 border-y border-edge`}>
+                      <span>Part</span>
+                      <span className="text-right">Width <span className="font-normal normal-case">DX</span></span>
+                      <span className="text-right">Height <span className="font-normal normal-case">DY</span></span>
+                      <span className="text-right">Thk</span>
+                      <span className="text-right">Material</span>
+                    </div>
                     {g.cabs.map(c => {
                       const cabParts = partsByCab.get(c.id) ?? []
                       const cabOpen = openCabs.has(c.id)
@@ -638,11 +648,15 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, matName, select
                             <FilterBtn on={sel.has(c.id)} onClick={() => toggleCab(c.id)} />
                           </div>
                           {cabOpen && cabParts.map(p => (
-                            <label key={p.uid} className={`flex items-center gap-2 pl-14 pr-2 py-0.5 text-[11px] hover:bg-surface-2/60 cursor-pointer ${partOn.has(p.uid) ? '' : 'opacity-55'}`}>
-                              <input type="checkbox" checked={partOn.has(p.uid)} onChange={() => setPartsOn([p.uid], !partOn.has(p.uid))} title="Tick this part for nesting" />
-                              <span className="text-ink truncate min-w-0 flex-1">{p.label}</span>
-                              <span className="font-mono tabular-nums text-ink-subtle shrink-0">{fmtMm(Math.round(p.w))} × {fmtMm(Math.round(p.h))} × {p.thickness}</span>
-                              <span className="text-ink-subtle shrink-0 w-40 truncate text-right">{p.material_id ? (matName.get(p.material_id) ?? '—') : 'no material'}</span>
+                            <label key={p.uid} className={`${PART_GRID} pl-14 pr-2 py-0.5 text-[11px] hover:bg-surface-2/60 cursor-pointer ${partOn.has(p.uid) ? '' : 'opacity-55'}`}>
+                              <span className="flex items-center gap-2 min-w-0">
+                                <input type="checkbox" checked={partOn.has(p.uid)} onChange={() => setPartsOn([p.uid], !partOn.has(p.uid))} title="Tick this part for nesting" />
+                                <span className="text-ink truncate">{p.label}</span>
+                              </span>
+                              <span className="font-mono tabular-nums text-ink-muted text-right">{fmtMm(dims(p).w)}</span>
+                              <span className="font-mono tabular-nums text-ink-muted text-right">{fmtMm(dims(p).h)}</span>
+                              <span className="font-mono tabular-nums text-ink-muted text-right">{p.thickness}</span>
+                              <span className="text-ink-subtle truncate text-right">{p.material_id ? (matName.get(p.material_id) ?? '—') : 'no material'}</span>
                             </label>
                           ))}
                         </div>
