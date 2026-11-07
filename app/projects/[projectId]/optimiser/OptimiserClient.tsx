@@ -551,7 +551,10 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, dims, matName, 
 }) {
   const uidsOf = (cabIds: string[]) => cabIds.flatMap(id => (partsByCab.get(id) ?? []).map(p => p.uid))
   // Part rows + the per-room header share one column grid so they line up.
-  const PART_GRID = 'grid grid-cols-[minmax(0,1fr)_4.5rem_4.5rem_3rem_11rem] gap-x-2 items-center'
+  // Fixed column widths (not stretched) so sizes sit next to the name on a wide
+  // screen; cells carry the same grid lines as the parts table.
+  const PART_GRID = 'grid grid-cols-[16rem_4.5rem_4.5rem_3rem_11rem] w-max ml-14 border-l border-edge-strong'
+  const CELL = 'px-1.5 py-0.5 border-r border-b border-edge/70 min-w-0'
   const [openCabs, setOpenCabs] = useState<Set<string>>(new Set())
   const toggleOpenCab = (id: string) => setOpenCabs(o => { const n = new Set(o); if (n.has(id)) n.delete(id); else n.add(id); return n })
   // Checkbox = are this room's / cabinet's parts ticked for nesting (tri-state).
@@ -625,12 +628,12 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, dims, matName, 
                 </div>
                 {isOpen && (
                   <div className="pb-1">
-                    <div className={`${PART_GRID} pl-14 pr-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-ink-subtle bg-surface-2/50 border-y border-edge`}>
-                      <span>Part</span>
-                      <span className="text-right">Width <span className="font-normal normal-case">DX</span></span>
-                      <span className="text-right">Height <span className="font-normal normal-case">DY</span></span>
-                      <span className="text-right">Thk</span>
-                      <span className="text-right">Material</span>
+                    <div className={`${PART_GRID} text-[10px] font-semibold uppercase tracking-wider text-ink-muted bg-surface-2 border-t mt-1`}>
+                      <span className={`${CELL} border-b-edge-strong`}>Part</span>
+                      <span className={`${CELL} border-b-edge-strong text-right`}>Width <span className="font-normal normal-case text-ink-subtle">DX</span></span>
+                      <span className={`${CELL} border-b-edge-strong text-right`}>Height <span className="font-normal normal-case text-ink-subtle">DY</span></span>
+                      <span className={`${CELL} border-b-edge-strong text-right`}>Thk</span>
+                      <span className={`${CELL} border-b-edge-strong`}>Material</span>
                     </div>
                     {g.cabs.map(c => {
                       const cabParts = partsByCab.get(c.id) ?? []
@@ -647,16 +650,16 @@ function RoomCabinetPicker({ rooms, cabinets, partsByCab, fmtMm, dims, matName, 
                             <PartCount uids={cabParts.map(p => p.uid)} />
                             <FilterBtn on={sel.has(c.id)} onClick={() => toggleCab(c.id)} />
                           </div>
-                          {cabOpen && cabParts.map(p => (
-                            <label key={p.uid} className={`${PART_GRID} pl-14 pr-2 py-0.5 text-[11px] hover:bg-surface-2/60 cursor-pointer ${partOn.has(p.uid) ? '' : 'opacity-55'}`}>
-                              <span className="flex items-center gap-2 min-w-0">
+                          {cabOpen && cabParts.map((p, i) => (
+                            <label key={p.uid} className={`${PART_GRID} ${i === 0 ? 'border-t border-t-edge/70' : ''} text-[11px] hover:bg-surface-2/60 cursor-pointer ${partOn.has(p.uid) ? '' : 'opacity-55'}`}>
+                              <span className={`${CELL} flex items-center gap-2`}>
                                 <input type="checkbox" checked={partOn.has(p.uid)} onChange={() => setPartsOn([p.uid], !partOn.has(p.uid))} title="Tick this part for nesting" />
                                 <span className="text-ink truncate">{p.label}</span>
                               </span>
-                              <span className="font-mono tabular-nums text-ink-muted text-right">{fmtMm(dims(p).w)}</span>
-                              <span className="font-mono tabular-nums text-ink-muted text-right">{fmtMm(dims(p).h)}</span>
-                              <span className="font-mono tabular-nums text-ink-muted text-right">{p.thickness}</span>
-                              <span className="text-ink-subtle truncate text-right">{p.material_id ? (matName.get(p.material_id) ?? '—') : 'no material'}</span>
+                              <span className={`${CELL} font-mono tabular-nums text-ink-muted text-right`}>{fmtMm(dims(p).w)}</span>
+                              <span className={`${CELL} font-mono tabular-nums text-ink-muted text-right`}>{fmtMm(dims(p).h)}</span>
+                              <span className={`${CELL} font-mono tabular-nums text-ink-muted text-right`}>{p.thickness}</span>
+                              <span className={`${CELL} text-ink-muted truncate`}>{p.material_id ? (matName.get(p.material_id) ?? '—') : 'no material'}</span>
                             </label>
                           ))}
                         </div>
