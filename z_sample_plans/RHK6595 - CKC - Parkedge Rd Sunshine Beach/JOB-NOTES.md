@@ -122,6 +122,8 @@ Done in Rev 4 (2026-11-07); see below.
 - **Island waterfall** (`_tmp-6595-waterfall.mjs`): Benchtop 1 east edge 2986 -> 3006, WF profile, mitred (20 leg inside the
   edge, 2016 overall per page 4). Before-state saved in `_tmp-6595-bt1-before.json`. Both tops set to the 20mm Stone schedule
   (`_tmp-6595-btsched.mjs`); they had none. Depth left at the auto-built 904 (plan says 900).
+  The island top was anchored to Wall 5 (stub wall), so it did not show on the Wall 6 elevations: re-anchored to Wall 6
+  (`_tmp-6595-btwall.mjs`). Top + mitred leg now print on Wall 6 front + back.
 - **WC-10 fillers (Mark):** WC-10 is 890 wall to wall and needs a filler each side. New library item **WF-L** planned (one 16.5
   board between the cabinet side and the wall, L-shaped in side view: 70 front leg full height + 70 bottom leg full depth,
   front + bottom edges edged, colour to match the cabinet = Sublime Teak). Not built yet: side custom parts can't take a notch.
