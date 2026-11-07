@@ -1,8 +1,9 @@
 # RHK6595 Caloundra Kitchens — 1/21 Parkedge Rd, Sunshine Beach
 
-Drawings: `SynologyDrive/_JOBS/RHK6500 - 6599/RHK6595 - CKC - 1-21 Parkedge Rd Sunshine/ARCHITECTURALS/Park Edge Dr, Sunshine Beach.pdf`
-(Caloundra Kitchens job #3431, client Jenny & Greg Kenny, Liam G 28/10/2026, rev 0, 10 pages: plan, benchtop,
-elevations, 3D, appliance list).
+Drawings (latest): `SynologyDrive/_JOBS/RHK6500 - 6599/RHK6595 - CKC - 1-21 Parkedge Rd Sunshine/ARCHITECTURALS/1 of 21 Parkedge Rd, Sunshine Beach - Revised 5th November (Drawer under oven).pdf`
+(Caloundra Kitchens job #3431, client Jenny & Greg Kenny, Liam G 5/11/2026, 10 pages: plan, benchtop, elevations, 3D,
+appliance list). The 28/10/2026 rev 0 `Park Edge Dr, Sunshine Beach.pdf` is in `ARCHITECTURALS/_SUPERSEEDED`.
+The 5/11 changes have been applied: see "FILE NOTE 2026-11-05" and "Rev 4" at the end.
 
 ## Job-level setup (2026-10-30, `z_plan_automation/_tmp-6595-setup.mjs`)
 
@@ -76,3 +77,35 @@ elevations, 3D, appliance list).
 - Fix (same day): wall units hang from the 2340 top line, so the 1000 WC-02 first sat at 1340–2340, over WC-14. New rule
   WALLZ (f7ec94e: a wall unit's own height, set from "Elevation from floor" in the sidebar) — WC-02 WALLZ 950 stands on the
   bench (950–1950); WC-14 hangs from the top line (1950–2340).
+
+## FILE NOTE 2026-11-05 — revised drawings in, CAD not updated yet
+
+Done in Rev 4 (2026-11-07); see below.
+
+- Liam Green (Caloundra Kitchens), email "RE: Quote Request - Parkedge Rd, Sunshine Beach", Thu 5/11/2026 9:27 am ("Sorry take 2",
+  to Charlene, cc Mark). PDF saved to ARCHITECTURALS: `1 of 21 Parkedge Rd, Sunshine Beach - Revised 5th November (Drawer under oven).pdf`.
+  The old set has been moved to `_SUPERSEEDED`.
+- Liam (9:23 am): "She contacted me this morning and asked if she can have a drawer under the oven. If so, please add this in
+  (Not displayed on these drawings)". **The drawer under the oven is not on the new drawings.** It has to be added from the email.
+  The oven is the Westinghouse WVEP6716SD 600 in the island front (UBO 600). We still need to choose the drawer height and the oven
+  cavity / UBO height.
+- Charlene (9:27 am) asked Liam whether he got the quote and if one drawer is enough or a full requote is needed. Check for a
+  reply before redrawing.
+- Differences between the 28/10 and 5/11 PDFs, checked by comparing the text and the page images:
+  - Date 28/10 -> 5/11 on all pages.
+  - Handles **Handle House C128 -> C138** Maleny satin nickel (p10 appliance list). Our handle is C128 (`82f50f69`, 128 centres),
+    so the handle + schedule need updating to C138 (centres / length TBC).
+  - The island cooktop sits in a slightly different spot in the 3D views (p6, p7, p9). The plan (p1) and benchtop (p2) pages
+    are unchanged, so this may only be a re-render. Confirm the cutout position.
+  - Small line shifts on the p4 fridge-box cubby elevation and the p3 drawer lines. The dimensions read the same.
+  - Nothing else on the plan or the elevations changed.
+- To do: add the drawer under the oven, change the handle to C138, check the cooktop position, then re-resolve and reissue.
+
+## Rev 4 (Mark 2026-11-07) — 5/11 drawings applied
+
+- **No drawer under the oven.** The island oven cabinet BC-11 (`4cb2b290`) stays a `UBO`: false panel / 600 open (locked) /
+  false panel. The two panels are unlocked, so they come out equal. Already set up this way, so nothing changed.
+- **Handles = Handle House C138 Maleny, size TBC.** The job's handle `82f50f69` was renamed from "C128" (it was used only by this job);
+  it is still drawn at 128 centres x 140 long until the size is known. Schedule `f9dfa969` was renamed "Handle House Maleny C138".
+  **The builder drills and supplies the handles themselves.**
+- Cooktop position: the plan / benchtop pages are unchanged, so it stays where it is.
