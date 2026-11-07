@@ -127,3 +127,6 @@ Done in Rev 4 (2026-11-07); see below.
 - **WC-10 fillers (Mark):** WC-10 is 890 wall to wall and needs a filler each side. New library item **WF-L** planned (one 16.5
   board between the cabinet side and the wall, L-shaped in side view: 70 front leg full height + 70 bottom leg full depth,
   front + bottom edges edged, colour to match the cabinet = Sublime Teak). Not built yet: side custom parts can't take a notch.
+- **BC-13 689** (`_tmp-6595-bc13fix.mjs`): the draw left the island's last front drawer bank at 672.5 (layout + page 4 say 689),
+  leaving a 17 gap to the waterfall. Set back to 689 through the canvas API; resolves clean. Cause not found: no script
+  set 672.5, so the canvas placement trimmed it by 16.5 when drawn.
