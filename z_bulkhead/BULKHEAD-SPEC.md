@@ -87,7 +87,7 @@ underside when the bulkhead isn't sitting on cabinets.
   {
     front: 'doors' | 'carcase',
     auto_h: boolean,                // height follows ceiling − wall-cab top
-    h_adjust?: number,              // B11: + taller / − shorter than the auto height
+    h_adjust?: number,              // B11: top above (+) / below (−) the ceiling
     cleat: boolean,
     left:   { on: boolean, depth: number, joint: 'mitre' | 'butt' },
     right:  { on: boolean, depth: number, joint: 'mitre' | 'butt' },
@@ -184,12 +184,14 @@ underside when the bulkhead isn't sitting on cabinets.
       mitre on the saw). Not on curved bulkheads. Tutorial `bulkhead_bottom_mitre`.
 - [~] **B11 — height adjust** (built 2026-11-07, in-app check pending) (Mark:
       "a field called height adjust on the bulkhead, negative and positive").
-      `bulkhead.h_adjust` (mm) is added to the auto height (ceiling − wall-cab
-      top): + = taller, the bottom drops below the overhead tops; − = shorter,
-      it stops above them. The top stays at the ceiling and it keeps following
+      `bulkhead.h_adjust` (mm) moves the **top**: + = up past the ceiling (into the
+      ceiling cavity), − = short of it. The bottom stays on the soffit line
+      (wall-cab top), so the auto height grows / shrinks by the same
+      (2026-11-07, Mark: "add it to the top and maintain the soffit line").
+      `cabVExtent` puts the top at ceiling + adjust. It keeps following
       soffit / ceiling edits. Typing an adjust turns "Height to ceiling" back
-      on; typing H directly still turns it off (adjust kept, unused until
-      re-ticked). No schema change (jsonb). Not for shadowlines. Sidebar
+      on; typing H directly still turns it off (the top stays at ceiling +
+      adjust). No schema change (jsonb). Not for shadowlines. Sidebar
       "Height adjust" under Height to ceiling. Tutorial `bulkhead_height_adjust`.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.

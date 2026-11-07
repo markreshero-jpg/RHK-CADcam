@@ -73,8 +73,10 @@ export function cabVExtent(
   // `bulkhead` = the cabinet's bulkhead settings: a bulkhead hangs from the
   // ceiling; a shadowline (z_bulkhead) lies on the overhead tops.
   const shadowline = !!bulkhead && (bulkhead as { kind?: unknown }).kind === 'shadowline'
+  // Height adjust (B11): the top sits that far above (+) / below (−) the ceiling.
+  const adj = Number((bulkhead as { h_adjust?: unknown } | null)?.h_adjust)
   const bottom = shadowline ? wallCabTop(wall, room)
-    : bulkhead ? (wall?.height ?? room.room_dy ?? 2400) - dy
+    : bulkhead ? (wall?.height ?? room.room_dy ?? 2400) + (Number.isFinite(adj) ? adj : 0) - dy
     : (cls === 'wall' || cls === 'wall_corner') ? (wallZ ?? wallCabTop(wall, room) - dy)
     : posZ ?? 0
   return [bottom, bottom + dy]

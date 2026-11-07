@@ -1781,10 +1781,10 @@ export const LESSONS: TutorialLesson[] = [
 
   // Appended 2026-11-07 (z_bulkhead B11 — height adjust).
   { id: 'bulkhead_height_adjust', level: 'intermediate', topic: 'cabinets', title: 'Adjust a bulkhead\'s height',
-    blurb: 'Make a bulkhead taller or shorter than the ceiling-to-overhead gap while it still follows the ceiling.',
+    blurb: 'Run a bulkhead top up past the ceiling (or stop it short) while its bottom stays on the soffit line.',
     keywords: 'bulkhead height adjust taller shorter drop overlap gap ceiling BH', steps: [
     { id: 'adjust', title: 'Type a height adjust',
-      body: 'Select the bulkhead (BH). In the bulkhead section type a number in Height adjust: + makes it taller (e.g. 20 drops the bottom 20 below the overhead tops), − makes it shorter (e.g. -10 stops it 10 above them). The top stays at the ceiling, and it keeps following soffit / ceiling changes with the adjust added. 0 takes it off.',
+      body: 'Select the bulkhead (BH). In the bulkhead section type a number in Height adjust: + runs the top up past the ceiling (e.g. 50 into the ceiling cavity), − stops it short of the ceiling. The bottom stays on the soffit line, and it keeps following soffit / ceiling changes with the adjust added. 0 takes it off.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead?.h_adjust) },
   ]},
 ]

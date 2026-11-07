@@ -90,7 +90,7 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
         Height to ceiling{autoH != null && autoH > 0 ? ` (${autoH})` : ''}
       </label>
       <div className="grid grid-cols-[1fr_4.5rem] gap-1 items-center"
-        title="Added to the height to ceiling. + = taller (the bottom drops below the overhead tops), − = shorter (it stops above them). The top stays at the ceiling. Typing one turns Height to ceiling back on.">
+        title="Moves the top: + = up past the ceiling (e.g. 50 into the ceiling cavity), − = stops short of it. The bottom stays on the soffit line, so the height grows / shrinks by the same. Typing one turns Height to ceiling back on.">
         <label className="text-xs text-gray-300">Height adjust</label>
         <CalcInput value={b.h_adjust ?? 0} decimals={1}
           onCommit={v => {

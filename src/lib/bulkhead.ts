@@ -39,8 +39,9 @@ export interface BulkheadSettings {
   width:  number                // shadowline strip width (front to back)
   front:  'doors' | 'carcase'   // front face flush with the overhead doors / carcase
   auto_h: boolean               // height follows ceiling − wall-cab top until typed
-  /** B11: mm added to the auto height (+ = taller, the bottom drops below the
-   *  wall-cab top; − = shorter, it stops above it). Top stays at the ceiling. */
+  /** B11: mm the top sits above (+) / below (−) the ceiling, e.g. up into the
+   *  ceiling cavity. The bottom stays on the soffit line (wall-cab top), so the
+   *  auto height grows / shrinks by the same amount. */
   h_adjust?: number
   cleat:  boolean
   left:   BulkheadReturn
