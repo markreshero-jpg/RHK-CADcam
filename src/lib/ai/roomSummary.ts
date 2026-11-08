@@ -6,6 +6,7 @@
 
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, Wall, Room, RoomFixture } from '@/src/lib/types'
+import { cabWallSide } from '@/src/lib/geometry'
 
 export interface RoomSummaryData {
   room: Pick<Room, 'id' | 'name'>
@@ -43,10 +44,11 @@ export function formatRoomSummary(d: RoomSummaryData): string {
     lines.push(`${w.name} | ${Math.round(w.length)} | ${Math.round(w.angle)}° | ${w.wall_type}`)
   }
 
-  lines.push('', 'Cabinets (label | code | class | wall @ offset | W×H×D | z | fronts | carcass):')
+  lines.push('', 'Cabinets (label | code | class | wall [back] @ offset | W×H×D | z | fronts | carcass):')
+  lines.push(`Offset = mm along the wall from its start to the cabinet's low end. "back" = on the wall's back face (an island's far side), facing the other way: there your left is the HIGH-offset end.`)
   for (const c of [...d.cabinets].sort(byLabel)) {
     const w = c.wall_id ? wallById.get(c.wall_id) : undefined
-    const where = w ? `${w.name} @ ${wallOffset(c, w)}` : 'no wall'
+    const where = w ? `${w.name}${cabWallSide(c, w) === 'back' ? ' back' : ''} @ ${wallOffset(c, w)}` : 'no wall'
     const code = (c.cabinet_definition_id && d.defNames.get(c.cabinet_definition_id)) || (c.is_kick_assembly ? 'KICK' : '?')
 
     const fronts = d.fronts.filter(f => f.cabinet_instance_id === c.id)

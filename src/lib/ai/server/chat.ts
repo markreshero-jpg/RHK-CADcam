@@ -82,12 +82,15 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
               code: { type: 'string', description: 'place: library code, e.g. "BEP"' },
               wall: { type: 'string', description: 'place: wall name (with offset)' },
               offset: { type: 'number', description: 'place: mm from the wall start to the cabinet low end' },
+              at_end: { type: 'string', enum: ['left', 'right'], description: 'place: at this end of the wall, as you face the side it goes on (instead of offset)' },
+              back: { type: 'boolean', description: 'place: on the wall back face (an island far side / back). Default: the face' },
               next_to: {
                 type: 'object', description: 'place: against this cabinet side (left / right as you face its front)',
                 properties: { label: { type: 'string' }, side: { type: 'string', enum: ['left', 'right'] } },
                 required: ['label', 'side'], additionalProperties: false,
               },
               dx: { type: 'number', description: 'place: width (else the library default)' },
+              dy: { type: 'number', description: 'place: height (else matched to the next_to cabinet, or the library default)' },
               labels: { type: 'array', items: { type: 'string' }, description: 'delete: cabinet labels' },
             },
             required: ['op'], additionalProperties: false,
@@ -124,7 +127,8 @@ Scope: each message says the scope. "Selection" = only the cabinets the user has
 
 Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - update: width, height, depth, height off the floor, position along the wall (offset), notes, scribes, handle schedule.
-- place: a library code (find_library first if you don't know it — e.g. search "end panel" or "filler"), next_to a cabinet's left / right side, or on a wall at an offset. Left / right is as you face the cabinet's front.
+- place: a library code (find_library first if you don't know it — e.g. search "end panel" or "filler"), next_to a cabinet's left / right side, or on a wall at_end left / right (or an offset). Left / right is always as you face the side it goes on.
+- Faces and backs: a wall — an island especially — has a face and a back. The summary marks back-face cabinets "back". To put something on the back, use next_to a back cabinet, or wall + back: true. If the user says "back" or "far side" of an island, it's the back; if it's unclear which side they mean, ask.
 - delete: by label. Adding and deleting always wait for the user to press Apply.
 - Several steps in one call when they belong together, e.g. delete BC-04 then move BC-05 and BC-06 (offset) to close the gap — work the new offsets out from the summary.
 - You can NOT change door or board colours, or touch walls, yet — say so.
@@ -202,7 +206,7 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
 }
 
 type ChangesIn = CabinetChanges & { handle_schedule?: string | null }
-interface StepIn { op?: string; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface StepIn { op?: string; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -256,7 +260,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         ops.push({ op: 'update', filter, changes })
       } else if (st.op === 'place') {
         if (!st.code) return { text: `Step ${i + 1}: place needs a library code.`, isError: true }
-        ops.push({ op: 'place', code: st.code, wall: st.wall, offset: st.offset, next_to: st.next_to, dx: st.dx })
+        ops.push({ op: 'place', code: st.code, wall: st.wall, offset: st.offset, at_end: st.at_end, back: st.back, next_to: st.next_to, dx: st.dx, dy: st.dy })
       } else if (st.op === 'delete') {
         const labels = st.labels?.length ? st.labels : selection ? selLabels : []
         if (!labels.length) return { text: `Step ${i + 1}: delete needs labels.`, isError: true }

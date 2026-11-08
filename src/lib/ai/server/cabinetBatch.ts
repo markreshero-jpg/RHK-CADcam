@@ -32,8 +32,9 @@ type Row = Record<string, unknown>
 
 export type BatchOp =
   | { op: 'update'; filter: CabinetFilter; changes: CabinetChanges }
-  /** A library cabinet / end panel / filler: on a wall at an offset, or against a cabinet's side. */
-  | { op: 'place'; code: string; wall?: string; offset?: number; next_to?: { label: string; side: 'left' | 'right' }; back?: boolean; dx?: number }
+  /** A library cabinet / end panel / filler: against a cabinet's side, or on a wall (face or
+   *  back) at an offset or at its left / right end as you face that side. */
+  | { op: 'place'; code: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; next_to?: { label: string; side: 'left' | 'right' }; back?: boolean; dx?: number; dy?: number }
   | { op: 'delete'; labels: string[] }
 
 /** What a deleted cabinet takes with it that isn't rebuilt by a resolve. */
@@ -247,9 +248,11 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       const dx = probe.dx
 
       let wall: Wall | undefined, back = !!op.back, pos: { x: number; y: number }
+      let against: CabinetInstance | undefined
       if (op.next_to) {
         const nb = cabs.find(x => (x.label ?? '').toLowerCase() === op.next_to!.label.trim().toLowerCase())
         if (!nb) { problems.push(`${n}: no cabinet "${op.next_to.label}" to place against.`); continue }
+        against = nb
         wall = walls.find(x => x.id === nb.wall_id)
         if (!wall) { problems.push(`${n}: ${nb.label} isn't on a wall.`); continue }
         // Facing the front, "left" is the low end along the wall — the high end for a back-face cabinet.
@@ -261,8 +264,10 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       } else {
         wall = walls.find(x => x.name.toLowerCase() === (op.wall ?? '').trim().toLowerCase())
         if (!wall) { problems.push(`${n}: say which wall (${walls.map(w => w.name).join(', ')}) or which cabinet to go next to.`); continue }
-        if (op.offset == null || op.offset < 0) { problems.push(`${n}: offset along ${wall.name} is needed.`); continue }
-        pos = wallAnchorPoint(wall, op.offset, back, ref)
+        // At an end of the wall, as you face that side: the face's left is the low end, the back's left the high end.
+        const offset = op.at_end ? ((op.at_end === 'left') !== back ? 0 : Math.max(0, wall.length - dx)) : op.offset
+        if (offset == null || offset < 0) { problems.push(`${n}: an offset along ${wall.name}, or at_end left / right, is needed.`); continue }
+        pos = wallAnchorPoint(wall, offset, back, ref)
       }
 
       const label = nextLabel(cabs, def.assembly_class)
@@ -276,10 +281,21 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         if (h > 0) row.dy = h
       }
       if (row.float_shelf) row.pos_z = Math.max(0, Math.round(wallCabTop(wall, room) - resolveClassDims('wall', { room, project: state.project as never, shop: state.shop }).dy))
+      // Against a cabinet of the same kind (an end panel / filler on an overhead, a base…),
+      // it takes that cabinet's height and height off the floor — a 600 overhead gets a 600 panel.
+      const sameKind = (a: string, b: string) => a.replace('_corner', '') === b.replace('_corner', '')
+      let matched = ''
+      if (against && sameKind(against.assembly_class, def.assembly_class) && !row.bulkhead && !row.float_shelf && op.dy == null) {
+        if (row.dy !== against.dy || (row.pos_z ?? 0) !== (against.pos_z ?? 0)) matched = `, height matched to ${against.label}`
+        row.dy = against.dy
+        row.pos_z = against.pos_z ?? 0
+        if (against.rule_overrides?.WALLZ != null) row.rule_overrides = { ...(row.rule_overrides ?? {}), WALLZ: against.rule_overrides.WALLZ }
+      }
+      if (op.dy != null) row.dy = op.dy
 
       const tempId = `new:${steps.length}`
       const offset = wallOffset({ pos_x: row.pos_x, pos_y: row.pos_y }, wall)
-      const line = `Add ${label} (${def.name}, ${Math.round(row.dx)}×${Math.round(row.dy)}×${Math.round(row.dz)}) on ${wall.name} @ ${offset}${op.next_to ? `, ${op.next_to.side} of ${op.next_to.label}` : ''}`
+      const line = `Add ${label} (${def.name}, ${Math.round(row.dx)}×${Math.round(row.dy)}×${Math.round(row.dz)}) on ${wall.name}${back ? ' back' : ''} @ ${offset}${op.next_to ? `, ${op.next_to.side} of ${op.next_to.label}` : op.at_end ? `, ${op.at_end} end` : ''}${matched}`
       steps.push({ kind: 'insert', tempId, row, defId: def.id, line })
       lines.push(line)
       // Overlap warning (same wall, same height band) — the canvas lets it, but it's usually a mistake.

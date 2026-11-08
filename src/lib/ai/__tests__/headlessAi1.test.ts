@@ -32,7 +32,7 @@ describe.skipIf(!CFG)('AI1 chat on a real room', () => {
       const { loadRoomSummary } = await import('../roomSummary')
       for (const id of cfg.summaryOnly) {
         const s = await withSupabaseRead(client, () => loadRoomSummary(id))
-        console.log(`── ${id}: ${s.split('\n').length} lines, ${s.length} chars ≈ ${Math.round(s.length / 3.5)} tokens ──\n${s.split('\n').slice(0, 12).join('\n')}\n…`)
+        console.log(`── ${id}: ${s.split('\n').length} lines, ${s.length} chars ≈ ${Math.round(s.length / 3.5)} tokens ──\n${s}`)
       }
       return
     }

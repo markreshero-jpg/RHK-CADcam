@@ -323,6 +323,15 @@ they're sent on every request.
   offset 0 → 900 / Add WEP @ 882 → Apply (canvas showed it) → Undo → every row back
   exactly, WC-02 same id. 0.10¢; apply 8.5 s, undo 3.3 s for 3 steps.
 - Tutorial `ai_chat_add_delete`.
+- **After Mark's first tries (2026-11-08):** island back. The summary now marks
+  back-face cabinets ("Island 1 back @ …") with a note that on the back your left is
+  the high-offset end; `place` takes `back: true` and `at_end: left | right` (as you
+  face that side — the server works out the offset, so the model never has to flip
+  it). Anything placed `next_to` a cabinet of the same kind takes that cabinet's
+  height and height off the floor (an end panel beside a 600 overhead is 600, not the
+  library's 700) unless a height is asked for. Checked plan-only
+  (`headlessPlan.test.ts`, reads only) on Kitchen - Paul: BEPF at the island back's
+  left end → opposite side of the island line, facing out, @ 2862 of 2880.
 
 ## Open items (check while building)
 
