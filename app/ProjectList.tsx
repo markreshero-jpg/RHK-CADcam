@@ -5,7 +5,9 @@ import Link from 'next/link'
 import { Project, Room, ProjectStatus } from '@/src/lib/types'
 import ProjectCard from './ProjectCard'
 
-type ProjectWithRooms = Project & { rooms: Room[] }
+/** Room plus its latest edit time across everything drawn in it (room_last_activity RPC). */
+export type RoomWithActivity = Room & { last_activity_at?: string }
+type ProjectWithRooms = Project & { rooms: RoomWithActivity[] }
 
 // ── Status tiles ────────────────────────────────────────────────────────────────
 
@@ -55,11 +57,17 @@ const ChevronIcon = ({ expanded }: { expanded: boolean }) => (
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-/** Latest of the job's and its rooms' updated_at — "last touched". */
+/** Latest edit to the job or anything in its rooms — "last touched". */
 function lastActivity(p: ProjectWithRooms): number {
   let t = Date.parse(p.updated_at) || 0
-  for (const r of p.rooms) t = Math.max(t, Date.parse(r.updated_at) || 0)
+  for (const r of p.rooms) t = Math.max(t, Date.parse(r.last_activity_at ?? r.updated_at) || 0)
   return t
+}
+
+/** Rooms most recently worked on first. */
+function roomsByActivity(rooms: RoomWithActivity[]): RoomWithActivity[] {
+  return [...rooms].sort((a, b) =>
+    (Date.parse(b.last_activity_at ?? b.updated_at) || 0) - (Date.parse(a.last_activity_at ?? a.updated_at) || 0))
 }
 
 function haystack(p: ProjectWithRooms): string {
@@ -323,7 +331,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                   </div>
                   {p.rooms.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
-                      {p.rooms.slice(0, 6).map(r => (
+                      {roomsByActivity(p.rooms).slice(0, 6).map(r => (
                         <Link
                           key={r.id}
                           href={`/canvas/${r.id}`}

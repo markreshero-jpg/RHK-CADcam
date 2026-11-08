@@ -4,7 +4,7 @@ import { fetchRole } from '@/src/lib/role'
 import { SignOutButton } from './SignOutButton'
 import { ThemeToggle } from './ThemeToggle'
 import { Project, Room } from '@/src/lib/types'
-import ProjectList from './ProjectList'
+import ProjectList, { type RoomWithActivity } from './ProjectList'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,7 +43,7 @@ const FolderIcon = () => (
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
-async function getProjectsWithRooms(): Promise<(Project & { rooms: Room[] })[]> {
+async function getProjectsWithRooms(): Promise<(Project & { rooms: RoomWithActivity[] })[]> {
   const supabase = await createServerClient()
 
   const { data: projects } = await supabase
@@ -59,9 +59,15 @@ async function getProjectsWithRooms(): Promise<(Project & { rooms: Room[] })[]> 
     .in('project_id', projects.map((p) => p.id))
     .order('sort_order', { ascending: true })
 
-  const roomsByProject: Record<string, Room[]> = {}
+  // Latest edit per room across cabinets / CAD notes / benchtops / fixtures —
+  // canvas work doesn't touch rooms.updated_at, so the dashboard needs this.
+  const { data: activity } = await supabase.rpc('room_last_activity')
+  const lastAt: Record<string, string> = {}
+  for (const a of (activity ?? []) as { room_id: string; last_at: string }[]) lastAt[a.room_id] = a.last_at
+
+  const roomsByProject: Record<string, RoomWithActivity[]> = {}
   for (const r of (rooms ?? []) as Room[]) {
-    (roomsByProject[r.project_id] ??= []).push(r)
+    (roomsByProject[r.project_id] ??= []).push({ ...r, last_activity_at: lastAt[r.id] ?? r.updated_at })
   }
 
   return projects.map((p) => ({ ...p, rooms: roomsByProject[p.id] ?? [] }))
