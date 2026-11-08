@@ -113,6 +113,7 @@ interface OptiState {
   setStock: (key: string, patch: Partial<SheetStock>) => void
   addOffcut: (key: string, offcut: SheetStock) => void
   removeOffcut: (key: string, index: number) => void
+  setOffcut: (key: string, index: number, patch: Partial<SheetStock>) => void
   setNestResult: (r: NestResult | null) => void
   // Replace the layout without touching undo, selection or the open sheet (the
   // 6th face anchoring of a fresh nest — sixthFaceLayout.ts).
@@ -271,6 +272,10 @@ export const useOptiStore = create<OptiState>((set) => ({
   removeOffcut: (key, index) => set(st => {
     const g = st.stock[key]; if (!g) return {}
     return { stock: { ...st.stock, [key]: { ...g, offcuts: g.offcuts.filter((_, i) => i !== index) } }, ...INVALIDATE_NEST }
+  }),
+  setOffcut: (key, index, patch) => set(st => {
+    const g = st.stock[key]; if (!g || !g.offcuts[index]) return {}
+    return { stock: { ...st.stock, [key]: { ...g, offcuts: g.offcuts.map((o, i) => i === index ? { ...o, ...patch } : o) } }, ...INVALIDATE_NEST }
   }),
   setNestResult: (r) => set({ nestResult: r, editPast: [], editFuture: [], selectedUid: null, currentSheet: 0 }),
   setNestQuiet: (r) => set({ nestResult: r }),

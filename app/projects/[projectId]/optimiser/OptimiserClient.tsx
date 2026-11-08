@@ -713,6 +713,7 @@ function Stage3Settings() {
   const setStock = useOptiStore(s => s.setStock)
   const addOffcut = useOptiStore(s => s.addOffcut)
   const removeOffcut = useOptiStore(s => s.removeOffcut)
+  const setOffcut = useOptiStore(s => s.setOffcut)
   const groups = useSelectedGroups()
   const grained = useMemo(() => new Set(snap.materials.filter(m => m.has_grain).map(m => m.id)), [snap])
 
@@ -792,7 +793,15 @@ function Stage3Settings() {
                       {gs.offcuts.map((o, i) => (
                         <div key={i} className="flex items-center gap-2 text-[11px]">
                           <span className="text-ink-subtle w-16">{o.label}</span>
-                          <span className="font-mono text-ink-muted">{o.w}×{o.h}mm</span>
+                          <span className="text-ink-subtle">W</span>
+                          <input type="number" step="any" defaultValue={o.w} key={`w${o.w}`}
+                            onBlur={e => { const n = parseFloat(e.target.value); if (Number.isFinite(n) && n > 0) setOffcut(g.key, i, { w: n }) }}
+                            className="w-20 bg-surface-2 border border-edge-strong rounded px-2 py-0.5 text-[11px] text-ink font-mono focus:outline-none focus:border-accent" />
+                          <span className="text-ink-subtle">H</span>
+                          <input type="number" step="any" defaultValue={o.h} key={`h${o.h}`}
+                            onBlur={e => { const n = parseFloat(e.target.value); if (Number.isFinite(n) && n > 0) setOffcut(g.key, i, { h: n }) }}
+                            className="w-20 bg-surface-2 border border-edge-strong rounded px-2 py-0.5 text-[11px] text-ink font-mono focus:outline-none focus:border-accent" />
+                          <span className="text-ink-subtle">mm</span>
                           <button onClick={() => removeOffcut(g.key, i)} className="text-ink-subtle hover:text-red-400 ml-2">remove</button>
                         </div>
                       ))}
