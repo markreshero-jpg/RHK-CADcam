@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI4 built 2026-11-08** (AI4 engine checked; the 📎 button in the browser not yet — dev server wedged) — next is AI5 (Shop Rules page)
+Status: **AI0 – AI4 built and checked 2026-11-08** — next is AI5 (Shop Rules page)
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -399,7 +399,10 @@ they're sent on every request.
   02 same places (300 deep vs 350); BC-01 B1D vs B2D (it flagged the hinge as TBC);
   BC-03 / 04 D2-LL vs D2-SL; base depth 575 vs 580. Its TBC list: the empty corner,
   the 16.5 gap by the tall, end panels on the exposed ends, overhead ceiling
-  treatment, hinge side. Room **AI4 Draw Test 2** (empty) was made for the browser check.
+  treatment, hinge side. **Browser check** (after a clean dev restart — the old `.next`
+  had lost every `/api/*` route): 📎 on the empty room **AI4 Draw Test 2** → same plan
+  in 52 s for 16¢ (consistent with the direct run; its TBC list also caught the
+  exposed overhead end and the missing return wall) → Cancel; the room stays empty.
 - Not yet: TBC clouds / notes aren't drawn as CAD markup (they're listed in the
   message); fixtures / appliances aren't placed (gaps only).
 - Tutorial `ai_draw`.
