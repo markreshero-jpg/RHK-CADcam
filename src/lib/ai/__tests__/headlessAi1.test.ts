@@ -13,7 +13,7 @@
 import { describe, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-interface Cfg { room?: string; questions?: string[]; summaryOnly?: string[] }
+interface Cfg { room?: string; questions?: string[]; summaryOnly?: string[]; selected?: string[] }
 const CFG: Cfg | null = process.env.AI1_RUN ? JSON.parse(process.env.AI1_RUN) : null
 
 describe.skipIf(!CFG)('AI1 chat on a real room', () => {
@@ -41,9 +41,12 @@ describe.skipIf(!CFG)('AI1 chat on a real room', () => {
     const { runChatTurn } = await import('../server/chat')
     let total = 0
     for (const q of cfg.questions ?? []) {
-      const r = await withSupabaseRead(client, () => runChatTurn({ projectId: room!.project_id, roomId: cfg.room!, message: q }))
+      const r = await withSupabaseRead(client, () => runChatTurn({ client, projectId: room!.project_id, roomId: cfg.room!, message: q, selectedIds: cfg.selected }))
       total += r.costUsd
       console.log(`\nQ: ${q}\nA: ${r.reply}\n   [${r.ms} ms, $${r.costUsd.toFixed(5)}, tools: ${r.toolCalls.join(', ') || 'none'}]`)
+      if (r.question) console.log('   question options:', r.question.options.join(' / '))
+      if (r.proposal) console.log('   proposal:', r.proposal.lines)
+      if (r.changed) console.log('   applied:', r.changed, 'batch', r.batchId)
     }
     console.log(`\nTotal $${total.toFixed(5)}`)
   }, 300_000)

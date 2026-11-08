@@ -3024,6 +3024,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  // The AI helper changed these cabinets on the server (z_ai_helper AI2): take the
+  // saved rows and re-resolve, with the caches dropped so nothing resolves stale.
+  async function reloadCabinetsFromServer(ids: string[]) {
+    invalidateResolverCaches()
+    const { data } = await supabase.from('cabinet_instances').select('*').in('id', ids)
+    const rows = new Map(((data ?? []) as CabinetInstance[]).map(c => [c.id, c]))
+    setCabinets(cs => cs.map(c => rows.get(c.id) ?? c))
+    for (const id of rows.keys()) {
+      dbResolveAndPersistCabinet(id).then(resolved => {
+        if (resolved) { setResolvedParts(m => new Map(m).set(id, resolved)); applyInputColours(id); applyInputEdgebands(id) }
+      })
+    }
+  }
+
   async function handleUpdateProject(updates: Partial<Project>) {
     if (!project) return
     setProjectState(prev => prev ? { ...prev, ...updates } : prev)
@@ -3460,7 +3474,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
       <div className="flex flex-1 overflow-hidden relative">
         {aiOpen && !phone && (
-          <AiChatPanel projectId={room.project_id} roomId={room.id} roomName={room.name} onClose={() => setAiOpen(false)} />
+          <AiChatPanel projectId={room.project_id} roomId={room.id} roomName={room.name}
+            selectedIds={getSelectedCabinets().map(c => c.id)} selectedLabels={getSelectedCabinets().map(c => c.label ?? '?')}
+            onChanged={ids => void reloadCabinetsFromServer(ids)} onClose={() => setAiOpen(false)} />
         )}
 
         {/* Phone: the sidebar is a drawer over the canvas (kept mounted so its menus keep state). */}

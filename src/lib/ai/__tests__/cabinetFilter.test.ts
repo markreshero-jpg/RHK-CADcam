@@ -49,6 +49,18 @@ describe('changes', () => {
     expect(patchFor(cabs[0], { dy: 720 }, walls)).toBeNull()
     expect(patchFor(cabs[0], { dy: 900 }, walls)).toEqual({ dy: 900 })
   })
+  it('scribes merge into rule_overrides; null clears back to inherited', () => {
+    const c = cab({ label: 'BC-09', rule_overrides: { SCRL: 5, TOP_TYPE: 'front_rail' } })
+    expect(patchFor(c, { scribes: { right: 20 } }, walls)).toEqual({ rule_overrides: { SCRL: 5, SCRR: 20, TOP_TYPE: 'front_rail' } })
+    expect(patchFor(c, { scribes: { left: null } }, walls)).toEqual({ rule_overrides: { TOP_TYPE: 'front_rail' } })
+    expect(patchFor(c, { scribes: { left: 5 } }, walls)).toBeNull()
+    expect(validateChanges({ scribes: { side: 5 } as never }).length).toBe(1)
+  })
+  it('handle schedule sets or clears hardware_overrides', () => {
+    const c = cab({ label: 'BC-10', hardware_overrides: { handle_offset: 30 } })
+    expect(patchFor(c, { handle_schedule_id: 'hs-1' }, walls)).toEqual({ hardware_overrides: { handle_offset: 30, handle_schedule_id: 'hs-1' } })
+    expect(patchFor(c, { handle_schedule_id: null }, walls)).toBeNull()
+  })
   it('offset slides along the wall, keeping the distance off it', () => {
     // Wall 2 runs down from (4000,0); WC-02 sits 300 along it.
     const u = patchFor(cabs[3], { offset: 1000 }, walls)!

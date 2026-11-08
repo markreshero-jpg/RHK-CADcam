@@ -17,7 +17,11 @@ export interface CabinetFilter {
   where?: { field: NumField; op: Op; value: number }[]
 }
 
-/** AI0 whitelist. Material / handle / scribe changes join in AI2–AI3. */
+export type ScribeSide = 'left' | 'right' | 'top' | 'bottom' | 'back'
+/** Scribe side → rule_overrides key (cabinet panel "Scribes (mm)"). */
+export const SCRIBE_KEY: Record<ScribeSide, string> = { left: 'SCRL', right: 'SCRR', top: 'SCRT', bottom: 'SCRBT', back: 'SCRBK' }
+
+/** Change whitelist (AI0 + AI2). Door / board colours join in AI3. */
 export interface CabinetChanges {
   dx?: number
   dy?: number
@@ -25,9 +29,13 @@ export interface CabinetChanges {
   pos_z?: number
   offset?: number                   // mm from the wall's start, as the summary shows it
   notes?: string | null
+  /** mm per side; null = back to the inherited (room / job) scribe. */
+  scribes?: Partial<Record<ScribeSide, number | null>>
+  /** handle_schedules id (the server turns the name into it); null = inherit room / job. */
+  handle_schedule_id?: string | null
 }
 
-export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes'] as const
+export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'handle_schedule_id'] as const
 
 export interface MatchContext {
   walls: Wall[]
@@ -77,6 +85,10 @@ export function validateChanges(ch: CabinetChanges): string[] {
   }
   if (ch.pos_z !== undefined && !(Number.isFinite(ch.pos_z) && ch.pos_z >= 0 && ch.pos_z <= 4000)) errs.push('pos_z must be 0–4000 mm')
   if (ch.offset !== undefined && !(Number.isFinite(ch.offset) && ch.offset >= 0)) errs.push('offset must be ≥ 0 mm')
+  for (const [side, v] of Object.entries(ch.scribes ?? {})) {
+    if (!(side in SCRIBE_KEY)) errs.push(`unknown scribe side "${side}" (left, right, top, bottom, back)`)
+    else if (v !== null && !(Number.isFinite(v) && v >= 0 && v <= 200)) errs.push(`scribe ${side} must be 0–200 mm`)
+  }
   return errs
 }
 
@@ -87,6 +99,23 @@ export function patchFor(c: CabinetInstance, ch: CabinetChanges, walls: Wall[]):
     if (ch[k] !== undefined && Number(c[k]) !== ch[k]) u[k] = Math.round(ch[k]! * 10) / 10
   }
   if (ch.notes !== undefined && (c.notes ?? null) !== ch.notes) u.notes = ch.notes
+  if (ch.scribes) {
+    const cur = (c.rule_overrides ?? {}) as Record<string, unknown>
+    const next = { ...cur }
+    for (const [side, v] of Object.entries(ch.scribes) as [ScribeSide, number | null][]) {
+      const key = SCRIBE_KEY[side]
+      if (v === null) delete next[key]; else next[key] = Math.round(v * 10) / 10
+    }
+    if (JSON.stringify(next) !== JSON.stringify(cur)) u.rule_overrides = next
+  }
+  if (ch.handle_schedule_id !== undefined) {
+    const cur = (c.hardware_overrides ?? {}) as Record<string, unknown>
+    if ((cur.handle_schedule_id ?? null) !== ch.handle_schedule_id) {
+      const next = { ...cur }
+      if (ch.handle_schedule_id === null) delete next.handle_schedule_id; else next.handle_schedule_id = ch.handle_schedule_id
+      u.hardware_overrides = next
+    }
+  }
   if (ch.offset !== undefined) {
     const w = walls.find(x => x.id === c.wall_id)
     if (w && wallOffset(c, w) !== Math.round(ch.offset)) {

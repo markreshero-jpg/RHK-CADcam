@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 + AI1 built and checked 2026-11-08** — next is AI2 (Selection edits, ask_user, Undo in the panel)
+Status: **AI0 – AI2 built and checked 2026-11-08** — next is AI3 (colours, Job scope, speed, "Try harder")
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -174,7 +174,7 @@ $20; cached input ~10% of normal.
 |---|---|---|
 | AI0 ✅ | **Server actions**: placement / update / resolve callable server-side (from what `window.__canvasApi` does in the browser today); compact summary builder; batch + undo tables | A script can update 12 cabinets by filter server-side and undo it, matching what the UI produces |
 | AI1 ✅ | Chat panel + Room scope, **read-only** Q&A on Haiku; cost log | "Total kick length in the Kitchen?" / "Which cabinets are TBC?" correct in a few seconds, cost logged |
-| AI2 | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
+| AI2 ✅ | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
 | AI3 | Room + Job scope bulk changes, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
 | AI4 | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
 | AI5 | Shop Rules editor in Settings, per-job notes, admin cost view | Rules editable and visibly followed; monthly total shown |
@@ -246,7 +246,46 @@ they're sent on every request.
   **4–7 s and 0.04–0.08¢ per answer.** Summary of a real 32-cabinet kitchen (RHK6595)
   ≈ 1,050 tokens.
 
+## AI2 — what was built (2026-11-08)
+
+- **Scope follows the canvas.** Cabinets selected → **Selection** (chip "Selection:
+  WC-01, …"): the server refuses changes outside it. Nothing selected → **Room**:
+  any change becomes a proposal that waits for **Apply** (pulled forward from AI3 —
+  it's the same approval flow, and safer than refusing).
+- **`update_cabinets`** tool (`src/lib/ai/server/chat.ts`): filter optional in
+  Selection scope (= the selection). Change whitelist now also has **scribes**
+  (left / right / top / bottom / back → `rule_overrides` SCRL / SCRR / SCRT / SCRBT /
+  SCRBK, null = inherit) and **handle schedule** (by name → `hardware_overrides
+  .handle_schedule_id`, null = inherit; `list_handle_schedules` tool). One edit per
+  message. Selection ≤ 3 cabinets (`AUTO_APPLY_MAX`) applies straight away; else a
+  proposal. Change lines read per key ("SCRR inherited → 20").
+- **`ask_user`** tool — question + 2–4 option buttons; ends the turn; buttons live
+  on the latest message only; a click sends the option as the next message.
+- **Apply / Cancel** `app/api/ai/apply` (re-expands the proposal against the room
+  as it is now), **Undo** `app/api/ai/undo`. Both run in `withSupabase()` as the user.
+- **`ai_messages`** gained `question`, `proposal`, `proposal_status`, `batch_id`,
+  `changed`, `undone_at` (`migration_ai_chat_edits.sql`, applied). History replays
+  those as text ("[Applied: …]", "[Undone by the user]").
+- **History is per room now** (the panel still shows the job's thread): replaying
+  other rooms' messages muddled labels (Haiku mixed BC- labels from another room).
+- **Canvas** reloads the changed cabinets after an apply / undo
+  (`reloadCabinetsFromServer`: drops resolver caches, takes the saved rows, re-resolves).
+- Fixed: Undo's "changed since" check and the change lines compare jsonb with sorted
+  keys (Postgres reorders jsonb keys).
+- **Check (browser, Test Kitchen):** select WC-01 → "make this 900 high" → applied
+  (dy 700 → 900, canvas updated, 16 s incl. resolve) → Undo → 700. Nothing selected →
+  "make all the overheads 800 high" → proposal WC-01 / WC-02 700 → 800 → Cancel →
+  unchanged. "add a scribe to this" → question with side / mm buttons. 0.02–0.07¢ each.
+- Tutorial `ai_chat_edit`.
+
 ## Open items (check while building)
+
+- **Door / board colours** per cabinet — the edit modal sets front colours through
+  the face grid / material schedules, not `material_overrides` directly; work out the
+  right write path before adding it (AI3).
+- **Apply speed:** a 1-cabinet change took 16 s (server resolve with cold caches +
+  neighbour re-detect + re-resolve). Parallel resolves / warm cascade within a batch (AI3).
+- Other people with the same room open don't see an AI change until they reload.
 
 - **Production key:** `ANTHROPIC_API_KEY` is set in Vercel (Mark, 2026-11-08) and in
   `.env.local` for dev. Spend cap US$50 in the Anthropic Console.

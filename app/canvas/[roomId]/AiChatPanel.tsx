@@ -1,16 +1,28 @@
 'use client'
 
-// AI helper chat panel (z_ai_helper AI1): docked on the right of the canvas.
-// Room scope, read-only Q&A. The thread is the job's (one per job), so it shows
-// questions asked in any room; each one is tagged with its room.
+// AI helper chat panel (z_ai_helper AI1 + AI2): docked on the right of the canvas.
+// Scope follows the canvas: cabinets selected → Selection (small edits apply
+// straight away, Undo on the message), nothing selected → Room (changes wait for
+// Apply). The thread is the job's (one per job), so it shows questions asked in
+// any room; each one is tagged with its room.
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import { useTutorial } from '@/src/lib/tutorial/store'
 
-interface Msg { id: string; role: 'user' | 'assistant'; text: string; room_id: string | null; cost_usd?: number | null; ms?: number | null }
+interface Msg {
+  id: string; role: 'user' | 'assistant'; text: string; room_id: string | null
+  cost_usd?: number | null; ms?: number | null
+  question?: { text: string; options: string[] } | null
+  proposal?: { lines: string[]; description: string } | null
+  proposal_status?: 'pending' | 'applied' | 'cancelled' | null
+  batch_id?: string | null
+  changed?: string[] | null
+  undone_at?: string | null
+}
 
 const SUGGESTIONS = ['What is the total kick length?', 'Which cabinets are TBC?', 'List the overheads and their sizes']
+const COLS = 'id, role, text, room_id, cost_usd, ms, question, proposal, proposal_status, batch_id, changed, undone_at'
 
 const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
   part.startsWith('**') && part.endsWith('**') ? <strong key={i} className="text-white">{part.slice(2, -2)}</strong> : part)
@@ -50,63 +62,111 @@ function renderReply(text: string): ReactNode {
 
 const cents = (usd: number) => `${(usd * 100).toFixed(usd < 0.01 ? 2 : 1)}¢`
 
-export default function AiChatPanel({ projectId, roomId, roomName, onClose }: {
-  projectId: string; roomId: string; roomName: string; onClose: () => void
+function ChangeList({ lines, tone }: { lines: string[]; tone: 'pending' | 'done' | 'muted' }) {
+  const cls = tone === 'pending' ? 'border-amber-500/40 bg-amber-500/5' : tone === 'done' ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-gray-700 opacity-60'
+  return (
+    <ul className={`mt-2 rounded border ${cls} px-2 py-1.5 text-xs space-y-0.5 font-mono`}>
+      {lines.map((l, i) => <li key={i}>{l}</li>)}
+    </ul>
+  )
+}
+
+export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, selectedLabels, onChanged, onClose }: {
+  projectId: string; roomId: string; roomName: string
+  /** Cabinets selected on the canvas — non-empty = Selection scope. */
+  selectedIds: string[]; selectedLabels: string[]
+  /** After an apply / undo: the cabinets the server changed, for the canvas to reload. */
+  onChanged: (cabinetIds: string[]) => void
+  onClose: () => void
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([])
   const [roomNames, setRoomNames] = useState<Map<string, string>>(new Map())
   const [input, setInput] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)   // what's running: 'Thinking…' / 'Applying…' / 'Undoing…'
   const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    let live = true
-    void Promise.all([
-      supabase.from('ai_messages').select('id, role, text, room_id, cost_usd, ms')
-        .eq('project_id', projectId).order('created_at', { ascending: false }).limit(60),
+  async function loadThread() {
+    const [m, r] = await Promise.all([
+      supabase.from('ai_messages').select(COLS).eq('project_id', projectId).order('created_at', { ascending: false }).limit(60),
       supabase.from('rooms').select('id, name').eq('project_id', projectId),
-    ]).then(([m, r]) => {
-      if (!live) return
-      setMsgs(((m.data ?? []) as Msg[]).reverse())
-      setRoomNames(new Map((r.data ?? []).map(x => [x.id as string, x.name as string])))
-    })
-    return () => { live = false }
-  }, [projectId])
+    ])
+    setMsgs(((m.data ?? []) as Msg[]).reverse())
+    setRoomNames(new Map((r.data ?? []).map(x => [x.id as string, x.name as string])))
+  }
+  useEffect(() => { void loadThread() }, [projectId])   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { endRef.current?.scrollIntoView({ block: 'end' }) }, [msgs, busy])
+
+  async function post(url: string, body: unknown) {
+    const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`)
+    return data
+  }
 
   async function send(text: string) {
     const message = text.trim()
     if (!message || busy) return
-    setInput(''); setError(null); setBusy(true)
+    setInput(''); setError(null); setBusy('Thinking…')
     setMsgs(m => [...m, { id: `local-${Date.now()}`, role: 'user', text: message, room_id: roomId }])
     try {
-      const res = await fetch('/api/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ roomId, message }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? `Error ${res.status}`)
-      setMsgs(m => [...m, { id: `local-${Date.now()}-a`, role: 'assistant', text: data.reply, room_id: roomId, cost_usd: data.costUsd, ms: data.ms }])
+      const data = await post('/api/ai/chat', { roomId, message, selectedIds })
+      setMsgs(m => [...m, {
+        id: data.messageId ?? `local-${Date.now()}-a`, role: 'assistant', text: data.reply, room_id: roomId,
+        cost_usd: data.costUsd, ms: data.ms, question: data.question ?? null,
+        proposal: data.proposal ?? null, proposal_status: data.proposal ? 'pending' : null,
+        batch_id: data.batchId ?? null, changed: data.changed ?? null,
+      }])
+      if (data.cabinetIds?.length) { onChanged(data.cabinetIds); useTutorial.getState().emit('ai_chat_edit') }
       useTutorial.getState().emit('ai_chat_asked')
     } catch (e) {
       setError((e as Error).message)
     } finally {
-      setBusy(false)
+      setBusy(null)
     }
   }
+
+  async function act(m: Msg, kind: 'apply' | 'cancel' | 'undo') {
+    if (busy) return
+    setError(null); setBusy(kind === 'undo' ? 'Undoing…' : kind === 'apply' ? 'Applying…' : 'Cancelling…')
+    try {
+      const data = kind === 'undo'
+        ? await post('/api/ai/undo', { messageId: m.id })
+        : await post('/api/ai/apply', { messageId: m.id, cancel: kind === 'cancel' })
+      if (data.cabinetIds?.length) onChanged(data.cabinetIds)
+      if (kind !== 'cancel') useTutorial.getState().emit(kind === 'undo' ? 'ai_chat_undo' : 'ai_chat_edit')
+      const warn = [...(data.warnings ?? []), ...(data.errors ?? [])]
+      if (warn.length) setError(warn.join('\n'))
+      await loadThread()
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const lastId = msgs[msgs.length - 1]?.id
+  const scopeText = selectedIds.length
+    ? `Selection: ${selectedLabels.slice(0, 6).join(', ')}${selectedLabels.length > 6 ? ` +${selectedLabels.length - 6}` : ''}`
+    : `Room: ${roomName}`
 
   return (
     <aside className="order-last w-[380px] flex-none flex flex-col border-l border-gray-800 bg-gray-950 text-sm text-gray-200">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800">
         <span className="font-medium text-gray-100">Ask AI</span>
-        <span className="text-xs text-gray-500 truncate">· {roomName} · read-only</span>
+        <span title={selectedIds.length ? 'Changes only touch the selected cabinets; up to 3 apply straight away.' : 'Nothing selected: changes to this room wait for you to press Apply.'}
+          className={`text-[11px] px-1.5 py-0.5 rounded truncate ${selectedIds.length ? 'bg-blue-600/25 text-blue-200 border border-blue-500/40' : 'bg-gray-800 text-gray-400 border border-gray-700'}`}>
+          {scopeText}
+        </span>
         <button onClick={onClose} title="Close" aria-label="Close AI chat"
-          className="ml-auto w-6 h-6 rounded text-gray-400 hover:text-gray-100 hover:bg-gray-800">✕</button>
+          className="ml-auto w-6 h-6 flex-none rounded text-gray-400 hover:text-gray-100 hover:bg-gray-800">✕</button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {!msgs.length && !busy && (
           <div className="text-gray-400 space-y-2">
-            <p>Ask about this room — sizes, colours, kicks, what&apos;s TBC. It can&apos;t change anything yet.</p>
+            <p>Ask about this room — sizes, colours, kicks, what&apos;s TBC — or select cabinets and ask for a change (sizes, position, scribes, handles, notes).</p>
             {SUGGESTIONS.map(s => (
               <button key={s} onClick={() => void send(s)}
                 className="block w-full text-left px-2 py-1.5 rounded border border-gray-800 hover:border-gray-600 hover:bg-gray-900 text-gray-300">{s}</button>
@@ -120,23 +180,62 @@ export default function AiChatPanel({ projectId, roomId, roomName, onClose }: {
           </div>
         ) : (
           <div key={m.id} className="mr-4">
-            <div className="rounded-lg bg-gray-900 border border-gray-800 px-3 py-2 leading-relaxed">{renderReply(m.text)}</div>
+            <div className="rounded-lg bg-gray-900 border border-gray-800 px-3 py-2 leading-relaxed">
+              {renderReply(m.text)}
+
+              {/* ask_user: answer buttons, live on the latest message only */}
+              {m.question?.options?.length ? (
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {m.question.options.map(o => (
+                    <button key={o} disabled={m.id !== lastId || !!busy} onClick={() => void send(o)}
+                      className="px-2 py-1 rounded border border-blue-500/50 text-blue-200 text-xs hover:bg-blue-600/20 disabled:opacity-40 disabled:hover:bg-transparent">{o}</button>
+                  ))}
+                </div>
+              ) : null}
+
+              {/* A change waiting for Apply */}
+              {m.proposal && (
+                <>
+                  <ChangeList lines={m.proposal_status === 'applied' && m.changed?.length ? m.changed : m.proposal.lines}
+                    tone={m.proposal_status === 'pending' ? 'pending' : m.proposal_status === 'applied' && !m.undone_at ? 'done' : 'muted'} />
+                  {m.proposal_status === 'pending' && (
+                    <div className="flex gap-1.5 mt-2">
+                      <button disabled={!!busy} onClick={() => void act(m, 'apply')}
+                        className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-40">Apply</button>
+                      <button disabled={!!busy} onClick={() => void act(m, 'cancel')}
+                        className="px-3 py-1 rounded border border-gray-700 text-gray-300 text-xs hover:bg-gray-800 disabled:opacity-40">Cancel</button>
+                    </div>
+                  )}
+                  {m.proposal_status === 'cancelled' && <div className="text-[11px] text-gray-500 mt-1">Cancelled — nothing changed.</div>}
+                </>
+              )}
+
+              {/* Applied straight away (small selection edit) */}
+              {!m.proposal && m.changed?.length ? <ChangeList lines={m.changed} tone={m.undone_at ? 'muted' : 'done'} /> : null}
+
+              {m.batch_id && (
+                m.undone_at
+                  ? <div className="text-[11px] text-gray-500 mt-1">Undone.</div>
+                  : <button disabled={!!busy} onClick={() => void act(m, 'undo')}
+                      className="mt-2 px-3 py-1 rounded border border-gray-700 text-gray-300 text-xs hover:bg-gray-800 disabled:opacity-40">↶ Undo</button>
+              )}
+            </div>
             {m.cost_usd != null && <div className="text-[10px] text-gray-600 mt-0.5">{cents(Number(m.cost_usd))}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)}s` : ''}</div>}
           </div>
         ))}
-        {busy && <div className="text-gray-500 italic">Thinking…</div>}
-        {error && <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-red-300">{error}</div>}
+        {busy && <div className="text-gray-500 italic">{busy}</div>}
+        {error && <div className="rounded border border-red-500/40 bg-red-500/10 px-3 py-2 text-red-300 whitespace-pre-wrap">{error}</div>}
         <div ref={endRef} />
       </div>
 
       <form className="border-t border-gray-800 p-2" onSubmit={e => { e.preventDefault(); void send(input) }}>
-        <textarea value={input} onChange={e => setInput(e.target.value)} rows={2} disabled={busy}
-          placeholder={`Ask about ${roomName}…`}
+        <textarea value={input} onChange={e => setInput(e.target.value)} rows={2} disabled={!!busy}
+          placeholder={selectedIds.length ? `Ask about or change ${selectedLabels.length === 1 ? selectedLabels[0] : `these ${selectedLabels.length}`}…` : `Ask about ${roomName}…`}
           onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input) } }}
           className="w-full resize-none rounded bg-gray-900 border border-gray-700 px-2 py-1.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500" />
         <div className="flex items-center mt-1">
           <span className="text-[10px] text-gray-600">Enter to send · Shift+Enter new line</span>
-          <button type="submit" disabled={busy || !input.trim()}
+          <button type="submit" disabled={!!busy || !input.trim()}
             className="ml-auto px-3 py-1 rounded bg-blue-600 text-white text-xs disabled:opacity-40 hover:bg-blue-500">Send</button>
         </div>
       </form>

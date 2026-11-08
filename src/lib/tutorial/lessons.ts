@@ -1826,7 +1826,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click ✨ Ask AI at the top right of the canvas (PC only for now). The chat opens on the right. It is the job’s chat: questions asked in other rooms show too, tagged with their room.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_open') > ev(s, 'ai_chat_open') },
     { id: 'ask', title: 'Ask a question',
-      body: 'Type a question and press Enter, e.g. "What is the total kick length?" or "Which cabinets are TBC?". It reads the room as saved (cabinets, fronts, colours, kicks, CAD notes and clouds) and answers in a few seconds. Each answer shows what it cost, usually well under 1¢. It can only read for now: ask it to change something and it will say so.',
+      body: 'Type a question and press Enter, e.g. "What is the total kick length?" or "Which cabinets are TBC?". It reads the room as saved (cabinets, fronts, colours, kicks, CAD notes and clouds) and answers in a few seconds. Each answer shows what it cost, usually well under 1¢. To have it change cabinets, see "Change cabinets with the AI".',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
   ]},
 
@@ -1840,6 +1840,21 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'search', title: 'Search for a job',
       body: 'Click the search bar (or press / anywhere on the page) and type part of a job number, name, client, address or room name, e.g. "6595" or "laundry". Archived jobs are searched too. A job whose room matches opens to show its rooms. Esc clears the search; if only one job with one room matches, Enter opens it. Click a room to open it.',
       target: 'job-search', done: c => c.inCanvas },
+  ]},
+
+  // Appended 2026-11-08 (z_ai_helper AI2: AI edits with Undo).
+  { id: 'ai_chat_edit', level: 'basics', topic: 'room', title: 'Change cabinets with the AI',
+    blurb: 'Select cabinets and tell the AI what to change: sizes, position, height off the floor, scribes, handle schedule, notes. Undo is on the message.',
+    keywords: 'ai ask chat change edit resize height width depth scribe handle undo apply selection helper', steps: [
+    { id: 'select', title: 'Select the cabinets',
+      body: 'Open ✨ Ask AI, then click a cabinet on the plan (Shift / drag to select more). The chip at the top of the chat says "Selection: …" — the AI can only change those. With nothing selected it says "Room", and any change waits for you to press Apply.',
+      canvas: true, done: c => c.selected?.type === 'cabinet' },
+    { id: 'change', title: 'Ask for the change',
+      body: 'Type what you want, e.g. "make these 900 high" or "scribe 20 on the right". Up to 3 selected cabinets change straight away and the canvas updates; more than that, or Room scope, shows the list of changes with Apply / Cancel. If it isn’t sure (which side? how much?) it asks with buttons — click one. It can’t change colours, or add or delete cabinets, yet.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
+    { id: 'undo', title: 'Undo it',
+      body: 'Click ↶ Undo on the message. That change is put back. A cabinet you’ve edited again since is left alone and the chat tells you.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_undo') > ev(s, 'ai_chat_undo') },
   ]},
 ]
 

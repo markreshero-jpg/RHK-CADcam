@@ -24,6 +24,8 @@ export interface BatchResult {
   warnings: string[]
   /** Resolver errors after the change, per cabinet label. */
   errors: string[]
+  /** Every cabinet whose row changed (incl. neighbour re-detects) — the canvas reloads these. */
+  cabinetIds: string[]
 }
 
 interface RoomState { room: Room; walls: Wall[]; cabinets: CabinetInstance[]; defNames: Map<string, string> }
@@ -50,6 +52,32 @@ const pick = (c: CabinetInstance, keys: string[]): Fields =>
   Object.fromEntries(keys.map(k => [k, (c as unknown as Record<string, unknown>)[k] ?? null])) as Fields
 
 const fmt = (v: unknown) => typeof v === 'number' ? String(Math.round(v * 10) / 10) : JSON.stringify(v)
+
+/** JSON with sorted keys — jsonb columns come back in their own key order. */
+function canon(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canon).join(',')}]`
+  if (v && typeof v === 'object') return `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canon((v as Record<string, unknown>)[k])}`).join(',')}}`
+  return JSON.stringify(v ?? null)
+}
+
+/** "BC-03: SCRR 0 → 20" rather than the whole rule_overrides object. */
+function fieldChanges(k: string, before: unknown, after: unknown): string[] {
+  if ((k === 'rule_overrides' || k === 'hardware_overrides') && (before ?? {}) instanceof Object && (after ?? {}) instanceof Object) {
+    const b = (before ?? {}) as Record<string, unknown>, a = (after ?? {}) as Record<string, unknown>
+    return [...new Set([...Object.keys(b), ...Object.keys(a)])].filter(x => canon(b[x]) !== canon(a[x]))
+      .map(x => `${x} ${b[x] === undefined ? 'inherited' : fmt(b[x])} → ${a[x] === undefined ? 'inherited' : fmt(a[x])}`)
+  }
+  return canon(before) === canon(after) ? [] : [`${k} ${fmt(before)} → ${fmt(after)}`]
+}
+
+/** Handle schedule by name (case-insensitive, partial ok) → id; null when none matches. */
+export async function findHandleSchedule(name: string): Promise<{ id: string; name: string } | { error: string }> {
+  const { data } = await supabase.from('handle_schedules').select('id, name').order('name')
+  const all = (data ?? []) as { id: string; name: string }[]
+  const n = name.trim().toLowerCase()
+  const hit = all.find(s => s.name.toLowerCase() === n) ?? (all.filter(s => s.name.toLowerCase().includes(n)).length === 1 ? all.find(s => s.name.toLowerCase().includes(n)) : undefined)
+  return hit ?? { error: `No single handle schedule matches "${name}". Schedules: ${all.map(s => s.name).join(', ')}` }
+}
 
 /**
  * Apply row patches and everything the canvas does after them. Returns one entry
@@ -125,12 +153,10 @@ async function saveBatch(room: Room, description: string, source: string, entrie
 }
 
 function describe(entries: BatchEntry[]): string[] {
-  const b = (e: BatchEntry) => e.before as Record<string, unknown>
-  const a = (e: BatchEntry) => e.after as Record<string, unknown>
   return entries
-    .map(e => ({ e, keys: Object.keys(e.after).filter(k => JSON.stringify(b(e)[k]) !== JSON.stringify(a(e)[k])) }))
-    .filter(x => x.keys.length)
-    .map(({ e, keys }) => `${e.label}: ` + keys.map(k => `${k} ${fmt(b(e)[k])} → ${fmt(a(e)[k])}`).join(', '))
+    .map(e => ({ e, parts: Object.keys(e.after).flatMap(k => fieldChanges(k, (e.before as Record<string, unknown>)[k], (e.after as Record<string, unknown>)[k])) }))
+    .filter(x => x.parts.length)
+    .map(({ e, parts }) => `${e.label}: ${parts.join(', ')}`)
 }
 
 /** Expand a filter + changes without saving — what the panel shows for approval. */
@@ -153,19 +179,29 @@ export async function previewCabinetUpdate(roomId: string, filter: CabinetFilter
   return { state, matched: matched.map(c => c.label ?? c.id), patches, problems }
 }
 
+/** The "BC-03: dy 720 → 900" lines a preview would apply (row changes only; neighbour re-detects show after). */
+export function previewLines(pv: Awaited<ReturnType<typeof previewCabinetUpdate>>): string[] {
+  if (!pv.state) return []
+  const entries: BatchEntry[] = [...pv.patches].map(([id, u]) => {
+    const c = pv.state!.cabinets.find(x => x.id === id)!
+    return { cabinet_id: id, label: c.label, before: pick(c, Object.keys(u)), after: u }
+  })
+  return describe(entries)
+}
+
 /** Find the cabinets, change them, resolve, and save the batch for Undo. */
 export async function updateCabinets(args: {
   roomId: string; filter: CabinetFilter; changes: CabinetChanges
   description: string; source?: 'ai' | 'script'; onlyIds?: string[]
 }): Promise<BatchResult> {
   const pv = await previewCabinetUpdate(args.roomId, args.filter, args.changes, { onlyIds: args.onlyIds })
-  if (pv.problems.length || !pv.state) return { batchId: null, changed: [], warnings: pv.problems, errors: [] }
+  if (pv.problems.length || !pv.state) return { batchId: null, changed: [], warnings: pv.problems, errors: [], cabinetIds: [] }
   if (!pv.patches.size) {
-    return { batchId: null, changed: [], warnings: [pv.matched.length ? 'Nothing to change — already that way.' : 'No cabinets match.'], errors: [] }
+    return { batchId: null, changed: [], warnings: [pv.matched.length ? 'Nothing to change — already that way.' : 'No cabinets match.'], errors: [], cabinetIds: [] }
   }
   const { entries, warnings, errors } = await applyPatches(pv.state, pv.patches)
   const batchId = entries.length ? await saveBatch(pv.state.room, args.description, args.source ?? 'ai', entries, warnings) : null
-  return { batchId, changed: describe(entries), warnings, errors }
+  return { batchId, changed: describe(entries), warnings, errors, cabinetIds: entries.map(e => e.cabinet_id) }
 }
 
 /**
@@ -176,7 +212,7 @@ export async function updateCabinets(args: {
 export async function undoBatch(batchId: string): Promise<BatchResult> {
   const { data: batch, error } = await supabase.from('ai_batches').select('*').eq('id', batchId).single()
   if (error || !batch) throw new Error(`Batch not found or no access: ${batchId}`)
-  if (batch.undone_at) return { batchId: null, changed: [], warnings: ['Already undone.'], errors: [] }
+  if (batch.undone_at) return { batchId: null, changed: [], warnings: ['Already undone.'], errors: [], cabinetIds: [] }
   if (!batch.room_id) throw new Error('Batch has no room')
 
   const state = await loadRoomState(batch.room_id)
@@ -187,7 +223,7 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
     if (!c) { warnings.push(`${e.label}: no longer in the room — skipped.`); continue }
     const keys = Object.keys(e.after)
     const cur = pick(c, keys) as Record<string, unknown>
-    const changedSince = keys.filter(k => JSON.stringify(cur[k]) !== JSON.stringify((e.after as Record<string, unknown>)[k]))
+    const changedSince = keys.filter(k => canon(cur[k]) !== canon((e.after as Record<string, unknown>)[k]))
     if (changedSince.length) { warnings.push(`${e.label}: changed again since (${changedSince.join(', ')}) — left as is.`); continue }
     patches.set(c.id, e.before)
   }
@@ -196,5 +232,5 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   const undoId = applied.entries.length
     ? await saveBatch(state.room, `Undo: ${batch.description}`, 'undo', applied.entries, [...warnings, ...applied.warnings])
     : null
-  return { batchId: undoId, changed: describe(applied.entries), warnings: [...warnings, ...applied.warnings], errors: applied.errors }
+  return { batchId: undoId, changed: describe(applied.entries), warnings: [...warnings, ...applied.warnings], errors: applied.errors, cabinetIds: applied.entries.map(e => e.cabinet_id) }
 }
