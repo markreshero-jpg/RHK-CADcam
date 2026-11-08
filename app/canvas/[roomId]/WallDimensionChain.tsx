@@ -39,14 +39,13 @@ interface Props {
 type Seg = { from: number; to: number; label: number }
 
 // Dimension spacing is fixed in model mm so the dims stay put relative to the walls
-// as you zoom, clamped to a screen-px range: never closer than MIN_PX (labels would
-// pile up when zoomed out) nor further than MAX_PX (would drift off-screen when
-// zoomed in). Returns model mm.
+// as you zoom (and CAD markup drawn against them stays on them - DF1, Mark 2026-11-08).
+// Only when zoomed right out does it hold a minimum screen gap (MIN_PX), so the labels
+// don't pile up; zoomed in there's no cap, so nothing drifts. Returns model mm.
 const DIM_STEP_MM = 150
 const DIM_STEP_MIN_PX = 18
-const DIM_STEP_MAX_PX = 50
 function dimStep(zoom: number): number {
-  return Math.min(Math.max(DIM_STEP_MM * zoom, DIM_STEP_MIN_PX), DIM_STEP_MAX_PX) / zoom
+  return Math.max(DIM_STEP_MM * zoom, DIM_STEP_MIN_PX) / zoom
 }
 
 // `extra` = other items in the row (appliances), as along-wall { t, dx }.

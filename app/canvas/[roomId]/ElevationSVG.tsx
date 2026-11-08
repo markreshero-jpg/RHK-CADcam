@@ -993,6 +993,10 @@ export default function ElevationSVG({
   const cabLabelMove = useLabelMove(labelMoving?.kind === 'cab' ? labelMoving.id : null, onCabLabelMove, onLabelMoveEnd)
   const dimFs   =  9 / z
   const tickH   = 30 / z
+  // DF1: dimension rows sit at fixed mm off the drawing (not screen px), so they don't
+  // move as you zoom and CAD markup on them stays put. Same paper-mm offsets as the
+  // printed elevation (ElevationPrintSVG) x the room's CAD scale.
+  const dm = (paperMm: number) => paperMm * (itemCadPaper ?? 20)
   const mr      =  6 / z
 
   return (
@@ -2367,11 +2371,11 @@ export default function ElevationSVG({
                   </g>
                 )
               }
-              const chainY = -tickH * 2 - layers.offset('dim_elev_wall_chain')
+              const chainY = -dm(7) - layers.offset('dim_elev_wall_chain')
               return (
                 <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
                   {(overheadCabs.length > 0 || chainFxWall.length > 0) && row(computeElevChain(overheadCabs, wall, elevX, chainFxWall), chainY, 'oh')}
-                  {bulkheadCabs.length > 0 && row(computeElevChain(bulkheadCabs, wall, elevX), chainY - tickH, 'bh')}
+                  {bulkheadCabs.length > 0 && row(computeElevChain(bulkheadCabs, wall, elevX), chainY - dm(2.5), 'bh')}
                 </g>
               )
             })()}
@@ -2386,7 +2390,7 @@ export default function ElevationSVG({
               )
               if (floorCabs.length === 0 && chainFxFloor.length === 0) return null
               const segs = computeElevChain(floorCabs, wall, elevX, chainFxFloor)
-              const chainY = roomH + tickH * 1.5 + layers.offset('dim_elev_floor_chain')
+              const chainY = roomH + dm(6) + layers.offset('dim_elev_floor_chain')
               const col = layers.color('dim_elev_floor_chain', '#ffffff')
               const chainOp = layers.op('dim_elev_floor_chain')
               const sw = layers.w('dim_elev_floor_chain', 1) / lz, fs = 12 / z, tk = 8 / z
@@ -2424,7 +2428,7 @@ export default function ElevationSVG({
               return (
                 <g pointerEvents="none" opacity={layers.op('dim_kicks')} style={{ userSelect: 'none' }}>
                   {marks.map((m, i) => {
-                    const x = m.x + 24 / z + layers.offset('dim_kicks'), y0 = roomH, y1 = roomH - m.top, my = (y0 + y1) / 2
+                    const x = m.x + dm(4) + layers.offset('dim_kicks'), y0 = roomH, y1 = roomH - m.top, my = (y0 + y1) / 2
                     return (
                       <g key={i}>
                         <line x1={x} y1={y0} x2={x} y2={y1} stroke={col} strokeWidth={sw} />
@@ -2461,7 +2465,7 @@ export default function ElevationSVG({
                 cur = Math.max(cur, o.t1)
               }
               if (cur < wall.length - 0.5) segs.push({ from: cur, to: wall.length })
-              const chainY = -tickH * 4 - layers.offset('dim_openings')
+              const chainY = -dm(12) - layers.offset('dim_openings')   // outside the overhead + bulkhead rows
               const label = (x: number, y: number, v: number, vertical = false, side?: DimSide) => (
                 <g transform={vertical ? `rotate(-90,${x},${y})` : undefined}>
                   <DimLabel x={x} y={y} label={roundMm(v)} fs={fs} col={col} bg={bg}
@@ -2488,7 +2492,7 @@ export default function ElevationSVG({
                   ))}
                   {segs.map((s, i) => <g key={i}>{label((s.from + s.to) / 2, chainY, s.to - s.from, false, opSides[i])}</g>)}
                   {ops.map((o, i) => {
-                    const x = o.t1 - 40 / z
+                    const x = o.t1 - dm(4)
                     return (
                       <g key={`v${i}`}>
                         {o.sill > 0.5 && vDim('s', x, 0, o.sill)}
@@ -2503,7 +2507,7 @@ export default function ElevationSVG({
             {/* Bottom dimension — overall wall length */}
             {(() => {
               // Overall sits outside the floor chain, so it moves out with it.
-              const dimY = roomH + tickH * 4 + (layers.show('dim_elev_floor_chain') ? layers.offset('dim_elev_floor_chain') : 0)
+              const dimY = roomH + dm(13) + (layers.show('dim_elev_floor_chain') ? layers.offset('dim_elev_floor_chain') : 0)
               const fs = 12 / z, tk = 8 / z, sw = 1 / lz, col = '#ffffff'
               const mx = wall.length / 2
               const padX = fs * 1.8, padY = fs * 0.6
@@ -2611,7 +2615,7 @@ export default function ElevationSVG({
                 segs.push({ fromY: 0, toY: roomH, label: `${roundMm(roomH)}` })
               }
 
-              const chainX = -70 / z - layers.offset('dim_elev_height')
+              const chainX = -dm(13) - layers.offset('dim_elev_height')
               const tkLen = 8 / z
               const sw = layers.w('dim_elev_height', 1) / lz
               const fs = 12 / z
@@ -2652,11 +2656,11 @@ export default function ElevationSVG({
               if (dims.length === 0) return null
               const col = layers.color('dim_elev_bench', '#ffffff')
               const sw = layers.w('dim_elev_bench', 1) / lz, fs = 12 / z, tk = 8 / z
-              const x0 = -70 / z - (layers.show('dim_elev_height') ? 70 / z + layers.offset('dim_elev_height') : 0) - layers.offset('dim_elev_bench')
+              const x0 = -dm(13) - (layers.show('dim_elev_height') ? dm(8) + layers.offset('dim_elev_height') : 0) - layers.offset('dim_elev_bench')
               return (
                 <g pointerEvents="none" opacity={layers.op('dim_elev_bench')} style={{ userSelect: 'none' }}>
                   {dims.map((h, i) => {
-                    const x = x0 - i * 50 / z, y1 = roomH - h, midY = (roomH + y1) / 2
+                    const x = x0 - i * dm(8), y1 = roomH - h, midY = (roomH + y1) / 2
                     return (
                       <g key={i}>
                         <line x1={x} y1={roomH} x2={x} y2={y1} stroke={col} strokeWidth={sw} />
@@ -2677,10 +2681,10 @@ export default function ElevationSVG({
               const benchN = layers.show('dim_elev_bench') && benchtops && benchtopInfo
                 ? benchDimHeights(wall.id, benchtops, bt => benchtopInfo(bt).topZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category, f.kind)))).length
                 : 0
-              const heightX = layers.show('dim_elev_height') ? -70 / z - layers.offset('dim_elev_height') : null
-              const benchX0 = -70 / z - (heightX != null ? 70 / z + layers.offset('dim_elev_height') : 0) - layers.offset('dim_elev_bench')
-              const outer = benchN ? benchX0 - (benchN - 1) * 50 / z : heightX
-              const x = (outer != null ? outer - 60 / z : -70 / z) - layers.offset('dim_elev_wall_height')
+              const heightX = layers.show('dim_elev_height') ? -dm(13) - layers.offset('dim_elev_height') : null
+              const benchX0 = -dm(13) - (heightX != null ? dm(8) + layers.offset('dim_elev_height') : 0) - layers.offset('dim_elev_bench')
+              const outer = benchN ? benchX0 - (benchN - 1) * dm(8) : heightX
+              const x = (outer != null ? outer - dm(8) : -dm(13)) - layers.offset('dim_elev_wall_height')
               const col = layers.color('dim_elev_wall_height', '#ffffff')
               const sw = layers.w('dim_elev_wall_height', 1) / lz, fs = 12 / z, tk = 8 / z, midY = roomH / 2
               const dash = layers.props('dim_elev_wall_height', z).strokeDasharray
