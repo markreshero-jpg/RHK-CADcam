@@ -155,3 +155,8 @@ Done in Rev 4 (2026-11-07); see below.
   front Winter Sky, island back teak (BC-14 + KICK 3 set teak by hand: no fronts of their own). Island joined as two runs:
   KICK 2 = front BC-10..13 (560), KICK 3 = back BC-14, BC-01..03 (264) (`_tmp-6595-joinkicks.mjs`, `_tmp-6595-kick3teak.mjs`).
   Code fix: detectKickRun keeps a run to one facing (island front / back rows were mixed into one run).
+- **Sink = Abey Lucia LUA190PK (2026-11-08):** new GLB `public/fixture-models/Abey_Lucia_LUA190.glb` from
+  `z_fixtures/make-lucia-sink-glb.mjs` (spec-sheet sizes, plan / elevation outlines in `Abey_Lucia_LUA190.shapes.json`),
+  catalog `69e35552`. The job sink row (`dda70361`, was the Abi Seba 550 stand-in) swapped in place, centred on BC-07,
+  drop-in: flange on the 950 bench (z 750), cut-out 565 x 400 (`_tmp-6595-lucia.mjs`, `_tmp-6595-sinkz.mjs`, before
+  `_tmp-6595-sink-before.json`). Handedness checked in 3D: big bowl on the left seen from the front.
