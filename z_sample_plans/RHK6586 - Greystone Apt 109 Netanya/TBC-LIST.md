@@ -7,7 +7,7 @@
 | # | Item | Notes |
 |---|------|-------|
 | 1 | ~~Stone product + colour~~ | **Closed 8/11 (Mark):** colour not needed — spec blocks say "Stone benchtops by others". Finished thicknesses (Mark 30/10): kitchenette 60, vanity 60, TV unit 40, study 40 (45 end now a 40 apron, no waterfall) — all 20 stone + mitred apron. |
-| 2 | **33 doubled panels** | Mark 1/11: two 16.5 Boston Oak glued up and edged as one so they read 33. Halves untaped in the model + comment "GLUE UP WITH ... - EDGE AS ONE 33" (study BC-01/02, BC-08 gable + BC-09, robe TC-01/02, kitchenette TC-03/04 + TC-05/06). 8/11: tape **PT Woodmatt 1mm Matching 38 – Boston Oak** (`ec634ca4`) added to the library (deliberately not colour-matched, or it would replace the 21 tape on every Boston Oak edge). Not yet put on the panels' edges. |
+| 2 | **33 doubled panels** | Mark 1/11: two 16.5 Boston Oak glued up and edged as one so they read 33. Halves untaped in the model + comment "GLUE UP WITH ... - EDGE AS ONE 33" (study BC-01/02, BC-08 gable + BC-09, robe TC-01/02, kitchenette TC-03 (now one 33 assembly: panel + 100 build-up strip, 8/11) + TC-05/06). 8/11: tape **PT Woodmatt 1mm Matching 38 – Boston Oak** (`ec634ca4`) added to the library (deliberately not colour-matched, or it would replace the 21 tape on every Boston Oak edge). Not yet put on the panels' edges. |
 | 3 | Boston Oak long sheets (3100) | Mark 8/11: one 3100 sheet ordered for the ledge. |
 | 4 | Nikpol Diamond Grey sheet size | Mark 8/11: Mark sorting the Diamond Grey cut sheets himself. |
 | 4a | **Finger pull rail paint** | Ben 30/10: metallic rails + kicks. Mark 31/10: rails cut from Boston Oak, painted Metallic — colour TBC (noted on every spec block). Mark 8/11: leave as TBC. Kicks: call Ben (he has a catalogue). |
@@ -45,8 +45,8 @@
 | # | Item | Notes |
 |---|------|-------|
 | 16 | AC grille in the bulkhead | Ben confirmed 500W x 150H centred over the fridge, painted MDF bulkhead — done. |
-| 17 | **Rangehood cut-out** | Sirius SM927EL520 in the base of WC-04 (delivered 30/10). Mark getting specs to size the cut-out in the cupboard base + under panel. **2026-11-04:** WC-04 is now a rangehood cabinet (shelf 350, flue box, hole centred on the Sirius) — just type the hole W x D in WC-04 › Rangehood; WC-09 follows. |
-| 18 | **Pantry doors — 45° hinges** | The two pantry doors hang on 45° corners; no angled hinge (or hinge block) in the hinge library yet. Pick a hinge. |
+| 17 | Rangehood cut-out | **Done 8/11:** 502 x 265 (Sirius manual) in WC-04 + WC-09, bottom hinges at 310 to clear the body, flue notch 280 deep. Outlet assumed centred on the hood (no dimension in the manual) - check on the unit before cutting. |
+| 18 | Pantry doors | **Done 8/11:** no 45 hinges. TC-02 ends square to the doors (120 deep), carcass 611.4, fillers TC-07 (138.5, to the wall) + TC-08 (133.1, to TC-03), scribed 45. Check in the app. |
 | 19 | **Sink** | Library Abi Ohelu single bowl 380 undermount (cut-out 350 x 410) used in place of the designer's 400 x 460 — confirm the client's sink. Tap = Abi pull-out sink mixer — confirm. Mark 8/11: OK for now. |
 | 20 | Fridge | Smeg FAB28RDEG5 Emerald Green (Ben 30/10). Mark: height on the drawing is right. |
 | 21 | 45° wall angle | BFKANG corner filler built so its top + bottom can be planed to suit if the wall isn't exactly 45°. Check on site. |
