@@ -3494,17 +3494,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               {phone ? 'Hidden' : 'Show hidden parts'}
             </label>
           </>)}
-          {!phone && (
-            <button
-              onClick={() => { setAiOpen(o => !o); if (!aiOpen) useTutorial.getState().emit('ai_chat_open') }}
-              title="Ask the AI helper about this room"
-              className={`px-2 py-0.5 text-xs rounded transition-colors ${
-                aiOpen ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700'
-              }`}
-            >
-              ✨ Ask AI
-            </button>
-          )}
+          <button
+            onClick={() => { setAiOpen(o => !o); if (!aiOpen) useTutorial.getState().emit('ai_chat_open') }}
+            title="Ask the AI helper about this room" aria-label="Ask AI" aria-pressed={aiOpen}
+            className={phone
+              ? `flex-none w-9 h-8 rounded-lg flex items-center justify-center border transition-colors ${aiOpen ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800/50 border-gray-700 text-gray-300 active:bg-gray-800'}`
+              : `px-2 py-0.5 text-xs rounded transition-colors ${aiOpen ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700'}`}
+          >
+            {phone ? '✨' : '✨ Ask AI'}
+          </button>
           {/* Light / dark menus (globals.css "Job canvas light mode"); the drawing follows the layer set. */}
           <span data-canvas-theme className="flex items-center" title="Light / dark menus — pick an inverted layer set (e.g. Line drawing white) for a white drawing">
             <ThemeToggle />
@@ -3524,8 +3522,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       )}
 
       <div className="flex flex-1 overflow-hidden relative">
-        {aiOpen && !phone && (
-          <AiChatPanel projectId={room.project_id} roomId={room.id} roomName={room.name}
+        {aiOpen && (
+          <AiChatPanel projectId={room.project_id} roomId={room.id} roomName={room.name} phone={phone}
             selectedIds={getSelectedCabinets().map(c => c.id)} selectedLabels={getSelectedCabinets().map(c => c.label ?? '?')}
             onChanged={ids => void reloadCabinetsFromServer(ids)} onClose={() => setAiOpen(false)} />
         )}

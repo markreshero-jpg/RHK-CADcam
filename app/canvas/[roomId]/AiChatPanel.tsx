@@ -73,8 +73,10 @@ function ChangeList({ lines, tone }: { lines: string[]; tone: 'pending' | 'done'
   )
 }
 
-export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, selectedLabels, onChanged, onClose }: {
+export default function AiChatPanel({ projectId, roomId, roomName, phone = false, selectedIds, selectedLabels, onChanged, onClose }: {
   projectId: string; roomId: string; roomName: string
+  /** Phone (z_mobile): the panel covers the screen instead of docking on the right. */
+  phone?: boolean
   /** Cabinets selected on the canvas — non-empty = Selection scope. */
   selectedIds: string[]; selectedLabels: string[]
   /** After an apply / undo: the cabinets the server changed, for the canvas to reload. */
@@ -207,7 +209,9 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
     : `Room: ${roomName}`
 
   return (
-    <aside className="order-last w-[380px] flex-none flex flex-col border-l border-gray-800 bg-gray-950 text-sm text-gray-200">
+    <aside className={phone
+      ? 'fixed inset-0 z-50 flex flex-col bg-gray-950 text-sm text-gray-200 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]'
+      : 'order-last w-[380px] flex-none flex flex-col border-l border-gray-800 bg-gray-950 text-sm text-gray-200'}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-800">
         <span className="font-medium text-gray-100">Ask AI</span>
         <span title={selectedIds.length ? 'Changes only touch the selected cabinets; up to 3 apply straight away.' : 'Nothing selected: changes to this room wait for you to press Apply.'}
@@ -327,7 +331,7 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
         <textarea value={input} onChange={e => setInput(e.target.value)} rows={2} disabled={!!busy}
           placeholder={selectedIds.length ? `Ask about or change ${selectedLabels.length === 1 ? selectedLabels[0] : `these ${selectedLabels.length}`}…` : `Ask about ${roomName}…`}
           onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input) } }}
-          className="w-full resize-none rounded bg-gray-900 border border-gray-700 px-2 py-1.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500" />
+          className={`w-full resize-none rounded bg-gray-900 border border-gray-700 px-2 py-1.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 ${phone ? 'text-base' : ''}`} />
         <div className="flex items-center mt-1">
           <button type="button" disabled={!!busy} onClick={() => fileRef.current?.click()}
             title="Draw this room from a plan PDF or a site sketch photo (type any notes first, e.g. which page or wall)"
