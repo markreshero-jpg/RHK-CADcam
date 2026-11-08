@@ -99,6 +99,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
               wall_dy: { type: 'number', description: 'set_properties: overhead class height' },
               overhead_top: { type: 'number', description: 'set_properties (room): overhead top line, mm UP from the floor' },
               soffit_drop: { type: 'number', description: 'set_properties (room): soffit, mm DOWN from the ceiling to the overhead tops (wins over overhead_top when set)' },
+              wall_soffit_drop: { type: ['number', 'null'], description: 'set_properties with wall: THAT wall\'s own soffit drop (only its overheads / bulkheads follow); null = back to the room\'s' },
               role: { type: 'string', enum: [...MATERIAL_ROLES], description: 'set_material: fronts (doors / drawers), carcass, exposed (end panels, fillers, open interiors), shelf, divider, kick (kick face)' },
               classes: { type: 'array', items: { type: 'string', enum: ['base', 'wall', 'tall'] }, description: 'set_material: which kinds (wall = overheads); leave out for all three' },
               material: { type: ['string', 'null'], description: 'set_material: board name from find_material; null = back to inherited' },
@@ -166,7 +167,7 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 
 How overheads and bulkheads hang (get this right):
 - Overheads (wall cabinets) HANG from the room's overhead top line (the summary's first lines; a soffit drop from the ceiling wins over a top line from the floor). An overhead's underside = top line − its height. "Off the floor" (pos_z) does NOT move overheads.
-- Move ALL overheads up / down: set_properties (room) overhead_top (or soffit_drop if the room uses a soffit). Keep their undersides where they are but make them taller toward the ceiling: raise the top line AND add the same amount to their height (dy) — two steps, one change.
+- Move ALL overheads up / down: set_properties (room) overhead_top (or soffit_drop if the room uses a soffit). Only the overheads on ONE wall: set_properties with wall + wall_soffit_drop (that wall's own soffit, mm down from the ceiling) — other walls stay put. Prefer the one-wall way when the cupboards asked about are all on one wall. Keep their undersides where they are but make them taller toward the ceiling: raise the top line AND add the same amount to their height (dy) — two steps, one change.
 - Move ONE overhead: changes.wallz = its own underside from the floor (null puts it back on the top line).
 - Bulkheads ("BH", "fills to ceiling" in the summary) fill from the overhead top line up to the ceiling by themselves. To make them smaller, raise the top line — never set their height. Example: ceiling 2320, top line 2120, bulkhead 200 → "bulkhead 30, cupboards taller toward the ceiling" = top line 2120 → 2290 + those cupboards' height +170.
 - Before a change, say back in one line what you understood if the request could mean two things; if unsure, ask_user.
@@ -244,7 +245,7 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { op?: string; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface StepIn { op?: string; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -323,7 +324,9 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         ops.push({ op: 'set_material', level: st.level, role: st.role as MaterialRole, classes: st.classes, material_id: id })
       } else if (st.op === 'set_properties') {
         const level = st.level ?? 'room'
-        ops.push({ op: 'set_properties', level, kick: st.kick, base_dy: st.base_dy, tall_dy: st.tall_dy, wall_dy: st.wall_dy, soffit_drop: st.soffit_drop, overhead_top: st.overhead_top })
+        ops.push(st.wall && st.wall_soffit_drop !== undefined
+          ? { op: 'set_properties', level: 'room', wall: st.wall, wall_soffit_drop: st.wall_soffit_drop }
+          : { op: 'set_properties', level, kick: st.kick, base_dy: st.base_dy, tall_dy: st.tall_dy, wall_dy: st.wall_dy, soffit_drop: st.soffit_drop, overhead_top: st.overhead_top })
       } else if (st.op === 'delete') {
         const labels = st.labels?.length ? st.labels : selection ? selLabels : []
         if (!labels.length) return { text: `Step ${i + 1}: delete needs labels.`, isError: true }

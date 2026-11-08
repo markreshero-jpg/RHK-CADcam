@@ -40,7 +40,9 @@ export type BatchOp =
    *  Name defaults as the canvas names them (Wall N / Island N). */
   /** Job / room set-up the drawing needs (Job / Room properties): kick height (rule TOEH),
    *  class heights (class_dimension_defaults), the room's soffit drop or overhead top line. */
-  | { op: 'set_properties'; level: 'job' | 'room'; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number }
+  | { op: 'set_properties'; level: 'job' | 'room'; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number
+      /** One wall's own soffit drop (walls.soffit_height, null = the room's) — only that wall's overheads / bulkheads follow. */
+      wall?: string; wall_soffit_drop?: number | null }
   | { op: 'wall'; name?: string; x: number; y: number; length: number; angle: number; type?: 'standard' | 'island'; thickness?: number; height?: number | null }
   /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
    *  material_id null = back to inherited. Kick face has no class. */
@@ -63,7 +65,7 @@ export type BatchEntry =
   /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
   | { kind: 'wall'; cabinet_id: ''; label: null; line: string; wall_id: string }
   /** A projects / rooms row's columns before → after (whole column values). */
-  | { kind: 'props'; cabinet_id: ''; label: null; line: string; table: 'projects' | 'rooms'; row_id: string; before: Row; after: Row }
+  | { kind: 'props'; cabinet_id: ''; label: null; line: string; table: 'projects' | 'rooms' | 'walls'; row_id: string; before: Row; after: Row }
   | { kind: 'material'; cabinet_id: ''; label: null; line: string; table: string; match: Row; before: string | null; after: string | null; resolve_ids: string[] }
 
 export interface BatchResult {
@@ -192,7 +194,7 @@ type PlannedStep =
   | { kind: 'delete'; id: string; line: string }
   | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
   | { kind: 'wall'; tempId: string; row: Omit<Wall, 'id' | 'created_at'>; line: string }
-  | { kind: 'props'; table: 'projects' | 'rooms'; rowId: string; before: Row; after: Row; line: string }
+  | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
 
 export interface BatchPlan {
   state: RoomState
@@ -291,6 +293,25 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         lines.push(line)
         touched.add(c.id)
         cabs = cabs.filter(x => x.id !== c.id)
+      }
+    } else if (op.op === 'set_properties' && op.wall) {
+      const w = walls.find(x => x.name.toLowerCase() === op.wall!.trim().toLowerCase())
+      if (!w || w.id.startsWith('newwall:')) { problems.push(`${n}: no wall "${op.wall}" (${walls.map(x => x.name).join(', ')}).`); continue }
+      if (op.wall_soffit_drop === undefined || op.wall_soffit_drop === (w.soffit_height ?? null)) continue
+      if (op.wall_soffit_drop !== null && !(op.wall_soffit_drop >= 0 && op.wall_soffit_drop <= 2000)) { problems.push(`${n}: soffit drop must be 0–2000.`); continue }
+      const before = { soffit_height: w.soffit_height ?? null }, after = { soffit_height: op.wall_soffit_drop }
+      const line = `${w.name} · soffit ${w.soffit_height ?? 'room’s'} → ${op.wall_soffit_drop ?? 'room’s'} (overhead top line ${Math.round(wallCabTop(w, room))} → ${Math.round(wallCabTop({ ...w, soffit_height: op.wall_soffit_drop }, room))})`
+      steps.push({ kind: 'props', table: 'walls', rowId: w.id, before, after, line })
+      lines.push(line)
+      Object.assign(w, after)
+      // That wall's bulkheads on height-to-ceiling re-fit (as the canvas does).
+      for (const c of cabs.filter(x => x.wall_id === w.id && (x.bulkhead as { auto_h?: boolean } | null)?.auto_h)) {
+        const h = bulkheadAutoHeight(w, room, c.bulkhead)
+        if (!(h > 0) || Math.abs(h - c.dy) < 0.5) continue
+        const u = { dy: Math.round(h * 10) / 10 }
+        steps.push({ kind: 'update', id: c.id, patch: u })
+        const l = updateLine(c, u, walls); if (l) lines.push(`${l} (bulkhead re-fits to the ceiling)`)
+        cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
       }
     } else if (op.op === 'set_properties') {
       const job = op.level === 'job'
