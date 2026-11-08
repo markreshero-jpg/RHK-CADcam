@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI3b built and checked 2026-11-08** — next is AI4 (drawing from a PDF) or AI5 (Shop Rules page)
+Status: **AI0 – AI4 built 2026-11-08** (AI4 engine checked; the 📎 button in the browser not yet — dev server wedged) — next is AI5 (Shop Rules page)
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -184,7 +184,7 @@ $20; cached input ~10% of normal.
 | AI2 ✅ | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
 | AI3 ✅ | **Add / delete / multi-step**: place cabinets, end panels and fillers server-side (same path as the canvas: next label, cascade sizes, custom parts, neighbours); delete with Apply + full Undo (decision 7); several changes as one batch (decision 8); apply speed | "Delete BC-04 and slide BC-05 / BC-06 left into its place" and "add an end panel on the left of BC-03" — previewed, applied, undone exactly |
 | AI3b ✅ | Door / board colours, Job scope, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
-| AI4 | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
+| AI4 ✅ | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
 | AI5 | Shop Rules editor in Settings, per-job notes, admin cost view | Rules editable and visibly followed; monthly total shown |
 
 Each user-facing phase gets a tutorial lesson (`src/lib/tutorial/lessons.ts`).
@@ -370,9 +370,62 @@ they're sent on every request.
   mode to clean up a run that stopped early.
 - Tutorial `ai_chat_colours`.
 
+## AI4 — what was built (2026-11-08)
+
+- **📎 Draw from plan** in the Ask AI panel: the PDF / photo (≤ 20 MB) goes from the
+  browser straight to the private `ai-uploads` bucket under `<project_id>/…`
+  (`migration_ai_uploads.sql`, applied — only people who can open the job can
+  upload / read / remove), then `POST /api/ai/draw` (`maxDuration` 300) reads it.
+  Notes typed in the box first go with it ("page 2 is the laundry").
+- **Engine** `src/lib/ai/server/draw.ts`: Claude Opus 5.5, effort high, streamed; the
+  file is sent once and prompt-cached across the tool loop; tools = `find_library` +
+  `room_plan` (walls, items {wall, back, code, offset, dx, dy, dz, note}, tbc,
+  summary). The plan → `wall` + `place` steps → `planBatch` dry run; problems go back
+  to the model (2 fixes max); anything still failing is listed "✗ … (left out)" and
+  dropped. Result = one proposal → Apply (existing route) → one Undo removes it all.
+  Uses the room's existing walls by name; never touches what's there.
+- **Rules** `src/lib/ai/drawRules.ts` — the draw-plan / cabinet-codes skills
+  condensed for a JSON-only planner (coordinates, clockwise walls, island face =
+  left-perp, dims, appliances as gaps, fillers / panels / corners, codes, TBC list).
+  Keep it in step with those skills.
+- **`wall` step** in the batch engine: inserts walls named / sized as the canvas does
+  (Wall N / Island N, islands thickness 0, others the room's wall defaults); later
+  steps can place on them; Undo removes a wall only if nothing is on it. `place`
+  takes `dz` too.
+- **Check** (`headlessAi4.test.ts`, gated `AI4_RUN`) — `RHK1234 - John Smith - Test
+  Kitchen2.pdf` (4 pages) into a new empty room **RHK1234 › AI4 Draw Test**: read in
+  47 s for $0.145, applied. Against the hand-drawn **Kitchen Test Room**: both walls
+  identical (lengths, angles, start points); BC-02 / BC-05 / TC-01 identical; WC-01 /
+  02 same places (300 deep vs 350); BC-01 B1D vs B2D (it flagged the hinge as TBC);
+  BC-03 / 04 D2-LL vs D2-SL; base depth 575 vs 580. Its TBC list: the empty corner,
+  the 16.5 gap by the tall, end panels on the exposed ends, overhead ceiling
+  treatment, hinge side. Room **AI4 Draw Test 2** (empty) was made for the browser check.
+- Not yet: TBC clouds / notes aren't drawn as CAD markup (they're listed in the
+  message); fixtures / appliances aren't placed (gaps only).
+- Tutorial `ai_draw`.
+
+### AI4 open questions (Mark) — the skills disagree here; drawRules.ts picks the first
+1. Wall-run fillers: on-kick BFK / TFK default, vs "always ask 30 vs material
+   thickness" (CV conventions / intake checklist). Picked: ask (TBC) unless the plan shows it.
+2. Island face: left-perp of draw direction (current) vs "toward the room centroid"
+   (old schema note). Picked: left-perp.
+3. Nib walls: no rules anywhere — the AI doesn't draw nibs (TBC instead).
+4. Blind corners: cabinet-codes lists BCNR / WCNR, the skill builds one from B1D +
+   false panel. Picked: closest library code + TBC.
+5. Kick 140 vs 100: no room kick field in the plan JSON; base dy carries it.
+6. Overhead top line when the plan is silent: 2100 vs the 2400 line vs ceiling drop
+   30 + 30 BH. Picked: 2100 + TBC on ceiling treatment.
+7. Dishwasher gap 605 (freestanding) vs the 610 example; D/W at a wall uses BFF
+   (contradicts "fillers on the kick").
+8. Filler / panel depth: easy to double-count the door — panels get the carcass dz.
+9. Legacy codes (B2, D2, Wall Unit, P2-3ID) still in the checklist — mapped to new codes.
+10. Tall height: 2100 default vs "ask rather than guess". Picked: TBC when not stated.
+
 ## Open items (check while building)
 
 - Job-wide sizes / adds / deletes (several rooms in one change) — colours only so far.
+- AI4: draw TBC clouds / site notes as CAD markup (Questions for Client layer), and
+  appliance fixtures from the catalogue.
 - **Apply speed:** resolves now run 4 at a time; a 3-step batch applies in ~8.5 s.
   The first resolve in a request is still slow (cold caches).
 - Other people with the same room open don't see an AI change until they reload.

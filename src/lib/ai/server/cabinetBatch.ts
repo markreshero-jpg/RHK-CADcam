@@ -34,8 +34,11 @@ export type BatchOp =
   | { op: 'update'; filter: CabinetFilter; changes: CabinetChanges }
   /** A library cabinet / end panel / filler: against a cabinet's side, or on a wall (face or
    *  back) at an offset or at its left / right end as you face that side. */
-  | { op: 'place'; code: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; next_to?: { label: string; side: 'left' | 'right' }; back?: boolean; dx?: number; dy?: number }
+  | { op: 'place'; code: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; next_to?: { label: string; side: 'left' | 'right' }; back?: boolean; dx?: number; dy?: number; dz?: number }
   | { op: 'delete'; labels: string[] }
+  /** A new wall (AI4 drawing): start point (room mm), length, angle (degrees, 0 = +x, 90 = +y / down the plan).
+   *  Name defaults as the canvas names them (Wall N / Island N). */
+  | { op: 'wall'; name?: string; x: number; y: number; length: number; angle: number; type?: 'standard' | 'island'; thickness?: number; height?: number | null }
   /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
    *  material_id null = back to inherited. Kick face has no class. */
   | { op: 'set_material'; level: 'room' | 'job'; role: MaterialRole; classes?: ('base' | 'wall' | 'tall')[]; material_id: string | null }
@@ -55,6 +58,7 @@ export type BatchEntry =
   | { kind: 'insert'; cabinet_id: string; label: string | null; line: string }
   | { kind: 'delete'; cabinet_id: string; label: string | null; line: string; snapshot: DeleteSnapshot }
   /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
+  | { kind: 'wall'; cabinet_id: ''; label: null; line: string; wall_id: string }
   | { kind: 'material'; cabinet_id: ''; label: null; line: string; table: string; match: Row; before: string | null; after: string | null; resolve_ids: string[] }
 
 export interface BatchResult {
@@ -182,6 +186,7 @@ type PlannedStep =
   | { kind: 'insert'; tempId: string; row: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>; defId: string; line: string }
   | { kind: 'delete'; id: string; line: string }
   | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
+  | { kind: 'wall'; tempId: string; row: Omit<Wall, 'id' | 'created_at'>; line: string }
 
 export interface BatchPlan {
   state: RoomState
@@ -210,7 +215,9 @@ async function loadDefinitions(codes: string[]): Promise<Map<string, CabinetDefi
  */
 export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?: string[]; state?: RoomState } = {}): Promise<BatchPlan> {
   const state = opts.state ?? await loadRoomState(roomId)
-  const { room, walls } = state
+  const { room } = state
+  // Walls as the steps go: planned walls (temp id "newwall:…") join so later steps can use them.
+  const walls: Wall[] = state.walls.map(w => ({ ...w }))
   const defs = await loadDefinitions(ops.flatMap(o => o.op === 'place' ? [o.code] : []))
   await loadMaterialNames([
     ...ops.flatMap(o => o.op === 'update' ? Object.values(o.changes.materials ?? {}) : o.op === 'set_material' ? [o.material_id] : []),
@@ -220,7 +227,6 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
   const defNames = new Map(state.defNames)
   const steps: PlannedStep[] = [], lines: string[] = [], problems: string[] = [], warnings: string[] = []
   const touched = new Set<string>()
-  const ref = centroid(walls)
   const only = opts.onlyIds ? new Set(opts.onlyIds) : null
   const outside = (c: CabinetInstance) => !!only && !only.has(c.id) && !c.id.startsWith('new:')
 
@@ -268,6 +274,25 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         touched.add(c.id)
         cabs = cabs.filter(x => x.id !== c.id)
       }
+    } else if (op.op === 'wall') {
+      if (!(op.length > 0) || ![op.x, op.y, op.angle].every(Number.isFinite)) { problems.push(`${n}: a wall needs x, y, length and angle.`); continue }
+      const island = op.type === 'island'
+      const name = op.name?.trim() || (island ? `Island ${walls.filter(w => w.wall_type === 'island').length + 1}` : `Wall ${walls.length + 1}`)
+      if (walls.some(w => w.name.toLowerCase() === name.toLowerCase())) { problems.push(`${n}: there's already a wall called ${name}.`); continue }
+      const row: Omit<Wall, 'id' | 'created_at'> = {
+        room_id: room.id, name, sort_order: walls.length,
+        length: Math.round(op.length * 10) / 10, angle: Math.round(op.angle * 100) / 100,
+        pos_x: Math.round(op.x * 10) / 10, pos_y: Math.round(op.y * 10) / 10,
+        // As the canvas draws them: islands have no body; others take the room's wall defaults.
+        thickness: island ? 0 : (op.thickness ?? room.wall_dz ?? 90),
+        height: op.height ?? room.wall_dy ?? null,
+        soffit_height: null, wall_type: island ? 'island' : 'standard',
+      }
+      const tempId = `newwall:${steps.length}`
+      const line = `Add ${name} (${Math.round(row.length)} long, ${Math.round(row.angle)}°, from ${Math.round(row.pos_x)}, ${Math.round(row.pos_y)})`
+      steps.push({ kind: 'wall', tempId, row, line })
+      lines.push(line)
+      walls.push({ ...row, id: tempId, created_at: '' } as Wall)
     } else if (op.op === 'set_material') {
       if (only) { problems.push(`${n}: a ${op.level} colour changes every cabinet of that kind — deselect everything first (or ask for just the selected cabinets' own colour).`); continue }
       const kick = op.role === 'kick'
@@ -342,7 +367,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         // At an end of the wall, as you face that side: the face's left is the low end, the back's left the high end.
         const offset = op.at_end ? ((op.at_end === 'left') !== back ? 0 : Math.max(0, wall.length - dx)) : op.offset
         if (offset == null || offset < 0) { problems.push(`${n}: an offset along ${wall.name}, or at_end left / right, is needed.`); continue }
-        pos = wallAnchorPoint(wall, offset, back, ref)
+        pos = wallAnchorPoint(wall, offset, back, centroid(walls))
       }
 
       const label = nextLabel(cabs, def.assembly_class)
@@ -367,6 +392,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         if (against.rule_overrides?.WALLZ != null) row.rule_overrides = { ...(row.rule_overrides ?? {}), WALLZ: against.rule_overrides.WALLZ }
       }
       if (op.dy != null) row.dy = op.dy
+      if (op.dz != null && op.dz > 0) row.dz = op.dz
 
       const tempId = `new:${steps.length}`
       const offset = wallOffset({ pos_x: row.pos_x, pos_y: row.pos_y }, wall)
@@ -387,7 +413,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
     }
   }
 
-  return { state, steps, lines, problems, warnings, touched: touched.size, onlyUpdates: steps.every(s => s.kind === 'update') }
+  return { state: { ...state, walls }, steps, lines, problems, warnings, touched: touched.size, onlyUpdates: steps.every(s => s.kind === 'update') }
 }
 
 // ── Apply ─────────────────────────────────────────────────────────────────────
@@ -509,7 +535,7 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
 
   const warnings = [...plan.warnings], errors: string[] = []
   const rows = new Map(plan.state.cabinets.map(c => [c.id, { ...c }]))
-  const idFor = new Map<string, string>()   // planned temp id → real id
+  const idFor = new Map<string, string>()   // planned temp id (cabinet or wall) → real id
   const entries: BatchEntry[] = []
   const updates = new Map<string, Extract<BatchEntry, { before: Fields }>>()
   const touched = new Set<string>()
@@ -525,6 +551,13 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
   }
 
   for (const s of plan.steps) {
+    if (s.kind === 'wall') {
+      const { data, error } = await supabase.from('walls').insert(s.row).select('id').single()
+      if (error || !data) { errors.push(`${s.row.name}: add failed — ${error?.message}`); continue }
+      idFor.set(s.tempId, data.id as string)
+      entries.push({ kind: 'wall', cabinet_id: '', label: null, line: s.line, wall_id: data.id as string })
+      continue
+    }
     if (s.kind === 'material') {
       const err = await writeMaterialRow(s.table, s.match, s.after)
       if (err) { errors.push(`${s.line}: save failed — ${err}`); continue }
@@ -544,7 +577,9 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       const moved = ['dx', 'dy', 'dz', 'pos_x', 'pos_y', 'pos_z'].some(k => k in s.patch)
       if (moved && c.kick_run_id) warnings.push(`${c.label} is in a joined kick run — the joined kick isn't re-fitted (as on the canvas); check it.`)
     } else if (s.kind === 'insert') {
-      const { data, error } = await supabase.from('cabinet_instances').insert(s.row).select('*').single()
+      const wallId = s.row.wall_id ? idFor.get(s.row.wall_id) ?? s.row.wall_id : s.row.wall_id
+      if (wallId?.startsWith('newwall:')) { errors.push(`${s.row.label}: its wall wasn't added — skipped.`); continue }
+      const { data, error } = await supabase.from('cabinet_instances').insert({ ...s.row, wall_id: wallId }).select('*').single()
       if (error || !data) { errors.push(`${s.row.label}: add failed — ${error?.message}`); continue }
       const c = data as CabinetInstance
       idFor.set(s.tempId, c.id)
@@ -613,6 +648,14 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   for (const e of entries) {
+    if (e.kind === 'wall') {
+      const { count } = await supabase.from('cabinet_instances').select('id', { count: 'exact', head: true }).eq('wall_id', e.wall_id)
+      if (count) { warnings.push(`${e.line.replace(/^Add /, '').split(' (')[0]}: cabinets were put on it since — left in place.`); continue }
+      const { error: we } = await supabase.from('walls').delete().eq('id', e.wall_id)
+      if (we) { errors.push(`${e.line}: remove failed — ${we.message}`); continue }
+      lines.push(`Removed ${e.line.replace(/^Add /, '').split(' (')[0]}`)
+      continue
+    }
     if (e.kind === 'material') {
       let q = supabase.from(e.table).select('material_id')
       for (const [k, v] of Object.entries(e.match)) q = q.eq(k, v as string)

@@ -65,7 +65,7 @@ const cents = (usd: number) => `${(usd * 100).toFixed(usd < 0.01 ? 2 : 1)}¢`
 function ChangeList({ lines, tone }: { lines: string[]; tone: 'pending' | 'done' | 'muted' }) {
   const cls = tone === 'pending' ? 'border-amber-500/40 bg-amber-500/5' : tone === 'done' ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-gray-700 opacity-60'
   return (
-    <ul className={`mt-2 rounded border ${cls} px-2 py-1.5 text-xs space-y-0.5 font-mono`}>
+    <ul className={`mt-2 rounded border ${cls} px-2 py-1.5 text-xs space-y-0.5 font-mono max-h-72 overflow-y-auto`}>
       {lines.map((l, i) => <li key={i}>{l}</li>)}
     </ul>
   )
@@ -85,6 +85,7 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
   const [busy, setBusy] = useState<string | null>(null)   // what's running: 'Thinking…' / 'Applying…' / 'Undoing…'
   const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   async function loadThread() {
     const [m, r] = await Promise.all([
@@ -121,6 +122,32 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
       }])
       if (data.cabinetIds?.length) { onChanged(data.cabinetIds); useTutorial.getState().emit('ai_chat_edit') }
       useTutorial.getState().emit(strong ? 'ai_chat_harder' : 'ai_chat_asked')
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  /** AI4: a plan PDF / sketch photo → straight to the job's private upload folder, then the drawing route. */
+  async function drawFrom(file: File) {
+    if (busy) return
+    if (file.size > 20 * 1024 * 1024) { setError('That file is over 20 MB — export the plan pages you need, or a smaller photo.'); return }
+    const message = input.trim()
+    setInput(''); setError(null); setBusy('Uploading the plan…')
+    setMsgs(m => [...m, { id: `local-${Date.now()}`, role: 'user', text: `📎 ${file.name}${message ? `\n${message}` : ''}`, room_id: roomId }])
+    try {
+      const path = `${projectId}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, '_')}`
+      const up = await supabase.storage.from('ai-uploads').upload(path, file, { contentType: file.type || undefined })
+      if (up.error) throw new Error(`Upload failed: ${up.error.message}`)
+      setBusy('Reading the plan… (a minute or two)')
+      const data = await post('/api/ai/draw', { roomId, path, fileName: file.name, message })
+      setMsgs(m => [...m, {
+        id: data.messageId ?? `local-${Date.now()}-a`, role: 'assistant', text: data.reply, room_id: roomId,
+        cost_usd: data.costUsd, ms: data.ms, model: data.model,
+        proposal: data.proposal ?? null, proposal_status: data.proposal ? 'pending' : null,
+      }])
+      useTutorial.getState().emit('ai_draw_read')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -240,12 +267,17 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
       </div>
 
       <form className="border-t border-gray-800 p-2" onSubmit={e => { e.preventDefault(); void send(input) }}>
+        <input ref={fileRef} type="file" accept="application/pdf,image/png,image/jpeg,image/webp" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void drawFrom(f) }} />
         <textarea value={input} onChange={e => setInput(e.target.value)} rows={2} disabled={!!busy}
           placeholder={selectedIds.length ? `Ask about or change ${selectedLabels.length === 1 ? selectedLabels[0] : `these ${selectedLabels.length}`}…` : `Ask about ${roomName}…`}
           onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(input) } }}
           className="w-full resize-none rounded bg-gray-900 border border-gray-700 px-2 py-1.5 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500" />
         <div className="flex items-center mt-1">
-          <span className="text-[10px] text-gray-600">Enter to send · Shift+Enter new line</span>
+          <button type="button" disabled={!!busy} onClick={() => fileRef.current?.click()}
+            title="Draw this room from a plan PDF or a site sketch photo (type any notes first, e.g. which page or wall)"
+            className="mr-2 px-2 py-0.5 rounded border border-gray-700 text-gray-300 text-xs hover:bg-gray-800 disabled:opacity-40">📎 Draw from plan</button>
+          <span className="text-[10px] text-gray-600">Enter to send</span>
           <button type="submit" disabled={!!busy || !input.trim()}
             className="ml-auto px-3 py-1 rounded bg-blue-600 text-white text-xs disabled:opacity-40 hover:bg-blue-500">Send</button>
         </div>

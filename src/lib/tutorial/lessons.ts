@@ -1886,6 +1886,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Under the latest answer, ↻ Try harder asks the same question again on a stronger model. It costs a cent or two instead of a fraction of one, so use it when an answer is wrong or it got muddled.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_harder') > ev(s, 'ai_chat_harder') },
   ]},
+
+  // Appended 2026-11-08 (z_ai_helper AI4: draw a room from a plan).
+  { id: 'ai_draw', level: 'intermediate', topic: 'room', title: 'Draw a room from a plan with the AI',
+    blurb: 'Attach the customer plan PDF or a site sketch photo in Ask AI. It reads the elevations, works out the walls and cabinets with their offsets, lists what to confirm, and draws it all when you press Apply.',
+    keywords: 'ai draw plan pdf sketch photo site measure attach upload elevation walls cabinets tbc apply undo opus', steps: [
+    { id: 'attach', title: 'Attach the plan',
+      body: 'Open the room (an empty one, or one with its walls already drawn) and ✨ Ask AI. Type any notes first if they help, e.g. "page 2 is the laundry" or "Wall 1 is the window wall". Then click 📎 Draw from plan and pick the PDF or photo (up to 20 MB). Reading takes a minute or two and costs around 10–30¢.',
+      canvas: true, done: (c, s) => ev(c, 'ai_draw_read') > ev(s, 'ai_draw_read') },
+    { id: 'check', title: 'Check what it read',
+      body: 'It says what it drew, lists everything to confirm (TBC) — kick height, end panels, corners, appliance gaps — and shows every wall and cabinet it will add with its size and offset. Appliances are left as gaps; it never guesses a size it can’t read. If it read something wrong, Cancel and tell it, or Apply and fix that cabinet after.',
+      canvas: true, done: c => c.inCanvas },
+    { id: 'apply', title: 'Apply, then check the drawing',
+      body: 'Apply draws it all at once. Check the plan and each elevation against the PDF. One ↶ Undo on the message takes the whole lot back out (it never touches what was already in the room).',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') || c.cabinets.length > s.cabinets.length },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
