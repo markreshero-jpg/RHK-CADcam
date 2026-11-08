@@ -1708,6 +1708,9 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'redo', title: 'Redo it',
       body: 'Tap Redo to put it back (Ctrl+Y). Undo covers the whole room - walls and cabinets too - not just CAD.',
       target: 'cad-undo', canvas: true, done: (c, s) => ev(c, 'cad_redo') > ev(s, 'cad_redo') },
+    { id: 'delete', title: 'Delete with the button',
+      body: 'Pick Select (S), tap a CAD item (or drag a box round several), then tap Delete next to Redo. Same as the Delete key; Undo brings it back.',
+      target: 'cad-delete', canvas: true, done: (c, s) => ev(c, 'cad_delete') > ev(s, 'cad_delete') },
   ]},
 
   // Appended 2026-11-04 (z_curved_end C9: rangehood in a curved wall end).

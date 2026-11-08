@@ -306,8 +306,8 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
   return (
     <div className="ml-2.5 pl-1.5 border-l-2 border-rose-500/50 flex flex-col gap-1.5 pt-1 pb-1.5"
       onPointerDown={e => e.stopPropagation()}>
-      {history && (
-        <div className="flex gap-1" data-tour="cad-undo">
+      <div className="flex gap-1" data-tour="cad-undo">
+      {history && (<>
           <button title="Undo (Ctrl+Z)" disabled={!history.canUndo} onMouseDown={keep}
             onClick={() => { history.undo(); useTutorial.getState().emit('cad_undo') }}
             className="flex-1 h-8 rounded flex items-center justify-center gap-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white disabled:text-gray-600 disabled:hover:bg-gray-800">
@@ -318,8 +318,14 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
             className="flex-1 h-8 rounded flex items-center justify-center gap-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white disabled:text-gray-600 disabled:hover:bg-gray-800">
             Redo<Icon><path d="M10 4l3.5 3.5L10 11" /><path d="M13 7.5H6.5a3.5 3.5 0 000 7H9" /></Icon>
           </button>
-        </div>
-      )}
+      </>)}
+        {/* UR2: delete the selected CAD (same as the Delete key) - for pen / touch. */}
+        <button title="Delete the selected CAD (Delete)" disabled={!nSel || !!cad.editing} onMouseDown={keep} data-tour="cad-delete"
+          onClick={() => { cad.deleteSelected(); useTutorial.getState().emit('cad_delete') }}
+          className="flex-1 h-8 rounded flex items-center justify-center gap-1.5 text-xs bg-gray-800 border border-gray-700 text-red-300 hover:bg-red-900/60 hover:text-white disabled:text-gray-600 disabled:hover:bg-gray-800">
+          <Icon><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.7 9h5.6l.7-9M7 7v4.5M9 7v4.5" /></Icon>Delete
+        </button>
+      </div>
       <div className="grid grid-cols-[repeat(auto-fill,1.75rem)] gap-0.5">
       {TOOLS.map(t => (
         <Btn key={t.id} on={cad.tool === t.id} title={`${t.label} (${t.key})`} onClick={() => cad.setTool(t.id)} disabled={!viewSupported} tour={`cad-${t.id}`}>
