@@ -225,7 +225,7 @@ Pattern: class letter + `F` + `K` (sits at kick height) or `F` (runs to floor)
 
 | Code | Meaning |
 |---|---|
-| `BFK` | Base filler, at kick height, **material thickness**: one board flat between the cabinet and the wall, standing side-on, only its front edge seen (Mark 2026-11-08) |
+| `BFK` | Base filler, at kick height, **material thickness**: a **70 strip** standing side-on between the cabinet and the wall, front edge flush with the door face and the only part seen (Mark 2026-11-08) |
 | `BFF` | Base filler, runs to floor |
 | `BFKW` | Base filler, kick height, wide: the face filler in the door plane (70 default) |
 | `BFFW` | Base filler, floor, wide |
@@ -245,8 +245,9 @@ up; the Filler part uses `y = cab.kick`, `dy = cab.h - cab.kick` — correct bot
 standalone and after joining (the join raises the member and zeroes
 `cab.kick`; never use `r.TOEH` here, it double-raises). **2026-11-08 (Mark):** `BFK`
 changed to the side-on material-thickness board (set its width to the board,
-18 / 16.5; part `orientation: 'side'`, `dx = cab.d + t.door + 2`, front edge
-= `edge_right`), and the old front-face filler saved as `BFKW` (70 default).
+18 / 16.5; part `orientation: 'side'`, `dx = 70`, `z = cab.d + t.door + 2 - 70`,
+front edge = `edge_right`). **Fillers are 70 wide max**: the planer blade is 82, so
+it planes the width in one pass. A filler is never a full-depth panel., and the old front-face filler saved as `BFKW` (70 default).
 BFKs placed before then keep their own front-face part. `WF-L` added 2026-11-07
 (side-part notch, `z_plan_automation/_tmp-wfl-def.mjs`).
 

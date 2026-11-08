@@ -145,3 +145,5 @@ Done in Rev 4 (2026-11-07); see below.
   on the kick, out to the teak door face (`cab.d + 20`); BC-01 546.5 -> 598.5 (`_tmp-6595-bfkside.mjs`). BC-10 BEPF -> BFK
   the same way in Winter Sky 16.5 (`_tmp-6595-bc10bfk.mjs`). Library: BFK changed to this, old front-face filler = new
   **BFKW** (`_tmp-bfk-bfkw-def.mjs`, BFK before-state in `_tmp-bfk-before.json`).
+- **Fillers 70 wide (Mark 2026-11-08, planer blade 82):** BC-10 / BC-14 boards -> 70 strips at the front, flush with the door
+  faces (578.5 / 284), not full-depth panels; library BFK the same (`_tmp-bfk-70.mjs`). BC-01/02/03 already have 1 adj shelf each.
