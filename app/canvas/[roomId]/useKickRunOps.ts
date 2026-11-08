@@ -20,6 +20,10 @@ export function eligibleForKickRun(c: CabinetInstance): boolean {
 // The contiguous straight run of kick-eligible cabinets containing `clicked`,
 // walking left then right while each neighbour touches within tolerance. Returns
 // the members ordered left→right (empty when `clicked` itself isn't eligible).
+// Only cabinets facing the same way as `clicked` count: an island wall carries a
+// front row and a back row (turned 180°) over the same stretch, and those are two
+// runs, not one mixed-depth run (RHK6595 Wall 6, Mark 2026-11-08).
+const facing = (c: CabinetInstance) => ((Math.round(Number(c.rotation ?? 0)) % 360) + 360) % 360
 export function detectKickRun(
   clicked: CabinetInstance,
   cabinets: CabinetInstance[],
@@ -27,7 +31,7 @@ export function detectKickRun(
 ): CabinetInstance[] {
   if (!eligibleForKickRun(clicked)) return []
   const onWall = cabinets
-    .filter(c => c.wall_id === wall.id && eligibleForKickRun(c))
+    .filter(c => c.wall_id === wall.id && eligibleForKickRun(c) && facing(c) === facing(clicked))
     .map(c => ({ c, t0: cabT(c, wall), t1: cabT(c, wall) + c.dx }))
     .sort((a, b) => a.t0 - b.t0)
   const idx = onWall.findIndex(x => x.c.id === clicked.id)

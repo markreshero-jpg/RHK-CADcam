@@ -150,3 +150,8 @@ Done in Rev 4 (2026-11-07); see below.
 - **Appliance specs (2026-11-08)** downloaded to the job's `APPLIANCES` folder (README there): oven WVEP6716SD x4, Bosch
   PVQ811H26E x4 (incl. installation instructions), Abey LUA190 sheet, Blanco LINUS-S install (generic); links for the
   C138 handle, K-Push, pendants. DW + microwave are existing (no specs).
+- **Kicks (Mark 2026-11-08): match the cupboards above + joined.** Job kick face (Whiteboard 16.5, title block) removed
+  (`_tmp-6595-kickmatch.mjs`, before-state `_tmp-6595-kick-before.json`), so kicks take the front above: Wall 2 + island
+  front Winter Sky, island back teak (BC-14 + KICK 3 set teak by hand: no fronts of their own). Island joined as two runs:
+  KICK 2 = front BC-10..13 (560), KICK 3 = back BC-14, BC-01..03 (264) (`_tmp-6595-joinkicks.mjs`, `_tmp-6595-kick3teak.mjs`).
+  Code fix: detectKickRun keeps a run to one facing (island front / back rows were mixed into one run).
