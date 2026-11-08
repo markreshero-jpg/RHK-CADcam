@@ -141,3 +141,7 @@ Done in Rev 4 (2026-11-07); see below.
 - **Push-to-open (Mark):** new catalogue handle **K-Push Tech Long Concealed (buffer)** (`3b00f8ae`, Furnware DPC5B.WH.FG,
   white, grip `push`, price TBC: trade login) on every BC-01/02/03 door, replacing the generic "Push to open"
   (`_tmp-6595-kpush.mjs`).
+- **2026-11-08 (Mark): BFK = material-thickness side-on board.** BC-14 -> 18 wide, one 18 teak board flat against Wall 5,
+  on the kick, out to the teak door face (`cab.d + 20`); BC-01 546.5 -> 598.5 (`_tmp-6595-bfkside.mjs`). BC-10 BEPF -> BFK
+  the same way in Winter Sky 16.5 (`_tmp-6595-bc10bfk.mjs`). Library: BFK changed to this, old front-face filler = new
+  **BFKW** (`_tmp-bfk-bfkw-def.mjs`, BFK before-state in `_tmp-bfk-before.json`).
