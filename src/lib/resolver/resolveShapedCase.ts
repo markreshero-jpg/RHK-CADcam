@@ -126,6 +126,42 @@ function insetOf(cab: CabinetInput, s: FootprintSegment): number {
   return b ? b.off + b.t : 0
 }
 
+/**
+ * Side / back edges too short to carry a panel: a line no longer than the
+ * board of a panel it meets square that runs through it (the butt priority, or
+ * a hand-set through join) — e.g. the short edge across a gable's end where an
+ * open face starts (RHK6586 study BC-08). The through panel's end covers it and
+ * shapeCaseParts trims it to nothing, so it's left out of the inside
+ * (bottom / top / shelves): the through panel's inside face runs on to the next
+ * edge — a point on the open face, not a square end.
+ */
+function stubEdges(cab: CabinetInput, segs: FootprintSegment[]): Set<FootprintSegment> {
+  const out = new Set<FootprintSegment>()
+  const fp = cab.footprint
+  const behind = cab.rules?.BACK_JOIN === 'behind_sides'
+  const rank = (s: FootprintSegment) => s.edge.role === 'back' ? (behind ? 2 : 1) : (behind ? 1 : 2)
+  const n = segs.length
+  segs.forEach((s, i) => {
+    if (s.type !== 'line' || !isPanelRole(s)) return
+    const len = edgeFrame(s).len
+    for (const j of [(i - 1 + n) % n, (i + 1) % n]) {
+      const nb = segs[j]
+      if (nb.type !== 'line' || !isPanelRole(nb)) continue
+      const angle = j === (i + 1) % n ? interiorAngle(s, nb) : interiorAngle(nb, s)
+      if (Math.abs(angle - 90) > ANGLE_TOL) continue
+      const b = edgeBuild(cab, nb)
+      if (!b || len > b.off + b.t + NEAR) continue
+      const choice = fp ? storedJoin(fp, s, nb) : undefined
+      const through = choice?.startsWith('through:') ? choice.slice(8) : null
+      const nbThrough = through === nb.edge.id ? true : through === s.edge.id ? false
+        : choice === 'mitre' ? false
+        : rank(nb) > rank(s) || (rank(nb) === rank(s) && j < i)
+      if (nbThrough) { out.add(s); return }
+    }
+  })
+  return out
+}
+
 /** A box edge whose panel E1 sets in or thickens: where the box build put
  *  that panel's inner face (`at`) and how much further in it now is (`d`). */
 type FaceShift = { at: number; d: number }
@@ -185,6 +221,8 @@ export interface ShapedInterior {
   segs: FootprintSegment[]
   outline: ShapePt[]   // plan polygon of the footprint
   inner: ShapePt[]     // inside of the carcass panels
+  /** `segs` less the stub edges (stubEdges) — what the insides are inset from. */
+  insetSegs: FootprintSegment[]
   /** The footprint's arcs (they never carry panels, so every inset keeps them
    *  on the outline) — clipped parts get them back as true arcs. */
   arcs: Circle[]
@@ -195,10 +233,13 @@ export function shapedInterior(cab: CabinetInput): ShapedInterior | null {
   if (!cab.footprint?.segments?.length) return null
   const segs = canonicalSegments(cab.footprint, cab.DX, cab.DZ)
   if (segs.length < 3) return null
+  const stubs = stubEdges(cab, segs)
+  const insetSegs = stubs.size ? segs.filter(s => !stubs.has(s)) : segs
   return {
     segs,
+    insetSegs,
     outline: insetPolygon(segs, () => 0),
-    inner: insetPolygon(segs, s => insetOf(cab, s)),
+    inner: insetPolygon(insetSegs, s => insetOf(cab, s)),
     arcs: segs.flatMap(s => {
       const g = s.type === 'arc' ? arcGeom(s.p0, s.p1, s.rx ?? 0, s.ry ?? 0, s.largeArc ?? 0, s.sweep ?? 0) : null
       return g ? [{ c: { x: g.cx, y: g.cy }, r: g.rx }] : []
@@ -557,7 +598,7 @@ export function shapeCaseParts(
       // Backs sitting on the bottom (BOTTOM_BACK_JOIN back_on_bottom, as the box)
       // need it to run under them to the outline (L3: back:bottom holes).
       const underBacks = r.BOTTOM_BACK_JOIN === 'back_on_bottom'
-        ? insetPolygon(segs, s => (s.edge.role !== 'back' ? insetOf(cab, s) : 0))
+        ? insetPolygon(shape.insetSegs, s => (s.edge.role !== 'back' ? insetOf(cab, s) : 0))
         : inner
       const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : underBacks, shape, gr(p))
       if (c) out.push(c)
@@ -565,7 +606,7 @@ export function shapeCaseParts(
       // A top sitting over the backs (TOP_BACK_JOIN sits_over_back, as the box)
       // runs over them to the outline, like the bottom under them.
       const overBacks = r.TOP_BACK_JOIN === 'sits_over_back'
-        ? insetPolygon(segs, s => (s.edge.role !== 'back' ? insetOf(cab, s) : 0))
+        ? insetPolygon(shape.insetSegs, s => (s.edge.role !== 'back' ? insetOf(cab, s) : 0))
         : inner
       const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : overBacks, shape, gr(p))
       if (c) out.push(c)
@@ -645,7 +686,7 @@ export function shapeShelves(cab: CabinetInput, r: ConstructionRules, parts: Res
   // back, none on a fixed shelf — as the box build.
   const adjClr = Math.max(r.ADJSL ?? 0, r.ADJSR ?? 0)
   const adjInner = adjClr > 0
-    ? insetPolygon(shape.segs, s => (isPanelRole(s) ? insetOf(cab, s) + (s.edge.role === 'back' ? 0 : adjClr) : 0))
+    ? insetPolygon(shape.insetSegs, s => (isPanelRole(s) ? insetOf(cab, s) + (s.edge.role === 'back' ? 0 : adjClr) : 0))
     : shape.inner
   // No box side / back panel on that edge (an end set to open, a shape with no
   // edge there): nothing to clear, so the shelf runs out to the outline — the

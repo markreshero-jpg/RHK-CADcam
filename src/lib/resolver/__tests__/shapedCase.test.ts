@@ -83,6 +83,37 @@ describe('shaped case', () => {
     expect(get(l.case_parts, 'side:end').DY).toBeCloseTo(get(r.case_parts, 'side:end').DY, 3)
   })
 
+  it('short side edge across a gable end (open 45 face): bottom + shelves run to a point, no square stub', () => {
+    // RHK6586 study BC-08: right gable full depth, a board-thick 'end' edge across
+    // its front end, then an open 45 face back to the left.
+    const W = 507.5, D = 482.5, GI = W - 18, T = GI - D
+    const fp = { preset: null, params: {}, segments: [
+      { type: 'line' as const, p0: { x: T, y: 0 }, p1: { x: W, y: 0 }, edge: { id: 'back', role: 'back' as const } },
+      { type: 'line' as const, p0: { x: W, y: 0 }, p1: { x: W, y: D }, edge: { id: 'right', role: 'side' as const } },
+      { type: 'line' as const, p0: { x: W, y: D }, p1: { x: GI, y: D }, edge: { id: 'end', role: 'side' as const } },
+      { type: 'line' as const, p0: { x: GI, y: D }, p1: { x: T, y: 0 }, edge: { id: 'front', role: 'front' as const, sub: 'open' as const } },
+    ] }
+    const res = resolveCabinet(cab({ DX: W, DZ: D, footprint: fp, has_toekick: false,
+      internal_tree: { type: 'open', fittings: [{ type: 'fixed_shelf', y_locked: false }] } as CabinetInput['internal_tree'] }))
+    expect(res.case_parts.some(p => p.part_key === 'side:end')).toBe(false)
+    const plan = (p: { X: number; Z: number; DX: number; DY: number; outline?: { x: number; y: number }[] }) =>
+      p.outline!.map(q => ({ X: p.X + q.x, Z: p.Z + p.DX - q.y }))
+    // Bottom: its point is the gable's inside face on the open face (GI, D).
+    const bottom = plan(get(res.case_parts, 'bottom'))
+    expect(bottom.some(q => Math.abs(q.X - GI) < 0.01 && Math.abs(q.Z - D) < 0.01)).toBe(true)
+    for (const q of bottom) expect(q.Z).toBeLessThanOrEqual(q.X - T + 0.01)          // inside the 45 line
+    // Fixed shelf: the front-most point is on the 45 line at the gable (the
+    // adjustable one keeps the box's front setback, so its front is clipped).
+    for (const s of res.internal_parts.filter(p => p.part_type === 'fixed_shelf')) {
+      const pts = plan(s)
+      const maxX = Math.max(...pts.map(q => q.X)), maxZ = Math.max(...pts.map(q => q.Z))
+      const tip = pts.filter(q => Math.abs(q.Z - maxZ) < 0.01)
+      expect(tip.length).toBe(1)                                                       // a point, not a square end
+      expect(tip[0].X).toBeCloseTo(maxX, 2)                                            // on the gable's inside line
+      expect(tip[0].Z).toBeCloseTo(tip[0].X - T, 2)                                    // and on the 45 face
+    }
+  })
+
   it('radius end with the end set to open: shelf runs out flush with the end (no side to clear)', () => {
     const fp = buildPresetFootprint('radius_end', { radius: 300 }, { w: 1000, d: 560 }, { end: { role: 'open' } })
     const res = resolveCabinet(cab({ DX: 1000, DZ: 560, footprint: fp }))
