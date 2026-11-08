@@ -14,7 +14,7 @@ import { describe, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 
-interface Cfg { room: string; file: string; message?: string; apply?: boolean; compare?: string }
+interface Cfg { room: string; file: string; message?: string; apply?: boolean; compare?: string; answers?: string }
 const CFG: Cfg | null = process.env.AI4_RUN ? JSON.parse(process.env.AI4_RUN) : null
 
 describe.skipIf(!CFG)('AI4 draw from a plan', () => {
@@ -38,7 +38,16 @@ describe.skipIf(!CFG)('AI4 draw from a plan', () => {
     const up = await client.storage.from(DRAW_BUCKET).upload(path, readFileSync(cfg.file), { contentType: name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png' })
     if (up.error) throw up.error
 
-    const r = await withSupabaseRead(client, () => runDrawTurn({ projectId: room!.project_id, roomId: cfg.room, path, fileName: name, message: cfg.message ?? '' }))
+    let ctx = { path, fileName: name, notes: cfg.message ?? '', qa: [] as { q: string; a: string }[] }
+    let r = await withSupabaseRead(client, () => runDrawTurn({ projectId: room!.project_id, roomId: cfg.room, ctx }))
+    // It asked first: print the questions, answer with cfg.answers, carry on.
+    if (r.question) {
+      const q = r.question.items?.map((x, i) => `${i + 1}. ${x.text} [${x.options.join(' / ')}]`).join(' ') ?? r.question.text
+      console.log(`── Asked (${(r.ms / 1000).toFixed(0)} s, $${r.costUsd.toFixed(3)}) ── ${q} ── Answer: ${cfg.answers ?? '(none, stopping)'}`)
+      if (!cfg.answers) return
+      ctx = { ...ctx, qa: [{ q, a: cfg.answers }] }
+      r = await withSupabaseRead(client, () => runDrawTurn({ projectId: room!.project_id, roomId: cfg.room, ctx }))
+    }
     console.log(`── Read in ${(r.ms / 1000).toFixed(0)} s, $${r.costUsd.toFixed(3)}, tools: ${r.toolCalls.join(', ')} ──\n${r.reply}\n\n── Proposal ──\n${r.proposal?.lines.join('\n') ?? '(none)'}`)
 
     if (cfg.apply && r.proposal) {

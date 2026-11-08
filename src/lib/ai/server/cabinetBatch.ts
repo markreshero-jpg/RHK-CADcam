@@ -38,6 +38,9 @@ export type BatchOp =
   | { op: 'delete'; labels: string[] }
   /** A new wall (AI4 drawing): start point (room mm), length, angle (degrees, 0 = +x, 90 = +y / down the plan).
    *  Name defaults as the canvas names them (Wall N / Island N). */
+  /** Job / room set-up the drawing needs (Job / Room properties): kick height (rule TOEH),
+   *  class heights (class_dimension_defaults), the room's soffit drop or overhead top line. */
+  | { op: 'set_properties'; level: 'job' | 'room'; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number }
   | { op: 'wall'; name?: string; x: number; y: number; length: number; angle: number; type?: 'standard' | 'island'; thickness?: number; height?: number | null }
   /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
    *  material_id null = back to inherited. Kick face has no class. */
@@ -59,6 +62,8 @@ export type BatchEntry =
   | { kind: 'delete'; cabinet_id: string; label: string | null; line: string; snapshot: DeleteSnapshot }
   /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
   | { kind: 'wall'; cabinet_id: ''; label: null; line: string; wall_id: string }
+  /** A projects / rooms row's columns before → after (whole column values). */
+  | { kind: 'props'; cabinet_id: ''; label: null; line: string; table: 'projects' | 'rooms'; row_id: string; before: Row; after: Row }
   | { kind: 'material'; cabinet_id: ''; label: null; line: string; table: string; match: Row; before: string | null; after: string | null; resolve_ids: string[] }
 
 export interface BatchResult {
@@ -187,6 +192,7 @@ type PlannedStep =
   | { kind: 'delete'; id: string; line: string }
   | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
   | { kind: 'wall'; tempId: string; row: Omit<Wall, 'id' | 'created_at'>; line: string }
+  | { kind: 'props'; table: 'projects' | 'rooms'; rowId: string; before: Row; after: Row; line: string }
 
 export interface BatchPlan {
   state: RoomState
@@ -274,6 +280,35 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         touched.add(c.id)
         cabs = cabs.filter(x => x.id !== c.id)
       }
+    } else if (op.op === 'set_properties') {
+      const job = op.level === 'job'
+      const target = (job ? state.project : room) as Row | null
+      if (!target) { problems.push(`${n}: no ${op.level} to set.`); continue }
+      if (!job && (op.kick == null && op.base_dy == null && op.tall_dy == null && op.wall_dy == null && op.soffit_drop == null && op.overhead_top == null)) continue
+      const before: Row = {}, after: Row = {}, parts: string[] = []
+      const ro = { ...((target.rule_overrides ?? {}) as Row) }
+      if (op.kick != null && ro.TOEH !== op.kick) { parts.push(`kick ${ro.TOEH ?? 'not set'} → ${op.kick}`); ro.TOEH = op.kick; before.rule_overrides = target.rule_overrides ?? {}; after.rule_overrides = ro }
+      const cd = JSON.parse(JSON.stringify(target.class_dimension_defaults ?? {})) as Record<string, Record<string, number>>
+      let cdChanged = false
+      for (const [cls, v, word] of [['base', op.base_dy, 'base height'], ['tall', op.tall_dy, 'tall height'], ['wall', op.wall_dy, 'overhead height']] as const) {
+        if (v == null || cd[cls]?.dy === v) continue
+        parts.push(`${word} ${cd[cls]?.dy ?? 'not set'} → ${v}`)
+        cd[cls] = { ...(cd[cls] ?? {}), dy: v }
+        cdChanged = true
+      }
+      if (cdChanged) { before.class_dimension_defaults = target.class_dimension_defaults ?? {}; after.class_dimension_defaults = cd }
+      if (!job) {
+        if (op.soffit_drop != null && room.soffit_height !== op.soffit_drop) { parts.push(`soffit drop ${room.soffit_height ?? 'not set'} → ${op.soffit_drop}`); before.soffit_height = room.soffit_height ?? null; after.soffit_height = op.soffit_drop }
+        if (op.overhead_top != null && room.wall_cabinet_top !== op.overhead_top) { parts.push(`overhead top line ${room.wall_cabinet_top ?? 'not set'} → ${op.overhead_top}`); before.wall_cabinet_top = room.wall_cabinet_top ?? null; after.wall_cabinet_top = op.overhead_top }
+      } else if (op.soffit_drop != null || op.overhead_top != null) {
+        problems.push(`${n}: the soffit / overhead top line is set on the room, not the job.`); continue
+      }
+      if (!parts.length) continue
+      const line = `${job ? 'Job' : `Room ${room.name}`} · ${parts.join(', ')}`
+      steps.push({ kind: 'props', table: job ? 'projects' : 'rooms', rowId: target.id as string, before, after, line })
+      lines.push(line)
+      // Later steps (placements) take their class sizes from the new values.
+      Object.assign(target, after)
     } else if (op.op === 'wall') {
       if (!(op.length > 0) || ![op.x, op.y, op.angle].every(Number.isFinite)) { problems.push(`${n}: a wall needs x, y, length and angle.`); continue }
       const island = op.type === 'island'
@@ -551,6 +586,14 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
   }
 
   for (const s of plan.steps) {
+    if (s.kind === 'props') {
+      invalidateResolverCaches()   // the cascade every cabinet reads
+      const { error } = await supabase.from(s.table).update(s.after).eq('id', s.rowId)
+      if (error) { errors.push(`${s.line}: save failed — ${error.message}`); continue }
+      entries.push({ kind: 'props', cabinet_id: '', label: null, line: s.line, table: s.table, row_id: s.rowId, before: s.before, after: s.after })
+      for (const c of rows.values()) touched.add(c.id)
+      continue
+    }
     if (s.kind === 'wall') {
       const { data, error } = await supabase.from('walls').insert(s.row).select('id').single()
       if (error || !data) { errors.push(`${s.row.name}: add failed — ${error?.message}`); continue }
@@ -648,6 +691,17 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   for (const e of entries) {
+    if (e.kind === 'props') {
+      const { data: cur } = await supabase.from(e.table).select(Object.keys(e.after).join(', ')).eq('id', e.row_id).maybeSingle()
+      const since = Object.keys(e.after).filter(k => canon((cur as Row | null)?.[k]) !== canon(e.after[k]))
+      if (since.length) { warnings.push(`${e.line.split(' · ')[0]} set-up: changed again since — left as is.`); continue }
+      invalidateResolverCaches()
+      const { error: pe } = await supabase.from(e.table).update(e.before).eq('id', e.row_id)
+      if (pe) { errors.push(`${e.line}: undo failed — ${pe.message}`); continue }
+      lines.push(`${e.line.split(' · ')[0]} set-up put back`)
+      for (const c of state.cabinets) { touched.add(c.id); changedIds.add(c.id) }
+      continue
+    }
     if (e.kind === 'wall') {
       const { count } = await supabase.from('cabinet_instances').select('id', { count: 'exact', head: true }).eq('wall_id', e.wall_id)
       if (count) { warnings.push(`${e.line.replace(/^Add /, '').split(' (')[0]}: cabinets were put on it since — left in place.`); continue }

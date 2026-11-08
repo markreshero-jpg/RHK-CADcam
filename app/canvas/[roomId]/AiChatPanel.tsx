@@ -13,7 +13,9 @@ import { useTutorial } from '@/src/lib/tutorial/store'
 interface Msg {
   id: string; role: 'user' | 'assistant'; text: string; room_id: string | null
   cost_usd?: number | null; ms?: number | null; model?: string | null
-  question?: { text: string; options: string[] } | null
+  question?: { text: string; options: string[]; items?: { text: string; options: string[] }[] } | null
+  /** Set on a drawing's question (AI4): answering it carries that drawing on. */
+  draw?: unknown
   proposal?: { lines: string[]; description: string } | null
   proposal_status?: 'pending' | 'applied' | 'cancelled' | null
   batch_id?: string | null
@@ -22,7 +24,7 @@ interface Msg {
 }
 
 const SUGGESTIONS = ['What is the total kick length?', 'Which cabinets are TBC?', 'List the overheads and their sizes']
-const COLS = 'id, role, text, room_id, cost_usd, ms, model, question, proposal, proposal_status, batch_id, changed, undone_at'
+const COLS = 'id, role, text, room_id, cost_usd, ms, model, draw, question, proposal, proposal_status, batch_id, changed, undone_at'
 
 const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
   part.startsWith('**') && part.endsWith('**') ? <strong key={i} className="text-white">{part.slice(2, -2)}</strong> : part)
@@ -86,6 +88,8 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
   const [error, setError] = useState<string | null>(null)
   const endRef = useRef<HTMLDivElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // A drawing's questions: the button picked per question, per message.
+  const [picks, setPicks] = useState<Record<string, Record<number, string>>>({})
 
   async function loadThread() {
     const [m, r] = await Promise.all([
@@ -110,6 +114,8 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
   async function send(text: string, strong = false) {
     const message = text.trim()
     if (!message || busy) return
+    const latest = msgs[msgs.length - 1]
+    if (latest?.role === 'assistant' && latest.draw && latest.question && !strong) return continueDraw(latest, message)
     setInput(''); setError(null); setBusy(strong ? 'Trying harder…' : 'Thinking…')
     setMsgs(m => [...m, { id: `local-${Date.now()}`, role: 'user', text: message, room_id: roomId }])
     try {
@@ -129,6 +135,30 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
     }
   }
 
+  function addDrawReply(data: { messageId?: string; reply: string; costUsd?: number; ms?: number; model?: string; proposal?: Msg['proposal']; question?: Msg['question'] }) {
+    setMsgs(m => [...m, {
+      id: data.messageId ?? `local-${Date.now()}-a`, role: 'assistant', text: data.reply, room_id: roomId,
+      cost_usd: data.costUsd, ms: data.ms, model: data.model,
+      question: data.question ?? null, draw: data.question ? true : null,
+      proposal: data.proposal ?? null, proposal_status: data.proposal ? 'pending' : null,
+    }])
+  }
+
+  /** The user's answers to a drawing's questions → the drawing carries on (reads the plan again with them). */
+  async function continueDraw(m: Msg, answer: string) {
+    if (busy) return
+    setInput(''); setError(null); setBusy('Reading the plan… (a minute or two)')
+    setMsgs(ms => [...ms, { id: `local-${Date.now()}`, role: 'user', text: answer, room_id: roomId }])
+    try {
+      addDrawReply(await post('/api/ai/draw', { roomId, continueFrom: m.id, answer }))
+      useTutorial.getState().emit('ai_draw_read')
+    } catch (e) {
+      setError((e as Error).message)
+    } finally {
+      setBusy(null)
+    }
+  }
+
   /** AI4: a plan PDF / sketch photo → straight to the job's private upload folder, then the drawing route. */
   async function drawFrom(file: File) {
     if (busy) return
@@ -141,12 +171,7 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
       const up = await supabase.storage.from('ai-uploads').upload(path, file, { contentType: file.type || undefined })
       if (up.error) throw new Error(`Upload failed: ${up.error.message}`)
       setBusy('Reading the plan… (a minute or two)')
-      const data = await post('/api/ai/draw', { roomId, path, fileName: file.name, message })
-      setMsgs(m => [...m, {
-        id: data.messageId ?? `local-${Date.now()}-a`, role: 'assistant', text: data.reply, room_id: roomId,
-        cost_usd: data.costUsd, ms: data.ms, model: data.model,
-        proposal: data.proposal ?? null, proposal_status: data.proposal ? 'pending' : null,
-      }])
+      addDrawReply(await post('/api/ai/draw', { roomId, path, fileName: file.name, message }))
       useTutorial.getState().emit('ai_draw_read')
     } catch (e) {
       setError((e as Error).message)
@@ -213,6 +238,35 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
             <div className="rounded-lg bg-gray-900 border border-gray-800 px-3 py-2 leading-relaxed">
               {renderReply(m.text)}
 
+              {/* A drawing's questions: one row of buttons per question, then Send answers */}
+              {m.question?.items?.length ? (() => {
+                const live = m.id === lastId && !busy
+                const got = picks[m.id] ?? {}
+                const all = m.question.items.every((_, k) => got[k])
+                return (
+                  <div className="mt-2 space-y-2">
+                    {m.question.items.map((it, k) => (
+                      <div key={k}>
+                        <div className="text-xs text-gray-400 mb-1">{k + 1}. {it.text}</div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {it.options.map(o => (
+                            <button key={o} disabled={!live} onClick={() => setPicks(p => ({ ...p, [m.id]: { ...(p[m.id] ?? {}), [k]: o } }))}
+                              className={`px-2 py-1 rounded border text-xs disabled:opacity-40 ${got[k] === o ? 'border-blue-400 bg-blue-600/30 text-white' : 'border-blue-500/50 text-blue-200 hover:bg-blue-600/20'}`}>{o}</button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                    {live && (
+                      <div className="flex items-center gap-2">
+                        <button disabled={!all} onClick={() => void continueDraw(m, m.question!.items!.map((it, k) => `${k + 1}. ${it.text} → ${got[k]}`).join('\n'))}
+                          className="px-3 py-1 rounded bg-blue-600 text-white text-xs hover:bg-blue-500 disabled:opacity-40">Send answers</button>
+                        <span className="text-[10px] text-gray-500">or type your answers below</span>
+                      </div>
+                    )}
+                  </div>
+                )
+              })() : null}
+
               {/* ask_user: answer buttons, live on the latest message only */}
               {m.question?.options?.length ? (
                 <div className="flex flex-wrap gap-1.5 mt-2">
@@ -253,7 +307,8 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
             <div className="flex items-center gap-2 text-[10px] text-gray-600 mt-0.5">
               {m.cost_usd != null && <span>{cents(Number(m.cost_usd))}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)}s` : ''}{m.model?.includes('sonnet') ? ' · tried harder' : ''}</span>}
               {/* Try harder: the latest answer only, and not once it changed something */}
-              {m.id === lastId && lastQuestion && !m.model?.includes('sonnet') && !m.changed?.length && m.proposal_status !== 'applied' && (
+              {/* (not on a drawing — that already ran on the top model) */}
+              {m.id === lastId && lastQuestion && !m.model?.includes('sonnet') && !m.model?.includes('opus') && !m.draw && !m.changed?.length && m.proposal_status !== 'applied' && (
                 <button disabled={!!busy} onClick={() => void send(lastQuestion, true)}
                   title="Ask the same again on a stronger model: a few cents instead of a fraction of one"
                   className="text-blue-400 hover:text-blue-300 disabled:opacity-40">↻ Try harder</button>

@@ -407,22 +407,39 @@ they're sent on every request.
   message); fixtures / appliances aren't placed (gaps only).
 - Tutorial `ai_draw`.
 
-### AI4 open questions (Mark) — the skills disagree here; drawRules.ts picks the first
-1. Wall-run fillers: on-kick BFK / TFK default, vs "always ask 30 vs material
-   thickness" (CV conventions / intake checklist). Picked: ask (TBC) unless the plan shows it.
-2. Island face: left-perp of draw direction (current) vs "toward the room centroid"
-   (old schema note). Picked: left-perp.
-3. Nib walls: no rules anywhere — the AI doesn't draw nibs (TBC instead).
-4. Blind corners: cabinet-codes lists BCNR / WCNR, the skill builds one from B1D +
-   false panel. Picked: closest library code + TBC.
-5. Kick 140 vs 100: no room kick field in the plan JSON; base dy carries it.
-6. Overhead top line when the plan is silent: 2100 vs the 2400 line vs ceiling drop
-   30 + 30 BH. Picked: 2100 + TBC on ceiling treatment.
-7. Dishwasher gap 605 (freestanding) vs the 610 example; D/W at a wall uses BFF
-   (contradicts "fillers on the kick").
-8. Filler / panel depth: easy to double-count the door — panels get the carcass dz.
-9. Legacy codes (B2, D2, Wall Unit, P2-3ID) still in the checklist — mapped to new codes.
-10. Tall height: 2100 default vs "ask rather than guess". Picked: TBC when not stated.
+### AI4 drawing decisions (LOCKED, Mark 2026-11-08)
+Where the skills disagreed. In `src/lib/ai/drawRules.ts` and the draw-plan /
+cabinet-codes skills.
+1. **Set-up first, ask — don't assume.** If the job / room doesn't have the kick
+   height (TOEH), tall height or overhead top line set, the AI asks (one round, up to
+   4 questions with buttons, the plan's reading offered first) and saves the answers
+   to Job / Room properties as part of the Apply. Saved to the **job** while it's the
+   job's first room with cabinets (later rooms inherit it), else the **room** — so a
+   drawing never changes other rooms.
+2. **Overheads sit at the soffit line** (room soffit drop or overhead top line).
+3. **Wall-run filler not shown → leave tight + TBC** ("30 or board thickness?").
+4. **Dishwasher type not shown → ask.** Freestanding 605 + BEPF each side;
+   integrated 600. **D/W against a wall: BEPF on the D/W side only** (no BFF).
+5. **No blind-corner code** (no BCNR in the library). 900 × 900 corner → BCNP;
+   900 × 600 → B1D with door + false panel, blind side to the corner (TBC to set the
+   fronts). A saved "blind corner" library cabinet is wanted later.
+6. **Island back panel not shown → ask** (back panel? IBPF or IBPK?).
+7. Island face = left-perp of the draw direction (already locked); nib walls aren't
+   drawn (TBC); panels take the carcass dz (the definition adds the door); legacy codes
+   map to new ones.
+
+**Built (2026-11-08):** `set_properties` batch step (kick → `rule_overrides.TOEH`;
+base / tall / overhead heights → `class_dimension_defaults`; room soffit drop /
+overhead top line), full Undo. Draw engine tells the model what's set / NOT SET and
+where new values go; `ask_questions` tool ends the turn; the question message keeps
+the plan (`ai_messages.draw`, `migration_ai_draw_ctx.sql`); answers (buttons + Send
+answers, or typed) carry the drawing on via `POST /api/ai/draw { continueFrom, answer }`.
+**Checked:** AI4 Draw Test 2 (RHK1234 has other rooms with cabinets) → asked kick
+(140 plan / 150 / 100) + overhead tops (300 down / 2100 up) → drew it, saving kick
+140 + top line 2100 to the ROOM (job untouched) → applied; ~30¢ for both rounds; it
+also flagged "elevations show 880 bases, job set-up says 900". Browser: the question
+groups + Send answers render; on AI4 Draw Test it saw all 8 items already there and
+said it won't add duplicates (2.3¢ — plan cached).
 
 ## Open items (check while building)
 

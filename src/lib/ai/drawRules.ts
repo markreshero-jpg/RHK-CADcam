@@ -1,8 +1,8 @@
 // Drawing rules for the AI helper's plan reader (z_ai_helper AI4). Condensed
 // 2026-11-08 from .claude/skills/draw-plan/SKILL.md, .claude/skills/cabinet-codes,
 // and the draw-plan references (cabinet-vision-conventions, site-sketches,
-// job-intake-checklist) — keep in step when those change. Where they disagree the
-// pick made here is noted in z_ai_helper/AI-HELPER-SPEC.md (AI4 open questions).
+// job-intake-checklist) — keep in step when those change. Where they disagreed,
+// Mark settled it 2026-11-08 (z_ai_helper/AI-HELPER-SPEC.md, AI4 decisions).
 
 export const DRAW_RULES = `
 == COORDINATES & WALLS ==
@@ -16,17 +16,18 @@ export const DRAW_RULES = `
 - Island = a zero-thickness wall (type island) on the centreline between back-to-back runs. It is not part of the clockwise chain.
 - Island face = left-perp of the draw direction (y down): drawn west→east (angle 0) it faces SOUTH; east→west (180) it faces NORTH. Pick the direction so the face is where the main fronts go; the opposite run goes on side "back".
 - On the back side, offset is still measured from the wall start to the cabinet's low end (as you face the back, your left is the HIGH-offset end).
-- Most islands get a back panel (IBPF to the floor, IBPK when the kick shows). If none is marked, use IBPF and add a TBC.
+- Island back panel (IBPF to the floor, IBPK when the kick shows): if the plan doesn't show one, ASK (back panel? IBPF or IBPK?) before drawing the island.
 - Islands often have no position dims: estimate the aisle and add a TBC. With no length given, an island matches the run it faces.
 - A wall with nothing else attached still needs a side wall, or its cabinets can land behind it.
 
 == HEIGHTS & DEPTHS ==
-- Base dy = kick + carcass, never the benchtop. "140 kick + 740 + 20 bench" → dy 880. Kick is 140 or 100 per job: read it off the vertical chain, else TBC.
+- SET-UP FIRST: kick height, tall height and the overhead top line come from the job / room set-up. If one the drawing needs is NOT SET, ASK (offer what the plan shows first) and put the answer in room_plan.setup — never assume a default.
+- Overheads sit at the SOFFIT line: their tops follow the room's overhead top line (soffit drop from the ceiling, or top line from the floor). Give overheads their height (dy) only.
+- Base dy = kick + carcass, never the benchtop. "140 kick + 740 + 20 bench" → dy 880.
 - Site sketches: "bench 870 off tile" is finished height; kick = bench − top − 740.
 - dz is the CARCASS depth only (no fronts). Standard 600 bench → 560; fingerpull (5 overhang) → 575. A plan depth number is the carcass depth.
-- Defaults: overhead depth 350, tall depth 580, tall dy 2100, overhead top line 2100 unless the plan shows one. Overhead dy comes from the elevation (600, 720…).
+- Defaults: overhead depth 350, tall depth 580. Overhead dy comes from the elevation (600, 720…). Tall height is set-up (ask when not set).
 - Sketch depths: a number just past a run's end is a DEPTH, not a gap (600 = base, 300 = overhead).
-- If a tall height isn't stated, TBC — don't guess.
 - End panels (BEPF/BEPK/TEPF/TEPK/WEP) get the SAME dz as the carcass beside them; the definition adds the door itself.
 
 == READING DIMENSIONS ==
@@ -39,18 +40,19 @@ export const DRAW_RULES = `
 
 == APPLIANCES / GAPS (leave the space empty) ==
 - Never put a fridge, dishwasher, oven or other appliance in as a cabinet. Leave its gap and say what it is in tbc / notes.
-- Freestanding dishwasher: 605 gap with a BEPF each side. Unmarked D/W = freestanding; if unclear, TBC.
-- Integrated dishwasher: 600 gap, tight to the cabinets beside it.
+- Dishwasher: if the plan doesn't say integrated or freestanding, ASK. Freestanding: 605 gap with a BEPF each side. Integrated: 600 gap, tight to the cabinets beside it.
+- Dishwasher against a wall: a BEPF on the dishwasher side only (no filler at the wall).
 - Fridge: open side gets a TEPF from the floor to the top of the fridge overhead; overhead width = gap − filler; no clearance height given → TBC.
 - Drawers above or below doors is never one cabinet: a drawer base + a separate unit.
 
 == CORNERS, FILLERS, END PANELS ==
 - Seen run end (no wall): BEPF / TEPF to the floor. A panel BETWEEN cupboards (beside an open bay) is TEPK / BEPK on the kick.
 - Fillers default to the on-kick versions: BFK / BFKW (base), TFK / TFKW (tall). BFF / TFF only when told. Fillers are 70 wide max.
-- Run touching a wall: filler type / width is per job — TBC unless the plan shows it.
+- Run touching a wall: if the plan doesn't show a filler, leave the run tight and add a TBC ("filler at the wall: 30 or board thickness?").
 - Inner drawers / pull-outs in a cupboard against a WALL: 50 filler there. Beside a seen end panel, no filler.
 - Wall cabinet boxed in by walls both sides: filler each side; never a carcass straight to a wall.
-- Pie / L corner = BCNP. Diagonal corner = BCNL / WCNL. Blind corner = BCNR / WCNR (if not in the library, the closest code + TBC).
+- Corners: there is NO blind-corner code. A 900 × 900 corner space → BCNP (pie / L corner). A 900 × 600 corner space → a B1D blind corner: place a B1D the run's corner width, note "blind corner — door + false panel, blind side to the corner", and add a TBC to set its door / false panel. Diagonal corner = BCNL / WCNL if the library has them, else closest + TBC.
+- Nib walls: don't draw them — say where they are in tbc.
 
 == CABINET CODES (CLASS + CONFIG [-STACK] [+INNER] [/MOD]; no sizes in codes) ==
 - B = base doors, D = base drawers, W = wall (overhead), T = tall.
@@ -61,8 +63,9 @@ export const DRAW_RULES = `
 - Panels BEPF, BEPK, TEPF, TEPK, WEP. Under panels BUP, WUP. Island backs IBPF, IBPK. Fillers BFK, BFF, BFKW, BFFW, TFK, TFF, TFKW, TFFW, WF, WFW, WF-L.
 - Never invent a code: search the library (find_library) when unsure; if nothing fits, the closest code + a TBC.
 
-== TBC (don't guess — list these) ==
-Kick height not readable · tall height not stated · wall-run filler type · fridge overhead height / type · D/W integrated vs freestanding · island position / aisle · island back panel not shown · ceiling treatment over overheads · unknown codes · chain totals that don't add up · unlabelled tall section (possible fridge) · sketch strip whose wall is unclear · appliance models, handle size.
+== ASK FIRST vs TBC ==
+Ask (ask_questions, all at once, before drawing): set-up that is NOT SET (kick height, tall height, overhead top line) · D/W integrated vs freestanding when the plan doesn't say · island back panel when none is shown.
+TBC (list, don't ask): wall-run filler type · fridge overhead height / type · island position / aisle · ceiling treatment over overheads · unknown codes · chain totals that don't add up · unlabelled tall section (possible fridge) · sketch strip whose wall is unclear · blind corner door / false panel · nib walls · appliance models, handle size.
 
 == NEVER ==
 Never draw benchtops as cabinets. Never draw appliances as cabinets. Never take dimensions from codes. Never delete or replace anything already in the room. Skip job-specific one-offs.

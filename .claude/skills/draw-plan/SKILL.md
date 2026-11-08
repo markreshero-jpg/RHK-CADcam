@@ -580,6 +580,26 @@ dishwasher in its space), colour callouts, TBC queries (clouded, on the
 Questions for Client layer) and site / install notes. Insert only, and check
 the result with a report shot.
 
+## Ask first, then draw (Mark 2026-11-08)
+
+These settle where the notes below disagree (the in-app AI follows the same —
+`src/lib/ai/drawRules.ts`):
+
+- **Set-up before drawing.** If the job / room doesn't have kick height (TOEH),
+  tall height or the overhead top line set, ASK, then set them in Job / Room
+  properties (the job while it's the job's first room, else the room) and draw
+  to them. Don't assume 140 / 2100.
+- **Overheads sit at the soffit line** (room soffit drop / overhead top line).
+- **Dishwasher type not shown → ask** (integrated 600 / freestanding 605 + BEPF
+  each side). **D/W against a wall: BEPF on the D/W side only** — no BFF.
+- **Island back panel not shown → ask** (back panel? IBPF or IBPK?).
+- **Base run to a wall with no filler shown → leave tight + TBC** ("30 or board
+  thickness?").
+- **Corners: no blind-corner code.** 900 × 900 space → `BCNP`. 900 × 600 space →
+  `B1D` with a door + false panel, blind side to the corner (a saved library
+  cabinet later).
+- Nib walls: don't draw; note them as TBC.
+
 ## Wall cabinet between two walls needs fillers (Mark 2026-11-07)
 
 A wall cabinet boxed in by walls on both sides (e.g. an open box over the

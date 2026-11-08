@@ -49,7 +49,7 @@ as the first letter (`BEPF`, `WEP`, `TFK`…), see their section below.
 | `T1D1D` | Tall, single over single |
 | `BOPN` / `WOPN` / `TOPN` | Open (no fronts) |
 | `BSK` | Base, sink — in the library 2026-10-18: 900, pair of doors, no shelf, comes with the Zalo double bowl + pull-out mixer (z_ubo) |
-| `BCNR` / `WCNR` | Blind corner |
+| `BCNR` / `WCNR` | Blind corner — **not in the library** (Mark 2026-11-08). A 900 × 600 corner space is a `B1D` with a door + false panel, blind side to the corner (to become a saved library cabinet later); a 900 × 900 space is a `BCNP`. |
 | `BCNL` / `WCNL` | Diagonal corner |
 | `BCNP` | L corner (pie) — square L, bi-fold doors; legs at the run's base depth |
 | `UBO` | Under-bench oven housing (base class) — in the library 2026-10-18 (z_ubo): 600 wide, fixed panel / 600 open / fixed panel, oven shelf, back rail only |

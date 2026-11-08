@@ -1,8 +1,15 @@
 // AI helper drawing (z_ai_helper AI4): read a plan PDF / site sketch photo on
-// Claude Opus 5.5 and return ONE room plan — walls + library cabinets with offsets
-// + TBC notes. The plan becomes batch steps (wall / place), dry-run by planBatch;
-// problems go back to the model to fix (twice at most), then the user gets the
-// whole thing as one proposal to Apply — one Undo removes it all.
+// Claude Opus 5.5 and return ONE room plan — set-up + walls + library cabinets
+// with offsets + TBC notes. The plan becomes batch steps (set_properties / wall /
+// place), dry-run by planBatch; problems go back to the model to fix (twice at
+// most), then the user gets the whole thing as one proposal to Apply — one Undo
+// removes it all.
+//
+// Before drawing, the model is told which job / room set-up is missing (kick
+// height, tall height, overhead top line); it asks the user (ask_questions — Mark,
+// 2026-11-08: ask, don't assume) along with anything else the plan leaves open
+// (dishwasher type, island back panel). The question message keeps what it was
+// reading (`draw`), and the answers carry the drawing on.
 //
 // Run inside withSupabaseRead() (reads only — Apply runs the batch later).
 
@@ -21,12 +28,47 @@ const MAX_CALLS = 10
 const MAX_FIXES = 2
 export const DRAW_BUCKET = 'ai-uploads'
 
-const PLAN_TOOL: Anthropic.Tool = {
-  name: 'room_plan',
-  description: 'Hand back the finished room plan. Call it once when you have read the whole plan. The server checks it; if it reports problems, fix them and call room_plan again with the WHOLE corrected plan.',
+const ASK_TOOL: Anthropic.Tool = {
+  name: 'ask_questions',
+  description: 'Ask the user everything you need before drawing, in ONE go (up to 4 questions, each with 2–4 short answer buttons; they can also type). Ends this turn; their answers come back and you carry on. Use it for set-up that is NOT SET, and anything the plan leaves open that the rules say to ask about.',
   input_schema: {
     type: 'object',
     properties: {
+      intro: { type: 'string', description: 'One short line, e.g. "Before I draw this kitchen:"' },
+      questions: {
+        type: 'array', minItems: 1, maxItems: 4,
+        items: {
+          type: 'object',
+          properties: {
+            question: { type: 'string' },
+            options: { type: 'array', items: { type: 'string' }, minItems: 2, maxItems: 4, description: 'What the plan suggests first, e.g. "140 (plan)"' },
+          },
+          required: ['question', 'options'], additionalProperties: false,
+        },
+      },
+    },
+    required: ['questions'], additionalProperties: false,
+  },
+}
+
+const PLAN_TOOL: Anthropic.Tool = {
+  name: 'room_plan',
+  description: 'Hand back the finished room plan. Call it once when you have read the whole plan and have every answer you need. The server checks it; if it reports problems, fix them and call room_plan again with the WHOLE corrected plan.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      setup: {
+        type: 'object', description: 'Set-up values to save (the ones that were NOT SET, from the user\'s answers or the plan). Leave out what is already set.',
+        properties: {
+          kick: { type: 'number', description: 'Kick height (mm)' },
+          base_dy: { type: 'number', description: 'Base cabinet height incl. kick (mm)' },
+          tall_dy: { type: 'number', description: 'Tall height incl. kick (mm)' },
+          wall_dy: { type: 'number', description: 'Overhead height (mm)' },
+          soffit_drop: { type: 'number', description: 'Soffit: mm DOWN from the ceiling to the overhead tops' },
+          overhead_top: { type: 'number', description: 'Overhead top line: mm UP from the floor (when there is no soffit)' },
+        },
+        additionalProperties: false,
+      },
       walls: {
         type: 'array', description: 'New walls only, in drawing order (clockwise chain, then islands). Leave empty if the room already has the walls you need.',
         items: {
@@ -63,66 +105,121 @@ const PLAN_TOOL: Anthropic.Tool = {
   },
 }
 
-const SYSTEM = `You are RHK CADcam's plan reader. RHK is a cabinet-making workshop. You read a customer's kitchen / joinery plan (PDF) or a site sketch (photo) and turn it into a room plan the app draws: walls, and the library cabinets on them with exact offsets. You never draw on screen — you only return the plan with the room_plan tool, once.
+const SYSTEM = `You are RHK CADcam's plan reader. RHK is a cabinet-making workshop. You read a customer's kitchen / joinery plan (PDF) or a site sketch (photo) and turn it into a room plan the app draws: the job / room set-up, walls, and the library cabinets on them with exact offsets. You never draw on screen — you only return the plan with the room_plan tool, once.
 
-Work carefully: read every elevation and the plan view, add up each dimension chain, check it against the wall length, then decide. Use find_library to check codes you're not sure of. Put anything you can't read or that the plan doesn't settle in tbc — never guess a size.
+Work carefully: read every elevation and the plan view, add up each dimension chain, check it against the wall length, then decide. Use find_library to check codes you're not sure of.
+
+ASK FIRST (Mark's rule): before calling room_plan, if any set-up the drawing needs is NOT SET (kick height; tall height when there are talls; overhead top line when there are overheads), or the plan leaves a dishwasher's type open, or an island has no back panel shown, call ask_questions ONCE with all of those together (up to 4) — offer what the plan suggests as the first option. Then draw to the answers and put the newly set values in room_plan.setup. If everything is set and clear, don't ask — draw. Anything else you can't read goes in tbc; never guess a size.
 
 ${DRAW_RULES}`
 
-export interface DrawArgs { projectId: string; roomId: string; path: string; fileName: string; message: string }
+export interface DrawCtx { path: string; fileName: string; notes: string; qa: { q: string; a: string }[] }
+export interface DrawArgs { projectId: string; roomId: string; ctx: DrawCtx }
 export interface DrawResult {
   messageId: string | null; reply: string; proposal?: Proposal
+  question?: { text: string; options: string[]; items?: { text: string; options: string[] }[] }
   costUsd: number; ms: number; model: string; toolCalls: string[]
 }
 
 const anthropic = new Anthropic()   // ANTHROPIC_API_KEY from the server env
 
+interface Setup { kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number }
 interface PlanIn {
+  setup?: Setup
   walls?: { name: string; x: number; y: number; length: number; angle: number; type: 'standard' | 'island'; height?: number }[]
   items?: { wall: string; back?: boolean; code: string; offset: number; dx: number; dy?: number; dz?: number; note?: string }[]
   tbc?: string[]; summary?: string
 }
 
-const toOps = (p: PlanIn): BatchOp[] => [
-  ...(p.walls ?? []).map(w => ({ op: 'wall' as const, name: w.name, x: w.x, y: w.y, length: w.length, angle: w.angle, type: w.type, height: w.height ?? null })),
-  ...(p.items ?? []).map(i => ({ op: 'place' as const, code: i.code, wall: i.wall, back: !!i.back, offset: i.offset, dx: i.dx, dy: i.dy, dz: i.dz })),
-]
+type Row = Record<string, unknown>
+const dyOf = (cd: unknown, cls: string) => ((cd ?? {}) as Record<string, { dy?: number } | undefined>)[cls]?.dy
+
+/**
+ * What set-up the room has, as the model reads it — and where new values go:
+ * the job, while this is its first room with cabinets (later rooms inherit it);
+ * after that the room, so other rooms never change under the user.
+ */
+async function loadSetup(projectId: string, roomId: string) {
+  const [{ data: room }, { data: job }, { data: rooms }] = await Promise.all([
+    supabase.from('rooms').select('id, name, rule_overrides, class_dimension_defaults, soffit_height, wall_cabinet_top, room_dy').eq('id', roomId).single(),
+    supabase.from('projects').select('id, rule_overrides, class_dimension_defaults').eq('id', projectId).single(),
+    supabase.from('rooms').select('id').eq('project_id', projectId).neq('id', roomId),
+  ])
+  const otherIds = ((rooms ?? []) as { id: string }[]).map(r => r.id)
+  const { count } = otherIds.length
+    ? await supabase.from('cabinet_instances').select('id', { count: 'exact', head: true }).in('room_id', otherIds)
+    : { count: 0 }
+  const r = (room ?? {}) as Row, j = (job ?? {}) as Row
+  const firstRoom = !count
+  const val = (rv: unknown, jv: unknown) => rv != null ? `${rv} (room)` : jv != null ? `${jv} (job)` : 'NOT SET'
+  const rTOEH = (r.rule_overrides as Row | null)?.TOEH, jTOEH = (j.rule_overrides as Row | null)?.TOEH
+  const top = r.soffit_height != null ? `soffit ${r.soffit_height} down from the ceiling (room)` : r.wall_cabinet_top != null ? `${r.wall_cabinet_top} from the floor (room)` : 'NOT SET'
+  const text = [
+    'Job / room set-up (Job / Room properties):',
+    `- Kick height: ${val(rTOEH, jTOEH)}`,
+    `- Base height (incl. kick): ${val(dyOf(r.class_dimension_defaults, 'base'), dyOf(j.class_dimension_defaults, 'base'))}`,
+    `- Tall height (incl. kick): ${val(dyOf(r.class_dimension_defaults, 'tall'), dyOf(j.class_dimension_defaults, 'tall'))}`,
+    `- Overhead height: ${val(dyOf(r.class_dimension_defaults, 'wall'), dyOf(j.class_dimension_defaults, 'wall'))}`,
+    `- Overhead top line: ${top}${r.room_dy ? ` · ceiling ${r.room_dy}` : ''}`,
+    `New set-up values will be saved to the ${firstRoom ? 'JOB (this is its first room)' : 'ROOM (other rooms already have cabinets)'}.`,
+  ].join('\n')
+  return { text, firstRoom }
+}
+
+function toOps(p: PlanIn, firstRoom: boolean): BatchOp[] {
+  const s = p.setup ?? {}
+  const ops: BatchOp[] = []
+  // Heights and kick go to the job on its first room, else the room; the top line is always the room's.
+  const classy = { kick: s.kick, base_dy: s.base_dy, tall_dy: s.tall_dy, wall_dy: s.wall_dy }
+  if (Object.values(classy).some(v => v != null)) ops.push({ op: 'set_properties', level: firstRoom ? 'job' : 'room', ...classy })
+  if (s.soffit_drop != null || s.overhead_top != null) ops.push({ op: 'set_properties', level: 'room', soffit_drop: s.soffit_drop, overhead_top: s.overhead_top })
+  ops.push(
+    ...(p.walls ?? []).map(w => ({ op: 'wall' as const, name: w.name, x: w.x, y: w.y, length: w.length, angle: w.angle, type: w.type, height: w.height ?? null })),
+    ...(p.items ?? []).map(i => ({ op: 'place' as const, code: i.code, wall: i.wall, back: !!i.back, offset: i.offset, dx: i.dx, dy: i.dy, dz: i.dz })),
+  )
+  return ops
+}
 
 export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
   const t0 = Date.now()
-  const ctx: ToolContext = { projectId: args.projectId, roomId: args.roomId }
+  const { ctx: draw } = args
+  const toolCtx: ToolContext = { projectId: args.projectId, roomId: args.roomId }
 
-  const { data: file, error: dlErr } = await supabase.storage.from(DRAW_BUCKET).download(args.path)
+  const { data: file, error: dlErr } = await supabase.storage.from(DRAW_BUCKET).download(draw.path)
   if (dlErr || !file) throw new Error(`Couldn't read the upload: ${dlErr?.message ?? 'not found'}`)
   const data = Buffer.from(await file.arrayBuffer()).toString('base64')
-  const mime = file.type || (args.fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png')
+  const mime = file.type || (draw.fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png')
   const source: Anthropic.ContentBlockParam = mime === 'application/pdf'
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, cache_control: { type: 'ephemeral' } }
     : { type: 'image', source: { type: 'base64', media_type: mime as 'image/png' | 'image/jpeg' | 'image/webp', data }, cache_control: { type: 'ephemeral' } }
 
-  const summary = await loadRoomSummary(args.roomId)
-  const asked = await supabase.from('ai_messages').insert({
-    project_id: args.projectId, room_id: args.roomId, role: 'user', scope: 'room',
-    text: `📎 ${args.fileName}${args.message ? `\n${args.message}` : ''}`,
-  })
+  const [summary, setup] = await Promise.all([loadRoomSummary(args.roomId), loadSetup(args.projectId, args.roomId)])
+  const answers = draw.qa.length
+    ? `\n\nYou asked before drawing; the user answered:\n${draw.qa.map(x => `Q: ${x.q}\nA: ${x.a}`).join('\n')}\nDraw now to these answers (ask again only if something is still missing).`
+    : ''
+  // The user's turn: the file + note on the first go, the answer on a carry-on.
+  const said = draw.qa.length ? draw.qa[draw.qa.length - 1].a : `📎 ${draw.fileName}${draw.notes ? `\n${draw.notes}` : ''}`
+  const asked = await supabase.from('ai_messages').insert({ project_id: args.projectId, room_id: args.roomId, role: 'user', scope: 'room', text: said })
   if (asked.error) throw new Error(`ai_messages: ${asked.error.message}`)
 
   const messages: Anthropic.MessageParam[] = [{
     role: 'user', content: [
       source,
-      { type: 'text', text: `The room as it is now (draw into it — use its existing walls by name; add only walls that are missing; never touch what's there):\n<room_summary>\n${summary}\n</room_summary>\n\n${args.message || 'Draw this room from the plan.'}` },
+      { type: 'text', text: `${setup.text}\n\nThe room as it is now (draw into it — use its existing walls by name; add only walls that are missing; never touch what's there):\n<room_summary>\n${summary}\n</room_summary>\n\n${draw.notes || 'Draw this room from the plan.'}${answers}` },
     ],
   }]
 
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 }
   const toolCalls: string[] = []
-  let fixes = 0, reply = '', proposal: Proposal | undefined
+  let fixes = 0, reply = ''
+  let proposal: Proposal | undefined
+  let question: DrawResult['question']
 
   for (let i = 0; i < MAX_CALLS; i++) {
     const res = await anthropic.messages.stream({
       model: DRAW_MODEL, max_tokens: 32000,
       system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
-      tools: [...READ_TOOLS.filter(t => t.name === 'find_library'), PLAN_TOOL],
+      tools: [...READ_TOOLS.filter(t => t.name === 'find_library'), ASK_TOOL, PLAN_TOOL],
       output_config: { effort: 'high' },
       messages,
     }).finalMessage()
@@ -136,6 +233,17 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
     const text = res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('\n').trim()
     const uses = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
     if (!uses.length) { reply = text || "I couldn't make a plan from that — try a clearer page, or tell me which room it is."; break }
+
+    const ask = uses.find(u => u.name === 'ask_questions')
+    if (ask) {
+      const q = ask.input as { intro?: string; questions?: { question: string; options: string[] }[] }
+      const items = (q.questions ?? []).slice(0, 4).map(x => ({ text: x.question, options: x.options.slice(0, 4) }))
+      question = { text: q.intro?.trim() || 'Before I draw this:', options: [], items }
+      // The questions show as button groups under this; the text is just the lead-in.
+      reply = q.intro?.trim() || text || 'Before I draw this, a few things the job / plan don\'t settle:'
+      toolCalls.push('ask_questions')
+      break
+    }
     messages.push({ role: 'assistant', content: res.content })
 
     const results: Anthropic.ToolResultBlockParam[] = []
@@ -143,12 +251,12 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
     for (const u of uses) {
       toolCalls.push(u.name)
       if (u.name !== 'room_plan') {
-        try { results.push({ type: 'tool_result', tool_use_id: u.id, content: await runReadTool(u.name, u.input, ctx) }) }
+        try { results.push({ type: 'tool_result', tool_use_id: u.id, content: await runReadTool(u.name, u.input, toolCtx) }) }
         catch (e) { results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${(e as Error).message}`, is_error: true }) }
         continue
       }
       const p = u.input as PlanIn
-      const ops = toOps(p)
+      const ops = toOps(p, setup.firstRoom)
       if (!ops.length) { results.push({ type: 'tool_result', tool_use_id: u.id, content: 'The plan is empty.', is_error: true }); continue }
       const plan = await planBatch(args.roomId, ops)
       if (plan.problems.length && fixes < MAX_FIXES) {
@@ -158,7 +266,7 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
       }
       const tbc = p.tbc ?? []
       proposal = {
-        roomId: args.roomId, ops, description: `Draw from ${args.fileName}`,
+        roomId: args.roomId, ops, description: `Draw from ${draw.fileName}`,
         lines: [...plan.lines, ...plan.warnings.map(w => `⚠ ${w}`), ...plan.problems.map(x => `✗ ${x} (left out)`)],
       }
       // Steps the server still can't do are dropped, not guessed at.
@@ -183,8 +291,11 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
     model: DRAW_MODEL, input_tokens: usage.input, output_tokens: usage.output,
     cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite,
     api_calls: usage.calls, cost_usd: costUsd, ms,
+    question: question ?? null,
+    // A question keeps what it was reading, so the answers carry the drawing on.
+    draw: question ? draw : null,
     proposal: proposal ?? null, proposal_status: proposal ? 'pending' : null,
   }).select('id').single()
   if (error) console.error('ai_messages insert:', error.message)
-  return { messageId: saved?.id ?? null, reply, proposal, costUsd, ms, model: DRAW_MODEL, toolCalls }
+  return { messageId: saved?.id ?? null, reply, proposal, question, costUsd, ms, model: DRAW_MODEL, toolCalls }
 }
