@@ -127,6 +127,9 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
         edge_band_right:  p.edge_band.right,
         edge_band_id:     p.edge_band.id ?? null,
         output_to_cnc:    true,
+        // Cut-outs (z_rangehood R11): plumbing U notch / holes in a drawer bottom.
+        outline:          p.outline ?? null,
+        cutouts:          p.cutouts?.length ? p.cutouts : null,
       }))),
     // A shaped cabinet's facets each have their own rows/cols.
     face_rows: resolved.face_rows.map(r => ({

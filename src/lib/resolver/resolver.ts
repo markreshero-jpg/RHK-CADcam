@@ -225,7 +225,7 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
   const cutoutVoids: CutoutVoid[] = []
   if (Object.keys(cutouts).length) {
     const scope = buildFormulaScope({ case_parts: caseParts, toekick_parts: toekickParts, internal_parts: internalParts, face_zones: zones } as ResolvedCabinet, cab)
-    allWarnings.push(...applyPartCutouts(cutoutTargets(caseParts, internalParts), cutouts, scope, cutoutVoids))
+    allWarnings.push(...applyPartCutouts(cutoutTargets(caseParts, internalParts, drawerStacks), cutouts, scope, cutoutVoids))
   }
 
   // ── 7. Warnings ───────────────────────────────────────────────

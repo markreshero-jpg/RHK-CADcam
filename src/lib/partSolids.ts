@@ -119,6 +119,11 @@ export function partShapes(rp: ResolvedCabinet, overrides?: Record<string, { seg
     if (o) m.set(`tk_${p.part_key}_${p.sort_order}`, { pts: o, extrude: 'up' })
   }
   for (const p of rp.internal_parts ?? []) if (p.outline) m.set(`int_${p.part_type}_${p.sort_order}`, { pts: sampleOutline(p.outline, 2), edges: outlineEdges(p.outline, 2) })
+  // Drawer box bottoms with cut-outs (z_rangehood R11) — carcass bottom frame.
+  for (const stk of rp.drawer_stacks ?? []) for (const p of stk.box_parts) if (p.outline?.length) m.set(dbPartId(stk, p.part_type), {
+    pts: sampleOutline(p.outline, 2),
+    ...(p.cutouts?.length ? { holes: p.cutouts.map(c => sampleOutline(c.pts, 2)) } : {}),
+  })
   // Flat custom parts with cut-outs (z_rangehood R3) — same frame as a carcass bottom.
   // Side customs (WF-L wall filler) carry theirs in the gable frame, with the
   // outline's straight edges tagged so the edge tape follows the cut shape.

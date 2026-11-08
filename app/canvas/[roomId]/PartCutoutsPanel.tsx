@@ -129,10 +129,11 @@ export default function PartCutoutsPanel({ W, D, DZ, holesAllowed, list, scope, 
                   <option value="front">front</option><option value="centre">centre</option><option value="back">back</option>
                 </select>
                 <ValField value={c.y.off} onCommit={v => set(i, { y: { ...c.y, off: v } })} />
-                {!isNotch && c.shape === 'rect' && (<>
+                {c.shape === 'rect' && (<>
                   <span>Radius</span>
-                  <ValField value={c.radius ?? 0} onCommit={v => set(i, { radius: Math.max(0, Number(v) || 0) })} title="Corner radius, mm" />
-                  <span />
+                  <ValField value={c.radius ?? 0} onCommit={v => set(i, { radius: Math.max(0, Number(v) || 0) })}
+                    title={isNotch ? 'Radius on the two inside corners away from the open edge, mm (half the width = a round end)' : 'Corner radius, mm'} />
+                  <span className="text-gray-600">{isNotch ? 'inner corners' : ''}</span>
                 </>)}
                 {!isNotch && (<>
                   <span>Depth</span>

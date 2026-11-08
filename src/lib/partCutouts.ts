@@ -10,8 +10,9 @@
 //          nesting, G-code, 3D and the cabinet views pick it up unchanged.
 //   notch  a rectangle open to an edge, cut into the part's outline (R2).
 //
-// So far: the carcass's horizontal parts (bottom, top, rails), shelves, and
-// flat custom parts (their own `cabinet_custom_parts.part_cutouts`, R3).
+// So far: the carcass's horizontal parts (bottom, top, rails), shelves,
+// flat custom parts (their own `cabinet_custom_parts.part_cutouts`, R3) and
+// drawer box bottoms (`db_<r>_<c>_db_bottom`, R11 — plumbing U cut-outs).
 // Positions are in the horizontal shape frame — x across from the part's left
 // end (0..DY), y back from its front edge (0..DX).
 // ============================================================
@@ -19,6 +20,7 @@
 import { sampleOutline, type OutlinePt } from './shapePath'
 import { evaluateFormula, type FormulaScope } from './formula'
 import type { ResolvedCabinet } from './resolver/types'
+import { dbPartId, type StackRef } from './cabinetShape/partKeys'
 
 export type CutoutKind  = 'hole' | 'notch'
 export type CutoutShape = 'rect' | 'circle'
@@ -33,7 +35,7 @@ export interface Cutout {
   shape:   CutoutShape
   w:       CutoutValue           // across the part (circle: the diameter)
   d:       CutoutValue           // back from the front (ignored for a circle)
-  radius?: number                // rect corners (0 = square)
+  radius?: number                // hole: rect corners · notch: its two inner corners (0 = square)
   // Where it sits: measured from this side of the part to the same side of the
   // cut-out (centre → centre to centre), + = in toward the middle / right / back.
   x: { from: CutoutAnchorX; off: CutoutValue }
@@ -254,6 +256,34 @@ export function spliceNotch(pts: OutlinePt[], W: number, D: number, r: Rect, edg
   return null
 }
 
+/**
+ * Round one square corner of an outline (the point at cx, cy, straight edges
+ * both sides) with a tangent arc of radius `rad` — a notch's inner corners (R11).
+ * Concave corners get a clockwise arc (negative bulge), convex ones counter-clockwise.
+ */
+export function roundCorner(pts: OutlinePt[], cx: number, cy: number, rad: number): OutlinePt[] {
+  const n = pts.length
+  const i = pts.findIndex(p => Math.abs(p.x - cx) < EPS && Math.abs(p.y - cy) < EPS)
+  if (i < 0 || rad < EPS) return pts
+  const P = pts[i], A = pts[(i + n - 1) % n], B = pts[(i + 1) % n]
+  if ((A.b && Math.abs(A.b) > 1e-9) || (P.b && Math.abs(P.b) > 1e-9)) return pts
+  const la = Math.hypot(A.x - P.x, A.y - P.y), lb = Math.hypot(B.x - P.x, B.y - P.y)
+  const rr = Math.min(rad, la, lb)
+  if (rr < EPS) return pts
+  const cross = (P.x - A.x) * (B.y - P.y) - (P.y - A.y) * (B.x - P.x)
+  if (Math.abs(cross) < EPS) return pts
+  const ang = Math.acos(Math.max(-1, Math.min(1, ((P.x - A.x) * (B.x - P.x) + (P.y - A.y) * (B.y - P.y)) / (la * lb))))
+  const bulge = Math.sign(cross) * Math.tan(ang / 4)
+  const p1: OutlinePt = { x: r2(P.x + (A.x - P.x) / la * rr), y: r2(P.y + (A.y - P.y) / la * rr), b: bulge }
+  const p2: OutlinePt = { x: r2(P.x + (B.x - P.x) / lb * rr), y: r2(P.y + (B.y - P.y) / lb * rr), ...(P.e ? { e: P.e } : {}) }
+  const out = [...pts.slice(0, i), p1, p2, ...pts.slice(i + 1)]
+  // Two arcs meeting mid-edge (radius = half the notch width): drop the empty run.
+  return out.filter((p, k) => {
+    const q = out[(k + 1) % out.length]
+    return !(Math.hypot(q.x - p.x, q.y - p.y) < EPS && !(p.b && Math.abs(p.b) > 1e-9))
+  })
+}
+
 // ── Applying them ─────────────────────────────────────────────────────────────
 
 /** Parts that take cut-outs so far (horizontal shape frame: x along the width
@@ -264,6 +294,8 @@ export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'ba
 /** Case parts that take cut-outs: the set above + a curved end's ribs (C9 rangehood). */
 export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+(_[lr])?$/.test(k)
 export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
+/** Drawer box parts that take cut-outs (R11): the bottom. */
+export const CUTOUT_DB_TYPES = new Set(['db_bottom'])
 
 type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }
 /** `at` = the part's min corner in cabinet space (horizontal box: x across, y
@@ -281,10 +313,15 @@ const atOf = (p: { X?: number; Y?: number; Z?: number }) =>
 export function cutoutTargets(
   caseParts: (CutPart & { part_key: string; X?: number; Y?: number; Z?: number })[],
   internalParts: (CutPart & { part_type: string; sort_order: number; X?: number; Y?: number; Z?: number })[],
+  drawerStacks: (StackRef & { box_parts: (CutPart & { part_type: string })[] })[] = [],
 ): CutTarget[] {
   return [
     ...caseParts.filter(p => isCutoutCaseKey(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p) })),
     ...internalParts.filter(p => CUTOUT_INTERNAL_TYPES.has(p.part_type)).map(p => ({ id: `int_${p.part_type}_${p.sort_order}`, part: p, holes: false, at: atOf(p) })),
+    // Drawer box bottoms (R11): DX = depth front → back, DY = width — the carcass
+    // bottom's frame. Their drawer stack id moves with the drawer, so the cut-out does.
+    ...drawerStacks.flatMap(s => s.box_parts.filter(p => CUTOUT_DB_TYPES.has(p.part_type))
+      .map(p => ({ id: dbPartId(s, p.part_type), part: p, holes: true }))),
   ]
 }
 
@@ -314,6 +351,7 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
     const notchList = list.filter(c => c.kind === 'notch')
     const notches: Rect[] = []
     const notchEdges: NonNullable<Cutout['edge']>[] = []
+    const notchRadii: number[] = []
     for (const c of notchList) {
       if (c.shape !== 'rect') { warn(c, 'notches are rectangles'); continue }
       if (!c.edge) { warn(c, 'pick the edge it opens to'); continue }
@@ -326,6 +364,7 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
       if (r.x0 < -OVER - EPS || r.x1 > W + OVER + EPS || r.y0 < -OVER - EPS || r.y1 > D + OVER + EPS) { warn(c, 'runs off the part'); continue }
       notches.push(r)
       notchEdges.push(c.edge)
+      notchRadii.push(Math.min(c.radius ?? 0, w / 2, d))
     }
     if (notches.length) {
       let o: OutlinePt[] | null
@@ -339,6 +378,14 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
         if (!o) notchList.forEach(c => warn(c, 'the notches cut the part in two'))
       }
       {
+        // Rounded inner corners (R11): the two corners at the notch's closed end.
+        for (let k = 0; k < notches.length && o; k++) {
+          const rad = notchRadii[k], n = notches[k]
+          if (!(rad > EPS)) continue
+          const cs = notchEdges[k] === 'back' ? [[n.x0, n.y0], [n.x1, n.y0]] : notchEdges[k] === 'front' ? [[n.x0, n.y1], [n.x1, n.y1]]
+            : notchEdges[k] === 'left' ? [[n.x1, n.y0], [n.x1, n.y1]] : [[n.x0, n.y0], [n.x0, n.y1]]
+          for (const [cx, cy] of cs) o = roundCorner(o!, r2(cx), r2(cy), rad)
+        }
         if (o) {
           p.outline = o
           // Its gaps in cabinet space (frame y runs back from the front edge at Z + D).
@@ -365,14 +412,14 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
 /** Whether a part on a resolved cabinet takes cut-outs (R4 editor): its size in
  *  the cut-out frame (W across, D front to back) and whether holes are allowed.
  *  Null = not supported (yet). */
-export function cutoutPartInfo(rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts' | 'custom_parts'>, partId: string):
+export function cutoutPartInfo(rp: Pick<ResolvedCabinet, 'case_parts' | 'internal_parts' | 'custom_parts'> & Partial<Pick<ResolvedCabinet, 'drawer_stacks'>>, partId: string):
   { W: number; D: number; DZ: number; holes: boolean } | null {
   if (partId.startsWith('custom_')) {
     const p = rp.custom_parts?.find(c => `custom_${c.id}` === partId)
     const o = p?.orientation ?? 'flat'
     return p && (o === 'flat' || o === 'side') ? { W: Number(p.dy), D: Number(p.dx), DZ: Number(p.dz), holes: true } : null
   }
-  const t = cutoutTargets(rp.case_parts, rp.internal_parts ?? []).find(x => x.id === partId)
+  const t = cutoutTargets(rp.case_parts, rp.internal_parts ?? [], rp.drawer_stacks ?? []).find(x => x.id === partId)
   return t ? { W: t.part.DY, D: t.part.DX, DZ: t.part.DZ, holes: t.holes } : null
 }
 

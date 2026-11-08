@@ -215,6 +215,7 @@ function buildDbPartInfo(p: ResolvedDrawerBoxPart, b: Box, stack: ResolvedDrawer
                : (p.part_type === 'db_bottom') ? 'horizontal' : 'face',
     detail:    `Row ${stack.face_zone_row + 1}, Col ${stack.face_zone_col + 1} · ${stack.drawer_type}`,
     materialId: p.material_id,
+    ...(p.outline?.length ? { outline: p.outline, ...(p.cutouts?.length ? { cutouts: p.cutouts } : {}) } : {}),
   }
 }
 

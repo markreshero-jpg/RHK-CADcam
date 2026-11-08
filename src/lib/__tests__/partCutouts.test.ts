@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { resolveCabinet } from '../resolver/resolver'
 import { mergeRules } from '../resolver/mergeRules'
 import { DEFAULT_RULES, type CabinetInput, type Material } from '../resolver/types'
-import { normalisePartCutouts, normaliseCutoutList, customPartCuts, cutoutPartInfo, previewCutouts, holeLoop, notchOutline, type Cutout } from '../partCutouts'
+import { normalisePartCutouts, normaliseCutoutList, customPartCuts, cutoutPartInfo, previewCutouts, holeLoop, notchOutline, applyPartCutouts, cutoutTargets, type Cutout } from '../partCutouts'
 import { buildFormulaScope } from '../formula/context'
-import { cutoutsToOp, shapeFrameFor } from '../optimiser/shapes'
+import { attachShape, cutoutsToOp, shapeFrameFor } from '../optimiser/shapes'
 import { partShapes } from '../partSolids'
-import { sampleOutline } from '../shapePath'
+import { sampleOutline, type OutlinePt } from '../shapePath'
 
 // z_rangehood R1: holes on a carcass's horizontal parts.
 const board: Material = { id: 'm', name: 'B16', DZ: 16.5, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
@@ -260,5 +260,79 @@ describe('normalisePartCutouts', () => {
     const b = bbox(sampleOutline(holeLoop(10, 20, 100, 50, 'rect', 25)))
     expect(b.x0).toBeCloseTo(10); expect(b.x1).toBeCloseTo(110)
     expect(b.y0).toBeCloseTo(20); expect(b.y1).toBeCloseTo(70)
+  })
+})
+
+// z_rangehood R11: plumbing U notch in a drawer box bottom (RHK6586 vanity).
+describe('part cut-outs (R11 drawer bottoms, rounded notches)', () => {
+  const uNotch = (o: Partial<Cutout> = {}): Cutout => ({
+    id: 'pl', kind: 'notch', shape: 'rect', w: 180, d: 210, radius: 90, edge: 'back',
+    x: { from: 'centre', off: 0 }, y: { from: 'back', off: 0 }, source: 'user', ...o,
+  })
+  const stack = () => ({
+    face_zone_row: 1, face_zone_col: 0,
+    box_parts: [
+      { part_type: 'db_bottom', DX: 375, DY: 592, DZ: 16.5 },
+      { part_type: 'db_back', DX: 166, DY: 580, DZ: 16.5 },
+    ] as { part_type: string; DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }[],
+  })
+
+  it('targets the drawer bottom by its stack id', () => {
+    const s = stack()
+    const t = cutoutTargets([], [], [s])
+    expect(t.map(x => x.id)).toEqual(['db_1_0_db_bottom'])
+  })
+
+  it('cuts a U from the back edge with 90 radius front corners', () => {
+    const s = stack()
+    const warn = applyPartCutouts(cutoutTargets([], [], [s]), { db_1_0_db_bottom: [uNotch()] })
+    expect(warn).toEqual([])
+    const o = s.box_parts[0].outline!
+    const pts = sampleOutline(o, 1)
+    const b = bbox(pts)
+    expect(b).toEqual({ x0: 0, x1: 592, y0: 0, y1: 375 })
+    // The U: 180 wide centred (206..386), 210 deep from the back (165..375).
+    const inU = (x: number, y: number) => {
+      let inside = false
+      for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+        const a = pts[i], c = pts[j]
+        if ((a.y > y) !== (c.y > y) && x < (c.x - a.x) * (y - a.y) / (c.y - a.y) + a.x) inside = !inside
+      }
+      return !inside
+    }
+    expect(inU(296, 300)).toBe(true)        // middle of the U
+    expect(inU(296, 170)).toBe(true)        // front of the round end, on the centre line
+    expect(inU(296, 160)).toBe(false)       // board in front of it
+    expect(inU(210, 170)).toBe(false)       // the radius leaves board in the corner
+    expect(inU(200, 300)).toBe(false)       // board beside it
+    // Two arcs (negative bulge = concave), meeting on the centre line (radius = half the width).
+    expect(o.filter(p => p.b).map(p => Math.sign(p.b!))).toEqual([-1, -1])
+    // Back edge only drawn either side of the U.
+    expect(o.some(p => Math.abs(p.x - 296) < 0.01 && Math.abs(p.y - 165) < 0.01)).toBe(true)
+  })
+
+  it('reaches the 3D shapes and the optimiser frame', () => {
+    const s = stack()
+    applyPartCutouts(cutoutTargets([], [], [s]), { db_1_0_db_bottom: [uNotch()] })
+    const rp = { case_parts: [], toekick_parts: [], face_zones: [], internal_parts: [], drawer_stacks: [s] } as unknown as Parameters<typeof partShapes>[0]
+    expect(partShapes(rp).get('db_1_0_db_bottom')!.pts.length).toBeGreaterThan(8)
+    expect(shapeFrameFor('drawer_box_parts', 'db_bottom', 'db_1_0_db_bottom')).toEqual(shapeFrameFor('case_parts', 'bottom', 'case_bottom'))
+    // The optimiser nests it from the row's outline, U included (op frame = DX × DY).
+    const op = attachShape(undefined, 375, 592, { frame: shapeFrameFor('drawer_box_parts', 'db_bottom', 'db_1_0_db_bottom'), DX: 375, DY: 592, transpose: false }, s.box_parts[0].outline!, undefined as never)
+    expect(op.shape?.source).toBe('resolver')
+    expect(op.shape!.op_polygon.length).toBeGreaterThan(8)
+    expect(Math.min(...op.shape!.op_polygon.map(p => p.x))).toBeCloseTo(0)
+    expect(cutoutPartInfo({ case_parts: [], internal_parts: [], custom_parts: [], drawer_stacks: [s] } as never, 'db_1_0_db_bottom'))
+      .toEqual({ W: 592, D: 375, DZ: 16.5, holes: true })
+  })
+
+  it('a smaller radius keeps a flat run at the end; square without one', () => {
+    const s = stack()
+    applyPartCutouts(cutoutTargets([], [], [s]), { db_1_0_db_bottom: [uNotch({ radius: 30 })] })
+    expect(s.box_parts[0].outline!.filter(p => p.b)).toHaveLength(2)
+    const s2 = stack()
+    applyPartCutouts(cutoutTargets([], [], [s2]), { db_1_0_db_bottom: [uNotch({ radius: 0 })] })
+    expect(s2.box_parts[0].outline!.some(p => p.b)).toBe(false)
+    expect(s2.box_parts[0].outline!).toHaveLength(8)
   })
 })

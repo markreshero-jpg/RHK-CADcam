@@ -1887,6 +1887,21 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: (c, s) => ev(c, 'ai_chat_harder') > ev(s, 'ai_chat_harder') },
   ]},
 
+  // Appended 2026-11-08 (z_rangehood R11: drawer bottom cut-outs + rounded notch corners, RHK6586 vanity).
+  { id: 'drawer_plumbing_cutout', level: 'intermediate', topic: 'cabinets', title: 'Plumbing U cut-out in a drawer bottom',
+    blurb: 'A U notch from the back of a vanity drawer bottom so it clears the waste pipe — it moves and resizes with the drawer.',
+    keywords: 'plumbing cutout cut out u notch drawer bottom vanity waste pipe trap radius round corners basin', steps: [
+    { id: 'open', title: 'Pick the drawer bottom',
+      body: 'Double-click the vanity cabinet, go to the 3D tab and click the drawer box bottom of the drawer that needs it. The Cut-outs box shows under its details (each drawer has its own bottom).',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'notch', title: '+ Notch from the back',
+      body: 'Press + Notch, edge back. Type W × D, e.g. 180 × 210 (210 in from the back edge), X from centre 0. Radius rounds the two inside corners nearest the front: 90 on a 180 wide notch gives a round end. It is measured from the drawer bottom itself, so it follows the drawer when the cabinet is resized or the runner changes.',
+      canvas: true, done: (c, s) => ev(c, 'cutout_set') > ev(s, 'cutout_set') },
+    { id: 'check', title: 'Check it',
+      body: 'The 3D view and the Part Editor show the U on the bottom; the optimiser nests the bottom as a shaped part and cuts it. The drawer back still runs full width across the U, so plan how the pipe clears it (cut the back, or box round the U).',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
+
   // Appended 2026-11-08 (z_ai_helper AI4: draw a room from a plan).
   { id: 'ai_draw', level: 'intermediate', topic: 'room', title: 'Draw a room from a plan with the AI',
     blurb: 'Attach the customer plan PDF or a site sketch photo in Ask AI. It reads the elevations, works out the walls and cabinets with their offsets, lists what to confirm, and draws it all when you press Apply.',

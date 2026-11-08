@@ -740,6 +740,9 @@ export interface ResolvedDrawerBoxPart extends ResolvedPart {
   // the underside rebate along its left + right edges (DB_BOTTOM_FIT_T).
   // seamDrillSync turns it into generated route pockets. Not persisted.
   rebate?: { depth: number; width: number }
+  // Part cut-out holes (z_rangehood R11, db_bottom): loops in the outline's
+  // frame, as case_parts.cutouts. Notches change `outline`.
+  cutouts?: { pts: OutlinePt[]; skin: number }[]
 }
 
 // ── Kick run (joined toe kicks across a straight run) ─────────────────────────

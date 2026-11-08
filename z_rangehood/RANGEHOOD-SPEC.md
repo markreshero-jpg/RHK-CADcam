@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03); R10 2026-11-07 bottom skin (RHK6581 WC-02). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03); R10 2026-11-07 bottom skin (RHK6581 WC-02); R11 2026-11-08 drawer box bottoms + rounded notch corners (RHK6586 vanity plumbing U). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -341,6 +341,25 @@ rangehood cutout".
   their bounding rect pocket, depth = thickness − onion skin. PartMeta carries `cutouts` (case parts with an
   outline, flat custom parts from the resolved custom part). Test `src/lib/__tests__/partEditorCutouts.test.ts`.
 
+## R11 as built (2026-11-08) — drawer bottom cut-outs, rounded notches
+
+Mark (RHK6586 vanity): "plumbing cutouts to the drawer bottoms … 210 from drawer back edge toward the front, 180mm
+wide … 90mm radius corners on the two corners closest to the front edge of the drawer"; wants them parametric.
+- **Drawer box bottoms are cut-out targets**: key `db_<r>_<c>_db_bottom` (facet: `db_<edge>.<r>_<c>_db_bottom`) in
+  `cabinet_instances.part_cutouts` — the drawer stack's part id, so the cut-out follows the drawer; anchored to the
+  bottom's own edges, so it follows its size (runner length, cabinet width). Frame = carcass bottom (x across the
+  width, y back from the front). Holes and notches. `cutoutTargets(case, internal, drawerStacks)`; `CUTOUT_DB_TYPES`.
+- **Notch radius**: `radius` on a rect notch rounds its two inner corners at the closed end (away from the edge it
+  opens to) with tangent arcs (`roundCorner`, negative bulge); radius capped at half the width / the depth; radius =
+  half the width gives a round-ended U. Square-cornered notches unchanged (radius 0). Cut-outs box shows Radius on
+  notches too.
+- Persisted: migration `migration_r11_drawer_box_cutouts.sql` (applied) — `outline` / `cutouts` on
+  `drawer_box_parts`; optimiser `PART_SELECTS.drawer_box_parts` reads them (existing resolver-outline path).
+  3D: `partShapes` gives the bottom its outline; PartMeta carries outline / cutouts for the Part Editor.
+- **Drawer back not touched**: the back still runs full width behind the U, so a vertical pipe in the U fouls it
+  as the drawer opens. How the back clears the pipe (cut in two / boxed U) is Mark's call — not modelled.
+- Tutorial `drawer_plumbing_cutout`. Tests in `src/lib/__tests__/partCutouts.test.ts` (R11 block).
+
 ## Phases
 
 | # | What | Status |
@@ -354,6 +373,7 @@ rangehood cutout".
 | R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [x] 2026-11-04 |
 | R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [x] 2026-11-04 |
 | R9 | Hood cover panel (hinge D notches) + under panel onion skin; first use RHK6592 WC-03 | [x] 2026-11-05 (in-app check pending) |
+| R11 | **Drawer box bottoms** take cut-outs + notch inner-corner **radius**; first use RHK6586 vanity plumbing U | [x] 2026-11-08 (in-app check pending) |
 
 ## Open
 
