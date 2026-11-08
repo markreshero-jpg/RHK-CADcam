@@ -100,6 +100,26 @@ const PLAN_TOOL: Anthropic.Tool = {
           required: ['wall', 'code', 'offset', 'dx'], additionalProperties: false,
         },
       },
+      markup: {
+        type: 'array', description: 'CAD markup on the elevations (markup standard): every appliance / fixture space not drawn (dashed box + label), every TBC (cloud + question, layer questions), site / install notes, colour callouts the spec block doesn\'t cover.',
+        items: {
+          type: 'object',
+          properties: {
+            layer: { type: 'string', enum: ['general', 'questions', 'site', 'electrical'], description: 'general = appliance spaces / colour callouts; questions = TBC (Questions for Client); site = site / install notes; electrical = lighting / power' },
+            wall: { type: 'string' },
+            side: { type: 'string', enum: ['face', 'back'] },
+            text: { type: 'string', description: 'Short, capitals, e.g. "DISHWASHER SPACE 605W x 880H" or "BULKHEAD COLOUR TBC"' },
+            box: {
+              type: 'object', description: 'The area it is about: x along the wall from its start, z height off the floor (mm)',
+              properties: { x0: { type: 'number' }, x1: { type: 'number' }, z0: { type: 'number' }, z1: { type: 'number' } },
+              required: ['x0', 'x1', 'z0', 'z1'], additionalProperties: false,
+            },
+            box_style: { type: 'string', enum: ['cloud', 'dashed'], description: 'cloud = TBC, dashed = an appliance / fixture space' },
+            text_inside: { type: 'boolean', description: 'Text inside the box (only for an empty space like the dishwasher gap); else the right margin with a leader' },
+          },
+          required: ['layer', 'wall', 'text'], additionalProperties: false,
+        },
+      },
       tbc: { type: 'array', items: { type: 'string' }, description: 'Things to confirm with the client / site, one short line each' },
       summary: { type: 'string', description: 'One short paragraph for the user: what you drew and what you left as gaps' },
     },
@@ -130,6 +150,7 @@ interface PlanIn {
   setup?: Setup
   walls?: { name: string; x: number; y: number; length: number; angle: number; type: 'standard' | 'island'; height?: number }[]
   items?: { wall: string; back?: boolean; code: string; offset: number; dx: number; dy?: number; dz?: number; blind_width?: number; note?: string }[]
+  markup?: import('./cabinetBatch').MarkupNote[]
   tbc?: string[]; summary?: string
 }
 
@@ -179,6 +200,7 @@ function toOps(p: PlanIn, firstRoom: boolean): BatchOp[] {
     ...(p.walls ?? []).map(w => ({ op: 'wall' as const, name: w.name, x: w.x, y: w.y, length: w.length, angle: w.angle, type: w.type, height: w.height ?? null })),
     ...(p.items ?? []).map(i => ({ op: 'place' as const, code: i.code, wall: i.wall, back: !!i.back, offset: i.offset, dx: i.dx, dy: i.dy, dz: i.dz, blind_width: i.blind_width })),
   )
+  if (p.markup?.length) ops.push({ op: 'markup', notes: p.markup })
   return ops
 }
 

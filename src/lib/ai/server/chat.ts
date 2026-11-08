@@ -69,7 +69,27 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
           items: {
             type: 'object',
             properties: {
-              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties'] },
+              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup'] },
+              notes: {
+                type: 'array', description: 'markup: CAD notes on an elevation (TBC clouds, appliance spaces, site notes)',
+                items: {
+                  type: 'object',
+                  properties: {
+                    layer: { type: 'string', enum: ['general', 'questions', 'site', 'electrical'], description: 'general = appliance spaces / colour callouts; questions = TBC (Questions for Client); site = site / install notes; electrical = lighting / power' },
+                    wall: { type: 'string' },
+                    side: { type: 'string', enum: ['face', 'back'] },
+                    text: { type: 'string', description: 'Short, capitals, e.g. "DISHWASHER SPACE 605W x 880H" or "BULKHEAD COLOUR TBC"' },
+                    box: {
+                      type: 'object', description: 'The area it is about: x along the wall from its start, z height off the floor (mm)',
+                      properties: { x0: { type: 'number' }, x1: { type: 'number' }, z0: { type: 'number' }, z1: { type: 'number' } },
+                      required: ['x0', 'x1', 'z0', 'z1'], additionalProperties: false,
+                    },
+                    box_style: { type: 'string', enum: ['cloud', 'dashed'], description: 'cloud = TBC, dashed = an appliance / fixture space' },
+                    text_inside: { type: 'boolean', description: 'Text inside the box (only for an empty space like the dishwasher gap); else the right margin with a leader' },
+                  },
+                  required: ['layer', 'wall', 'text'], additionalProperties: false,
+        },
+              },
               filter: FILTER_SCHEMA as unknown as Anthropic.Tool.InputSchema,
               changes: {
                 type: 'object',
@@ -161,6 +181,7 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
   · "BC-03's doors in Walnut" (named or selected cabinets) → update with materials { fronts: … } — that cabinet's own colour, which wins over the room / job one.
   · Roles: fronts = doors, drawer fronts and false fronts; carcass = cabinet interior; exposed = end panels, fillers, open interiors; shelf; divider; kick = kick face.
   · Never guess a board: if find_material gives several close matches, ask_user with them as options.
+- markup: CAD notes on an elevation — a TBC cloud + question (layer questions), an appliance space (dashed box + label, layer general), site / install notes (layer site), lighting / power (electrical). x along the wall from its start, z height off the floor. They wait for Apply.
 - You can NOT touch walls or benchtops yet — say so.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size? which end panel?). One question at a time.
 - After it, say in one line what changed (or that it's waiting for Apply). Undo is on the message.
@@ -246,7 +267,7 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { op?: string; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface StepIn { op?: string; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -323,6 +344,9 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
           id = m.id
         }
         ops.push({ op: 'set_material', level: st.level, role: st.role as MaterialRole, classes: st.classes, material_id: id })
+      } else if (st.op === 'markup') {
+        if (!st.notes?.length) return { text: `Step ${i + 1}: markup needs notes.`, isError: true }
+        ops.push({ op: 'markup', notes: st.notes })
       } else if (st.op === 'set_properties') {
         const level = st.level ?? 'room'
         ops.push(st.wall && st.wall_soffit_drop !== undefined

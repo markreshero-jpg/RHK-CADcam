@@ -67,6 +67,13 @@ export const DRAW_RULES = `
 Ask (ask_questions, all at once, before drawing): set-up that is NOT SET (kick height, tall height, overhead top line) · D/W integrated vs freestanding when the plan doesn't say · island back panel when none is shown.
 TBC (list, don't ask): wall-run filler type · fridge overhead height / type · island position / aisle · ceiling treatment over overheads · unknown codes · chain totals that don't add up · unlabelled tall section (possible fridge) · sketch strip whose wall is unclear · blind corner door / false panel · nib walls · appliance models, handle size.
 
+== MARKUP (every room — room_plan.markup, on the elevations) ==
+- Appliances / fixtures not drawn (dishwasher, fridge, oven, rangehood, microwave…): a dashed box over the space (x along the wall, z heights) + a label, layer general. The label goes inside an empty space (text_inside), e.g. "DISHWASHER SPACE 605W x 880H", "FRIDGE OPENING 900W x 1800H"; add the model or "BY OWNER" when known.
+- Every TBC that's about a place on a wall: a cloud round it + the question, layer questions. TBCs that aren't about one place stay in tbc only.
+- Site / install notes (push-to-open, scribe on site, oversized cut on site): layer site. Lighting / power: layer electrical.
+- Colour callouts only for what the spec block doesn't cover (open box interiors, bulkheads, fillers, a kick in another colour): layer general.
+- Short, capitals. Don't repeat the same note on several walls.
+
 == NEVER ==
 Never draw benchtops as cabinets. Never draw appliances as cabinets. Never take dimensions from codes. Never delete or replace anything already in the room. Skip job-specific one-offs.
 `.trim()

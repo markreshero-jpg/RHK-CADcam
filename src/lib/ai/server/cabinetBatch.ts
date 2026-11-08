@@ -24,6 +24,8 @@ import { parseKit } from '@/src/lib/cabinetKit'
 import { buildInstanceFromDefinition, dbInsertDefinitionParts } from '@/app/canvas/[roomId]/canvasDB'
 import { matchCabinets, patchFor, validateChanges, ROLE_KEY, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { wallOffset } from '../roomSummary'
+import { ensureJobCadLayers } from '@/src/lib/annotations/cadLayers'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 type Fields = Partial<CabinetInstance>
 type Row = Record<string, unknown>
@@ -45,10 +47,28 @@ export type BatchOp =
   | { op: 'set_properties'; level: 'job' | 'room'; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number
       /** One wall's own soffit drop (walls.soffit_height, null = the room's) — only that wall's overheads / bulkheads follow. */
       wall?: string; wall_soffit_drop?: number | null }
+  /** CAD markup on a wall's elevation (z_CAD_tool/MARKUP-STANDARD.md): notes on their
+   *  layer, optionally with a TBC cloud or a dashed appliance-space box. */
+  | { op: 'markup'; notes: MarkupNote[] }
   | { op: 'wall'; name?: string; x: number; y: number; length: number; angle: number; type?: 'standard' | 'island'; thickness?: number; height?: number | null }
   /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
    *  material_id null = back to inherited. Kick face has no class. */
   | { op: 'set_material'; level: 'room' | 'job'; role: MaterialRole; classes?: ('base' | 'wall' | 'tall')[]; material_id: string | null }
+
+export type MarkupLayer = 'general' | 'questions' | 'site' | 'electrical'
+export interface MarkupNote {
+  layer: MarkupLayer
+  wall: string
+  side?: 'face' | 'back'
+  text: string
+  /** Area it's about: x along the wall from its start, z height off the floor (mm). */
+  box?: { x0: number; x1: number; z0: number; z1: number }
+  /** cloud = TBC; dashed = an appliance / fixture space. Default: cloud on Questions, dashed otherwise. */
+  box_style?: 'cloud' | 'dashed'
+  /** Put the text inside the box (an empty space, e.g. the dishwasher gap); else the right margin with a leader. */
+  text_inside?: boolean
+}
+const LAYER_NAME: Record<MarkupLayer, string> = { general: 'General', questions: 'Questions for Client', site: 'Site notes', electrical: 'Electrical' }
 
 /** What a deleted cabinet takes with it that isn't rebuilt by a resolve. */
 interface DeleteSnapshot {
@@ -66,6 +86,8 @@ export type BatchEntry =
   | { kind: 'delete'; cabinet_id: string; label: string | null; line: string; snapshot: DeleteSnapshot }
   /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
   | { kind: 'wall'; cabinet_id: ''; label: null; line: string; wall_id: string }
+  /** CAD notes the AI drew (Undo removes them unless someone edited them since). */
+  | { kind: 'markup'; cabinet_id: ''; label: null; line: string; annotation_ids: string[] }
   /** A projects / rooms row's columns before → after (whole column values). */
   | { kind: 'props'; cabinet_id: ''; label: null; line: string; table: 'projects' | 'rooms' | 'walls'; row_id: string; before: Row; after: Row }
   | { kind: 'material'; cabinet_id: ''; label: null; line: string; table: string; match: Row; before: string | null; after: string | null; resolve_ids: string[] }
@@ -196,6 +218,7 @@ type PlannedStep =
   | { kind: 'delete'; id: string; line: string }
   | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
   | { kind: 'wall'; tempId: string; row: Omit<Wall, 'id' | 'created_at'>; line: string }
+  | { kind: 'markup'; rows: (Row & { _layer: MarkupLayer })[]; line: string }
   | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
 
 export interface BatchPlan {
@@ -295,6 +318,42 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         lines.push(line)
         touched.add(c.id)
         cabs = cabs.filter(x => x.id !== c.id)
+      }
+    } else if (op.op === 'markup') {
+      const T = { size: 2.5, align: 'center', src: 'markup-std' }
+      const margin = new Map<string, number>()   // per wall + side: notes stacked so far
+      for (const note of op.notes ?? []) {
+        const w = walls.find(x => x.name.toLowerCase() === (note.wall ?? '').trim().toLowerCase())
+        if (!w) { problems.push(`${n}: note "${note.text?.slice(0, 30)}": no wall "${note.wall}".`); continue }
+        if (!note.text?.trim() || !(note.layer in LAYER_NAME)) { problems.push(`${n}: a note needs text and a layer (${Object.keys(LAYER_NAME).join(', ')}).`); continue }
+        const side = note.side ?? 'face'
+        const base = { room_id: room.id, view: 'elevation', wall_id: w.id, wall_side: side, _layer: note.layer, sort_order: 0 }
+        const rows: (Row & { _layer: MarkupLayer })[] = []
+        const b = note.box
+        // Boxes are for TBC clouds (questions) and appliance spaces (general); site / electrical notes just point.
+        if (b && (note.layer === 'questions' || note.layer === 'general')) {
+          const style = (note.box_style ?? (note.layer === 'questions' ? 'cloud' : 'dashed')) === 'cloud'
+          rows.push(style
+            ? { ...base, kind: 'cloud', text: null, geom: { pts: [{ x: b.x0, y: -b.z1 }, { x: b.x1, y: -b.z1 }, { x: b.x1, y: -b.z0 }, { x: b.x0, y: -b.z0 }] }, style: { src: 'markup-std', weight: 0.25, cloudBump: 4 } }
+            : { ...base, kind: 'rect', text: null, geom: { a: { x: b.x0, y: -b.z0 }, b: { x: b.x1, y: -b.z1 } }, style: { src: 'markup-std', dash: 'dashed', weight: 0.25 } })
+        }
+        const text = note.text.trim().toUpperCase()
+        if (b && note.text_inside) {
+          // Inside an empty space: near its top, wrapped to the space (~22 mm of wall per paper mm).
+          rows.push({ ...base, kind: 'text', text, geom: { at: { x: b.x0 + 30, y: -(b.z1 - 120) }, width: Math.max(15, Math.min(40, (b.x1 - b.x0 - 60) / 22)) }, style: T })
+        } else {
+          // Right margin past the wall's end, stacked top down, with a leader to the area.
+          const key = `${w.id}|${side}`
+          const k = margin.get(key) ?? 0
+          margin.set(key, k + 1)
+          const wallH = w.height ?? room.room_dy ?? 2400
+          const at = { x: w.length + 180, y: -(wallH - 150 - k * 320) }
+          const leader = b ? [{ x: (b.x0 + b.x1) / 2, y: -(b.z0 + b.z1) / 2 }, { x: w.length + 170, y: at.y + 40 }] : undefined
+          rows.push({ ...base, kind: 'text', text, geom: { at, width: 30, ...(leader && { leader }) }, style: T })
+        }
+        const line = `${LAYER_NAME[note.layer]} note on ${w.name}${side === 'back' ? ' back' : ''}: ${text.replace(/\n/g, ' ')}${rows[0]?.kind === 'cloud' ? ' (cloud)' : rows[0]?.kind === 'rect' ? ' (dashed box)' : ''}`
+        steps.push({ kind: 'markup', rows, line })
+        lines.push(line)
       }
     } else if (op.op === 'set_properties' && op.wall) {
       const w = walls.find(x => x.name.toLowerCase() === op.wall!.trim().toLowerCase())
@@ -549,6 +608,21 @@ async function restoreDeleted(s: DeleteSnapshot): Promise<string | null> {
   return errs.length ? errs.join('; ') : null
 }
 
+/** The job's CAD layers by name (copying the shop list the first time, as the canvas does),
+ *  adding "Questions for Client" (teal, like the jobs that have it) when it's missing. */
+async function jobLayerIds(client: SupabaseClient, projectId: string): Promise<Map<string, string>> {
+  const layers = await ensureJobCadLayers(client, projectId)
+  const byName = new Map(layers.map(l => [l.name, l.id]))
+  if (!byName.has('Questions for Client')) {
+    const { data } = await client.from('job_cad_layers').insert({
+      project_id: projectId, shop_layer_id: null, name: 'Questions for Client', color: '#0891b2',
+      visible: true, print: true, is_default: false, sort_order: layers.reduce((m, l) => Math.max(m, l.sort_order + 1), 0),
+    }).select('id').single()
+    if (data) byName.set('Questions for Client', data.id as string)
+  }
+  return byName
+}
+
 /** Resolve + persist a few at a time (each is mostly DB round trips). */
 async function resolveAll(ids: string[], labelOf: (id: string) => string, errors: string[]) {
   const queue = [...ids]
@@ -642,7 +716,17 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
     }
   }
 
+  let layerIds: Map<string, string> | null = null
   for (const s of plan.steps) {
+    if (s.kind === 'markup') {
+      if (!layerIds) layerIds = await jobLayerIds(supabase as unknown as SupabaseClient, plan.state.room.project_id)
+      const rows = s.rows.map(({ _layer, ...r }) => ({ ...r, wall_id: idFor.get(r.wall_id as string) ?? r.wall_id, cad_layer_id: layerIds!.get(LAYER_NAME[_layer]) ?? null }))
+      if (rows.some(r => String(r.wall_id).startsWith('newwall:'))) { errors.push(`${s.line}: its wall wasn't added — skipped.`); continue }
+      const { data, error } = await supabase.from('room_annotations').insert(rows).select('id')
+      if (error) { errors.push(`${s.line}: save failed — ${error.message}`); continue }
+      entries.push({ kind: 'markup', cabinet_id: '', label: null, line: s.line, annotation_ids: ((data ?? []) as { id: string }[]).map(a => a.id) })
+      continue
+    }
     if (s.kind === 'props') {
       invalidateResolverCaches()   // the cascade every cabinet reads
       const { error } = await supabase.from(s.table).update(s.after).eq('id', s.rowId)
@@ -748,6 +832,19 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   for (const e of entries) {
+    if (e.kind === 'markup') {
+      // Only the AI's own notes, and only if nobody has edited them since (never delete user CAD).
+      const { data: notes } = await supabase.from('room_annotations').select('id, created_at, updated_at').in('id', e.annotation_ids)
+      const untouched = ((notes ?? []) as { id: string; created_at: string; updated_at: string }[])
+        .filter(a => Math.abs(new Date(a.updated_at).getTime() - new Date(a.created_at).getTime()) < 2000).map(a => a.id)
+      if (untouched.length < (notes ?? []).length) warnings.push(`${e.line.split(':')[0]}: edited since — left in place.`)
+      if (untouched.length) {
+        const { error: ae } = await supabase.from('room_annotations').delete().in('id', untouched)
+        if (ae) { errors.push(`${e.line}: remove failed — ${ae.message}`); continue }
+        lines.push(`Removed ${e.line.split(':')[0]}`)
+      }
+      continue
+    }
     if (e.kind === 'props') {
       const { data: cur } = await supabase.from(e.table).select(Object.keys(e.after).join(', ')).eq('id', e.row_id).maybeSingle()
       const since = Object.keys(e.after).filter(k => canon((cur as Row | null)?.[k]) !== canon(e.after[k]))
