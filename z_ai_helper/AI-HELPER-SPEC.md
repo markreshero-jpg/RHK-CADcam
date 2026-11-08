@@ -82,8 +82,8 @@ Change — **bulk by filter**:
 
 Conversation: `ask_user(question, options[])` — option buttons + "Other" in the panel.
 
-**Never:** delete cabinets, walls or CAD (the helper marks TBC or asks instead — see
-"Never delete user CAD"), touch the cabinet library, touch other jobs.
+**Never:** delete walls or CAD, touch the cabinet library, touch other jobs.
+Cabinets may be deleted only through Apply, with a full Undo (locked decision 7).
 
 ## How a request runs
 
@@ -165,6 +165,13 @@ $20; cached input ~10% of normal.
 3. **Chat history per job** — one thread; each message records its scope.
 4. **PC first** — panel docked on the right of the canvas; iPhone later.
 5. **Testers get full scope** (Selection / Room / Job); limited by job access, not scope.
+7. **The AI may delete cabinets — always with Apply** (Mark, 2026-11-08). Never
+   straight away, even one cabinet in Selection scope. Undo brings the cabinet back
+   whole (row + custom parts / end panels / fillers + its CAD + fixture links). A
+   cabinet carrying protected CAD stops the delete and says so, as the canvas does
+   ("Never delete user CAD" trigger). Supersedes the "Never: delete" line under Tools.
+8. **Several changes in one message** (delete + move others into its place) apply as
+   one batch with one Undo — needed for 7 and for placing runs.
 6. **Streamlined design** — compact summary, bulk-by-filter tools, server expands and
    applies, model routing, drawing via one room plan. Target $20–40/month, $50 cap.
 
@@ -175,7 +182,8 @@ $20; cached input ~10% of normal.
 | AI0 ✅ | **Server actions**: placement / update / resolve callable server-side (from what `window.__canvasApi` does in the browser today); compact summary builder; batch + undo tables | A script can update 12 cabinets by filter server-side and undo it, matching what the UI produces |
 | AI1 ✅ | Chat panel + Room scope, **read-only** Q&A on Haiku; cost log | "Total kick length in the Kitchen?" / "Which cabinets are TBC?" correct in a few seconds, cost logged |
 | AI2 ✅ | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
-| AI3 | Room + Job scope bulk changes, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
+| AI3 | **Add / delete / multi-step**: place cabinets, end panels and fillers server-side (same path as the canvas: next label, cascade sizes, custom parts, neighbours); delete with Apply + full Undo (decision 7); several changes as one batch (decision 8); apply speed | "Delete BC-04 and slide BC-05 / BC-06 left into its place" and "add an end panel on the left of BC-03" — previewed, applied, undone exactly |
+| AI3b | Door / board colours, Job scope, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
 | AI4 | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
 | AI5 | Shop Rules editor in Settings, per-job notes, admin cost view | Rules editable and visibly followed; monthly total shown |
 
