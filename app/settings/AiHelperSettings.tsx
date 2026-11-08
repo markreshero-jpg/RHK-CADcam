@@ -13,7 +13,7 @@ const CAP_USD = 50
 interface CostRow { project_id: string; user_id: string; model: string | null; cost_usd: number; created_at: string }
 
 const money = (v: number) => v < 1 ? `${(v * 100).toFixed(1)}¢` : `$${v.toFixed(2)}`
-const modelName = (m: string | null) => !m ? '?' : m.includes('haiku') ? 'Haiku (everyday)' : m.includes('sonnet') ? 'Sonnet (Try harder)' : m.includes('opus') ? 'Opus (drawing)' : m
+const modelName = (m: string | null) => !m ? '?' : m.includes('haiku') ? 'Haiku (before 2026-11-08)' : m.includes('sonnet') ? 'Sonnet (everyday)' : m.includes('opus') ? 'Opus (drawing, Try harder)' : m
 
 function monthStart(offset: number) {
   const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); d.setMonth(d.getMonth() + offset)

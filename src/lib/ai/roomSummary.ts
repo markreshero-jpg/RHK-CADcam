@@ -6,10 +6,10 @@
 
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, Wall, Room, RoomFixture } from '@/src/lib/types'
-import { cabWallSide } from '@/src/lib/geometry'
+import { cabBottomZ, cabWallSide, wallCabTop } from '@/src/lib/geometry'
 
 export interface RoomSummaryData {
-  room: Pick<Room, 'id' | 'name'>
+  room: Room
   walls: Wall[]
   cabinets: CabinetInstance[]
   fixtures: Pick<RoomFixture, 'id' | 'label' | 'display_name' | 'name' | 'cabinet_id'>[]
@@ -39,12 +39,16 @@ const byLabel = (a: { label: string | null }, b: { label: string | null }) =>
 export function formatRoomSummary(d: RoomSummaryData): string {
   const wallById = new Map(d.walls.map(w => [w.id, w]))
   const mat = (id: string | null) => (id && d.materialNames.get(id)) || null
-  const lines: string[] = [`Room: ${d.room.name}`, '', 'Walls (name | length | angle | type):']
+  const top = wallCabTop(null, d.room)
+  const lines: string[] = [
+    `Room: ${d.room.name}`,
+    `Ceiling ${d.room.room_dy ?? 'not set'} · overhead top line ${Math.round(top)} from the floor${d.room.soffit_height != null ? ` (soffit ${d.room.soffit_height} down from the ceiling)` : d.room.wall_cabinet_top != null ? '' : ' (default)'} — overheads hang from it.`,
+    '', 'Walls (name | length | angle | type):']
   for (const w of [...d.walls].sort((a, b) => a.sort_order - b.sort_order)) {
     lines.push(`${w.name} | ${Math.round(w.length)} | ${Math.round(w.angle)}° | ${w.wall_type}`)
   }
 
-  lines.push('', 'Cabinets (label | code | class | wall [back] @ offset | W×H×D | z | fronts | carcass):')
+  lines.push('', 'Cabinets (label | code | class | wall [back] @ offset | W×H×D | underside off floor | fronts | carcass):')
   lines.push(`Offset = mm along the wall from its start to the cabinet's low end. "back" = on the wall's back face (an island's far side), facing the other way: there your left is the HIGH-offset end.`)
   for (const c of [...d.cabinets].sort(byLabel)) {
     const w = c.wall_id ? wallById.get(c.wall_id) : undefined
@@ -69,7 +73,8 @@ export function formatRoomSummary(d: RoomSummaryData): string {
     lines.push([
       c.label ?? '?', code, c.assembly_class, where,
       `${Math.round(c.dx)}×${Math.round(c.dy)}×${Math.round(c.dz)}`,
-      Math.round(c.pos_z ?? 0), frontText, mat(carcassId) ?? '-',
+      `${Math.round(cabBottomZ(c, d.room, w))}${(c.bulkhead as { auto_h?: boolean } | null)?.auto_h ? ' (bulkhead, fills to ceiling)' : (c.rule_overrides as { WALLZ?: number } | null)?.WALLZ != null ? ' (own underside)' : ''}`,
+      frontText, mat(carcassId) ?? '-',
     ].join(' | '))
   }
 
@@ -86,7 +91,7 @@ export function formatRoomSummary(d: RoomSummaryData): string {
 /** Load everything formatRoomSummary needs for one room (8 reads, run in parallel where possible). */
 export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryData> {
   const [roomQ, wallsQ, cabsQ, fixQ] = await Promise.all([
-    supabase.from('rooms').select('id, name').eq('id', roomId).single(),
+    supabase.from('rooms').select('*').eq('id', roomId).single(),
     supabase.from('walls').select('*').eq('room_id', roomId),
     supabase.from('cabinet_instances').select('*').eq('room_id', roomId),
     supabase.from('room_fixtures').select('id, label, display_name, name, cabinet_id').eq('room_id', roomId),

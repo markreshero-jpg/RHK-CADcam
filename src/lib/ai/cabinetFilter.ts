@@ -41,11 +41,13 @@ export interface CabinetChanges {
   scribes?: Partial<Record<ScribeSide, number | null>>
   /** handle_schedules id (the server turns the name into it); null = inherit room / job. */
   handle_schedule_id?: string | null
+  /** An overhead's own underside, mm from the floor (rule WALLZ) instead of hanging from the room's top line; null = hang again. */
+  wallz?: number | null
   /** This cabinet's own board colours: role → materials.id (the server turns names into ids); null = inherit room / job. */
   materials?: Partial<Record<MaterialRole, string | null>>
 }
 
-export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'handle_schedule_id', 'materials'] as const
+export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'handle_schedule_id', 'materials', 'wallz'] as const
 
 export interface MatchContext {
   walls: Wall[]
@@ -95,6 +97,7 @@ export function validateChanges(ch: CabinetChanges): string[] {
   }
   if (ch.pos_z !== undefined && !(Number.isFinite(ch.pos_z) && ch.pos_z >= 0 && ch.pos_z <= 4000)) errs.push('pos_z must be 0–4000 mm')
   if (ch.offset !== undefined && !(Number.isFinite(ch.offset) && ch.offset >= 0)) errs.push('offset must be ≥ 0 mm')
+  if (ch.wallz != null && !(Number.isFinite(ch.wallz) && ch.wallz >= 0 && ch.wallz <= 4000)) errs.push('wallz (underside) must be 0–4000 mm')
   for (const role of Object.keys(ch.materials ?? {})) {
     if (!(MATERIAL_ROLES as readonly string[]).includes(role)) errs.push(`unknown colour role "${role}" (${MATERIAL_ROLES.join(', ')})`)
   }
@@ -112,6 +115,14 @@ export function patchFor(c: CabinetInstance, ch: CabinetChanges, walls: Wall[]):
     if (ch[k] !== undefined && Number(c[k]) !== ch[k]) u[k] = Math.round(ch[k]! * 10) / 10
   }
   if (ch.notes !== undefined && (c.notes ?? null) !== ch.notes) u.notes = ch.notes
+  if (ch.wallz !== undefined) {
+    const cur = (c.rule_overrides ?? {}) as Record<string, unknown>
+    if ((cur.WALLZ ?? null) !== ch.wallz) {
+      const next = { ...cur }
+      if (ch.wallz === null) delete next.WALLZ; else next.WALLZ = Math.round(ch.wallz * 10) / 10
+      u.rule_overrides = next
+    }
+  }
   if (ch.scribes) {
     const cur = (c.rule_overrides ?? {}) as Record<string, unknown>
     const next = { ...cur }

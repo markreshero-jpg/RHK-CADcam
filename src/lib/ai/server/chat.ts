@@ -1,4 +1,5 @@
-// AI helper chat turn (z_ai_helper AI1–AI3) on Claude Haiku 5.5. One turn =
+// AI helper chat turn (z_ai_helper AI1–AI3) on Claude Sonnet 5.5 (Mark 2026-11-08 — Haiku
+// misread overhead / bulkhead edits; Try harder = Opus 5.5). One turn =
 // the room summary + the question + read-tool calls, and at most one change
 // (one or more steps — update / place / delete — applied and undone together):
 //   - Selection scope, updates only, ≤ AUTO_APPLY_MAX cabinets → applied straight away (Undo on the message)
@@ -20,12 +21,12 @@ import { withSupabase } from './scope'
 import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
 
 /** Everyday model, and the one "Try harder" re-runs a message on. */
-export const CHAT_MODEL = 'claude-haiku-5-5'
-export const STRONG_MODEL = 'claude-sonnet-5-5'
-// $ per million tokens. Cache reads ~0.1×, writes 1.25× input. Haiku: prompts under 100K.
+export const CHAT_MODEL = 'claude-sonnet-5-5'
+export const STRONG_MODEL = 'claude-opus-5-5'
+// $ per million tokens. Cache reads ~0.1×, writes 1.25× input.
 const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
-  [CHAT_MODEL]: { input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite: 0.125 },
-  [STRONG_MODEL]: { input: 2, output: 10, cacheRead: 0.20, cacheWrite: 2.5 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.20, cacheWrite: 2.5 },
+  'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.20, cacheWrite: 5 },
 }
 const MAX_CALLS = 6
 const HISTORY_TURNS = 6
@@ -58,7 +59,7 @@ const FILTER_SCHEMA = {
 const EDIT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'change_cabinets',
-    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z, offset along the wall, notes, scribes, handle_schedule, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
+    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z for base / tall only, offset along the wall, notes, scribes, handle_schedule, wallz = one overhead own underside, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "set_properties" (room / job set-up: overhead top line or soffit, kick, class heights), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
     input_schema: {
       type: 'object',
       properties: {
@@ -68,7 +69,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
           items: {
             type: 'object',
             properties: {
-              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material'] },
+              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties'] },
               filter: FILTER_SCHEMA as unknown as Anthropic.Tool.InputSchema,
               changes: {
                 type: 'object',
@@ -82,6 +83,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                     additionalProperties: false,
                   },
                   handle_schedule: { type: ['string', 'null'], description: 'Handle schedule name (list_handle_schedules); null = inherit room/job' },
+                  wallz: { type: ['number', 'null'], description: 'One overhead\'s OWN underside, mm from the floor, instead of hanging from the room top line; null = hang from the top line again' },
                   materials: {
                     type: 'object', description: 'These cabinets\' OWN board colours by role — board names from find_material; null = back to the room / job colour',
                     properties: Object.fromEntries(MATERIAL_ROLES.map(k => [k, { type: ['string', 'null'] }])),
@@ -90,7 +92,13 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                 },
                 additionalProperties: false,
               },
-              level: { type: 'string', enum: ['room', 'job'], description: 'set_material: this room, or every room in the job' },
+              level: { type: 'string', enum: ['room', 'job'], description: 'set_material / set_properties: this room, or the whole job' },
+              kick: { type: 'number', description: 'set_properties: kick height' },
+              base_dy: { type: 'number', description: 'set_properties: base class height (incl. kick)' },
+              tall_dy: { type: 'number', description: 'set_properties: tall class height' },
+              wall_dy: { type: 'number', description: 'set_properties: overhead class height' },
+              overhead_top: { type: 'number', description: 'set_properties (room): overhead top line, mm UP from the floor' },
+              soffit_drop: { type: 'number', description: 'set_properties (room): soffit, mm DOWN from the ceiling to the overhead tops (wins over overhead_top when set)' },
               role: { type: 'string', enum: [...MATERIAL_ROLES], description: 'set_material: fronts (doors / drawers), carcass, exposed (end panels, fillers, open interiors), shelf, divider, kick (kick face)' },
               classes: { type: 'array', items: { type: 'string', enum: ['base', 'wall', 'tall'] }, description: 'set_material: which kinds (wall = overheads); leave out for all three' },
               material: { type: ['string', 'null'], description: 'set_material: board name from find_material; null = back to inherited' },
@@ -155,6 +163,17 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size? which end panel?). One question at a time.
 - After it, say in one line what changed (or that it's waiting for Apply). Undo is on the message.
 - Sizes are W×H×D: width = dx, height = dy, depth = dz.
+
+How overheads and bulkheads hang (get this right):
+- Overheads (wall cabinets) HANG from the room's overhead top line (the summary's first lines; a soffit drop from the ceiling wins over a top line from the floor). An overhead's underside = top line − its height. "Off the floor" (pos_z) does NOT move overheads.
+- Move ALL overheads up / down: set_properties (room) overhead_top (or soffit_drop if the room uses a soffit). Keep their undersides where they are but make them taller toward the ceiling: raise the top line AND add the same amount to their height (dy) — two steps, one change.
+- Move ONE overhead: changes.wallz = its own underside from the floor (null puts it back on the top line).
+- Bulkheads ("BH", "fills to ceiling" in the summary) fill from the overhead top line up to the ceiling by themselves. To make them smaller, raise the top line — never set their height. Example: ceiling 2320, top line 2120, bulkhead 200 → "bulkhead 30, cupboards taller toward the ceiling" = top line 2120 → 2290 + those cupboards' height +170.
+- Before a change, say back in one line what you understood if the request could mean two things; if unsure, ask_user.
+
+Reporting (strict):
+- Say what changed ONLY from the change_cabinets result. "Applied" = done (Undo is on the message). "Shown to the user for Apply" = NOT done yet — say it's waiting for Apply. Never say something changed when it didn't, never ask to press Apply for something already applied.
+- The room summary is the room as it is now — read sizes from it, not from earlier messages.
 
 How to answer:
 - Short and plain, like a workshop foreman. Lead with the answer. Sizes in mm.
@@ -225,7 +244,7 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { op?: string; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface StepIn { op?: string; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -302,11 +321,14 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
           id = m.id
         }
         ops.push({ op: 'set_material', level: st.level, role: st.role as MaterialRole, classes: st.classes, material_id: id })
+      } else if (st.op === 'set_properties') {
+        const level = st.level ?? 'room'
+        ops.push({ op: 'set_properties', level, kick: st.kick, base_dy: st.base_dy, tall_dy: st.tall_dy, wall_dy: st.wall_dy, soffit_drop: st.soffit_drop, overhead_top: st.overhead_top })
       } else if (st.op === 'delete') {
         const labels = st.labels?.length ? st.labels : selection ? selLabels : []
         if (!labels.length) return { text: `Step ${i + 1}: delete needs labels.`, isError: true }
         ops.push({ op: 'delete', labels })
-      } else return { text: `Step ${i + 1}: op must be update, place, delete or set_material.`, isError: true }
+      } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material or set_properties.`, isError: true }
     }
     if (!ops.length) return { text: 'No steps.', isError: true }
 
@@ -331,7 +353,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
       max_tokens: 4000,
       system: systemBlocks(SYSTEM, aiCtx.rules),
       tools: [...READ_TOOLS, ...EDIT_TOOLS],
-      output_config: { effort: args.strong ? 'medium' : 'low' },
+      output_config: { effort: args.strong ? 'high' : 'medium' },
       messages,
     })
     usage.calls++

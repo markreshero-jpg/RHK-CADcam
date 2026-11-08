@@ -245,6 +245,18 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       if (!matched.length) { problems.push(`${n}: no cabinets match.`); continue }
       const out = matched.filter(outside)
       if (out.length) { problems.push(`${n}: ${out.map(c => c.label).join(', ')} isn't selected — select it too, or deselect everything to work on the whole room.`); continue }
+      // Overheads hang from the room's top line: "off the floor" doesn't move them, and a
+      // bulkhead on height-to-ceiling is re-fitted to the gap above that line.
+      const hanging = matched.filter(c => c.assembly_class.startsWith('wall') && !c.bulkhead && !c.float_shelf && !(c.rule_overrides as Row | null)?.UNDER_PANEL)
+      if (op.changes.pos_z !== undefined && hanging.length) {
+        problems.push(`${n}: ${hanging.map(c => c.label).join(', ')} hang from the room's overhead top line, so "off the floor" won't move them. To move ALL overheads up or down, change the room's overhead top line (set_properties overhead_top / soffit_drop); for one cupboard, set its own underside (changes.wallz).`)
+        continue
+      }
+      const autoBh = matched.filter(c => (c.bulkhead as { auto_h?: boolean } | null)?.auto_h)
+      if (op.changes.dy !== undefined && autoBh.length) {
+        problems.push(`${n}: ${autoBh.map(c => c.label).join(', ')} ${autoBh.length === 1 ? 'is a bulkhead' : 'are bulkheads'} on height-to-ceiling — ${autoBh.length === 1 ? 'it fills' : 'they fill'} from the overhead top line to the ceiling. To make ${autoBh.length === 1 ? 'it' : 'them'} smaller, raise the room's overhead top line (set_properties) and ${autoBh.length === 1 ? 'it re-fits' : 'they re-fit'}.`)
+        continue
+      }
       for (const c of matched) {
         const u = patchFor(c, op.changes, walls)
         if (!u) continue
@@ -309,6 +321,17 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       lines.push(line)
       // Later steps (placements) take their class sizes from the new values.
       Object.assign(target, after)
+      // Bulkheads on height-to-ceiling follow the room's top line / soffit (as the canvas does).
+      if (!job && ('wall_cabinet_top' in after || 'soffit_height' in after)) {
+        for (const c of cabs.filter(x => (x.bulkhead as { auto_h?: boolean } | null)?.auto_h)) {
+          const h = bulkheadAutoHeight(walls.find(w => w.id === c.wall_id), room, c.bulkhead)
+          if (!(h > 0) || Math.abs(h - c.dy) < 0.5) continue
+          const u = { dy: Math.round(h * 10) / 10 }
+          steps.push({ kind: 'update', id: c.id, patch: u })
+          const l = updateLine(c, u, walls); if (l) lines.push(`${l} (bulkhead re-fits to the ceiling)`)
+          cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
+        }
+      }
     } else if (op.op === 'wall') {
       if (!(op.length > 0) || ![op.x, op.y, op.angle].every(Number.isFinite)) { problems.push(`${n}: a wall needs x, y, length and angle.`); continue }
       const island = op.type === 'island'

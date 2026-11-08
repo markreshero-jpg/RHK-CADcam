@@ -461,6 +461,35 @@ said it won't add duplicates (2.3¢ — plan cached).
   finger pulls on top cupboards…" — both the rule and the note reached it. Note removed.
 - Tutorial `ai_rules`.
 
+## Chat moved to Sonnet + overheads / bulkheads (2026-11-08)
+
+- **Why:** on RHK6586 Greystone › Kitchenette Mark asked "WC-10, 04, 01, 02, 03 170 higher
+  toward the ceiling, bulkhead 30". Haiku set their pos_z 0 → 170 (overheads hang from
+  the top line, so nothing moved — and that change is still there), then grew them
+  downward, set a height-to-ceiling bulkhead's dy (the canvas re-fits it straight
+  back), and told him to "press Apply" for things already applied.
+- **Decision (Mark):** chat runs on **Claude Sonnet 5.5** (effort medium); **Try harder
+  = Opus 5.5** (effort high); drawing stays Opus. Haiku is no longer used. ~1–2¢ per
+  message.
+- **Overheads:** `pos_z` on a hanging overhead is refused with how to do it; new
+  `changes.wallz` (rule WALLZ — one overhead's own underside, null = hang again); chat
+  step `set_properties` (room / job: overhead top line, soffit drop, kick, class
+  heights; job-level changes wait for Apply like everything room-wide).
+- **Bulkheads on height-to-ceiling:** setting their dy is refused (raise the top line
+  instead); a room top-line / soffit change re-fits them in the same batch (as the
+  canvas effect does), shown as "(bulkhead re-fits to the ceiling)".
+- **Summary** now starts with ceiling + overhead top line, and the column is the real
+  underside off the floor (`cabBottomZ`), marked "(bulkhead, fills to ceiling)" /
+  "(own underside)" — no more stale pos_z.
+- **Reporting rules** in the prompt: describe changes only from the tool result;
+  waiting-for-Apply ≠ done.
+- **Check** (`headlessScenario.test.ts`, gated `SCENARIO_RUN`) on Test Kitchen › **AI
+  Overhead Test** (a copy of the Kitchenette set-up: ceiling 2320, top line 2120, 620
+  overheads, BH): Mark's request → "top line 2120 → 2290, BH 200 → 30, WC-01 / 02 620 →
+  790" (undersides stay 1500) — right first time, 1.8¢ / 3.6 s; Undo exact. "move this
+  cupboard up 100" (WC-01 selected) → WALLZ 1600, applied, warned it runs 100 into the
+  bulkhead; Undo exact.
+
 ## Open items (check while building)
 
 - Job-wide sizes / adds / deletes (several rooms in one change) — colours only so far.
