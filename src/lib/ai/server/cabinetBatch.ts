@@ -92,6 +92,8 @@ export type BatchEntry =
   /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
   | { kind: 'wall'; cabinet_id: ''; label: null; line: string; wall_id: string }
   | { kind: 'fixture'; cabinet_id: ''; label: null; line: string; fixture_id: string }
+  /** A job-wide change: one batch per room, under this parent (Undo undoes each). */
+  | { kind: 'batch'; cabinet_id: ''; label: null; line: string; batch_id: string; room_name: string }
   /** CAD notes the AI drew (Undo removes them unless someone edited them since). */
   | { kind: 'markup'; cabinet_id: ''; label: null; line: string; annotation_ids: string[] }
   /** A projects / rooms row's columns before → after (whole column values). */
@@ -881,6 +883,25 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
   return { batchId, changed: describe(entries), warnings, errors, cabinetIds: [...new Set([...entries.map(e => e.cabinet_id).filter(Boolean), ...touched])] }
 }
 
+/** A change across several rooms of a job: each room's steps run as that room's batch,
+ *  and a parent batch (saved on `homeRoomId`) lists them so one Undo reverts them all. */
+export async function runJobBatch(groups: { roomId: string; roomName: string; ops: BatchOp[] }[], args: { description: string; homeRoomId: string; source?: 'ai' | 'script' }): Promise<BatchResult> {
+  const out: BatchResult = { batchId: null, changed: [], warnings: [], errors: [], cabinetIds: [] }
+  const children: BatchEntry[] = []
+  for (const g of groups) {
+    const r = await runBatch(g.roomId, g.ops, { description: `${args.description} — ${g.roomName}`, source: args.source })
+    const tag = (l: string) => `${g.roomName} · ${l}`
+    out.changed.push(...r.changed.map(tag)); out.warnings.push(...r.warnings.map(tag)); out.errors.push(...r.errors.map(tag))
+    out.cabinetIds.push(...r.cabinetIds)
+    if (r.batchId) children.push({ kind: 'batch', cabinet_id: '', label: null, line: `${g.roomName}: ${r.changed.length} change${r.changed.length === 1 ? '' : 's'}`, batch_id: r.batchId, room_name: g.roomName })
+  }
+  if (children.length) {
+    const { data: home } = await supabase.from('rooms').select('*').eq('id', args.homeRoomId).single()
+    out.batchId = await saveBatch(home as Room, args.description, args.source ?? 'ai', children, out.warnings)
+  }
+  return out
+}
+
 /** AI0 shape: one update step. */
 export function updateCabinets(args: { roomId: string; filter: CabinetFilter; changes: CabinetChanges; description: string; source?: 'ai' | 'script'; onlyIds?: string[] }) {
   return runBatch(args.roomId, [{ op: 'update', filter: args.filter, changes: args.changes }], args)
@@ -898,6 +919,18 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   if (error || !batch) throw new Error(`Batch not found or no access: ${batchId}`)
   if (batch.undone_at) return { batchId: null, changed: [], warnings: ['Already undone.'], errors: [], cabinetIds: [] }
   if (!batch.room_id) throw new Error('Batch has no room')
+  // A job-wide change: undo each room's batch, last first.
+  const kids = (batch.entries as BatchEntry[]).filter((e): e is Extract<BatchEntry, { kind: 'batch' }> => e.kind === 'batch')
+  if (kids.length) {
+    const out: BatchResult = { batchId: null, changed: [], warnings: [], errors: [], cabinetIds: [] }
+    for (const k of [...kids].reverse()) {
+      const r = await undoBatch(k.batch_id)
+      const tag = (l: string) => `${k.room_name} · ${l}`
+      out.changed.push(...r.changed.map(tag)); out.warnings.push(...r.warnings.map(tag)); out.errors.push(...r.errors.map(tag)); out.cabinetIds.push(...r.cabinetIds)
+    }
+    await supabase.from('ai_batches').update({ undone_at: new Date().toISOString(), undone_by: (await supabase.auth.getUser()).data.user?.id ?? null }).eq('id', batchId)
+    return out
+  }
 
   const state = await loadRoomState(batch.room_id)
   const warnings: string[] = [], errors: string[] = [], lines: string[] = []
@@ -981,6 +1014,8 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
       if (err && err.startsWith('cabinet_instances')) { errors.push(`${e.label}: restore failed — ${err}`); continue }
       if (err) warnings.push(`${e.label}: back, but some extras didn't restore (${err}).`)
       lines.push(`Restored ${e.label}`); touched.add(e.cabinet_id); changedIds.add(e.cabinet_id)
+    } else if (e.kind === 'batch') {
+      continue   // job batches are undone above, room by room
     } else {
       if (!cur) { warnings.push(`${e.label}: no longer in the room — skipped.`); continue }
       const keys = Object.keys(e.after)

@@ -16,7 +16,7 @@ import { supabase } from '@/src/lib/supabase'
 import { loadRoomSummary } from '../roomSummary'
 import { READ_TOOLS, findMaterial, runReadTool, type ToolContext } from '../readTools'
 import { filterHasCriteria, MATERIAL_ROLES, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
-import { findHandleSchedule, planBatch, runBatch, type BatchOp } from './cabinetBatch'
+import { findHandleSchedule, planBatch, runBatch, runJobBatch, type BatchOp } from './cabinetBatch'
 import { withSupabase } from './scope'
 import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
 
@@ -70,6 +70,10 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
             type: 'object',
             properties: {
               op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup', 'fixture'] },
+              rooms: {
+                type: 'array', items: { type: 'string' },
+                description: 'Which rooms of the job this step is for (names from get_job_summary), or ["all"] for every room. Leave out = this room. A change touching other rooms always waits for Apply.',
+              },
               item: { type: 'string', description: 'fixture: catalogue item name (find_fixture)' },
               on: { type: 'string', description: 'fixture: cabinet label it sits on / in (sink, cooktop, oven, rangehood) — centred' },
               along: { type: 'number', description: 'fixture on a cabinet: mm from its centre along the width (+ = right as you face it)' },
@@ -187,6 +191,7 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
   · Never guess a board: if find_material gives several close matches, ask_user with them as options.
 - fixture: a catalogue appliance / sink (find_fixture) — on a cabinet (sink on BSK, cooktop on its base, oven in UBO, rangehood under WRH; centred, linked so the benchtop cut-out follows), or in a gap on a wall + offset (dishwasher, fridge, washer).
 - markup: CAD notes on an elevation — a TBC cloud + question (layer questions), an appliance space (dashed box + label, layer general), site / install notes (layer site), lighting / power (electrical). x along the wall from its start, z height off the floor. They wait for Apply.
+- Other rooms of the job: get_job_summary lists them, get_room_summary reads one. A step with rooms: ["Laundry"] or ["all"] changes those rooms too (filters like class "base" apply in each room). It always waits for Apply, and one Undo reverts every room.
 - You can NOT touch walls or benchtops yet — say so.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size? which end panel?). One question at a time.
 - After it, say in one line what changed (or that it's waiting for Apply). Undo is on the message.
@@ -224,6 +229,8 @@ export interface ChatTurnArgs {
 }
 export interface Proposal {
   roomId: string; ops: BatchOp[]; onlyIds?: string[]
+  /** A change across several rooms: each room's steps (Apply runs runJobBatch). */
+  groups?: { roomId: string; roomName: string; ops: BatchOp[] }[]
   description: string; lines: string[]
   /** AI2 proposals (one update) — kept so an old pending one still applies. */
   filter?: CabinetFilter; changes?: CabinetChanges
@@ -272,7 +279,7 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { op?: string; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface StepIn { op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -312,7 +319,9 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   async function runEdit(input: EditInput): Promise<{ text: string; isError?: boolean; endTurn?: boolean }> {
     if (edited) return { text: 'Only one change per message — finish this one, then the user can ask again.', isError: true }
     const ops: BatchOp[] = []
+    const opRooms: (string[] | undefined)[] = []   // per op: target room names (undefined = this room)
     for (const [i, st] of (input.steps ?? []).entries()) {
+      const before = ops.length
       if (st.op === 'update') {
         const { handle_schedule, materials, ...rest } = st.changes ?? {}
         const changes: CabinetChanges = { ...rest }
@@ -365,8 +374,42 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         if (!labels.length) return { text: `Step ${i + 1}: delete needs labels.`, isError: true }
         ops.push({ op: 'delete', labels })
       } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material or set_properties.`, isError: true }
+      for (let k = before; k < ops.length; k++) opRooms[k] = st.rooms?.length ? st.rooms : undefined
     }
     if (!ops.length) return { text: 'No steps.', isError: true }
+
+    // A change for other rooms too → one group per room, always waiting for Apply.
+    if (opRooms.some(r => r?.length)) {
+      if (selection) return { text: 'A change across rooms works with nothing selected — ask the user to deselect.', isError: true }
+      const { data: jr } = await supabase.from('rooms').select('id, name').eq('project_id', args.projectId).order('sort_order')
+      const jobRooms = (jr ?? []) as { id: string; name: string }[]
+      const groups: { roomId: string; roomName: string; ops: BatchOp[] }[] = []
+      for (const [k, op] of ops.entries()) {
+        const names = opRooms[k]
+        const targets = !names ? jobRooms.filter(r => r.id === args.roomId)
+          : names.some(x => x.toLowerCase() === 'all') ? jobRooms
+          : jobRooms.filter(r => names.some(x => x.trim().toLowerCase() === r.name.toLowerCase()))
+        if (names && !names.some(x => x.toLowerCase() === 'all') && targets.length < names.length) return { text: `Unknown room in ${names.join(', ')}. Rooms: ${jobRooms.map(r => r.name).join(', ')}`, isError: true }
+        for (const t of targets) {
+          let g = groups.find(x => x.roomId === t.id)
+          if (!g) { g = { roomId: t.id, roomName: t.name, ops: [] }; groups.push(g) }
+          g.ops.push(op)
+        }
+      }
+      const lines: string[] = [], problems: string[] = []
+      for (const g of groups) {
+        const pl = await planBatch(g.roomId, g.ops)
+        // A room where a filter matches nothing just has nothing to do there.
+        const real = pl.problems.filter(p => !/no cabinets match/.test(p))
+        problems.push(...real.map(p => `${g.roomName}: ${p}`))
+        lines.push(...pl.lines.map(l => `${g.roomName} · ${l}`), ...pl.warnings.map(w => `⚠ ${g.roomName} · ${w}`))
+      }
+      if (problems.length) return { text: problems.join('\n'), isError: true }
+      if (!lines.length) return { text: 'Nothing to change in those rooms.' }
+      edited = true
+      out.proposal = { roomId: args.roomId, ops, groups, description: input.description?.trim() || 'Job change', lines }
+      return { text: 'Shown to the user for Apply.', endTurn: true }
+    }
 
     const plan = await planBatch(args.roomId, ops, { onlyIds: selection ?? undefined })
     if (plan.problems.length) return { text: plan.problems.join('\n'), isError: true }

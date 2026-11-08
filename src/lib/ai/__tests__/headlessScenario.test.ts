@@ -25,7 +25,7 @@ describe.skipIf(!CFG)('chat scenario', () => {
     const { error } = await client.auth.signInWithPassword({ email: env.AUTOMATION_EMAIL, password: env.AUTOMATION_PASSWORD })
     if (error) throw error
     const { withSupabase, withSupabaseRead } = await import('../server/scope')
-    const { runBatch, undoBatch } = await import('../server/cabinetBatch')
+    const { runBatch, runJobBatch, undoBatch } = await import('../server/cabinetBatch')
     const { runChatTurn } = await import('../server/chat')
     const { loadRoomSummary } = await import('../roomSummary')
     type Op = import('../server/cabinetBatch').BatchOp
@@ -52,7 +52,10 @@ describe.skipIf(!CFG)('chat scenario', () => {
 
     let batchId = r.batchId ?? null
     if (cfg.apply && r.proposal) {
-      const res = await withSupabase(client, () => runBatch(cfg.room, r.proposal!.ops, { description: r.proposal!.description, onlyIds: r.proposal!.onlyIds }))
+      const p = r.proposal
+      const res = await withSupabase(client, () => p.groups?.length
+        ? runJobBatch(p.groups, { description: p.description, homeRoomId: cfg.room })
+        : runBatch(cfg.room, p.ops, { description: p.description, onlyIds: p.onlyIds }))
       if (res.batchId && r.messageId) await client.from('ai_messages').update({ proposal_status: 'applied', batch_id: res.batchId, changed: res.changed }).eq('id', r.messageId)
       batchId = res.batchId
       console.log('── Applied ──\n' + res.changed.join('\n') + (res.warnings.length ? `\nwarnings: ${res.warnings.join(' | ')}` : ''))

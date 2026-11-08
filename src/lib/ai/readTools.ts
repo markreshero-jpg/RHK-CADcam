@@ -31,6 +31,16 @@ export const READ_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'get_job_summary',
+    description: 'Every room in this job: name, cabinets by kind (base / overhead / tall), walls. Use before a change across the job.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
+    name: 'get_room_summary',
+    description: 'Another room of this job, in the same form as the room summary you were given (walls, cabinets, sizes, colours).',
+    input_schema: { type: 'object', properties: { room: { type: 'string', description: 'Room name' } }, required: ['room'], additionalProperties: false },
+  },
+  {
     name: 'find_fixture',
     description: 'Search the fixture / appliance catalogue (sinks, cooktops, ovens, dishwashers, fridges, rangehoods, BBQs…) by name, brand, model or kind. Returns name | kind | W×D×H | mount.',
     input_schema: { type: 'object', properties: { search: { type: 'string' } }, required: ['search'], additionalProperties: false },
@@ -241,8 +251,31 @@ async function findFixture(input: { search?: string }): Promise<string> {
   return ['name | kind | W×D×H | mount', ...hits.slice(0, 20).map(f => `${f.name} | ${f.kind ?? '-'} | ${r(f.width)}×${r(f.depth)}×${r(f.height)} | ${f.mount}`)].join('\n')
 }
 
+async function getJobSummary(ctx: ToolContext): Promise<string> {
+  const { data: rooms } = await supabase.from('rooms').select('id, name').eq('project_id', ctx.projectId).order('sort_order')
+  const ids = ((rooms ?? []) as { id: string }[]).map(r => r.id)
+  const { data: cabs } = ids.length ? await supabase.from('cabinet_instances').select('room_id, assembly_class, is_kick_assembly').in('room_id', ids) : { data: [] }
+  const { data: walls } = ids.length ? await supabase.from('walls').select('room_id').in('room_id', ids) : { data: [] }
+  return ['Rooms in this job (name | base | overhead | tall | walls):', ...((rooms ?? []) as { id: string; name: string }[]).map(r => {
+    const mine = ((cabs ?? []) as { room_id: string; assembly_class: string; is_kick_assembly: boolean }[]).filter(c => c.room_id === r.id && !c.is_kick_assembly)
+    const n = (k: string) => mine.filter(c => c.assembly_class.replace('_corner', '') === k).length
+    return `${r.name}${r.id === ctx.roomId ? ' (this room)' : ''} | ${n('base')} | ${n('wall')} | ${n('tall')} | ${((walls ?? []) as { room_id: string }[]).filter(w => w.room_id === r.id).length}`
+  })].join('\n')
+}
+
+async function getOtherRoomSummary(ctx: ToolContext, input: { room?: string }): Promise<string> {
+  const { data } = await supabase.from('rooms').select('id, name').eq('project_id', ctx.projectId)
+  const all = (data ?? []) as { id: string; name: string }[]
+  const hit = all.find(r => r.name.toLowerCase() === String(input.room ?? '').trim().toLowerCase())
+  if (!hit) return `No room "${input.room}". Rooms: ${all.map(r => r.name).join(', ')}`
+  const { loadRoomSummary } = await import('./roomSummary')
+  return loadRoomSummary(hit.id)
+}
+
 export async function runReadTool(name: string, input: unknown, ctx: ToolContext): Promise<string> {
   switch (name) {
+    case 'get_job_summary': return getJobSummary(ctx)
+    case 'get_room_summary': return getOtherRoomSummary(ctx, (input ?? {}) as { room?: string })
     case 'find_fixture': return findFixture((input ?? {}) as { search?: string })
     case 'find_material': return findMaterialTool((input ?? {}) as { search?: string })
     case 'find_library': return findLibrary((input ?? {}) as { search?: string })
