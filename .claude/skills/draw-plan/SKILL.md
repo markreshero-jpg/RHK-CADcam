@@ -595,9 +595,10 @@ These settle where the notes below disagree (the in-app AI follows the same —
 - **Island back panel not shown → ask** (back panel? IBPF or IBPK?).
 - **Base run to a wall with no filler shown → leave tight + TBC** ("30 or board
   thickness?").
-- **Corners: no blind-corner code.** 900 × 900 space → `BCNP`. 900 × 600 space →
-  `B1D` with a door + false panel, blind side to the corner (a saved library
-  cabinet later).
+- **Corners:** 900 × 900 space → `BCNP`. Blind corner → `BCNR/L` / `BCNR/R`
+  (door + false panel, /L /R = blind side), false panel width = the return run's
+  depth + its door + 2 + 40 (620 on a 560 / 18 run), and a 40 face filler at the
+  start of the return run.
 - Nib walls: don't draw; note them as TBC.
 
 ## Wall cabinet between two walls needs fillers (Mark 2026-11-07)

@@ -94,6 +94,7 @@ const PLAN_TOOL: Anthropic.Tool = {
             code: { type: 'string', description: 'Library code' },
             offset: { type: 'number', description: 'mm from the wall start to the low end' },
             dx: { type: 'number' }, dy: { type: 'number' }, dz: { type: 'number' },
+            blind_width: { type: 'number', description: 'BCNR/L / BCNR/R only: false panel width = return run depth + its door + 2 + 40' },
             note: { type: 'string', description: 'Plan reference, e.g. "#3" — for the user' },
           },
           required: ['wall', 'code', 'offset', 'dx'], additionalProperties: false,
@@ -128,7 +129,7 @@ interface Setup { kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: n
 interface PlanIn {
   setup?: Setup
   walls?: { name: string; x: number; y: number; length: number; angle: number; type: 'standard' | 'island'; height?: number }[]
-  items?: { wall: string; back?: boolean; code: string; offset: number; dx: number; dy?: number; dz?: number; note?: string }[]
+  items?: { wall: string; back?: boolean; code: string; offset: number; dx: number; dy?: number; dz?: number; blind_width?: number; note?: string }[]
   tbc?: string[]; summary?: string
 }
 
@@ -176,7 +177,7 @@ function toOps(p: PlanIn, firstRoom: boolean): BatchOp[] {
   if (s.soffit_drop != null || s.overhead_top != null) ops.push({ op: 'set_properties', level: 'room', soffit_drop: s.soffit_drop, overhead_top: s.overhead_top })
   ops.push(
     ...(p.walls ?? []).map(w => ({ op: 'wall' as const, name: w.name, x: w.x, y: w.y, length: w.length, angle: w.angle, type: w.type, height: w.height ?? null })),
-    ...(p.items ?? []).map(i => ({ op: 'place' as const, code: i.code, wall: i.wall, back: !!i.back, offset: i.offset, dx: i.dx, dy: i.dy, dz: i.dz })),
+    ...(p.items ?? []).map(i => ({ op: 'place' as const, code: i.code, wall: i.wall, back: !!i.back, offset: i.offset, dx: i.dx, dy: i.dy, dz: i.dz, blind_width: i.blind_width })),
   )
   return ops
 }

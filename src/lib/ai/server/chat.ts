@@ -114,6 +114,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                 required: ['label', 'side'], additionalProperties: false,
               },
               dx: { type: 'number', description: 'place: width (else the library default)' },
+              blind_width: { type: 'number', description: 'place BCNR/L or BCNR/R (blind corner): false panel width = return run carcass depth + its door thickness + 2 + 40 (e.g. 560 + 18 + 2 + 40 = 620)' },
               dy: { type: 'number', description: 'place: height (else matched to the next_to cabinet, or the library default)' },
               labels: { type: 'array', items: { type: 'string' }, description: 'delete: cabinet labels' },
             },
@@ -245,7 +246,7 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { op?: string; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface StepIn { op?: string; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -311,7 +312,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         ops.push({ op: 'update', filter, changes })
       } else if (st.op === 'place') {
         if (!st.code) return { text: `Step ${i + 1}: place needs a library code.`, isError: true }
-        ops.push({ op: 'place', code: st.code, wall: st.wall, offset: st.offset, at_end: st.at_end, back: st.back, next_to: st.next_to, dx: st.dx, dy: st.dy })
+        ops.push({ op: 'place', code: st.code, wall: st.wall, offset: st.offset, at_end: st.at_end, back: st.back, next_to: st.next_to, dx: st.dx, dy: st.dy, blind_width: st.blind_width })
       } else if (st.op === 'set_material') {
         if (!st.level || !st.role || !(MATERIAL_ROLES as readonly string[]).includes(st.role) || st.material === undefined)
           return { text: `Step ${i + 1}: set_material needs level, role and material.`, isError: true }

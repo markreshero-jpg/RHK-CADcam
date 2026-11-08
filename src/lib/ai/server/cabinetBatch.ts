@@ -34,7 +34,9 @@ export type BatchOp =
   | { op: 'update'; filter: CabinetFilter; changes: CabinetChanges }
   /** A library cabinet / end panel / filler: against a cabinet's side, or on a wall (face or
    *  back) at an offset or at its left / right end as you face that side. */
-  | { op: 'place'; code: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; next_to?: { label: string; side: 'left' | 'right' }; back?: boolean; dx?: number; dy?: number; dz?: number }
+  | { op: 'place'; code: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; next_to?: { label: string; side: 'left' | 'right' }; back?: boolean; dx?: number; dy?: number; dz?: number
+      /** Blind corner (BCNR/L, BCNR/R): the false panel's width = return run depth + its door + 2 + 40. */
+      blind_width?: number }
   | { op: 'delete'; labels: string[] }
   /** A new wall (AI4 drawing): start point (room mm), length, angle (degrees, 0 = +x, 90 = +y / down the plan).
    *  Name defaults as the canvas names them (Wall N / Island N). */
@@ -472,10 +474,21 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       }
       if (op.dy != null) row.dy = op.dy
       if (op.dz != null && op.dz > 0) row.dz = op.dz
+      // Blind corner: the false panel column takes the blind width (locked).
+      if (op.blind_width != null) {
+        const fg = JSON.parse(JSON.stringify(row.face_grid ?? null)) as { cols?: { col_index: number; width?: number; width_locked?: boolean }[]; zones?: { col_index: number; face_type: string }[] } | null
+        const blindCol = fg?.zones?.find(z => z.face_type === 'false_panel')?.col_index
+        const col = blindCol != null ? fg?.cols?.find(c => c.col_index === blindCol) : undefined
+        if (!col) { problems.push(`${n}: ${def.name} has no false panel to set a blind width on.`); continue }
+        if (!(op.blind_width > 0 && op.blind_width < row.dx - 100)) { problems.push(`${n}: blind width ${op.blind_width} doesn't leave room for a door in a ${Math.round(row.dx)} cabinet.`); continue }
+        col.width = Math.round(op.blind_width * 10) / 10
+        col.width_locked = true
+        row.face_grid = fg as typeof row.face_grid
+      }
 
       const tempId = `new:${steps.length}`
       const offset = wallOffset({ pos_x: row.pos_x, pos_y: row.pos_y }, wall)
-      const line = `Add ${label} (${def.name}, ${Math.round(row.dx)}×${Math.round(row.dy)}×${Math.round(row.dz)}) on ${wall.name}${back ? ' back' : ''} @ ${offset}${op.next_to ? `, ${op.next_to.side} of ${op.next_to.label}` : op.at_end ? `, ${op.at_end} end` : ''}${matched}`
+      const line = `Add ${label} (${def.name}, ${Math.round(row.dx)}×${Math.round(row.dy)}×${Math.round(row.dz)}${op.blind_width != null ? `, blind ${Math.round(op.blind_width)}` : ''}) on ${wall.name}${back ? ' back' : ''} @ ${offset}${op.next_to ? `, ${op.next_to.side} of ${op.next_to.label}` : op.at_end ? `, ${op.at_end} end` : ''}${matched}`
       steps.push({ kind: 'insert', tempId, row, defId: def.id, line })
       lines.push(line)
       // Overlap warning (same wall, same height band) — the canvas lets it, but it's usually a mistake.

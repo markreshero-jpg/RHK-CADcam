@@ -51,7 +51,7 @@ export const DRAW_RULES = `
 - Run touching a wall: if the plan doesn't show a filler, leave the run tight and add a TBC ("filler at the wall: 30 or board thickness?").
 - Inner drawers / pull-outs in a cupboard against a WALL: 50 filler there. Beside a seen end panel, no filler.
 - Wall cabinet boxed in by walls both sides: filler each side; never a carcass straight to a wall.
-- Corners: there is NO blind-corner code. A 900 × 900 corner space → BCNP (pie / L corner). A 900 × 600 corner space → a B1D blind corner: place a B1D the run's corner width, note "blind corner — door + false panel, blind side to the corner", and add a TBC to set its door / false panel. Diagonal corner = BCNL / WCNL if the library has them, else closest + TBC.
+- Corners: a 900 × 900 corner space → BCNP (pie / L corner). A blind corner (the return run butts across it) → BCNR/L or BCNR/R (one carcass, door + false panel; /L /R = the blind side as you face it), with blind_width = the return run's carcass depth + its door thickness + 2 + 40 (560 + 18 + 2 + 40 = 620), plus a 40 face filler (BFKW 40) at the start of the return run. Diagonal corner = BCNL / WCNL if the library has them, else closest + TBC.
 - Nib walls: don't draw them — say where they are in tbc.
 
 == CABINET CODES (CLASS + CONFIG [-STACK] [+INNER] [/MOD]; no sizes in codes) ==
