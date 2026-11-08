@@ -1,8 +1,8 @@
 {
   "_source": "RHK6563 Costello Site Measure.pdf p2 (Laundry plan) + Laundry elevations.pdf (Wall A, plinth plan, Wall B), both in SITE CHECK MEASURES",
   "_notes": [
-    "Walls only so far, questions in JOB-NOTES. Clockwise from the nib: 1 nib 200, 2 left 1261, 3 Wall B 1327, 4 duct side 418, 5 duct front 339, 6 Wall A 845, 7 door end 525 to the front of the jamb. CH 2213, cornice 55.",
-    "Wall 5 is flagged detached only to pass the clockwise check: Wall 4 to 5 is the duct's inside corner. It is a normal wall, head to tail."
+    "Walls only so far, questions in JOB-NOTES. Clockwise from the nib: 1 nib 200, 2 left 1261, 3 Wall B 1666 (1327 + 339 duct), 4 Wall A 1263 (418 duct + 845), 5 door end 525 to the front of the jamb. CH 2213, cornice 55.",
+    "Duct = Plasterboard box fixture 'Void duct' 339 x 418 full height in the Wall 3 / Wall 4 corner (Mark 2026-11-08), placed by _tmp-6563-laundry-duct.mjs."
   ],
   "projectId": "416bf6cf-9681-4462-b93d-6ecac19e015b",
   "roomName": "Laundry",
@@ -10,11 +10,9 @@
   "walls": [
     { "x": 200, "y": 1261, "length": 200, "angle": 180, "_": "1 nib beside the door" },
     { "x": 0, "y": 1261, "length": 1261, "angle": 270, "_": "2 left wall" },
-    { "x": 0, "y": 0, "length": 1327, "angle": 0, "_": "3 Wall B" },
-    { "x": 1327, "y": 0, "length": 418, "angle": 90, "_": "4 duct side" },
-    { "x": 1327, "y": 418, "length": 339, "angle": 0, "detached": true, "_": "5 duct front" },
-    { "x": 1666, "y": 418, "length": 845, "angle": 90, "_": "6 Wall A" },
-    { "x": 1666, "y": 1263, "length": 525, "angle": 180, "_": "7 door end to the front of the jamb" }
+    { "x": 0, "y": 0, "length": 1666, "angle": 0, "_": "3 Wall B" },
+    { "x": 1666, "y": 0, "length": 1263, "angle": 90, "_": "4 Wall A" },
+    { "x": 1666, "y": 1263, "length": 525, "angle": 180, "_": "5 door end to the front of the jamb" }
   ],
   "cabinets": []
 }
