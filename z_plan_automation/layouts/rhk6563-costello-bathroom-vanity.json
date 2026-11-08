@@ -1,0 +1,28 @@
+{
+  "_source": "RHK6563 Costello Site Measure.pdf p1 (Bathroom Vanity) + Mark Q&A 2026-11-08",
+  "_notes": [
+    "Walls clockwise: 1 left 1000, 2 back 1456, 3 right 765. CH 2237 F/T/P.",
+    "Floating 300-800 (500 carcass), 20 stone to 820, 500 deep overall, 20 overhang: fronts at 480, carcass 461.5. BFKW 30 each end | D2-LL 465 | B1D 466 (bowl centred 728) | D2-LL 465.",
+    "Shaving cabinets on the side walls, 500 along the wall from the back wall, 1100-2207 + 30 BH to the ceiling (placed in the post script). Carcass 483.5 + WEP 16.5 at the seen front end. 160 OA deep = 137.5 + 2 + 20.5 mirror door."
+  ],
+  "projectId": "416bf6cf-9681-4462-b93d-6ecac19e015b",
+  "roomName": "Bathroom Vanity",
+  "roomHeight": 2237,
+  "wallCabinetTop": 2207,
+  "walls": [
+    { "x": 0, "y": 1000, "length": 1000, "angle": 270, "_": "1 left wall" },
+    { "x": 0, "y": 0, "length": 1456, "angle": 0, "_": "2 back wall, vanity" },
+    { "x": 1456, "y": 0, "length": 765, "angle": 90, "_": "3 right wall" }
+  ],
+  "cabinets": [
+    { "def": "BFKW", "wall": 2, "offset": 0, "dx": 30, "dy": 500, "dz": 461.5, "rules": { "FLOAT": true }, "set": { "has_toekick": false, "pos_z": 300 }, "note": "30 filler at the left wall, floating 300-800" },
+    { "def": "D2-LL", "wall": 2, "offset": 30, "dx": 465, "dy": 500, "dz": 461.5, "rules": { "FLOAT": true }, "set": { "has_toekick": false, "pos_z": 300 }, "note": "Vanity left drawers, floating 300-800" },
+    { "def": "B1D", "wall": 2, "offset": 495, "dx": 466, "dy": 500, "dz": 461.5, "rules": { "FLOAT": true, "RAIL_ORIENT": "vertical" }, "set": { "has_toekick": false, "pos_z": 300 }, "note": "Vanity basin cupboard, over-mount bowl centred (728 from the left wall). Water 600-840 off left at 530 AFF, waste 940 off left at 440 AFF" },
+    { "def": "D2-LL", "wall": 2, "offset": 961, "dx": 465, "dy": 500, "dz": 461.5, "rules": { "FLOAT": true }, "set": { "has_toekick": false, "pos_z": 300 }, "note": "Vanity right drawers, floating 300-800" },
+    { "def": "BFKW", "wall": 2, "offset": 1426, "dx": 30, "dy": 500, "dz": 461.5, "rules": { "FLOAT": true }, "set": { "has_toekick": false, "pos_z": 300 }, "note": "30 filler at the right wall, floating 300-800" },
+    { "def": "WEP", "wall": 1, "offset": 500, "dx": 16.5, "dy": 1107, "dz": 141.5, "note": "Left shaving cabinet seen front end, 1100-2207" },
+    { "def": "W1D", "wall": 1, "offset": 516.5, "dx": 483.5, "dy": 1107, "dz": 137.5, "set": { "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }], "rows": [{ "row_index": 0, "height_locked": false }], "zones": [{ "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "right", "handle_id": "none" }] } }, "note": "Left shaving cabinet, side wall, mirror door hinged at the back wall end, 160 OA deep, 1100-2207" },
+    { "def": "W1D", "wall": 3, "offset": 0, "dx": 483.5, "dy": 1107, "dz": 137.5, "set": { "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }], "rows": [{ "row_index": 0, "height_locked": false }], "zones": [{ "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left", "handle_id": "none" }] } }, "note": "Right shaving cabinet, side wall, mirror door hinged at the back wall end, 160 OA deep, 1100-2207" },
+    { "def": "WEP", "wall": 3, "offset": 483.5, "dx": 16.5, "dy": 1107, "dz": 141.5, "note": "Right shaving cabinet seen front end, 1100-2207" }
+  ]
+}
