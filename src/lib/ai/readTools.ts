@@ -31,6 +31,11 @@ export const READ_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'find_fixture',
+    description: 'Search the fixture / appliance catalogue (sinks, cooktops, ovens, dishwashers, fridges, rangehoods, BBQs…) by name, brand, model or kind. Returns name | kind | W×D×H | mount.',
+    input_schema: { type: 'object', properties: { search: { type: 'string' } }, required: ['search'], additionalProperties: false },
+  },
+  {
     name: 'find_material',
     description: 'Search the board colours (materials) by name, colour or brand, e.g. "walnut", "boston oak", "whiteboard 16.5", "teak 33". Returns name | thickness. Use the exact name in change_cabinets.',
     input_schema: {
@@ -225,8 +230,20 @@ async function findMaterialTool(input: { search?: string }): Promise<string> {
   return ['name | thickness', ...hits.slice(0, 25).map(h => `${h.name} | ${r(h.dz)}`), ...(hits.length > 25 ? [`…and ${hits.length - 25} more — narrow it.`] : [])].join('\n')
 }
 
+async function findFixture(input: { search?: string }): Promise<string> {
+  const q = String(input.search ?? '').trim().toLowerCase()
+  if (!q) return 'Give a name, brand, model or kind.'
+  const { data } = await supabase.from('fixture_catalog').select('name, kind, brand, model_no, width, depth, height, mount').eq('active', true).order('name')
+  const words = q.split(/\s+/)
+  const hits = ((data ?? []) as { name: string; kind: string | null; brand: string | null; model_no: string | null; width: number; depth: number; height: number; mount: string }[])
+    .filter(f => words.every(w => `${f.name} ${f.kind ?? ''} ${f.brand ?? ''} ${f.model_no ?? ''}`.toLowerCase().includes(w)))
+  if (!hits.length) return `Nothing in the catalogue matches "${q}".`
+  return ['name | kind | W×D×H | mount', ...hits.slice(0, 20).map(f => `${f.name} | ${f.kind ?? '-'} | ${r(f.width)}×${r(f.depth)}×${r(f.height)} | ${f.mount}`)].join('\n')
+}
+
 export async function runReadTool(name: string, input: unknown, ctx: ToolContext): Promise<string> {
   switch (name) {
+    case 'find_fixture': return findFixture((input ?? {}) as { search?: string })
     case 'find_material': return findMaterialTool((input ?? {}) as { search?: string })
     case 'find_library': return findLibrary((input ?? {}) as { search?: string })
     case 'get_kicks': return getKicks(ctx)

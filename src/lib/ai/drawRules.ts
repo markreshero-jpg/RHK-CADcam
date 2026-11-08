@@ -39,7 +39,7 @@ export const DRAW_RULES = `
 - Sketch shortcuts: "2 OH" = split into 600–800 widths; bases with no widths = equal widths between anchors; n tick marks = n drawers; "2L" = D2-LL; "seen end" = end panel.
 
 == APPLIANCES / GAPS (leave the space empty) ==
-- Never put a fridge, dishwasher, oven or other appliance in as a cabinet. Leave its gap and say what it is in tbc / notes.
+- Never put a fridge, dishwasher, oven or other appliance in as a cabinet. Leave its gap, and place the appliance as a FIXTURE from the catalogue (find_fixture) when there's a matching or generic one: sink on the sink cabinet, cooktop on its base, oven in the UBO, rangehood under the WRH, dishwasher / fridge / washer in their gap. Use the brand / model when the plan or schedule names it, else the generic one, and say so in the markup label. Nothing suitable → markup only.
 - Dishwasher: if the plan doesn't say integrated or freestanding, ASK. Freestanding: 605 gap with a BEPF each side. Integrated: 600 gap, tight to the cabinets beside it.
 - Dishwasher against a wall: a BEPF on the dishwasher side only (no filler at the wall).
 - Fridge: open side gets a TEPF from the floor to the top of the fridge overhead; overhead width = gap − filler; no clearance height given → TBC.

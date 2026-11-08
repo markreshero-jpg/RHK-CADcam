@@ -25,6 +25,8 @@ import { buildInstanceFromDefinition, dbInsertDefinitionParts } from '@/app/canv
 import { matchCabinets, patchFor, validateChanges, ROLE_KEY, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { wallOffset } from '../roomSummary'
 import { ensureJobCadLayers } from '@/src/lib/annotations/cadLayers'
+import { cabinetPlans, linkedPose } from '@/src/lib/fixtureLinks'
+import { defaultFixtureZ } from '@/src/lib/fixtureGeometry'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 type Fields = Partial<CabinetInstance>
@@ -50,6 +52,9 @@ export type BatchOp =
   /** CAD markup on a wall's elevation (z_CAD_tool/MARKUP-STANDARD.md): notes on their
    *  layer, optionally with a TBC cloud or a dashed appliance-space box. */
   | { op: 'markup'; notes: MarkupNote[] }
+  /** A catalogue fixture (sink, cooktop, oven, dishwasher, fridge…): on a cabinet (centred, linked
+   *  so the benchtop cut-out follows), or in a gap on a wall (floor items, unlinked). */
+  | { op: 'fixture'; item: string; on?: string; along?: number; from_back?: number; wall?: string; offset?: number; back?: boolean }
   | { op: 'wall'; name?: string; x: number; y: number; length: number; angle: number; type?: 'standard' | 'island'; thickness?: number; height?: number | null }
   /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
    *  material_id null = back to inherited. Kick face has no class. */
@@ -86,6 +91,7 @@ export type BatchEntry =
   | { kind: 'delete'; cabinet_id: string; label: string | null; line: string; snapshot: DeleteSnapshot }
   /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
   | { kind: 'wall'; cabinet_id: ''; label: null; line: string; wall_id: string }
+  | { kind: 'fixture'; cabinet_id: ''; label: null; line: string; fixture_id: string }
   /** CAD notes the AI drew (Undo removes them unless someone edited them since). */
   | { kind: 'markup'; cabinet_id: ''; label: null; line: string; annotation_ids: string[] }
   /** A projects / rooms row's columns before → after (whole column values). */
@@ -219,6 +225,7 @@ type PlannedStep =
   | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
   | { kind: 'wall'; tempId: string; row: Omit<Wall, 'id' | 'created_at'>; line: string }
   | { kind: 'markup'; rows: (Row & { _layer: MarkupLayer })[]; line: string }
+  | { kind: 'fixture'; row: Row; line: string }
   | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
 
 export interface BatchPlan {
@@ -230,6 +237,34 @@ export interface BatchPlan {
   /** Existing cabinets the plan changes or deletes (for the auto-apply limit). */
   touched: number
   onlyUpdates: boolean
+}
+
+// The catalogue body a placed fixture copies (as useFixtureInteraction's BODY_KEYS — shapes
+// and cut-outs included, or plans fall back to a box and the benchtop gets no hole).
+const FIXTURE_BODY_KEYS = [
+  'category', 'kind', 'name', 'brand', 'model_no', 'width', 'depth', 'height', 'mount', 'colour',
+  'model_url', 'model_format', 'model_scale', 'model_rot_x', 'model_rot_y',
+  'model_off_x', 'model_off_y', 'model_off_z',
+  'cutout_shape', 'cutout_w', 'cutout_d', 'cutout_radius', 'cutout_off_x', 'cutout_off_y', 'cut_benchtop', 'bench_drop',
+  'plan_shape', 'elev_shape', 'resizable', 'stretch',
+]
+
+/** Catalogue items by name / brand / model / kind: exact name, else the single match of every word. */
+async function loadFixtures(queries: string[]): Promise<Map<string, Row | string>> {
+  const out = new Map<string, Row | string>()
+  if (!queries.length) return out
+  const { data } = await supabase.from('fixture_catalog').select('*').eq('active', true)
+  const all = (data ?? []) as Row[]
+  for (const q of [...new Set(queries.map(x => x.trim()).filter(Boolean))]) {
+    const words = q.toLowerCase().split(/\s+/)
+    const text = (r: Row) => `${r.name} ${r.brand ?? ''} ${r.model_no ?? ''} ${r.kind ?? ''}`.toLowerCase()
+    const exact = all.filter(r => String(r.name).toLowerCase() === q.toLowerCase())
+    const hits = exact.length ? exact : all.filter(r => words.every(w => text(r).includes(w)))
+    out.set(q.toLowerCase(), hits.length === 1 ? hits[0] : hits.length
+      ? `"${q}" matches ${hits.length} catalogue items — say which: ${hits.slice(0, 8).map(h => h.name).join('; ')}`
+      : `No catalogue item matches "${q}" — use find_fixture, or leave it as a marked-up space.`)
+  }
+  return out
 }
 
 async function loadDefinitions(codes: string[]): Promise<Map<string, CabinetDefinition>> {
@@ -252,6 +287,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
   // Walls as the steps go: planned walls (temp id "newwall:…") join so later steps can use them.
   const walls: Wall[] = state.walls.map(w => ({ ...w }))
   const defs = await loadDefinitions(ops.flatMap(o => o.op === 'place' ? [o.code] : []))
+  const catalog = await loadFixtures(ops.flatMap(o => o.op === 'fixture' ? [o.item] : []))
   await loadMaterialNames([
     ...ops.flatMap(o => o.op === 'update' ? Object.values(o.changes.materials ?? {}) : o.op === 'set_material' ? [o.material_id] : []),
     ...state.cabinets.flatMap(c => [...overrideIds(c.material_overrides), ...overrideIds(c.toekick_overrides)]),
@@ -319,6 +355,45 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         touched.add(c.id)
         cabs = cabs.filter(x => x.id !== c.id)
       }
+    } else if (op.op === 'fixture') {
+      const item = catalog.get(op.item.trim().toLowerCase())
+      if (!item || typeof item === 'string') { problems.push(`${n}: ${item ?? `no catalogue item "${op.item}"`}`); continue }
+      const w = Number(item.width), d = Number(item.depth)
+      const mount = String(item.mount) as 'floor' | 'under_bench' | 'benchtop' | 'wall'
+      let pose: { x: number; y: number; rotation: number; wall_id: string }
+      let link: { cabinet_id: string | null; link_x: number; link_z: number; link_rot: number } = { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 }
+      let z = defaultFixtureZ(mount, item.mount_height as number | null)
+      let where: string
+      if (op.on) {
+        const cab = cabs.find(x => (x.label ?? '').toLowerCase() === op.on!.trim().toLowerCase())
+        if (!cab) { problems.push(`${n}: no cabinet "${op.on}" to put ${item.name} on.`); continue }
+        const p = cabinetPlans([cab], walls, centroid(walls))[0]
+        if (!p) { problems.push(`${n}: ${cab.label} isn't on a wall.`); continue }
+        const l = { link_x: cab.dx / 2 + (op.along ?? 0), link_z: op.from_back ?? cab.dz / 2, link_rot: 0 }
+        pose = linkedPose(l, p, w, d)
+        // Benchtop / under-bench items link to base / tall cabinets, wall items to wall cabinets (as linkFor).
+        const wallCab = cab.assembly_class.startsWith('wall')
+        if ((mount === 'wall') === wallCab && mount !== 'floor') link = { cabinet_id: cab.id, ...l }
+        const top = cabBottomZ(cab, room, p.wall) + cab.dy
+        if (mount === 'benchtop') z = top + 20 - (Number(item.bench_drop) || 0)   // on a 20 top until the benchtop is drawn
+        else if (mount === 'wall' && wallCab) z = Math.max(0, cabBottomZ(cab, room, p.wall) - Number(item.height))
+        where = `on ${cab.label}${op.along ? ` (${op.along > 0 ? '+' : ''}${op.along} from centre)` : ''}`
+      } else {
+        const wall = walls.find(x => x.name.toLowerCase() === (op.wall ?? '').trim().toLowerCase())
+        if (!wall || op.offset == null) { problems.push(`${n}: ${item.name} needs a cabinet to sit on (on) or a wall + offset for its gap.`); continue }
+        // A stand-in "cabinet" the size of the item in the gap gives the same frame a cabinet there would.
+        const back = !!op.back
+        const at = wallAnchorPoint(wall, op.offset, back, centroid(walls))
+        const gap = { id: 'gap', wall_id: wall.id, pos_x: at.x, pos_y: at.y, rotation: back ? wall.angle + 180 : wall.angle, dx: w, dz: d, assembly_class: 'base' } as unknown as CabinetInstance
+        const p = cabinetPlans([gap], walls, centroid(walls))[0]
+        pose = linkedPose({ link_x: w / 2, link_z: d / 2 + (op.from_back ?? 0), link_rot: 0 }, p, w, d)
+        where = `${wall.name}${back ? ' back' : ''} @ ${Math.round(op.offset)}`
+      }
+      const body = Object.fromEntries(FIXTURE_BODY_KEYS.map(k => [k, item[k] ?? null]))
+      const row: Row = { room_id: room.id, catalog_id: item.id, ...body, x: pose.x, y: pose.y, rotation: pose.rotation, wall_id: pose.wall_id, z: Math.round(z * 10) / 10, ...link, link_zone: null }
+      const line = `Add ${item.name} ${where}${link.cabinet_id ? ' (linked — benchtop cut-out follows)' : ''}`
+      steps.push({ kind: 'fixture', row, line })
+      lines.push(line)
     } else if (op.op === 'markup') {
       const T = { size: 2.5, align: 'center', src: 'markup-std' }
       const margin = new Map<string, number>()   // per wall + side: notes stacked so far
@@ -718,6 +793,15 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
 
   let layerIds: Map<string, string> | null = null
   for (const s of plan.steps) {
+    if (s.kind === 'fixture') {
+      const cabId = s.row.cabinet_id ? idFor.get(s.row.cabinet_id as string) ?? s.row.cabinet_id : null
+      const wallId = idFor.get(s.row.wall_id as string) ?? s.row.wall_id
+      if (String(cabId ?? '').startsWith('new:') || String(wallId).startsWith('newwall:')) { errors.push(`${s.line}: what it sits on wasn't added — skipped.`); continue }
+      const { data, error } = await supabase.from('room_fixtures').insert({ ...s.row, cabinet_id: cabId, wall_id: wallId }).select('id').single()
+      if (error || !data) { errors.push(`${s.line}: save failed — ${error?.message}`); continue }
+      entries.push({ kind: 'fixture', cabinet_id: '', label: null, line: s.line, fixture_id: data.id as string })
+      continue
+    }
     if (s.kind === 'markup') {
       if (!layerIds) layerIds = await jobLayerIds(supabase as unknown as SupabaseClient, plan.state.room.project_id)
       const rows = s.rows.map(({ _layer, ...r }) => ({ ...r, wall_id: idFor.get(r.wall_id as string) ?? r.wall_id, cad_layer_id: layerIds!.get(LAYER_NAME[_layer]) ?? null }))
@@ -832,6 +916,12 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   for (const e of entries) {
+    if (e.kind === 'fixture') {
+      const { error: fe } = await supabase.from('room_fixtures').delete().eq('id', e.fixture_id)
+      if (fe) { errors.push(`${e.line}: remove failed — ${fe.message}`); continue }
+      lines.push(`Removed ${e.line.replace(/^Add /, '').split(' on ')[0].split(' (')[0]}`)
+      continue
+    }
     if (e.kind === 'markup') {
       // Only the AI's own notes, and only if nobody has edited them since (never delete user CAD).
       const { data: notes } = await supabase.from('room_annotations').select('id, created_at, updated_at').in('id', e.annotation_ids)

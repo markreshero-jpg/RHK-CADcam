@@ -100,6 +100,17 @@ const PLAN_TOOL: Anthropic.Tool = {
           required: ['wall', 'code', 'offset', 'dx'], additionalProperties: false,
         },
       },
+      fixtures: {
+        type: 'array', description: 'Appliances / sinks from the catalogue (find_fixture): sink on the sink cabinet, cooktop on its base, oven in the UBO, rangehood under the WRH (on = the cabinet label, centred), dishwasher / fridge / washer in their gap (wall + offset of the gap low end).',
+        items: {
+          type: 'object',
+          properties: {
+            item: { type: 'string' }, on: { type: 'string' }, along: { type: 'number' }, from_back: { type: 'number' },
+            wall: { type: 'string' }, offset: { type: 'number' }, back: { type: 'boolean' },
+          },
+          required: ['item'], additionalProperties: false,
+        },
+      },
       markup: {
         type: 'array', description: 'CAD markup on the elevations (markup standard): every appliance / fixture space not drawn (dashed box + label), every TBC (cloud + question, layer questions), site / install notes, colour callouts the spec block doesn\'t cover.',
         items: {
@@ -151,6 +162,7 @@ interface PlanIn {
   walls?: { name: string; x: number; y: number; length: number; angle: number; type: 'standard' | 'island'; height?: number }[]
   items?: { wall: string; back?: boolean; code: string; offset: number; dx: number; dy?: number; dz?: number; blind_width?: number; note?: string }[]
   markup?: import('./cabinetBatch').MarkupNote[]
+  fixtures?: { item: string; on?: string; along?: number; from_back?: number; wall?: string; offset?: number; back?: boolean }[]
   tbc?: string[]; summary?: string
 }
 
@@ -200,6 +212,7 @@ function toOps(p: PlanIn, firstRoom: boolean): BatchOp[] {
     ...(p.walls ?? []).map(w => ({ op: 'wall' as const, name: w.name, x: w.x, y: w.y, length: w.length, angle: w.angle, type: w.type, height: w.height ?? null })),
     ...(p.items ?? []).map(i => ({ op: 'place' as const, code: i.code, wall: i.wall, back: !!i.back, offset: i.offset, dx: i.dx, dy: i.dy, dz: i.dz, blind_width: i.blind_width })),
   )
+  for (const f of p.fixtures ?? []) ops.push({ op: 'fixture', ...f })
   if (p.markup?.length) ops.push({ op: 'markup', notes: p.markup })
   return ops
 }
@@ -243,7 +256,7 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
     const res = await anthropic.messages.stream({
       model: DRAW_MODEL, max_tokens: 32000,
       system: systemBlocks(SYSTEM, aiCtx.rules),
-      tools: [...READ_TOOLS.filter(t => t.name === 'find_library'), ASK_TOOL, PLAN_TOOL],
+      tools: [...READ_TOOLS.filter(t => t.name === 'find_library' || t.name === 'find_fixture'), ASK_TOOL, PLAN_TOOL],
       output_config: { effort: 'high' },
       messages,
     }).finalMessage()
