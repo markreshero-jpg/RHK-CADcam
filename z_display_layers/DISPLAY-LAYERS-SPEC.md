@@ -267,6 +267,12 @@ Decisions (2026-09-16): hardware before appearance; real hardware models in
 ### Phase 3 — appearance + gaps (split 2026-09-16)
 
 #### 3a — colour, line weight, background ✅ built (2026-09-16, pending manual test)
+- **Invert colours (2026-11-08, check pending):** `ViewLayerSettings.invert` (plan +
+  elevation, checkbox beside Background colour) puts `INVERT_FILTER`
+  (`invert(1) hue-rotate(180deg)`) on the plan / elevation `<svg>` — every colour
+  flips, hard-coded ones included, so a dark-screen set reads as dark lines on white.
+  Colour / background picks are flipped too (background #000000 → white). Screen only.
+  Set "Line drawing white" = copy of Line drawing with invert on, 3D background white.
 - `ItemSetting` gains optional `color` (#rrggbb) and `weight` (multiplier;
   `WEIGHT_OPTIONS` ½/1/1½/2/3). `ViewLayerSettings` gains optional `background`.
   All unset = renderers draw exactly as before. Sparse save keeps only set values.

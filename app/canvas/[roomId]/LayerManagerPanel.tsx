@@ -257,6 +257,13 @@ export default function LayerManagerPanel({ api, initialView, activeSetId, onPre
               <ColorSwatch title="Background" value={vs.background}
                 onChange={v => patchView(cur => ({ ...cur, background: v }))} />
               Background colour
+              {view !== '3d' && (
+                <label className="flex items-center gap-1.5 ml-3" title="Flip every colour on screen — dark lines on a light page. Colour picks above are flipped too. Prints unaffected.">
+                  <input type="checkbox" checked={!!vs.invert}
+                    onChange={e => patchView(v => ({ ...v, invert: e.target.checked }))} className="accent-blue-500" />
+                  Invert colours
+                </label>
+              )}
             </div>
             {view === 'plan' && (
               <div className="flex items-center gap-2 text-xs text-gray-300">

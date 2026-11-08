@@ -11,6 +11,8 @@ import { CAB_FILL, CAB_FILL_SEL } from '../geometry'
 
 /** Ghost style in 3D — the material alpha (matches the 2D ghost's 0.25 opacity). */
 export const GHOST_ALPHA = 0.25
+/** CSS filter for a set's "Invert colours": light ↔ dark, hues kept. */
+export const INVERT_FILTER = 'invert(1) hue-rotate(180deg)'
 
 export interface LayerSVGProps {
   opacity: number
@@ -53,6 +55,8 @@ export interface LayerView {
   alpha(id: string): number
   /** View background override or undefined. */
   background?: string
+  /** Flip colours on screen (see ViewLayerSettings.invert). */
+  invert: boolean
   /** Cabinet fill for an assembly class (set override, else CAB_FILL). */
   cabFill(assemblyClass: string): string
   /** Selected-cabinet fill: a brighter version of an overridden fill, else CAB_FILL_SEL. */
@@ -132,6 +136,7 @@ export function resolveLayerView(set: LayerSet | undefined, view: LayerViewId, o
     // 3D has no line style: ghost = see-through material, dashed = solid.
     alpha:   id => (setting(id).style === 'ghost' ? GHOST_ALPHA : 1) * (setting(id).opacity ?? 1),
     background: vs?.background,
+    invert: !!vs?.invert,
     cabFill: cls => vs?.cabinetFill?.[fillClass(cls)] ?? CAB_FILL[fillClass(cls)],
     cabFillSel: cls => {
       const o = vs?.cabinetFill?.[fillClass(cls)]
@@ -169,6 +174,7 @@ export function sparseViewSettings(vs: ViewLayerSettings, view: LayerViewId): Vi
   const out: ViewLayerSettings = { items }
   if (vs.lineDrawing) out.lineDrawing = true
   if (vs.background) out.background = vs.background
+  if (vs.invert) out.invert = true
   const fill = Object.fromEntries(Object.entries(vs.cabinetFill ?? {}).filter(([, v]) => !!v))
   if (Object.keys(fill).length) out.cabinetFill = fill
   if (vs.cabinetFillOpacity !== undefined && vs.cabinetFillOpacity !== 1) out.cabinetFillOpacity = vs.cabinetFillOpacity

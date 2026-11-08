@@ -33,6 +33,7 @@ import { kickPlanSpans } from '@/src/lib/kickDims'
 import { benchtopWallSpans } from '@/src/lib/benchtopDims'
 import { Mode, ArmedDefinition, Selected, ViewState, PlaceGhost, CabDrag, CabMoveDrag, CabResize, ContextMenuState, placeInfoFor, SectionCut, isBenchtopMode, type BtShapeEdit, btLocal } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
+import { INVERT_FILTER } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, faceZoneItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { handleShape } from '@/src/lib/handleGeometry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
@@ -261,7 +262,7 @@ export default function CanvasSVG({
     <svg
       ref={svgRef}
       className="flex-1 bg-gray-950 select-none"
-      style={{ cursor, background: layers.background }}
+      style={{ cursor, background: layers.background, filter: layers.invert ? INVERT_FILTER : undefined }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}

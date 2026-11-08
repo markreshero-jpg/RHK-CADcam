@@ -285,6 +285,10 @@ export interface ViewLayerSettings {
   lineDrawing?: boolean
   /** Phase 3: view background colour (#rrggbb). Unset = the view's default. */
   background?: string
+  /** Plan / elevation: flip every colour on screen (dark lines on a light page)
+   *  with a CSS invert + hue-rotate, background included. Screen only — prints
+   *  are already black on white. */
+  invert?: boolean
   /** Plan / elevation cabinet fill per class (#rrggbb). Corner classes follow
    *  their parent class. Unset = the built-in CAB_FILL colour. */
   cabinetFill?: Partial<Record<CabinetFillClass, string>>

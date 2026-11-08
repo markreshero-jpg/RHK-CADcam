@@ -9,6 +9,7 @@ import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlo
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
+import { INVERT_FILTER } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, internalPartItem, faceZoneItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem, CUSTOM_PART_ITEMS } from '@/src/lib/displayLayers/customPartKinds'
 import { roundMm } from '@/src/lib/format'
@@ -1123,7 +1124,7 @@ export default function ElevationSVG({
       <svg
         ref={el => { svgRef.current = el; if (svgElRef) svgElRef.current = el }}
         className="flex-1 bg-gray-950 select-none"
-        style={{ background: layers.background, cursor: mode === 'measure' ? 'crosshair' : (placeInfoFor(mode, armedDef) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
+        style={{ background: layers.background, filter: layers.invert ? INVERT_FILTER : undefined, cursor: mode === 'measure' ? 'crosshair' : (placeInfoFor(mode, armedDef) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
