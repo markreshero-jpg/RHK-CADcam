@@ -147,3 +147,6 @@ Done in Rev 4 (2026-11-07); see below.
   **BFKW** (`_tmp-bfk-bfkw-def.mjs`, BFK before-state in `_tmp-bfk-before.json`).
 - **Fillers 70 wide (Mark 2026-11-08, planer blade 82):** BC-10 / BC-14 boards -> 70 strips at the front, flush with the door
   faces (578.5 / 284), not full-depth panels; library BFK the same (`_tmp-bfk-70.mjs`). BC-01/02/03 already have 1 adj shelf each.
+- **Appliance specs (2026-11-08)** downloaded to the job's `APPLIANCES` folder (README there): oven WVEP6716SD x4, Bosch
+  PVQ811H26E x4 (incl. installation instructions), Abey LUA190 sheet, Blanco LINUS-S install (generic); links for the
+  C138 handle, K-Push, pendants. DW + microwave are existing (no specs).
