@@ -79,14 +79,14 @@ describe('part cut-outs (R1 holes)', () => {
   it('warns instead of cutting what it cannot', () => {
     const rp = resolveCabinet(cab({
       case_bottom: [hole({ id: 'big', w: 900 }), hole({ id: 'bad', w: 'nope.x' }), hole({ id: 'n', kind: 'notch' })],
-      case_left_side: [hole({ id: 'g' })],
+      case_back: [hole({ id: 'g' })],
     }))
     const msgs = rp.warnings.filter(w => w.code === 'CUTOUT_SKIPPED').map(w => w.message)
     expect(msgs).toHaveLength(4)
     expect(msgs.some(m => /n on case_bottom: pick the edge/.test(m))).toBe(true)
     expect(msgs.some(m => /big on case_bottom: runs off/.test(m))).toBe(true)
     expect(msgs.some(m => /bad on case_bottom: width/.test(m))).toBe(true)
-    expect(msgs.some(m => /g on case_left_side: .*not supported/.test(m))).toBe(true)
+    expect(msgs.some(m => /g on case_back: .*not supported/.test(m))).toBe(true)
     expect(rp.case_parts.find(p => p.part_key === 'bottom')!.cutouts).toBeUndefined()
   })
 })
@@ -236,7 +236,7 @@ describe('cut-outs editor helpers (R4)', () => {
     expect(cutoutPartInfo(rp, 'custom_up')).toEqual({ W: 1200, D: 330, DZ: 18, holes: true })
     // Side customs take them too (WF-L): W = its height (dy), D = its depth (dx).
     expect(cutoutPartInfo(rp, 'custom_ep')).toEqual({ W: 700, D: 330, DZ: 18, holes: true })
-    expect(cutoutPartInfo(rp, 'case_left_side')).toBeNull()
+    expect(cutoutPartInfo(rp, 'case_back')).toBeNull()
   })
 
   it('previews like the resolve cuts', () => {
@@ -334,5 +334,16 @@ describe('part cut-outs (R11 drawer bottoms, rounded notches)', () => {
     applyPartCutouts(cutoutTargets([], [], [s2]), { db_1_0_db_bottom: [uNotch({ radius: 0 })] })
     expect(s2.box_parts[0].outline!.some(p => p.b)).toBe(false)
     expect(s2.box_parts[0].outline!).toHaveLength(8)
+  })
+})
+
+// Duct holes in carcass gables (RHK6586 rangehood duct).
+describe('holes in gables', () => {
+  it('stores the hole in the gable frame: depth from the back, down from the top', () => {
+    const c: Cutout = { id: 'd', kind: 'hole', shape: 'circle', w: 160, d: 160, x: { from: 'left', off: 400 }, y: { from: 'back', off: 30 }, depth: null, source: 'user' }
+    const p = resolveCabinet(cab({ case_left_side: [c] })).case_parts.find(x => x.part_key === 'left_side')!
+    const b = bbox(p.cutouts![0].pts)
+    expect((b.x0 + b.x1) / 2).toBeCloseTo(110, 1)   // centre 110 off the back
+    expect(p.outline).toHaveLength(4)
   })
 })

@@ -379,3 +379,7 @@ wide … 90mm radius corners on the two corners closest to the front edge of the
 
 - **Default hole size** — from the Sirius SM927EL520 specs when they come; until
   then the WRH warns while the hole is unset (Mark OK'd, 2026-11-01).
+
+## Holes in uprights (2026-11-09, RHK6586 duct)
+
+Carcass gables (`case_left_side` / `case_right_side`), shaped uprights (`case_side:<edge>`) and the flue box (`case_rh:flue_l` etc.) take cut-outs. Gables take **holes only** (a notch warns). A gable's hole is written in the gable frame (x depth from the back, y down from the top), like side custom parts; on a gable x 'left' = bottom. Shaped uprights + flue box stay in the horizontal frame: x along DY from the part's origin, y 'front' = from the top.

@@ -10,7 +10,8 @@
 //          nesting, G-code, 3D and the cabinet views pick it up unchanged.
 //   notch  a rectangle open to an edge, cut into the part's outline (R2).
 //
-// So far: the carcass's horizontal parts (bottom, top, rails), shelves,
+// So far: the carcass's horizontal parts (bottom, top, rails), shelves, gables +
+// shaped uprights + the flue box (holes only on gables, duct runs),
 // flat custom parts (their own `cabinet_custom_parts.part_cutouts`, R3) and
 // drawer box bottoms (`db_<r>_<c>_db_bottom`, R11 — plumbing U cut-outs).
 // Positions are in the horizontal shape frame — x across from the part's left
@@ -292,7 +293,10 @@ export function roundCorner(pts: OutlinePt[], cx: number, cy: number, rad: numbe
  *  (BHCRVFIXP) bottom former — same frame (kit x across, d back from the front). */
 export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail', 'crv:bottom', 'crv:top'])
 /** Case parts that take cut-outs: the set above + a curved end's ribs (C9 rangehood). */
-export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+(_[lr])?$/.test(k)
+export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+(_[lr])?$/.test(k) || isGableKey(k) || /^(side:|rh:flue_)/.test(k)
+/** Carcass gables take holes too (duct runs, RHK6586). Their outlines + cut-outs are
+ *  stored in the gable frame (x depth from the back, y down from the top). */
+export const isGableKey = (k: string) => k === 'left_side' || k === 'right_side'
 export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
 /** Drawer box parts that take cut-outs (R11): the bottom. */
 export const CUTOUT_DB_TYPES = new Set(['db_bottom'])
@@ -300,7 +304,7 @@ export const CUTOUT_DB_TYPES = new Set(['db_bottom'])
 type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }
 /** `at` = the part's min corner in cabinet space (horizontal box: x across, y
  *  up its thickness, z = its back edge) — set, a notch's gap is reported as a void. */
-export type CutTarget = { id: string; part: CutPart; holes: boolean; at?: { X: number; Y: number; Z: number } }
+export type CutTarget = { id: string; part: CutPart; holes: boolean; at?: { X: number; Y: number; Z: number }; gable?: boolean }
 /** Board a notch took away, in cabinet space (z_rangehood R5): joint holes that
  *  run into it are dropped (jointDrilling seamDrillsFor). */
 export type CutoutVoid = { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }
@@ -316,13 +320,23 @@ export function cutoutTargets(
   drawerStacks: (StackRef & { box_parts: (CutPart & { part_type: string })[] })[] = [],
 ): CutTarget[] {
   return [
-    ...caseParts.filter(p => isCutoutCaseKey(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p) })),
+    ...caseParts.filter(p => isCutoutCaseKey(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p), ...(isGableKey(p.part_key) ? { gable: true } : {}) })),
     ...internalParts.filter(p => CUTOUT_INTERNAL_TYPES.has(p.part_type)).map(p => ({ id: `int_${p.part_type}_${p.sort_order}`, part: p, holes: false, at: atOf(p) })),
     // Drawer box bottoms (R11): DX = depth front → back, DY = width — the carcass
     // bottom's frame. Their drawer stack id moves with the drawer, so the cut-out does.
     ...drawerStacks.flatMap(s => s.box_parts.filter(p => CUTOUT_DB_TYPES.has(p.part_type))
       .map(p => ({ id: dbPartId(s, p.part_type), part: p, holes: true }))),
   ]
+}
+
+/** Horizontal frame (u along dy from the bottom, v back from the front) → gable frame
+ *  of a DX deep, DY high side. The swap is a mirror, so the points are walked backwards. */
+function toGableFrame(pts: OutlinePt[], DX: number, DY: number): OutlinePt[] {
+  const n = pts.length
+  return pts.map((_, k) => {
+    const at = pts[n - 1 - k], src = pts[(2 * n - 2 - k) % n]
+    return { x: r2(DX - at.y), y: r2(DY - at.x), ...(src.e ? { e: src.e } : {}), ...(src.b ? { b: src.b } : {}) }
+  })
 }
 
 /**
@@ -348,7 +362,7 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
     // Notches first: they change the outline the holes sit in. Each butts
     // against its edge (whatever its anchor says that way) and runs 1 past it.
     const OVER = 1
-    const notchList = list.filter(c => c.kind === 'notch')
+    const notchList = list.filter(c => c.kind === 'notch' && (!t.gable || (warn(c, 'gables take holes only'), false)))
     const notches: Rect[] = []
     const notchEdges: NonNullable<Cutout['edge']>[] = []
     const notchRadii: number[] = []
@@ -401,9 +415,10 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
       if (!t.holes) { warn(c, 'holes on this part are not supported yet'); continue }
       const s = sized(c); if (!s) continue
       if (s.x0 < -EPS || s.y0 < -EPS || s.x0 + s.n.w > W + EPS || s.y0 + s.n.d > D + EPS) { warn(c, 'runs off the part'); continue }
-      if (!p.outline) p.outline = [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }, { x: 0, y: D }]
+      if (!p.outline) p.outline = t.gable ? [{ x: 0, y: 0 }, { x: D, y: 0 }, { x: D, y: W }, { x: 0, y: W }] : [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: W, y: D }, { x: 0, y: D }]
       const skin = c.depth != null && c.depth < p.DZ ? r2(p.DZ - c.depth) : 0
-      p.cutouts = [...(p.cutouts ?? []), { pts: holeLoop(s.x0, s.y0, s.n.w, s.n.d, c.shape, c.radius), skin }]
+      const loop = holeLoop(s.x0, s.y0, s.n.w, s.n.d, c.shape, c.radius)
+      p.cutouts = [...(p.cutouts ?? []), { pts: t.gable ? toGableFrame(loop, D, W) : loop, skin }]
     }
   }
   return warnings
@@ -466,13 +481,7 @@ export function customPartCuts(p: CustomCutRow, list: Cutout[], scope?: FormulaS
   // The swap is a mirror, which flips the winding: walk the points backwards to
   // keep it. An edge's tag / bulge sits on its start point, so each point takes
   // them from the one before it in the old order (bulge: mirror + reverse = same sign).
-  const toSide = (pts: OutlinePt[]): OutlinePt[] => {
-    const n = pts.length
-    return pts.map((_, k) => {
-      const at = pts[n - 1 - k], src = pts[(2 * n - 2 - k) % n]
-      return { x: r2(part.DX - at.y), y: r2(part.DY - at.x), ...(src.e ? { e: src.e } : {}), ...(src.b ? { b: src.b } : {}) }
-    })
-  }
+  const toSide = (pts: OutlinePt[]) => toGableFrame(pts, part.DX, part.DY)
   const outline = part.outline ? (side ? toSide(part.outline) : part.outline) : null
   const cutouts = part.cutouts?.length ? (side ? part.cutouts.map(c => ({ ...c, pts: toSide(c.pts) })) : part.cutouts) : null
   return { outline, cutouts, warnings }
