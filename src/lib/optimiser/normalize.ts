@@ -12,7 +12,7 @@ import { applySizeOverride, type SizeOvByCab } from './sizeOverrides'
 import { attachShape, cutoutsToOp, shapeFrameFor, type ShapesByCab } from './shapes'
 import { bandedLengthMM, tapeRuns, type EbSides } from './edgebandLength'
 import type { OutlinePt } from '@/src/lib/shapePath'
-import { zonePartId, dbPartId, zoneRef } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
 import { removedIdsFrom, isAllViews } from '@/src/lib/resolver/filterHidden'
 import type { PartHideViews, DoorFacing } from '@/src/lib/resolver/types'
 import { zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
@@ -426,6 +426,22 @@ export function normalizeProject(
     const tkLast = parts[parts.length - 1]
     if (join && tkLast?.source_part_id === r.id) tkLast.comment = withJoinComment(tkLast.comment)
   }
+  // Drawer fronts are numbered 1, 2, 3… per cabinet from the top down (rows are
+  // stored bottom-up, so highest row first; left to right within a row). Their
+  // drawer box panels carry the same number (Mark, 2026-11-08).
+  const drawerNo = new Map<string, number>()   // `${cab}|${facet}|${row}_${col}` → number
+  const dzKey = (cab: unknown, facet: unknown, row: unknown, col: unknown) => `${cab}|${(facet as string | null) || ''}|${Number(row)}_${Number(col)}`
+  {
+    const byCab = new Map<string, Row[]>()
+    for (const z of fz) if (z.face_type === 'drawer_face') {
+      const k = String(z.cabinet_instance_id); byCab.set(k, [...(byCab.get(k) ?? []), z])
+    }
+    for (const zs of byCab.values()) {
+      zs.sort((a, b) => String(a.facet ?? '').localeCompare(String(b.facet ?? ''))
+        || Number(b.row_index) - Number(a.row_index) || Number(a.col_index) - Number(b.col_index))
+      zs.forEach((z, i) => drawerNo.set(dzKey(z.cabinet_instance_id, z.facet, z.row_index, z.col_index), i + 1))
+    }
+  }
   for (const r0 of fz) {
     const { r: rs, base } = sized('face_zones', r0, zonePartId(r0 as unknown as { row_index: number; col_index: number; facet?: string }))
     // Mitred facet fronts (z_cabinet_shape 3c) nest at their front-face width;
@@ -436,12 +452,14 @@ export function normalizeProject(
     // Face zones: dx = width (w, banded left/right), dy = height (h, banded bottom/top).
     const eb = ebFields(flagsOf(r), tFor(r), ['left', 'right'], ['bottom', 'top'])
     const zref = { row_index: Number(r.row_index), col_index: Number(r.col_index), facet: (r.facet as string | null) || undefined }
-    // Doors are named by their hinge side — "Left Door (R1C1)", "Top Door (R1C1)"
-    // — so the sticker says which way it hangs (Mark, 2026-11-08). No side → plain "Door".
+    // Doors are named by their hinge side — "Left Door", "Top Door" — so the
+    // sticker says which way it hangs; no side → plain "Door". Drawer fronts are
+    // numbered. No R1C1 position on the name (Mark, 2026-11-08).
     const hinge = r.face_type === 'door' ? HINGE_PREFIX[String(r.hinge_side)] : undefined
+    const dno = r.face_type === 'drawer_face' ? drawerNo.get(dzKey(r.cabinet_instance_id, r.facet, r.row_index, r.col_index)) : undefined
     push('face_zones', r, zonePartId(zref),
       { typeKey: String(r.face_type), base: humanize(String(r.face_type)), prefix: hinge,
-        suffix: ` (${zoneRef(zref)}${mitre ? `, ${mitre}` : ''})` },
+        suffix: `${dno ? ` ${dno}` : ''}${mitre ? ` (${mitre})` : ''}` },
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
     // A front in a horizontal grain match group (z_grain_match G3) runs its grain
     // across its width: the nest turns it (a true quarter turn, so its drilling
@@ -469,7 +487,7 @@ export function normalizeProject(
     const eb = ebFields(flagsOf(r), tFor(r), pairs[0], pairs[1])
     push('drawer_box_parts', r, id,
       { typeKey: type, base: humanize(type.replace(/^db_/, '')),
-        suffix: ` (${zoneRef({ row_index: Number(r.face_zone_row), col_index: Number(r.face_zone_col), facet: (r.facet as string | null) || undefined })})` },
+        suffix: ((n?: number) => n ? ` ${n}` : '')(drawerNo.get(dzKey(r.cabinet_instance_id, r.facet, r.face_zone_row, r.face_zone_col))) },
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
   }
   // Custom parts (fillers / applied panels / end panels). Key mirrors PartsView (custom_<id>).
