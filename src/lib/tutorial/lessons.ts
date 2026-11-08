@@ -1931,6 +1931,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Room Properties or Job Properties, Adjustable Shelves, "Adj. Shelf Hole Setback". Every cabinet in that room or job follows it unless the cabinet has its own number.',
       canvas: true, done: c => c.inCanvas },
   ]},
+
+  // Appended 2026-11-08 (z_ai_helper AI5: shop rules, job notes, AI cost).
+  { id: 'ai_rules', level: 'intermediate', topic: 'production', title: 'Teach the AI your rules',
+    blurb: 'The shop rules the AI follows on every job, a job’s own notes for it, and what the AI is costing.',
+    keywords: 'ai rules shop conventions notes job settings cost spend cap month helper teach', steps: [
+    { id: 'rules', title: 'Shop rules',
+      body: 'Settings → AI helper (admins). The box at the top is what the AI follows on every job — in the chat and when it draws from a plan. Write a rule the way you’d tell a new cabinetmaker, one per line, and Save rules. It’s sent with every message, so keep it short (the token count shows under the box).',
+      done: c => c.path.startsWith('/settings') },
+    { id: 'job', title: 'Notes for one job',
+      body: 'In a job: Job → Job Properties, "Notes for the AI". Anything only for that job, e.g. "Teak 16.5 or 33 only, never 18" or "all kicks 100". These win over the shop rules for that job.',
+      canvas: true, done: c => c.inCanvas },
+    { id: 'cost', title: 'What it costs',
+      body: 'Back on Settings → AI helper, AI cost shows this month against the cap, by job, by person and by model (everyday questions, Try harder, drawing from a plan). ‹ › steps through months. The cap itself is on the API key in the Anthropic Console.',
+      done: c => c.path.startsWith('/settings') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

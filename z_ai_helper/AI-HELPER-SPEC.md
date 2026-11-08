@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI4 built and checked 2026-11-08** — next is AI5 (Shop Rules page)
+Status: **AI0 – AI5 built and checked 2026-11-08** — all planned phases done; follow-ups under Open items
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -185,7 +185,7 @@ $20; cached input ~10% of normal.
 | AI3 ✅ | **Add / delete / multi-step**: place cabinets, end panels and fillers server-side (same path as the canvas: next label, cascade sizes, custom parts, neighbours); delete with Apply + full Undo (decision 7); several changes as one batch (decision 8); apply speed | "Delete BC-04 and slide BC-05 / BC-06 left into its place" and "add an end panel on the left of BC-03" — previewed, applied, undone exactly |
 | AI3b ✅ | Door / board colours, Job scope, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
 | AI4 ✅ | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
-| AI5 | Shop Rules editor in Settings, per-job notes, admin cost view | Rules editable and visibly followed; monthly total shown |
+| AI5 ✅ | Shop Rules editor in Settings, per-job notes, admin cost view | Rules editable and visibly followed; monthly total shown |
 
 Each user-facing phase gets a tutorial lesson (`src/lib/tutorial/lessons.ts`).
 
@@ -440,6 +440,26 @@ answers, or typed) carry the drawing on via `POST /api/ai/draw { continueFrom, a
 also flagged "elevations show 880 bases, job set-up says 900". Browser: the question
 groups + Send answers render; on AI4 Draw Test it saw all 8 items already there and
 said it won't add duplicates (2.3¢ — plan cached).
+
+## AI5 — what was built (2026-11-08)
+
+- **Shop rules** = `shop_settings.ai_rules` (`migration_ai_rules.sql`, applied; seeded
+  from the conventions in Claude Code's memory). Edited in **Settings › AI helper**
+  (`app/settings/AiHelperSettings.tsx`; Settings is admin-only, and shop_settings is
+  admin write / everyone read). Token estimate under the box (amber over 1,500).
+- **Job notes** = `projects.ai_notes`, **Job Properties → "Notes for the AI"**.
+- Both engines (chat + drawing) load them per request (`src/lib/ai/shopRules.ts`):
+  rules as a second cached system block after the fixed instructions (cost ~nothing
+  until edited), job notes in the user turn (`<job_notes>`), and the model is told job
+  notes win for that job. The hard-coded "Shop conventions" lines left the chat prompt.
+- **AI cost** on the same tab: the month's total against the $50 cap (bar), answers,
+  by job / person (`admin_list_users`) / model (Haiku everyday, Sonnet Try harder,
+  Opus drawing); ‹ › for earlier months.
+- **Check (browser):** Settings › AI helper showed 66.6¢ / 44 answers for November
+  2026 with the three breakdowns. With a temporary job note on Test Kitchen ("call
+  overheads top cupboards"), "Should WC-01 get a finger pull?" → "No. Shop rule is no
+  finger pulls on top cupboards…" — both the rule and the note reached it. Note removed.
+- Tutorial `ai_rules`.
 
 ## Open items (check while building)
 

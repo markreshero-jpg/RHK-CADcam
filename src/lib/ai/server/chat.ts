@@ -17,6 +17,7 @@ import { READ_TOOLS, findMaterial, runReadTool, type ToolContext } from '../read
 import { filterHasCriteria, MATERIAL_ROLES, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { findHandleSchedule, planBatch, runBatch, type BatchOp } from './cabinetBatch'
 import { withSupabase } from './scope'
+import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
 
 /** Everyday model, and the one "Try harder" re-runs a message on. */
 export const CHAT_MODEL = 'claude-haiku-5-5'
@@ -162,10 +163,7 @@ How to answer:
 - TBC items are marked with CLOUDS in the markup; text near a cloud says what's to be confirmed.
 - Totals: add them up yourself from the tool output and show the total clearly.
 - "Kick length" means the visible kick: the kick_front_face total. Mention the rails behind only if asked.
-
-Shop conventions (RHK):
-- Fillers sit on the kick; only end panels go to the floor. Overheads have no finger pulls.
-- Every room's drawings carry colour callouts, TBC clouds and site notes. Appliances aren't drawn as cabinets.`
+- The shop's own rules follow (Settings › AI helper), and a job's notes come with the question (<job_notes>) — follow both; job notes win for that job.`
 
 export interface ChatTurnArgs {
   client: SupabaseClient
@@ -237,12 +235,13 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const ctx: ToolContext = { projectId: args.projectId, roomId: args.roomId }
   const selection = args.selectedIds?.length ? args.selectedIds : null
 
-  const [summary, past, selLabels] = await Promise.all([
+  const [summary, past, selLabels, aiCtx] = await Promise.all([
     loadRoomSummary(args.roomId),
     history(args.projectId, args.roomId),
     selection
       ? supabase.from('cabinet_instances').select('id, label').in('id', selection).then(r => (r.data ?? []).map(c => c.label as string))
       : Promise.resolve([] as string[]),
+    loadAiContext(args.projectId),
   ])
   const scopeLine = selection
     ? `Scope: Selection — ${selLabels.join(', ')}`
@@ -255,7 +254,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
 
   const messages: Anthropic.MessageParam[] = [
     ...past,
-    { role: 'user', content: `<room_summary>\n${summary}\n</room_summary>\n${scopeLine}\n\n${args.message}` },
+    { role: 'user', content: `<room_summary>\n${summary}\n</room_summary>${jobNotesBlock(aiCtx.jobNotes)}\n${scopeLine}\n\n${args.message}` },
   ]
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 }
   const toolCalls: string[] = []
@@ -330,7 +329,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     const res = await anthropic.messages.create({
       model,
       max_tokens: 4000,
-      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+      system: systemBlocks(SYSTEM, aiCtx.rules),
       tools: [...READ_TOOLS, ...EDIT_TOOLS],
       output_config: { effort: args.strong ? 'medium' : 'low' },
       messages,

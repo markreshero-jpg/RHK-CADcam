@@ -29,6 +29,8 @@ export interface Project {
   hardware_overrides: Record<string, unknown>
   job_number: string | null
   notes: string | null
+  /** This job's notes for the AI helper (z_ai_helper AI5), sent while the job is open. */
+  ai_notes?: string | null
   // Schedule assignments (null = use shop default)
   assembly_schedule_id:        string | null
   base_assembly_schedule_id:   string | null

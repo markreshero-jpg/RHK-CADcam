@@ -135,6 +135,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
   const [clientAddress, setClientAddress] = useState(project.client_address ?? '')
   const [status,        setStatus]        = useState<ProjectStatus>(project.status)
   const [notes,         setNotes]         = useState(project.notes ?? '')
+  const [aiNotes,       setAiNotes]       = useState(project.ai_notes ?? '')
 
   // ── Cabinet size defaults ─────────────────────────────────────────────────
   const cd = project.class_dimension_defaults as ClassDimDefaults
@@ -287,6 +288,7 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
       client_address: clientAddress.trim() || null,
       status,
       notes:         notes.trim() || null,
+      ai_notes:      aiNotes.trim() || null,
       rule_overrides: newOverrides as Record<string, unknown>,
       class_dimension_defaults: {
         base: { dy: baseDy, dz: baseDz },
@@ -479,6 +481,12 @@ export default function JobPropertiesModal({ project, initialTab, onClose, onSav
               <Field label="Notes">
                 <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
                   className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500 resize-none" />
+              </Field>
+              {/* z_ai_helper AI5: sent with every Ask AI message while this job is open; wins over the shop rules. */}
+              <Field label="Notes for the AI">
+                <textarea value={aiNotes} onChange={e => setAiNotes(e.target.value)} rows={3}
+                  placeholder={'Rules for this job only, e.g. "Teak 16.5 or 33 only, never 18" or "all kicks 100"'}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none" />
               </Field>
             </div>
           )}

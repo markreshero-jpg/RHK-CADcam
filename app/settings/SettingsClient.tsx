@@ -19,6 +19,7 @@ import DrillLibraryClient from '@/app/settings/DrillLibraryClient'
 import CncToolSetsClient from '@/app/settings/CncToolSetsClient'
 import CncMachinesClient from '@/app/settings/CncMachinesClient'
 import UsersClient from '@/app/settings/UsersClient'
+import AiHelperSettings from '@/app/settings/AiHelperSettings'
 import { DEFAULT_DIMS } from '@/src/lib/types'
 import { getUserPrefs, setUserPrefs, type CabinetViewStyles, type ViewStyle } from '@/src/lib/userPrefs'
 import { useLayerSets } from '@/src/lib/displayLayers/useLayerSets'
@@ -93,7 +94,7 @@ const SCHED_TYPES: { key: SchedKey; label: string; col: keyof ShopSettings }[] =
 
 type SettingsTab =
   | 'user_preferences'
-  | 'company' | 'users' | 'dimensions' | 'materials'
+  | 'company' | 'users' | 'ai_helper' | 'dimensions' | 'materials'
   | 'cabinet_builder' | 'drawer_builder' | 'benchtop_builder'
   | 'hinge_rules'
   | 'cnc_tool' | 'drill_library' | 'cnc_tool_set' | 'cnc_machine'
@@ -135,6 +136,15 @@ const TABS: TabDef[] = [
         <path d="M1.5 13c0-2.3 1.8-4 4-4s4 1.7 4 4"/>
         <circle cx="10.8" cy="5.5" r="1.7"/>
         <path d="M10.5 9.1c1.8.1 3 1.6 3 3.4"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'ai_helper', label: 'AI helper', group: 'Shop',
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7.5 1.5l1.3 3.2 3.2 1.3-3.2 1.3-1.3 3.2-1.3-3.2L3 6l3.2-1.3z"/>
+        <path d="M12 10l.6 1.4 1.4.6-1.4.6L12 14l-.6-1.4L10 12l1.4-.6z"/>
       </svg>
     ),
   },
@@ -597,7 +607,9 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
 
         {/* Content area */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          {tab === 'users' ? (
+          {tab === 'ai_helper' ? (
+            <AiHelperSettings />
+          ) : tab === 'users' ? (
             <UsersClient />
           ) : tab === 'materials_library' ? (
             <MaterialsClient embedded />

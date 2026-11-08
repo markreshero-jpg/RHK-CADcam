@@ -20,6 +20,7 @@ import { READ_TOOLS, runReadTool, type ToolContext } from '../readTools'
 import { DRAW_RULES } from '../drawRules'
 import { planBatch, type BatchOp } from './cabinetBatch'
 import type { Proposal } from './chat'
+import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
 
 export const DRAW_MODEL = 'claude-opus-5-5'
 // $ per million tokens (Opus 5.5): cache reads $0.20, writes 1.25× input.
@@ -193,7 +194,7 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
     ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, cache_control: { type: 'ephemeral' } }
     : { type: 'image', source: { type: 'base64', media_type: mime as 'image/png' | 'image/jpeg' | 'image/webp', data }, cache_control: { type: 'ephemeral' } }
 
-  const [summary, setup] = await Promise.all([loadRoomSummary(args.roomId), loadSetup(args.projectId, args.roomId)])
+  const [summary, setup, aiCtx] = await Promise.all([loadRoomSummary(args.roomId), loadSetup(args.projectId, args.roomId), loadAiContext(args.projectId)])
   const answers = draw.qa.length
     ? `\n\nYou asked before drawing; the user answered:\n${draw.qa.map(x => `Q: ${x.q}\nA: ${x.a}`).join('\n')}\nDraw now to these answers (ask again only if something is still missing).`
     : ''
@@ -205,7 +206,7 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
   const messages: Anthropic.MessageParam[] = [{
     role: 'user', content: [
       source,
-      { type: 'text', text: `${setup.text}\n\nThe room as it is now (draw into it — use its existing walls by name; add only walls that are missing; never touch what's there):\n<room_summary>\n${summary}\n</room_summary>\n\n${draw.notes || 'Draw this room from the plan.'}${answers}` },
+      { type: 'text', text: `${setup.text}\n\nThe room as it is now (draw into it — use its existing walls by name; add only walls that are missing; never touch what's there):\n<room_summary>\n${summary}\n</room_summary>${jobNotesBlock(aiCtx.jobNotes)}\n${draw.notes || 'Draw this room from the plan.'}${answers}` },
     ],
   }]
 
@@ -218,7 +219,7 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
   for (let i = 0; i < MAX_CALLS; i++) {
     const res = await anthropic.messages.stream({
       model: DRAW_MODEL, max_tokens: 32000,
-      system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
+      system: systemBlocks(SYSTEM, aiCtx.rules),
       tools: [...READ_TOOLS.filter(t => t.name === 'find_library'), ASK_TOOL, PLAN_TOOL],
       output_config: { effort: 'high' },
       messages,
