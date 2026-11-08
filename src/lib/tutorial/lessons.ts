@@ -1685,7 +1685,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Press F7, or click CAD in the left sidebar (or turn on CAD in the cabinet editor).',
       target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
     { id: 'pick', title: 'Pick or type a colour',
-      body: 'In the Colour group, click the big swatch to pick any colour, or type a code like #0891b2 in the code box and press Enter.',
+      body: 'In the Colour group, click the big swatch to open the colour chart and click a colour (More… opens the full picker), or type a code like #0891b2 in the code box and press Enter.',
       target: 'cad-colour', canvas: true, done: (c, s) => ev(c, 'annot_style') > ev(s, 'annot_style') },
     { id: 'save', title: 'Save it',
       body: 'Click + to save the current colour. It joins the swatches for everyone in the shop, on every PC and phone. Click a saved swatch to use it; right-click it to remove it. Saving needs an admin login.',

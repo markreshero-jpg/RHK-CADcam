@@ -69,12 +69,64 @@ function Icon({ children }: { children: React.ReactNode }) {
   return <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">{children}</svg>
 }
 
+// CC2: the swatch chart behind every colour button - hue columns x shade rows, a grey row,
+// then the shop's saved colours. "More…" opens the system colour picker.
+const hsl = (h: number, s: number, l: number) => {
+  const a = s * Math.min(l, 1 - l)
+  const f = (n: number) => { const k = (n + h / 30) % 12; return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, '0') }
+  return `#${f(0)}${f(8)}${f(4)}`
+}
+const SWATCH_HUES = [0, 20, 35, 50, 75, 120, 160, 185, 200, 220, 250, 275, 300, 330]
+const SWATCH_ROWS = [0.88, 0.75, 0.6, 0.48, 0.36, 0.25]
+const SWATCH_GRID: string[][] = [
+  ...SWATCH_ROWS.map(l => SWATCH_HUES.map(h => hsl(h, 0.8, l))),
+  Array.from({ length: SWATCH_HUES.length }, (_, i) => hsl(0, 0, 1 - i / (SWATCH_HUES.length - 1))),
+]
+
 function Colour({ value, onChange, title }: { value: string; onChange: (c: string) => void; title: string }) {
+  const [open, setOpen] = useState<{ x: number; y: number } | null>(null)
+  const btn = useRef<HTMLButtonElement>(null)
+  const saved = useCustomColours()
+  useEffect(() => {
+    if (!open) return
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest?.('[data-colourchart]')) setOpen(null) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(null) }
+    window.addEventListener('pointerdown', close); window.addEventListener('keydown', esc)
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', esc) }
+  }, [open])
+  const cur = (value ?? '').toLowerCase()
+  const cell = (c: string) => (
+    <button key={c} title={c} onMouseDown={keep} onClick={() => { onChange(c); setOpen(null) }}
+      className={`w-4 h-4 rounded-sm border ${cur === c ? 'border-white ring-1 ring-rose-400' : 'border-black/30'}`} style={{ background: c }} />
+  )
   return (
-    <label title={title} className="relative w-6 h-6 shrink-0 rounded border border-gray-500 cursor-pointer overflow-hidden"
-      style={{ background: value }}>
-      <input type="color" value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
-    </label>
+    <div className="shrink-0" data-colourchart>
+      <button ref={btn} title={`${title} - colour chart`} onMouseDown={keep}
+        onClick={() => { const r = btn.current!.getBoundingClientRect(); setOpen(o => o ? null : { x: r.left, y: r.bottom + 4 }) }}
+        className="block w-6 h-6 rounded border border-gray-500" style={{ background: value }} />
+      {open && (
+        <div data-colourchart className="fixed z-50 bg-gray-800 border border-gray-600 rounded-lg shadow-xl p-2"
+          style={{ left: Math.max(8, Math.min(open.x, window.innerWidth - 270)), top: Math.max(8, Math.min(open.y, window.innerHeight - 260)) }}>
+          <div className="text-[10px] uppercase tracking-wide text-gray-500 mb-1">{title}</div>
+          <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${SWATCH_HUES.length}, 1rem)` }}>
+            {SWATCH_GRID.flat().map(cell)}
+          </div>
+          {saved.length > 0 && (<>
+            <div className="text-[10px] uppercase tracking-wide text-gray-500 mt-2 mb-1">Shop colours</div>
+            <div className="grid gap-0.5" style={{ gridTemplateColumns: `repeat(${SWATCH_HUES.length}, 1rem)` }}>{saved.map(cell)}</div>
+          </>)}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="w-5 h-5 rounded border border-gray-500" style={{ background: value }} />
+            <span className="text-[11px] font-mono text-gray-300">{cur}</span>
+            <label className="ml-auto text-[11px] text-gray-300 hover:text-white cursor-pointer relative">
+              More…
+              <input type="color" value={/^#[0-9a-f]{6}$/.test(cur) ? cur : '#000000'} onChange={e => onChange(e.target.value)}
+                className="absolute inset-0 opacity-0 cursor-pointer" />
+            </label>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -311,7 +363,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
               className={`w-4 h-4 shrink-0 rounded-sm border ${!(cadLayers && cad.ribbonByLayer) && s.color.toLowerCase() === c ? 'border-white ring-1 ring-rose-400' : 'border-gray-600'}`}
               style={{ background: c }} />
           ))}
-          <Colour value={s.color} title="Pick any colour" onChange={c => set({ color: c })} />
+          <Colour value={s.color} title="Colour" onChange={c => set({ color: c, borderColor: c, fillColor: c })} />
           <CustomColours current={s.color} active={!(cadLayers && cad.ribbonByLayer)}
             onPick={c => set({ color: c, borderColor: c, fillColor: c })} />
         </Group>
