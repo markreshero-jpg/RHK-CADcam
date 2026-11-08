@@ -248,8 +248,8 @@ they're sent on every request.
 
 ## Open items (check while building)
 
-- **Production key:** `ANTHROPIC_API_KEY` must be set in Vercel's environment for the
-  live site (it's in `.env.local` for dev). Spend cap US$50 set in the Anthropic Console.
+- **Production key:** `ANTHROPIC_API_KEY` is set in Vercel (Mark, 2026-11-08) and in
+  `.env.local` for dev. Spend cap US$50 in the Anthropic Console.
 - Corners: the summary's class column says `base_corner` etc., but "the corner
   cabinet" is ambiguous when the corner is a plain code — Haiku asks which label.
 

@@ -12,16 +12,40 @@ interface Msg { id: string; role: 'user' | 'assistant'; text: string; room_id: s
 
 const SUGGESTIONS = ['What is the total kick length?', 'Which cabinets are TBC?', 'List the overheads and their sizes']
 
-/** **bold** and "- " bullets — all the replies use. */
+const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+  part.startsWith('**') && part.endsWith('**') ? <strong key={i} className="text-white">{part.slice(2, -2)}</strong> : part)
+
+const isTableRow = (line: string) => /^\s*\|.*\|\s*$/.test(line)
+const cells = (line: string) => line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim())
+
+/** **bold**, "- " bullets and | tables | — all the replies use. */
 function renderReply(text: string): ReactNode {
-  const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-    part.startsWith('**') && part.endsWith('**') ? <strong key={i} className="text-white">{part.slice(2, -2)}</strong> : part)
-  return text.split('\n').map((line, i) => {
+  const lines = text.split('\n')
+  const out: ReactNode[] = []
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+    if (isTableRow(line)) {
+      const rows: string[] = []
+      while (i < lines.length && isTableRow(lines[i])) rows.push(lines[i++])
+      i--
+      const body = rows.filter(r => !/^\s*\|[\s:|-]+\|\s*$/.test(r))   // drop the |---| divider
+      const [head, ...rest] = body
+      out.push(
+        <div key={i} className="overflow-x-auto my-1">
+          <table className="text-xs border-collapse">
+            <thead><tr>{cells(head).map((c, j) => <th key={j} className="text-left font-medium text-gray-300 border-b border-gray-700 px-1.5 py-0.5">{inline(c)}</th>)}</tr></thead>
+            <tbody>{rest.map((r, k) => <tr key={k}>{cells(r).map((c, j) => <td key={j} className="border-b border-gray-800 px-1.5 py-0.5 align-top">{inline(c)}</td>)}</tr>)}</tbody>
+          </table>
+        </div>,
+      )
+      continue
+    }
     const bullet = /^\s*[-•*]\s+/.test(line)
-    return bullet
+    out.push(bullet
       ? <div key={i} className="pl-3 -indent-3">• {inline(line.replace(/^\s*[-•*]\s+/, ''))}</div>
-      : <div key={i} className={line.trim() ? '' : 'h-2'}>{inline(line)}</div>
-  })
+      : <div key={i} className={line.trim() ? '' : 'h-2'}>{inline(line)}</div>)
+  }
+  return out
 }
 
 const cents = (usd: number) => `${(usd * 100).toFixed(usd < 0.01 ? 2 : 1)}¢`

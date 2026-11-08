@@ -131,7 +131,7 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
   const w = walls.find(x => x.id === c.wall_id)
   const [def, fronts, carcass, custom, fixtures] = await Promise.all([
     c.cabinet_definition_id ? supabase.from('cabinet_definitions').select('name').eq('id', c.cabinet_definition_id).maybeSingle() : Promise.resolve({ data: null }),
-    supabase.from('face_zones').select('face_type, row_index, col_index, dx, dy, material_id, handle_hardware_id, hinge_side').eq('cabinet_instance_id', c.id),
+    supabase.from('face_zones').select('facet, face_type, row_index, col_index, dx, dy, material_id, handle_hardware_id, hinge_side').eq('cabinet_instance_id', c.id),
     supabase.from('case_parts').select('part_key, dx, dy, dz, material_id').eq('cabinet_instance_id', c.id),
     supabase.from('cabinet_custom_parts').select('name, dx, dy, dz, material_id, visible').eq('cabinet_instance_id', c.id),
     supabase.from('room_fixtures').select('name, label, display_name').eq('cabinet_id', c.id),
@@ -146,9 +146,12 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
     `Position: ${w ? `${w.name} @ ${wallOffset(c, w)}` : 'not on a wall'}; neighbours left ${c.left_neighbour_type ?? '-'}, right ${c.right_neighbour_type ?? '-'}`,
     c.notes ? `Notes: ${c.notes}` : '',
     rules.length ? `Rule overrides: ${rules.map(k => `${k}=${JSON.stringify((c.rule_overrides as Record<string, unknown>)[k])}`).join(', ')}` : '',
-    '', 'Fronts (type | row,col | W×H | colour | handle | hinge):',
-    ...fz.sort((a, b) => a.row_index - b.row_index || a.col_index - b.col_index).map(f =>
-      `${f.face_type} | ${f.row_index},${f.col_index} | ${r(f.dx)}×${r(f.dy)} | ${mats.get(f.material_id) ?? '-'} | ${handles.get(f.handle_hardware_id) ?? '-'} | ${f.hinge_side ?? '-'}`),
+    // A shaped cabinet (pie corner, angled end) has fronts on more than one face:
+    // facet '' = its main face, others are named by the footprint edge.
+    '', 'Fronts (face | type | row,col | W×H | colour | handle | hinge — doors only):',
+    ...fz.sort((a, b) => (a.facet ?? '').localeCompare(b.facet ?? '') || a.row_index - b.row_index || a.col_index - b.col_index).map(f =>
+      `${f.facet ? `${f.facet} face` : 'main face'} | ${f.face_type} | ${f.row_index},${f.col_index} | ${r(f.dx)}×${r(f.dy)} | ${mats.get(f.material_id) ?? '-'} | ${handles.get(f.handle_hardware_id) ?? '-'} | ${f.face_type === 'door' ? f.hinge_side ?? '-' : '-'}`),
+    ...(new Set(fz.map(f => f.facet ?? '')).size > 1 ? ['(Fronts on different faces are separate fronts, even when their row,col match.)'] : []),
     '', 'Carcass parts (part | length × width × thickness | board):',
     ...cp.sort((a, b) => a.part_key.localeCompare(b.part_key)).map(p => `${p.part_key} | ${r(p.dy)}×${r(p.dx)}×${r(p.dz)} | ${mats.get(p.material_id) ?? '-'}`),
     ...(cu.length ? ['', 'Custom parts (name | size | board):', ...cu.map(p => `${p.name} | ${r(p.dx)}×${r(p.dy)}×${r(p.dz)} | ${mats.get(p.material_id) ?? '-'}`)] : []),
