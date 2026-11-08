@@ -279,7 +279,7 @@ export function normalizeProject(
   // The tape product a part's banded edges take — same fallback as bandOf.
   const tapeIdOf = (table: SourceTable, r: Row): string | null => {
     const mat = r.material_id as string | null
-    const own = table === 'custom_parts' ? null : (r.edge_band_id as string | null | undefined)
+    const own = r.edge_band_id as string | null | undefined
     return own ?? (mat ? matEbId.get(mat) ?? null : null)
   }
   const flagsOf = (r: Row): EdgeFlags => ({
@@ -491,7 +491,7 @@ export function normalizeProject(
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
   }
   // Custom parts (fillers / applied panels / end panels). Key mirrors PartsView (custom_<id>).
-  // No edgeband id of their own — fall back to the tape used with the same material.
+  // Tape: their own edge_band_id when set (e.g. 38 tape on 33 glued-up panels), else the tape used with the same material.
   for (const r of ccp) {
     const flags: EdgeFlags = { top: !!r.edge_top, bottom: !!r.edge_bottom, left: !!r.edge_left, right: !!r.edge_right }
     const t = r.material_id ? matEb.get(r.material_id as string) : undefined
@@ -521,7 +521,7 @@ export const PART_SELECTS = {
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,grain_direction,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,hinge_side,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id,facing',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,outline,cutouts,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,outline,cutouts,material_id,no_cnc,hide_views,edge_top,edge_bottom,edge_left,edge_right,grain_across',
+  custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,outline,cutouts,material_id,no_cnc,hide_views,edge_band_id,edge_top,edge_bottom,edge_left,edge_right,grain_across',
 } as const
 
 // Fetch the edge_banding thicknesses referenced by a set of part rows — shared
