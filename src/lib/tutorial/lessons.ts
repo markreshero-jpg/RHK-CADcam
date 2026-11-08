@@ -1713,6 +1713,21 @@ export const LESSONS: TutorialLesson[] = [
       target: 'cad-delete', canvas: true, done: (c, s) => ev(c, 'cad_delete') > ev(s, 'cad_delete') },
   ]},
 
+  // Appended 2026-11-08 (z_CAD_tool NG1: arrow-key nudge).
+  { id: 'cad_nudge', level: 'basics', topic: 'cad', title: 'Nudge CAD with the arrow keys',
+    blurb: 'Move selected text, lines or a group a little at a time with the arrow keys.',
+    keywords: 'cad nudge arrow keys move shift alt text line group selection small step', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar (or turn on CAD in the cabinet editor).',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'select', title: 'Select something',
+      body: 'Pick Select (S) and click a CAD item, or drag a box round several.',
+      target: 'cad-select', canvas: true, done: c => c.annotSelected > 0 },
+    { id: 'nudge', title: 'Nudge it',
+      body: 'Press the arrow keys: each press moves it 10 mm. Hold Shift for 100 mm, Ctrl for 1 mm. A run of presses is one Undo step.',
+      canvas: true, done: (c, s) => JSON.stringify(c.annotations.map(a => a.geom)) !== JSON.stringify(s.annotations.map(a => a.geom)) },
+  ]},
+
   // Appended 2026-11-04 (z_curved_end C9: rangehood in a curved wall end).
   { id: 'curved_rangehood', level: 'intermediate', topic: 'cabinets', title: 'Put a rangehood in a curved wall cabinet',
     blurb: 'A WCRVFIXP with the rangehood hole in its bottom, a rib as the flue shelf and a flue box up to the top.',

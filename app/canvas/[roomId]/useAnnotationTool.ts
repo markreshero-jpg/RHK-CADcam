@@ -615,6 +615,15 @@ export function useAnnotationTool({
     for (const [id, geom] of moved) void storeRef.current.update(id, { geom })
   }, [liveSelected, k, captureSnapshot, setAnnotations])
 
+  /** NG1: arrow keys nudge the selection by dx / dy (frame mm). A held key / quick taps
+   *  make one undo step; saved shortly after the last nudge. */
+  const nudgeSelection = useCallback((dx: number, dy: number) => {
+    if (!liveSelected.size) return
+    snapshotForBurst()
+    setAnnotations(xs => xs.map(a => liveSelected.has(a.id) ? { ...a, geom: translateGeom(a.kind, a.geom, dx, dy) } : a))
+    for (const id of liveSelected) persistSoon(id)
+  }, [liveSelected, snapshotForBurst, setAnnotations, persistSoon])
+
   /** CAD panel: replace one item's geometry (a typed coordinate). One undo step, saved now. */
   const patchGeom = useCallback((id: string, geom: RoomAnnotation['geom']) => {
     if (!annRef.current.some(x => x.id === id)) return
@@ -1526,6 +1535,16 @@ export function useAnnotationTool({
         return
       }
       if (e.key === 'Delete' || e.key === 'Backspace') { take(); deleteSelected(); return }
+      // NG1 (Mark 2026-11-08): arrows nudge the selected CAD - 10 mm, Shift 100, Ctrl 1
+      // (not Alt: Alt+Left is the browser's Back).
+      if (!e.altKey && liveSelected.size && !drawingRef.current && !pendingRef.current && !dragRef.current
+        && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        take()
+        const step = e.shiftKey ? 100 : mod ? 1 : 10
+        nudgeSelection(e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0,
+                       e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0)
+        return
+      }
       if (e.key === 'Enter' && selected.length === 1 && selected[0].kind === 'text') { take(); startEdit(selected[0]); return }
       if (!mod && !e.altKey) {
         const t = CAD_TOOL_KEYS[e.key.toLowerCase()]
@@ -1534,7 +1553,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen, dimMode, commitTyped])
+  }, [active, liveSelected, selected, tool, deleteSelected, nudgeSelection, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen, dimMode, commitTyped])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
