@@ -1829,6 +1829,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Type a question and press Enter, e.g. "What is the total kick length?" or "Which cabinets are TBC?". It reads the room as saved (cabinets, fronts, colours, kicks, CAD notes and clouds) and answers in a few seconds. Each answer shows what it cost, usually well under 1¢. It can only read for now: ask it to change something and it will say so.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
   ]},
+
+  // Appended 2026-11-08 (main menu dashboard + job search).
+  { id: 'job_search', level: 'basics', topic: 'room', title: 'Find a job on the dashboard',
+    blurb: 'Search jobs by number, name, client, address or room, and filter by status.',
+    keywords: 'search find job project dashboard main menu home status filter recent room', steps: [
+    { id: 'home', title: 'Go to the dashboard',
+      body: 'Open File → Back to Projects. The dashboard shows a search bar, status tiles (click one to filter, click it again to go back to all active jobs), your jobs, and on the right the jobs worked on most recently with their rooms.',
+      target: 'menu-File', done: c => c.path === '/' },
+    { id: 'search', title: 'Search for a job',
+      body: 'Click the search bar (or press / anywhere on the page) and type part of a job number, name, client, address or room name, e.g. "6595" or "laundry". Archived jobs are searched too. A job whose room matches opens to show its rooms. Esc clears the search; if only one job with one room matches, Enter opens it. Click a room to open it.',
+      target: 'job-search', done: c => c.inCanvas },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

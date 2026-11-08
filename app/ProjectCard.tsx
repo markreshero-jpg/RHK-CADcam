@@ -199,14 +199,21 @@ function SortableRoomRow({ room, removing, onEdit, onDelete }: {
 
 // ── Component ─────────────────────────────────────────────────────────────────────
 
-export default function ProjectCard({ project, initialRooms, defaultExpanded = false, onStatusChange }: {
+export default function ProjectCard({ project, initialRooms, defaultExpanded = false, forceExpanded = false, onStatusChange }: {
   project: Project
   initialRooms: Room[]
   defaultExpanded?: boolean
+  /** Opens the card while true (dashboard search matched a room name), closes it again after. */
+  forceExpanded?: boolean
   onStatusChange?: (status: ProjectStatus) => void
 }) {
   const isAdmin = useIsAdmin()
-  const [expanded, setExpanded] = useState(defaultExpanded)
+  const [expanded, setExpanded] = useState(defaultExpanded || forceExpanded)
+  const [prevForce, setPrevForce] = useState(forceExpanded)
+  if (forceExpanded !== prevForce) {
+    setPrevForce(forceExpanded)
+    setExpanded(forceExpanded || defaultExpanded)
+  }
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
   const [editRoom, setEditRoom] = useState<Room | null>(null)
 
@@ -436,6 +443,9 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
         {/* Main info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2.5 flex-wrap">
+            {project.job_number && !project.name.includes(project.job_number) && (
+              <span className="text-xs font-mono text-ink-subtle">{project.job_number}</span>
+            )}
             <span className="font-semibold text-ink text-sm">{project.name}</span>
             <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />

@@ -118,7 +118,7 @@ export default async function HomePage({ searchParams }: {
       </header>
 
       {/* Content */}
-      <main className="px-6 py-6 max-w-5xl">
+      <main className="px-6 py-6 max-w-7xl mx-auto">
         {projects.length === 0 ? (
           <>
             <div className="flex items-center justify-between mb-4">
@@ -140,7 +140,7 @@ export default async function HomePage({ searchParams }: {
             </div>
           </>
         ) : (
-          <ProjectList initialProjects={projects} expand={expand} />
+          <ProjectList initialProjects={projects} expand={expand} isAdmin={isAdmin} />
         )}
       </main>
     </div>
