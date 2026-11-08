@@ -41,6 +41,8 @@ export interface ModalCadContext {
   annotations:     RoomAnnotation[]
   setAnnotations:  React.Dispatch<React.SetStateAction<RoomAnnotation[]>>
   captureSnapshot: () => void
+  /** Undo / Redo buttons in the CAD tools (UR1) - the canvas's shared history. */
+  history?:        { undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean }
   /** frame mm per paper mm (the room's annotation scale) + its setter. */
   scale:           number
   onScale:         (n: number) => void
@@ -348,7 +350,7 @@ export function useCabinetCad({ ctx, cabinet, rp, sheet = 'front', viewOn, onEnt
 
   const ribbon = active && ctx ? (
     <div className="flex-none w-64 border-r border-gray-800 bg-gray-900 overflow-y-auto" onPointerDown={e => e.stopPropagation()}>
-      <CadRibbon cad={cad} viewSupported scale={ctx.scale} onScale={ctx.onScale} snap={ctx.snap} onSnap={ctx.onSnap} />
+      <CadRibbon cad={cad} viewSupported scale={ctx.scale} onScale={ctx.onScale} snap={ctx.snap} onSnap={ctx.onSnap} history={ctx.history} />
     </div>
   ) : null
 

@@ -1692,6 +1692,24 @@ export const LESSONS: TutorialLesson[] = [
       target: 'cad-colour', canvas: true, done: (c, s) => ev(c, 'cad_colour_saved') > ev(s, 'cad_colour_saved') },
   ]},
 
+  // Appended 2026-11-08 (z_CAD_tool UR1: Undo / Redo buttons for pen / touch).
+  { id: 'cad_undo_redo', level: 'start', topic: 'cad', title: 'Undo and redo in CAD',
+    blurb: 'Take back the last stroke or change with the Undo button - handy with a pen, where there is no keyboard.',
+    keywords: 'cad undo redo back ctrl z y pen stylus touch mistake sketch', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar (or turn on CAD in the cabinet editor).',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'draw', title: 'Draw something',
+      body: 'Draw a line or a freehand sketch (P).',
+      canvas: true, done: (c, s) => c.annotations.length > s.annotations.length },
+    { id: 'undo', title: 'Undo it',
+      body: 'Tap Undo at the top of the CAD tools. It takes back the last change, one step per tap - the same as Ctrl+Z.',
+      target: 'cad-undo', canvas: true, done: (c, s) => ev(c, 'cad_undo') > ev(s, 'cad_undo') },
+    { id: 'redo', title: 'Redo it',
+      body: 'Tap Redo to put it back (Ctrl+Y). Undo covers the whole room - walls and cabinets too - not just CAD.',
+      target: 'cad-undo', canvas: true, done: (c, s) => ev(c, 'cad_redo') > ev(s, 'cad_redo') },
+  ]},
+
   // Appended 2026-11-04 (z_curved_end C9: rangehood in a curved wall end).
   { id: 'curved_rangehood', level: 'intermediate', topic: 'cabinets', title: 'Put a rangehood in a curved wall cabinet',
     blurb: 'A WCRVFIXP with the rangehood hole in its bottom, a rib as the flue shelf and a flue box up to the top.',

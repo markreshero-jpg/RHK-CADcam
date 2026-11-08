@@ -3528,7 +3528,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           cadPanel={(canvasView === 'plan' || canvasView === 'elevation') && (
             <CadRibbon cad={cad} viewSupported={canvasView === 'plan' || !!cadElevWallId} scale={annotScale} onScale={setAnnotScale}
               snap={cadSnapSettings} onSnap={setCadSnapSettings}
-              cadLayers={{ list: cadLayers, current: cadLayerCurrent, setCurrent: setCadLayerCurrent }} />
+              cadLayers={{ list: cadLayers, current: cadLayerCurrent, setCurrent: setCadLayerCurrent }}
+              history={{ undo: () => void handleUndo(), redo: () => void handleRedo(), canUndo: !!canUndo, canRedo: !!canRedo }} />
           )}
           clipboard={clipboard}
           sidebarW={sidebarW}
@@ -4426,6 +4427,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             initialView={editCabInitialView}
             cadCtx={{
               room, walls, annotations, setAnnotations, captureSnapshot,
+              history: { undo: () => void handleUndo(), redo: () => void handleRedo(), canUndo: !!canUndo, canRedo: !!canRedo },
               scale: annotScale, onScale: setAnnotScale, snap: cadSnapSettings, onSnap: setCadSnapSettings,
               fields: cadFields, itemCad,
               // Hide / Detach (z_item_cad IC2): straight to the row, no re-resolve (like label_offsets).

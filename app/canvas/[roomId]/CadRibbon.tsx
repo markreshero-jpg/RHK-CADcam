@@ -249,7 +249,7 @@ function SnapMenu({ snap, onSnap }: { snap: CadSnapSettings; onSnap: (s: CadSnap
   )
 }
 
-export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, onSnap, cadLayers }: {
+export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, onSnap, cadLayers, history }: {
   cad: AnnotationTool
   /** false on views annotations don't cover yet (elevation until A6). */
   viewSupported: boolean
@@ -259,6 +259,9 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
   onSnap: (s: CadSnapSettings) => void
   /** Named CAD layers (z_cad_layers): the job's list + the current layer for new items. */
   cadLayers?: { list: CadLayer[]; current: string | null; setCurrent: (id: string | null) => void }
+  /** UR1: Undo / Redo buttons (the shared canvas history) for pen / touch, where there's
+   *  no Ctrl+Z. Same history as Ctrl+Z / Ctrl+Y. */
+  history?: { undo: () => void; redo: () => void; canUndo: boolean; canRedo: boolean }
 }) {
   const s = cad.ribbonStyle
   // The tutorial (z_tutorial) counts a ribbon style change as one event.
@@ -303,6 +306,20 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
   return (
     <div className="ml-2.5 pl-1.5 border-l-2 border-rose-500/50 flex flex-col gap-1.5 pt-1 pb-1.5"
       onPointerDown={e => e.stopPropagation()}>
+      {history && (
+        <div className="flex gap-1" data-tour="cad-undo">
+          <button title="Undo (Ctrl+Z)" disabled={!history.canUndo} onMouseDown={keep}
+            onClick={() => { history.undo(); useTutorial.getState().emit('cad_undo') }}
+            className="flex-1 h-8 rounded flex items-center justify-center gap-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white disabled:text-gray-600 disabled:hover:bg-gray-800">
+            <Icon><path d="M6 4L2.5 7.5 6 11" /><path d="M3 7.5h6.5a3.5 3.5 0 010 7H7" /></Icon>Undo
+          </button>
+          <button title="Redo (Ctrl+Y)" disabled={!history.canRedo} onMouseDown={keep}
+            onClick={() => { history.redo(); useTutorial.getState().emit('cad_redo') }}
+            className="flex-1 h-8 rounded flex items-center justify-center gap-1.5 text-xs bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700 hover:text-white disabled:text-gray-600 disabled:hover:bg-gray-800">
+            Redo<Icon><path d="M10 4l3.5 3.5L10 11" /><path d="M13 7.5H6.5a3.5 3.5 0 000 7H9" /></Icon>
+          </button>
+        </div>
+      )}
       <div className="grid grid-cols-[repeat(auto-fill,1.75rem)] gap-0.5">
       {TOOLS.map(t => (
         <Btn key={t.id} on={cad.tool === t.id} title={`${t.label} (${t.key})`} onClick={() => cad.setTool(t.id)} disabled={!viewSupported} tour={`cad-${t.id}`}>
