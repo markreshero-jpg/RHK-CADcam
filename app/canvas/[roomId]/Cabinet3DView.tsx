@@ -724,9 +724,11 @@ function DrawerAssembly({
   function ebFor(matId: string): EbSpec | undefined {
     const spec = ebByMatId?.[matId]
     if (!spec) return undefined
-    // Tape with no colour on record reads as the part's material face colour —
-    // one colour for every strip, matched to the face.
-    return { thick: spec.thickness, color: spec.color ?? unpackMatCol(materialColours?.[matId], '#c8b89a').face }
+    // Tape matches its board: drawn in the part material's face colour; the
+    // tape row's own colour only when the board has no colour on record.
+    const mc = materialColours?.[matId]
+    const face = typeof mc === 'string' ? mc : mc?.face
+    return { thick: spec.thickness, color: face ?? spec.color ?? '#c8b89a' }
   }
   function applyEdgeOv<T extends PartMeta>(info: T): T {
     const ov = edgeOverrides.get(info.id)
@@ -1512,9 +1514,11 @@ export function CabinetScene({
   function ebFor(matId: string): EbSpec | undefined {
     const spec = ebByMatId?.[matId]
     if (!spec) return undefined
-    // Tape with no colour on record reads as the part's material face colour —
-    // one colour for every strip, matched to the face.
-    return { thick: spec.thickness, color: spec.color ?? unpackMatCol(materialColours?.[matId], '#c8b89a').face }
+    // Tape matches its board: drawn in the part material's face colour; the
+    // tape row's own colour only when the board has no colour on record.
+    const mc = materialColours?.[matId]
+    const face = typeof mc === 'string' ? mc : mc?.face
+    return { thick: spec.thickness, color: face ?? spec.color ?? '#c8b89a' }
   }
 
   // Pocket/route (area) ops → real CSG recesses per part (keyed by source_part_key).

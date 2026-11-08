@@ -94,6 +94,9 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
         // carcass / front part uses — e.g. a per-cabinet 33 board override.
         rp.custom_parts?.forEach(p => { if (p.material_id) matIds.add(p.material_id) })
       }
+      // Board face colours by material — edge tape is drawn in its board's face
+      // colour (tape matches the board), so the tape row's own colour is ignored.
+      const faceByMat: Record<string, string> = {}
       if (matIds.size > 0) {
         const { data } = await supabase
           .from('materials').select('id, face_colour, back_colour, edge_colour, has_grain, opacity')
@@ -101,6 +104,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
         if (data) {
           const colours: MatColours = {}
           for (const m of data) {
+            if (m.face_colour) faceByMat[m.id] = m.face_colour
             colours[m.id] = {
               face: m.face_colour ?? undefined,
               back: m.back_colour ?? undefined,
@@ -132,7 +136,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
           const specs: EbByMatId = {}
           for (const eb of ebData) {
             for (const matId of (ebIdToMatIds.get(eb.id) ?? [])) {
-              specs[matId] = { thickness: eb.thickness, color: ebColour(eb.color) }
+              specs[matId] = { thickness: eb.thickness, color: faceByMat[matId] ?? ebColour(eb.color) }
             }
           }
           if (Object.keys(specs).length > 0) setEbByMatId(specs)
@@ -192,6 +196,9 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       [input.toekick_face_material.id,     input.toekick_face_edgeband_id],
       [input.toekick_interior_material.id, input.toekick_interior_edgeband_id],
     ]
+    const faceByMat: Record<string, string> = {}
+    for (const m of [input.material, input.door_material, input.shelf_material, input.toekick_face_material, input.toekick_interior_material])
+      if (m?.face_colour) faceByMat[m.id] = m.face_colour
     const needed = pairs.filter((p): p is [string, string] => !!p[1])
     if (needed.length === 0) return
     const uniqueEbIds = [...new Set(needed.map(([, ebId]) => ebId))]
@@ -201,7 +208,7 @@ export function useMaterialColours(initialCabinets: CabinetInstance[]) {
       const specs: EbByMatId = {}
       for (const [matId, ebId] of needed) {
         const eb = ebMap.get(ebId)
-        if (eb) specs[matId] = { thickness: eb.thickness, color: ebColour(eb.color) }
+        if (eb) specs[matId] = { thickness: eb.thickness, color: faceByMat[matId] ?? ebColour(eb.color) }
       }
       if (Object.keys(specs).length > 0) setEbByMatId(prev => ({ ...prev, ...specs }))
     })

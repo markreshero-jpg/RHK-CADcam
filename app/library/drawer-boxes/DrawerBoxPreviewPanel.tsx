@@ -629,7 +629,7 @@ export default function DrawerBoxPreviewPanel({
   }), [selMat])
 
   const ebSpec = selEb
-    ? { thick: Number(selEb.thickness), color: ebColour(selEb.color) ?? matCol.face }
+    ? { thick: Number(selEb.thickness), color: matCol.face }
     : undefined
 
   // Per-id lookups so the 3D view can render each part with its own material/banding

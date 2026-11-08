@@ -172,7 +172,9 @@ export default function DrawerBox3DView({
               back: partCol.back,
               edge: partCol.edge,
             }
-            const partEbSpec = (p.edge_band?.id && ebSpecById?.[p.edge_band.id]) || ebSpec
+            // Tape matches its board: thickness from the tape, colour = part face.
+            const tapeSpec = (p.edge_band?.id && ebSpecById?.[p.edge_band.id]) || ebSpec
+            const partEbSpec = tapeSpec ? { ...tapeSpec, color: partCol.face } : undefined
             const meta: PartMeta = {
               id:        `${p.part_type}_${i}`,
               label:     DB_LABELS[p.part_type],

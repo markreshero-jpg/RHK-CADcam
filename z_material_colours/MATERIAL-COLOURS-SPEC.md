@@ -263,7 +263,7 @@ between two oaks).
 - **Grain direction:** rotate by the part's grain direction, so grain runs along
   DY (length), following [[cv-part-dimension-convention]]. Doors and drawer fronts
   use the same rule.
-- **Edges** stay the tape colour. `face_colour` remains the average colour, used
+- **Edges:** taped edges are drawn in the board's face colour (tape matches the board; the tape row's own colour is used only when the board has none — 2026-11-08, Mark). Untaped (raw) edges use the colour's `edge_colour`; MDF-core boards use the MDF board's edge colour (#ffa3a3, set on LX Abs Grain 2026-11-08). `face_colour` remains the average colour, used
   for plan view and while an image loads.
 - **Later, optional:** pattern fill in elevation and shop drawings.
 
