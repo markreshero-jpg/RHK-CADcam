@@ -4,7 +4,7 @@
 
 import { createServerClient } from '@/src/lib/supabase-server'
 import { withSupabase } from '@/src/lib/ai/server/scope'
-import { updateCabinets } from '@/src/lib/ai/server/cabinetBatch'
+import { runBatch } from '@/src/lib/ai/server/cabinetBatch'
 import type { Proposal } from '@/src/lib/ai/server/chat'
 
 export const maxDuration = 60
@@ -28,9 +28,9 @@ export async function POST(request: Request) {
 
   const p = msg.proposal as Proposal
   try {
-    const res = await withSupabase(supabase, () => updateCabinets({
-      roomId: p.roomId, filter: p.filter, changes: p.changes, onlyIds: p.onlyIds, description: p.description,
-    }))
+    // AI2 proposals carried one update (filter + changes); AI3 ones carry steps.
+    const ops = p.ops ?? (p.filter && p.changes ? [{ op: 'update' as const, filter: p.filter, changes: p.changes }] : [])
+    const res = await withSupabase(supabase, () => runBatch(p.roomId, ops, { description: p.description, onlyIds: p.onlyIds }))
     if (res.batchId) {
       await supabase.from('ai_messages').update({ proposal_status: 'applied', batch_id: res.batchId, changed: res.changed }).eq('id', msg.id)
     }

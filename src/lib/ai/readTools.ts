@@ -22,6 +22,15 @@ export const READ_TOOLS: Anthropic.Tool[] = [
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'find_library',
+    description: 'Search the cabinet library for codes to place: by code or words (e.g. "end panel", "filler", "BEP", "drawer 600"). Returns code | class | default W×H×D | category.',
+    input_schema: {
+      type: 'object',
+      properties: { search: { type: 'string' } },
+      required: ['search'], additionalProperties: false,
+    },
+  },
+  {
     name: 'get_cabinet_detail',
     description: 'Full detail for one cabinet by label: size, position, neighbours, notes, every front (type, size, colour, handle, hinge side), carcass parts (size, board), custom parts (end panels, fillers) and fixtures on it.',
     input_schema: {
@@ -159,8 +168,28 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
   ].filter((l, i, a) => l !== '' || (i > 0 && a[i - 1] !== '')).join('\n')
 }
 
+async function findLibrary(input: { search?: string }): Promise<string> {
+  const q = String(input.search ?? '').trim()
+  if (!q) return 'Give a code or a few words to search for.'
+  const [{ data: cats }, { data: defs }] = await Promise.all([
+    supabase.from('cabinet_categories').select('id, name'),
+    supabase.from('cabinet_definitions').select('id, name, assembly_class, default_dx, default_dy, default_dz, category_id, subcategory_id').order('name'),
+  ])
+  const catName = new Map((cats ?? []).map((c: { id: string; name: string }) => [c.id, c.name]))
+  const words = q.toLowerCase().split(/\s+/)
+  const rows = (defs ?? []).map(d => ({ d, text: `${d.name} ${catName.get(d.category_id) ?? ''} ${catName.get(d.subcategory_id) ?? ''} ${d.assembly_class}`.toLowerCase() }))
+  const exact = rows.filter(r => r.d.name.toLowerCase() === q.toLowerCase())
+  const hits = exact.length ? exact : rows.filter(r => words.every(w => r.text.includes(w)))
+  if (!hits.length) return `Nothing in the library matches "${q}". Try fewer words or a code.`
+  return ['code | class | default W×H×D | category', ...hits.slice(0, 25).map(({ d }) =>
+    `${d.name} | ${d.assembly_class} | ${r(d.default_dx)}×${r(d.default_dy)}×${r(d.default_dz)} | ${[catName.get(d.category_id), catName.get(d.subcategory_id)].filter(Boolean).join(' › ') || '-'}`),
+    ...(hits.length > 25 ? [`…and ${hits.length - 25} more — narrow the search.`] : []),
+  ].join('\n')
+}
+
 export async function runReadTool(name: string, input: unknown, ctx: ToolContext): Promise<string> {
   switch (name) {
+    case 'find_library': return findLibrary((input ?? {}) as { search?: string })
     case 'get_kicks': return getKicks(ctx)
     case 'get_markup': return getMarkup(ctx)
     case 'get_cabinet_detail': return getCabinetDetail(ctx, (input ?? {}) as { label?: string })

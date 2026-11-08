@@ -3024,13 +3024,23 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
-  // The AI helper changed these cabinets on the server (z_ai_helper AI2): take the
-  // saved rows and re-resolve, with the caches dropped so nothing resolves stale.
+  // The AI helper changed, added or deleted these cabinets on the server
+  // (z_ai_helper AI2/AI3): take the saved rows (an id with no row was deleted) and
+  // re-resolve, with the caches dropped so nothing resolves stale.
   async function reloadCabinetsFromServer(ids: string[]) {
     invalidateResolverCaches()
     const { data } = await supabase.from('cabinet_instances').select('*').in('id', ids)
     const rows = new Map(((data ?? []) as CabinetInstance[]).map(c => [c.id, c]))
-    setCabinets(cs => cs.map(c => rows.get(c.id) ?? c))
+    const gone = new Set(ids.filter(id => !rows.has(id)))
+    setCabinets(cs => [
+      ...cs.filter(c => !gone.has(c.id)).map(c => rows.get(c.id) ?? c),
+      ...[...rows.values()].filter(r => !cs.some(c => c.id === r.id)),
+    ])
+    if (gone.size) {
+      setResolvedParts(m => { const next = new Map(m); for (const id of gone) next.delete(id); return next })
+      setSelected(s => s?.type === 'cabinet' && gone.has(s.id) ? null : s)
+      setMultiSelect(ms => ms.filter(id => !gone.has(id)))
+    }
     for (const id of rows.keys()) {
       dbResolveAndPersistCabinet(id).then(resolved => {
         if (resolved) { setResolvedParts(m => new Map(m).set(id, resolved)); applyInputColours(id); applyInputEdgebands(id) }

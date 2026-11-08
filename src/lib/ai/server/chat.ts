@@ -1,7 +1,8 @@
-// AI helper chat turn (z_ai_helper AI1 + AI2) on Claude Haiku 5.5. One turn =
-// the room summary + the question + read-tool calls, and at most one edit:
-//   - Selection scope, ≤ AUTO_APPLY_MAX cabinets → applied straight away (Undo on the message)
-//   - anything bigger, or Room scope → a proposal the user Applies from the panel
+// AI helper chat turn (z_ai_helper AI1–AI3) on Claude Haiku 5.5. One turn =
+// the room summary + the question + read-tool calls, and at most one change
+// (one or more steps — update / place / delete — applied and undone together):
+//   - Selection scope, updates only, ≤ AUTO_APPLY_MAX cabinets → applied straight away (Undo on the message)
+//   - anything bigger, any add / delete, or Room scope → a proposal the user Applies from the panel
 //   - ask_user ends the turn with a question + option buttons
 // The job's thread and the cost of every turn go to ai_messages.
 //
@@ -14,7 +15,7 @@ import { supabase } from '@/src/lib/supabase'
 import { loadRoomSummary } from '../roomSummary'
 import { READ_TOOLS, runReadTool, type ToolContext } from '../readTools'
 import { filterHasCriteria, type CabinetChanges, type CabinetFilter } from '../cabinetFilter'
-import { findHandleSchedule, previewCabinetUpdate, previewLines, updateCabinets } from './cabinetBatch'
+import { findHandleSchedule, planBatch, runBatch, type BatchOp } from './cabinetBatch'
 import { withSupabase } from './scope'
 
 export const CHAT_MODEL = 'claude-haiku-5-5'
@@ -50,30 +51,50 @@ const FILTER_SCHEMA = {
 
 const EDIT_TOOLS: Anthropic.Tool[] = [
   {
-    name: 'update_cabinets',
-    description: 'Change one or more cabinets in one go. Only these fields can change: width (dx), height (dy), depth (dz), height off the floor (pos_z), position along its wall (offset, mm from the wall start), notes, scribes, handle schedule. Door / board colours can NOT be changed yet. Call it once per message.',
+    name: 'change_cabinets',
+    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z, offset along the wall, notes, scribes, handle_schedule), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Door / board colours can NOT be changed yet. Call it once per message.',
     input_schema: {
       type: 'object',
       properties: {
-        description: { type: 'string', description: 'Short summary for the history, e.g. "Overheads to 900 high"' },
-        filter: FILTER_SCHEMA as unknown as Anthropic.Tool.InputSchema,
-        changes: {
-          type: 'object',
-          properties: {
-            dx: { type: 'number' }, dy: { type: 'number' }, dz: { type: 'number' },
-            pos_z: { type: 'number' }, offset: { type: 'number' },
-            notes: { type: ['string', 'null'] },
-            scribes: {
-              type: 'object', description: 'mm per side; null = back to inherited',
-              properties: Object.fromEntries(['left', 'right', 'top', 'bottom', 'back'].map(k => [k, { type: ['number', 'null'] }])),
-              additionalProperties: false,
+        description: { type: 'string', description: 'Short summary for the history, e.g. "Delete BC-04, close the gap"' },
+        steps: {
+          type: 'array', minItems: 1, maxItems: 12,
+          items: {
+            type: 'object',
+            properties: {
+              op: { type: 'string', enum: ['update', 'place', 'delete'] },
+              filter: FILTER_SCHEMA as unknown as Anthropic.Tool.InputSchema,
+              changes: {
+                type: 'object',
+                properties: {
+                  dx: { type: 'number' }, dy: { type: 'number' }, dz: { type: 'number' },
+                  pos_z: { type: 'number' }, offset: { type: 'number' },
+                  notes: { type: ['string', 'null'] },
+                  scribes: {
+                    type: 'object', description: 'mm per side; null = back to inherited',
+                    properties: Object.fromEntries(['left', 'right', 'top', 'bottom', 'back'].map(k => [k, { type: ['number', 'null'] }])),
+                    additionalProperties: false,
+                  },
+                  handle_schedule: { type: ['string', 'null'], description: 'Handle schedule name (list_handle_schedules); null = inherit room/job' },
+                },
+                additionalProperties: false,
+              },
+              code: { type: 'string', description: 'place: library code, e.g. "BEP"' },
+              wall: { type: 'string', description: 'place: wall name (with offset)' },
+              offset: { type: 'number', description: 'place: mm from the wall start to the cabinet low end' },
+              next_to: {
+                type: 'object', description: 'place: against this cabinet side (left / right as you face its front)',
+                properties: { label: { type: 'string' }, side: { type: 'string', enum: ['left', 'right'] } },
+                required: ['label', 'side'], additionalProperties: false,
+              },
+              dx: { type: 'number', description: 'place: width (else the library default)' },
+              labels: { type: 'array', items: { type: 'string' }, description: 'delete: cabinet labels' },
             },
-            handle_schedule: { type: ['string', 'null'], description: 'Handle schedule name (list_handle_schedules); null = inherit room/job' },
+            required: ['op'], additionalProperties: false,
           },
-          additionalProperties: false,
         },
       },
-      required: ['description', 'changes'], additionalProperties: false,
+      required: ['description', 'steps'], additionalProperties: false,
     },
   },
   {
@@ -90,21 +111,25 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'list_handle_schedules',
-    description: 'Names of the shop\'s handle schedules (for update_cabinets handle_schedule).',
+    description: 'Names of the shop\'s handle schedules (for change_cabinets handle_schedule).',
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
 ]
 
 // Frozen so it caches. Shop rules move to the Settings page in AI5.
 const SYSTEM = `You are the RHK CADcam helper, inside a cabinet-making CAD app used by RHK's workshop.
-You answer questions about the job the user has open and make small changes to its cabinets.
+You answer questions about the job the user has open and change its cabinets: resize, move, add (cabinets, end panels, fillers) and delete.
 
 Scope: each message says the scope. "Selection" = only the cabinets the user has selected on the canvas; never touch others (the server refuses anyway — tell them to select more, or deselect everything for the whole room). "Room" = any cabinet in this room; changes there wait for the user to press Apply.
 
-Changing cabinets (update_cabinets):
-- You can change width, height, depth, height off the floor, position along the wall, notes, scribes and handle schedule. You can NOT change door or board colours, add or delete cabinets yet — say so.
-- Clear request → just do it, no questions ("make these 900 high"). Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size?). Never ask more than one question at a time.
-- One update_cabinets call per message. After it, say in one line what changed (or that it's waiting for Apply). Undo is on the message.
+Changing cabinets (change_cabinets — one call per message, as ordered steps):
+- update: width, height, depth, height off the floor, position along the wall (offset), notes, scribes, handle schedule.
+- place: a library code (find_library first if you don't know it — e.g. search "end panel" or "filler"), next_to a cabinet's left / right side, or on a wall at an offset. Left / right is as you face the cabinet's front.
+- delete: by label. Adding and deleting always wait for the user to press Apply.
+- Several steps in one call when they belong together, e.g. delete BC-04 then move BC-05 and BC-06 (offset) to close the gap — work the new offsets out from the summary.
+- You can NOT change door or board colours, or touch walls, yet — say so.
+- Clear request → just do it, no questions. Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size? which end panel?). One question at a time.
+- After it, say in one line what changed (or that it's waiting for Apply). Undo is on the message.
 - Sizes are W×H×D: width = dx, height = dy, depth = dz.
 
 How to answer:
@@ -128,8 +153,10 @@ export interface ChatTurnArgs {
   selectedIds?: string[]
 }
 export interface Proposal {
-  roomId: string; filter: CabinetFilter; changes: CabinetChanges; onlyIds?: string[]
+  roomId: string; ops: BatchOp[]; onlyIds?: string[]
   description: string; lines: string[]
+  /** AI2 proposals (one update) — kept so an old pending one still applies. */
+  filter?: CabinetFilter; changes?: CabinetChanges
 }
 export interface ChatTurnResult {
   messageId: string | null
@@ -174,7 +201,9 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
   return out
 }
 
-interface EditInput { description?: string; filter?: CabinetFilter; changes?: CabinetChanges & { handle_schedule?: string | null } }
+type ChangesIn = CabinetChanges & { handle_schedule?: string | null }
+interface StepIn { op?: string; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const t0 = Date.now()
@@ -206,33 +235,48 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const out: Omit<ChatTurnResult, 'messageId' | 'costUsd' | 'ms' | 'model' | 'toolCalls'> = { reply: '' }
   let edited = false
 
-  /** Run one update_cabinets call → tool result text, and maybe end the turn with a proposal. */
+  /** Run one change_cabinets call → tool result text, and maybe end the turn with a proposal. */
   async function runEdit(input: EditInput): Promise<{ text: string; isError?: boolean; endTurn?: boolean }> {
     if (edited) return { text: 'Only one change per message — finish this one, then the user can ask again.', isError: true }
-    const { handle_schedule, ...rest } = input.changes ?? {}
-    const changes: CabinetChanges = { ...rest }
-    if (handle_schedule !== undefined) {
-      if (handle_schedule === null) changes.handle_schedule_id = null
-      else {
-        const hs = await findHandleSchedule(handle_schedule)
-        if ('error' in hs) return { text: hs.error, isError: true }
-        changes.handle_schedule_id = hs.id
-      }
+    const ops: BatchOp[] = []
+    for (const [i, st] of (input.steps ?? []).entries()) {
+      if (st.op === 'update') {
+        const { handle_schedule, ...rest } = st.changes ?? {}
+        const changes: CabinetChanges = { ...rest }
+        if (handle_schedule !== undefined) {
+          if (handle_schedule === null) changes.handle_schedule_id = null
+          else {
+            const hs = await findHandleSchedule(handle_schedule)
+            if ('error' in hs) return { text: `Step ${i + 1}: ${hs.error}`, isError: true }
+            changes.handle_schedule_id = hs.id
+          }
+        }
+        const filter: CabinetFilter = st.filter && filterHasCriteria(st.filter) ? st.filter : selection ? { labels: selLabels } : {}
+        if (!filterHasCriteria(filter)) return { text: `Step ${i + 1}: say which cabinets (labels, class, wall or code), or ask the user to select them.`, isError: true }
+        ops.push({ op: 'update', filter, changes })
+      } else if (st.op === 'place') {
+        if (!st.code) return { text: `Step ${i + 1}: place needs a library code.`, isError: true }
+        ops.push({ op: 'place', code: st.code, wall: st.wall, offset: st.offset, next_to: st.next_to, dx: st.dx })
+      } else if (st.op === 'delete') {
+        const labels = st.labels?.length ? st.labels : selection ? selLabels : []
+        if (!labels.length) return { text: `Step ${i + 1}: delete needs labels.`, isError: true }
+        ops.push({ op: 'delete', labels })
+      } else return { text: `Step ${i + 1}: op must be update, place or delete.`, isError: true }
     }
-    const filter: CabinetFilter = input.filter && filterHasCriteria(input.filter) ? input.filter : selection ? { labels: selLabels } : {}
-    if (!filterHasCriteria(filter)) return { text: 'Nothing selected — say which cabinets (labels, class, wall or code), or ask the user to select them.', isError: true }
-    const pv = await previewCabinetUpdate(args.roomId, filter, changes, { onlyIds: selection ?? undefined })
-    if (pv.problems.length) return { text: pv.problems.join('\n'), isError: true }
-    if (!pv.patches.size) return { text: pv.matched.length ? `Nothing to change — ${pv.matched.join(', ')} already like that.` : 'No cabinets match that.' }
+    if (!ops.length) return { text: 'No steps.', isError: true }
+
+    const plan = await planBatch(args.roomId, ops, { onlyIds: selection ?? undefined })
+    if (plan.problems.length) return { text: plan.problems.join('\n'), isError: true }
+    if (!plan.steps.length) return { text: 'Nothing to change — already like that.' }
     const description = input.description?.trim() || 'AI change'
     edited = true
 
-    if (selection && pv.patches.size <= AUTO_APPLY_MAX) {
-      const res = await withSupabase(args.client, () => updateCabinets({ roomId: args.roomId, filter, changes, description, onlyIds: selection }))
+    if (selection && plan.onlyUpdates && plan.touched <= AUTO_APPLY_MAX) {
+      const res = await withSupabase(args.client, () => runBatch(args.roomId, ops, { description, onlyIds: selection }))
       out.changed = res.changed; out.batchId = res.batchId; out.cabinetIds = res.cabinetIds
-      return { text: [`Applied:`, ...res.changed, ...res.warnings.map(w => `Warning: ${w}`), ...res.errors.map(e => `Resolver error: ${e}`)].join('\n') }
+      return { text: ['Applied:', ...res.changed, ...res.warnings.map(w => `Warning: ${w}`), ...res.errors.map(e => `Resolver error: ${e}`)].join('\n') }
     }
-    out.proposal = { roomId: args.roomId, filter, changes, onlyIds: selection ?? undefined, description, lines: previewLines(pv) }
+    out.proposal = { roomId: args.roomId, ops, onlyIds: selection ?? undefined, description, lines: [...plan.lines, ...plan.warnings.map(w => `⚠ ${w}`)] }
     return { text: 'Shown to the user for Apply.', endTurn: true }
   }
 
@@ -271,7 +315,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     for (const u of uses) {
       toolCalls.push(u.name)
       try {
-        if (u.name === 'update_cabinets') {
+        if (u.name === 'change_cabinets') {
           const r = await runEdit(u.input as EditInput)
           endTurn ||= !!r.endTurn
           results.push({ type: 'tool_result', tool_use_id: u.id, content: r.text, ...(r.isError && { is_error: true }) })

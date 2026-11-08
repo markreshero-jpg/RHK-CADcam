@@ -1850,10 +1850,25 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open ✨ Ask AI, then click a cabinet on the plan (Shift / drag to select more). The chip at the top of the chat says "Selection: …" — the AI can only change those. With nothing selected it says "Room", and any change waits for you to press Apply.',
       canvas: true, done: c => c.selected?.type === 'cabinet' },
     { id: 'change', title: 'Ask for the change',
-      body: 'Type what you want, e.g. "make these 900 high" or "scribe 20 on the right". Up to 3 selected cabinets change straight away and the canvas updates; more than that, or Room scope, shows the list of changes with Apply / Cancel. If it isn’t sure (which side? how much?) it asks with buttons — click one. It can’t change colours, or add or delete cabinets, yet.',
+      body: 'Type what you want, e.g. "make these 900 high" or "scribe 20 on the right". Up to 3 selected cabinets change straight away and the canvas updates; more than that, or Room scope, shows the list of changes with Apply / Cancel. If it isn’t sure (which side? how much?) it asks with buttons — click one. It can’t change colours yet; to add or delete cabinets see "Add and delete cabinets with the AI".',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
     { id: 'undo', title: 'Undo it',
       body: 'Click ↶ Undo on the message. That change is put back. A cabinet you’ve edited again since is left alone and the chat tells you.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_undo') > ev(s, 'ai_chat_undo') },
+  ]},
+
+  // Appended 2026-11-08 (z_ai_helper AI3: add / delete / several steps).
+  { id: 'ai_chat_add_delete', level: 'intermediate', topic: 'room', title: 'Add and delete cabinets with the AI',
+    blurb: 'Ask the AI to add an end panel, filler or cabinet, delete one, or do several things at once, e.g. delete a cabinet and slide the others into its place.',
+    keywords: 'ai ask chat add place insert delete remove end panel filler move slide close gap apply undo several steps', steps: [
+    { id: 'ask', title: 'Ask for it',
+      body: 'Open ✨ Ask AI and type it the way you’d say it, e.g. "put an end panel on the left of WC-01" or "delete BC-04 and slide BC-05 and BC-06 left to close the gap". It finds the library code (or asks which one), works out the positions, and shows every step: Delete …, BC-05: offset … → …, Add …. A ⚠ line means something to check, like an overlap.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
+    { id: 'apply', title: 'Press Apply',
+      body: 'Adding and deleting always wait for Apply, even for one cabinet. Apply does all the steps together and the canvas updates. It won’t delete a cabinet with CAD drawn on its cabinet sheet, or one in a joined kick run — do those by hand.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
+    { id: 'undo', title: 'Undo puts it all back',
+      body: 'Click ↶ Undo on the message: added cabinets go, deleted ones come back with their end panels, fillers, shape edits and fixtures, and moved ones go back where they were.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_undo') > ev(s, 'ai_chat_undo') },
   ]},
 ]

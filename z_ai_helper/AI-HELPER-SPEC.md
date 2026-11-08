@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI2 built and checked 2026-11-08** — next is AI3 (colours, Job scope, speed, "Try harder")
+Status: **AI0 – AI3 built and checked 2026-11-08** — next is AI3b (colours, Job scope, "Try harder")
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -182,7 +182,7 @@ $20; cached input ~10% of normal.
 | AI0 ✅ | **Server actions**: placement / update / resolve callable server-side (from what `window.__canvasApi` does in the browser today); compact summary builder; batch + undo tables | A script can update 12 cabinets by filter server-side and undo it, matching what the UI produces |
 | AI1 ✅ | Chat panel + Room scope, **read-only** Q&A on Haiku; cost log | "Total kick length in the Kitchen?" / "Which cabinets are TBC?" correct in a few seconds, cost logged |
 | AI2 ✅ | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
-| AI3 | **Add / delete / multi-step**: place cabinets, end panels and fillers server-side (same path as the canvas: next label, cascade sizes, custom parts, neighbours); delete with Apply + full Undo (decision 7); several changes as one batch (decision 8); apply speed | "Delete BC-04 and slide BC-05 / BC-06 left into its place" and "add an end panel on the left of BC-03" — previewed, applied, undone exactly |
+| AI3 ✅ | **Add / delete / multi-step**: place cabinets, end panels and fillers server-side (same path as the canvas: next label, cascade sizes, custom parts, neighbours); delete with Apply + full Undo (decision 7); several changes as one batch (decision 8); apply speed | "Delete BC-04 and slide BC-05 / BC-06 left into its place" and "add an end panel on the left of BC-03" — previewed, applied, undone exactly |
 | AI3b | Door / board colours, Job scope, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
 | AI4 | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
 | AI5 | Shop Rules editor in Settings, per-job notes, admin cost view | Rules editable and visibly followed; monthly total shown |
@@ -286,13 +286,51 @@ they're sent on every request.
   unchanged. "add a scribe to this" → question with side / mm buttons. 0.02–0.07¢ each.
 - Tutorial `ai_chat_edit`.
 
+## AI3 — what was built (2026-11-08)
+
+- **Batch engine rewrite** `src/lib/ai/server/cabinetBatch.ts`: a change is ordered
+  **steps** — `update` (filter + changes), `place` (library code on a wall at an
+  offset, or `next_to` a cabinet's left / right as you face its front), `delete`
+  (labels). `planBatch()` runs them on an in-memory copy of the room (so later steps
+  see earlier ones, and new cabinets get the labels they'll really get); the lines
+  the user approves are exactly what `runBatch()` then does. One `ai_batches` row,
+  one Undo.
+- **Place** = the canvas's path server-side: `buildInstanceFromDefinition` with the
+  room / job / shop class sizes (`resolveClassDims`), `nextLabel`, wall anchor (or
+  the neighbour's own distance off the wall for `next_to`), back-face cabinets
+  flipped, bulkhead auto height, floating shelf height, then
+  `dbInsertDefinitionParts` (the definition's end panels / fillers). Kits and angled
+  corner fillers are refused (place by hand). Overlap on the same wall + height band
+  is a ⚠ warning, not a block. Like the canvas, a new cabinet takes the next free
+  label, which can be a just-deleted one's.
+- **Delete** keeps a full copy for Undo: the row (same id comes back) + custom parts,
+  part shape overrides, joint instances + their operations, fixture links. Refused:
+  cabinets in a joined kick run, and cabinets with CAD on their cabinet sheet (the
+  "Protected CAD" trigger isn't live, so the guard is in code). An under panel's
+  scribe comes off the carcasses over it, as on the canvas. Parts, fronts, hinges
+  are rebuilt by the resolve.
+- **Undo** runs last step first: updates back (unless edited since), added cabinets
+  removed (unless CAD was drawn on them since), deleted ones restored.
+- **Settle** after any batch / undo: neighbours re-detected room-wide (canvas rule),
+  everything touched resolved **4 at a time** (was one by one), under panels re-cut.
+- **Chat**: `change_cabinets` (steps) replaces `update_cabinets`; `find_library`
+  read tool (code / class / default size / category). Auto-apply only for
+  update-only Selection changes on ≤ 3 cabinets; any add / delete waits for Apply
+  (decision 7). AI2 proposals still apply. Canvas reload adds new / drops deleted rows.
+- **Check:** engine (`headlessAi3.test.ts`, gated by `AI3_RUN`) and in the browser
+  on Test Kitchen — "delete WC-02, slide WC-01 right so its right end sits where
+  WC-02 ended, and put an end panel on the left of WC-01" → Delete WC-02 / WC-01
+  offset 0 → 900 / Add WEP @ 882 → Apply (canvas showed it) → Undo → every row back
+  exactly, WC-02 same id. 0.10¢; apply 8.5 s, undo 3.3 s for 3 steps.
+- Tutorial `ai_chat_add_delete`.
+
 ## Open items (check while building)
 
 - **Door / board colours** per cabinet — the edit modal sets front colours through
   the face grid / material schedules, not `material_overrides` directly; work out the
   right write path before adding it (AI3).
-- **Apply speed:** a 1-cabinet change took 16 s (server resolve with cold caches +
-  neighbour re-detect + re-resolve). Parallel resolves / warm cascade within a batch (AI3).
+- **Apply speed:** resolves now run 4 at a time; a 3-step batch applies in ~8.5 s.
+  The first resolve in a request is still slow (cold caches).
 - Other people with the same room open don't see an AI change until they reload.
 
 - **Production key:** `ANTHROPIC_API_KEY` is set in Vercel (Mark, 2026-11-08) and in
