@@ -15,6 +15,7 @@ import type { AnnotationTool, CadTool } from './useAnnotationTool'
 import type { CadLayer } from '@/src/lib/types'
 import { sortCadLayers } from '@/src/lib/annotations/cadLayers'
 import { evalCalc } from '@/src/lib/calc'
+import { addCustomColour, normaliseHex, removeCustomColour, useCustomColours } from '@/src/lib/annotations/customColours'
 
 const generalId = (list: CadLayer[]) => list.find(l => l.is_default)?.id ?? ''
 
@@ -75,6 +76,39 @@ function Colour({ value, onChange, title }: { value: string; onChange: (c: strin
       <input type="color" value={value} onChange={e => onChange(e.target.value)} className="absolute inset-0 opacity-0 cursor-pointer" />
     </label>
   )
+}
+
+/** CC1: the shop's saved custom colours, a + to save the current colour, and a hex box
+ *  for typing a colour code. Right-click a saved swatch to remove it. */
+function CustomColours({ current, active, onPick }: { current: string; active: boolean; onPick: (c: string) => void }) {
+  const list = useCustomColours()
+  const [hex, setHex] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+  const report = (p: Promise<string | null>) => { void p.then(e => { setErr(e); if (e) setTimeout(() => setErr(null), 4000) }) }
+  const applyHex = () => { if (hex == null) return; const c = normaliseHex(hex); setHex(null); if (c) onPick(c) }
+  const cur = current.toLowerCase()
+  return (<>
+    {list.length > 0 && <div className="basis-full h-0" />}
+    {list.map(c => (
+      <button key={c} title={`${c} (saved). Right-click to remove`} onMouseDown={keep} onClick={() => onPick(c)}
+        onContextMenu={e => { e.preventDefault(); report(removeCustomColour(c)) }}
+        className={`w-4 h-4 shrink-0 rounded-sm border ${active && cur === c ? 'border-white ring-1 ring-rose-400' : 'border-gray-600'}`}
+        style={{ background: c }} />
+    ))}
+    <button title={`Save ${cur} to the shop's custom colours`} onMouseDown={keep}
+      onClick={() => { report(addCustomColour(current)); useTutorial.getState().emit('cad_colour_saved') }}
+      className="w-4 h-4 shrink-0 rounded-sm border border-dashed border-gray-500 text-gray-300 hover:text-white hover:border-white text-[11px] leading-none flex items-center justify-center">+</button>
+    <input type="text" autoComplete="off" spellCheck={false} title="Colour code, e.g. #0891b2 - Enter applies"
+      value={hex ?? cur} onFocus={e => { setHex(cur); e.currentTarget.select() }}
+      onChange={e => setHex(e.target.value)} onBlur={applyHex}
+      onKeyDown={e => {
+        if (e.key === 'Enter') { e.preventDefault(); applyHex(); e.currentTarget.blur() }
+        else if (e.key === 'Escape') { e.stopPropagation(); setHex(null); e.currentTarget.blur() }
+      }}
+      className={`h-5 w-[4.5rem] bg-gray-800 border rounded px-1 text-[11px] font-mono text-gray-100 outline-none focus:border-rose-500
+        ${hex != null && !normaliseHex(hex) ? 'border-red-500' : 'border-gray-700'}`} />
+    {err && <div className="basis-full text-[10px] text-red-400">Couldn&apos;t save: {err}</div>}
+  </>)
 }
 
 function Num({ value, onChange, title, step = 0.5, min, max, w = 'w-12', suffix }: {
@@ -277,7 +311,9 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
               className={`w-4 h-4 shrink-0 rounded-sm border ${!(cadLayers && cad.ribbonByLayer) && s.color.toLowerCase() === c ? 'border-white ring-1 ring-rose-400' : 'border-gray-600'}`}
               style={{ background: c }} />
           ))}
-          <Colour value={s.color} title="Custom colour" onChange={c => set({ color: c })} />
+          <Colour value={s.color} title="Pick any colour" onChange={c => set({ color: c })} />
+          <CustomColours current={s.color} active={!(cadLayers && cad.ribbonByLayer)}
+            onPick={c => set({ color: c, borderColor: c, fillColor: c })} />
         </Group>
 
         {isText && (<>

@@ -1677,6 +1677,21 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.annotSelected > 0 },
   ]},
 
+  // Appended 2026-11-08 (z_CAD_tool CC1: shop custom colours).
+  { id: 'cad_custom_colours', level: 'basics', topic: 'cad', title: 'Save your own CAD colours',
+    blurb: 'Keep the colours you use (a Resene shade, a site-measure colour) as swatches for the whole shop.',
+    keywords: 'cad colour color custom swatch palette hex code save own resene', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar (or turn on CAD in the cabinet editor).',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'pick', title: 'Pick or type a colour',
+      body: 'In the Colour group, click the big swatch to pick any colour, or type a code like #0891b2 in the code box and press Enter.',
+      target: 'cad-colour', canvas: true, done: (c, s) => ev(c, 'annot_style') > ev(s, 'annot_style') },
+    { id: 'save', title: 'Save it',
+      body: 'Click + to save the current colour. It joins the swatches for everyone in the shop, on every PC and phone. Click a saved swatch to use it; right-click it to remove it. Saving needs an admin login.',
+      target: 'cad-colour', canvas: true, done: (c, s) => ev(c, 'cad_colour_saved') > ev(s, 'cad_colour_saved') },
+  ]},
+
   // Appended 2026-11-04 (z_curved_end C9: rangehood in a curved wall end).
   { id: 'curved_rangehood', level: 'intermediate', topic: 'cabinets', title: 'Put a rangehood in a curved wall cabinet',
     blurb: 'A WCRVFIXP with the rangehood hole in its bottom, a rib as the flue shelf and a flue box up to the top.',
