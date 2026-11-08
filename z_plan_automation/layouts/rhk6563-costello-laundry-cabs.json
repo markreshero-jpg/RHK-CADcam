@@ -1,0 +1,29 @@
+{
+  "_source": "Laundry elevations.pdf + Mark's answers 2026-11-08. Draws into the existing Laundry room; walls come from rhk6563-costello-laundry.json. Post script: _tmp-6563-laundry-post.mjs",
+  "_notes": [
+    "Cabinets sit on our plinth: 117 = kick 100.5 + 16.5 exposed panel. Bench 900 (carcass top 880), so base pos_z 117, dy 763.",
+    "Wall 3 (Wall B): washer 620 | TEPF 16.5 | B2D 594.5 | BFKW 40 ending on the Wall A front line (1271). 580 OA, carcass 561.5.",
+    "Wall 4 (Wall A): BFKW 254.5 from behind the Wall B filler to the void end at 818 | B2D 415 | BFKW 30. 395 OA, carcass 376.5."
+  ],
+  "projectId": "416bf6cf-9681-4462-b93d-6ecac19e015b",
+  "roomId": "534712c8-089b-4cd5-b040-32e72da116db",
+  "wallCabinetTop": 2183,
+  "walls": [
+    { "x": 200, "y": 1261, "length": 200, "angle": 180 },
+    { "x": 0, "y": 1261, "length": 1261, "angle": 270 },
+    { "x": 0, "y": 0, "length": 1666, "angle": 0 },
+    { "x": 1666, "y": 0, "length": 1263, "angle": 90 },
+    { "x": 1666, "y": 1263, "length": 525, "angle": 180 }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 3, "offset": 620, "dx": 16.5, "dy": 2183, "dz": 561.5, "note": "Panel between the washer / dryer space and the cupboards, floor to 2183" },
+    { "def": "B2D", "wall": 3, "offset": 636.5, "dx": 594.5, "dy": 763, "dz": 561.5, "set": { "has_toekick": false, "pos_z": 117 }, "note": "Wall B base, on the plinth, 580 OA" },
+    { "def": "BFKW", "wall": 3, "offset": 1231, "dx": 40, "dy": 763, "dz": 561.5, "set": { "has_toekick": false, "pos_z": 117 }, "note": "Corner filler, butts into the Wall A filler" },
+    { "def": "BFKW", "wall": 4, "offset": 563.5, "dx": 254.5, "dy": 763, "dz": 376.5, "set": { "has_toekick": false, "pos_z": 117 }, "note": "Wall A filler closing the void, from behind the Wall B filler to the cupboard" },
+    { "def": "B2D", "wall": 4, "offset": 818, "dx": 415, "dy": 763, "dz": 376.5, "set": { "has_toekick": false, "pos_z": 117 }, "note": "Wall A base, on the plinth, 395 OA, starts at the boxed-out void" },
+    { "def": "BFKW", "wall": 4, "offset": 1233, "dx": 30, "dy": 763, "dz": 376.5, "set": { "has_toekick": false, "pos_z": 117 }, "note": "30 filler at the door end wall" },
+    { "def": "W2D", "wall": 3, "offset": 636.5, "dx": 660.5, "dy": 783, "dz": 320, "note": "Wall B upper, 1400-2183" },
+    { "def": "WEP", "wall": 4, "offset": 818, "dx": 16.5, "dy": 783, "dz": 376.5, "note": "Wall A upper seen end beside the void" },
+    { "def": "W2D", "wall": 4, "offset": 834.5, "dx": 398.5, "dy": 783, "dz": 376.5, "note": "Wall A upper, 1400-2183, 395 OA" }
+  ]
+}
