@@ -146,3 +146,4 @@ Everything for this job is in this folder (Mark).
 - 33 panels: 38 tape on the **front edge of one piece per pair** (robe TC-01, study BC-01, BC-09, kitchenette TC-03 full panel, TC-05). New `cabinet_custom_parts.edge_band_id` so a part can carry its own tape (optimiser + edgeband report). The taped piece nests 1 narrower than its partner. Script `_tmp-6586-38tape.mjs`.
 - Base doors stay set back finger pull (Mark 8/11); kitchenette + study spec text fixed. Pantry filler widths OK. Vanity backs: Mark set them himself. Drawer back across the U: fine for now.
 - U cut-out saved as project skill `.claude/skills/plumbing-cutouts`.
+- 33 panels (Mark 8/11): **both halves** of each pair now taped on the front edge so both take the 1 mm trim (added TC-02, study BC-02, TC-03 strip, TC-06, BC-08 gable). Report counts the tape on each half, so metres are double. BC-08 gable is a case part, so it lists the schedule tape, not the 38. Script `_tmp-6586-38both.mjs`.
