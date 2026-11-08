@@ -275,10 +275,12 @@ export function resolveJoints(
   // Internal seams: shelves ↔ side supports, dividers ↔ horizontal anchors.
   // Same cascade as carcase seams; the CM default lives under the family's
   // generic key (adj_shelf:side, fixed_shelf:side, divider:top/bottom).
-  // Half-checked shelves / dividers (z_dividers V-D8) get no joint drilling.
+  // Half-checked shelves / dividers (z_dividers V-D8, revised 2026-11-08) drill at
+  // their ends like any other (gables, divisions, top / bottom); the crossings
+  // between two half-checked parts never drill (they're notched together).
   const halfChecked = new Set(internalParts.filter(p => p.half_check).map(p => `int_${p.part_type}_${p.sort_order}`))
   for (const cand of enumerateInternalSeams(caseParts, internalParts, { adjFullBank })) {
-    if (halfChecked.has(cand.part_a_key)) continue
+    if (halfChecked.has(cand.part_a_key) && halfChecked.has(cand.part_b_key)) continue
     let jointTypeId: string | null | undefined
     let source: 'cabinet' | 'method' = 'method'
 

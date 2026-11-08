@@ -160,3 +160,9 @@ Done in Rev 4 (2026-11-07); see below.
   catalog `69e35552`. The job sink row (`dda70361`, was the Abi Seba 550 stand-in) swapped in place, centred on BC-07,
   drop-in: flange on the 950 bench (z 750), cut-out 565 x 400 (`_tmp-6595-lucia.mjs`, `_tmp-6595-sinkz.mjs`, before
   `_tmp-6595-sink-before.json`). Handedness checked in 3D: big bowl on the left seen from the front.
+
+## 2026-11-08 — Loose Parts redrawn + WC-10 egg-crate drilling
+- **Loose Parts** room: one carrier per piece on Wall 2, all face-on (orientation front) so they read in elevation.
+  TC-01 2400 x 900 at 0, TC-02 2400 x 70 at 1000, TC-03 2400 x 70 at 1170. Whiteboard 16.5, no tape (`_tmp-6595-loose-resolve.mjs`).
+- **WC-10** half-checked fixed shelves now drill into the left gable + the 418 division, and the egg-crate dividers into the
+  bottom / top (Mark: V-D8 revised from "no drilling" to "drill the ends, never the crossings").

@@ -412,7 +412,7 @@ function mergeRuns(ps: ResolvedInternalPart[], line: (p: ResolvedInternalPart) =
  *  each run of pieces into one full-length part, then notch every crossing on
  *  the outlines — shelves from the back, dividers from the front (V-D6), to the
  *  meeting line + over-cut, the other part's thickness + clearance wide (V-D7).
- *  The parts are flagged `half_check` (no joint drilling, V-D8). Returns true
+ *  The parts are flagged `half_check` (crossings never drill, ends do, V-D8). Returns true
  *  when pieces were merged (sort orders then need renumbering). */
 function halfCheck(parts: ResolvedInternalPart[], start: number, shelfT: number, matT: number): boolean {
   const mine = parts.slice(start)

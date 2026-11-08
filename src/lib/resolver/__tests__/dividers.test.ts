@@ -198,8 +198,14 @@ describe('half-check crossings (z_dividers V5)', () => {
     expect(Math.abs(ys[0].y - ys[1].y)).toBeCloseTo(18.2)
   })
 
-  it('no joint seams on the half-checked parts', () => {
-    const seams = resolveCabinet(c(true)).seam_joints
-    expect(seams.filter(j => /^int_(divider|fixed_shelf)_/.test(j.part_a_key))).toHaveLength(0)
+  it('half-checked parts drill at their ends, never at the crossings (V-D8 revised 2026-11-08)', () => {
+    const seams = resolveCabinet({ ...c(true), joint_defaults: { 'fixed_shelf:side': 'j', 'divider:top': 'j', 'divider:bottom': 'j' }, joint_type_ops: { j: [] }, joint_type_names: { j: 'J' } }).seam_joints
+    const internal = seams.filter(j => /^int_(divider|fixed_shelf)_\d+:/.test(j.seam_key))
+    const isHC = (k: string) => /^int_(divider|fixed_shelf)_/.test(k)
+    expect(internal.filter(j => isHC(j.part_a_key) && isHC(j.part_b_key))).toHaveLength(0)
+    const shelfEnds = internal.filter(j => j.part_a_key.startsWith('int_fixed_shelf_'))
+    expect(shelfEnds.map(j => j.part_b_key).sort()).toEqual(['left_side', 'left_side', 'right_side', 'right_side'])
+    const divEnds = internal.filter(j => j.part_a_key.startsWith('int_divider_'))
+    expect(divEnds.map(j => j.part_b_key).sort()).toEqual(['bottom', 'bottom'])   // base: rails over, no full top
   })
 })

@@ -129,9 +129,11 @@ part's thickness + **0.2** (16.5 board → 16.7). Length = to the meeting line
 (the middle of the depth both parts share) **+ 5 over-cut** on each part, so
 the router's corner radius clears and the joint never bottoms out.
 
-**V-D8. No drilling.** The half-checked shelves and dividers get no joint
-drilling — no seams at the crossings, none at their ends. They are fixed by
-screwing through the bottom, top and gables at assembly.
+**V-D8. Drill the ends, not the crossings** (revised Mark 2026-11-08; was "no
+drilling"). Half-checked shelves and dividers drill at their ends like any fixed
+shelf / divider — shelves into the gables and full divisions, dividers into the
+bottom / top / fixed shelves — using the normal joint cascade. The crossings
+between two half-checked parts never drill (they're notched together).
 
 ### Data model
 
@@ -155,7 +157,8 @@ finger-pull gable notches).
   Crossings → notches on the outlines. Divider / fixed-shelf `sort_order`s are
   renumbered in array order after a merge. Constants `HALF_CHECK_CLEARANCE` 0.2,
   `HALF_CHECK_OVERCUT` 5. Adjustable shelves never half-check.
-- `resolveJoints` skips internal seams whose part A is a half-check part.
+- `resolveJoints` skips internal seams where both parts are half-check parts
+  (crossings); end seams drill as normal (V-D8 revised 2026-11-08).
 - Internal editor: select a shelf or divider inside a grid → **Half-check
   crossings** tick, stored on the nearest split whose subtree has both shelves
   and dividers. The editor still draws the bays as before (pieces), the
