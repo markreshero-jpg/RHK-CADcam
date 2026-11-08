@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI3 built and checked 2026-11-08** — next is AI3b (colours, Job scope, "Try harder")
+Status: **AI0 – AI3b built and checked 2026-11-08** — next is AI4 (drawing from a PDF) or AI5 (Shop Rules page)
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -183,7 +183,7 @@ $20; cached input ~10% of normal.
 | AI1 ✅ | Chat panel + Room scope, **read-only** Q&A on Haiku; cost log | "Total kick length in the Kitchen?" / "Which cabinets are TBC?" correct in a few seconds, cost logged |
 | AI2 ✅ | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
 | AI3 ✅ | **Add / delete / multi-step**: place cabinets, end panels and fillers server-side (same path as the canvas: next label, cascade sizes, custom parts, neighbours); delete with Apply + full Undo (decision 7); several changes as one batch (decision 8); apply speed | "Delete BC-04 and slide BC-05 / BC-06 left into its place" and "add an end panel on the left of BC-03" — previewed, applied, undone exactly |
-| AI3b | Door / board colours, Job scope, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
+| AI3b ✅ | Door / board colours, Job scope, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
 | AI4 | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
 | AI5 | Shop Rules editor in Settings, per-job notes, admin cost view | Rules editable and visibly followed; monthly total shown |
 
@@ -333,11 +333,46 @@ they're sent on every request.
   (`headlessPlan.test.ts`, reads only) on Kitchen - Paul: BEPF at the island back's
   left end → opposite side of the island line, facing out, @ 2862 of 2880.
 
+## AI3b — what was built (2026-11-08)
+
+- **Colours, two ways** (`cabinetFilter.ts` + `cabinetBatch.ts`):
+  - **Room / job, by kind** — `set_material` step: writes the same rows as the
+    Materials tab (`room_materials` / `job_materials`: base / wall / tall ×
+    door_face / interior / exposed / shelf / divider; `room_ / job_toekick_materials`
+    part_role face for the kick). null = back to inherited. Always waits for Apply.
+    Lines: "Room Kitchen · overheads fronts: inherited → LX Colour 16mm – Natural
+    Walnut (2 cabinets)". ⚠ lines name cabinets that keep their own colour, and (job
+    level) rooms with their own room colour.
+  - **One cabinet's own** — `update` changes `materials { fronts | carcass | exposed |
+    shelf | divider | kick }` → `material_overrides` (door_face / interior / …) or
+    `toekick_overrides.face`; the resolver already ranks these over room / job.
+- Writing a colour row drops the resolver caches first, so the resolves after it read
+  the new colour (found when an Undo in the same run re-resolved with the old cascade).
+- Undo restores the row (or removes it) and re-resolves every cabinet it reached;
+  skips it if the row was changed again since.
+- **Job scope** (for colours): a job colour reaches every room; the cabinets in other
+  rooms re-resolve too (`settle(..., elsewhere)`); the canvas only reloads its own
+  room's rows. Job-wide *sizes / adds / deletes* stay room by room for now.
+- **Boards by name**: `find_material` tool + `findMaterial()` (exact, else the one
+  partial match, else "say which" with the candidates — the model turns that into
+  ask_user buttons, e.g. Natural Walnut 16 mm vs 33 mm).
+- **Try harder**: ↻ under the latest answer re-asks the same question on Claude
+  Sonnet 5.5 (effort medium); priced per model in the cost log; tagged "tried harder".
+  Not offered once an answer has changed something.
+- **Check** on Test Kitchen: engine (`headlessAi3.test.ts`) overheads White → Natural
+  Walnut + TC-01's own Black Matt → saved fronts changed → Undo → White / Boston Oak,
+  colour rows and cabinet rows exactly restored. Browser: "make the overhead doors
+  natural walnut" → asked 16 mm or 33 mm; with the 16 mm named → proposal → Apply →
+  Undo. Try harder: 0.02¢ Haiku vs 1.4¢ Sonnet. Plan-only: job bases fronts → 8
+  cabinets across both rooms; room kick face → 2.
+- `headlessAi3.test.ts` reports resolver errors instead of failing on them (Test
+  Kitchen's TC-01 has a hinge / shelf-hole clash of its own), and has an undo-only
+  mode to clean up a run that stopped early.
+- Tutorial `ai_chat_colours`.
+
 ## Open items (check while building)
 
-- **Door / board colours** per cabinet — the edit modal sets front colours through
-  the face grid / material schedules, not `material_overrides` directly; work out the
-  right write path before adding it (AI3).
+- Job-wide sizes / adds / deletes (several rooms in one change) — colours only so far.
 - **Apply speed:** resolves now run 4 at a time; a 3-step batch applies in ~8.5 s.
   The first resolve in a request is still slow (cold caches).
 - Other people with the same room open don't see an AI change until they reload.

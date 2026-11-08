@@ -61,6 +61,15 @@ describe('changes', () => {
     expect(patchFor(c, { handle_schedule_id: 'hs-1' }, walls)).toEqual({ hardware_overrides: { handle_offset: 30, handle_schedule_id: 'hs-1' } })
     expect(patchFor(c, { handle_schedule_id: null }, walls)).toBeNull()
   })
+  it('own colours go into material_overrides / toekick_overrides; null goes back to inherited', () => {
+    const c = cab({ label: 'BC-11', material_overrides: { interior: 'm-wb' }, toekick_overrides: {} })
+    expect(patchFor(c, { materials: { fronts: 'm-walnut', kick: 'm-black' } }, walls)).toEqual({
+      material_overrides: { interior: 'm-wb', door_face: 'm-walnut' }, toekick_overrides: { face: 'm-black' },
+    })
+    expect(patchFor(c, { materials: { carcass: null } }, walls)).toEqual({ material_overrides: {} })
+    expect(patchFor(c, { materials: { carcass: 'm-wb' } }, walls)).toBeNull()
+    expect(validateChanges({ materials: { doors: 'x' } as never }).length).toBe(1)
+  })
   it('offset slides along the wall, keeping the distance off it', () => {
     // Wall 2 runs down from (4000,0); WC-02 sits 300 along it.
     const u = patchFor(cabs[3], { offset: 1000 }, walls)!

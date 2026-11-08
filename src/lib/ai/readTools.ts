@@ -31,6 +31,15 @@ export const READ_TOOLS: Anthropic.Tool[] = [
     },
   },
   {
+    name: 'find_material',
+    description: 'Search the board colours (materials) by name, colour or brand, e.g. "walnut", "boston oak", "whiteboard 16.5", "teak 33". Returns name | thickness. Use the exact name in change_cabinets.',
+    input_schema: {
+      type: 'object',
+      properties: { search: { type: 'string' } },
+      required: ['search'], additionalProperties: false,
+    },
+  },
+  {
     name: 'get_cabinet_detail',
     description: 'Full detail for one cabinet by label: size, position, neighbours, notes, every front (type, size, colour, handle, hinge side), carcass parts (size, board), custom parts (end panels, fillers) and fixtures on it.',
     input_schema: {
@@ -187,8 +196,38 @@ async function findLibrary(input: { search?: string }): Promise<string> {
   ].join('\n')
 }
 
+/** Active board colours matching every word (name + colour name). */
+export async function searchMaterials(q: string): Promise<{ id: string; name: string; dz: number }[]> {
+  const { data } = await supabase.from('materials').select('id, name, colour_name, dz').eq('active', true).order('name')
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean)
+  return ((data ?? []) as { id: string; name: string; colour_name: string | null; dz: number }[])
+    .filter(m => words.every(w => `${m.name} ${m.colour_name ?? ''}`.toLowerCase().includes(w)))
+    .map(m => ({ id: m.id, name: m.name, dz: Number(m.dz) }))
+}
+
+/** A material by name: exact, else the single partial match; error lists candidates. */
+export async function findMaterial(name: string): Promise<{ id: string; name: string } | { error: string }> {
+  const n = name.trim().toLowerCase()
+  const { data } = await supabase.from('materials').select('id, name').eq('active', true).ilike('name', n).limit(1).maybeSingle()
+  if (data) return data as { id: string; name: string }
+  const hits = await searchMaterials(name)
+  if (hits.length === 1) return hits[0]
+  return { error: hits.length
+    ? `"${name}" matches ${hits.length} boards — say which: ${hits.slice(0, 10).map(h => h.name).join('; ')}${hits.length > 10 ? '; …' : ''}`
+    : `No board matches "${name}" — try find_material with fewer words.` }
+}
+
+async function findMaterialTool(input: { search?: string }): Promise<string> {
+  const q = String(input.search ?? '').trim()
+  if (!q) return 'Give a colour or board name to search for.'
+  const hits = await searchMaterials(q)
+  if (!hits.length) return `No board matches "${q}". Try fewer words.`
+  return ['name | thickness', ...hits.slice(0, 25).map(h => `${h.name} | ${r(h.dz)}`), ...(hits.length > 25 ? [`…and ${hits.length - 25} more — narrow it.`] : [])].join('\n')
+}
+
 export async function runReadTool(name: string, input: unknown, ctx: ToolContext): Promise<string> {
   switch (name) {
+    case 'find_material': return findMaterialTool((input ?? {}) as { search?: string })
     case 'find_library': return findLibrary((input ?? {}) as { search?: string })
     case 'get_kicks': return getKicks(ctx)
     case 'get_markup': return getMarkup(ctx)

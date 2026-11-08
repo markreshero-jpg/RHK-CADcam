@@ -3031,8 +3031,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   async function reloadCabinetsFromServer(ids: string[]) {
     invalidateResolverCaches()
     const { data } = await supabase.from('cabinet_instances').select('*').in('id', ids)
-    const rows = new Map(((data ?? []) as CabinetInstance[]).map(c => [c.id, c]))
-    const gone = new Set(ids.filter(id => !rows.has(id)))
+    const all = (data ?? []) as CabinetInstance[]
+    // A job-wide colour reaches other rooms too: only this room's rows come onto the canvas.
+    const rows = new Map(all.filter(c => c.room_id === room.id).map(c => [c.id, c]))
+    const gone = new Set(ids.filter(id => !all.some(c => c.id === id)))
     setCabinets(cs => [
       ...cs.filter(c => !gone.has(c.id)).map(c => rows.get(c.id) ?? c),
       ...[...rows.values()].filter(r => !cs.some(c => c.id === r.id)),

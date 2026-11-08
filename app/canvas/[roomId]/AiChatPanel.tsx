@@ -12,7 +12,7 @@ import { useTutorial } from '@/src/lib/tutorial/store'
 
 interface Msg {
   id: string; role: 'user' | 'assistant'; text: string; room_id: string | null
-  cost_usd?: number | null; ms?: number | null
+  cost_usd?: number | null; ms?: number | null; model?: string | null
   question?: { text: string; options: string[] } | null
   proposal?: { lines: string[]; description: string } | null
   proposal_status?: 'pending' | 'applied' | 'cancelled' | null
@@ -22,7 +22,7 @@ interface Msg {
 }
 
 const SUGGESTIONS = ['What is the total kick length?', 'Which cabinets are TBC?', 'List the overheads and their sizes']
-const COLS = 'id, role, text, room_id, cost_usd, ms, question, proposal, proposal_status, batch_id, changed, undone_at'
+const COLS = 'id, role, text, room_id, cost_usd, ms, model, question, proposal, proposal_status, batch_id, changed, undone_at'
 
 const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
   part.startsWith('**') && part.endsWith('**') ? <strong key={i} className="text-white">{part.slice(2, -2)}</strong> : part)
@@ -105,21 +105,22 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
     return data
   }
 
-  async function send(text: string) {
+  /** strong = "Try harder": the same question again on the stronger model. */
+  async function send(text: string, strong = false) {
     const message = text.trim()
     if (!message || busy) return
-    setInput(''); setError(null); setBusy('Thinking…')
+    setInput(''); setError(null); setBusy(strong ? 'Trying harder…' : 'Thinking…')
     setMsgs(m => [...m, { id: `local-${Date.now()}`, role: 'user', text: message, room_id: roomId }])
     try {
-      const data = await post('/api/ai/chat', { roomId, message, selectedIds })
+      const data = await post('/api/ai/chat', { roomId, message, selectedIds, strong })
       setMsgs(m => [...m, {
         id: data.messageId ?? `local-${Date.now()}-a`, role: 'assistant', text: data.reply, room_id: roomId,
-        cost_usd: data.costUsd, ms: data.ms, question: data.question ?? null,
+        cost_usd: data.costUsd, ms: data.ms, model: data.model, question: data.question ?? null,
         proposal: data.proposal ?? null, proposal_status: data.proposal ? 'pending' : null,
         batch_id: data.batchId ?? null, changed: data.changed ?? null,
       }])
       if (data.cabinetIds?.length) { onChanged(data.cabinetIds); useTutorial.getState().emit('ai_chat_edit') }
-      useTutorial.getState().emit('ai_chat_asked')
+      useTutorial.getState().emit(strong ? 'ai_chat_harder' : 'ai_chat_asked')
     } catch (e) {
       setError((e as Error).message)
     } finally {
@@ -147,6 +148,8 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
   }
 
   const lastId = msgs[msgs.length - 1]?.id
+  // The question "Try harder" re-asks: the latest user message.
+  const lastQuestion = [...msgs].reverse().find(m => m.role === 'user')?.text
   const scopeText = selectedIds.length
     ? `Selection: ${selectedLabels.slice(0, 6).join(', ')}${selectedLabels.length > 6 ? ` +${selectedLabels.length - 6}` : ''}`
     : `Room: ${roomName}`
@@ -166,7 +169,7 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
         {!msgs.length && !busy && (
           <div className="text-gray-400 space-y-2">
-            <p>Ask about this room — sizes, colours, kicks, what&apos;s TBC — or select cabinets and ask for a change (sizes, position, scribes, handles, notes).</p>
+            <p>Ask about this room — sizes, colours, kicks, what&apos;s TBC — or ask for a change: sizes, position, colours, scribes, handles, add an end panel, delete a cabinet. Select cabinets to keep it to those.</p>
             {SUGGESTIONS.map(s => (
               <button key={s} onClick={() => void send(s)}
                 className="block w-full text-left px-2 py-1.5 rounded border border-gray-800 hover:border-gray-600 hover:bg-gray-900 text-gray-300">{s}</button>
@@ -220,7 +223,15 @@ export default function AiChatPanel({ projectId, roomId, roomName, selectedIds, 
                       className="mt-2 px-3 py-1 rounded border border-gray-700 text-gray-300 text-xs hover:bg-gray-800 disabled:opacity-40">↶ Undo</button>
               )}
             </div>
-            {m.cost_usd != null && <div className="text-[10px] text-gray-600 mt-0.5">{cents(Number(m.cost_usd))}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)}s` : ''}</div>}
+            <div className="flex items-center gap-2 text-[10px] text-gray-600 mt-0.5">
+              {m.cost_usd != null && <span>{cents(Number(m.cost_usd))}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)}s` : ''}{m.model?.includes('sonnet') ? ' · tried harder' : ''}</span>}
+              {/* Try harder: the latest answer only, and not once it changed something */}
+              {m.id === lastId && lastQuestion && !m.model?.includes('sonnet') && !m.changed?.length && m.proposal_status !== 'applied' && (
+                <button disabled={!!busy} onClick={() => void send(lastQuestion, true)}
+                  title="Ask the same again on a stronger model: a few cents instead of a fraction of one"
+                  className="text-blue-400 hover:text-blue-300 disabled:opacity-40">↻ Try harder</button>
+              )}
+            </div>
           </div>
         ))}
         {busy && <div className="text-gray-500 italic">{busy}</div>}

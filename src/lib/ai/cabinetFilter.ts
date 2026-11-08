@@ -21,7 +21,15 @@ export type ScribeSide = 'left' | 'right' | 'top' | 'bottom' | 'back'
 /** Scribe side → rule_overrides key (cabinet panel "Scribes (mm)"). */
 export const SCRIBE_KEY: Record<ScribeSide, string> = { left: 'SCRL', right: 'SCRR', top: 'SCRT', bottom: 'SCRBT', back: 'SCRBK' }
 
-/** Change whitelist (AI0 + AI2). Door / board colours join in AI3. */
+/** Board colour roles the AI can set. Cabinet: material_overrides (role → materials.id),
+ *  kick face: toekick_overrides.face. Room / job: room_materials / job_materials rows. */
+export type MaterialRole = 'fronts' | 'carcass' | 'exposed' | 'shelf' | 'divider' | 'kick'
+export const ROLE_KEY: Record<Exclude<MaterialRole, 'kick'>, string> = {
+  fronts: 'door_face', carcass: 'interior', exposed: 'exposed', shelf: 'shelf', divider: 'divider',
+}
+export const MATERIAL_ROLES = ['fronts', 'carcass', 'exposed', 'shelf', 'divider', 'kick'] as const
+
+/** Change whitelist (AI0 + AI2 + AI3b colours). */
 export interface CabinetChanges {
   dx?: number
   dy?: number
@@ -33,9 +41,11 @@ export interface CabinetChanges {
   scribes?: Partial<Record<ScribeSide, number | null>>
   /** handle_schedules id (the server turns the name into it); null = inherit room / job. */
   handle_schedule_id?: string | null
+  /** This cabinet's own board colours: role → materials.id (the server turns names into ids); null = inherit room / job. */
+  materials?: Partial<Record<MaterialRole, string | null>>
 }
 
-export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'handle_schedule_id'] as const
+export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'handle_schedule_id', 'materials'] as const
 
 export interface MatchContext {
   walls: Wall[]
@@ -85,6 +95,9 @@ export function validateChanges(ch: CabinetChanges): string[] {
   }
   if (ch.pos_z !== undefined && !(Number.isFinite(ch.pos_z) && ch.pos_z >= 0 && ch.pos_z <= 4000)) errs.push('pos_z must be 0–4000 mm')
   if (ch.offset !== undefined && !(Number.isFinite(ch.offset) && ch.offset >= 0)) errs.push('offset must be ≥ 0 mm')
+  for (const role of Object.keys(ch.materials ?? {})) {
+    if (!(MATERIAL_ROLES as readonly string[]).includes(role)) errs.push(`unknown colour role "${role}" (${MATERIAL_ROLES.join(', ')})`)
+  }
   for (const [side, v] of Object.entries(ch.scribes ?? {})) {
     if (!(side in SCRIBE_KEY)) errs.push(`unknown scribe side "${side}" (left, right, top, bottom, back)`)
     else if (v !== null && !(Number.isFinite(v) && v >= 0 && v <= 200)) errs.push(`scribe ${side} must be 0–200 mm`)
@@ -107,6 +120,22 @@ export function patchFor(c: CabinetInstance, ch: CabinetChanges, walls: Wall[]):
       if (v === null) delete next[key]; else next[key] = Math.round(v * 10) / 10
     }
     if (JSON.stringify(next) !== JSON.stringify(cur)) u.rule_overrides = next
+  }
+  if (ch.materials) {
+    const merge = (cur: Record<string, unknown>, key: string, v: string | null) => {
+      const next = { ...cur }
+      if (v === null) delete next[key]; else next[key] = v
+      return next
+    }
+    let mo = (c.material_overrides ?? {}) as Record<string, unknown>
+    let to = (c.toekick_overrides ?? {}) as Record<string, unknown>
+    for (const [role, v] of Object.entries(ch.materials) as [MaterialRole, string | null][]) {
+      if (v === undefined) continue
+      if (role === 'kick') to = merge(to, 'face', v)
+      else mo = merge(mo, ROLE_KEY[role], v)
+    }
+    if (JSON.stringify(mo) !== JSON.stringify(c.material_overrides ?? {})) u.material_overrides = mo
+    if (JSON.stringify(to) !== JSON.stringify(c.toekick_overrides ?? {})) u.toekick_overrides = to
   }
   if (ch.handle_schedule_id !== undefined) {
     const cur = (c.hardware_overrides ?? {}) as Record<string, unknown>

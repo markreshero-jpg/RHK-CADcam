@@ -13,7 +13,7 @@
 
 import { supabase } from '@/src/lib/supabase'
 import type { CabinetDefinition, CabinetInstance, Room, Wall } from '@/src/lib/types'
-import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
+import { invalidateResolverCaches, resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { detectNeighbours } from '@/src/lib/neighbours'
 import { panelLinkSignature } from '@/src/lib/rangehoodLink'
@@ -22,7 +22,7 @@ import { cabBottomZ, centroid, nextLabel, wallAnchorPoint, wallCabTop, wallDir }
 import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
 import { parseKit } from '@/src/lib/cabinetKit'
 import { buildInstanceFromDefinition, dbInsertDefinitionParts } from '@/app/canvas/[roomId]/canvasDB'
-import { matchCabinets, patchFor, validateChanges, type CabinetChanges, type CabinetFilter } from '../cabinetFilter'
+import { matchCabinets, patchFor, validateChanges, ROLE_KEY, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { wallOffset } from '../roomSummary'
 
 type Fields = Partial<CabinetInstance>
@@ -36,6 +36,9 @@ export type BatchOp =
    *  back) at an offset or at its left / right end as you face that side. */
   | { op: 'place'; code: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; next_to?: { label: string; side: 'left' | 'right' }; back?: boolean; dx?: number; dy?: number }
   | { op: 'delete'; labels: string[] }
+  /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
+   *  material_id null = back to inherited. Kick face has no class. */
+  | { op: 'set_material'; level: 'room' | 'job'; role: MaterialRole; classes?: ('base' | 'wall' | 'tall')[]; material_id: string | null }
 
 /** What a deleted cabinet takes with it that isn't rebuilt by a resolve. */
 interface DeleteSnapshot {
@@ -51,6 +54,8 @@ export type BatchEntry =
   | { kind?: 'update'; cabinet_id: string; label: string | null; before: Fields; after: Fields; line?: string }
   | { kind: 'insert'; cabinet_id: string; label: string | null; line: string }
   | { kind: 'delete'; cabinet_id: string; label: string | null; line: string; snapshot: DeleteSnapshot }
+  /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
+  | { kind: 'material'; cabinet_id: ''; label: null; line: string; table: string; match: Row; before: string | null; after: string | null; resolve_ids: string[] }
 
 export interface BatchResult {
   batchId: string | null
@@ -112,6 +117,21 @@ function canon(v: unknown): string {
   return JSON.stringify(v ?? null)
 }
 
+/** materials.id → name, for change lines (filled as plans / undos need them). */
+const matNames = new Map<string, string>()
+async function loadMaterialNames(ids: (string | null | undefined)[]) {
+  const want = [...new Set(ids.filter((x): x is string => !!x && !matNames.has(x)))]
+  if (!want.length) return
+  const { data } = await supabase.from('materials').select('id, name').in('id', want)
+  for (const m of (data ?? []) as { id: string; name: string }[]) matNames.set(m.id, m.name)
+}
+const matName = (id: unknown) => typeof id === 'string' ? matNames.get(id) ?? 'unknown board' : 'inherited'
+const ROLE_WORD: Record<string, string> = { door_face: 'fronts', interior: 'carcass', exposed: 'exposed', shelf: 'shelves', divider: 'dividers', face: 'kick face' }
+const CLASS_WORD: Record<string, string> = { base: 'bases', wall: 'overheads', tall: 'talls' }
+
+/** Every materials id an override object holds. */
+const overrideIds = (o: unknown) => Object.values((o ?? {}) as Row).filter((v): v is string => typeof v === 'string')
+
 const FIELD_WORD: Record<string, string> = { dx: 'width', dy: 'height', dz: 'depth', pos_z: 'off floor', left_neighbour_type: 'left neighbour', right_neighbour_type: 'right neighbour' }
 
 /** "BC-03: height 720 → 900, offset 1200 → 600, SCRR inherited → 20". */
@@ -121,6 +141,13 @@ function updateLine(c: CabinetInstance, u: Fields, walls: Wall[]): string | null
   for (const k of Object.keys(u)) {
     const before = (c as unknown as Row)[k], after = (u as Row)[k]
     if (k === 'pos_y' || (k === 'pos_x' && w)) continue   // shown as the offset below
+    if (k === 'material_overrides' || k === 'toekick_overrides') {
+      const b = (before ?? {}) as Row, a = (after ?? {}) as Row
+      for (const x of new Set([...Object.keys(b), ...Object.keys(a)])) {
+        if (canon(b[x]) !== canon(a[x])) parts.push(`${ROLE_WORD[x] ?? x} ${matName(b[x])} → ${matName(a[x])}`)
+      }
+      continue
+    }
     if (k === 'rule_overrides' || k === 'hardware_overrides') {
       const b = (before ?? {}) as Row, a = (after ?? {}) as Row
       for (const x of new Set([...Object.keys(b), ...Object.keys(a)])) {
@@ -154,6 +181,7 @@ type PlannedStep =
   | { kind: 'update'; id: string; patch: Fields }
   | { kind: 'insert'; tempId: string; row: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>; defId: string; line: string }
   | { kind: 'delete'; id: string; line: string }
+  | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
 
 export interface BatchPlan {
   state: RoomState
@@ -184,6 +212,10 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
   const state = opts.state ?? await loadRoomState(roomId)
   const { room, walls } = state
   const defs = await loadDefinitions(ops.flatMap(o => o.op === 'place' ? [o.code] : []))
+  await loadMaterialNames([
+    ...ops.flatMap(o => o.op === 'update' ? Object.values(o.changes.materials ?? {}) : o.op === 'set_material' ? [o.material_id] : []),
+    ...state.cabinets.flatMap(c => [...overrideIds(c.material_overrides), ...overrideIds(c.toekick_overrides)]),
+  ])
   let cabs: CabinetInstance[] = state.cabinets.map(c => ({ ...c }))
   const defNames = new Map(state.defNames)
   const steps: PlannedStep[] = [], lines: string[] = [], problems: string[] = [], warnings: string[] = []
@@ -235,6 +267,49 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         lines.push(line)
         touched.add(c.id)
         cabs = cabs.filter(x => x.id !== c.id)
+      }
+    } else if (op.op === 'set_material') {
+      if (only) { problems.push(`${n}: a ${op.level} colour changes every cabinet of that kind — deselect everything first (or ask for just the selected cabinets' own colour).`); continue }
+      const kick = op.role === 'kick'
+      const classes = kick ? [null] : (op.classes?.length ? op.classes : ['base', 'wall', 'tall'] as const)
+      // Cabinets it reaches: this room, or every room in the job.
+      let reach: { id: string; room_id: string; label: string | null; assembly_class: string; has_toekick: boolean; is_kick_assembly?: boolean; material_overrides: unknown; toekick_overrides: unknown }[] = cabs
+      let roomNames = new Map<string, string>([[room.id, room.name]])
+      if (op.level === 'job') {
+        const { data: rms } = await supabase.from('rooms').select('id, name').eq('project_id', room.project_id)
+        roomNames = new Map(((rms ?? []) as { id: string; name: string }[]).map(r => [r.id, r.name]))
+        const { data: all } = await supabase.from('cabinet_instances')
+          .select('id, room_id, label, assembly_class, has_toekick, is_kick_assembly, material_overrides, toekick_overrides').in('room_id', [...roomNames.keys()])
+        reach = (all ?? []) as typeof reach
+        await loadMaterialNames(reach.flatMap(c => [...overrideIds(c.material_overrides), ...overrideIds(c.toekick_overrides)]))
+      }
+      const where = op.level === 'job' ? 'Job' : `Room ${room.name}`
+      for (const cls of classes) {
+        const table = kick ? (op.level === 'job' ? 'job_toekick_materials' : 'room_toekick_materials') : (op.level === 'job' ? 'job_materials' : 'room_materials')
+        const match: Row = {
+          ...(op.level === 'job' ? { project_id: room.project_id } : { room_id: room.id }),
+          ...(kick ? { part_role: 'face' } : { assembly_class: cls, material_role: ROLE_KEY[op.role as Exclude<MaterialRole, 'kick'>] }),
+        }
+        let q = supabase.from(table).select('material_id')
+        for (const [k, v] of Object.entries(match)) q = q.eq(k, v as string)
+        const { data: cur } = await q.maybeSingle()
+        const before = (cur as { material_id?: string } | null)?.material_id ?? null
+        await loadMaterialNames([before])
+        if (before === op.material_id) continue
+        const hits = reach.filter(c => kick ? (c.has_toekick || c.is_kick_assembly) : c.assembly_class.replace('_corner', '') === cls)
+        const line = `${where} · ${kick ? 'kick face' : `${CLASS_WORD[cls!]} ${op.role === 'fronts' ? 'fronts' : ROLE_WORD[ROLE_KEY[op.role as Exclude<MaterialRole, 'kick'>]]}`}: ${matName(before)} → ${matName(op.material_id)} (${hits.length} cabinet${hits.length === 1 ? '' : 's'})`
+        steps.push({ kind: 'material', table, match, before, after: op.material_id, line, resolveIds: hits.map(c => c.id) })
+        lines.push(line)
+        // A cabinet's own colour wins over the room / job one — say which keep theirs.
+        const key = kick ? 'face' : ROLE_KEY[op.role as Exclude<MaterialRole, 'kick'>]
+        const own = hits.filter(c => ((kick ? c.toekick_overrides : c.material_overrides) as Row | null)?.[key])
+        if (own.length) warnings.push(`${own.map(c => `${c.label}${op.level === 'job' && c.room_id !== room.id ? ` (${roomNames.get(c.room_id)})` : ''}`).join(', ')} keep${own.length === 1 ? 's' : ''} ${own.length === 1 ? 'its' : 'their'} own ${ROLE_WORD[key]} colour.`)
+        if (op.level === 'job' && !kick) {
+          const { data: roomRows } = await supabase.from('room_materials').select('room_id, material_id')
+            .in('room_id', [...roomNames.keys()]).eq('assembly_class', cls!).eq('material_role', key)
+          const keep = ((roomRows ?? []) as { room_id: string }[]).map(r => roomNames.get(r.room_id)).filter(Boolean)
+          if (keep.length) warnings.push(`${keep.join(', ')} ${keep.length === 1 ? 'has its' : 'have their'} own ${CLASS_WORD[cls!]} ${ROLE_WORD[key]} — unchanged there.`)
+        }
       }
     } else if (op.op === 'place') {
       const def = defs.get(op.code.trim().toLowerCase())
@@ -375,7 +450,7 @@ async function resolveAll(ids: string[], labelOf: (id: string) => string, errors
  * cabinets whose detected pair moved take the new one), resolve everything
  * touched, and re-cut under panels whose rangehoods moved.
  */
-async function settle(roomId: string, before: CabinetInstance[], touched: Set<string>, record: (c: CabinetInstance, u: Fields) => void, warnings: string[], errors: string[]) {
+async function settle(roomId: string, before: CabinetInstance[], touched: Set<string>, record: (c: CabinetInstance, u: Fields) => void, warnings: string[], errors: string[], elsewhere: string[] = []) {
   const after = await loadRoomState(roomId)
   const was = detectNeighbours(before, after.walls, after.room)
   const now = detectNeighbours(after.cabinets, after.walls, after.room)
@@ -395,6 +470,27 @@ async function settle(roomId: string, before: CabinetInstance[], touched: Set<st
   await resolveAll(live, id => label.get(id)!, errors)
   const panels = after.cabinets.filter(isUnderPanel).filter(p => !touched.has(p.id) && panelLinkSignature(p, before) !== panelLinkSignature(p, after.cabinets))
   await resolveAll(panels.map(p => p.id), id => label.get(id)!, errors)
+  // A job colour reaches other rooms: their cabinets re-resolve too (nothing moved there).
+  const others = elsewhere.filter(id => !label.has(id))
+  if (others.length) {
+    const { data } = await supabase.from('cabinet_instances').select('id, label').in('id', others)
+    const ol = new Map(((data ?? []) as { id: string; label: string | null }[]).map(c => [c.id, c.label ?? '?']))
+    await resolveAll(others.filter(id => ol.has(id)), id => ol.get(id)!, errors)
+  }
+}
+
+/** Write a room / job colour row: a material sets it, null removes it (back to inherited). */
+async function writeMaterialRow(table: string, match: Row, materialId: string | null): Promise<string | null> {
+  // Room / job colours feed every cabinet's cascade: resolves after this must re-read them.
+  invalidateResolverCaches()
+  if (materialId) {
+    const { error } = await supabase.from(table).upsert({ ...match, material_id: materialId }, { onConflict: Object.keys(match).join(',') })
+    return error?.message ?? null
+  }
+  let q = supabase.from(table).delete()
+  for (const [k, v] of Object.entries(match)) q = q.eq(k, v as string)
+  const { error } = await q
+  return error?.message ?? null
 }
 
 async function saveBatch(room: Room, description: string, source: string, entries: BatchEntry[], warnings: string[]) {
@@ -417,6 +513,7 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
   const entries: BatchEntry[] = []
   const updates = new Map<string, Extract<BatchEntry, { before: Fields }>>()
   const touched = new Set<string>()
+  const elsewhere: string[] = []
 
   const record = (c: CabinetInstance, u: Fields) => {
     let e = updates.get(c.id)
@@ -428,6 +525,13 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
   }
 
   for (const s of plan.steps) {
+    if (s.kind === 'material') {
+      const err = await writeMaterialRow(s.table, s.match, s.after)
+      if (err) { errors.push(`${s.line}: save failed — ${err}`); continue }
+      entries.push({ kind: 'material', cabinet_id: '', label: null, line: s.line, table: s.table, match: s.match, before: s.before, after: s.after, resolve_ids: s.resolveIds })
+      for (const id of s.resolveIds) { if (rows.has(id)) touched.add(id); else elsewhere.push(id) }
+      continue
+    }
     if (s.kind === 'update') {
       const id = idFor.get(s.id) ?? s.id
       const c = rows.get(id)
@@ -463,7 +567,7 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
     e.line = c ? updateLine(c, e.after, plan.state.walls) ?? undefined : undefined
   }
 
-  await settle(roomId, plan.state.cabinets, touched, record, warnings, errors)
+  await settle(roomId, plan.state.cabinets, touched, record, warnings, errors, elsewhere)
   for (const e of updates.values()) {   // neighbour re-detects joined in during settle
     if (e.line) continue
     const c = plan.state.cabinets.find(x => x.id === e.cabinet_id)
@@ -471,7 +575,7 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
   }
 
   const batchId = entries.length ? await saveBatch(plan.state.room, args.description, args.source ?? 'ai', entries, warnings) : null
-  return { batchId, changed: describe(entries), warnings, errors, cabinetIds: [...new Set(entries.map(e => e.cabinet_id))] }
+  return { batchId, changed: describe(entries), warnings, errors, cabinetIds: [...new Set([...entries.map(e => e.cabinet_id).filter(Boolean), ...touched])] }
 }
 
 /** AI0 shape: one update step. */
@@ -495,6 +599,12 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   const state = await loadRoomState(batch.room_id)
   const warnings: string[] = [], errors: string[] = [], lines: string[] = []
   const touched = new Set<string>(), changedIds = new Set<string>()
+  const elsewhere: string[] = []
+  await loadMaterialNames((batch.entries as BatchEntry[]).flatMap(e =>
+    e.kind === 'material' ? [e.before, e.after] : e.kind === 'update' || !e.kind
+      ? [...overrideIds((e as { before: Fields }).before.material_overrides), ...overrideIds((e as { before: Fields }).before.toekick_overrides),
+         ...overrideIds((e as { after: Fields }).after.material_overrides), ...overrideIds((e as { after: Fields }).after.toekick_overrides)]
+      : []))
   const entries = [...(batch.entries as BatchEntry[])].reverse()
   const undoEntries: BatchEntry[] = []
   const record = (c: CabinetInstance, u: Fields) => {
@@ -503,6 +613,20 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   for (const e of entries) {
+    if (e.kind === 'material') {
+      let q = supabase.from(e.table).select('material_id')
+      for (const [k, v] of Object.entries(e.match)) q = q.eq(k, v as string)
+      const { data: cur } = await q.maybeSingle()
+      const now = (cur as { material_id?: string } | null)?.material_id ?? null
+      if (now !== e.after) { warnings.push(`${e.line.split(':')[0]}: changed again since — left as is.`); continue }
+      const err = await writeMaterialRow(e.table, e.match, e.before)
+      if (err) { errors.push(`${e.line.split(':')[0]}: undo failed — ${err}`); continue }
+      lines.push(`${e.line.split(':')[0]}: back to ${matName(e.before)}`)
+      for (const id of e.resolve_ids) {
+        if (state.cabinets.some(c => c.id === id)) { touched.add(id); changedIds.add(id) } else elsewhere.push(id)
+      }
+      continue
+    }
     const cur = state.cabinets.find(x => x.id === e.cabinet_id)
     if (e.kind === 'insert') {
       if (!cur) continue
@@ -529,7 +653,7 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
     }
   }
 
-  await settle(batch.room_id, state.cabinets, touched, record, warnings, errors)
+  await settle(batch.room_id, state.cabinets, touched, record, warnings, errors, elsewhere)
   await supabase.from('ai_batches').update({ undone_at: new Date().toISOString(), undone_by: (await supabase.auth.getUser()).data.user?.id ?? null }).eq('id', batchId)
   const undoId = lines.length ? await saveBatch(state.room, `Undo: ${batch.description}`, 'undo', undoEntries, warnings) : null
   return { batchId: undoId, changed: lines, warnings, errors, cabinetIds: [...changedIds] }

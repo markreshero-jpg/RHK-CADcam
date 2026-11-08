@@ -13,14 +13,19 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/src/lib/supabase'
 import { loadRoomSummary } from '../roomSummary'
-import { READ_TOOLS, runReadTool, type ToolContext } from '../readTools'
-import { filterHasCriteria, type CabinetChanges, type CabinetFilter } from '../cabinetFilter'
+import { READ_TOOLS, findMaterial, runReadTool, type ToolContext } from '../readTools'
+import { filterHasCriteria, MATERIAL_ROLES, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { findHandleSchedule, planBatch, runBatch, type BatchOp } from './cabinetBatch'
 import { withSupabase } from './scope'
 
+/** Everyday model, and the one "Try harder" re-runs a message on. */
 export const CHAT_MODEL = 'claude-haiku-5-5'
-// $ per million tokens (Haiku 5.5, prompts under 100K). Cache reads 0.1×, writes 1.25× input.
-const PRICE = { input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite: 0.125 }
+export const STRONG_MODEL = 'claude-sonnet-5-5'
+// $ per million tokens. Cache reads ~0.1×, writes 1.25× input. Haiku: prompts under 100K.
+const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+  [CHAT_MODEL]: { input: 0.10, output: 0.50, cacheRead: 0.01, cacheWrite: 0.125 },
+  [STRONG_MODEL]: { input: 2, output: 10, cacheRead: 0.20, cacheWrite: 2.5 },
+}
 const MAX_CALLS = 6
 const HISTORY_TURNS = 6
 /** Locked decision 1: Selection edits on this many cabinets or fewer apply without asking. */
@@ -52,7 +57,7 @@ const FILTER_SCHEMA = {
 const EDIT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'change_cabinets',
-    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z, offset along the wall, notes, scribes, handle_schedule), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Door / board colours can NOT be changed yet. Call it once per message.',
+    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z, offset along the wall, notes, scribes, handle_schedule, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
     input_schema: {
       type: 'object',
       properties: {
@@ -62,7 +67,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
           items: {
             type: 'object',
             properties: {
-              op: { type: 'string', enum: ['update', 'place', 'delete'] },
+              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material'] },
               filter: FILTER_SCHEMA as unknown as Anthropic.Tool.InputSchema,
               changes: {
                 type: 'object',
@@ -76,9 +81,18 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                     additionalProperties: false,
                   },
                   handle_schedule: { type: ['string', 'null'], description: 'Handle schedule name (list_handle_schedules); null = inherit room/job' },
+                  materials: {
+                    type: 'object', description: 'These cabinets\' OWN board colours by role — board names from find_material; null = back to the room / job colour',
+                    properties: Object.fromEntries(MATERIAL_ROLES.map(k => [k, { type: ['string', 'null'] }])),
+                    additionalProperties: false,
+                  },
                 },
                 additionalProperties: false,
               },
+              level: { type: 'string', enum: ['room', 'job'], description: 'set_material: this room, or every room in the job' },
+              role: { type: 'string', enum: [...MATERIAL_ROLES], description: 'set_material: fronts (doors / drawers), carcass, exposed (end panels, fillers, open interiors), shelf, divider, kick (kick face)' },
+              classes: { type: 'array', items: { type: 'string', enum: ['base', 'wall', 'tall'] }, description: 'set_material: which kinds (wall = overheads); leave out for all three' },
+              material: { type: ['string', 'null'], description: 'set_material: board name from find_material; null = back to inherited' },
               code: { type: 'string', description: 'place: library code, e.g. "BEP"' },
               wall: { type: 'string', description: 'place: wall name (with offset)' },
               offset: { type: 'number', description: 'place: mm from the wall start to the cabinet low end' },
@@ -131,7 +145,12 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - Faces and backs: a wall — an island especially — has a face and a back. The summary marks back-face cabinets "back". To put something on the back, use next_to a back cabinet, or wall + back: true. If the user says "back" or "far side" of an island, it's the back; if it's unclear which side they mean, ask.
 - delete: by label. Adding and deleting always wait for the user to press Apply.
 - Several steps in one call when they belong together, e.g. delete BC-04 then move BC-05 and BC-06 (offset) to close the gap — work the new offsets out from the summary.
-- You can NOT change door or board colours, or touch walls, yet — say so.
+- Colours (find_material first for the exact board name):
+  · "all the overhead doors in Walnut" / "kicks black in this room" → set_material, level room (classes: wall; role fronts / kick). "…on the whole job" → level job.
+  · "BC-03's doors in Walnut" (named or selected cabinets) → update with materials { fronts: … } — that cabinet's own colour, which wins over the room / job one.
+  · Roles: fronts = doors, drawer fronts and false fronts; carcass = cabinet interior; exposed = end panels, fillers, open interiors; shelf; divider; kick = kick face.
+  · Never guess a board: if find_material gives several close matches, ask_user with them as options.
+- You can NOT touch walls or benchtops yet — say so.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size? which end panel?). One question at a time.
 - After it, say in one line what changed (or that it's waiting for Apply). Undo is on the message.
 - Sizes are W×H×D: width = dx, height = dy, depth = dz.
@@ -155,6 +174,8 @@ export interface ChatTurnArgs {
   message: string
   /** Cabinets selected on the canvas — non-empty = Selection scope. */
   selectedIds?: string[]
+  /** "Try harder": run this message on the stronger model. */
+  strong?: boolean
 }
 export interface Proposal {
   roomId: string; ops: BatchOp[]; onlyIds?: string[]
@@ -205,12 +226,14 @@ async function history(projectId: string, roomId: string): Promise<Anthropic.Mes
   return out
 }
 
-type ChangesIn = CabinetChanges & { handle_schedule?: string | null }
-interface StepIn { op?: string; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
+interface StepIn { op?: string; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const t0 = Date.now()
+  const model = args.strong ? STRONG_MODEL : CHAT_MODEL
+  const PRICE = PRICES[model]
   const ctx: ToolContext = { projectId: args.projectId, roomId: args.roomId }
   const selection = args.selectedIds?.length ? args.selectedIds : null
 
@@ -245,8 +268,17 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     const ops: BatchOp[] = []
     for (const [i, st] of (input.steps ?? []).entries()) {
       if (st.op === 'update') {
-        const { handle_schedule, ...rest } = st.changes ?? {}
+        const { handle_schedule, materials, ...rest } = st.changes ?? {}
         const changes: CabinetChanges = { ...rest }
+        if (materials) {
+          changes.materials = {}
+          for (const [role, name] of Object.entries(materials) as [MaterialRole, string | null][]) {
+            if (name === null) { changes.materials[role] = null; continue }
+            const m = await findMaterial(name)
+            if ('error' in m) return { text: `Step ${i + 1}: ${m.error}`, isError: true }
+            changes.materials[role] = m.id
+          }
+        }
         if (handle_schedule !== undefined) {
           if (handle_schedule === null) changes.handle_schedule_id = null
           else {
@@ -261,11 +293,21 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
       } else if (st.op === 'place') {
         if (!st.code) return { text: `Step ${i + 1}: place needs a library code.`, isError: true }
         ops.push({ op: 'place', code: st.code, wall: st.wall, offset: st.offset, at_end: st.at_end, back: st.back, next_to: st.next_to, dx: st.dx, dy: st.dy })
+      } else if (st.op === 'set_material') {
+        if (!st.level || !st.role || !(MATERIAL_ROLES as readonly string[]).includes(st.role) || st.material === undefined)
+          return { text: `Step ${i + 1}: set_material needs level, role and material.`, isError: true }
+        let id: string | null = null
+        if (st.material !== null) {
+          const m = await findMaterial(st.material)
+          if ('error' in m) return { text: `Step ${i + 1}: ${m.error}`, isError: true }
+          id = m.id
+        }
+        ops.push({ op: 'set_material', level: st.level, role: st.role as MaterialRole, classes: st.classes, material_id: id })
       } else if (st.op === 'delete') {
         const labels = st.labels?.length ? st.labels : selection ? selLabels : []
         if (!labels.length) return { text: `Step ${i + 1}: delete needs labels.`, isError: true }
         ops.push({ op: 'delete', labels })
-      } else return { text: `Step ${i + 1}: op must be update, place or delete.`, isError: true }
+      } else return { text: `Step ${i + 1}: op must be update, place, delete or set_material.`, isError: true }
     }
     if (!ops.length) return { text: 'No steps.', isError: true }
 
@@ -286,11 +328,11 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
 
   for (let i = 0; i < MAX_CALLS; i++) {
     const res = await anthropic.messages.create({
-      model: CHAT_MODEL,
+      model,
       max_tokens: 4000,
       system: [{ type: 'text', text: SYSTEM, cache_control: { type: 'ephemeral' } }],
       tools: [...READ_TOOLS, ...EDIT_TOOLS],
-      output_config: { effort: 'low' },
+      output_config: { effort: args.strong ? 'medium' : 'low' },
       messages,
     })
     usage.calls++
@@ -342,7 +384,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const ms = Date.now() - t0
   const { data: saved, error } = await supabase.from('ai_messages').insert({
     project_id: args.projectId, room_id: args.roomId, role: 'assistant', text: out.reply, scope: selection ? 'selection' : 'room',
-    model: CHAT_MODEL, input_tokens: usage.input, output_tokens: usage.output,
+    model, input_tokens: usage.input, output_tokens: usage.output,
     cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite,
     api_calls: usage.calls, cost_usd: costUsd, ms,
     question: out.question ?? null,
@@ -350,5 +392,5 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     batch_id: out.batchId ?? null, changed: out.changed?.length ? out.changed : null,
   }).select('id').single()
   if (error) console.error('ai_messages insert:', error.message)
-  return { ...out, messageId: saved?.id ?? null, costUsd, ms, model: CHAT_MODEL, toolCalls }
+  return { ...out, messageId: saved?.id ?? null, costUsd, ms, model, toolCalls }
 }

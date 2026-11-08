@@ -1871,6 +1871,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click ↶ Undo on the message: added cabinets go, deleted ones come back with their end panels, fillers, shape edits and fixtures, and moved ones go back where they were.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_undo') > ev(s, 'ai_chat_undo') },
   ]},
+
+  // Appended 2026-11-08 (z_ai_helper AI3b: colours + Try harder).
+  { id: 'ai_chat_colours', level: 'basics', topic: 'room', title: 'Change colours with the AI',
+    blurb: 'Ask the AI to change door, carcass, end panel or kick colours for a room, the whole job, or just the cabinets you pick. If an answer looks wrong, Try harder asks again on a stronger model.',
+    keywords: 'ai ask chat colour color board material doors fronts carcass kick exposed walnut room job try harder sonnet', steps: [
+    { id: 'room', title: 'A colour for the room or the job',
+      body: 'In ✨ Ask AI type e.g. "make the overhead doors Natural Walnut" (this room) or "black kicks on the whole job". It finds the board, or shows buttons when there’s more than one (16 mm or 33 mm). It sets the same thing as the Materials tab in Room / Job properties, so every cabinet of that kind follows. Press Apply. Cabinets with their own colour keep it and the list says which.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
+    { id: 'own', title: 'One cabinet’s own colour',
+      body: 'Select a cabinet (or name it) and ask "make these doors Black Matt". That cabinet gets its own colour, which beats the room / job one. "Back to the room colour" clears it. Undo is on the message.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
+    { id: 'harder', title: 'Try harder',
+      body: 'Under the latest answer, ↻ Try harder asks the same question again on a stronger model. It costs a cent or two instead of a fraction of one, so use it when an answer is wrong or it got muddled.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_harder') > ev(s, 'ai_chat_harder') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
