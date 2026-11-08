@@ -1994,6 +1994,24 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Hold Ctrl and move the mouse a little, then drop while Ctrl is still down. The cabinet lands exactly there, even over another cabinet. It still stays on the wall. Check nothing really overlaps, because the app will not stop you.',
       canvas: true, done: c => c.inCanvas },
   ]},
+
+  // Appended 2026-11-08 (z_ai_helper: notes, appliances, whole job, phone).
+  { id: 'ai_more', level: 'intermediate', topic: 'room', title: 'More the AI can do: notes, appliances, the whole job, your phone',
+    blurb: 'Have the AI cloud a TBC, put in a sink or dishwasher, change every room at once, or use it from your phone.',
+    keywords: 'ai markup cloud tbc note site notes appliance sink cooktop dishwasher fridge fixture whole job every room phone mobile iphone photo live overhead soffit', steps: [
+    { id: 'notes', title: 'Notes and TBC clouds',
+      body: 'Ask e.g. "bulkhead colour is TBC, cloud it" or "add a site note: overheads push to open". It draws them on the elevation on the right layer (Questions for Client, Site notes, Electrical, General) in the right margin with a leader. Drawing from a plan adds them for every room. Undo takes them off again, unless you’ve edited them since.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
+    { id: 'appliances', title: 'Sinks and appliances',
+      body: 'Ask e.g. "put the Abi Zalo double sink in BC-01" or "a freestanding dishwasher in the 600 gap after BC-02". Sinks, cooktops, ovens and rangehoods go on their cabinet (centred and linked, so the benchtop cut-out follows); dishwashers, fridges and washers stand in their gap.',
+      canvas: true, done: (c, s) => c.fixtures.length > s.fixtures.length },
+    { id: 'job', title: 'The whole job at once',
+      body: 'With nothing selected, ask e.g. "make every base cabinet on the job 570 deep". It lists the changes room by room; Apply does them all, one Undo puts every room back. Anyone else with a room open sees the cabinets change without reloading.',
+      canvas: true, done: c => c.inCanvas },
+    { id: 'phone', title: 'On your phone',
+      body: 'On the phone canvas tap ✨ in the toolbar: the chat opens full screen. 📎 Draw from plan can take a photo of a site sketch.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_open') > ev(s, 'ai_chat_open') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI5 built and checked 2026-11-08** — all planned phases done; follow-ups under Open items
+Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08** (chat on Sonnet 5.5; markup, appliances, whole job, live refresh, phone) — remaining open items at the end
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -490,14 +490,48 @@ said it won't add duplicates (2.3¢ — plan cached).
   cupboard up 100" (WC-01 selected) → WALLZ 1600, applied, warned it runs 100 into the
   bulkhead; Undo exact.
 
+## Follow-ups built 2026-11-08 (Mark: "yes" to all)
+
+- **Greystone fixed as Mark asked:** RHK6586 Kitchenette — Haiku's stray pos_z undone;
+  **Wall 2** own soffit 30 (top line 2120 → 2290), WC-10 / 04 / 01 / 02 / 03 620 → 790
+  (undersides stay 1500), BH WC-08 re-fits 200 → 30; Wall 1 / pantry untouched. Posted to
+  its Ask AI chat with Undo. New `set_properties` `wall` + `wall_soffit_drop` (one wall's
+  soffit; its overheads / bulkheads follow).
+- **Blind corner** `BCNR/L`, `BCNR/R` (z_cabinet_library/migration_bcnr_library.sql) —
+  Mark's build: one carcass, door + false panel, blind width = return depth + its door +
+  2 + 40 (620), 40 filler on the return run, inside per job. `place` `blind_width` sets the
+  false panel column (the AI works it out).
+- **Markup** step: notes on an elevation per MARKUP-STANDARD — layers General /
+  Questions for Client (created teal #0891b2 when a job lacks it) / Site notes /
+  Electrical; TBC → cloud, appliance space → dashed box (others just a leader); text
+  inside an empty space or stacked in the right margin. Drawing adds markup for every
+  room; chat on request. Undo removes only the AI's own notes nobody has edited.
+- **Fixtures** step: catalogue items (`find_fixture`) on a cabinet — centred, linked via
+  `cabinetPlans` / `linkedPose` so the benchtop cut-out follows (sink, cooktop, oven,
+  rangehood) — or in a wall gap (dishwasher, fridge, washer; floor, unlinked). Full
+  catalogue body copied. Drawing places them; chat on request.
+- **Whole job:** steps take `rooms` (names or ["all"]); one proposal across rooms →
+  `runJobBatch` (a batch per room under a parent) → one Undo. `get_job_summary`,
+  `get_room_summary` read the other rooms.
+- **Live refresh:** `ai_batches` in the Realtime publication; each canvas listens for its
+  room's new / undone batches and reloads those cabinets (others get a reload hint for
+  walls / fixtures / notes / set-up). The socket must `realtime.setAuth()` before joining
+  or RLS filters every event (found in testing).
+- **Phone:** ✨ in the phone toolbar; the chat opens full screen.
+- **Checks** (Test Kitchen job): blind corner BCNR/L blind 620 via chat; TBC cloud + site
+  note drawn (elevation screenshot) and undone; Zalo sink centred + linked on a BSK and a
+  dishwasher in its gap (plan screenshot) and undone; every base on the job → 570 (9
+  cabinets, 3 rooms) and back; an open canvas saw WC-02 620 → 700 → 620 live; phone panel
+  at 390 × 844 answered.
+- Tutorial `ai_more`.
+
 ## Open items (check while building)
 
-- Job-wide sizes / adds / deletes (several rooms in one change) — colours only so far.
-- AI4: draw TBC clouds / site notes as CAD markup (Questions for Client layer), and
-  appliance fixtures from the catalogue.
+- Plan-view markup (only elevations so far); WCNR (overhead blind corner).
+- Other users see wall / fixture / note changes only after a reload (cabinets update live).
 - **Apply speed:** resolves now run 4 at a time; a 3-step batch applies in ~8.5 s.
   The first resolve in a request is still slow (cold caches).
-- Other people with the same room open don't see an AI change until they reload.
+
 
 - **Production key:** `ANTHROPIC_API_KEY` is set in Vercel (Mark, 2026-11-08) and in
   `.env.local` for dev. Spend cap US$50 in the Anthropic Console.
