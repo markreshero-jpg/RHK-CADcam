@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **Scope agreed, not started** — streamlined design locked 2026-11-08, next is AI0
+Status: **AI0 built and checked 2026-11-08** — next is AI1 (chat panel, read-only)
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -172,7 +172,7 @@ $20; cached input ~10% of normal.
 
 | # | Phase | Done when |
 |---|---|---|
-| AI0 | **Server actions**: placement / update / resolve callable server-side (from what `window.__canvasApi` does in the browser today); compact summary builder; batch + undo tables | A script can update 12 cabinets by filter server-side and undo it, matching what the UI produces |
+| AI0 ✅ | **Server actions**: placement / update / resolve callable server-side (from what `window.__canvasApi` does in the browser today); compact summary builder; batch + undo tables | A script can update 12 cabinets by filter server-side and undo it, matching what the UI produces |
 | AI1 | Chat panel + Room scope, **read-only** Q&A on Haiku; cost log | "Total kick length in the Kitchen?" / "Which cabinets are TBC?" correct in a few seconds, cost logged |
 | AI2 | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
 | AI3 | Room + Job scope bulk changes, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
@@ -191,9 +191,41 @@ then). Per-job notes (the `JOB-NOTES.md` equivalents, e.g. "Dune: Teak 16.5 or 3
 never 18") live on the job and are sent when that job is in scope. Keep both short —
 they're sent on every request.
 
+## AI0 — what was built (2026-11-08)
+
+- **`src/lib/supabase.ts`** — the shared client is now a proxy: in the browser it is
+  the browser client as before; on the server, code run inside `withSupabase()` uses
+  that request's client. So the resolver / save code runs unchanged as the signed-in
+  user. No browser-only dependencies were found in the resolve path.
+- **`src/lib/ai/server/scope.ts`** — `withSupabase(client, fn)`. Runs one at a time
+  and clears the resolver's module caches before and after, so a server run never
+  uses another request's (or a stale) cached input.
+- **`src/lib/ai/roomSummary.ts`** — compact summary (walls / cabinets / fixtures).
+  Fronts, colours, handles and carcass board come from the saved parts. Test Kitchen
+  (5 cabinets) = ~830 chars ≈ 210 tokens → a 40-cabinet kitchen ≈ 1.5–2K tokens.
+- **`src/lib/ai/cabinetFilter.ts`** — filter (labels / codes / classes / walls /
+  numeric where) + AI0 change whitelist (dx, dy, dz, pos_z, offset, notes), pure and
+  unit-tested. Class "wall" takes wall corners; joined kicks only when named; an
+  empty filter matches nothing; offset slides along the wall keeping the distance off it.
+- **`src/lib/ai/server/cabinetBatch.ts`** — `previewCabinetUpdate`, `updateCabinets`,
+  `undoBatch`. Same follow-ups as a canvas edit: full resolve + persist (awaited),
+  face neighbours re-detected, under panels re-cut when a rangehood moves, warning
+  when a joined-kick member moves (the canvas doesn't re-fit those either). Undo
+  skips any cabinet edited again since, and reports it.
+- **`ai_batches`** table (`migration_ai_batches.sql`, applied) — before / after per
+  field per cabinet, `undone_at`, job-access RLS.
+- **Check:** `src/lib/ai/__tests__/headlessAi0.test.ts` (gated by `AI0_RUN`) on
+  Test Kitchen: both overheads dy 700 → 900 and back; WC-02 moved 600 → 1000 along
+  Wall 1 (neighbours of WC-01 / WC-02 re-detected) and back — rows restored exactly,
+  parts re-resolved, no resolver errors.
+
 ## Open items (check while building)
 
-- Whether placement/resolve code has browser-only dependencies that block running it
-  server-side (AI0's first job).
-- How open canvases learn about changes (existing realtime channel vs refresh).
+- **Speed:** ~3–4 s per cabinet resolve on the server with cold caches, one after
+  another (2 cabinets ≈ 8 s). A 12-cabinet job-wide change would be ~40 s — resolve
+  in parallel / keep the cascade cache within a batch before AI3.
+- How open canvases learn about changes (existing realtime channel vs refresh) — AI1/AI2.
+- Material / handle / scribe changes in `update_cabinets` — need the override
+  structures (door colour per class lives on the job / room; per-cabinet in
+  `material_overrides`) — AI2/AI3.
 - Haiku's reliability on edits — measure in AI2 before committing to it.
