@@ -273,6 +273,12 @@ Decisions (2026-09-16): hardware before appearance; real hardware models in
   flips, hard-coded ones included, so a dark-screen set reads as dark lines on white.
   Colour / background picks are flipped too (background #000000 → white). Screen only.
   Set "Line drawing white" = copy of Line drawing with invert on, 3D background white.
+- **Canvas light mode (2026-11-08, check pending):** the app ThemeToggle sits at the
+  top right of the canvas bar. The canvas UI uses raw Tailwind grays, so globals.css
+  flips `--color-gray-*` + `--color-white` on `.light:has([data-canvas-theme])`
+  (coloured buttons keep white text). Plan / elevation `<svg>`s carry
+  `.canvas-keep-dark` so the drawing keeps its layer-set colours — pair light menus
+  with an inverted set (Line drawing white).
 - `ItemSetting` gains optional `color` (#rrggbb) and `weight` (multiplier;
   `WEIGHT_OPTIONS` ½/1/1½/2/3). `ViewLayerSettings` gains optional `background`.
   All unset = renderers draw exactly as before. Sparse save keeps only set values.

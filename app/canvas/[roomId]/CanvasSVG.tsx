@@ -261,7 +261,7 @@ export default function CanvasSVG({
   return (
     <svg
       ref={svgRef}
-      className="flex-1 bg-gray-950 select-none"
+      className="flex-1 bg-gray-950 select-none canvas-keep-dark"
       style={{ cursor, background: layers.background, filter: layers.invert ? INVERT_FILTER : undefined }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

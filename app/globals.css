@@ -71,3 +71,53 @@ input[type='number'] {
     user-select: text;
   }
 }
+
+/* ── Job canvas light mode ──────────────────────────────────────────────────
+   The canvas UI is built from raw Tailwind grays (bg-gray-800, text-white …),
+   ~3000 uses, not the semantic tokens above (2026-11-08). In light mode, while a canvas is
+   open (the canvas theme switch carries [data-canvas-theme]), flip the gray
+   scale + white so those classes go light. Set on <html> so portalled modals
+   follow. Coloured buttons (bg-blue-600 text-white …) keep white text.
+   The drawing surfaces opt out with .canvas-keep-dark — their colours come
+   from the layer set (use an inverted set, e.g. "Line drawing white"). */
+.light:has([data-canvas-theme]) {
+  --color-gray-950: #f1f5f9;
+  --color-gray-900: #ffffff;
+  --color-gray-800: #e2e8f0;
+  --color-gray-700: #cbd5e1;
+  --color-gray-600: #94a3b8;
+  --color-gray-500: #64748b;
+  --color-gray-400: #475569;
+  --color-gray-300: #334155;
+  --color-gray-200: #1e293b;
+  --color-gray-100: #0f172a;
+  --color-gray-50:  #020617;
+  --color-white:    #0f172a;
+}
+.light:has([data-canvas-theme]) :is(
+  [class^="bg-blue-"], [class*=" bg-blue-"], [class^="bg-red-"], [class*=" bg-red-"],
+  [class^="bg-green-"], [class*=" bg-green-"], [class^="bg-emerald-"], [class*=" bg-emerald-"],
+  [class^="bg-amber-"], [class*=" bg-amber-"], [class^="bg-orange-"], [class*=" bg-orange-"],
+  [class^="bg-purple-"], [class*=" bg-purple-"], [class^="bg-violet-"], [class*=" bg-violet-"],
+  [class^="bg-indigo-"], [class*=" bg-indigo-"], [class^="bg-sky-"], [class*=" bg-sky-"],
+  [class^="bg-teal-"], [class*=" bg-teal-"], [class^="bg-cyan-"], [class*=" bg-cyan-"],
+  [class^="bg-rose-"], [class*=" bg-rose-"], [class^="bg-pink-"], [class*=" bg-pink-"],
+  [class^="bg-yellow-"], [class*=" bg-yellow-"], [class^="bg-lime-"], [class*=" bg-lime-"],
+  [class^="bg-accent"], [class*=" bg-accent"]
+) {
+  --color-white: #ffffff;
+}
+.light:has([data-canvas-theme]) .canvas-keep-dark {
+  --color-gray-950: #030712;
+  --color-gray-900: #111827;
+  --color-gray-800: #1f2937;
+  --color-gray-700: #374151;
+  --color-gray-600: #4b5563;
+  --color-gray-500: #6b7280;
+  --color-gray-400: #9ca3af;
+  --color-gray-300: #d1d5db;
+  --color-gray-200: #e5e7eb;
+  --color-gray-100: #f3f4f6;
+  --color-gray-50:  #f9fafb;
+  --color-white:    #ffffff;
+}

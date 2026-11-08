@@ -1123,7 +1123,7 @@ export default function ElevationSVG({
       {/* SVG */}
       <svg
         ref={el => { svgRef.current = el; if (svgElRef) svgElRef.current = el }}
-        className="flex-1 bg-gray-950 select-none"
+        className="flex-1 bg-gray-950 select-none canvas-keep-dark"
         style={{ background: layers.background, filter: layers.invert ? INVERT_FILTER : undefined, cursor: mode === 'measure' ? 'crosshair' : (placeInfoFor(mode, armedDef) || mode === 'paste') ? 'crosshair' : elevCabFollowing ? 'crosshair' : elevResizeFollowing ? (elevResizeFollowing.side === 'top' ? 'ns-resize' : 'ew-resize') : spaceRef.current ? 'grab' : 'default' }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

@@ -141,6 +141,7 @@ import { computeSnap, cabinetCorners, SNAP_KINDS, SNAP_KIND_META, type SnapSetti
 import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationSnap'
 import { benchtopSeedFromCabinets, btFrontOverhang } from '@/src/lib/benchtopSeed'
 import { loadRoomHandleSchedule } from '@/src/lib/resolver/loadCabinetInput'
+import { ThemeToggle } from '@/app/ThemeToggle'
 
 // Last canvas tab for a room (see canvasView state). A stored elevation wall that
 // no longer exists falls back to the first wall.
@@ -3468,6 +3469,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               ✨ Ask AI
             </button>
           )}
+          {/* Light / dark menus (globals.css "Job canvas light mode"); the drawing follows the layer set. */}
+          <span data-canvas-theme className="flex items-center" title="Light / dark menus — pick an inverted layer set (e.g. Line drawing white) for a white drawing">
+            <ThemeToggle />
+          </span>
         </div>
       </div>
 
