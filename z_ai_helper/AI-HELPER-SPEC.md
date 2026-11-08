@@ -162,7 +162,8 @@ $20; cached input ~10% of normal.
    Starting rule ≤ 3 cabinets in Selection scope — tune with use.
 2. **Clarifying questions with clickable answers** (Claude Code style) when a request is
    ambiguous or big — not for every small edit.
-3. **Chat history per job** — one thread; each message records its scope.
+3. ~~**Chat history per job** — one thread~~ → **superseded 2026-11-08:** several chats
+   (conversations) per job, see "Chats, voice, Attach plan" below. Each message still records its scope.
 4. **PC first** — panel docked on the right of the canvas; iPhone later.
 5. **Testers get full scope** (Selection / Room / Job); limited by job access, not scope.
 7. **The AI may delete cabinets — always with Apply** (Mark, 2026-11-08). Never
@@ -524,6 +525,28 @@ said it won't add duplicates (2.3¢ — plan cached).
   cabinets, 3 rooms) and back; an open canvas saw WC-02 620 → 700 → 620 live; phone panel
   at 390 × 844 answered.
 - Tutorial `ai_more`.
+
+## Chats, voice, Attach plan (2026-11-08, Mark: "can you do it all")
+
+- **Conversations:** `ai_conversations` (z_ai_helper/migration_ai_conversations.sql; job
+  access RLS) + `ai_messages.conversation_id`. Old messages became one "Earlier chat" per
+  job. Only the chat's own history goes back to the model; a message from another room
+  is tagged `[In room X]`. A new chat names itself from its first question (📎 → "Plan:"),
+  ✎ renames. Server: `ensureConversation` / `touchConversation`
+  (src/lib/ai/server/conversations.ts); chat and draw routes take `conversationId`
+  (a drawing's answers follow the question's chat).
+- **Panel:** chat name at the top (☰ ▾) opens the list: Search (chat names + message
+  words across the job → jump to the message, lit up), ＋ New chat, newest first. Opens
+  on the job's latest chat. A new chat is saved on its first message.
+- **Two at once:** busy / error per chat; while one thinks you can open another and ask
+  there. An orange dot shows another chat still working. Checked: two concurrent
+  chats on Test Kitchen kept their own memory (headlessAi1 `chats`), and in the browser.
+- **🎤 Voice to text:** the browser's speech recognition (en-AU), words go into the box
+  for you to check, then Send. Hidden where the browser has none. Needs a real-device
+  check (headless Chrome has no microphone).
+- **Attach plan:** paperclip icon + "Attach plan" (PC); full-width "Attach plan or photo
+  — draw this room" on the phone.
+- No delete for chats yet (Undo links live on the messages). Tutorial `ai_chats`.
 
 ## Open items (check while building)
 

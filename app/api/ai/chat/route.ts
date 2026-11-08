@@ -10,7 +10,7 @@ import { runChatTurn } from '@/src/lib/ai/server/chat'
 export const maxDuration = 60
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => null) as { roomId?: string; message?: string; selectedIds?: unknown; strong?: boolean } | null
+  const body = await request.json().catch(() => null) as { roomId?: string; message?: string; selectedIds?: unknown; strong?: boolean; conversationId?: string } | null
   const roomId = body?.roomId, message = body?.message?.trim()
   const selectedIds = Array.isArray(body?.selectedIds) ? body.selectedIds.filter((x): x is string => typeof x === 'string').slice(0, 200) : []
   if (!roomId || !message) return Response.json({ error: 'roomId and message are required' }, { status: 400 })
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 
   try {
     const result = await withSupabaseRead(supabase, () =>
-      runChatTurn({ client: supabase, projectId: room.project_id, roomId, message, selectedIds, strong: body?.strong === true }))
+      runChatTurn({ client: supabase, projectId: room.project_id, roomId, message, selectedIds, strong: body?.strong === true, conversationId: body?.conversationId ?? null }))
     return Response.json(result)
   } catch (e) {
     console.error('ai chat:', e)

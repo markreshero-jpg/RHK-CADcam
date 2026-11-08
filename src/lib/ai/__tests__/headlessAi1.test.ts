@@ -13,7 +13,7 @@
 import { describe, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-interface Cfg { room?: string; questions?: string[]; summaryOnly?: string[]; selected?: string[] }
+interface Cfg { room?: string; questions?: string[]; chats?: string[][]; summaryOnly?: string[]; selected?: string[] }
 const CFG: Cfg | null = process.env.AI1_RUN ? JSON.parse(process.env.AI1_RUN) : null
 
 describe.skipIf(!CFG)('AI1 chat on a real room', () => {
@@ -40,14 +40,22 @@ describe.skipIf(!CFG)('AI1 chat on a real room', () => {
     const { data: room } = await client.from('rooms').select('project_id').eq('id', cfg.room!).single()
     const { runChatTurn } = await import('../server/chat')
     let total = 0
-    for (const q of cfg.questions ?? []) {
-      const r = await withSupabaseRead(client, () => runChatTurn({ client, projectId: room!.project_id, roomId: cfg.room!, message: q, selectedIds: cfg.selected }))
-      total += r.costUsd
-      console.log(`\nQ: ${q}\nA: ${r.reply}\n   [${r.ms} ms, $${r.costUsd.toFixed(5)}, tools: ${r.toolCalls.join(', ') || 'none'}]`)
-      if (r.question) console.log('   question options:', r.question.options.join(' / '))
-      if (r.proposal) console.log('   proposal:', r.proposal.lines)
-      if (r.changed) console.log('   applied:', r.changed, 'batch', r.batchId)
+    // One conversation: each question sees the ones before it.
+    const chat = async (qs: string[], tag: string) => {
+      let conversationId: string | null = null
+      for (const q of qs) {
+        const r = await withSupabaseRead(client, () => runChatTurn({ client, projectId: room!.project_id, roomId: cfg.room!, message: q, selectedIds: cfg.selected, conversationId }))
+        conversationId = r.conversationId
+        total += r.costUsd
+        console.log(`\n${tag}Q: ${q}\nA: ${r.reply}\n   [chat ${r.conversationId.slice(0, 8)}, ${r.ms} ms, $${r.costUsd.toFixed(5)}, tools: ${r.toolCalls.join(', ') || 'none'}]`)
+        if (r.question) console.log('   question options:', r.question.options.join(' / '))
+        if (r.proposal) console.log('   proposal:', r.proposal.lines)
+        if (r.changed) console.log('   applied:', r.changed, 'batch', r.batchId)
+      }
     }
+    // "chats": several conversations at the same time, to check they don't mix.
+    if (cfg.chats) await Promise.all(cfg.chats.map((qs, i) => chat(qs, `[chat ${i + 1}] `)))
+    else await chat(cfg.questions ?? [], '')
     console.log(`\nTotal $${total.toFixed(5)}`)
   }, 300_000)
 })

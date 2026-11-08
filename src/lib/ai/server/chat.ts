@@ -19,6 +19,7 @@ import { filterHasCriteria, MATERIAL_ROLES, type CabinetChanges, type CabinetFil
 import { findHandleSchedule, planBatch, runBatch, runJobBatch, type BatchOp } from './cabinetBatch'
 import { withSupabase } from './scope'
 import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
+import { ensureConversation, touchConversation } from './conversations'
 
 /** Everyday model, and the one "Try harder" re-runs a message on. */
 export const CHAT_MODEL = 'claude-sonnet-5-5'
@@ -226,6 +227,8 @@ export interface ChatTurnArgs {
   selectedIds?: string[]
   /** "Try harder": run this message on the stronger model. */
   strong?: boolean
+  /** The chat this message belongs to; none (or not this job's) = a new chat. */
+  conversationId?: string | null
 }
 export interface Proposal {
   roomId: string; ops: BatchOp[]; onlyIds?: string[]
@@ -237,6 +240,7 @@ export interface Proposal {
 }
 export interface ChatTurnResult {
   messageId: string | null
+  conversationId: string
   reply: string
   question?: { text: string; options: string[] }
   proposal?: Proposal
@@ -260,16 +264,20 @@ function replayText(m: HistoryRow): string {
   return t
 }
 
-/** Last few exchanges in this room. The panel shows the whole job's thread, but only
- *  this room's goes back to the model — other rooms' labels would muddle it. */
-async function history(projectId: string, roomId: string): Promise<Anthropic.MessageParam[]> {
-  const { data } = await supabase.from('ai_messages').select('role, text, question, proposal, proposal_status, changed, undone_at')
-    .eq('project_id', projectId).eq('room_id', roomId).order('created_at', { ascending: false }).limit(HISTORY_TURNS * 2)
-  const rows = ((data ?? []) as HistoryRow[]).reverse()
+/** Last few exchanges of this conversation. A message asked in another room is tagged
+ *  with that room, so its labels don't get mixed up with this room's. */
+async function history(conversationId: string, roomId: string): Promise<Anthropic.MessageParam[]> {
+  const { data } = await supabase.from('ai_messages').select('role, text, room_id, question, proposal, proposal_status, changed, undone_at')
+    .eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(HISTORY_TURNS * 2)
+  const rows = ((data ?? []) as (HistoryRow & { room_id: string | null })[]).reverse()
+  const otherRooms = [...new Set(rows.map(r => r.room_id).filter((x): x is string => !!x && x !== roomId))]
+  const { data: rn } = otherRooms.length ? await supabase.from('rooms').select('id, name').in('id', otherRooms) : { data: [] }
+  const roomName = new Map(((rn ?? []) as { id: string; name: string }[]).map(r => [r.id, r.name]))
   while (rows.length && rows[0].role !== 'user') rows.shift()
   const out: Anthropic.MessageParam[] = []
   for (const m of rows) {
-    const text = m.role === 'assistant' ? replayText(m) : m.text
+    const tag = m.room_id && m.room_id !== roomId ? `[In room ${roomName.get(m.room_id) ?? 'another room'}] ` : ''
+    const text = tag + (m.role === 'assistant' ? replayText(m) : m.text)
     const last = out[out.length - 1]
     if (last && last.role === m.role) last.content = `${last.content}\n\n${text}`   // keep turns alternating
     else out.push({ role: m.role as 'user' | 'assistant', content: text })
@@ -289,9 +297,10 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const ctx: ToolContext = { projectId: args.projectId, roomId: args.roomId }
   const selection = args.selectedIds?.length ? args.selectedIds : null
 
+  const conversationId = await ensureConversation(args.projectId, args.conversationId)
   const [summary, past, selLabels, aiCtx] = await Promise.all([
     loadRoomSummary(args.roomId),
-    history(args.projectId, args.roomId),
+    history(conversationId, args.roomId),
     selection
       ? supabase.from('cabinet_instances').select('id, label').in('id', selection).then(r => (r.data ?? []).map(c => c.label as string))
       : Promise.resolve([] as string[]),
@@ -303,8 +312,9 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
 
   // The question is saved first (its own created_at, before the answer's).
   const asked = await supabase.from('ai_messages').insert(
-    { project_id: args.projectId, room_id: args.roomId, role: 'user', text: args.message, scope: selection ? 'selection' : 'room' })
+    { project_id: args.projectId, room_id: args.roomId, conversation_id: conversationId, role: 'user', text: args.message, scope: selection ? 'selection' : 'room' })
   if (asked.error) throw new Error(`ai_messages: ${asked.error.message}`)
+  await touchConversation(conversationId, args.message)
 
   const messages: Anthropic.MessageParam[] = [
     ...past,
@@ -312,7 +322,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   ]
   const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, calls: 0 }
   const toolCalls: string[] = []
-  const out: Omit<ChatTurnResult, 'messageId' | 'costUsd' | 'ms' | 'model' | 'toolCalls'> = { reply: '' }
+  const out: Omit<ChatTurnResult, 'messageId' | 'conversationId' | 'costUsd' | 'ms' | 'model' | 'toolCalls'> = { reply: '' }
   let edited = false
 
   /** Run one change_cabinets call → tool result text, and maybe end the turn with a proposal. */
@@ -483,7 +493,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const costUsd = (usage.input * PRICE.input + usage.output * PRICE.output + usage.cacheRead * PRICE.cacheRead + usage.cacheWrite * PRICE.cacheWrite) / 1e6
   const ms = Date.now() - t0
   const { data: saved, error } = await supabase.from('ai_messages').insert({
-    project_id: args.projectId, room_id: args.roomId, role: 'assistant', text: out.reply, scope: selection ? 'selection' : 'room',
+    project_id: args.projectId, room_id: args.roomId, conversation_id: conversationId, role: 'assistant', text: out.reply, scope: selection ? 'selection' : 'room',
     model, input_tokens: usage.input, output_tokens: usage.output,
     cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite,
     api_calls: usage.calls, cost_usd: costUsd, ms,
@@ -492,5 +502,6 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     batch_id: out.batchId ?? null, changed: out.changed?.length ? out.changed : null,
   }).select('id').single()
   if (error) console.error('ai_messages insert:', error.message)
-  return { ...out, messageId: saved?.id ?? null, costUsd, ms, model, toolCalls }
+  await supabase.from('ai_conversations').update({ last_message_at: new Date().toISOString() }).eq('id', conversationId)
+  return { ...out, messageId: saved?.id ?? null, conversationId, costUsd, ms, model, toolCalls }
 }

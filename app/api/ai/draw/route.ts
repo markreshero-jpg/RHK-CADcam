@@ -15,7 +15,7 @@ export const maxDuration = 300
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as {
-    roomId?: string; path?: string; fileName?: string; message?: string; continueFrom?: string; answer?: string
+    roomId?: string; path?: string; fileName?: string; message?: string; continueFrom?: string; answer?: string; conversationId?: string
   } | null
   const roomId = body?.roomId
   if (!roomId || (!body?.path && !body?.continueFrom)) return Response.json({ error: 'roomId and a path (or continueFrom) are required' }, { status: 400 })
@@ -29,8 +29,10 @@ export async function POST(request: Request) {
   if (!room) return Response.json({ error: 'Room not found' }, { status: 404 })
 
   let ctx: DrawCtx
+  let conversationId = body.conversationId ?? null
   if (body.continueFrom) {
-    const { data: msg } = await supabase.from('ai_messages').select('draw, question').eq('id', body.continueFrom).maybeSingle()
+    const { data: msg } = await supabase.from('ai_messages').select('draw, question, conversation_id').eq('id', body.continueFrom).maybeSingle()
+    conversationId = (msg?.conversation_id as string | null) ?? conversationId
     const prev = msg?.draw as DrawCtx | null
     if (!prev) return Response.json({ error: 'That drawing question has gone — attach the plan again.' }, { status: 404 })
     const q = msg?.question as { text?: string; items?: { text: string }[] } | null
@@ -42,7 +44,7 @@ export async function POST(request: Request) {
   if (!ctx.path.startsWith(`${room.project_id}/`)) return Response.json({ error: 'That upload belongs to another job' }, { status: 400 })
 
   try {
-    const result = await withSupabaseRead(supabase, () => runDrawTurn({ projectId: room.project_id, roomId, ctx }))
+    const result = await withSupabaseRead(supabase, () => runDrawTurn({ projectId: room.project_id, roomId, ctx, conversationId }))
     return Response.json(result)
   } catch (e) {
     console.error('ai draw:', e)

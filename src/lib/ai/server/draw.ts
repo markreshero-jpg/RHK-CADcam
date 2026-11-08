@@ -21,6 +21,7 @@ import { DRAW_RULES } from '../drawRules'
 import { planBatch, type BatchOp } from './cabinetBatch'
 import type { Proposal } from './chat'
 import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
+import { ensureConversation, touchConversation } from './conversations'
 
 export const DRAW_MODEL = 'claude-opus-5-5'
 // $ per million tokens (Opus 5.5): cache reads $0.20, writes 1.25× input.
@@ -147,9 +148,9 @@ ASK FIRST (Mark's rule): before calling room_plan, if any set-up the drawing nee
 ${DRAW_RULES}`
 
 export interface DrawCtx { path: string; fileName: string; notes: string; qa: { q: string; a: string }[] }
-export interface DrawArgs { projectId: string; roomId: string; ctx: DrawCtx }
+export interface DrawArgs { projectId: string; roomId: string; ctx: DrawCtx; conversationId?: string | null }
 export interface DrawResult {
-  messageId: string | null; reply: string; proposal?: Proposal
+  messageId: string | null; conversationId: string; reply: string; proposal?: Proposal
   question?: { text: string; options: string[]; items?: { text: string; options: string[] }[] }
   costUsd: number; ms: number; model: string; toolCalls: string[]
 }
@@ -236,8 +237,10 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
     : ''
   // The user's turn: the file + note on the first go, the answer on a carry-on.
   const said = draw.qa.length ? draw.qa[draw.qa.length - 1].a : `📎 ${draw.fileName}${draw.notes ? `\n${draw.notes}` : ''}`
-  const asked = await supabase.from('ai_messages').insert({ project_id: args.projectId, room_id: args.roomId, role: 'user', scope: 'room', text: said })
+  const conversationId = await ensureConversation(args.projectId, args.conversationId)
+  const asked = await supabase.from('ai_messages').insert({ project_id: args.projectId, room_id: args.roomId, conversation_id: conversationId, role: 'user', scope: 'room', text: said })
   if (asked.error) throw new Error(`ai_messages: ${asked.error.message}`)
+  await touchConversation(conversationId, said)
 
   const messages: Anthropic.MessageParam[] = [{
     role: 'user', content: [
@@ -324,7 +327,7 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
   const costUsd = (usage.input * PRICE.input + usage.output * PRICE.output + usage.cacheRead * PRICE.cacheRead + usage.cacheWrite * PRICE.cacheWrite) / 1e6
   const ms = Date.now() - t0
   const { data: saved, error } = await supabase.from('ai_messages').insert({
-    project_id: args.projectId, room_id: args.roomId, role: 'assistant', text: reply, scope: 'room',
+    project_id: args.projectId, room_id: args.roomId, conversation_id: conversationId, role: 'assistant', text: reply, scope: 'room',
     model: DRAW_MODEL, input_tokens: usage.input, output_tokens: usage.output,
     cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite,
     api_calls: usage.calls, cost_usd: costUsd, ms,
@@ -334,5 +337,5 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
     proposal: proposal ?? null, proposal_status: proposal ? 'pending' : null,
   }).select('id').single()
   if (error) console.error('ai_messages insert:', error.message)
-  return { messageId: saved?.id ?? null, reply, proposal, question, costUsd, ms, model: DRAW_MODEL, toolCalls }
+  return { messageId: saved?.id ?? null, conversationId, reply, proposal, question, costUsd, ms, model: DRAW_MODEL, toolCalls }
 }

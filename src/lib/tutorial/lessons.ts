@@ -2012,6 +2012,27 @@ export const LESSONS: TutorialLesson[] = [
       body: 'On the phone canvas tap ✨ in the toolbar: the chat opens full screen. 📎 Draw from plan can take a photo of a site sketch.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_open') > ev(s, 'ai_chat_open') },
   ]},
+
+  // Appended 2026-11-08 (z_ai_helper: several chats per job, voice, Attach plan).
+  { id: 'ai_chats', level: 'basics', topic: 'room', title: 'AI chats: new subject, search, talk instead of type',
+    blurb: 'Keep one chat per subject, find old ones, run two at once, and use the microphone.',
+    keywords: 'ai chat conversation new chat subject search find history rename two at once microphone mic voice speak talk dictate attach plan paperclip', steps: [
+    { id: 'new', title: 'A new chat for a new subject',
+      body: 'Open Ask AI and press ＋ New chat. It only remembers what was said in this chat, so a new subject starts clean (and costs less). It names itself from your first question; ✎ renames it.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_new') > ev(s, 'ai_chat_new') },
+    { id: 'search', title: 'Find an old chat',
+      body: 'Click the chat name at the top (☰ ▾): every chat on this job, newest first. Type in Search to find words in any of them, then click a result to jump to that message.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_search') > ev(s, 'ai_chat_search') },
+    { id: 'two', title: 'Two at once',
+      body: 'Ask something, then while it says Thinking… open another chat from ☰ and carry on there (e.g. heights in one, colours in the other). An orange dot shows a chat still working; its answer is there when you go back.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
+    { id: 'mic', title: 'Talk instead of typing',
+      body: 'Press the 🎤 microphone next to Send and talk. The words go into the box (it goes red while listening); press it again to stop, check the words, then Send. The first time, the browser asks to use the microphone: Allow.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_mic') > ev(s, 'ai_chat_mic') },
+    { id: 'attach', title: 'Attach a plan',
+      body: 'Attach plan (the paperclip, bottom left; a full-width button on the phone) draws this room from a plan PDF or a site sketch photo. Type any notes first, e.g. which page or wall.',
+      canvas: true, done: c => c.inCanvas },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
