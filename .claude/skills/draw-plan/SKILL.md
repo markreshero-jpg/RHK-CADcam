@@ -657,6 +657,17 @@ Extra fields (full example: `layouts/rhk6456-morris-kitchen.json`):
   has protected CAD (below) those deletes fail; keep the walls / cabinets and
   edit them instead, or ask Mark.
 
+## Reading Mark's markup (Mark 2026-11-08)
+
+Mark marks up on the canvas, often with the Sketch tool, and often on the **Site measure**
+CAD layer (no print): a crossed-out dimension with a number written by it = the new size
+(e.g. overall 2400 struck, 2450 written = wall length 2450); an **X on a part edge = edge
+it**, **"ne" / "n/e" = no edge**; a word on a part = its finish ("2pac" + a colour = the
+2 Pac range colour's board). Read the strokes from `room_annotations` (elevation: x along
+the wall, y = -height off the floor; dims sit at the print offsets x the CAD scale - see
+z_CAD_tool DF1), plot them over the cabinets / dims to read handwriting, then apply.
+Never delete his markup after applying it (below).
+
 ## Mark's CAD is never deleted (LOCKED, Mark 2026-11-04)
 
 `room_annotations` rows carry `origin` (`auto` = inserted by

@@ -33,6 +33,9 @@ by themselves).
 - **Starter shop list:** General (red, the colour CAD uses today), Electrical (amber),
   Plumbing (blue), Gas (green), Site notes (purple), Construction (grey, **don't print**,
   for working lines). Edited in Settings → CAD Layers.
+- **Site measure** (cyan `#0891b2`, **don't print**) added to the shop list 2026-11-08 (Mark):
+  Mark sketches site measures / corrections over the drawing on it (cross out a dim, write the
+  measured size) and Claude reads + applies them. Older jobs get it via **Add from shop list**.
 - **Pinning.** The first time a job opens without layers, it copies the whole shop list.
   After that, shop edits never reach the job. Job layer manager → **Add from shop list**
   adds shop layers the job doesn't have yet (the explicit "Update job" step for layers).

@@ -30,6 +30,7 @@ drawings**, on the **plan** and the **elevations**. They print on the shop drawi
 | Appliances / fixtures, colour callouts | General |
 | TBC / questions + their clouds | Questions for Client |
 | Site + install notes | Site notes |
+| Mark's site measures / corrections (read + applied by Claude, not drawn by Claude) | Site measure (no print) |
 | Lighting / power | Electrical |
 
 ## Placement
