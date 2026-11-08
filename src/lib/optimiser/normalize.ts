@@ -43,7 +43,7 @@ const NO_EB: EbFields = { eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, eb_missing: fa
 
 // Finger-pull rails (z_handles D22): the CNC cuts anything narrower than this as
 // a strip this wide; the shop trims it to size, then tapes its long edges.
-export const RAIL_NEST_W = 60
+export const RAIL_NEST_W = 80
 
 /** A narrow finger-pull rail's nest strip + its shop note. Face-kind frame: the
  *  long edges are top / bottom (ends of DX = the rail's finished width). */

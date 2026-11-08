@@ -114,13 +114,13 @@ describe('finger-rail machining (H6b)', () => {
     expect(low.edge_band).toMatchObject({ top: true, bottom: true, left: false, right: false })
   })
 
-  it('narrow rails nest as a 60 strip; the note gives the trim size (D21)', () => {
+  it('narrow rails nest as an 80 strip; the note gives the trim size (D21)', () => {
     const both = fingerRailStrip(40, 588, 18, { top: true, bottom: true, left: false, right: false }, 1, false)
-    expect(both.dims).toEqual({ w: 60, h: 588, thickness: 18 })
-    expect(both.note).toBe('Cut 60 wide, trim to 38, then tape 2 long edges = 40')
+    expect(both.dims).toEqual({ w: 80, h: 588, thickness: 18 })
+    expect(both.note).toBe('Cut 80 wide, trim to 38, then tape 2 long edges = 40')
     const one = fingerRailStrip(40, 588, 18, { top: false, bottom: true, left: false, right: false }, 1, false)
-    expect(one.note).toBe('Cut 60 wide, trim to 39, then tape 1 long edge = 40')
-    expect(fingerRailStrip(45, 588, 18, { top: true, bottom: true, left: false, right: false }, 1, true).dims).toEqual({ w: 588, h: 60, thickness: 18 })
+    expect(one.note).toBe('Cut 80 wide, trim to 39, then tape 1 long edge = 40')
+    expect(fingerRailStrip(45, 588, 18, { top: true, bottom: true, left: false, right: false }, 1, true).dims).toEqual({ w: 588, h: 80, thickness: 18 })
   })
 
   it('flat front rail: the top rail\'s block drops to sit 2 under it; lower rails stay centred', () => {

@@ -417,24 +417,24 @@ cabinet. Rails run horizontally, with the grain along their length.
   - Tests: `fingerRailOps.test.ts` (D20 case).
   - Shaped facet rails (5b) still always get blocks and aren't drawn in 3D.
 
-**D21. Rails cut as a 60 strip, trimmed, then taped (Mark, 2026-10-29 — standard practice).**
-The machine doesn't cut anything under 50–60 wide well. So the CNC cuts each
-finger-pull rail as a 60-wide strip, and the shop trims it to width and then
-tapes its long edges.
+**D21. Rails cut as an 80 strip, trimmed, then taped (Mark, 2026-10-29 — standard practice; strip raised from 60 to 80 shop-wide, Mark 2026-11-09).**
+The machine doesn't cut narrow strips well. So the CNC cuts each
+finger-pull rail under 80 wide as an 80-wide strip, and the shop trims it to
+width and then tapes its long edges.
 - **Tape:**
   - The rail at the carcass top gap (base) or bottom gap (wall) gets 1 long
     edge: the one away from the carcass edge.
   - Every other rail gets both long edges.
   - The tape is the front's (door) tape.
-- **Comment on every rail:** "Cut 60 wide, trim to {W − n × tape}, then tape n
+- **Comment on every rail:** "Cut 80 wide, trim to {W − n × tape}, then tape n
   long edge(s) = W". Joined rails (D19) keep it, followed by "Joined rail: …".
 - **As built:**
   - `fingerRails` marks each rail `at` 'top' / 'bottom' and carries the front's
     `edgeband_id`.
   - `fingerRailParts` sets the long-edge flags (face-kind top / bottom = ends of
     DX).
-  - normalize: `RAIL_NEST_W` = 60. `fingerRailStrip` makes a rail under 60 nest
-    at 60 × length with no tape deducted, and writes the note. Its tape still
+  - normalize: `RAIL_NEST_W` = 80. `fingerRailStrip` makes a rail under 80 nest
+    at 80 × length with no tape deducted, and writes the note. Its tape still
     counts in the edgeband metres and shows on the label.
   - Shaped facet rails are untouched.
   - Tests: `fingerRailOps.test.ts`.
@@ -501,7 +501,7 @@ is, and which edge is the bottom, once the label is off.
   back by rail thickness + RAILSB and **cut down to RAILSBFR (50)** ("the vertical
   front rails get cut down to 50mm", Mark), keeping its top.
 - Rules RAILSB / RAILSBX / RAILSBFR in the Finger Pull Rails group (job / room / cabinet).
-- Optimiser: the base piece nests like a rail (60 strip, trim, tape the front edge,
+- Optimiser: the base piece nests like a rail (80 strip, trim, tape the front edge,
   D21), named "Finger Rail Base n". Display layer `finger_rails`.
 - Migration `z_handles/migration_d24_setback.sql` (grip kind + `fpbase:` part key) — applied.
 - Not yet: base pieces don't join along the run in the optimiser (D19 joins `fprail:`
