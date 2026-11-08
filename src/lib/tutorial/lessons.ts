@@ -1982,6 +1982,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Back on Settings → AI helper, AI cost shows this month against the cap, by job, by person and by model (everyday questions, Try harder, drawing from a plan). ‹ › steps through months. The cap itself is on the API key in the Anthropic Console.',
       done: c => c.path.startsWith('/settings') },
   ]},
+
+  // Appended 2026-11-08 (Ctrl force placement).
+  { id: 'cab_force_place', level: 'intermediate', topic: 'cabinets', title: 'Force a cabinet exactly where you want it',
+    blurb: 'Hold Ctrl while moving a cabinet and it lands exactly at the cursor instead of snapping clear of other cabinets.',
+    keywords: 'force placement ctrl control move drag cabinet snap snapping overlap corner exact position', steps: [
+    { id: 'move', title: 'Move the cabinet',
+      body: 'Drag the cabinet along its wall, or use its crosshair to pick it up, in the plan or an elevation. Normally it snaps clear of anything in the way.',
+      canvas: true, done: c => c.inCanvas },
+    { id: 'ctrl', title: 'Hold Ctrl as you drop it',
+      body: 'Hold Ctrl and move the mouse a little, then drop while Ctrl is still down. The cabinet lands exactly there, even over another cabinet. It still stays on the wall. Check nothing really overlaps, because the app will not stop you.',
+      canvas: true, done: c => c.inCanvas },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -2395,7 +2395,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         const desired = Math.max(-sp.lo, Math.min(wall.length - sp.hi, cursorT - dragOffset))
         const dragSide = dragCab ? cabWallSide(dragCab, wall) : 'face'
         const occupied = cabinets.filter(c => c.id !== cabId && c.wall_id === wall.id && !c.is_kick_assembly && cabsBlock(dragCab ?? { assembly_class: assemblyClass, dy: 9999 }, c, wall, room) && cabWallSide(c, wall) === dragSide).map(c => ({ t: cabT(c, wall), dx: c.dx })).concat(wfOcc(wall, dragSide, dragCab ?? { assembly_class: assemblyClass, dy: 9999 }))
-        const t = slideToFreeSlot(desired + sp.lo, sp.hi - sp.lo, wall.length, occupied, dragCab ? cabT(dragCab, wall) + sp.lo : undefined) - sp.lo
+        // Ctrl = force placement: land exactly at the cursor, ignoring other cabinets.
+        const t = ctrlRef.current ? desired : slideToFreeSlot(desired + sp.lo, sp.hi - sp.lo, wall.length, occupied, dragCab ? cabT(dragCab, wall) + sp.lo : undefined) - sp.lo
         const cxp = centroid(walls)
         const a = wallAnchorPoint(wall, t, dragSide === 'back', cxp, dragCab ? cabGap(dragCab) : 0)
         setCabDrag({ id: cabId, pos_x: a.x, pos_y: a.y })
@@ -2419,7 +2420,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           const origT = raw.wall.id === cab.wall_id ? cabT(cab, raw.wall) : undefined
           const inw = wallInwardNormal(raw.wall, centroid(walls))
           const sp = cabWallSpan(cab, raw.wall, flip ? { x: -inw.x, y: -inw.y } : inw)
-          const t = slideToFreeSlot(Math.max(0, desired + sp.lo), sp.hi - sp.lo, raw.wall.length, occupied, origT != null ? origT + sp.lo : undefined) - sp.lo
+          // Ctrl = force placement (still on the wall), ignoring other cabinets.
+          const t = ctrlRef.current
+            ? Math.max(-sp.lo, Math.min(raw.wall.length - sp.hi, desired))
+            : slideToFreeSlot(Math.max(0, desired + sp.lo), sp.hi - sp.lo, raw.wall.length, occupied, origT != null ? origT + sp.lo : undefined) - sp.lo
           const cxp = centroid(walls)
           const a = wallAnchorPoint(raw.wall, t, flip, cxp, cabGap(cab))
           setCabMoveDrag({ id, wall: raw.wall, pos_x: a.x, pos_y: a.y, islandFlip: flip, freePos: wp })

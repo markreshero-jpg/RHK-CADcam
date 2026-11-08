@@ -327,6 +327,15 @@ export default function ElevationSVG({
   const [elevCabFollowing, setElevCabFollowing] = useState<{ id: string } | null>(null)
   // Cursor position in wall coords: t = along wall (mm), ht = height above floor (mm)
   const [elevCabFloat, setElevCabFloat] = useState<{ t: number; ht: number } | null>(null)
+  // Ctrl while moving a cabinet = force placement: it lands exactly at the cursor.
+  const [ctrlHeld, setCtrlHeld] = useState(false)
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (e.key === 'Control') setCtrlHeld(true) }
+    const up = (e: KeyboardEvent) => { if (e.key === 'Control') setCtrlHeld(false) }
+    const blur = () => setCtrlHeld(false)
+    window.addEventListener('keydown', down); window.addEventListener('keyup', up); window.addEventListener('blur', blur)
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur) }
+  }, [])
 
   const [hoveredCabId, setHoveredCabId] = useState<string | null>(null)
   // Stacked cabinets / fixtures under one click → pick one (CabinetPickerMenu).
@@ -875,10 +884,8 @@ export default function ElevationSVG({
       ? wallCabs.filter(c => c.id !== id && c.kick_run_id !== cab.kick_run_id && cabsBlock(cab, c, wall, room))
       : wallCabs.filter(c => c.id !== id && !c.is_kick_assembly && cabsBlock(cab, c, wall, room))
     ).map(c => ({ t: elevX(c), dx: c.dx })).concat(wfOcc(cab))
-    const snapT = slideToFreeSlot(
-      Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2)),
-      cab.dx, wall.length, occupied, elevX(cab)
-    )
+    const wantT = Math.max(0, Math.min(wall.length - cab.dx, elevCabFloat.t - cab.dx / 2))
+    const snapT = ctrlHeld ? wantT : slideToFreeSlot(wantT, cab.dx, wall.length, occupied, elevX(cab))
     const { x: pos_x, y: pos_y } = elevPos(wall, snapT, cab.dx)
 
     setElevCabFollowing(null)
@@ -2292,10 +2299,8 @@ export default function ElevationSVG({
               const occupied = wallCabs
                 .filter(c => c.id !== elevCabFollowing.id && cabsBlock(followingCab, c, wall, room))
                 .map(c => ({ t: elevX(c), dx: c.dx })).concat(wfOcc(followingCab))
-              const snapT = slideToFreeSlot(
-                Math.max(0, Math.min(wall.length - followingCab.dx, elevCabFloat.t - followingCab.dx / 2)),
-                followingCab.dx, wall.length, occupied, elevX(followingCab)
-              )
+              const wantT = Math.max(0, Math.min(wall.length - followingCab.dx, elevCabFloat.t - followingCab.dx / 2))
+              const snapT = ctrlHeld ? wantT : slideToFreeSlot(wantT, followingCab.dx, wall.length, occupied, elevX(followingCab))
               const snapX = snapT
               const snapY = roomH - snapBottomZ - followingCab.dy
 
