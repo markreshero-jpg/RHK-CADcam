@@ -3055,6 +3055,36 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  // Someone else's AI change (or Undo) in this room shows here without a reload
+  // (z_ai_helper): new / undone ai_batches rows arrive over Realtime (RLS applies).
+  // Cabinets reload in place; walls, fixtures, notes and set-up need a page reload.
+  const reloadFromAiRef = useRef(reloadCabinetsFromServer)
+  reloadFromAiRef.current = reloadCabinetsFromServer
+  useEffect(() => {
+    type Entry = { kind?: string; cabinet_id?: string }
+    const onBatch = (row: { entries?: Entry[] } | null) => {
+      const entries = row?.entries ?? []
+      const ids = [...new Set(entries.map(e => e.cabinet_id).filter((x): x is string => !!x))]
+      if (ids.length) void reloadFromAiRef.current(ids)
+      if (entries.some(e => e.kind === 'wall' || e.kind === 'fixture' || e.kind === 'markup' || e.kind === 'props'))
+        setToast('The AI changed walls, fixtures, notes or room set-up here — reload the page to see them')
+    }
+    let ch: ReturnType<typeof supabase.channel> | null = null
+    let live = true
+    // Row events are filtered by RLS as the joining user: the socket must carry the
+    // user's JWT before the join, or it joins as anon and gets nothing (as presence.ts).
+    void supabase.realtime.setAuth().then(() => {
+      if (!live) return
+      ch = supabase.channel(`ai-batches-${room.id}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ai_batches', filter: `room_id=eq.${room.id}` },
+          p => onBatch(p.new as { entries?: Entry[] }))
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ai_batches', filter: `room_id=eq.${room.id}` },
+          p => { if ((p.new as { undone_at?: string | null }).undone_at) onBatch(p.new as { entries?: Entry[] }) })
+        .subscribe()
+    })
+    return () => { live = false; if (ch) void supabase.removeChannel(ch) }
+  }, [room.id])
+
   async function handleUpdateProject(updates: Partial<Project>) {
     if (!project) return
     setProjectState(prev => prev ? { ...prev, ...updates } : prev)
