@@ -118,6 +118,7 @@ orders by level / topic, not array position.
 | Advanced › Production | Cut list and CNC | Production → Generate CNC… (path ends /optimiser) → back to the canvas |
 | Intermediate › Production | Finger-pull rails and knock-in blocks | Read-only: joined rails in the optimiser cut list, blocks in 3D (`finger_rail_runs`) |
 | Advanced › Production | 6th face: two programs and a flip | Read-only in the optimiser: A/Z pair, run A, flip over the long edge, run Z, simulate |
+| Intermediate › Cabinets | Shelf pin holes closer to the front and back | Open · Hole setback · Room or job |
 
 ## Phases
 

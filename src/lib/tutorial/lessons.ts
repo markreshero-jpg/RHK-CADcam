@@ -1916,6 +1916,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Apply draws it all at once. Check the plan and each elevation against the PDF. One ↶ Undo on the message takes the whole lot back out (it never touches what was already in the room).',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') || c.cabinets.length > s.cabinets.length },
   ]},
+
+  // Appended 2026-11-08 (z_joints/ADJ-HOLE-SETBACK-SPEC.md).
+  { id: 'adj_hole_setback', level: 'intermediate', topic: 'cabinets', title: 'Shelf pin holes closer to the front and back',
+    blurb: 'Set how far the adjustable shelf pin rows sit from the shelf edges, for the whole job, one room or one cabinet.',
+    keywords: 'adjustable shelf holes boring drilling pin rows spacing setback wider front back shallow cabinet room job', steps: [
+    { id: 'open', title: 'Open the cabinet',
+      body: 'Double-click the cabinet with the adjustable shelves and open its Joints tab.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'set', title: 'Hole setback',
+      body: 'In the Internal Seam Joints box, type a number in "Hole setback from shelf front + back", e.g. 25. The first row sits 25 from the shelf front and the last row 25 from its back. Leave it blank to follow the room or job; 0 uses the joint\'s own rows.',
+      canvas: true, done: c => c.cabEditorOpen },
+    { id: 'room', title: 'For a whole room or job',
+      body: 'Room Properties or Job Properties, Adjustable Shelves, "Adj. Shelf Hole Setback". Every cabinet in that room or job follows it unless the cabinet has its own number.',
+      canvas: true, done: c => c.inCanvas },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

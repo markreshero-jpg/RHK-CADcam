@@ -51,6 +51,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
   BACK_RAIL_ORIENT: 'Back Rail Orientation',
   BACK_TYPE: 'Back Type',
   BKRH:      'Back Rail Height (mm)',
+  ADJ_HOLE_SB: 'Adj. Shelf Hole Setback (mm, 0 = joint)',
   ADJSB_F: 'Adj. Shelf Front Setback (mm)',
   ADJSB_B: 'Adj. Shelf Back Setback (mm)',
   ADJSL:   'Adj. Shelf Left Notch (mm)',
@@ -92,7 +93,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Top Rail',          keys: ['TOP_TYPE', 'RD', 'RAIL_ORIENT', 'BACK_RAIL_ORIENT'] },
   { label: 'Bottom', keys: ['BOTTOM_TYPE'] },
   { label: 'Back',              keys: ['BACK_TYPE', 'BKRH'] },
-  { label: 'Adjustable Shelves',keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR'] },
+  { label: 'Adjustable Shelves',keys: ['ADJSB_F', 'ADJSB_B', 'ADJSL', 'ADJSR', 'ADJ_HOLE_SB'] },
   { label: 'Fixed Shelves',     keys: ['FIXSB_F', 'FIXSB_B'] },
   { label: 'Inner Drawers',     keys: ['IDCL', 'IDCR', 'IDFAO', 'SLIDE_SETBACK'] },
   // Face Reveals (CLASS_RULE_KEYS) render per class — see ClassRulesTable.

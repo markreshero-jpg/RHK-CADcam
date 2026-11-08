@@ -30,7 +30,7 @@ export const DEFAULT_CONSTRUCTION_METHOD = {
     BKRH:      100,  // back top rail height when BACK_TYPE = rail
 
     // Adjustable shelves
-    ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1,
+    ADJSB_F: 10, ADJSB_B: 0, ADJSL: 1, ADJSR: 1, ADJ_HOLE_SB: 0,
 
     // Fixed shelves
     FIXSB_F: 0, FIXSB_B: 0,

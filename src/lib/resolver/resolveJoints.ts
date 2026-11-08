@@ -1,4 +1,4 @@
-import { CabinetInput, DeclaredSeam, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
+import { CabinetInput, DeclaredSeam, JointTypeOp, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
 import { toGenericSeamKey, topSeamPartKeys, topSeamSibling } from '../cabinetSeams'
 import { enumerateShapedSeams, partsTouch } from './shapedSeams'
 
@@ -132,6 +132,26 @@ export function enumerateInternalSeams(
   return out
 }
 
+// Depth of a shelf from its seam part key (int_adj_shelf_<sort_order>).
+function internalDepth(parts: ResolvedInternalPart[], key: string): number | undefined {
+  return parts.find(p => `int_${p.part_type}_${p.sort_order}` === key)?.DX
+}
+
+// ADJ_HOLE_SB (job / room / cabinet rule): first and last pin rows sit this far
+// from the shelf's front and back edges, whatever the joint says. 0 / unset keeps
+// the joint's layout. Single-row joints (centre pins) are left alone, and so is a
+// shelf too shallow for the setback at both ends.
+export function applyAdjHoleSetback(ops: JointTypeOp[], setback: number | undefined, shelfDepth?: number): JointTypeOp[] {
+  const s = Number(setback)
+  if (!(s > 0)) return ops
+  if (shelfDepth != null && 2 * s >= shelfDepth) return ops
+  return ops.map(op => {
+    if (op.machine_operation !== 'drill' || op.expressions?.qty != null || !(op.qty > 1)) return op
+    const { offset_z_mm: _z, ...expressions } = op.expressions ?? {}
+    return { ...op, offset_z_mm: s, expressions: { ...expressions, spacing_mm: `(D - ${2 * s}) / ${op.qty - 1}` } }
+  })
+}
+
 export function resolveJoints(
   cab: CabinetInput,
   caseParts: ResolvedCasePart[],
@@ -245,7 +265,9 @@ export function resolveJoints(
       source:          assigned !== undefined ? 'cabinet' : 'method',
       part_a_key:      cand.part_a_key,
       part_b_key:      cand.part_b_key,
-      ops:             jointTypeOps[jointTypeId] ?? [],
+      ops:             cand.generic_key === 'adj_shelf:side'
+        ? applyAdjHoleSetback(jointTypeOps[jointTypeId] ?? [], cab.rules?.ADJ_HOLE_SB, internalDepth(internalParts, cand.part_a_key))
+        : jointTypeOps[jointTypeId] ?? [],
       shaped:          cand.shaped,
       ...(cand.shaped.kind === 'back_bottom' ? { bottom_back_join: cab.rules?.BOTTOM_BACK_JOIN } : {}),
       ...(cand.internal_edge ? { internal_edge: cand.internal_edge } : {}),
@@ -310,7 +332,9 @@ export function resolveJoints(
       source,
       part_a_key:      cand.part_a_key,
       part_b_key:      cand.part_b_key,
-      ops:             jointTypeOps[jointTypeId] ?? [],
+      ops:             cand.generic_key === 'adj_shelf:side'
+        ? applyAdjHoleSetback(jointTypeOps[jointTypeId] ?? [], cab.rules?.ADJ_HOLE_SB, internalDepth(internalParts, cand.part_a_key))
+        : jointTypeOps[jointTypeId] ?? [],
       internal_edge:   cand.edge,
       bank:            cand.bank,
       rows_override:   rows,

@@ -91,6 +91,15 @@ export default function JointsPanel({ cabinet, rp, onUpdate }: {
     void onUpdate(cabinet.id, { rule_overrides: next } as Partial<CabinetInstance>)
   }
 
+  // Blank = inherit the job / room value; 0 = this cabinet uses the joint's own rows.
+  function setAdjHoleSetback(raw: string) {
+    const n = parseFloat(raw)
+    const next = { ...ruleOverrides }
+    if (Number.isFinite(n) && n >= 0) next.ADJ_HOLE_SB = n
+    else delete next.ADJ_HOLE_SB
+    void onUpdate(cabinet.id, { rule_overrides: next } as Partial<CabinetInstance>)
+  }
+
   if (!rp) {
     return (
       <div className="p-6 text-xs text-gray-500 italic">
@@ -242,6 +251,21 @@ export default function JointsPanel({ cabinet, rp, onUpdate }: {
               </div>
               <p className="text-[10px] mt-1 text-gray-600 leading-snug">
                 Blank = joint default (cluster) / pitch-filled (bank). Individual seams below can override.
+              </p>
+              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-700/60">
+                <span className="text-xs flex-1 text-gray-400">Hole setback from shelf front + back (mm)</span>
+                <input
+                  type="number" min={0} step={0.5} data-tour="adj-hole-setback"
+                  placeholder={String((getCachedInput(cabinet.id)?.rules?.ADJ_HOLE_SB as number | undefined) ?? 0)}
+                  value={(ruleOverrides.ADJ_HOLE_SB as number | undefined) ?? ''}
+                  onChange={e => setAdjHoleSetback(e.target.value)}
+                  className={`w-16 bg-gray-700 border rounded px-2 py-1 text-xs text-right focus:outline-none focus:border-blue-500 ${
+                    ruleOverrides.ADJ_HOLE_SB != null ? 'border-green-700 text-green-300' : 'border-gray-600 text-white'
+                  }`}
+                />
+              </div>
+              <p className="text-[10px] mt-1 text-gray-600 leading-snug">
+                Blank = job / room value. 0 = the joint&apos;s own rows.
               </p>
             </div>
 
