@@ -1662,6 +1662,21 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: (c, s) => c.annotations.length > s.annotations.length },
   ]},
 
+  // Appended 2026-11-08 (z_CAD_tool SK1: freehand sketch).
+  { id: 'cad_sketch', level: 'basics', topic: 'cad', title: 'Sketch freehand (P)',
+    blurb: 'Draw a freehand line by hand - press, drag, let go.',
+    keywords: 'cad sketch freehand free hand draw pencil pen scribble markup p', steps: [
+    { id: 'open', title: 'Turn on CAD mode',
+      body: 'Press F7, or click CAD in the left sidebar (or turn on CAD in the cabinet editor).',
+      target: 'tool-cad', canvas: true, done: c => c.mode === 'cad' },
+    { id: 'draw', title: 'Draw a sketch',
+      body: 'Pick Sketch (the squiggle, or press P). Press the mouse down, draw, and let go. The stroke is smoothed down to the points it needs and saved as a line, so it prints and takes the colour, weight, dash and CAD layer you pick, like any other line. Snaps are off while sketching.',
+      canvas: true, done: c => c.annotations.some(a => a.kind === 'line' && !!(a.geom as { freehand?: boolean }).freehand) },
+    { id: 'move', title: 'Move or restyle it',
+      body: 'Pick Select (S) and click the sketch. Drag it to move it, or change its colour and weight in the CAD tools. Delete removes it. Sketches have no point grips: draw it again if the shape is wrong.',
+      canvas: true, done: c => c.annotSelected > 0 },
+  ]},
+
   // Appended 2026-11-04 (z_curved_end C9: rangehood in a curved wall end).
   { id: 'curved_rangehood', level: 'intermediate', topic: 'cabinets', title: 'Put a rangehood in a curved wall cabinet',
     blurb: 'A WCRVFIXP with the rangehood hole in its bottom, a rib as the flue shelf and a flue box up to the top.',

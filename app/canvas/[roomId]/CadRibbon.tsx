@@ -31,6 +31,7 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'textbox', label: 'Text box — click a corner, click the opposite corner (or drag), then type', key: 'B', icon: <><rect x="2" y="2.5" width="12" height="11" rx="1" /><path d="M5 6h6M5 8.5h6M5 11h4" /></> },
   { id: 'leader',  label: 'Leader note — click the tip, click where the text goes', key: 'Q', icon: <><path d="M3 13l6-6h5" /><path d="M3 13l1-3 2 2z" fill="currentColor" /></> },
   { id: 'line',    label: 'Line — click points; double-click, Enter or right-click to finish', key: 'L', icon: <path d="M3 13L13 3" /> },
+  { id: 'sketch',  label: 'Sketch (freehand) — press and drag to draw, let go to finish', key: 'P', icon: <path d="M2 12c2-4 3 1 5-2s2-6 4-5 1 5 3 3" /> },
   { id: 'arrow',   label: 'Arrow — click points; double-click, Enter or right-click to finish', key: 'A', icon: <><path d="M3 13L12 4" /><path d="M13 3l-1 4-3-3z" fill="currentColor" /></> },
   { id: 'rect',    label: 'Box — click a corner, click the opposite corner (or drag)', key: 'R', icon: <rect x="3" y="4" width="10" height="8" /> },
   { id: 'ellipse', label: 'Ellipse — click one corner of its frame, then the opposite one (or drag)', key: 'E', icon: <ellipse cx="8" cy="8" rx="5.5" ry="4" /> },
@@ -182,7 +183,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
   const arrows = kind === 'line' || kind === 'dim' || kind === 'arc'
   const nSel = cad.selected.length
   const NEXT: Record<CadTool, string> = {
-    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle', offset: 'offset copy', fillet: 'fillet', chamfer: 'chamfer', join: 'join',
+    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', sketch: 'sketch', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle', offset: 'offset copy', fillet: 'fillet', chamfer: 'chamfer', join: 'join',
   }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`

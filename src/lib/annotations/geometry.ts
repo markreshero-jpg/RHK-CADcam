@@ -18,7 +18,8 @@ export interface Pt { x: number; y: number }
 export interface TextGeom  { at: Pt; rot?: number; width?: number; height?: number; leader?: Pt[] }
 /** bulges (B4b): per segment, 0 = straight, else an arc (see bulgeMid). closed: the last
  *  point joins back to the first (a closed outline drawn with lines). */
-export interface LineGeom  { pts: Pt[]; bulges?: number[]; closed?: boolean }
+/** freehand (SK1): drawn with the Sketch tool - many points, so no per-vertex grips / end snaps. */
+export interface LineGeom  { pts: Pt[]; bulges?: number[]; closed?: boolean; freehand?: boolean }
 export interface BoxGeom   { a: Pt; b: Pt; rot?: number }
 export interface CloudGeom { pts: Pt[] }
 /** Aligned (no axis): offset = signed distance (frame mm) of the dim line from p1→p2,
@@ -953,4 +954,25 @@ export function dimLineAndTextFor(g: DimGeom, cur: Pt): { offset: number; tx: nu
   const l = dimLayout({ ...g, offset }), v = sub(l.d2, l.d1), L2 = v.x * v.x + v.y * v.y
   const tx = L2 < 1e-9 ? 0.5 : ((cur.x - l.d1.x) * v.x + (cur.y - l.d1.y) * v.y) / L2
   return { offset, tx }
+}
+
+/** SK1: thin a freehand stroke (Ramer-Douglas-Peucker). Keeps every point further than
+ *  `tol` from the simplified line; ends always kept. */
+export function simplifyPath(pts: Pt[], tol: number): Pt[] {
+  if (pts.length < 3) return pts.slice()
+  const keep = new Uint8Array(pts.length)
+  keep[0] = keep[pts.length - 1] = 1
+  const stack: [number, number][] = [[0, pts.length - 1]]
+  while (stack.length) {
+    const [i, j] = stack.pop()!
+    const a = pts[i], b = pts[j], dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy)
+    let far = -1, best = tol
+    for (let m = i + 1; m < j; m++) {
+      const p = pts[m]
+      const d = L ? Math.abs(dy * (p.x - a.x) - dx * (p.y - a.y)) / L : Math.hypot(p.x - a.x, p.y - a.y)
+      if (d > best) { best = d; far = m }
+    }
+    if (far >= 0) { keep[far] = 1; stack.push([i, far], [far, j]) }
+  }
+  return pts.filter((_, i) => keep[i])
 }

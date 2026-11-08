@@ -322,7 +322,8 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
         onPointerDown={e => { if (e.button === 0) { e.stopPropagation(); edit.onGrip(e, a.id, 'offset') } }} />
     </>
   }
-  if ((a.kind === 'line' || a.kind === 'cloud') && single) {
+  // SK1: a freehand sketch has too many points for grips - it gets the dashed box below.
+  if ((a.kind === 'line' || a.kind === 'cloud') && single && !(a.geom as LineGeom).freehand) {
     const g = a.geom as LineGeom
     const pts = (g.pts ?? []).map(p => mapPt(f, p))
     return vertexGrips(a.id, pts, edit, a.kind === 'cloud' || !!g.closed, true, g.bulges)

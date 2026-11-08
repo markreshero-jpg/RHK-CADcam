@@ -57,6 +57,11 @@ export function planSnapGeometry({ walls, cabinets, resolved, fixtures, benchtop
     switch (a.kind) {
       case 'line': {
         const lg = a.geom as LineGeom, pts = lg.pts ?? []
+        if (lg.freehand) {   // SK1: along the stroke (nearest / intersection) + its two ends
+          for (let i = 0; i < pts.length - 1; i++) g.segs.push({ a: pts[i], b: pts[i + 1], src: 'annotations', owner: own })
+          if (pts.length) g.points.push({ p: pts[0], kind: 'end', src: 'annotations', owner: own }, { p: pts[pts.length - 1], kind: 'end', src: 'annotations', owner: own })
+          break
+        }
         // closed shapes snap to (and mark) their centre, like boxes and clouds
         if (!lg.bulges?.some(Boolean)) { addOutline(g, pts, 'annotations', !!lg.closed, own, !!lg.closed); break }
         // With fillet arcs: corners as ends, straight sides' middles, arc middles + centres,

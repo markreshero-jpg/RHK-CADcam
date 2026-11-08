@@ -411,7 +411,9 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
     case 'cloud': {
       const g = a.geom as LineGeom, pts = g.pts ?? [], closed = a.kind === 'cloud' || !!g.closed
       return <>
-        <PointTable pts={pts} closed={closed} bulges={g.bulges} onPoint={(i, p) => set({ ...g, pts: pts.map((q, j) => j === i ? p : q) })} />
+        {g.freehand
+          ? <div className="text-[11px] text-gray-500">Freehand sketch ({pts.length} points). Drag to move; colour, weight and dash in the CAD tools.</div>
+          : <PointTable pts={pts} closed={closed} bulges={g.bulges} onPoint={(i, p) => set({ ...g, pts: pts.map((q, j) => j === i ? p : q) })} />}
         {closed && pts.length >= 3 && (() => {
           const c = { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length }
           return centreFields(c, t => set({ ...g, pts: pts.map(p => ({ x: p.x + t.x - c.x, y: p.y + t.y - c.y })) }))
@@ -421,7 +423,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
           {closed && <Row k="Area" v={`${r1(polyArea(sampleBulged(pts, g.bulges, true)) / 1e6)} m²`} />}
           {!closed && pts.length >= 2 && <Row k="Angle (first side)" v={`${r1(segAngle(pts[0], pts[1]))}°`} />}
         </div>
-        {cad.ribbonSize?.kind === 'line' && (
+        {cad.ribbonSize?.kind === 'line' && !g.freehand && (
           <div className="mt-2 flex items-center gap-3">
             <Field label="L" value={cad.ribbonSize.length} onCommit={cad.applyLength} suffix="mm" w="w-16" />
             <Field label="∠" value={cad.ribbonSize.angle} onCommit={cad.applyAngle} suffix="°" w="w-14" />

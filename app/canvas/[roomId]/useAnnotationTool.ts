@@ -17,7 +17,7 @@ import {
   angleSnap, dedupePts, leaderTextAt, type ArcGeom, type CircleGeom,
   offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, OFFSETTABLE, type OffsetKind,
   filletAt, chamferAt, allCorners, joinPolys, cornerJoin, boxToPoly, nearestSegIndex, type Poly,
-  bulgeArc, isSpecialDim, chainedDim, type SpecialDim,
+  bulgeArc, isSpecialDim, chainedDim, type SpecialDim, simplifyPath,
   arcFrom3, arcFromCentre, arcFromEndsRadius, arcPoint, angOf, arcStart, arcMid, arcEnd, sweepOf, setBoxCorner, rectPts, dimOffsetFor, dimLineAndTextFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
@@ -29,7 +29,7 @@ import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 import type { LiveMeasure } from './CadMeasureOverlay'
 
-export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset' | 'fillet' | 'chamfer' | 'join'
+export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'sketch' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset' | 'fillet' | 'chamfer' | 'join'
 
 /** How the Arc tool draws (B3): start / through / end, centre / start / end, or two ends + radius. */
 export type ArcMode = '3pt' | 'centre' | 'ends'
@@ -42,7 +42,7 @@ export const PICK_DIM_MODES = new Set<DimMode>(['radius', 'diameter', 'arclen', 
 export interface ArcSource { c: Pt; r: number; a0?: number; a1?: number }
 
 export const CAD_TOOL_KEYS: Record<string, CadTool> = {
-  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset', g: 'fillet', h: 'chamfer', j: 'join',
+  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', p: 'sketch', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset', g: 'fillet', h: 'chamfer', j: 'join',
 }
 
 /** Tools that drag out a shape on the canvas. */
@@ -52,8 +52,9 @@ const PLACE_TOOLS = new Set<CadTool>(['text', 'textbox', 'rect', 'ellipse', 'clo
 /** Tools that click out points one by one (each click → drawClick). A freehand cloud
  *  joins them once it has started. Every drawing tool must be here or in PLACE_TOOLS. */
 const POINT_TOOLS = new Set<CadTool>(['line', 'arrow', 'leader', 'dim', 'arc', 'circle'])
-export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'offset' | 'modify' | 'none' {
+export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'offset' | 'modify' | 'sketch' | 'none' {
   if (tool === 'select') return 'marquee'
+  if (tool === 'sketch') return 'sketch'   // SK1: press, drag, release
   if (tool === 'offset') return 'offset'
   if (tool === 'fillet' || tool === 'chamfer' || tool === 'join') return 'modify'   // picks come through the items' hit areas
   if (POINT_TOOLS.has(tool) || (tool === 'cloud' && drawingActive)) return 'point'
@@ -62,10 +63,10 @@ export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'pl
 
 /** Kind of row a tool makes, and whose remembered style it starts from. */
 const TOOL_KIND: Record<CadTool, AnnotationKind> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', sketch: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
 }
 const TOOL_STYLE_KEY: Record<CadTool, StyleKey> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', sketch: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
 }
 
 /** A line / arrow / leader being clicked out. attachId = adding a leader to that text. */
@@ -173,6 +174,8 @@ type Drag =
   // point is only added once the pointer actually moves.
   | { kind: 'vertex'; id: string; i: number; insertAfter?: number; moved: boolean }
   | { kind: 'marquee'; start: Pt; cur: Pt; additive: boolean }
+  // SK1: a freehand stroke being drawn (frame mm, raw points).
+  | { kind: 'sketch'; pts: Pt[] }
   | { kind: 'place'; start: Pt; cur: Pt; tool: PlaceTool }
   // Corner of an unrotated box / ellipse (boxCorners order).
   | { kind: 'offset'; id: string; moved: boolean }
@@ -1039,6 +1042,13 @@ export function useAnnotationTool({
       const cur = dragRef.current
       if (!cur) return
       const far = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) >= DRAG_PX
+      if (cur.kind === 'sketch') {
+        const p = toFrame(ev, false), last = cur.pts[cur.pts.length - 1]
+        if (Math.hypot(p.x - last.x, p.y - last.y) * zoom * frame.s < 1.5) return   // ~1.5 screen px apart
+        const next = { kind: 'sketch' as const, pts: [...cur.pts, p] }
+        dragRef.current = next; setDrag(next)
+        return
+      }
       if (cur.kind === 'move') {
         if (!cur.moved && !far) return
         if (!cur.moved) { captureSnapshot(); cur.moved = true }
@@ -1187,6 +1197,20 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
+      if (cur.kind === 'sketch') {   // SK1: thin to ~0.5 screen px and save as a freehand line
+        const px = 1 / (zoom * frame.s)
+        const end = toFrame(ev, false)
+        const raw = Math.hypot(end.x - cur.pts[cur.pts.length - 1].x, end.y - cur.pts[cur.pts.length - 1].y) > 0 ? [...cur.pts, end] : cur.pts
+        const pts = simplifyPath(raw, 0.5 * px)
+        if (pts.length < 2 || pts.reduce((s, p, i) => i ? s + segLength(pts[i - 1], p) : 0, 0) < 3 * px) return   // a click, not a stroke
+        const { arrowStart: _s, arrowEnd: _e, ...style } = defaultsFor('line')
+        void _s; void _e
+        const row = newRow('line', { pts, freehand: true }, null, style)
+        captureSnapshot()
+        setAnnotations(xs => [...xs, row])
+        void insertRows([row])
+        return
+      }
       if (cur.kind === 'offset' && !cur.moved) {
         const a = annRef.current.find(x => x.id === cur.id)
         if (a?.kind === 'dim' && !isSpecialDim(a.geom)) {
@@ -1265,6 +1289,10 @@ export function useAnnotationTool({
     if (route === 'modify') return   // empty canvas: nothing to pick
     if (route === 'offset') {   // empty canvas: place the copy if something is picked
       if (offsetSrcRef.current) placeOffset(toFrame(e, !e.shiftKey, null, new Set([offsetSrcRef.current])))
+      return
+    }
+    if (route === 'sketch') {   // SK1: the stroke starts here (Shift-free; snaps would fight the hand)
+      beginDrag({ kind: 'sketch', pts: [toFrame(e, false)] }, { x: e.clientX, y: e.clientY })
       return
     }
     if (route === 'point' && tool === 'dim' && PICK_DIM_MODES.has(dimMode)) {   // an empty-canvas click
@@ -1546,6 +1574,8 @@ export function useAnnotationTool({
       const g = offsetGeom(offsetSrcA.kind as OffsetKind, offsetSrcA.geom, offsetDist(offsetSrcA, offsetCur, typed))
       return g ? row(offsetSrcA.kind, g, { ...offsetSrcA.style, dash: 'dashed' }) : null
     }
+    if (drag?.kind === 'sketch')
+      return drag.pts.length >= 2 ? row('line', { pts: drag.pts, freehand: true }, { ...defaultsFor('line'), arrowStart: 'none', arrowEnd: 'none' }) : null
     const pl = drag?.kind === 'place' ? drag : pending
     if (pl && (pl.tool === 'rect' || pl.tool === 'ellipse' || pl.tool === 'cloud')) {
       if (pl.start.x === pl.cur.x && pl.start.y === pl.cur.y) return null
