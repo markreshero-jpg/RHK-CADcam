@@ -70,6 +70,7 @@ import { PLAN_OWNER, elevationOwner, elevationAnnotFrame, ownedBy } from '@/src/
 import { cadLayerView } from '@/src/lib/annotations/cadLayers'
 import { useCadLayerOps, CadLayerManagerModal } from './CadLayers'
 import TutorialHintsPlan from './TutorialHintsPlan'
+import AiChatPanel from './AiChatPanel'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
@@ -302,6 +303,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setUserPrefs({ layerSetId: id })
   }
   const [showHiddenParts, setShowHiddenParts] = useState(() => getUserPrefs().showHiddenParts)
+  const [aiOpen, setAiOpen] = useState(false)   // AI helper chat panel (z_ai_helper AI1)
   function toggleShowHiddenParts(v: boolean) {
     setShowHiddenParts(v)
     setUserPrefs({ showHiddenParts: v })
@@ -3431,6 +3433,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               {phone ? 'Hidden' : 'Show hidden parts'}
             </label>
           </>)}
+          {!phone && (
+            <button
+              onClick={() => { setAiOpen(o => !o); if (!aiOpen) useTutorial.getState().emit('ai_chat_open') }}
+              title="Ask the AI helper about this room"
+              className={`px-2 py-0.5 text-xs rounded transition-colors ${
+                aiOpen ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800 border border-gray-700'
+              }`}
+            >
+              ✨ Ask AI
+            </button>
+          )}
         </div>
       </div>
 
@@ -3446,6 +3459,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       )}
 
       <div className="flex flex-1 overflow-hidden relative">
+        {aiOpen && !phone && (
+          <AiChatPanel projectId={room.project_id} roomId={room.id} roomName={room.name} onClose={() => setAiOpen(false)} />
+        )}
 
         {/* Phone: the sidebar is a drawer over the canvas (kept mounted so its menus keep state). */}
         {phone && phoneSidebar && <div className="absolute inset-0 z-30 bg-black/40" onPointerDown={() => setPhoneSidebar(false)} />}

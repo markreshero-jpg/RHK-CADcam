@@ -1817,6 +1817,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select the bulkhead (BH). In the bulkhead section type a number in Height adjust: + runs the top up past the ceiling (e.g. 50 into the ceiling cavity), − stops it short of the ceiling. The bottom stays on the soffit line, and it keeps following soffit / ceiling changes with the adjust added. 0 takes it off.',
       canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead?.h_adjust) },
   ]},
+
+  // Appended 2026-11-08 (z_ai_helper AI1: read-only AI chat).
+  { id: 'ai_chat', level: 'basics', topic: 'room', title: 'Ask the AI about a room',
+    blurb: 'Ask questions about the room you have open: sizes, colours, kick lengths, what is TBC.',
+    keywords: 'ai ask chat helper question assistant claude kick tbc colour sizes help', steps: [
+    { id: 'open', title: 'Open Ask AI',
+      body: 'Click ✨ Ask AI at the top right of the canvas (PC only for now). The chat opens on the right. It is the job’s chat: questions asked in other rooms show too, tagged with their room.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_open') > ev(s, 'ai_chat_open') },
+    { id: 'ask', title: 'Ask a question',
+      body: 'Type a question and press Enter, e.g. "What is the total kick length?" or "Which cabinets are TBC?". It reads the room as saved (cabinets, fronts, colours, kicks, CAD notes and clouds) and answers in a few seconds. Each answer shows what it cost, usually well under 1¢. It can only read for now: ask it to change something and it will say so.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

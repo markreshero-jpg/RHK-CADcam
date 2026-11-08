@@ -16,6 +16,11 @@ const store: Store = g.__rhkSupabaseScope ?? (g.__rhkSupabaseScope = new AsyncLo
 // runs go one at a time and each starts with empty caches.
 let queue: Promise<unknown> = Promise.resolve()
 
+/** Reads only (no resolver, no saves): runs as the user without queueing. */
+export function withSupabaseRead<T>(client: SupabaseClient, fn: () => Promise<T>): Promise<T> {
+  return store.run(client, fn)
+}
+
 export function withSupabase<T>(client: SupabaseClient, fn: () => Promise<T>): Promise<T> {
   const run = queue.catch(() => {}).then(() => store.run(client, async () => {
     invalidateResolverCaches()

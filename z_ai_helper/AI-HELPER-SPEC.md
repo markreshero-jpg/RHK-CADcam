@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 built and checked 2026-11-08** — next is AI1 (chat panel, read-only)
+Status: **AI0 + AI1 built and checked 2026-11-08** — next is AI2 (Selection edits, ask_user, Undo in the panel)
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -173,7 +173,7 @@ $20; cached input ~10% of normal.
 | # | Phase | Done when |
 |---|---|---|
 | AI0 ✅ | **Server actions**: placement / update / resolve callable server-side (from what `window.__canvasApi` does in the browser today); compact summary builder; batch + undo tables | A script can update 12 cabinets by filter server-side and undo it, matching what the UI produces |
-| AI1 | Chat panel + Room scope, **read-only** Q&A on Haiku; cost log | "Total kick length in the Kitchen?" / "Which cabinets are TBC?" correct in a few seconds, cost logged |
+| AI1 ✅ | Chat panel + Room scope, **read-only** Q&A on Haiku; cost log | "Total kick length in the Kitchen?" / "Which cabinets are TBC?" correct in a few seconds, cost logged |
 | AI2 | Selection scope edits, `ask_user`, auto-apply small / approve big, Undo, history | Edit 3 selected cabinets from chat; Undo restores them exactly |
 | AI3 | Room + Job scope bulk changes, Sonnet routing, "Try harder" | "All overhead doors to Walnut" across a job, previewed and applied in ≤ 3 round trips |
 | AI4 | Drawing via `apply_room_plan` from PDF / sketch on Opus | A room drawn from a plan matches what the draw-plan skill produces |
@@ -219,7 +219,39 @@ they're sent on every request.
   Wall 1 (neighbours of WC-01 / WC-02 re-detected) and back — rows restored exactly,
   parts re-resolved, no resolver errors.
 
+## AI1 — what was built (2026-11-08)
+
+- **Panel** `app/canvas/[roomId]/AiChatPanel.tsx` — "✨ Ask AI" in the canvas toolbar
+  (PC only), docked right. Shows the job's thread (last 60 messages; other rooms'
+  questions tagged with their room), suggestion buttons when empty, cost + time under
+  each answer. Tutorial lesson `ai_chat`.
+- **Route** `app/api/ai/chat/route.ts` — POST `{ roomId, message }`. Signed-in user
+  only; the room is read with their session (RLS), then the turn runs in
+  `withSupabaseRead()` (reads only, not queued). 503 with a plain message if
+  `ANTHROPIC_API_KEY` isn't set on the server. `maxDuration` 60.
+- **Engine** `src/lib/ai/server/chat.ts` — Claude Haiku 5.5, effort low, frozen
+  system prompt (prompt-cached), room summary in the new question only, last 6
+  exchanges replayed as plain text (no tool calls / thinking — keeps the prefix
+  stable), ≤ 6 API calls per turn.
+- **Read tools** `src/lib/ai/readTools.ts` — `get_kicks` (saved toekick parts, totals
+  per part, spreaders left out), `get_markup` (text + clouds with the cabinets each is
+  on / within 300 mm of, plan and elevation), `get_cabinet_detail` (fronts, carcass
+  parts, custom parts, fixtures).
+- **`ai_messages`** table (`migration_ai_chat.sql`, applied) — the job thread + cost
+  log: model, tokens (uncached / cache read / cache write / output), API calls, $ , ms.
+  Monthly total = `sum(cost_usd)`.
+- **Check** (`headlessAi1.test.ts`, gated by `AI1_RUN`, and in the browser) on Test
+  Kitchen › Void Corner Demo: kick length 2143 (matches the saved kick faces), TBC =
+  the one cloud near BC-07, plus the GPO note correctly called a note not a TBC.
+  **4–7 s and 0.04–0.08¢ per answer.** Summary of a real 32-cabinet kitchen (RHK6595)
+  ≈ 1,050 tokens.
+
 ## Open items (check while building)
+
+- **Production key:** `ANTHROPIC_API_KEY` must be set in Vercel's environment for the
+  live site (it's in `.env.local` for dev). Spend cap US$50 set in the Anthropic Console.
+- Corners: the summary's class column says `base_corner` etc., but "the corner
+  cabinet" is ambiguous when the corner is a plain code — Haiku asks which label.
 
 - **Speed:** ~3–4 s per cabinet resolve on the server with cold caches, one after
   another (2 cabinets ≈ 8 s). A 12-cabinet job-wide change would be ~40 s — resolve
