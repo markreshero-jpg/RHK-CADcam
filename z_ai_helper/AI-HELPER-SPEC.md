@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **Scope drafted, not started** — waiting on Mark to confirm the open questions
+Status: **Scope agreed, not started** — decisions locked 2026-11-08, next is AI1
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -63,6 +63,9 @@ handles, materials, scribes), `add_filler` / `add_end_panel`, `add_under_panel`,
 `update_fixture`, `set_room_materials`, `add_markup` (TBC cloud, note, colour callout),
 `draw_wall`.
 
+Conversation: `ask_user(question, options[])` — shows option buttons + "Other" in the
+panel and waits for the pick (decision 2).
+
 Never: delete cabinets, walls or CAD (see "Never delete user CAD" — the helper marks
 things TBC or asks instead), touch the cabinet library itself, touch other jobs.
 
@@ -103,12 +106,42 @@ RLS policies. No anon access.
 
 Each new user-facing phase gets a tutorial lesson (`src/lib/tutorial/lessons.ts`).
 
-## Open questions (Mark)
+## Locked decisions (Mark, 2026-11-08)
 
-1. **Approve every change, or let small ones apply straight away?** Proposal: Selection
-   edits on ≤ 3 cabinets apply immediately (with Undo); anything bigger shows the list.
-2. **Chat history per room, per job, or one running chat?** Proposal: one thread per job,
-   scope chip per message, so a job's history is in one place.
-3. **Phone first or PC first?** Panel layout differs a lot on the iPhone canvas.
-4. **Who else uses it?** If testers use it, should they be limited to Selection/Room?
-5. **Monthly spend cap** on the API key?
+1. **Small edits apply straight away** (with Undo); bigger ones show the change list.
+   Starting rule: ≤ 3 cabinets in Selection scope applies immediately — tune with use.
+2. **Clarifying questions with clickable answers.** When a request is ambiguous or big
+   (which cabinets? which colour? fillers both ends?), the helper asks first, Claude
+   Code style: a short question with option buttons plus a free-text "Other", and
+   carries on once answered. **Not** for every small edit — only when guessing could
+   get it wrong. Built as an `ask_user` tool whose result is the button picked.
+3. **Chat history per job.** One thread per job; each message records the scope it was
+   sent at, so the job's whole AI history is in one place.
+4. **PC first.** Panel docks on the right of the canvas. iPhone layout later.
+5. **Testers use it with full scope** (Selection / Room / Job). They're already limited
+   to their assigned (sample) jobs by `project_access` (`z_access_control/`). Locked
+   consequence: the AI route runs every read and write **as the signed-in user** (their
+   Supabase session, so RLS applies) — never with the service-role key — so a tester's
+   helper can't reach a job the tester can't open.
+6. **Spend cap:** see "Cost estimate" — start at **US$50/month** hard cap on the API key,
+   review after the first month using the per-job cost log.
+
+## Cost estimate (2026-11-08 prices, rough — check after a month of real use)
+
+Prices per million tokens: Sonnet 5.5 $2 in / $10 out; Opus 5.5 $4 / $20; Haiku 5.5
+$0.10 / $0.50. Cached input (shop rules + room state re-sent each step) is ~$0.20/M,
+which is why caching matters.
+
+| Kind of request | Model | Rough cost each |
+|---|---|---|
+| Question about a room ("total kick length?") | Haiku or Sonnet | < 1c – 3c |
+| Small edit (a few cabinets) | Sonnet | 5c – 20c |
+| Room / job-wide change | Sonnet | 20c – $1 |
+| Draw a room from a PDF plan (AI4) | Opus | $2 – $5 |
+
+- **Edits only (AI1–AI3)**, ~10–20 requests a working day across Mark + testers:
+  roughly **$20–50/month**. $20 is tight but possible on a light month.
+- **Once in-app drawing lands (AI4)**: a 5-room job adds ~$10–25 on its own, so
+  $20/month won't cover it; expect $50–150 depending on jobs drawn.
+- The cap is set in the Anthropic Console on the key. When it's hit, the helper says
+  so instead of failing silently.
