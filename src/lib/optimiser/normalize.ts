@@ -102,6 +102,9 @@ export function canonicalPanelDims(dx: number, dy: number, dz: number): { w: num
 
 export interface RawProject { id: string; name: string; job_number: string | null }
 export interface RawRoom { id: string; name: string }
+/** Door name prefix by hinge side (face_zones.hinge_side). */
+const HINGE_PREFIX: Record<string, string> = { left: 'Left ', right: 'Right ', top: 'Top ', bottom: 'Bottom ' }
+
 export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; is_kick_assembly?: boolean | null; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null
   // resolved_drawer_hw->warnings (saved resolver warnings, z_material_colours MC5)
   warnings?: { code?: string; message?: string; material_id?: string }[] | null
@@ -171,7 +174,7 @@ export function normalizeProject(
   // AFTER the name resolves, so "Drawer Box Bottom" still reads "Drawer Box Bottom (R2C1)".
   const push = (
     table: SourceTable, row: Row, partKey: string,
-    naming: { typeKey: string; base: string; suffix?: string },
+    naming: { typeKey: string; base: string; prefix?: string; suffix?: string },
     grain: string | null, nestPriority: number,
     dims?: { w: number; h: number; thickness: number },
     eb: EbFields = NO_EB,
@@ -186,7 +189,7 @@ export function normalizeProject(
     const base = (naming.typeKey
       ? systemNames[naming.typeKey] ?? PART_TYPE_LABELS[naming.typeKey]
       : undefined) ?? naming.base
-    const defaultLabel = base + (naming.suffix ?? '')
+    const defaultLabel = (naming.prefix ?? '') + base + (naming.suffix ?? '')
     // custom_parts carry no_cnc (true = skip CNC); everything else carries output_to_cnc.
     // Either is overridden to false when the whole assembly is flagged no_cnc.
     const partCut = table === 'custom_parts' ? !(row.no_cnc as boolean) : ((row.output_to_cnc as boolean) ?? true)
@@ -433,8 +436,11 @@ export function normalizeProject(
     // Face zones: dx = width (w, banded left/right), dy = height (h, banded bottom/top).
     const eb = ebFields(flagsOf(r), tFor(r), ['left', 'right'], ['bottom', 'top'])
     const zref = { row_index: Number(r.row_index), col_index: Number(r.col_index), facet: (r.facet as string | null) || undefined }
+    // Doors are named by their hinge side — "Left Door (R1C1)", "Top Door (R1C1)"
+    // — so the sticker says which way it hangs (Mark, 2026-11-08). No side → plain "Door".
+    const hinge = r.face_type === 'door' ? HINGE_PREFIX[String(r.hinge_side)] : undefined
     push('face_zones', r, zonePartId(zref),
-      { typeKey: String(r.face_type), base: humanize(String(r.face_type)),
+      { typeKey: String(r.face_type), base: humanize(String(r.face_type)), prefix: hinge,
         suffix: ` (${zoneRef(zref)}${mitre ? `, ${mitre}` : ''})` },
       (r.grain_direction as string) ?? null, 0, undefined, eb, base)
     // A front in a horizontal grain match group (z_grain_match G3) runs its grain
@@ -495,7 +501,7 @@ export const PART_SELECTS = {
   case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,edge_mitre,outline,cutouts,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,outline,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,grain_direction,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
-  face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id,facing',
+  face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,hinge_side,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id,facing',
   drawer_box_parts: 'id,cabinet_instance_id,facet,face_zone_row,face_zone_col,part_type,dx,dy,dz,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   custom_parts: 'id,cabinet_instance_id,name,orientation,dx,dy,dz,outline,cutouts,material_id,no_cnc,hide_views,edge_top,edge_bottom,edge_left,edge_right,grain_across',
 } as const
