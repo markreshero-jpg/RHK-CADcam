@@ -104,9 +104,12 @@ export function resolveShapedKick(
   const sideOff = (s: FootprintSegment) =>
     Math.abs(s.p0.x) < NEAR && Math.abs(s.p1.x) < NEAR ? r.TOESCL
     : Math.abs(s.p0.x - cab.DX) < NEAR && Math.abs(s.p1.x - cab.DX) < NEAR ? r.TOESCR : 0
-  const off = (frontExtra: number, backExtra: number, sideExtra = 0) => (s: FootprintSegment) => {
+  // edge.kick_inset sets the kick's frame in further on that edge. The face is
+  // the one board that ignores it: it runs on to the edge itself (to the wall).
+  const off = (frontExtra: number, backExtra: number, sideExtra = 0, frame = true) => (s: FootprintSegment) => {
     const k = kindOf(s)
-    return k === 'front' ? r.TOESCF + frontExtra : k === 'back' ? r.TOESCB + backExtra : sideOff(s) + sideExtra
+    return (k === 'front' ? r.TOESCF + frontExtra : k === 'back' ? r.TOESCB + backExtra : sideOff(s) + sideExtra)
+      + (frame ? s.edge.kick_inset ?? 0 : 0)
   }
   // A short side the front setback swallows (e.g. the square end of a gable
   // beside an angled front) comes out of the inset reversed and throws the
@@ -130,7 +133,8 @@ export function resolveShapedKick(
   const TK = r.TOEH, FC = r.TOEFC
   const fid = cab.toekick_face_material.id, iid = cab.toekick_interior_material.id
 
-  const K = insetPolygon(lines, off(0, 0))                 // kick face outer line
+  const K = insetPolygon(lines, off(0, 0, 0, false))       // kick face outer line
+  const KB = insetPolygon(lines, off(0, 0))                // kick backs + end spreaders
   const kEdge = (poly: ShapePt[], i: number) => ({ p0: poly[i], p1: poly[(i + 1) % n] })
   let sort = 0
 
@@ -189,7 +193,7 @@ export function resolveShapedKick(
   // Kick backs: +X along the edge, +Z inward. Backs butt each other (earlier edge runs through).
   edges.forEach((ed, i) => {
     if (ed.kind !== 'back') return
-    const bd = board(K, i, TI, false, j => edges[j].kind === 'back' && j < i)
+    const bd = board(KB, i, TI, false, j => edges[j].kind === 'back' && j < i)
     if (!bd) return
     const { e, f, lo, hi } = bd
     const ay = Math.atan2(-f.u.y, f.u.x) * D
@@ -247,7 +251,7 @@ export function resolveShapedKick(
   // End spreaders along every side edge of K (inward = +n).
   edges.forEach((ed, i) => {
     if (ed.kind !== 'side') return
-    const e = kEdge(K, i), f = edgeFrame(e)
+    const e = kEdge(KB, i), f = edgeFrame(e)
     if (f.len < 1) return
     spreader(e.p0, f.u, f.n, KE, f.len / 2)
   })

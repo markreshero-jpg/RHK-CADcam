@@ -6,8 +6,31 @@ import {
   CabinetInput, ResolvedToekickPart, ConstructionRules,
   ResolverError, edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
-import { resolveKickRunParts } from './resolveKickRun'
+import { resolveKickRunParts, kickRunSegments, kickFaceMaxLength } from './resolveKickRun'
 import { resolveShapedKick } from './resolveShapedKick'
+
+// A joined kick whose assembly has a footprint (one end following an angled wall,
+// RHK6586 robe KICK 1): built by the shaped kick, then the straight face and sub
+// front are cut at the run's seams. Backs stay whole: the sub front's mirrored
+// seams are for one long back, and a shaped kick's back turns the corner.
+function resolveShapedRunKick(cab: CabinetInput, r: ConstructionRules) {
+  const out = resolveShapedKick(cab, r, 'ladder')
+  const faceMax = kickFaceMaxLength(cab.toekick_face_material, r.TOEGRAIN ?? 'vertical')
+  const parts = out.parts.flatMap(p => {
+    if ((p.part_key !== 'kick_front_face' && p.part_key !== 'kick_sub_front') || Math.abs(p.AY) > 1e-6) return [p]
+    const segs = kickRunSegments(p.DY, cab.kick_run, faceMax)
+    const pieces = p.part_key === 'kick_front_face' ? segs.face : segs.sub
+    return pieces.map((s, i) => {
+      const { bevel_lo, bevel_hi, ...rest } = p
+      return {
+        ...rest, DY: s.len, X: p.X + s.start,
+        ...(i === 0 && bevel_lo ? { bevel_lo } : {}),
+        ...(i === pieces.length - 1 && bevel_hi ? { bevel_hi } : {}),
+      }
+    })
+  }).map((p, i) => ({ ...p, sort_order: i, is_detached: true }))
+  return { parts, errors: out.errors }
+}
 
 export function resolveToekickParts(
   cab: CabinetInput,
@@ -20,6 +43,7 @@ export function resolveToekickParts(
   // toe kick; member cabinets resolve nothing. See resolveKickRun.ts.
   if (cab.kick_run) {
     if (cab.kick_run.role === 'member') return { parts, errors }
+    if (cab.footprint?.segments?.length && (cab.toe_type ?? r.TOE_TYPE) === 'ladder') return resolveShapedRunKick(cab, r)
     return resolveKickRunParts(cab, r)
   }
 

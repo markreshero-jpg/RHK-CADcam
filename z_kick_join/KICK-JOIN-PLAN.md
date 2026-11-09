@@ -355,3 +355,11 @@ boards and horizontal grain have no limit. The sub front and back are not affect
 - **JOIN part comment** (Mark 2026-11-03): split face / sub front / back pieces also get "JOIN" as their part
   comment (optimiser labels / stickers / cut sheets via `OptiPart.comment`, Parts tab comment column). A comment
   typed on the part keeps its text with "JOIN. " in front (`withJoinComment`), unless it already starts with JOIN.
+
+## Shaped joined kick (built 2026-11-09, in-app check pending)
+
+Mark, RHK6586 Bed 1 KICK 1: the run ends on a 45 wall. A kick assembly with a `footprint` now resolves through
+`resolveShapedKick`, then the straight face and sub front are cut at the run's seams (`resolveShapedRunKick` in
+`resolveToekick.ts`; backs stay whole). New footprint edge field `kick_inset`: the frame stands that much further in
+from the edge, the face still runs on to it. No UI: the footprint is set by script, and moving a member re-fits the
+assembly's dx without touching the footprint, so put it back by hand.

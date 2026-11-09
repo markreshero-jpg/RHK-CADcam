@@ -79,6 +79,9 @@ export interface FootprintEdge {
   /** Scribe allowance (mm) for sub 'scribe': the panel stands this far in from
    *  the outline. Unset = the rules' SCRL / SCRR / SCRBK on the box edges, 0 elsewhere. */
   scribe?: number
+  /** Toe kick frame (back, sub front, spreaders) set in this much further from
+   *  this edge; the kick face still runs on to the edge. RHK6586 robe KICK 1. */
+  kick_inset?: number
   /** A face filler strip on this front edge (z_angled_filler): one false panel
    *  whose front face is exactly `width` wide, with a return cleat `cleat` deep
    *  at its end against a side edge when the cabinet has no carcass. */
