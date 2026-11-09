@@ -13,7 +13,7 @@ const shaker = (face: PanelProfileSpec['face']): PanelProfileSpec => ({
 })
 // IBPF 2431 wide in 3 pieces (resolveBackPanel): AY 180 about each piece's right end, outer face +Z at Z = t.
 const ibp = (n: number, x0: number, x1: number): ResolvedCasePart => ({
-  part_key: `ibp:${n}`, DX: 880, DY: x1 - x0, DZ: 18, X: x1, Y: 0, Z: 18, AX: 0, AY: 180, AZ: 0, material_id: 'm',
+  part_key: `ibp:${n}`, DX: 880, DY: x1 - x0, DZ: 18, X: x1, Y: 0, Z: 18, AX: 0, AY: 180, AZ: 0, material_id: 'm', grain_direction: 'vertical',
   edge_band: { top: true, bottom: false, left: true, right: true, id: null },
 } as unknown as ResolvedCasePart)
 const applied = { id: 'p1', name: 'Applied Panel', material_id: 'm', dx: 580, dy: 840, dz: 18, x: 0, y: 0, z: 0,
@@ -34,9 +34,9 @@ describe('panel profile routes', () => {
     const rows = collectPanelProfileRoutes(rp, 'c').rows
     expect(rows).toHaveLength(3)
     expect(rows.map(r => r.source_part_key)).toEqual(['case_ibp:1', 'case_ibp:2', 'case_ibp:3'])
-    // Face-kind nest frame: pos_x along the height (DX 880), pos_y along the width.
+    // Nested turned (w = width, h = height), so pos_x along the width, pos_y along the height (RHK6592 BC-01).
     expect(rows[0]).toMatchObject({ source_table: 'case_parts', operation_type: 'route', operation_action: 'pocket',
-      pos_x: 440, pos_y: 405.15, size_dx: 760, size_dy: 690.3, depth: 5, tool_set_id: 'shaker-set',
+      pos_x: 405.15, pos_y: 440, size_dx: 690.3, size_dy: 760, depth: 5, tool_set_id: 'shaker-set',
       output_face: 'front', plane_kind: 'face_front' })
   })
 

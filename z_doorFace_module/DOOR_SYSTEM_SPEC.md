@@ -556,7 +556,9 @@ panel piece, 60 in all round like the doors.
 4. **Machining as doors**: the seen face is the down face — output `front`, plane
    `face_front`, pos_x pre-mirrored across the part's DX — so a two-sided sheet cuts it
    in program Z with the door style's tool set. `collectPanelProfileRoutes`
-   (seamDrillSync), `kind: 'panel_profile'`.
+   (seamDrillSync), `kind: 'panel_profile'`. Island back panel pieces are vertical grain
+   and nest turned (w = width), so their routes are written in that turned frame: pos_x
+   and the mirror across the width DY, pos_y up the height DX (RHK6592 BC-01, 2026-11-09).
 5. **Drawn** in 3D on the seen face (`PanelProfile3D`) and in the cabinet's front
    elevation when the seen face is the front (island back panels). End panels are
    edge-on in the front elevation.

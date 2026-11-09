@@ -62,9 +62,13 @@ function ibpTarget(p: ResolvedCasePart, spec: PanelProfileSpec): PanelProfileTar
     origin: front ? { x: x0, y: p.Y, z: zHi } : { x: x0 + W, y: p.Y, z: zLo },
     across: { x: front ? 1 : -1, y: 0, z: 0 },
     normal: { x: 0, y: 0, z: front ? 1 : -1 },
-    // Face-kind nest frame: pos_x = height (DX), pos_y = width (DY).
-    toNest: (u, v) => ({ px: v, py: localX(cabX(u)) }),
-    nestW: H,
+    // Nest frame. A vertical-grain piece (every resolved one) is nested turned,
+    // w = its width (normalize.ts), so pos_x = width (DY), pos_y = height (DX) and
+    // the down-face mirror goes across the width. Otherwise the face-kind frame:
+    // pos_x = height (DX), pos_y = width (DY).
+    ...(p.grain_direction === 'vertical'
+      ? { toNest: (u: number, v: number) => ({ px: localX(cabX(u)), py: v }), nestW: W }
+      : { toNest: (u: number, v: number) => ({ px: v, py: localX(cabX(u)) }), nestW: H }),
   }
 }
 

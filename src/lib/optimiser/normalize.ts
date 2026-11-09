@@ -321,8 +321,9 @@ export function normalizeProject(
     // Finger-pull rails: the nest's h runs with the grain, so a horizontal-grain
     // rail nests as-is (h = length) and a vertical-grain rail is turned. Rails
     // carry no machining, so turning them can't misplace an op.
-    // Island back panels (z_island_back_panel) are vertical-grain applied panels
-    // with no machining: turned the same way, their tape turning with them.
+    // Island back panels (z_island_back_panel) are vertical-grain applied panels,
+    // turned the same way, their tape turning with them. Their Shaker routes are
+    // generated in this turned frame (panelProfile.ts ibpTarget).
     const turned = (key.startsWith('fprail:') || key.startsWith('ibp:') || key.startsWith('lh:')) && r.grain_direction === 'vertical'
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Finger-pull rails narrower than the machine cuts well nest as a RAIL_NEST_W
