@@ -383,3 +383,5 @@ wide … 90mm radius corners on the two corners closest to the front edge of the
 ## Holes in uprights (2026-11-09, RHK6586 duct)
 
 Carcass gables (`case_left_side` / `case_right_side`), shaped uprights (`case_side:<edge>`) and the flue box (`case_rh:flue_l` etc.) take cut-outs. Gables take **holes only** (a notch warns). A gable's hole is written in the gable frame (x depth from the back, y down from the top), like side custom parts; on a gable x 'left' = bottom. Shaped uprights + flue box stay in the horizontal frame: x along DY from the part's origin, y 'front' = from the top.
+
+**Circular holes in the optimiser (fixed 2026-11-09):** a circle is a 2-point loop (two half-circle bulges). `cutoutsToOp` used to require 3+ points, so round cut-outs were dropped from nesting and G-code; it now takes 2+. Onion skin on a hole = `depth` of DZ − skin (routes the circle, leaves the slug in).

@@ -461,7 +461,8 @@ export function cutoutsToOp(
   cutouts: { pts: OutlinePt[]; skin?: number }[] | null | undefined,
   op: { frame: ShapeFrame; DX: number; DY: number; transpose?: boolean },
 ): { cut_holes: ShapePt[][]; cut_hole_skins: number[] } | null {
-  const loops = (cutouts ?? []).filter(c => Array.isArray(c?.pts) && c.pts.length >= 3)
+  // 2 points is a full circle (holeLoop: two half-circle bulges).
+  const loops = (cutouts ?? []).filter(c => Array.isArray(c?.pts) && c.pts.length >= 2)
   if (!loops.length) return null
   const frame = { ...op.frame, mirror: false }
   return {
