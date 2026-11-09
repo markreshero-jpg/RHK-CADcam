@@ -43,6 +43,7 @@ export interface PreOptSettings {
   // machine profile (nest pad + tool-entry offset) + the material's routing tool Ø.
   quality: 'fast' | 'balanced' | 'best'
   allowRotation: boolean  // test 90°/180°/270° for non-grain materials
+  pairShapes?: boolean    // nest shaped parts head to tail in shared rectangles (shapePairs.ts)
 }
 
 let offcutSeq = 0
@@ -146,6 +147,7 @@ interface OptiState {
 export const DEFAULT_SETTINGS: PreOptSettings = {
   quality: 'balanced',
   allowRotation: true,
+  pairShapes: false,
 }
 
 export const useOptiStore = create<OptiState>((set) => ({
@@ -302,6 +304,7 @@ export const useOptiStore = create<OptiState>((set) => ({
   rotatePart: (uid) => set(st => {
     if (!st.nestResult) return {}
     const blk = blockOfUid(st.nestResult, uid)
+    if (blk?.pair) return { editError: `Paired part — it stays head to tail with its partner (${blk.name}). Cut it from the sheet and place it again to split the pair.` }
     if (blk) return { editError: `Grain-matched front — it turns with its ${blk.name} block, never on its own.` }
     if (st.partIndex[uid]?.grainLock) return { editError: 'Grained part — it stays with the sheet grain.' }
     const next = clone(st.nestResult)

@@ -255,7 +255,7 @@ export async function cutSheetsPdf(inp: CutSheetsInput, opt: CutSheetsOptions): 
       doc.setDrawColor(...rgb); doc.setLineWidth(0.5); doc.setLineDashPattern([2, 1], 0)
       doc.rect(bx - pad, by - pad, r.w * s + 2 * pad, r.h * s + 2 * pad, 'S')
       doc.setLineDashPattern([], 0)
-      const tag = `${b.name} ${b.direction === 'horizontal' ? 'grain across' : 'grain up'}${b.pieces > 1 ? `  ${b.piece}/${b.pieces}` : ''}`
+      const tag = b.pair ? `${b.name} pair` : `${b.name} ${b.direction === 'horizontal' ? 'grain across' : 'grain up'}${b.pieces > 1 ? `  ${b.piece}/${b.pieces}` : ''}`
       doc.setFont('helvetica', 'bold'); doc.setFontSize(7)
       const tw = doc.getTextWidth(tag) + 2
       doc.setFillColor(...rgb); doc.rect(bx - pad, by - pad, tw, 3.4, 'F')

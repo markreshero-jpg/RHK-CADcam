@@ -55,6 +55,10 @@ export interface Placement {
   x: number; y: number          // bottom-left in sheet coords (mm)
   w: number; h: number          // as placed (rotated swaps w/h)
   rotated: boolean
+  // Shaped pairs (shapePairs.ts): a further half turn on top of `rotated`, and the
+  // real outline's area, since a pair's two rectangles overlap on purpose.
+  turned?: boolean
+  trueArea?: number
 }
 
 export interface NestedSheet {

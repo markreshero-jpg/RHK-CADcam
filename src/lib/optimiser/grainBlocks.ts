@@ -39,6 +39,7 @@ export interface GrainBlockInfo {
   piece: number; pieces: number
   memberUids: string[]   // elevation order: left → right, top → bottom
   W: number; H: number
+  pair?: boolean         // a shaped pair (shapePairs.ts), not a grain match
 }
 
 /** Copy each grouped front's wall rect onto its snapshot part (face_zones only). */
@@ -268,7 +269,9 @@ export function detachFromBlock(res: NestResult, uid: string, label: string): st
   if (!b) return null
   b.memberUids = b.memberUids.filter(u => u !== uid)
   if (b.memberUids.length < 2) res.blocks = (res.blocks ?? []).filter(x => x !== b)
-  const msg = `${b.name}: ${label} taken out of the block — it's no longer grain matched with the rest.`
+  const msg = b.pair
+    ? `${b.name}: ${label} taken out of the pair. Its partner stays where it is, still turned.`
+    : `${b.name}: ${label} taken out of the block — it's no longer grain matched with the rest.`
   res.warnings = [...(res.warnings ?? []), msg]
   return msg
 }
@@ -286,7 +289,7 @@ export interface GrainMatchTag {
 export function grainMatchTags(res: NestResult | null): Map<string, GrainMatchTag> {
   const out = new Map<string, GrainMatchTag>()
   const byGroup = new Map<string, GrainBlockInfo[]>()
-  for (const b of res?.blocks ?? []) byGroup.set(b.groupId, [...(byGroup.get(b.groupId) ?? []), b])
+  for (const b of res?.blocks ?? []) if (!b.pair) byGroup.set(b.groupId, [...(byGroup.get(b.groupId) ?? []), b])
   for (const bs of byGroup.values()) {
     bs.sort((a, b) => a.piece - b.piece)
     const of = bs.reduce((s, b) => s + b.memberUids.length, 0)

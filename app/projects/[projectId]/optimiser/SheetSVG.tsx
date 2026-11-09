@@ -53,7 +53,7 @@ export function GrainBlockOutlines({ sheet, blocks, H, scale, shift, fontPx = 10
     const x = r.x + (moving ? shift!.dx : 0), y = r.y + (moving ? shift!.dy : 0)
     const col = grainMatchColour(b)
     const pad = 3
-    const tag = `${b.name} ${grainArrow(b.direction)}${b.pieces > 1 ? ` ${b.piece}/${b.pieces}` : ''}`
+    const tag = b.pair ? b.name : `${b.name} ${grainArrow(b.direction)}${b.pieces > 1 ? ` ${b.piece}/${b.pieces}` : ''}`
     const left = x * scale - pad, top = (H - y - r.h) * scale - pad
     return (
       <g key={b.uid} style={{ pointerEvents: 'none' }}>

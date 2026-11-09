@@ -82,8 +82,10 @@ function expand(op: DrillOpRaw): { ox: number; oy: number; d: number; depth: num
 // Part-local (origin bottom-left of natural w×h) → sheet coords.
 // rotated = part turned 90° CCW; the placed footprint is natH × natW, so
 // pl.w == natH and a local (ox,oy) maps to (pl.w - oy, ox).
-export function toSheet(ox: number, oy: number, pl: { x: number; y: number; w: number; rotated: boolean }) {
-  return pl.rotated ? { x: pl.x + (pl.w - oy), y: pl.y + ox } : { x: pl.x + ox, y: pl.y + oy }
+// turned = a further half turn inside the same footprint (shaped pairs).
+export function toSheet(ox: number, oy: number, pl: { x: number; y: number; w: number; h?: number; rotated: boolean; turned?: boolean }) {
+  const q = pl.rotated ? { x: pl.w - oy, y: ox } : { x: ox, y: oy }
+  return pl.turned ? { x: pl.x + pl.w - q.x, y: pl.y + (pl.h ?? 0) - q.y } : { x: pl.x + q.x, y: pl.y + q.y }
 }
 
 // Edgeband-deducted blank: how far part-local ops shift onto the deducted blank.

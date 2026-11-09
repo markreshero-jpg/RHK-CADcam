@@ -243,23 +243,27 @@ function insetClean(orig: ShapePt[], off: ShapePt[]): boolean {
  *  draw it. Same transform as the drill holes (drills.ts toSheet + the
  *  up-face ebShift), so the outline and its holes line up. Null = no outline.
  *  On a deducted profile it is the cut blank's contour (cutBlank, O5). */
-export function placedOutline(part: BlankPart, pl: { w: number; rotated: boolean }, deductEb: boolean): ShapePt[] | null {
+type PlacedAs = { w: number; h?: number; rotated: boolean; turned?: boolean }
+// Blank-local → placement-local: the quarter turn, then a pair's half turn.
+const placeLocal = (p: { x: number; y: number }, pl: PlacedAs): ShapePt => {
+  const q = pl.rotated ? { x: pl.w - p.y, y: p.x } : { x: p.x, y: p.y }
+  return pl.turned ? { x: pl.w - q.x, y: (pl.h ?? 0) - q.y } : q
+}
+
+export function placedOutline(part: BlankPart, pl: PlacedAs, deductEb: boolean): ShapePt[] | null {
   if (!part.shape?.op_polygon || part.shape.op_polygon.length < 3) return null
   const poly = cutBlank(part, deductEb).outline
   if (!poly) return null
-  return poly.map(p => (pl.rotated ? { x: pl.w - p.y, y: p.x } : { x: p.x, y: p.y }))
+  return poly.map(p => placeLocal(p, pl))
 }
 
 /** A part's through-cut holes (benchtop cutouts) in SHEET axes, relative to
  *  the placement corner — the same transform as placedOutline: shifted onto
  *  the cut blank, then turned with the placement. */
-export function placedHoles(part: BlankPart & { cut_holes?: ShapePt[][] }, pl: { w: number; rotated: boolean }, deductEb: boolean): ShapePt[][] {
+export function placedHoles(part: BlankPart & { cut_holes?: ShapePt[][] }, pl: PlacedAs, deductEb: boolean): ShapePt[][] {
   if (!part.cut_holes?.length) return []
   const { sx, sy } = cutBlank(part, deductEb)
-  return part.cut_holes.map(h => h.map(p => {
-    const q = { x: p.x - sx, y: p.y - sy }
-    return pl.rotated ? { x: pl.w - q.y, y: q.x } : q
-  }))
+  return part.cut_holes.map(h => h.map(p => placeLocal({ x: p.x - sx, y: p.y - sy }, pl)))
 }
 
 /** Signed area (+ = CCW in a y-up frame). */

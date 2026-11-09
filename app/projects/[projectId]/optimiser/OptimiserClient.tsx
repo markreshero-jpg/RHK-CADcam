@@ -20,6 +20,8 @@ import type { OptiSnapshot, OptiPart } from '@/src/lib/optimiser/types'
 import { materialGroupKey, buildMargins } from '@/src/lib/optimiser/types'
 import { nest, type NestPartInput, type GroupStock, type SheetStock } from '@/src/lib/optimiser/nest'
 import { buildGrainBlocks, expandGrainBlocks } from '@/src/lib/optimiser/grainBlocks'
+import { nestWithPairs } from '@/src/lib/optimiser/shapePairs'
+import { placedArea } from '@/src/lib/optimiser/edit'
 import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import { syncDrillingForParts, resetDrillSync } from '@/src/lib/optimiser/sheetDrills'
 import { cutBlank, placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
@@ -739,6 +741,16 @@ function Stage3Settings() {
               <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white transition-transform ${settings.allowRotation ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </button>
           </div>
+          <div className="col-span-2 flex items-center justify-between">
+            <div>
+              <p className="text-xs font-medium text-ink">Pair shaped parts</p>
+              <p className="text-[11px] text-ink-subtle">Turn matching corner parts 180° and nest them head to tail in one rectangle. Grain stays in line but runs the opposite way.</p>
+            </div>
+            <button onClick={() => setSettings({ pairShapes: !settings.pairShapes })} aria-label="Pair shaped parts" data-tutorial="pair-shapes"
+              className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${settings.pairShapes ? 'bg-accent' : 'bg-surface-3'}`}>
+              <span className={`inline-block h-4 w-4 mt-0.5 rounded-full bg-white transition-transform ${settings.pairShapes ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
           <div className="col-span-2">
             <p className="text-xs font-medium text-ink mb-1.5">Quality</p>
             <div className="inline-flex rounded-lg border border-edge-strong overflow-hidden">
@@ -923,13 +935,19 @@ function Stage4Nesting() {
         gapFor: m => (m != null ? margins.byMaterial[m] : undefined) ?? margins.fallback,
         allowRotation: settings.allowRotation,
       })
-      const raw = nest(gm.parts, stockForRun, {
+      const nestAndExpand = (ps: NestPartInput[]) => expandGrainBlocks(nest(ps, stockForRun, {
         quality: settings.quality,
         allowRotation: settings.allowRotation,
         marginByMaterial: margins.byMaterial,
         defaultMargin: margins.fallback,
-      })
-      setNestResult(expandGrainBlocks(raw, gm.blocks, index, gm.warnings))
+      }), gm.blocks, index, [...gm.warnings])
+      setNestResult(settings.pairShapes
+        ? nestWithPairs({
+            parts: gm.parts, partByUid, deductEb, index, run: nestAndExpand, allowRotation: settings.allowRotation,
+            gapFor: m => (m != null ? margins.byMaterial[m] : undefined) ?? margins.fallback,
+            stockFor: (m, t) => stockForRun[materialGroupKey(m, t)],
+          })
+        : nestAndExpand(gm.parts))
       setNesting(false)
     }, 20)
   }
@@ -940,7 +958,7 @@ function Stage4Nesting() {
     for (const s of nestResult.sheets) {
       const u = (s.stock.w - s.stock.trimLeft - s.stock.trimRight) * (s.stock.h - s.stock.trimTop - s.stock.trimBottom)
       area += u
-      placed += s.placements.reduce((a, p) => a + p.w * p.h, 0)
+      placed += s.placements.reduce((a, p) => a + placedArea(p), 0)
     }
     return { sheets: nestResult.sheets.length, eff: area ? placed / area : 0, unplaced: nestResult.unplaced.length }
   }, [nestResult])
@@ -1000,7 +1018,7 @@ function Stage4Nesting() {
         ) : (
           <>
             {(nestResult.warnings ?? []).map((w, i) => (
-              <p key={i} className="text-[11px] text-amber-500 mb-2">⚠ Grain match — {w}</p>
+              <p key={i} className="text-[11px] text-amber-500 mb-2">⚠ {w.startsWith('Pair shaped parts') ? w : `Grain match — ${w}`}</p>
             ))}
             {nestResult.unplaced.length > 0 && (
               <p className="text-[11px] text-amber-500 mb-4">

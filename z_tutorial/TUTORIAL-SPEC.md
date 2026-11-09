@@ -120,6 +120,7 @@ orders by level / topic, not array position.
 | Advanced › Production | 6th face: two programs and a flip | Read-only in the optimiser: A/Z pair, run A, flip over the long edge, run Z, simulate |
 | Intermediate › Cabinets | Shelf pin holes closer to the front and back | Open · Hole setback · Room or job |
 | Intermediate › Production | Nest onto the sheets and offcuts you have | Open · Full sheets Qty · Offcuts Qty · If you run out |
+| Intermediate › Production | Pair shaped parts head to tail | Open · Turn on Pair shaped parts · Check the note · Pairs move together |
 | Intermediate › Cabinets | Force a cabinet exactly where you want it | Move · Hold Ctrl as you drop it |
 
 ## Phases

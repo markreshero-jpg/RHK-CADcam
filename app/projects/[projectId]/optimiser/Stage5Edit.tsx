@@ -398,7 +398,7 @@ export default function Stage5Edit() {
               <InfoRow label="Height (DY)" value={`${Math.round(selectedInfo.pl.h)} mm`} />
               <InfoRow label="Thk (DZ)" value={selectedInfo.part ? `${selectedInfo.part.thickness} mm` : '—'} />
               <InfoRow label="Material" value={matName(selectedInfo.part?.material_id ?? null)} />
-              <InfoRow label="On sheet" value={`${selectedInfo.sheetIndex + 1}${selectedInfo.pl.rotated ? ' · rotated 90°' : ''}`} />
+              <InfoRow label="On sheet" value={`${selectedInfo.sheetIndex + 1}${selectedInfo.pl.rotated ? (selectedInfo.pl.turned ? ' · rotated 270°' : ' · rotated 90°') : selectedInfo.pl.turned ? ' · rotated 180°' : ''}`} />
               {(() => { const t = grainMatchTags(nestResult).get(selectedInfo.pl.uid); return t ? <InfoRow label="Grain match" value={`${grainMatchLine(t)} · ${t.direction}`} /> : null })()}
               {selectedInfo.part?.comment && <InfoRow label="Comment" value={selectedInfo.part.comment} />}
 

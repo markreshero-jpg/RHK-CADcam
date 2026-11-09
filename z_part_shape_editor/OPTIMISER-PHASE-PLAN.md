@@ -33,7 +33,11 @@
    `part_pos_overrides` + `part_shape_overrides` and adjust part sizes at snapshot time.
    `persistResolved` and the resolved part tables stay pure resolver output — nothing is baked
    into the DB. (Resolver-side baking rejected: double-apply risk in every view-layer consumer.)
-2. **Nesting footprint = bounding box** this phase. Shaped parts occupy their bbox rect in the
+2. **Shaped pairs (2026-11-09, Mark, RHK6586)**: Stage 3 "Pair shaped parts" (off by default,
+   `shapePairs.ts`): two shaped parts of similar size share one rectangle, usually one turned
+   180° (`Placement.turned`). Trial on RHK6586: filling bbox corners saved 0 sheets; pairs saved 2
+   of 26 on uncut sheets. Everything else still nests at its bbox. Machine test pending.
+   **Nesting footprint = bounding box** this phase. Shaped parts occupy their bbox rect in the
    skyline packer; the contour is still CUT. True polygon/NFP nesting stays deferred.
 3. **Edgeband deduction applies to shaped parts too** (Mark: "if the shaped edge has edgebanding
    applied to it then it needs to be deducted off the part"). Banded segments of a shaped outline

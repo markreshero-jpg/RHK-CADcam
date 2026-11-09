@@ -86,8 +86,11 @@ export function sheetEfficiency(sheet: NestedSheet): number {
   const u = usableBounds(sheet.stock)
   const area = (u.x1 - u.x0) * (u.y1 - u.y0)
   if (area <= 0) return 0
-  return sheet.placements.reduce((a, p) => a + p.w * p.h, 0) / area
+  return sheet.placements.reduce((a, p) => a + placedArea(p), 0) / area
 }
+
+// A paired part counts its real outline: its rectangle overlaps its partner's.
+export const placedArea = (p: Pick<Placement, 'w' | 'h' | 'trueArea'>) => p.trueArea ?? p.w * p.h
 
 export function clonePlacement(p: Placement, uid: string): Placement {
   return { ...p, uid }

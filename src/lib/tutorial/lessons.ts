@@ -2049,6 +2049,22 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Run the nest. Anything that won\'t fit what you have shows in an orange note above the sheets, so you can see what\'s short. Add stock in Stage 3 and nest again.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
+  { id: 'pair_shapes', level: 'intermediate', topic: 'production', title: 'Pair shaped parts head to tail',
+    blurb: 'Nest corner triangles and clipped panels two to a rectangle to save board.',
+    keywords: 'pair pairs shaped parts corner triangle true shape nesting head to tail turn 180 optimiser nest stage 3 settings', steps: [
+    { id: 'open', title: 'Open the optimiser',
+      body: 'Click Production in the menu bar and choose Generate CNC… Pick your parts and go to Stage 3, the settings.',
+      target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
+    { id: 'switch', title: 'Turn on Pair shaped parts',
+      body: 'Switch on Pair shaped parts. It is off unless you turn it on. A turned part keeps its grain in line, but the grain runs the opposite way, so think about shelves that show.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'nest', title: 'Check the note',
+      body: 'Run the nest. A note above the sheets says how many pairs were used and what they saved. If pairing saves nothing you get the normal nest.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'edit', title: 'Pairs move together',
+      body: 'In Editing each pair has a dashed outline and a tag like P1. Drag either part and the pair moves together. To split a pair, cut one part and place it again.',
+      done: c => c.path.endsWith('/optimiser') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

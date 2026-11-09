@@ -33,7 +33,7 @@ vi.mock('@/src/lib/supabase', async () => {
   return { supabase }
 })
 
-interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean; nestOnly?: boolean }
+interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean; nestOnly?: boolean; pairShapes?: boolean }
 const CFG: RunCfg | null = process.env.OPTI_RUN ? JSON.parse(process.env.OPTI_RUN) : null
 
 describe.skipIf(!CFG)('headless optimiser run', () => {
@@ -163,7 +163,12 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       lap(`nestOnly: ${gm.parts.length} parts → ${join(cfg.out, 'nest-input.json')}`)
       return
     }
-    let nestResult = expandGrainBlocks(nest(gm.parts, stockForRun, nestSettings), gm.blocks, index, gm.warnings)
+    const nestAndExpand = (ps: NestPartInput[]) => expandGrainBlocks(nest(ps, stockForRun, nestSettings), gm.blocks, index, [...gm.warnings])
+    let nestResult = !cfg.pairShapes ? nestAndExpand(gm.parts) : (await import('../shapePairs')).nestWithPairs({
+      parts: gm.parts, partByUid: new Map(snap.parts.map(p => [p.uid, p])), deductEb, index, run: nestAndExpand, allowRotation: true,
+      gapFor: m => (m != null ? margins.byMaterial[m] : undefined) ?? margins.fallback,
+      stockFor: (m, t) => stockForRun[materialGroupKey(m, t)],
+    })
     for (const w of nestResult.warnings ?? []) notes.push(`grain match: ${w}`)
     for (const u of nestResult.unplaced) notes.push(`UNPLACED (too big): ${u.label} ${u.w}x${u.h}`)
     lap(`nested ${parts.length} parts → ${nestResult.sheets.length} sheet(s)`)

@@ -159,7 +159,7 @@ export function buildLabelData(
   }
   // Holes: sheet → placement-local → blank frame (undo the placement turn).
   const holes = holesIn(pl, sheetDrills).map(hd => {
-    const dx = hd.x - pl.x, dy = hd.y - pl.y
+    const dx = pl.turned ? pl.x + pl.w - hd.x : hd.x - pl.x, dy = pl.turned ? pl.y + pl.h - hd.y : hd.y - pl.y
     const [x, y] = pl.rotated ? [dy, pl.w - dx] : [dx, dy]
     return { x, y, d: hd.diameter }
   })

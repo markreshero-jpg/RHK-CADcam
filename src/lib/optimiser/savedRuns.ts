@@ -129,7 +129,7 @@ export async function saveRun(inp: RunInput & { projectId: string; name: string;
       return {
         nest_sheet_id: (ns as { id: string }).id,
         source_table: stbl, source_part_id: rowId,
-        sheet_x: pl.x, sheet_y: pl.y, rotation: pl.rotated ? 90 : 0,
+        sheet_x: pl.x, sheet_y: pl.y, rotation: (pl.rotated ? 90 : 0) + (pl.turned ? 180 : 0),
         cut_dx: pl.w, cut_dy: pl.h,
         part_label: pl.label, project_id: partProject.get(pl.baseUid) ?? inp.projectId, cut_quantity: 1,
         shape_polygon: partShape.get(pl.baseUid) ?? null,
