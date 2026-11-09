@@ -42,7 +42,8 @@ export function outlinePath(x0: number, y0: number, x1: number, y1: number): Pt2
 // angleDeg 0 / null = AUTO: lanes run along the pocket's long side (fewest lanes,
 // fewest direction changes - quickest). Without this a long narrow LED groove
 // running along sheet Y was cleared in hundreds of tiny side-to-side passes.
-// Any other angle (90, 45 ...) is used exactly as set, in sheet coords.
+// Any other angle (90, 45 ...) is used exactly as given, in sheet coords
+// (buildSheetRoutes has already turned a set angle with the part).
 // Lanes serpentine; the step-across between lanes is left as an implicit G1 by the
 // caller (it runs along the pocket wall, inside the cleared area).
 export function rasterAutoAngle(x0: number, y0: number, x1: number, y1: number): number {

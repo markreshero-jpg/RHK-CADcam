@@ -201,7 +201,9 @@ export function buildSheetRoutes(
         x, y, w: Math.abs(c1.x - c0.x), h: Math.abs(c1.y - c0.y),
         depth, clear: op.operation_action === 'pocket',
         fillStrategy: op.fill_strategy ?? null,
-        rasterAngleDeg: op.raster_angle_deg ?? 0,
+        // A set angle is on the part, so it turns with a part turned on the sheet
+        // (RHK6542 WC-04 LED: 90 = along the panel, was cut across it). 0 stays auto.
+        rasterAngleDeg: op.raster_angle_deg ? op.raster_angle_deg + (pl.rotated ? 90 : 0) : 0,
         stepoverPct: op.raster_stepover_pct ?? 0,
         toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
         feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid, cutWidth: cutWidthAt(op, depth),
