@@ -942,7 +942,10 @@ export function shapedSeamDrillOps(
     const target = find(rest.targetPartKey)
     const turned = !!target && 'part_key' in target && !!target.AY
     if (dir && !turned && Math.max(Math.abs(dir.x), Math.abs(dir.y), Math.abs(dir.z)) < 0.9999) return []
-    return [rest]
+    // A hole in a turned panel keeps its exact direction: at 45° the snapped axis
+    // is a tie, and turning that into the panel's frame can come out sideways
+    // (the optimiser then drops the hole).
+    return turned ? [{ ...rest, dir }] : [rest]
   })
 }
 

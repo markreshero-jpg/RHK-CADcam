@@ -83,6 +83,27 @@ describe('L corner construction drilling', () => {
     }
   }
 
+  // RHK6586 TC-02 (Mark, 2026-11-09): the snapped axis ties at 45°, and the right
+  // gable's holes came out sideways in its own frame, so the optimiser dropped them.
+  it('45° corner cabinet: holes on both angled gables bore into the gable face', () => {
+    const line = (x0: number, y0: number, x1: number, y1: number, id: string, role: string) =>
+      ({ type: 'line', p0: { x: x0, y: y0 }, p1: { x: x1, y: y1 }, edge: { id, role } })
+    const footprint = { preset: 'custom', params: {}, segments: [
+      line(182.94, 0, 602, 0, 'back', 'back'), line(602, 0, 602, 419.06, 'back2', 'back'),
+      line(602, 419.06, 517.15, 503.91, 'right', 'side'), line(517.15, 503.91, 98.09, 84.85, 'front', 'front'),
+      line(98.09, 84.85, 182.94, 0, 'left', 'side'),
+    ] } as unknown as CabinetInput['footprint']
+    const rp = resolveCabinet(cab({ DX: 602, DY: 2020, DZ: 602, footprint }))
+    const gables = rp.case_parts.filter(p => p.part_key.startsWith('side:') && p.AY && p.AY % 90 !== 0)
+    expect(gables.length).toBe(2)
+    const drills = cabinetSeamDrills(rp)
+    for (const g of gables) {
+      const holes = drills.filter(d => d.targetPartKey === g.part_key)
+      expect(holes.length, g.part_key).toBeGreaterThan(0)
+      for (const d of holes) expect(intoPartFrame(g, d).axis[0], `${d.seamKey} on ${g.part_key}`).toBe('z')
+    }
+  })
+
   // Mark, 2026-10-15: "add more adj shelf holes along the 2 back edges to
   // support the shelf" — as joints, inheriting the shelf's side joint.
   for (const side of ['right', 'left'] as const) {
