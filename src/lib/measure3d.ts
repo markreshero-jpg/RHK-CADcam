@@ -62,3 +62,61 @@ export function coplanarTriangles(
   }
   return new Float32Array(out)
 }
+
+/** Outline edges of a flat face region (`coplanarTriangles` output): triangle
+ *  edges used once — the face's outer edge and its hole edges, not the
+ *  triangulation's inside diagonals. 9 floats per edge: a, b, and the third
+ *  vertex of its triangle (on the face side of the edge). */
+export function boundaryEdges(tris: Float32Array): Float32Array {
+  const k = (i: number) => `${tris[i].toFixed(2)},${tris[i + 1].toFixed(2)},${tris[i + 2].toFixed(2)}`
+  const seen = new Map<string, { n: number; at: number[] }>()
+  for (let t = 0; t + 8 < tris.length; t += 9) {
+    const v = [t, t + 3, t + 6]
+    for (let e = 0; e < 3; e++) {
+      const a = v[e], b = v[(e + 1) % 3], c = v[(e + 2) % 3]
+      const ka = k(a), kb = k(b)
+      const key = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`
+      const s = seen.get(key)
+      if (s) s.n++
+      else seen.set(key, { n: 1, at: [a, b, c] })
+    }
+  }
+  const out: number[] = []
+  for (const { n, at } of seen.values()) {
+    if (n !== 1) continue
+    for (const i of at) out.push(tris[i], tris[i + 1], tris[i + 2])
+  }
+  return new Float32Array(out)
+}
+
+/** Unit normal of the face meeting the face (normal `n`) along edge a–b: the
+ *  mesh triangle that shares the edge and isn't coplanar. If the mesh has none
+ *  (a re-split CSG mesh), the board's square edge: in the face plane, square to
+ *  the edge, pointing away from `inside` (a point on the face). */
+export function faceAcrossEdge(
+  geometry: BufferGeometry, matrixWorld: Matrix4, a: Vector3, b: Vector3, n: Vector3, inside: Vector3,
+): Vector3 {
+  const pos = geometry.getAttribute('position')
+  const idx = geometry.getIndex()
+  if (pos) {
+    const triCount = Math.floor((idx ? idx.count : pos.count) / 3)
+    const v = [new Vector3(), new Vector3(), new Vector3()]
+    const e1 = new Vector3(), e2 = new Vector3()
+    const near = (p: Vector3, q: Vector3) => p.distanceToSquared(q) < 0.01
+    for (let t = 0; t < triCount; t++) {
+      for (let j = 0; j < 3; j++) v[j].fromBufferAttribute(pos, idx ? idx.getX(3 * t + j) : 3 * t + j).applyMatrix4(matrixWorld)
+      const hasA = v.some(p => near(p, a)), hasB = v.some(p => near(p, b))
+      if (!hasA || !hasB) continue
+      e1.subVectors(v[1], v[0]); e2.subVectors(v[2], v[0])
+      const tn = e1.cross(e2)
+      const len = tn.length()
+      if (len < 1e-9) continue
+      tn.divideScalar(len)
+      if (Math.abs(tn.dot(n)) > 0.9999) continue   // the face itself
+      return tn.clone()
+    }
+  }
+  const m = n.clone().cross(b.clone().sub(a)).normalize()
+  if (m.dot(inside.clone().sub(a)) > 0) m.negate()
+  return m
+}

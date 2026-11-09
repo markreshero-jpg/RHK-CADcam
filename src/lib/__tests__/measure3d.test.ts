@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { BoxGeometry, Matrix4, Vector3 } from 'three'
-import { measurePlanes, coplanarTriangles } from '../measure3d'
+import { BoxGeometry, ExtrudeGeometry, Matrix4, Path, Shape, Vector2, Vector3 } from 'three'
+import { measurePlanes, coplanarTriangles, boundaryEdges, faceAcrossEdge } from '../measure3d'
 
 const pick = (p: [number, number, number], n: [number, number, number]) =>
   ({ point: new Vector3(...p), normal: new Vector3(...n).normalize() })
@@ -38,5 +38,39 @@ describe('coplanarTriangles', () => {
     const tris = coplanarTriangles(g, mw, new Vector3(0, 0, 1), new Vector3(1000, 0, 9))
     expect(tris.length).toBe(2 * 9)
     for (let i = 2; i < tris.length; i += 3) expect(tris[i]).toBeCloseTo(9)
+  })
+})
+
+describe('boundaryEdges / faceAcrossEdge', () => {
+  it('a box face has its 4 outline edges, not the diagonal', () => {
+    const g = new BoxGeometry(100, 200, 18)
+    const tris = coplanarTriangles(g, new Matrix4(), new Vector3(0, 0, 1), new Vector3(0, 0, 9))
+    expect(boundaryEdges(tris).length).toBe(4 * 9)
+  })
+
+  it('a hole in an extruded panel gives its edges, and the hole wall across them', () => {
+    const s = new Shape([new Vector2(0, 0), new Vector2(1000, 0), new Vector2(1000, 400), new Vector2(0, 400)])
+    s.holes.push(new Path([new Vector2(200, 100), new Vector2(800, 100), new Vector2(800, 300), new Vector2(200, 300)]))
+    const g = new ExtrudeGeometry(s, { depth: 18, bevelEnabled: false })
+    const n = new Vector3(0, 0, 1)
+    const tris = coplanarTriangles(g, new Matrix4(), n, new Vector3(50, 50, 18))
+    const edges = boundaryEdges(tris)
+    expect(edges.length).toBe(8 * 9)
+    // the hole's bottom edge (y = 100): the wall across it faces up into the hole
+    let found = false
+    for (let i = 0; i < edges.length; i += 9) {
+      const a = new Vector3(edges[i], edges[i + 1], edges[i + 2]), b = new Vector3(edges[i + 3], edges[i + 4], edges[i + 5])
+      if (Math.abs(a.y - 100) > 1e-6 || Math.abs(b.y - 100) > 1e-6) continue
+      const m = faceAcrossEdge(g, new Matrix4(), a, b, n, new Vector3(edges[i + 6], edges[i + 7], edges[i + 8]))
+      expect(Math.abs(m.y)).toBeCloseTo(1)
+      found = true
+    }
+    expect(found).toBe(true)
+  })
+
+  it('falls back to the square edge when the mesh has no face across', () => {
+    const m = faceAcrossEdge(new BoxGeometry(1, 1, 1), new Matrix4(),
+      new Vector3(500, 0, 0), new Vector3(500, 10, 0), new Vector3(0, 0, 1), new Vector3(400, 5, 0))
+    expect(m.x).toBeCloseTo(1)
   })
 })
