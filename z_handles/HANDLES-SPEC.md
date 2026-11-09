@@ -467,6 +467,11 @@ is, and which edge is the bottom, once the label is off.
     room loads them without re-resolving. Older saves re-resolve once
     (`markersStale` in `dbLoadResolvedParts`).
   - Tests: `drawerMarkers.test.ts`.
+  - 2026-11-09 (Mark, RHK6570 BC-03): the fronts machine back face up, so the
+    optimiser now mirrors drawer front runner holes and marker pricks across the
+    width when it puts them on the sheet (`mirrorsOnDrawerFront`, `drills.ts`).
+    Stored rows stay front view. Doors and handle holes are unchanged.
+    Tests: `drawerFrontMirror.test.ts`.
 
 **D23. "No handle" on a front (Mark, 2026-10-31 — RHK6586 study drawer, opened from underneath).**
 - A zone's `handle_id` can be the sentinel `'none'` (`NO_HANDLE` in

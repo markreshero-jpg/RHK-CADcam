@@ -141,7 +141,7 @@ export async function loadResolvedDrillOps(
   if (opts.sync && cabIds.length) await syncDrillingForParts(parts, { force: opts.sync === 'force' })
 
   const opRows = cabIds.length
-    ? await selectCabinetOps('source_table,source_cabinet_id,source_part_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool,output_face', cabIds, ['drill'])
+    ? await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool,output_face', cabIds, ['drill'])
     : []
   const drillOps = (opRows as unknown as (DrillOpRaw & { output_to_cnc: boolean | null })[]).filter(o => o.output_to_cnc !== false)
 

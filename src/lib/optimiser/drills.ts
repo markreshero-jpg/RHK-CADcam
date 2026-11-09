@@ -13,6 +13,8 @@ export interface DrillOpRaw {
   source_table: string
   source_cabinet_id: string | null
   source_part_key: string | null
+  // Generated rows' identity (slide_…, df_marker_…, hinge_…): see mirrorsOnDrawerFront.
+  operation_key?: string | null
   pos_x: number | null; pos_y: number | null
   // Entry face (± the part's footprint normal) — used to tell pre-mirrored
   // down-face bores apart when shifting ops onto an edgeband-deducted blank.
@@ -107,6 +109,15 @@ export function onDownFace(part: Pick<PartRef, 'source_table' | 'source_part_key
   return outputFace != null && POS_FACES.has(outputFace) !== upPos
 }
 
+// Drawer front runner fixings and marker pricks are stored as seen from the FRONT
+// of the cabinet (what the drawing shows), but the front is machined back face up,
+// so left and right swap on the sheet. A centred pair of runners hides it; a scribed
+// cabinet's off-centre runners don't (RHK6570 Bed 3 BC-03, 106 + 31 from the edges).
+// Doors stay as they are: hinge cups are right on the door as cut (Mark, 2026-11-09).
+export function mirrorsOnDrawerFront(part: Pick<PartRef, 'source_table'>, op: Pick<DrillOpRaw, 'operation_key'>): boolean {
+  return part.source_table === 'face_zones' && /^(slide_|df_marker_)/.test(op.operation_key ?? '')
+}
+
 // 6th face nesting (two-sided spec §0). Sheet program A runs face up as today; the
 // sheet is then flipped over its long edge for program Z. On a two-sided sheet a
 // down-face op is un-mirrored back to where it really sits seen from above in
@@ -131,10 +142,14 @@ export function buildSheetDrills(
       // Edgeband-deducted blank: shift holes by the tape on the edge that became
       // the blank origin (shared with routes via ebShift).
       const down = twoSided && onDownFace(part, op.output_face)
-      const { sx, sy } = ebShift(part, op.output_face, down)
+      const shift = ebShift(part, op.output_face, down)
+      const flip = down || mirrorsOnDrawerFront(part, op)
+      // Mirrored front holes measure from the far finished edge, so that edge's tape.
+      const sx = !down && flip && part.deduct ? part.eb_w2 ?? 0 : shift.sx
+      const sy = shift.sy
       for (const hole of expand(op)) {
         const depth = hole.depth ?? defaultDepth
-        const p = toSheet((down ? part.w - hole.ox : hole.ox) - sx, hole.oy - sy, pl)
+        const p = toSheet((flip ? part.w - hole.ox : hole.ox) - sx, hole.oy - sy, pl)
         drills.push({
           x: p.x, y: p.y, diameter: hole.d, depth, passes: hole.passes, pocket: hole.pocket ?? undefined,
           ...(twoSided ? { program: down && depth < defaultDepth - 1e-6 ? 'Z' as const : 'A' as const } : {}),
