@@ -126,7 +126,15 @@ export interface Footprint {
    *  (z_cabinet_shape_edit E2). Absent = the rules' default. Replaces flush_ends
    *  (still read where no entry is set). */
   joins?: Record<string, JoinChoice>
+  /** The toe kick's own choice per edge id (z_kick_join KE1, kickJunctions.ts). Unset = from the edge's role. */
+  kick_edges?: Record<string, KickEdgeChoice>
+  /** How the toe kick's boards meet at each corner, keyed as `joins`. Absent = the kick's default. */
+  kick_joins?: Record<string, JoinChoice>
 }
+
+/** What a toe kick builds on an edge. */
+export type KickEdgeType = 'face' | 'face_only' | 'back' | 'side' | 'none'
+export interface KickEdgeChoice { type?: KickEdgeType; inset?: number }
 
 /** A corner choice: `through:<edge id>` = a butt with that edge's panel running
  *  through (the other stops — bevelled against it at an off-square corner);

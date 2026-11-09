@@ -2065,6 +2065,24 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In Editing each pair has a dashed outline and a tag like P1. Drag either part and the pair moves together. To split a pair, cut one part and place it again.',
       done: c => c.path.endsWith('/optimiser') },
   ]},
+
+  // Appended 2026-11-10 (z_kick_join KE1: kick edge types + corners).
+  { id: 'kick_edges', level: 'intermediate', topic: 'cabinets', title: 'Set a shaped kick\'s edges and corners',
+    blurb: 'Choose what the kick builds on each edge of a shape, and how the boards join at each corner.',
+    keywords: 'kick edge type shaped toe kick face only back side none corner join mitre butt through return island inset', steps: [
+    { id: 'open', title: 'Open Edit kick shape',
+      body: 'Right-click a cabinet › Kick › Edit kick shape. On a joined run this edits the run\'s KICK n. You can also switch to Kick at the top of the Edit shape panel.',
+      canvas: true, done: c => c.mode === 'edit_cabinet_shape' },
+    { id: 'edge', title: 'Pick an edge type',
+      body: 'Click an edge on the plan and pick Face, Face only, Back, Side or None. Each edge starts from the cabinet\'s own edge type. Setting a cabinet side to Face turns the kick round the end as a mitred return.',
+      canvas: true, done: c => c.mode === 'edit_cabinet_shape' },
+    { id: 'corner', title: 'Pick how a corner joins',
+      body: 'Click a corner dot. Faces can mitre or butt with either board running through; backs can butt or mitre. Frame inset on an edge sets the sub front, back and spreaders further in while the face runs on.',
+      canvas: true, done: c => c.mode === 'edit_cabinet_shape' },
+    { id: 'done', title: 'Check the boards',
+      body: 'Press Enter to finish, then check the kick in 3D and on the Parts tab. Cancel in the panel puts the shape back as it was.',
+      canvas: true, done: c => c.mode === 'select' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

@@ -363,3 +363,35 @@ Mark, RHK6586 Bed 1 KICK 1: the run ends on a 45 wall. A kick assembly with a `f
 `resolveToekick.ts`; backs stay whole). New footprint edge field `kick_inset`: the frame stands that much further in
 from the edge, the face still runs on to it. No UI: the footprint is set by script, and moving a member re-fits the
 assembly's dx without touching the footprint, so put it back by hand.
+
+## Kick edges + corners — KE1 (built 2026-11-10, in-app check pending)
+
+Mark: "can we have shaped kicks act the same way shaped cabinets do, eg. face, sides, backs etc so they follow some
+sort of resolver rule and how each junction is joined?"
+
+**Locked decisions (Mark 2026-11-10)**
+- Each edge has its **own kick type**, defaulting from the cabinet edge's role (front / open = Face, back = Back,
+  side = Side). Types: Face (+ sub front), Face only (no frame behind), Back, Side (end spreader), None.
+- **Separate kick corner choices** (`footprint.kick_joins`), never read from the cabinet's `joins`. Unset corners keep
+  what the kick built before, so existing jobs don't change.
+- Edited in **Edit shape** with a Cabinet / Kick switch. Right-click › Kick › Edit kick shape; on a joined run it
+  edits the KICK n assembly.
+
+**Built**
+- `footprint.kick_edges` (`{ type?, inset? }` per edge id) + `footprint.kick_joins`; no DB migration. `kick_inset` on
+  a segment's edge is still read where no inset is set. Helpers in `src/lib/cabinetShape/kickJunctions.ts`.
+- `resolveShapedKick`: types drive which boards each edge gets and its setback. Corner options: Face/Face mitre
+  (default), through A, through B. Back/Back default butt, through A/B, mitre. Face/Back default, through A/B (no mitre:
+  a two-layer face + sub front can't mitre into one back). Face/Side or None, off-square: bevelled flush (default) or
+  square. A butt at an inside corner runs the through board past it.
+- A face meeting a back where a kick type was set by hand: the back stops behind the face + sub front. Footprints with
+  no kick types keep the old cut.
+- Sub fronts follow the face's corner. A sub front next to a Face only edge doesn't mitre into it.
+- A side set to Face with the default mitre is a shaped kick return (`TOERETL` / `TOERETR` still don't apply to shaped
+  kicks; the panel says so if they're ticked).
+- Kick back bevels are stored negated: `tkBevelOutline` measures from z = 0, which on a kick back is the outer face.
+- Tests `src/lib/resolver/__tests__/shapedKickEdges.test.ts`. Tutorial `kick_edges`.
+
+**Known limits:** moving a run member still re-fits the assembly's dx without touching its footprint. Editing a plain
+assembly gives it a rectangle footprint, which moves it to the shaped kick (Kick Returns ticks stop applying). Angled
+board seams: only the straight face / sub front are cut at the run's seams, as before.

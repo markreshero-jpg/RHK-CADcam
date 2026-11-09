@@ -19,9 +19,12 @@ export type ShapeCabSnap = Pick<CabinetInstance, 'footprint' | 'dx' | 'dz' | 'po
 const snapOf = (c: CabinetInstance): ShapeCabSnap => ({ footprint: c.footprint ?? null, dx: c.dx, dz: c.dz, pos_x: c.pos_x, pos_y: c.pos_y })
 
 export type ShapeEditSel = { kind: 'edge'; id: string } | { kind: 'corner'; key: string } | null
+/** What the edges and corners being picked belong to (z_kick_join KE1). */
+export type ShapeEditLayer = 'cabinet' | 'kick'
 
 export interface CabinetShapeEdit {
   cabId: string
+  layer: ShapeEditLayer
   /** The footprint as it was when the edit started (null = a plain box). */
   orig: Footprint | null
   /** The cabinet's footprint / box / position when the edit started (Cancel puts it back). */
@@ -44,11 +47,11 @@ export function useCabinetShapeEdit({ cabinets, onUpdate, captureSnapshot }: {
   editRef.current = edit
 
   /** Begin editing a cabinet's shape. Returns false when it can't be shape-edited. */
-  const start = useCallback((cabId: string) => {
+  const start = useCallback((cabId: string, layer: ShapeEditLayer = 'cabinet') => {
     const cab = cabinets.find(c => c.id === cabId)
     if (!cab) return false
     const orig = cab.footprint?.segments?.length ? cab.footprint : null
-    setEdit({ cabId, orig, origCab: snapOf(cab), fp: orig ?? rectangleFootprint({ w: cab.dx, d: cab.dz }), history: [], sel: null, hover: null })
+    setEdit({ cabId, layer, orig, origCab: snapOf(cab), fp: orig ?? rectangleFootprint({ w: cab.dx, d: cab.dz }), history: [], sel: null, hover: null })
     return true
   }, [cabinets])
 
@@ -94,7 +97,16 @@ export function useCabinetShapeEdit({ cabinets, onUpdate, captureSnapshot }: {
   const setSel = useCallback((sel: ShapeEditSel) => setEdit(e => (e ? { ...e, sel } : e)), [])
   const setHover = useCallback((hover: ShapeEditSel) => setEdit(e => (e ? { ...e, hover } : e)), [])
 
-  return { edit, start, apply, undo, done, cancel, setSel, setHover }
+  const setLayer = useCallback((layer: ShapeEditLayer) => setEdit(e => (e ? { ...e, layer, sel: null, hover: null } : e)), [])
+
+  return { edit, start, apply, undo, done, cancel, setSel, setHover, setLayer }
+}
+
+/** Cabinets whose toe kick can be edge / corner edited: a joined run's kick assembly,
+ *  or a floor cabinet with its own kick (a run member's kick belongs to the assembly). */
+export function kickShapeEditable(cab: CabinetInstance | undefined): boolean {
+  if (!cab || cab.assembly_class === 'wall') return false
+  return !!cab.is_kick_assembly || (shapeEditable(cab) && !!cab.has_toekick && !cab.kick_run_id)
 }
 
 /** Cabinets whose shape the edit mode can change: carcass cabinets built from a

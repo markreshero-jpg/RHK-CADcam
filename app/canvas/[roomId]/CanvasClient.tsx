@@ -130,7 +130,7 @@ import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
 import CabinetShapeEditPanel from './CabinetShapeEditPanel'
 import CabinetShapeEditPlan, { shapeEditGeo, shapeEditPickAt } from './CabinetShapeEditPlan'
 import { useShapeCad } from './useShapeCad'
-import { useCabinetShapeEdit, shapeEditable } from './useCabinetShapeEdit'
+import { useCabinetShapeEdit, shapeEditable, kickShapeEditable, type ShapeEditLayer } from './useCabinetShapeEdit'
 import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
 import dynamic from 'next/dynamic'
@@ -1417,9 +1417,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
 
   // Edit shape (z_cabinet_shape_edit E3): right-click a cabinet → Edit shape.
   const shp = useCabinetShapeEdit({ cabinets, onUpdate: handleUpdateCabinet, captureSnapshot })
-  function startCabinetShapeEdit(cabId: string) {
+  function startCabinetShapeEdit(cabId: string, layer: ShapeEditLayer = 'cabinet') {
     setContextMenu(null)
-    if (!shapeEditable(cabinets.find(c => c.id === cabId)) || !shp.start(cabId)) return
+    const cab = cabinets.find(c => c.id === cabId)
+    if (!(layer === 'kick' ? kickShapeEditable(cab) : shapeEditable(cab)) || !shp.start(cabId, layer)) return
     if (canvasView !== 'plan') switchView('plan')
     setSelected(null); setMultiSelect([]); setCabResize(null)
     setMode('edit_cabinet_shape')
@@ -4159,7 +4160,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )}
         {mode === 'edit_cabinet_shape' && shp.edit && (() => {
           const c = cabinets.find(x => x.id === shp.edit!.cabId)
-          return c ? <CabinetShapeEditPanel edit={shp.edit} cab={c} cad={shapeCad.cad} msg={shapeCad.msg} onApply={shp.apply} onSelect={shp.setSel}
+          return c ? <CabinetShapeEditPanel edit={shp.edit} cab={c} cad={shapeCad.cad} msg={shapeCad.msg} onApply={shp.apply} onSelect={shp.setSel} onLayer={shp.setLayer}
             onDone={() => finishCabinetShapeEdit()} onCancel={() => finishCabinetShapeEdit(true)} onUndo={shp.undo} /> : null
         })()}
         {mode === 'edit_benchtop_edges' && selectedBenchtop && bt.edgeEdit?.btId === selectedBenchtop.id && btEdgeAux && (
@@ -4413,6 +4414,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               void handleUpdateCabinet(id, { split: { ...cur, at: [at] } })
             },
             onEditShape: canvasView === 'plan' || canvasView === '3d' || canvasView === 'elevation' ? startCabinetShapeEdit : undefined,
+            onEditKickShape: canvasView === 'plan' || canvasView === '3d' || canvasView === 'elevation' ? (id: string) => startCabinetShapeEdit(id, 'kick') : undefined,
             onSaveToLibrary: isAdmin ? id => { setContextMenu(null); setSaveLibCabId(id) } : undefined,
             onReplace: id => { setContextMenu(null); setReplaceCabId(id) },
             onJoinKicks: id => { void handleJoinKicks(id) },

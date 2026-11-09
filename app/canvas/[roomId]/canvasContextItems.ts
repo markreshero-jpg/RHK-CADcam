@@ -5,7 +5,7 @@ import { normaliseBulkhead, type BulkheadSettings } from '@/src/lib/bulkhead'
 import { normaliseFloatShelf, type FloatShelfSettings } from '@/src/lib/floatShelf'
 import type { AlignMode } from '@/src/lib/fixtureGroups'
 import { isRunCarcass } from '@/src/lib/underPanel'
-import { shapeEditable } from './useCabinetShapeEdit'
+import { kickShapeEditable, shapeEditable } from './useCabinetShapeEdit'
 
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
@@ -13,12 +13,14 @@ export function buildContextMenuGroups({
   onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit, onSplitHeight,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
-  onUpdateBulkhead, onUpdateFloatShelf, onUpdateKick, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape, grainMatchItems,
+  onUpdateBulkhead, onUpdateFloatShelf, onUpdateKick, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape, onEditKickShape, grainMatchItems,
 }: {
   /** Grain match (z_grain_match G1): items for the cabinet, acting on the selection holding it. */
   grainMatchItems?: (cabId: string, ids: string[]) => ContextMenuItem[]
   /** Edit shape in plan (z_cabinet_shape_edit E3): edge types + corner joins. */
   onEditShape?: (cabId: string) => void
+  /** Edit shape on the toe kick's edges + corners (z_kick_join KE1). */
+  onEditKickShape?: (cabId: string) => void
   /** Under panel (z_floating F7/F8) under these base cabinets / overheads: a BUP / WUP + their bottom scribe. */
   onAddUnderPanel?: (ids: string[]) => void
   /** Put the right-clicked cabinet's / fixture's label into move mode (this view). */
@@ -166,7 +168,10 @@ export function buildContextMenuGroups({
   // Separate + Delete (it has no carcass/face/internal, so Edit/Split don't apply).
   if (cab?.is_kick_assembly) {
     const g: ContextMenuItem[][] = []
-    g.push([{ label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' }])
+    g.push([
+      { label: 'Edit…', onClick: () => onEdit(cabId), color: 'blue' },
+      ...(onEditKickShape ? [{ label: 'Edit kick shape', onClick: () => onEditKickShape(cabId), color: 'blue' as const }] : []),
+    ])
     if (onKickSettings) g.push([{ label: 'Kick split…', onClick: () => onKickSettings(cabId) }])
     if (onSeparateKicks) g.push([{ label: 'Separate kicks', onClick: () => onSeparateKicks(cabId) }])
     g.push([{ label: 'Delete', onClick: () => onDeleteCabinet(cabId), color: 'red' }])
@@ -252,6 +257,7 @@ export function buildContextMenuGroups({
       { label: tick(!!ro.TOERETR, 'Right return'), onClick: () => set('TOERETR', !ro.TOERETR) },
       { label: tick(!horiz, 'Grain vertical'), onClick: () => set('TOEGRAIN', null) },
       { label: tick(horiz, 'Grain horizontal'), onClick: () => set('TOEGRAIN', 'horizontal') },
+      ...(onEditKickShape && kickShapeEditable(kickOwner) ? [{ label: 'Edit kick shape', onClick: () => onEditKickShape(kickOwner.id) }] : []),
     ] }])
   }
 

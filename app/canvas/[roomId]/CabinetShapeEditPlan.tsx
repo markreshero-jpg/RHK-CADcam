@@ -15,11 +15,19 @@ import {
   type EdgeRole, type FootprintEdge,
 } from '@/src/lib/cabinetShape/footprint'
 import { footprintJunctions } from '@/src/lib/cabinetShape/junctions'
+import { KICK_EDGE_TYPES, kickEdgeType, kickJunctions } from '@/src/lib/cabinetShape/kickJunctions'
+import type { KickEdgeType } from '@/src/lib/cabinetShape/footprint'
 import type { CabinetShapeEdit, ShapeEditSel } from './useCabinetShapeEdit'
 
 export const ROLE_COLOUR: Record<EdgeRole, string> = {
   back: '#94a3b8', side: '#f59e0b', front: '#3b82f6', open: '#22c55e',
 }
+
+export const KICK_COLOUR: Record<KickEdgeType, string> = {
+  face: '#3b82f6', face_only: '#38bdf8', back: '#94a3b8', side: '#f59e0b', none: '#6b7280',
+}
+
+export const kickTypeLabel = (t: KickEdgeType) => KICK_EDGE_TYPES.find(o => o.value === t)?.label ?? t
 
 /** Short label for an edge on the plan: its sub-type when not the default, else its type. */
 export function edgePlanLabel(e: FootprintEdge): string {
@@ -39,7 +47,9 @@ export function shapeEditGeo(edit: CabinetShapeEdit, cab: CabinetInstance, wall:
   const edges = footprintEdgesPlan(withEdgeOverrides(edit.fp), dims, toPlan)
   const all = edges.flatMap(e => e.pts)
   const c = all.reduce((a, p) => ({ x: a.x + p.x / all.length, y: a.y + p.y / all.length }), { x: 0, y: 0 })
-  const corners = footprintJunctions(edit.fp, dims.w, dims.d).map(j => ({ j, p: toPlan(j.at.x, j.at.y) }))
+  const junctions: { key: string; at: { x: number; y: number }; choice?: string }[] =
+    edit.layer === 'kick' ? kickJunctions(edit.fp, dims.w, dims.d) : footprintJunctions(edit.fp, dims.w, dims.d)
+  const corners = junctions.map(j => ({ j, p: toPlan(j.at.x, j.at.y) }))
   // The outline as one ring (each edge's points, its end = the next start).
   const ring = edges.flatMap(e => e.pts.slice(0, -1))
   return { edges, corners, c, ring }
@@ -101,7 +111,8 @@ export default function CabinetShapeEditPlan({ edit, cab, wall, roomRef, zoom, o
         const mid = pts.length === 2 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : { x: (m.x + m2.x) / 2, y: (m.y + m2.y) / 2 }
         const ox = mid.x - geo.c.x, oy = mid.y - geo.c.y, ol = Math.hypot(ox, oy) || 1
         const lp = { x: mid.x + (ox / ol) * px(16), y: mid.y + (oy / ol) * px(16) }
-        const col = ROLE_COLOUR[edge.role]
+        const kt = edit.layer === 'kick' ? kickEdgeType(edit.fp, edge) : null
+        const col = kt ? KICK_COLOUR[kt] : ROLE_COLOUR[edge.role]
         return (
           <g key={edge.id} data-edge={edge.id} style={{ cursor: 'pointer' }}
             onPointerDown={down(s)} onPointerEnter={() => onHover(s)} onPointerLeave={() => onHover(null)}>
@@ -111,7 +122,7 @@ export default function CabinetShapeEditPlan({ edit, cab, wall, roomRef, zoom, o
             <text x={lp.x} y={lp.y} fontSize={px(11)} textAnchor="middle" dominantBaseline="middle"
               fill={on ? '#ffffff' : col} stroke="#030712" strokeWidth={px(3)} paintOrder="stroke"
               style={{ pointerEvents: 'none', userSelect: 'none', fontWeight: on ? 600 : 400 }}>
-              {edgePlanLabel(edge)}
+              {kt ? kickTypeLabel(kt) : edgePlanLabel(edge)}
             </text>
           </g>
         )

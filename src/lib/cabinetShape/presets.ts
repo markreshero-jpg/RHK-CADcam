@@ -280,6 +280,8 @@ export function withShapeChoices(from: Footprint | null | undefined, next: Footp
     ...next,
     ...(from.flush_ends?.length ? { flush_ends: from.flush_ends } : {}),
     ...(from.joins && Object.keys(from.joins).length ? { joins: from.joins } : {}),
+    ...(from.kick_edges ? { kick_edges: from.kick_edges } : {}),
+    ...(from.kick_joins ? { kick_joins: from.kick_joins } : {}),
   }
 }
 

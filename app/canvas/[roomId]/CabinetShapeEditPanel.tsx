@@ -18,8 +18,9 @@ import { footprintJunctions, joinOptions, withJoin } from '@/src/lib/cabinetShap
 import { withEdgeChoice } from '@/src/lib/cabinetShape/edit'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { edgeRuleScribe } from '@/src/lib/resolver/resolveShapedCase'
-import { ROLE_COLOUR, edgePlanLabel } from './CabinetShapeEditPlan'
-import type { CabinetShapeEdit, ShapeEditSel } from './useCabinetShapeEdit'
+import { KICK_EDGE_TYPES, kickEdgeType, kickInset, kickJoinOptions, kickJunctions, withKickEdge, withKickJoin } from '@/src/lib/cabinetShape/kickJunctions'
+import { KICK_COLOUR, ROLE_COLOUR, edgePlanLabel, kickTypeLabel } from './CabinetShapeEditPlan'
+import { kickShapeEditable, type CabinetShapeEdit, type ShapeEditLayer, type ShapeEditSel } from './useCabinetShapeEdit'
 import type { AnnotationTool, CadTool } from './useAnnotationTool'
 
 const TOOLS: { id: CadTool; label: string; key: string; tip: string }[] = [
@@ -35,7 +36,95 @@ const TOOLS: { id: CadTool; label: string; key: string; tip: string }[] = [
 const btn = 'px-2 py-1 rounded text-xs bg-gray-700 hover:bg-gray-600 text-white disabled:opacity-40'
 const inp = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white'
 
-export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, onSelect, onDone, onCancel, onUndo }: {
+/** The Kick side of the panel (z_kick_join KE1): this edge's kick type and frame inset, or this corner's join. */
+function KickEditor({ edit, cab, onApply, onSelect }: {
+  edit: CabinetShapeEdit
+  cab: CabinetInstance
+  onApply: (next: CabinetShapeEdit['fp']) => void
+  onSelect: (s: ShapeEditSel) => void
+}) {
+  const dims = { w: cab.dx, d: cab.dz }
+  const fp = edit.fp
+  const edges = evaluateFootprint(withEdgeOverrides(fp), dims)
+  const corners = kickJunctions(fp, dims.w, dims.d)
+  const sel = edit.sel
+  const selEdge = sel?.kind === 'edge' ? edges.find(s => s.edge.id === sel.id)?.edge : undefined
+  const selCorner = sel?.kind === 'corner' ? corners.find(j => j.key === sel.key) : undefined
+  const ro = (cab.rule_overrides ?? {}) as Record<string, unknown>
+  return (
+    <>
+      {(ro.TOERETL || ro.TOERETR) ? <p className="text-[11px] text-amber-400">Kick Returns ticks don&apos;t apply to a shaped kick. Set the end edge to Face for a mitred return.</p> : null}
+      {!selEdge && !selCorner && <p className="text-[11px] text-gray-400">Click an edge or a corner dot on the plan (or pick one below).</p>}
+      {selEdge && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-gray-300">Kick edge: <span className="text-white font-medium">{edgeLabel(selEdge.id)}</span></p>
+          <div className="grid grid-cols-2 gap-1">
+            {KICK_EDGE_TYPES.map(o => (
+              <button key={o.value} title={o.tip} onClick={() => onApply(withKickEdge(fp, selEdge.id, { type: o.value }))}
+                className={`text-xs py-1 rounded border flex items-center justify-center gap-1.5 ${kickEdgeType(fp, selEdge) === o.value
+                  ? 'bg-gray-700 border-gray-400 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:text-white'}`}>
+                <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: KICK_COLOUR[o.value] }} />
+                {o.label}
+              </button>
+            ))}
+          </div>
+          {fp.kick_edges?.[selEdge.id]?.type && (
+            <button className="text-[11px] text-sky-400 hover:text-sky-300" onClick={() => onApply(withKickEdge(fp, selEdge.id, { type: undefined }))}>Back to the cabinet&apos;s edge type</button>
+          )}
+          {kickEdgeType(fp, selEdge) !== 'none' && (
+            <div className="flex items-center gap-2" title="Sets the sub front, back and spreaders further in from this edge. The face still runs on to it.">
+              <span className="text-[11px] text-gray-400">Frame inset (mm)</span>
+              <CalcInput value={kickInset(fp, selEdge) || null} decimals={1} min={0} placeholder="0"
+                onCommit={v => onApply(withKickEdge(fp, selEdge.id, { inset: v }))} onClear={() => onApply(withKickEdge(fp, selEdge.id, { inset: undefined }))}
+                className={inp + ' w-20 text-right'} />
+            </div>
+          )}
+        </div>
+      )}
+      {selCorner && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-gray-300">
+            Kick corner: <span className="text-white font-medium">{edgeLabel(selCorner.a.id)} / {edgeLabel(selCorner.b.id)}</span>
+            <span className="text-gray-500"> · {Math.round(selCorner.angle * 10) / 10}°</span>
+          </p>
+          <div className="space-y-1">
+            {kickJoinOptions(selCorner).map(o => (
+              <label key={o.value} className="flex items-center gap-2 text-xs text-gray-300 cursor-pointer">
+                <input type="radio" checked={(selCorner.choice ?? '') === o.value} onChange={() => onApply(withKickJoin(fp, selCorner.key, o.value))} className="accent-amber-500" />
+                {o.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="border-t border-gray-800 pt-3 space-y-1">
+        <p className="text-[10px] uppercase tracking-wide text-gray-500">Kick edges</p>
+        {edges.map(s => {
+          const t = kickEdgeType(fp, s.edge)
+          return (
+            <button key={s.edge.id} onClick={() => onSelect({ kind: 'edge', id: s.edge.id })}
+              className={`w-full flex items-center gap-2 px-2 py-1 rounded text-left text-[11px] ${selEdge?.id === s.edge.id ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
+              <span className="inline-block w-2.5 h-2.5 rounded-full shrink-0" style={{ background: KICK_COLOUR[t] }} />
+              <span className="w-20 truncate">{edgeLabel(s.edge.id)}</span>
+              <span className="truncate">{kickTypeLabel(t)}</span>
+            </button>
+          )
+        })}
+        {corners.length > 0 && <p className="text-[10px] uppercase tracking-wide text-gray-500 pt-2">Kick corners</p>}
+        {corners.map(j => (
+          <button key={j.key} onClick={() => onSelect({ kind: 'corner', key: j.key })}
+            className={`w-full flex items-center gap-2 px-2 py-1 rounded text-left text-[11px] ${selCorner?.key === j.key ? 'bg-gray-700 text-white' : 'text-gray-400 hover:bg-gray-800'}`}>
+            <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 border border-gray-300 ${j.choice ? 'bg-gray-200' : ''}`} />
+            <span className="w-20 truncate">{edgeLabel(j.a.id)} / {edgeLabel(j.b.id)}</span>
+            <span className="truncate">{kickJoinOptions(j).find(o => o.value === (j.choice ?? ''))?.label}</span>
+          </button>
+        ))}
+      </div>
+    </>
+  )
+}
+
+export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, onSelect, onLayer, onDone, onCancel, onUndo }: {
   edit: CabinetShapeEdit
   cab: CabinetInstance
   /** The CAD tools on the outline (E4b). */
@@ -44,10 +133,12 @@ export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, on
   msg?: string | null
   onApply: (next: CabinetShapeEdit['fp']) => void
   onSelect: (s: ShapeEditSel) => void
+  onLayer: (l: ShapeEditLayer) => void
   onDone: () => void
   onCancel: () => void
   onUndo: () => void
 }) {
+  const kickLayer = edit.layer === 'kick'
   const dims = { w: cab.dx, d: cab.dz }
   const edges = evaluateFootprint(withEdgeOverrides(edit.fp), dims)
   const corners = footprintJunctions(edit.fp, dims.w, dims.d)
@@ -61,7 +152,17 @@ export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, on
     <div className="w-72 bg-gray-900 border-l border-gray-800 flex flex-col overflow-y-auto">
       <div className="px-4 py-3 border-b border-gray-800">
         <p className="text-xs font-medium text-amber-300">Edit shape — {cab.label ?? 'Cabinet'}</p>
-        <p className="text-[10px] text-gray-500">{edges.length} edges · {corners.length} corners with a choice</p>
+        <p className="text-[10px] text-gray-500">{edges.length} edges{kickLayer ? ' · toe kick' : ` · ${corners.length} corners with a choice`}</p>
+        {!cab.is_kick_assembly && kickShapeEditable(cab) && (
+          <div className="grid grid-cols-2 gap-1 mt-2">
+            {(['cabinet', 'kick'] as const).map(l => (
+              <button key={l} onClick={() => onLayer(l)}
+                className={`text-xs py-1 rounded border ${edit.layer === l ? 'bg-amber-600 border-amber-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:text-white'}`}>
+                {l === 'cabinet' ? 'Cabinet' : 'Kick'}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="flex gap-1.5 mt-2">
           <button onClick={onDone} className="flex-1 px-2 py-1 rounded text-xs bg-teal-600 hover:bg-teal-500 text-white" title="Enter / Esc">✓ Done</button>
           <button onClick={onCancel} disabled={!edit.history.length} className={btn} title="Put the shape back as it was">Cancel</button>
@@ -99,11 +200,13 @@ export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, on
           </div>
         )}
 
-        {!selEdge && !selCorner && (
+        {kickLayer && <KickEditor edit={edit} cab={cab} onApply={onApply} onSelect={onSelect} />}
+
+        {!kickLayer && !selEdge && !selCorner && (
           <p className="text-[11px] text-gray-400">Click an edge or a corner dot on the plan (or pick one below).</p>
         )}
 
-        {selEdge && (() => {
+        {!kickLayer && selEdge && (() => {
           const e = selEdge.edge
           const subs = EDGE_SUBS[e.role]
           const sub = edgeSub(e)
@@ -145,10 +248,10 @@ export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, on
           )
         })()}
 
-        {selCorner && (
+        {!kickLayer && selCorner && (
           <div className="space-y-2">
             <p className="text-[11px] text-gray-300">
-              Corner: <span className="text-white font-medium">{edgeLabel(selCorner.a.id)} / {edgeLabel(selCorner.b.id)}</span>
+              Corner:<span className="text-white font-medium">{edgeLabel(selCorner.a.id)} / {edgeLabel(selCorner.b.id)}</span>
               <span className="text-gray-500"> · {Math.round(selCorner.angle * 10) / 10}°</span>
             </p>
             <div className="space-y-1">
@@ -162,7 +265,7 @@ export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, on
           </div>
         )}
 
-        <div className="border-t border-gray-800 pt-3 space-y-1">
+        {!kickLayer && <div className="border-t border-gray-800 pt-3 space-y-1">
           <p className="text-[10px] uppercase tracking-wide text-gray-500">Edges</p>
           {edges.map(s => (
             <button key={s.edge.id} onClick={() => onSelect({ kind: 'edge', id: s.edge.id })}
@@ -181,7 +284,7 @@ export default function CabinetShapeEditPanel({ edit, cab, cad, msg, onApply, on
               <span className="truncate">{joinOptions(j).find(o => o.value === (j.choice ?? ''))?.label}</span>
             </button>
           ))}
-        </div>
+        </div>}
 
         <p className="text-[10px] text-gray-500">Changes save as you make them; Cancel puts the shape back as it was when you started.</p>
       </div>

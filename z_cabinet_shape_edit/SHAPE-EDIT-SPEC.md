@@ -77,8 +77,10 @@ sub-types and junction choices and builds the parts as it does today.
 8. **One corner picker for every junction kind** — panel↔panel, panel↔door facet
    (replaces the 3D right-click "Bevel front edge to facet" / "Square front
    edge"), and facet↔facet doors.
-9. **Kick and benchtop are not touched** by edge sub-types or junctions this
-   module. They keep following the edge's type as today (4b / 4c).
+9. **Benchtop is not touched** by edge sub-types or junctions this module. It
+   keeps following the edge's type as today (4c). *Kick changed 2026-11-10 (Mark):
+   it now has its own edge types and corners, Kick switch in Edit shape. See
+   `z_kick_join/KICK-JOIN-PLAN.md` "Kick edges + corners — KE1".*
 10. **Curved (arc) side / back panels are out of scope.** Arc edges stay
     allowed as `open` / `front` as today; arc `side` / `back` keeps the
     `SHAPE_CURVED_PANEL` error.

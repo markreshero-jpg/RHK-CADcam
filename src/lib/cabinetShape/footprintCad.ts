@@ -244,6 +244,15 @@ export function lineToFootprint(
     ...(prevFp.flush_ends?.length ? { flush_ends: prevFp.flush_ends.filter(id => live.has(id)) } : {}),
   }
   if (!Object.keys(joins).length) delete fp.joins
+  // The kick's choices follow the same edges (z_kick_join KE1).
+  const kickJoins = Object.fromEntries(Object.entries(prevFp.kick_joins ?? {}).filter(([k]) => {
+    const ok = k.split('|').every(id => live.has(id))
+    if (!ok) dropped.push(k)
+    return ok
+  }))
+  const kickEdges = Object.fromEntries(Object.entries(prevFp.kick_edges ?? {}).filter(([id]) => live.has(id)))
+  if (Object.keys(kickJoins).length) fp.kick_joins = kickJoins; else delete fp.kick_joins
+  if (Object.keys(kickEdges).length) fp.kick_edges = kickEdges; else delete fp.kick_edges
   // Roles now live on the edges themselves (hand-edited shape).
   delete fp.edge_overrides; delete fp.role_overrides
   return { fp, dx: r1(w), dz: r1(d), shift: { x: minX, y: minY }, dropped }

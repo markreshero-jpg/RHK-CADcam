@@ -25,15 +25,14 @@ import { edgeSidesToBanding, DEFAULT_EDGING } from './types'
 import type { FootprintSegment } from '../cabinetShape/footprint'
 import type { ShapePt } from '../shapePath'
 import { canonicalSegments, edgeFrame, insetPolygon, vertexTrim, angledEnd, interiorAngle, type EdgeFrame } from '../cabinetShape/construct'
+import { getKickJoin, kickEdgeType, kickInset, kickJunctionKind } from '../cabinetShape/kickJunctions'
 
 const NEAR = 0.5
 const D = 180 / Math.PI
 
 type Kind = 'front' | 'back' | 'side'
-interface KEdge { kind: Kind; seg: FootprintSegment }
-
-const kindOf = (s: FootprintSegment): Kind =>
-  s.edge.role === 'front' || s.edge.role === 'open' ? 'front' : s.edge.role === 'back' ? 'back' : 'side'
+// `ids`: the footprint edges this kick edge covers (straight-on fronts merge).
+interface KEdge { kind: Kind; seg: FootprintSegment; ids: string[]; faceOnly: boolean; none: boolean }
 
 /**
  * Where line P + d·t (d a unit vector) is inside the polygon — any polygon,
@@ -78,28 +77,38 @@ export function resolveShapedKick(
 ): { parts: ResolvedToekickPart[]; errors: ResolverError[] } {
   const parts: ResolvedToekickPart[] = []
   const errors: ResolverError[] = []
-  const segs0 = canonicalSegments(cab.footprint!, cab.DX, cab.DZ)
+  const TF = cab.toekick_face_material.DZ, TI = cab.toekick_interior_material.DZ
+  const fp = cab.footprint!
+  const kindOf = (s: FootprintSegment): Kind => {
+    const t = kickEdgeType(fp, s.edge)
+    return t === 'face' || t === 'face_only' ? 'front' : t === 'back' ? 'back' : 'side'
+  }
+  const typeIs = (s: FootprintSegment, t: ReturnType<typeof kickEdgeType>) => kickEdgeType(fp, s.edge) === t
+  const segs0 = canonicalSegments(fp, cab.DX, cab.DZ)
   // Arcs → chords (the kick runs straight across a curved end).
   const edges0: KEdge[] = segs0.map(s => ({
-    kind: kindOf(s),
+    kind: kindOf(s), ids: [s.edge.id], faceOnly: typeIs(s, 'face_only'), none: typeIs(s, 'none'),
     seg: s.type === 'arc' ? { type: 'line', p0: s.p0, p1: s.p1, edge: s.edge } as FootprintSegment : s,
   }))
   // Straight-on front edges (a face filler beside an open front) take one kick
   // board — their offset lines are (near enough) one line, so the inset can't
   // corner them (a hair off in line throws the corner hundreds of metres out).
   const inLine = (a: KEdge, b: KEdge) => {
-    if (a.kind !== 'front' || b.kind !== 'front') return false
+    if (a.kind !== 'front' || b.kind !== 'front' || a.faceOnly !== b.faceOnly) return false
     const fa = edgeFrame(a.seg), fb = edgeFrame(b.seg)
     return Math.abs(fa.u.x * fb.u.y - fa.u.y * fb.u.x) < 1e-3 && fa.u.x * fb.u.x + fa.u.y * fb.u.y > 0
   }
   const edges: KEdge[] = []
   for (const e of edges0) {
     const last = edges[edges.length - 1]
-    if (last && inLine(last, e)) last.seg = { ...last.seg, p1: e.seg.p1 } as FootprintSegment
-    else edges.push({ ...e })
+    if (last && inLine(last, e)) { last.seg = { ...last.seg, p1: e.seg.p1 } as FootprintSegment; last.ids.push(...e.ids) }
+    else edges.push({ ...e, ids: [...e.ids] })
   }
-  if (edges.length > 2 && inLine(edges[edges.length - 1], edges[0]))
-    edges[0].seg = { ...edges[0].seg, p0: edges.pop()!.seg.p0 } as FootprintSegment
+  if (edges.length > 2 && inLine(edges[edges.length - 1], edges[0])) {
+    const tail = edges.pop()!
+    edges[0].seg = { ...edges[0].seg, p0: tail.seg.p0 } as FootprintSegment
+    edges[0].ids.unshift(...tail.ids)
+  }
 
   const sideOff = (s: FootprintSegment) =>
     Math.abs(s.p0.x) < NEAR && Math.abs(s.p1.x) < NEAR ? r.TOESCL
@@ -108,8 +117,10 @@ export function resolveShapedKick(
   // the one board that ignores it: it runs on to the edge itself (to the wall).
   const off = (frontExtra: number, backExtra: number, sideExtra = 0, frame = true) => (s: FootprintSegment) => {
     const k = kindOf(s)
-    return (k === 'front' ? r.TOESCF + frontExtra : k === 'back' ? r.TOESCB + backExtra : sideOff(s) + sideExtra)
-      + (frame ? s.edge.kick_inset ?? 0 : 0)
+    // A face with no frame behind it: anything inside stops at the face alone.
+    const fx = typeIs(s, 'face_only') ? Math.min(frontExtra, TF) : frontExtra
+    return (k === 'front' ? r.TOESCF + fx : k === 'back' ? r.TOESCB + backExtra : sideOff(s) + (typeIs(s, 'none') ? 0 : sideExtra))
+      + (frame ? kickInset(fp, s.edge) : 0)
   }
   // A short side the front setback swallows (e.g. the square end of a gable
   // beside an angled front) comes out of the inset reversed and throws the
@@ -129,7 +140,6 @@ export function resolveShapedKick(
   const lines = edges.map(e => e.seg)
   const n = edges.length
   const edging: Required<EdgingDefaults> = { ...DEFAULT_EDGING, ...(r.EDGING ?? {}) }
-  const TF = cab.toekick_face_material.DZ, TI = cab.toekick_interior_material.DZ
   const TK = r.TOEH, FC = r.TOEFC
   const fid = cab.toekick_face_material.id, iid = cab.toekick_interior_material.id
 
@@ -138,15 +148,49 @@ export function resolveShapedKick(
   const kEdge = (poly: ShapePt[], i: number) => ({ p0: poly[i], p1: poly[(i + 1) % n] })
   let sort = 0
 
+  // The corner choice between kick edges i and j, if one is set and still applies.
+  const handSet = (i: number, j: number, alpha: number) => {
+    let c: ReturnType<typeof getKickJoin>
+    for (const a of edges[i].ids) for (const b of edges[j].ids) c = c ?? getKickJoin(fp, a, b)
+    const kind = kickJunctionKind(kickEdgeType(fp, edges[i].seg.edge), kickEdgeType(fp, edges[j].seg.edge), alpha)
+    if (!kind) return null
+    // A face meeting a back because an edge's kick type was set by hand: the back
+    // stops behind the face + sub front. (Untouched footprints keep their old cut.)
+    if (!c && kind === 'face_back' && [...edges[i].ids, ...edges[j].ids].some(id => fp.kick_edges?.[id]?.type))
+      c = `through:${(edges[i].kind === 'front' ? edges[i] : edges[j]).ids[0]}`
+    return c ? { c, kind } : null
+  }
+  // A hand-set corner's cut for edge i's board, or null for the default.
+  // through: at an outside corner the through board's end lies in the other's
+  // outer plane and the other stops on its inner face; at an inside corner it's
+  // the other way round (the through board runs past the corner to carry it).
+  const cornerCut = (i: number, j: number, V: ShapePt, away: ShapePt, f: EdgeFrame, nf: EdgeFrame, t: number, alpha: number, isSub: boolean) => {
+    if (isSub && edges[j].faceOnly) return null                // no sub front to meet
+    const set = handSet(i, j, alpha)
+    if (!set) return null
+    if (set.c === 'square') { const s = vertexTrim(away, f.n, nf.n, t, false); return { sOut: s, sIn: s } }
+    if (set.c === 'mitre') return angledEnd('mitre', V, away, f.n, nf, t)
+    if (!set.c.startsWith('through:')) return null
+    const id = set.c.slice('through:'.length)
+    const through = edges[i].ids.includes(id)
+    if (!through && !edges[j].ids.includes(id)) return null
+    const nbT = edges[i].kind === edges[j].kind ? t
+      : edges[j].kind === 'back' ? TI
+      : TF + (edges[j].faceOnly ? 0 : TI)                       // a back stops behind the face + sub front
+    return angledEnd(through === (alpha < 180) ? 'flush' : 'stop', V, away, f.n, nf, t, nbT)
+  }
+
   // One straight board on edge i of `poly`, `t` thick inward. Front boards mitre
   // into front neighbours; other ends are square and stay inside the polygon.
-  const board = (poly: ShapePt[], i: number, t: number, mitreFronts: boolean, butt?: (j: number) => boolean) => {
+  const board = (poly: ShapePt[], i: number, t: number, mitreFronts: boolean, butt?: (j: number) => boolean, isSub = false) => {
     const e = kEdge(poly, i), f = edgeFrame(e)
     if (f.len < 1) return null
     const ip = (i - 1 + n) % n, inx = (i + 1) % n
     const end = (j: number, V: ShapePt, away: ShapePt, alpha: number) => {
       const nf: EdgeFrame = edgeFrame(kEdge(poly, j))
-      if (mitreFronts && edges[j].kind === 'front' && Math.abs(alpha - 180) > 0.5)
+      const cut = cornerCut(i, j, V, away, f, nf, t, alpha, isSub)
+      if (cut) return cut
+      if (mitreFronts && edges[j].kind === 'front' && !(isSub && edges[j].faceOnly) && Math.abs(alpha - 180) > 0.5)
         return angledEnd('mitre', V, away, f.n, nf, t)
       // A front board meeting a side / back off square (an angled kick
       // running into a gable or end panel): run it on and cut the end to lie in
@@ -165,7 +209,7 @@ export function resolveShapedKick(
 
   // Kick face / sub front in the zone-like frame (+X = −u, +Z outward).
   const frontPart = (poly: ShapePt[], i: number, t: number, key: 'kick_front_face' | 'kick_sub_front', y: number, h: number, mat: string, eb: typeof edging.kick_front_face, ebId: string | null | undefined) => {
-    const bd = board(poly, i, t, true)
+    const bd = board(poly, i, t, true, undefined, key === 'kick_sub_front')
     if (!bd) return
     const { e, f, lo, hi, b0, b1 } = bd
     const ay = Math.atan2(f.u.y, -f.u.x) * D
@@ -187,7 +231,7 @@ export function resolveShapedKick(
   if (toeType === 'leg') return { parts, errors }
 
   const KS = insetPolygon(lines, off(TF, 0))               // sub front outer line
-  for (const i of fronts)
+  for (const i of fronts.filter(i => !edges[i].faceOnly))
     frontPart(KS, i, TI, 'kick_sub_front', FC, TK - FC, iid, edging.kick_sub_front, cab.toekick_interior_edgeband_id)
 
   // Kick backs: +X along the edge, +Z inward. Backs butt each other (earlier edge runs through).
@@ -195,7 +239,7 @@ export function resolveShapedKick(
     if (ed.kind !== 'back') return
     const bd = board(KB, i, TI, false, j => edges[j].kind === 'back' && j < i)
     if (!bd) return
-    const { e, f, lo, hi } = bd
+    const { e, f, lo, hi, b0, b1 } = bd
     const ay = Math.atan2(-f.u.y, f.u.x) * D
     parts.push({
       part_key: 'kick_back', sort_order: sort++,
@@ -203,6 +247,8 @@ export function resolveShapedKick(
       X: e.p0.x + f.u.x * lo, Y: FC, Z: e.p0.y + f.u.y * lo,
       AX: 0, AY: Math.abs(ay) < 1e-9 ? 0 : ay, AZ: 0,
       material_id: iid, edge_band: edgeSidesToBanding(edging.kick_back, cab.toekick_interior_edgeband_id), is_detached: false,
+      // Local z = 0 is this board's OUTER face, so "inner face shorter" is negative here.
+      ...(b0 ? { bevel_lo: -b0 } : {}), ...(b1 ? { bevel_hi: -b1 } : {}),
     })
   })
 
@@ -250,7 +296,7 @@ export function resolveShapedKick(
 
   // End spreaders along every side edge of K (inward = +n).
   edges.forEach((ed, i) => {
-    if (ed.kind !== 'side') return
+    if (ed.kind !== 'side' || ed.none) return
     const e = kEdge(KB, i), f = edgeFrame(e)
     if (f.len < 1) return
     spreader(e.p0, f.u, f.n, KE, f.len / 2)
@@ -263,7 +309,7 @@ export function resolveShapedKick(
   const spacing = W / (qty + 1)
   for (let i = 1; i <= qty; i++) spreader({ x: kx0 + spacing * i - TI / 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, KI)
 
-  if (!parts.some(p => p.part_key === 'kick_front_face'))
+  if (!parts.some(p => p.part_key === 'kick_front_face') && !Object.keys(fp.kick_edges ?? {}).length)
     errors.push({ code: 'SHAPE_NO_KICK_FRONT', message: 'Shape has no front edge for a toe kick face', part: 'toekick' })
   return { parts, errors }
 }
