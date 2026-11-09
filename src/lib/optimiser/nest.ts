@@ -42,6 +42,9 @@ export interface SheetStock {
   trimTop: number; trimBottom: number; trimLeft: number; trimRight: number
   isOffcut: boolean
   label: string | null
+  // How many we have (Stage 3). Standard sheet: unset = no limit, 0 = offcuts only.
+  // Offcut: unset = 1. Parts that don't fit what's available come back unplaced.
+  qty?: number | null
   // Sheet axis the board's grain runs along. Absent = 'w': the grain runs with
   // the board's length (sheet_dx), which is laid along W / machine X.
   grainAlong?: 'w' | 'h'
@@ -81,8 +84,8 @@ export interface NestSettings {
   allowRotation: boolean
 }
 
-// Stock available per material group: unlimited standard sheets plus a finite
-// pool of offcuts (consumed first).
+// Stock available per material group: standard sheets (unlimited unless qty is
+// set) plus a finite pool of offcuts (consumed first).
 export interface GroupStock {
   standard: SheetStock
   offcuts: SheetStock[]
@@ -225,7 +228,8 @@ const fill = (o: OpenSheet) => o.area / (o.uW * o.uH)
 
 // Pack one ordered list of same-group parts. Offcuts are opened first.
 function packGroup(parts: NestPartInput[], stock: GroupStock, gap: number, allowRot: boolean, rule: Rule): { open: OpenSheet[]; unplaced: NestPartInput[] } {
-  const offcutQueue = [...stock.offcuts]
+  const offcutQueue = stock.offcuts.flatMap(o => Array.from({ length: Math.max(1, Math.floor(o.qty ?? 1)) }, () => ({ ...o })))
+  let fullLeft = stock.standard.qty == null ? Infinity : Math.max(0, Math.floor(stock.standard.qty))
   const open: OpenSheet[] = []
   const unplaced: NestPartInput[] = []
   for (const part of parts) {
@@ -237,8 +241,9 @@ function packGroup(parts: NestPartInput[], stock: GroupStock, gap: number, allow
     // small offcuts stay available for smaller parts.
     const idx = offcutQueue.findIndex(o => fitsEmpty(o, part, allowRot))
     const stk = idx >= 0 ? offcutQueue.splice(idx, 1)[0]
-      : fitsEmpty(stock.standard, part, allowRot) ? stock.standard : null
+      : fullLeft > 0 && fitsEmpty(stock.standard, part, allowRot) ? stock.standard : null
     if (!stk) { unplaced.push(part); continue }
+    if (stk === stock.standard) fullLeft--
     const o = makeOpen(stk, gap)
     open.push(o)
     tryPlace(o, part, allowRot, rule)

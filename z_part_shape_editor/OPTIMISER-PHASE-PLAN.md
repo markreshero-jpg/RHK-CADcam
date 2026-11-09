@@ -53,6 +53,10 @@
 - **Nester**: hand-written skyline rect packer, `src/lib/optimiser/nest.ts` (random-restart,
   offcut pool, grain lock, top-left mirror). "Arbitrary-polygon NFP packing is a future
   extension" — `nest.ts:11-13`.
+- **Stock Qty (Mark, 2026-11-09)**: Stage 3 has a Qty on the full sheet (blank = no limit,
+  0 = offcuts only) and on each offcut (default 1). Offcuts go first. Parts that don't fit
+  what's on hand come back unplaced and are listed in Stage 4. Qty is per run, not saved
+  as an inventory. Takeoff and headless runs don't set it, so stay unlimited.
 - **Drill sync timing (2026-10-26)**: the regeneration is DB-latency bound (~240ms a call;
   the resolve itself is ~1ms). `sheetDrills.syncDrillingForParts` resolves each cabinet ONCE
   for the seam + master/slave passes, seam does one delete + parallel inserts, 12 cabinets in

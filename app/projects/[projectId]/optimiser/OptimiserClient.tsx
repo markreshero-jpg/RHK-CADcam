@@ -780,7 +780,14 @@ function Stage3Settings() {
                     <button onClick={() => addOffcut(g.key, { ...seedStock(snap, g.materialId), w: 1200, h: 600, isOffcut: true, label: `Offcut ${gs.offcuts.length + 1}` })}
                       className="text-[11px] px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 transition-colors">+ Offcut</button>
                   </div>
-                  <div className="grid grid-cols-6 gap-3">
+                  <div className="grid grid-cols-7 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-ink-subtle uppercase tracking-wide mb-1">Qty</label>
+                      <input type="number" min={0} step={1} placeholder="No limit" title="How many full sheets you have. Blank = no limit, 0 = offcuts only."
+                        defaultValue={gs.standard.qty ?? ''} key={`qty${gs.standard.qty ?? ''}`}
+                        onBlur={e => { const n = parseInt(e.target.value, 10); setStock(g.key, { qty: Number.isFinite(n) && n >= 0 ? n : null }) }}
+                        className="w-full bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink font-mono focus:outline-none focus:border-accent placeholder:text-ink-subtle" />
+                    </div>
                     <MiniNum label="Sheet W" value={gs.standard.w} onChange={v => setStock(g.key, { w: v })} />
                     <MiniNum label="Sheet H" value={gs.standard.h} onChange={v => setStock(g.key, { h: v })} />
                     <MiniNum label="Trim T" value={gs.standard.trimTop} onChange={v => setStock(g.key, { trimTop: v })} />
@@ -793,6 +800,10 @@ function Stage3Settings() {
                       {gs.offcuts.map((o, i) => (
                         <div key={i} className="flex items-center gap-2 text-[11px]">
                           <span className="text-ink-subtle w-16">{o.label}</span>
+                          <span className="text-ink-subtle">Qty</span>
+                          <input type="number" min={1} step={1} defaultValue={o.qty ?? 1} key={`q${o.qty ?? 1}`}
+                            onBlur={e => { const n = parseInt(e.target.value, 10); setOffcut(g.key, i, { qty: Number.isFinite(n) && n >= 1 ? n : 1 }); if (!(n >= 1)) e.target.value = '1' }}
+                            className="w-14 bg-surface-2 border border-edge-strong rounded px-2 py-0.5 text-[11px] text-ink font-mono focus:outline-none focus:border-accent" />
                           <span className="text-ink-subtle">W</span>
                           <input type="number" step="any" defaultValue={o.w} key={`w${o.w}`}
                             onBlur={e => { const n = parseFloat(e.target.value); if (Number.isFinite(n) && n > 0) setOffcut(g.key, i, { w: n }) }}
@@ -993,7 +1004,7 @@ function Stage4Nesting() {
             ))}
             {nestResult.unplaced.length > 0 && (
               <p className="text-[11px] text-amber-500 mb-4">
-                {nestResult.unplaced.length} part(s) too large for any configured sheet/offcut: {[...new Set(nestResult.unplaced.map(u => u.label))].slice(0, 6).join(', ')}{nestResult.unplaced.length > 6 ? '…' : ''}
+                {nestResult.unplaced.length} part(s) didn't fit the sheets and offcuts available (too large, or the Qty in Stage 3 ran out):{[...new Set(nestResult.unplaced.map(u => u.label))].slice(0, 6).join(', ')}{nestResult.unplaced.length > 6 ? '…' : ''}
               </p>
             )}
             <div className="grid grid-cols-[repeat(auto-fill,minmax(230px,1fr))] gap-5">

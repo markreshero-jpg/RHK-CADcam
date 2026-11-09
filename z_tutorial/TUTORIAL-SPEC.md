@@ -119,6 +119,7 @@ orders by level / topic, not array position.
 | Intermediate › Production | Finger-pull rails and knock-in blocks | Read-only: joined rails in the optimiser cut list, blocks in 3D (`finger_rail_runs`) |
 | Advanced › Production | 6th face: two programs and a flip | Read-only in the optimiser: A/Z pair, run A, flip over the long edge, run Z, simulate |
 | Intermediate › Cabinets | Shelf pin holes closer to the front and back | Open · Hole setback · Room or job |
+| Intermediate › Production | Nest onto the sheets and offcuts you have | Open · Full sheets Qty · Offcuts Qty · If you run out |
 | Intermediate › Cabinets | Force a cabinet exactly where you want it | Move · Hold Ctrl as you drop it |
 
 ## Phases

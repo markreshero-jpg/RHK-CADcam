@@ -2033,6 +2033,22 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Attach plan (the paperclip, bottom left; a full-width button on the phone) draws this room from a plan PDF or a site sketch photo. Type any notes first, e.g. which page or wall.',
       canvas: true, done: c => c.inCanvas },
   ]},
+  { id: 'stock_qty', level: 'intermediate', topic: 'production', title: 'Nest onto the sheets and offcuts you have',
+    blurb: 'Tell the optimiser how many full sheets and how many of each offcut are on hand.',
+    keywords: 'qty quantity stock sheets offcuts offcut limit how many full sheet optimiser nest stage 3 settings', steps: [
+    { id: 'open', title: 'Open the optimiser',
+      body: 'Click Production in the menu bar and choose Generate CNC… Pick your parts and go to Stage 3, the settings.',
+      target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
+    { id: 'full', title: 'Full sheets',
+      body: 'Each board has a Qty box next to Sheet W. Type how many full sheets you have, e.g. 3. Leave it blank for no limit; 0 means use offcuts only.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'offcuts', title: 'Offcuts',
+      body: 'Click + Offcut, enter its W and H, and set its Qty if you have several the same size. Offcuts get used before full sheets.',
+      done: c => c.path.endsWith('/optimiser') },
+    { id: 'short', title: 'If you run out',
+      body: 'Run the nest. Anything that won\'t fit what you have shows in an orange note above the sheets, so you can see what\'s short. Add stock in Stage 3 and nest again.',
+      done: c => c.path.endsWith('/optimiser') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
