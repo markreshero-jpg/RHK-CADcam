@@ -70,3 +70,29 @@ describe('BACK_TYPE', () => {
     expect(rails[0].DX).toBe(120)
   })
 })
+
+// BKTOP (cabinet rule): back stops at a height, e.g. the top of a fixed shelf (RHK6586 Bed 1 TC-03).
+describe('BKTOP', () => {
+  const tall = (rules: Partial<ConstructionRules>): CabinetInput => ({ ...cab(rules, 'full_top'), assembly_class: 'tall', DY: 2200 })
+  const backOf = (rules: Partial<ConstructionRules>) => resolveCabinet(tall(rules)).case_parts.find(p => p.part_key === 'back')!
+  const top = (p: ReturnType<typeof backOf>) => p.Y + p.DZ + p.DX
+
+  it('unset or 0 keeps the full back', () => {
+    expect(top(backOf({}))).toBe(top(backOf({ BKTOP: 0 })))
+  })
+
+  it('stops the back at BKTOP; bottom, sides and top unchanged', () => {
+    const whole = resolveCabinet(tall({})).case_parts, cut = resolveCabinet(tall({ BKTOP: 1500 })).case_parts
+    const b = cut.find(p => p.part_key === 'back')!, wb = whole.find(p => p.part_key === 'back')!
+    expect(top(b)).toBe(1500)
+    expect(b.Y).toBe(wb.Y)
+    for (const k of ['left_side', 'right_side', 'bottom', 'full_top']) {
+      const [a, w] = [cut.find(p => p.part_key === k), whole.find(p => p.part_key === k)]
+      expect(a?.DX, k).toBe(w?.DX); expect(a?.DY, k).toBe(w?.DY); expect(a?.Y, k).toBe(w?.Y)
+    }
+  })
+
+  it('a BKTOP above the full back changes nothing', () => {
+    expect(backOf({ BKTOP: 5000 }).DX).toBe(backOf({}).DX)
+  })
+})

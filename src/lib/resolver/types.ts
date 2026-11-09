@@ -188,6 +188,9 @@ export interface ConstructionRules {
   // standing on edge, BKRH tall (e.g. an under-bench oven cabinet).
   BACK_TYPE: 'panel' | 'none' | 'rail'
   BKRH:      number   // back top rail height (BACK_TYPE 'rail')
+  // Cabinet layer only: the back panel stops this high (mm up from the cabinet
+  // bottom) instead of running to the top. 0 / unset = full height.
+  BKTOP?:    number
 
   // Internal — adjustable shelf
   ADJSB_F:  number   // adj shelf setback front

@@ -6,7 +6,7 @@ import { ConstructionRules, DEFAULT_RULES, EdgingDefaults, DEFAULT_EDGING, EdgeS
 // HANDLE_DRILL / DF_MARKER are job / room / cabinet switches (z_handles D13 / D22), not method rules;
 // FLOAT / UNDER_PANEL are cabinet-layer switches (z_floating), PANEL_PROFILE (panel door profile), TOERETL / TOERETR / TOEGRAIN too (kick returns + grain), BIFOLD* (z_bifold_slide), SLIDER* (z_slider_sc),
 // and NBRL / NBRR / REVSL / REVSR (face neighbour locks + side reveals, z_doorFace_module).
-export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'DF_MARKER' | 'FPRAIL' | 'RAILGRAIN' | 'FLOAT' | 'UNDER_PANEL' | 'PANEL_PROFILE' | 'TOERETL' | 'TOERETR' | 'TOEGRAIN' | 'BIFOLD' | 'BIFOLD_BOTTOM' | 'BIFOLD_CENTRE' | 'SLIDER' | 'SLIDER_STILE' | 'SLIDER_FINISH' | 'SLIDER_RAIL' | 'WALLZ' | 'NBRL' | 'NBRR' | 'REVSL' | 'REVSR'>
+export type RuleKey    = Exclude<keyof ConstructionRules, 'EDGING' | 'HANDLE_DRILL' | 'DF_MARKER' | 'FPRAIL' | 'RAILGRAIN' | 'FLOAT' | 'UNDER_PANEL' | 'PANEL_PROFILE' | 'TOERETL' | 'TOERETR' | 'TOEGRAIN' | 'BIFOLD' | 'BIFOLD_BOTTOM' | 'BIFOLD_CENTRE' | 'SLIDER' | 'SLIDER_STILE' | 'SLIDER_FINISH' | 'SLIDER_RAIL' | 'WALLZ' | 'BKTOP' | 'NBRL' | 'NBRR' | 'REVSL' | 'REVSR'>
 export type EdgingKey  = keyof Required<EdgingDefaults>
 
 export const RULE_LABELS: Record<RuleKey, string> = {

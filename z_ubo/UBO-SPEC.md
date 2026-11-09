@@ -75,6 +75,14 @@ the gables like the top rails. Cut list / nest / drilling / 3D / views pick it
 up through the normal case-part path. **Locked 2026-10-18: one rail, at the top
 only** (`BKRH` default 100, overridable).
 
+*Added 2026-11-10 (Mark, RHK6586 Bed 1 TC-03):* cabinet rule `BKTOP` (mm up
+from the cabinet bottom, 0 / unset = full height). The back panel stops there,
+e.g. at the top of a fixed shelf so a pipe zone above stays open. Sides, top,
+bottom are unchanged; the back/side seam holes follow the shorter back (vertical
+seam length = the back's height). Plain backs only (resolveCase), cabinet layer
+only (not in the job / room rule tables), no sidebar control yet — set in
+`rule_overrides`. Tests: `backType.test.ts` "BKTOP".
+
 *Built (U1):* rules `BACK_TYPE` ('panel' default) + `BKRH` (100). The rail is
 the existing `back_rail` part forced upright, `BKRH` tall — so joints, seams,
 drilling, 3D and labels ("Back Top Rail") already handle it; with a

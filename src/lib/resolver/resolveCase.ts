@@ -206,7 +206,11 @@ export function resolveCaseParts(
   // Cabinet3DView now uses p.DX directly as the rendered height of the back panel,
   // so compute it as (top face) − (bottom face in 3D).
   const backBottom3D = backY + backT     // 3D bottom face (p.Y + p.DZ)
-  const backTop3D    = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
+  // BKTOP (cabinet rule, mm up from the cabinet bottom): the back stops there
+  // instead, e.g. at the top of a fixed shelf to leave a pipe zone open above
+  // (Mark, RHK6586 Bed 1 TC-03, 2026-11-10). 0 / unset = full height.
+  const backTopFull  = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
+  const backTop3D    = r.BKTOP && r.BKTOP > 0 ? Math.min(backTopFull, r.BKTOP) : backTopFull
   const backDX       = backTop3D - backBottom3D
 
   if (hasBack) parts.push({
