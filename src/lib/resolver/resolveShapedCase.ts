@@ -41,6 +41,15 @@ const ANGLE_TOL = 0.5   // degrees — corners this close to 90° keep the squar
 const isPanelRole = (s: FootprintSegment) =>
   s.type === 'line' && (s.edge.role === 'side' || s.edge.role === 'back')
 
+/** A short end panel the top and bottom run past (FootprintEdge.captive). */
+const isCaptive = (s: FootprintSegment) => s.type === 'line' && s.edge.role === 'side' && !!s.edge.captive
+
+/** The cabinet's outer limits on any end whose panel is captive: horizontals run out to there. */
+function captiveGrow(cab: CabinetInput, r: Pick<ConstructionRules, 'SCRL' | 'SCRR'>, segs: FootprintSegment[]): { x0?: number; x1?: number } {
+  const on = (slot: 'left' | 'right') => segs.some(s => isCaptive(s) && boxSlot(cab, s) === slot)
+  return { ...(on('left') ? { x0: r.SCRL ?? 0 } : {}), ...(on('right') ? { x1: cab.DX - (r.SCRR ?? 0) } : {}) }
+}
+
 // ── Edge sub-types (z_cabinet_shape_edit E1) ────────────────────
 // What a panel edge builds, from its sub-type:
 //   finished   the panel in the exposed board + exposed tape, at that board's
@@ -530,6 +539,14 @@ export function shapeCaseParts(
       const h = cHi.boxed ? Math.min(boxHi, Math.max(pa, pb)) : Math.max(pa, pb)
       return [l, h - l]
     }
+    // A captive panel stands between the bottom and the top, which run past it.
+    const between = (): Partial<ResolvedCasePart> => {
+      const bot = byKey.get('bottom'), top = byKey.get('full_top')
+      if (!isCaptive(o) || !bot || !top) return {}
+      const y0 = bot.Y + bot.DZ
+      return { Y: y0, DY: top.Y - y0 }
+    }
+
     // A box part keeps its outer face where the box build put it (rules'
     // scribe), moved in by `off`, at the edge's thickness.
     if (isSideRole && vertical && Math.abs(o.p0.x) < NEAR && byKey.has('left_side') && !used.has('left_side')) {
@@ -537,7 +554,7 @@ export function shapeCaseParts(
       const p = byKey.get('left_side')!
       const [Z, DX] = span(p.Z, p.Z + p.DX, a.y, b.y)
       { const bp = { ...p, ...board(p) }
-        out.push({ ...bp, X: p.X + off, Z, DX, DZ: t, ...bevels(a.y <= b.y), ...seenTape(bp.edge_band, a.y <= b.y) }) }
+        out.push({ ...bp, X: p.X + off, Z, DX, DZ: t, ...bevels(a.y <= b.y), ...seenTape(bp.edge_band, a.y <= b.y), ...between() }) }
       appliedPanel(p, p.Y, p.DY)
       return
     }
@@ -546,7 +563,7 @@ export function shapeCaseParts(
       const p = byKey.get('right_side')!
       const [Z, DX] = span(p.Z, p.Z + p.DX, a.y, b.y)
       { const bp = { ...p, ...board(p) }
-        out.push({ ...bp, X: p.X + p.DZ - t - off, Z, DX, DZ: t, ...bevels(a.y <= b.y), ...seenTape(bp.edge_band, a.y <= b.y) }) }
+        out.push({ ...bp, X: p.X + p.DZ - t - off, Z, DX, DZ: t, ...bevels(a.y <= b.y), ...seenTape(bp.edge_band, a.y <= b.y), ...between() }) }
       appliedPanel(p, p.Y, p.DY)
       return
     }
@@ -588,7 +605,12 @@ export function shapeCaseParts(
   }
   // A box panel set in / thickened by its sub-type moves the parts that stopped at it.
   const shifts = boxFaceShifts(cab, r, segs)
+  // Captive end panels: the bottom and top run past them to the cabinet's end.
+  const capGrow = captiveGrow(cab, r, segs)
   const gr = (p: ResolvedCasePart) => shiftedGrow(p, shifts, grow)
+  const grRun = (p: ResolvedCasePart) => ({ ...gr(p), ...capGrow })
+  const runInset = (s: FootprintSegment) => (isCaptive(s) ? 0 : insetOf(cab, s))
+  const runInner = insetPolygon(shape.insetSegs, runInset)
   const mainFront = segs.find(s => s.type === 'line' && s.edge.role === 'front'
     && Math.abs(s.p0.y - cab.DZ) < NEAR && Math.abs(s.p1.y - cab.DZ) < NEAR)
 
@@ -598,17 +620,17 @@ export function shapeCaseParts(
       // Backs sitting on the bottom (BOTTOM_BACK_JOIN back_on_bottom, as the box)
       // need it to run under them to the outline (L3: back:bottom holes).
       const underBacks = r.BOTTOM_BACK_JOIN === 'back_on_bottom'
-        ? insetPolygon(shape.insetSegs, s => (s.edge.role !== 'back' ? insetOf(cab, s) : 0))
-        : inner
-      const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : underBacks, shape, gr(p))
+        ? insetPolygon(shape.insetSegs, s => (s.edge.role !== 'back' ? runInset(s) : 0))
+        : runInner
+      const c = clipHorizontal(p, r.BOTTOM_JOIN === 'bottom_outside' ? outline : underBacks, shape, grRun(p))
       if (c) out.push(c)
     } else if (k === 'full_top') {
       // A top sitting over the backs (TOP_BACK_JOIN sits_over_back, as the box)
       // runs over them to the outline, like the bottom under them.
       const overBacks = r.TOP_BACK_JOIN === 'sits_over_back'
-        ? insetPolygon(shape.insetSegs, s => (s.edge.role !== 'back' ? insetOf(cab, s) : 0))
-        : inner
-      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : overBacks, shape, gr(p))
+        ? insetPolygon(shape.insetSegs, s => (s.edge.role !== 'back' ? runInset(s) : 0))
+        : runInner
+      const c = clipHorizontal(p, r.RAIL_JOIN === 'on_top_of_sides' ? outline : overBacks, shape, grRun(p))
       if (c) out.push(c)
     } else if (k === 'front_rail') {
       if (!mainFront) continue
@@ -700,10 +722,13 @@ export function shapeShelves(cab: CabinetInput, r: ConstructionRules, parts: Res
     ...(!has('y', 0) ? { z0: 0 } : {}),
   }
   const shifts = boxFaceShifts(cab, r, shape.segs)
+  // Beside a captive panel the shelf runs on to the cabinet's end; the inset
+  // polygon notches it round the panel.
+  const capGrow = captiveGrow(cab, r, shape.segs)
   const out: ResolvedInternalPart[] = []
   for (const p of parts) {
     if (p.part_type !== 'adj_shelf' && p.part_type !== 'fixed_shelf') { out.push(p); continue }
-    const c = clipHorizontal(p, p.part_type === 'adj_shelf' ? adjInner : shape.inner, shape, shiftedGrow(p, shifts, grow))
+    const c = clipHorizontal(p, p.part_type === 'adj_shelf' ? adjInner : shape.inner, shape, { ...shiftedGrow(p, shifts, grow), ...capGrow })
     if (c) out.push(c)
   }
   return out

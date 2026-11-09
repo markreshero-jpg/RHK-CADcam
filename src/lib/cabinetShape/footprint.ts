@@ -82,6 +82,10 @@ export interface FootprintEdge {
   /** Toe kick frame (back, sub front, spreaders) set in this much further from
    *  this edge; the kick face still runs on to the edge. RHK6586 robe KICK 1. */
   kick_inset?: number
+  /** A short side panel on a box end (half-depth corner gable): the top and
+   *  bottom run past it to the end of the cabinet with the panel fitted between
+   *  them, and shelves run on beside it, notched round it. RHK6478 Master WIR. */
+  captive?: boolean
   /** A face filler strip on this front edge (z_angled_filler): one false panel
    *  whose front face is exactly `width` wide, with a return cleat `cleat` deep
    *  at its end against a side edge when the cabinet has no carcass. */
