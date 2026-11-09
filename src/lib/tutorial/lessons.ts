@@ -2083,6 +2083,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Press Enter to finish, then check the kick in 3D and on the Parts tab. Cancel in the panel puts the shape back as it was.',
       canvas: true, done: c => c.mode === 'select' },
   ]},
+
+  // Appended 2026-11-10 (3D measure tool in the cabinet edit modal).
+  { id: 'cab_measure', level: 'basics', topic: 'cabinets', title: 'Measure inside a cabinet in 3D',
+    blurb: 'Measure between any two faces of a cabinet’s parts in the edit modal’s 3D view.',
+    keywords: 'measure measuring tape distance gap face plane 3D cabinet edit modal internal shelf drawer clearance', steps: [
+    { id: 'on', title: 'Turn on Measure',
+      body: 'Double-click a cabinet to open it and go to 3D. Press 📏 Measure (bottom right). Clicks now pick faces instead of parts.',
+      canvas: true, done: (c, s) => ev(c, 'cab_measure') > ev(s, 'cab_measure') },
+    { id: 'measure', title: 'Click two faces',
+      body: 'Hover a face (it tints blue) and click it, then click a second face. Parallel faces give the square gap between them, like shelf to shelf or side to side. Faces at an angle give point to point with W, D and H. Open the doors or drawers or use Explode to reach inside.',
+      canvas: true, done: (c, s) => ev(c, 'cab_measure_done') > ev(s, 'cab_measure_done') },
+    { id: 'done', title: 'Clear or finish',
+      body: 'A third click starts a new measure and right-click clears it. Dragging still turns the cabinet. Done (or Esc) goes back to picking parts.',
+      canvas: true, done: (c, s) => ev(c, 'cab_measure') >= ev(s, 'cab_measure') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

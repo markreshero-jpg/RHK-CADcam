@@ -42,6 +42,7 @@ import { toggleFlushEnds } from '@/src/lib/cabinetShape/junctions'
 import { seatNudge, cupAcrossOffset } from '@/src/lib/hingeSilhouette'
 import type { ResolvedSlideDrill } from '@/src/lib/resolver/types'
 import PartEdgeJoints from './PartEdgeJoints'
+import Measure3D from './Measure3D'
 import { SlideModel } from '@/src/components/three/SlideModel'
 import { HingeModel } from '@/src/components/three/HingeModel'
 import { FixtureModel, FixtureOutline } from '@/src/components/three/FixtureModel'
@@ -2132,6 +2133,7 @@ export default function Cabinet3DView({
   }, [onDeletePart])
 
   function handleSelect(info: PartMeta | null) {
+    if (measuring) return
     if (info !== null) { didHitPartRef.current = true; hitHardwareRef.current = isHardwarePartId(info.id) && !info.id.includes('slide_') }
     setSelectedPart(info)
     if (onPartSelect && info) {
@@ -2182,6 +2184,25 @@ export default function Cabinet3DView({
     return selectedPart && bandable(selectedPart) ? { partId: selectedPart.id, onToggle } : null
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedPart, ebPaint])
+  // Measure tool (same face-to-face tool as the room 3D view). While it's on,
+  // clicks pick faces instead of parts and right-click clears the measurement.
+  const [measuring, setMeasuring] = useState(false)
+  function toggleMeasuring() {
+    setMeasuring(m => {
+      if (!m) { setEbPaint(null); setSelectedPart(null); setEditMenu(null); useTutorial.getState().emit('cab_measure') }
+      return !m
+    })
+  }
+  useEffect(() => {
+    if (!measuring) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return
+      e.preventDefault(); e.stopImmediatePropagation(); setMeasuring(false)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [measuring])
+
   // Escape leaves the paint mode before it closes the modal.
   useEffect(() => {
     if (!ebPaint) return
@@ -2232,6 +2253,7 @@ export default function Cabinet3DView({
 
   function handleCanvasContextMenu(e: React.MouseEvent) {
     e.preventDefault()
+    if (measuring) { didHitPartRef.current = false; return }   // Measure3D clears on right-click
     if (didHitPartRef.current) {
       // A part was right-clicked (and just selected via contextMenuSelect). Offer
       // the Part Editor at the cursor when the host supports it.
@@ -2349,10 +2371,18 @@ export default function Cabinet3DView({
       enablePan
       onDeselect={() => setSelectedPart(null)}
       onContextMenu={handleCanvasContextMenu}
-      hint={ebPaint ? 'Edge banding: click an edge to paint it (cyan = taped, rose = bare) · Shift+click = all four edges of that part · Esc or Done to finish · Left-drag rotate'
+      hint={measuring ? 'Measure: hover a face · click it · click a second face · right-click clear · drag still orbits · Esc or Done to exit'
+        : ebPaint ? 'Edge banding: click an edge to paint it (cyan = taped, rose = bare) · Shift+click = all four edges of that part · Esc or Done to finish · Left-drag rotate'
         : selectedPart && edgeEdit ? "Click the picked part's edges to tape (cyan) or untape (rose) · right-click another part to pick it · Left-drag rotate" : "Left-drag rotate · scroll zoom · Ctrl fast · Shift fine · right-click part to inspect"}
       overlay={
         <>
+          {measuring && (
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-gray-900/90 border border-gray-700 rounded px-2 py-1 text-[11px] pointer-events-auto select-none">
+              <span className="text-gray-300">📏 Measure: click two faces</span>
+              <button onClick={() => setMeasuring(false)}
+                className="px-2 py-0.5 rounded border border-orange-500 text-orange-300 hover:bg-orange-600 hover:text-white">Done</button>
+            </div>
+          )}
           {ebPaint && (
             <div className="absolute top-2 left-1/2 -translate-x-1/2 flex items-center gap-1 bg-gray-900/90 border border-gray-700 rounded px-2 py-1 text-[11px] pointer-events-auto select-none"
               data-eb-paint>
@@ -2451,7 +2481,16 @@ export default function Cabinet3DView({
                 className="w-24 accent-orange-600 cursor-pointer" />
             </label>
             <button
-              onClick={() => setEbPaint(m => (m ? null : 'toggle'))}
+              onClick={toggleMeasuring}
+              title="Measure between two faces of the cabinet's parts"
+              className={`text-[11px] font-mono rounded px-2 py-1 transition-colors pointer-events-auto select-none border ${measuring
+                ? 'text-white bg-amber-600 border-amber-500 hover:bg-amber-500'
+                : 'text-amber-800 hover:text-amber-700 bg-white/70 hover:bg-white/90 border-amber-400 hover:border-amber-500'}`}
+            >
+              {measuring ? 'Done measuring' : '📏 Measure'}
+            </button>
+            <button
+              onClick={() => { setMeasuring(false); setEbPaint(m => (m ? null : 'toggle')) }}
               className={`text-[11px] font-mono rounded px-2 py-1 transition-colors pointer-events-auto select-none border ${ebPaint
                 ? 'text-white bg-cyan-600 border-cyan-500 hover:bg-cyan-500'
                 : 'text-cyan-800 hover:text-cyan-700 bg-white/70 hover:bg-white/90 border-cyan-400 hover:border-cyan-500'}`}
@@ -2508,6 +2547,7 @@ export default function Cabinet3DView({
           <meshStandardMaterial color="#ddd3bb" roughness={0.7} />
         </mesh>
       )}
+      {measuring && <Measure3D axes={['W', 'D', 'H']} onMeasured={() => useTutorial.getState().emit('cab_measure_done')} />}
       {/* Linked fixtures (z_ubo U5), in cabinet space like CabinetScene's root group. */}
       {!!fixtures?.length && (
         <group position={[-dx / 2, -dy / 2, -dz / 2]}>

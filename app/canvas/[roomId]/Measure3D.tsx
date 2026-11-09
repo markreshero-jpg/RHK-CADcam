@@ -12,6 +12,8 @@
 // layer set draws can be measured (hidden parts aren't in the scene). The overlay
 // is a transient tool, like the 2D measure tools — not a layer-registry item.
 // Mounted only while the tool is on; unmounting drops the measurement.
+// Also used by the cabinet edit modal's 3D view (Cabinet3DView), in cabinet
+// space (x = width, y = height, z = depth) — `axes` relabels the components.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useThree } from '@react-three/fiber'
@@ -42,7 +44,12 @@ function pickable(o: Object3D): boolean {
   return mats.some(mt => mt.visible !== false && !(mt.transparent && mt.opacity <= 0.02))
 }
 
-export default function Measure3D() {
+export default function Measure3D({ axes = ['X', 'Y', 'H'], onMeasured }: {
+  /** Labels for the point-to-point components: [x, z, y] world axes. */
+  axes?: [string, string, string]
+  /** Fires when a second face is locked (a measurement is complete). */
+  onMeasured?: () => void
+} = {}) {
   const get = useThree(s => s.get)
   const gl  = useThree(s => s.gl)
   const [hover, setHover] = useState<Pick | null>(null)
@@ -128,6 +135,9 @@ export default function Measure3D() {
   }, [gl, get, ray, ndc, nm])
 
   const { a, b } = picks
+  const onMeasuredRef = useRef(onMeasured)
+  onMeasuredRef.current = onMeasured
+  useEffect(() => { if (b) onMeasuredRef.current?.() }, [b])
   const target = b ?? (a ? hover : null)
   const m = a && target && target.key !== a.key ? measurePlanes(a, target) : null
   const showHover = hover && hover.key !== a?.key && hover.key !== b?.key
@@ -137,7 +147,7 @@ export default function Measure3D() {
       {showHover && <FaceTint tris={hover.tris} color={HOVER} opacity={0.35} />}
       {a && <FaceTint tris={a.tris} color={PICKED} opacity={0.45} />}
       {b && <FaceTint tris={b.tris} color={PICKED} opacity={0.45} />}
-      {m && <Dimension m={m} live={!b} />}
+      {m && <Dimension m={m} live={!b} axes={axes} />}
     </group>
   )
 }
@@ -167,7 +177,7 @@ function Dot({ at }: { at: PlaneMeasure['to'] }) {
   )
 }
 
-function Dimension({ m, live }: { m: PlaneMeasure; live: boolean }) {
+function Dimension({ m, live, axes }: { m: PlaneMeasure; live: boolean; axes: [string, string, string] }) {
   const mid = m.from.clone().add(m.to).multiplyScalar(0.5)
   return (
     <>
@@ -186,7 +196,7 @@ function Dimension({ m, live }: { m: PlaneMeasure; live: boolean }) {
           <div className="text-[10px] text-gray-300">
             {m.kind === 'parallel'
               ? 'square gap between faces'
-              : `faces at ${Math.round(m.angleDeg)}° · point to point · X ${fmtMm(m.dx)} · Y ${fmtMm(m.dy)} · H ${fmtMm(m.dz)}`}
+              : `faces at ${Math.round(m.angleDeg)}° · point to point · ${axes[0]} ${fmtMm(m.dx)} · ${axes[1]} ${fmtMm(m.dy)} · ${axes[2]} ${fmtMm(m.dz)}`}
           </div>
         </div>
       </Html>
