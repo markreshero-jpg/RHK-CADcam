@@ -10,9 +10,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import { handOpMarkers, type CabinetOpMarker, type CustomPartGeom, type HandOpRow, type Pt } from '@/src/lib/optimiser/partOpProject'
+import { Matrix4, Quaternion, Vector3 } from 'three'
+import { handOpMarkers, grooveAxisAligned, type CabinetOpMarker, type CustomPartGeom, type HandOpRow, type Pt } from '@/src/lib/optimiser/partOpProject'
 
-const COLS = 'id,source_part_key,operation_type,pos_x,pos_y,diameter,width,length,size_dx,size_dy,size_dz,depth,pos_z,plane_kind,repeat_count,repeat_spacing,repeat_axis,parameters,angle_az'
+const COLS = 'id,source_part_key,operation_type,pos_x,pos_y,diameter,width,length,size_dx,size_dy,size_dz,depth,pos_z,plane_kind,repeat_count,repeat_spacing,repeat_axis,parameters,angle_az,offset_left_mm,offset_right_mm,offset_top_mm,offset_bottom_mm'
 const HAND_COLOR = '#f97316'   // orange — distinct from the resolver's drilling markers
 
 // Load hand ops for one cabinet → cabinet-space markers. Empty until rp is ready.
@@ -96,6 +97,25 @@ function aabb(pts: Pt[], normal: 'x' | 'y' | 'z', radius: number, depth: number,
   return { pos, size: [sx, sy, sz] as [number, number, number] }
 }
 
+// Oriented box for a groove: x along the groove (length + the cutter's round ends),
+// y along the face normal (the depth, half inward), z across (the slot width).
+function grooveBox(m: Extract<CabinetOpMarker, { kind: 'groove' }>) {
+  const [a, b] = m.ends
+  const along = new Vector3(b.x - a.x, b.y - a.y, b.z - a.z)
+  const len = along.length()
+  const n = new Vector3(m.normal === 'x' ? 1 : 0, m.normal === 'y' ? 1 : 0, m.normal === 'z' ? 1 : 0)
+  // A zero-length groove: any direction in the face.
+  const u = len > 1e-6 ? along.clone().divideScalar(len) : new Vector3(m.normal === 'x' ? 0 : 1, m.normal === 'x' ? 1 : 0, 0)
+  const w = new Vector3().crossVectors(u, n)
+  const quat = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(u, n, w))
+  const mid = new Vector3((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2).addScaledVector(n, m.dir * m.depth / 2)
+  return {
+    pos: [mid.x, mid.y, mid.z] as [number, number, number],
+    quat,
+    size: [len + 2 * m.radius, m.depth, Math.max(2 * m.radius, 2)] as [number, number, number],
+  }
+}
+
 export function HandOpMarkers3D({ markers, color = HAND_COLOR, csgPartKeys }: { markers: CabinetOpMarker[]; color?: string; csgPartKeys?: Set<string> }) {
   return (
     <group>
@@ -104,7 +124,18 @@ export function HandOpMarkers3D({ markers, color = HAND_COLOR, csgPartKeys }: { 
         // the overlay marker so they aren't double-drawn.
         if (m.kind === 'area' && csgPartKeys?.has(m.partKey)) return null
         // Fronts cut their grooves too (Cabinet3DView pocketsByPart).
-        if (m.kind === 'groove' && m.partKey.startsWith('zone_') && csgPartKeys?.has(m.partKey)) return null
+        if (m.kind === 'groove' && m.partKey.startsWith('zone_') && csgPartKeys?.has(m.partKey) && grooveAxisAligned(m)) return null
+        if (m.kind === 'groove') {
+          // A slot turned along its own line — any angle in the face (an axis box around
+          // the two ends drew a 45 groove as a big square, RHK6586 WC-10 LED).
+          const g = grooveBox(m)
+          return (
+            <mesh key={m.id} position={g.pos} quaternion={g.quat}>
+              <boxGeometry args={g.size} />
+              <meshStandardMaterial color={color} transparent opacity={0.55} />
+            </mesh>
+          )
+        }
         if (m.kind === 'drill') {
           const rot: [number, number, number] = m.normal === 'x' ? [0, 0, Math.PI / 2] : m.normal === 'z' ? [Math.PI / 2, 0, 0] : [0, 0, 0]
           const off = (h: Pt): [number, number, number] => m.normal === 'x'
@@ -118,9 +149,7 @@ export function HandOpMarkers3D({ markers, color = HAND_COLOR, csgPartKeys }: { 
             </mesh>
           ))
         }
-        const pts = m.kind === 'groove' ? m.ends : m.corners
-        const radius = m.kind === 'groove' ? m.radius : 0
-        const box = aabb(pts, m.normal, radius, m.depth, m.dir)
+        const box = aabb(m.corners, m.normal, 0, m.depth, m.dir)
         return (
           <mesh key={m.id} position={box.pos}>
             <boxGeometry args={box.size} />

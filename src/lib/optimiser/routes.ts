@@ -141,7 +141,7 @@ const routeDepth = (op: RouteOpRaw) => op.depth ?? op.size_dz ?? 0
 // size_dx/size_dy centred on pos_x/pos_y, else an offset-from-edges box using the
 // part's finished footprint (u = part.w, v = part.h). Returns null when neither is
 // defined (a positionless / in-progress op).
-function areaRect(op: RouteOpRaw, part: PartRef): { x: number; y: number; w: number; h: number } | null {
+function areaRect(op: Pick<RouteGeom, 'pos_x' | 'pos_y' | 'size_dx' | 'size_dy' | 'offset_left_mm' | 'offset_right_mm' | 'offset_top_mm' | 'offset_bottom_mm'>, part: { w: number; h: number }): { x: number; y: number; w: number; h: number } | null {
   const px = op.pos_x ?? 0, py = op.pos_y ?? 0
   if (op.size_dx != null && op.size_dy != null) {
     return { x: px - op.size_dx / 2, y: py - op.size_dy / 2, w: op.size_dx, h: op.size_dy }
@@ -151,6 +151,29 @@ function areaRect(op: RouteOpRaw, part: PartRef): { x: number; y: number; w: num
     return { x: l, y: b, w: Math.max(0, part.w - l - rt), h: Math.max(0, part.h - t - b) }
   }
   return null
+}
+
+/** An op's part-local geometry (origin bottom-left, x along pos_x / u, y along pos_y / v):
+ *  a groove's centreline (from pos, `length` at `angle_az`) or an area op's rectangle.
+ *  The ONE place this is worked out — the CNC (buildSheetRoutes) and the cabinet views
+ *  (partOpProject.handOpMarkers) both call it, so what's drawn is what's cut (RHK6586
+ *  WC-10 LED: views drew grooves along pos_x whatever their angle). */
+export type OpPartGeom =
+  | { kind: 'groove'; x1: number; y1: number; x2: number; y2: number }
+  | { kind: 'area'; x: number; y: number; w: number; h: number }
+export function opPartGeom(
+  op: Pick<RouteGeom, 'operation_type' | 'pos_x' | 'pos_y' | 'length' | 'angle_az' | 'size_dx' | 'size_dy' | 'offset_left_mm' | 'offset_right_mm' | 'offset_top_mm' | 'offset_bottom_mm'>,
+  part: { w: number; h: number },
+): OpPartGeom | null {
+  if (op.operation_type === 'groove') {
+    const len = op.length ?? 0
+    if (!(len > 0)) return null
+    const px = op.pos_x ?? 0, py = op.pos_y ?? 0
+    const t = ((op.angle_az ?? 0) * Math.PI) / 180
+    return { kind: 'groove', x1: px, y1: py, x2: px + len * Math.cos(t), y2: py + len * Math.sin(t) }
+  }
+  const r = areaRect(op, part)
+  return r && r.w > 0 && r.h > 0 ? { kind: 'area', ...r } : null
 }
 
 export function buildSheetRoutes(
@@ -176,12 +199,11 @@ export function buildSheetRoutes(
       const map = (ox: number, oy: number) => toSheet((down ? part.w - ox : ox) - sx, oy - sy, pl)
       const prog = twoSided ? { program: down && depth < thickness - 1e-6 ? 'Z' as const : 'A' as const } : {}
 
-      if (op.operation_type === 'groove') {
-        const len = op.length ?? 0, w = Math.max(op.width ?? op.toolDiameter, 0.5)
-        if (!(len > 0)) continue
-        const px = op.pos_x ?? 0, py = op.pos_y ?? 0
-        const t = ((op.angle_az ?? 0) * Math.PI) / 180
-        const a = map(px, py), b = map(px + len * Math.cos(t), py + len * Math.sin(t))
+      const g = opPartGeom(op, part)
+      if (!g) continue
+      if (g.kind === 'groove') {
+        const w = Math.max(op.width ?? op.toolDiameter, 0.5)
+        const a = map(g.x1, g.y1), b = map(g.x2, g.y2)
         out.push({
           kind: 'groove', label: pl.label, x1: a.x, y1: a.y, x2: b.x, y2: b.y,
           width: w, depth, toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
@@ -192,8 +214,7 @@ export function buildSheetRoutes(
 
       // Area op (route). Rect corners → sheet; a 90° placement keeps it axis-aligned,
       // so the sheet-space bbox of the mapped corners is the placed rectangle.
-      const r = areaRect(op, part)
-      if (!r || !(r.w > 0) || !(r.h > 0)) continue
+      const r = g
       const c0 = map(r.x, r.y), c1 = map(r.x + r.w, r.y + r.h)
       const x = Math.min(c0.x, c1.x), y = Math.min(c0.y, c1.y)
       out.push({

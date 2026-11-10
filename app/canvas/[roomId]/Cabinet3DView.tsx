@@ -55,7 +55,7 @@ import { casePartItem, kickPartItem, internalPartItem, faceZoneItem, drawerBoxPa
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { PartAlpha, NO_ROTATION, EdgeEditContext } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
-import { areaSubtraction, grooveSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
+import { areaSubtraction, grooveSubtraction, grooveAxisAligned, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import { handleShape, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
@@ -1531,7 +1531,7 @@ export function CabinetScene({
     const m = new Map<string, { center: [number, number, number]; size: [number, number, number] }[]>()
     for (const mk of handMarkers) {
       const cut = mk.kind === 'area' ? areaSubtraction(mk)
-        : mk.kind === 'groove' && mk.partKey.startsWith('zone_') ? grooveSubtraction(mk) : null
+        : mk.kind === 'groove' && mk.partKey.startsWith('zone_') && grooveAxisAligned(mk) ? grooveSubtraction(mk) : null
       if (!cut) continue
       const arr = m.get(mk.partKey) ?? []
       arr.push(cut)

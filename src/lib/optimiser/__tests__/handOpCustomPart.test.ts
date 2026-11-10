@@ -40,6 +40,18 @@ describe('hand ops on custom parts', () => {
     expect(ends(315)).toEqual([[34.25, 100], [175.67, -41.42]])
   })
 
+  // Views and CNC share routes.opPartGeom: an area set by its edges (no size) draws too.
+  it('area op set by edge offsets uses the part size, like the CNC', () => {
+    const edges: HandOpRow = { ...route, id: 'e1', size_dx: null, size_dy: null, pos_x: null, pos_y: null,
+      offset_left_mm: 25, offset_right_mm: 268.5, offset_bottom_mm: 10, offset_top_mm: 10 }
+    const [m] = handOpMarkers(rp, [edges], [under])
+    expect(m?.kind).toBe('area')
+    if (m?.kind !== 'area') return
+    const zs = m.corners.map(c => c.z), xs = m.corners.map(c => c.x)
+    expect([Math.min(...zs), Math.max(...zs)]).toEqual([25, 43.5])     // 25 off the back, 18.5 wide
+    expect([Math.min(...xs), Math.max(...xs)]).toEqual([10, 690])
+  })
+
   it('falls back to rp.custom_parts, and skips a missing part', () => {
     expect(handOpMarkers({ ...rp, custom_parts: [under] } as unknown as ResolvedCabinet, [route])).toHaveLength(1)
     expect(handOpMarkers(rp, [route], [])).toHaveLength(0)

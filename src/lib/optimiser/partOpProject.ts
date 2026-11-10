@@ -17,6 +17,7 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { caseFrame, zoneFrame, intFrame, type FootprintFrame, type Axis } from './partFootprint'
 import { caseBox } from '@/src/lib/jointDrilling'
 import { customExtents, type CustomOrient } from '@/src/lib/customPartBox'
+import { opPartGeom } from './routes'
 
 // The custom-part fields the projection needs (cabinet_custom_parts row or
 // rp.custom_parts): min corner x/y/z in cabinet space + intrinsic dims.
@@ -44,6 +45,11 @@ export interface HandOpRow {
   parameters: Record<string, unknown> | null
   /** Groove direction in the face, degrees from +pos_x (90 = along pos_y), as the CNC reads it. */
   angle_az?: number | null
+  // Area op set by its edges instead of a centred size (routes.areaRect).
+  offset_left_mm?: number | null
+  offset_right_mm?: number | null
+  offset_top_mm?: number | null
+  offset_bottom_mm?: number | null
 }
 
 export type Pt = { x: number; y: number; z: number }
@@ -156,11 +162,12 @@ function toCabinet(frame: FootprintFrame, nCoord: number, px: number, py: number
 
 export function handOpMarkers(rp: ResolvedCabinet, ops: HandOpRow[], customParts?: CustomPartGeom[]): CabinetOpMarker[] {
   const out: CabinetOpMarker[] = []
+  const skipped: { op: HandOpRow; why: string }[] = []
   for (const op of ops) {
     if (op.parameters?.generated) continue          // resolver already draws these
-    if (!op.source_part_key) continue
+    if (!op.source_part_key) { skipped.push({ op, why: 'no part key' }); continue }
     const ff = frameFor(rp, op.source_part_key, customParts)
-    if (!ff) continue
+    if (!ff) { skipped.push({ op, why: 'part not found in this cabinet' }); continue }
     const { frame, nMid, halfThick } = ff
     const px = op.pos_x ?? 0, py = op.pos_y ?? 0
 
@@ -182,26 +189,38 @@ export function handOpMarkers(rp: ResolvedCabinet, ops: HandOpRow[], customParts
         holes.push(toCabinet(frame, nStart, px + (along ? step * i : 0), py + (along ? 0 : step * i)))
       }
       out.push({ id: op.id, partKey: op.source_part_key, kind: 'drill', normal: frame.normal, radius: Math.max((op.diameter ?? 5) / 2, 0.5), depth, dir, holes })
-    } else if (op.operation_type === 'groove') {
-      // Same direction as the CNC (routes.ts): angle_az from +pos_x. It was drawn along
-      // pos_x whatever the angle (RHK6586 WC-10 LED grooves along the wall showed front to back).
-      const len = op.length ?? 0, t = ((op.angle_az ?? 0) * Math.PI) / 180
-      out.push({
-        id: op.id, partKey: op.source_part_key, kind: 'groove', normal: frame.normal, radius: Math.max((op.width ?? 4) / 2, 0.5), depth, dir,
-        ends: [toCabinet(frame, nStart, px, py), toCabinet(frame, nStart, px + len * Math.cos(t), py + len * Math.sin(t))],
-      })
     } else {
-      const w = op.size_dx ?? 0, h = op.size_dy ?? 0
-      out.push({
-        id: op.id, partKey: op.source_part_key, kind: 'area', normal: frame.normal, depth, dir,
-        corners: [
-          toCabinet(frame, nStart, px - w / 2, py - h / 2),
-          toCabinet(frame, nStart, px + w / 2, py - h / 2),
-          toCabinet(frame, nStart, px + w / 2, py + h / 2),
-          toCabinet(frame, nStart, px - w / 2, py + h / 2),
-        ],
-      })
+      // Grooves + area ops: the CNC's own part-local geometry (routes.opPartGeom), so a
+      // view can't draw something different from what's cut (angles, edge offsets).
+      const g = opPartGeom({ ...op, angle_az: op.angle_az ?? null, offset_left_mm: op.offset_left_mm ?? null, offset_right_mm: op.offset_right_mm ?? null,
+        offset_top_mm: op.offset_top_mm ?? null, offset_bottom_mm: op.offset_bottom_mm ?? null }, { w: frame.u.extent, h: frame.v.extent })
+      if (!g) { skipped.push({ op, why: 'no size / length' }); continue }
+      if (g.kind === 'groove') {
+        out.push({
+          id: op.id, partKey: op.source_part_key, kind: 'groove', normal: frame.normal, radius: Math.max((op.width ?? 4) / 2, 0.5), depth, dir,
+          ends: [toCabinet(frame, nStart, g.x1, g.y1), toCabinet(frame, nStart, g.x2, g.y2)],
+        })
+      } else {
+        out.push({
+          id: op.id, partKey: op.source_part_key, kind: 'area', normal: frame.normal, depth, dir,
+          corners: [
+            toCabinet(frame, nStart, g.x, g.y),
+            toCabinet(frame, nStart, g.x + g.w, g.y),
+            toCabinet(frame, nStart, g.x + g.w, g.y + g.h),
+            toCabinet(frame, nStart, g.x, g.y + g.h),
+          ],
+        })
+      }
     }
   }
+  // Never drop an op silently: a route the views can't place was how the RHK6586
+  // lounge LED (part key without its case_ prefix) went missing unnoticed.
+  if (skipped.length) console.warn('[handOpMarkers] hand ops not drawn:', skipped.map(s => `${s.op.source_part_key} ${s.op.operation_type} (${s.why})`).join('; '))
   return out
+}
+
+/** A groove that runs along one of the cabinet's axes (a CSG box can cut it). */
+export function grooveAxisAligned(m: Extract<CabinetOpMarker, { kind: 'groove' }>): boolean {
+  const moves = (['x', 'y', 'z'] as const).filter(a => Math.abs(m.ends[1][a] - m.ends[0][a]) > 0.01)
+  return moves.length <= 1
 }
