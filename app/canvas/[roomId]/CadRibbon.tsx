@@ -502,6 +502,13 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
                 options={[{ id: '3pt', label: '3-point' }, { id: 'centre', label: 'Centre, start, end' }, { id: 'ends', label: 'Ends + radius' }]} />
             </Group>
           )}
+          {cad.tool === 'sketch' && (
+            <Group label="Sketch">
+              <Pick title="As drawn keeps every wiggle (handwriting, markup). Tidy thins the stroke so near-straight runs come out straight."
+                value={cad.sketchMode} onChange={v => cad.setSketchMode(v)}
+                options={[{ id: 'raw', label: 'As drawn' }, { id: 'tidy', label: 'Tidy' }]} />
+            </Group>
+          )}
           {kind === 'cloud' && (
             <Group label="Cloud">
               <Pick title="How the Cloud tool draws: a rectangle (two corners) or freehand (click each corner)"

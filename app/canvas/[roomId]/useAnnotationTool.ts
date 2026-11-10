@@ -29,6 +29,8 @@ import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 import type { LiveMeasure } from './CadMeasureOverlay'
 
+/** SK2: Sketch keeps the stroke as drawn ('raw', for handwriting) or thins it ('tidy'). */
+export type SketchMode = 'raw' | 'tidy'
 export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'sketch' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset' | 'fillet' | 'chamfer' | 'join'
 
 /** How the Arc tool draws (B3): start / through / end, centre / start / end, or two ends + radius. */
@@ -288,6 +290,16 @@ export function useAnnotationTool({
   const [centreFocusReq, setCentreFocusReq] = useState<{ n: number; id: string; t: number } | null>(null)
   // Cloud tool: drag / click-click a rectangle, or click the corners of a freehand one.
   const [cloudMode, setCloudMode] = useState<'rect' | 'free'>('rect')
+  // SK2: Sketch keeps the stroke as drawn (handwriting) or tidies it (thins near-straight
+  // runs). Remembered per browser; a ref so the drag handlers read the live value.
+  const [sketchMode, setSketchModeState] = useState<SketchMode>(() => {
+    try { return localStorage.getItem('cad.sketchMode') === 'tidy' ? 'tidy' : 'raw' } catch { return 'raw' }
+  })
+  const sketchModeRef = useRef(sketchMode)
+  const setSketchMode = useCallback((m: SketchMode) => {
+    sketchModeRef.current = m; setSketchModeState(m)
+    try { localStorage.setItem('cad.sketchMode', m) } catch { /* private mode */ }
+  }, [])
   // Click-click placement (B1): first click armed the shape, the next click finishes it.
   const [pending, setPending] = useState<{ tool: PlaceTool; start: Pt; cur: Pt } | null>(null)
   const pendingRef = useRef(pending)
@@ -1052,9 +1064,17 @@ export function useAnnotationTool({
       if (!cur) return
       const far = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) >= DRAG_PX
       if (cur.kind === 'sketch') {
-        const p = toFrame(ev, false), last = cur.pts[cur.pts.length - 1]
-        if (Math.hypot(p.x - last.x, p.y - last.y) * zoom * frame.s < 1.5) return   // ~1.5 screen px apart
-        const next = { kind: 'sketch' as const, pts: [...cur.pts, p] }
+        // SK2: every sample the pen / mouse sent since the last frame (the browser batches
+        // them to ~60 a second, which turned quick handwriting into straight chords).
+        const evs = (typeof ev.getCoalescedEvents === 'function' ? ev.getCoalescedEvents() : []) as PointerEvent[]
+        const gap = sketchModeRef.current === 'tidy' ? 1.5 : 0.5   // screen px between kept points
+        const pts = [...cur.pts]
+        for (const e of evs.length ? evs : [ev]) {
+          const p = toFrame(e, false), last = pts[pts.length - 1]
+          if (Math.hypot(p.x - last.x, p.y - last.y) * zoom * frame.s >= gap) pts.push(p)
+        }
+        if (pts.length === cur.pts.length) return
+        const next = { kind: 'sketch' as const, pts }
         dragRef.current = next; setDrag(next)
         return
       }
@@ -1206,11 +1226,13 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
-      if (cur.kind === 'sketch') {   // SK1: thin to ~0.5 screen px and save as a freehand line
+      if (cur.kind === 'sketch') {   // SK1: thin and save as a freehand line
         const px = 1 / (zoom * frame.s)
         const end = toFrame(ev, false)
         const raw = Math.hypot(end.x - cur.pts[cur.pts.length - 1].x, end.y - cur.pts[cur.pts.length - 1].y) > 0 ? [...cur.pts, end] : cur.pts
-        const pts = simplifyPath(raw, 0.5 * px)
+        // SK2: Tidy thins to ~0.5 screen px; As drawn only drops points that sit on a
+        // straight run anyway (0.05 px), so the saved stroke is what the hand drew.
+        const pts = simplifyPath(raw, (sketchModeRef.current === 'tidy' ? 0.5 : 0.05) * px)
         if (pts.length < 2 || pts.reduce((s, p, i) => i ? s + segLength(pts[i - 1], p) : 0, 0) < 3 * px) return   // a click, not a stroke
         const { arrowStart: _s, arrowEnd: _e, ...style } = defaultsFor('line')
         void _s; void _e
@@ -1665,7 +1687,7 @@ export function useAnnotationTool({
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     dimMode, setDimMode, applyDimText, chain, arcMode, setArcMode, offsetSrc: offsetSrcA,
     filletR, setFilletR, chamfer, setChamfer, modPick, modMsg, cornerOp, setLineClosed, convertToLines,
-    startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, insertItems, cloudMode, setCloudMode, pending,
+    startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, insertItems, cloudMode, setCloudMode, sketchMode, setSketchMode, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
     snapHit: active ? snapHit : null,
     /** LW1: true = printed line weights on screen; hairline = the cap to pass AnnotationLayer. */

@@ -2101,6 +2101,22 @@ export const LESSONS: TutorialLesson[] = [
       body: 'A third click starts a new measure and right-click clears it. Dragging still turns the cabinet. Done (or Esc) goes back to picking parts.',
       canvas: true, done: (c, s) => ev(c, 'cab_measure') >= ev(s, 'cab_measure') },
   ]},
+
+  // Appended 2026-11-10 (z_CAD_tool SK2: Sketch As drawn / Tidy).
+  { id: 'cad_handwrite', level: 'basics', topic: 'cad', title: 'Handwrite on a drawing',
+    blurb: 'Write notes and mark up by hand with Sketch, kept exactly as drawn.',
+    keywords: 'cad sketch handwrite handwriting write pen stylus markup freehand as drawn tidy straighten smooth p', steps: [
+    { id: 'mode', title: 'Pick Sketch, As drawn',
+      body: 'In CAD mode pick Sketch (press P). The CAD tools show a Sketch group: As drawn keeps every wiggle of the stroke (best for handwriting), Tidy thins it so near-straight runs come out straight. Your pick is remembered on this computer.',
+      canvas: true, done: c => c.mode === 'cad' },
+    { id: 'write', title: 'Write',
+      body: 'Each press-drag-let-go is one stroke, so write a word letter by letter. Zoom in for small writing - the stroke follows the pen more closely the bigger it is on screen. A pen on the touch screen works the same as the mouse. Undo takes off the last stroke.',
+      canvas: true, done: (c, s) => c.annotations.filter(a => a.kind === 'line' && !!(a.geom as { freehand?: boolean }).freehand).length
+        > s.annotations.filter(a => a.kind === 'line' && !!(a.geom as { freehand?: boolean }).freehand).length },
+    { id: 'text', title: 'Typed notes',
+      body: 'For notes other people need to read, use Text (T) or a Text box (B): they print clean and stay editable. Handwriting is best for quick marks, ticks, circles and arrows.',
+      canvas: true, done: c => c.mode === 'cad' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

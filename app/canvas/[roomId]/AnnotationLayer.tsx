@@ -384,7 +384,7 @@ function shapeFill(s: ResolvedStyle): { fill: string; fillOpacity?: number } {
 }
 
 /** Polyline with optional heads at each end; closed heads trim the line under them. */
-function Arrowed({ pts, s, k, start, end }: { pts: Pt[]; s: ResolvedStyle; k: number; start: ArrowType; end: ArrowType }) {
+function Arrowed({ pts, s, k, start, end, round }: { pts: Pt[]; s: ResolvedStyle; k: number; start: ArrowType; end: ArrowType; round?: boolean }) {
   if (pts.length < 2) return null
   const size = s.arrowSize * k
   const hs = arrowHead(pts[0], pts[1], start, size)
@@ -398,7 +398,8 @@ function Arrowed({ pts, s, k, start, end }: { pts: Pt[]; s: ResolvedStyle; k: nu
   })
   return (
     <>
-      <polyline points={line.map(p => `${p.x},${p.y}`).join(' ')} {...strokeProps(s, k)} />
+      <polyline points={line.map(p => `${p.x},${p.y}`).join(' ')} {...strokeProps(s, k)}
+        {...(round && s.dash === 'solid' && !hs && !he ? { strokeLinecap: 'round' as const } : {})} />
       {hs && <path d={hs.d} {...headProps(hs)} />}
       {he && <path d={he.d} {...headProps(he)} />}
     </>
@@ -412,7 +413,8 @@ function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
     case 'line': {
       const g = a.geom as LineGeom
       const pts = (g.pts ?? []).map(p => mapPt(f, p))
-      if (!g.closed && !g.bulges?.some(Boolean)) return <Arrowed pts={pts} s={s} k={k} start={s.arrowStart} end={s.arrowEnd} />
+      // SK2: a sketch (handwriting) gets round pen-tip ends.
+      if (!g.closed && !g.bulges?.some(Boolean)) return <Arrowed pts={pts} s={s} k={k} start={s.arrowStart} end={s.arrowEnd} round={!!g.freehand} />
       // Arcs (fillets) or a closed outline: one path; open ends still take arrowheads,
       // pointing along the first / last bit of the line.
       const smp = sampleBulged(g.pts ?? [], g.bulges, !!g.closed).map(p => mapPt(f, p))
