@@ -42,6 +42,8 @@ export interface HandOpRow {
   repeat_spacing: number | null
   repeat_axis: string | null
   parameters: Record<string, unknown> | null
+  /** Groove direction in the face, degrees from +pos_x (90 = along pos_y), as the CNC reads it. */
+  angle_az?: number | null
 }
 
 export type Pt = { x: number; y: number; z: number }
@@ -181,10 +183,12 @@ export function handOpMarkers(rp: ResolvedCabinet, ops: HandOpRow[], customParts
       }
       out.push({ id: op.id, partKey: op.source_part_key, kind: 'drill', normal: frame.normal, radius: Math.max((op.diameter ?? 5) / 2, 0.5), depth, dir, holes })
     } else if (op.operation_type === 'groove') {
-      const len = op.length ?? 0
+      // Same direction as the CNC (routes.ts): angle_az from +pos_x. It was drawn along
+      // pos_x whatever the angle (RHK6586 WC-10 LED grooves along the wall showed front to back).
+      const len = op.length ?? 0, t = ((op.angle_az ?? 0) * Math.PI) / 180
       out.push({
         id: op.id, partKey: op.source_part_key, kind: 'groove', normal: frame.normal, radius: Math.max((op.width ?? 4) / 2, 0.5), depth, dir,
-        ends: [toCabinet(frame, nStart, px, py), toCabinet(frame, nStart, px + len, py)],
+        ends: [toCabinet(frame, nStart, px, py), toCabinet(frame, nStart, px + len * Math.cos(t), py + len * Math.sin(t))],
       })
     } else {
       const w = op.size_dx ?? 0, h = op.size_dy ?? 0

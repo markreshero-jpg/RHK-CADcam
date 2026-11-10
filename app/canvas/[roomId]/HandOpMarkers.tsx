@@ -12,7 +12,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { handOpMarkers, type CabinetOpMarker, type CustomPartGeom, type HandOpRow, type Pt } from '@/src/lib/optimiser/partOpProject'
 
-const COLS = 'id,source_part_key,operation_type,pos_x,pos_y,diameter,width,length,size_dx,size_dy,size_dz,depth,pos_z,plane_kind,repeat_count,repeat_spacing,repeat_axis,parameters'
+const COLS = 'id,source_part_key,operation_type,pos_x,pos_y,diameter,width,length,size_dx,size_dy,size_dz,depth,pos_z,plane_kind,repeat_count,repeat_spacing,repeat_axis,parameters,angle_az'
 const HAND_COLOR = '#f97316'   // orange — distinct from the resolver's drilling markers
 
 // Load hand ops for one cabinet → cabinet-space markers. Empty until rp is ready.

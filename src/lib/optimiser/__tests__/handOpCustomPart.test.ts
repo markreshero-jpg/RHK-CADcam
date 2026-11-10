@@ -26,6 +26,20 @@ describe('hand ops on custom parts', () => {
     expect(m.dir).toBe(1)                                              // cuts up into the panel
   })
 
+  // RHK6586 WC-10 LED: grooves along the wall (90) and on the 45 (315) drew front to back.
+  it('groove follows angle_az like the CNC (0 = along pos_x, 90 = along pos_y)', () => {
+    const groove = (angle_az: number): HandOpRow => ({ ...route, id: 'g' + angle_az, operation_type: 'groove', size_dx: null, size_dy: null,
+      pos_x: 34.25, pos_y: 100, length: 200, width: 18.5, angle_az })
+    const ends = (a: number) => {
+      const [m] = handOpMarkers(rp, [groove(a)], [under])
+      if (m?.kind !== 'groove') throw new Error('no groove')
+      return m.ends.map(e => [+e.z.toFixed(2), +e.x.toFixed(2)])       // z = depth from the back, x = across
+    }
+    expect(ends(0)).toEqual([[34.25, 100], [234.25, 100]])
+    expect(ends(90)).toEqual([[34.25, 100], [34.25, 300]])
+    expect(ends(315)).toEqual([[34.25, 100], [175.67, -41.42]])
+  })
+
   it('falls back to rp.custom_parts, and skips a missing part', () => {
     expect(handOpMarkers({ ...rp, custom_parts: [under] } as unknown as ResolvedCabinet, [route])).toHaveLength(1)
     expect(handOpMarkers(rp, [route], [])).toHaveLength(0)
