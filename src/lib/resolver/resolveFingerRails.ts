@@ -10,6 +10,7 @@
 //     a taller rail
 //   • at the carcass top (base) / bottom (wall) gap it is clamped to the carcass
 //   • takes the board of the front it backs (door colour → board), thickness
+//     — or the job / room 'finger_rail' material when one is set (railBoard)
 //     from that front
 // Per column (D15): a rail runs between the sides / internal divisions either
 // side of its front. Rails at the same height in neighbouring columns join and
@@ -53,6 +54,15 @@ const SAME = 0.5   // rails within this of each other count as the same height
 
 // An internal division: one divider panel, or two back to back (double).
 interface Division { x0: number; x1: number; joint: number; double: boolean; y0: number; y1: number }
+
+/** The rail's board: the job / room 'finger_rail' material (+ its tape) when set,
+ *  else the front it backs. Thickness follows the board. */
+export function railBoard(cab: CabinetInput, z: ResolvedFaceZone): { thickness: number; material_id: string; edgeband_id?: string } {
+  const m = cab.finger_rail_material
+  return m
+    ? { thickness: m.DZ, material_id: m.id, edgeband_id: cab.finger_rail_edgeband_id }
+    : { thickness: z.DZ, material_id: z.material_id, edgeband_id: z.edge_band?.id }
+}
 
 function divisionsOf(dividers: ResolvedInternalPart[]): Division[] {
   const out: Division[] = []
@@ -121,7 +131,7 @@ export function fingerRails(
       if (d.joint <= cx && d.joint > x0) x0 = d.joint
       if (d.joint >= cx && d.joint < x1) x1 = d.joint
     }
-    found.push({ key: 'fprail:0', bottom, top, x0, x1, frontZ, thickness: z.DZ, material_id: z.material_id, edgeband_id: z.edge_band?.id,
+    found.push({ key: 'fprail:0', bottom, top, x0, x1, frontZ, ...railBoard(cab, z),
       ...(sb ? { setback: r.RAILSB, baseAt: h.grip_edge === 'top' ? 'bottom' as const : 'top' as const } : {}) })
   }
 

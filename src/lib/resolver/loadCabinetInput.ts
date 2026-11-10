@@ -1009,6 +1009,8 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     right_side_material:       matMap.get('right_side'),
     divider_material:          matMap.get('divider'),
     divider_edgeband_id:       matMap.has('divider') ? (ebMap.get('divider') ?? carcassEb) : undefined,
+    finger_rail_material:      matMap.get('finger_rail'),
+    finger_rail_edgeband_id:   matMap.has('finger_rail') ? ebMap.get('finger_rail') : undefined,
     toekick_face_material:     tkFace,
     toekick_interior_material: tkInt,
     interior_edgeband_id:         carcassEb,
@@ -1118,7 +1120,7 @@ async function loadKickRunInput(
 // ebMap keys: material role as-is, toekick roles as tk_<role>.
 const ROLE_LABEL: Record<string, string> = {
   interior: 'Interior', exposed: 'Exposed', door_face: 'Doors', shelf: 'Shelves', drawerbox: 'Drawer box',
-  divider: 'Dividers',
+  divider: 'Dividers', finger_rail: 'Finger rails',
 }
 async function applyBoardColours(
   matMap: Map<string, Material>, tkMap: Map<string, Material>, ebMap: Map<string, string>,

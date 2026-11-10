@@ -35,6 +35,7 @@ const ASM_ROLES = [
   { key: 'exposed',   label: 'Exposed',   desc: 'End panels, fillers, open interiors' },
   { key: 'shelf',     label: 'Shelf',     desc: 'Shelves' },
   { key: 'divider',   label: 'Divider',   desc: 'Upright dividers. Blank = Interior (Exposed on open interiors)' },
+  { key: 'finger_rail', label: 'Finger rails', desc: 'Finger-pull backing rails (board + its matched tape). Blank = the front they back' },
 ]
 
 const TK_ROLES = [

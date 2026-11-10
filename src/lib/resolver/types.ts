@@ -868,6 +868,11 @@ export interface CabinetInput {
   // in a 33 open unit). Absent = the carcass material (exposed on open interiors).
   divider_material?:    Material
   divider_edgeband_id?: string
+  // Finger-pull backing rail board when it differs from the front it backs (role
+  // 'finger_rail', job / room Materials tab or material_overrides — e.g. a metallic
+  // rail behind woodgrain fronts, RHK6586). Absent = the front's board + tape.
+  finger_rail_material?:    Material
+  finger_rail_edgeband_id?: string
   toekick_face_material:     Material
   toekick_interior_material: Material
 

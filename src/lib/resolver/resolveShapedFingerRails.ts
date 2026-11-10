@@ -29,7 +29,7 @@ import { DEFAULT_RULES } from './types'
 import type { FootprintSegment } from '../cabinetShape/footprint'
 import { edgeFrame } from '../cabinetShape/construct'
 import { shapedInterior } from './resolveShapedCase'
-import { notchPanels } from './resolveFingerRails'
+import { notchPanels, railBoard } from './resolveFingerRails'
 import { rotEulerXYZ } from '../jointDrilling'
 
 const EPS = 0.01
@@ -41,6 +41,7 @@ interface FacetRail {
   sMin: number; sMax: number
   thickness: number
   material_id: string
+  edgeband_id?: string
 }
 
 const rotY = (deg: number, x: number, z: number) => {
@@ -94,7 +95,7 @@ export function shapedFingerRails(
       bottom = Math.max(gapHi - gap - r.RAILUP, carcBot)
     }
     if (top - bottom <= EPS) continue
-    found.push({ seg, bottom, top, sMin: 0, sMax: edgeFrame(segs[seg]).len, thickness: z.DZ, material_id: z.material_id })
+    found.push({ seg, bottom, top, sMin: 0, sMax: edgeFrame(segs[seg]).len, ...railBoard(cab, z) })
   }
 
   // 2. Fronts on one facet sharing a seam share a rail.
@@ -217,7 +218,7 @@ export function shapedFingerRails(
         X: o.x, Y: rl.bottom, Z: o.y,
         AX: 0, AY: Math.atan2(f.u.y, -f.u.x) * 180 / Math.PI, AZ: 0,
         material_id: rl.material_id,
-        edge_band: { top: false, bottom: false, left: false, right: false },
+        edge_band: { top: false, bottom: false, left: false, right: false, ...(rl.edgeband_id ? { id: rl.edgeband_id } : {}) },
       } as ResolvedCasePart
     })
 }

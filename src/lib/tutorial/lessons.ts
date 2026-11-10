@@ -2117,6 +2117,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'For notes other people need to read, use Text (T) or a Text box (B): they print clean and stay editable. Handwriting is best for quick marks, ticks, circles and arrows.',
       canvas: true, done: c => c.mode === 'cad' },
   ]},
+
+  // Appended 2026-11-11 (z_handles: Finger rails material role).
+  { id: 'finger_rail_colour', level: 'intermediate', topic: 'materials', title: 'Finger rails in their own colour',
+    blurb: 'Make every finger-pull backing rail one board + colour (e.g. a metallic), not the door colour.',
+    keywords: 'finger pull rail backing rail colour color metallic pewter ultraglaze sharknose gap material tape job room', steps: [
+    { id: 'open', title: 'Open the per-role materials',
+      body: 'Click Job in the menu bar → Cabinet Standards, then the Material Schedules tab, and scroll down to Per-Role Material Overrides. (For one room only: Room Properties → Materials.)',
+      target: 'menu-Job', canvas: true, done: (c, s) => ev(c, 'job_materials_tab') > ev(s, 'job_materials_tab') },
+    { id: 'pick', title: 'Pick the Finger rails board + colour',
+      body: 'In the Finger rails row pick the board, then its colour, for Base, Wall and Tall ("Copy to wall & tall" copies the base pick). Every finger-pull backing rail in those cabinets takes that board, its thickness and the colour’s matched edge tape. The doors and drawer fronts keep their own colour. Blank = rails match the front they sit behind, as before.',
+      canvas: true, done: (c, s) => ev(c, 'mat_colour_pick') > ev(s, 'mat_colour_pick') },
+    { id: 'check', title: 'Check and re-nest',
+      body: 'Cabinets pick it up when they re-resolve (open the room, or edit a cabinet). The rails then nest on that colour’s own sheets, so re-run the optimiser for any colour you had already nested.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

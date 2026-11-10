@@ -684,6 +684,15 @@ H6 sub-phase, deferred until the handle work is right.
 - Tests: `src/lib/optimiser/__tests__/fingerRailOps.test.ts`, plus the rail
   cases in `handles.test.ts`.
 
+**Rail colour of its own (added 2026-11-11, Mark, RHK6586).** New material role
+`finger_rail` (job_materials / room_materials per class, or cabinet
+material_overrides): when set, every backing rail (and set back base strip) takes
+that board, its thickness, and the colour's matched tape (applyBoardColours).
+Blank = the D11 rule, the front's board + tape. UI: Job → Cabinet Standards →
+Material Schedules → Per-Role Material Overrides → "Finger rails" (room:
+Room Properties → Materials). `railBoard()` in resolveFingerRails.ts, shaped
+rails too. Tutorial `finger_rail_colour`. Test in `handles.test.ts`.
+
 ## 8. Open questions
 
 Answered 2026-10-13:

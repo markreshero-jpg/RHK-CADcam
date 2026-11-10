@@ -217,6 +217,20 @@ describe('resolveHandles', () => {
       expect(rp.case_parts.find(p => p.part_key.startsWith('fprail:'))!.grain_direction).toBe('vertical')
     })
 
+    it("a 'finger_rail' material (job / room) gives the rails its board, thickness + tape", () => {
+      const rail = { id: 'pewter', name: 'PT Ultraglaze – Pewter Metallic', DZ: 16.5, sheet_dx: 2400, sheet_dy: 1200, has_grain: false }
+      const rp = resolveCabinet(cab({ face_grid: threeDrawers, handle_schedule: sharkSched, finger_rail_material: rail, finger_rail_edgeband_id: 'pewter-tape' }))
+      const rails = rp.case_parts.filter(p => p.part_key.startsWith('fprail:'))
+      expect(rails).toHaveLength(3)
+      for (const r of rails) {
+        expect(r.material_id).toBe('pewter')
+        expect(r.DZ).toBe(16.5)
+        expect(r.edge_band.id).toBe('pewter-tape')
+      }
+      // The fronts keep the door board.
+      expect(rp.face_zones.every(z => z.material_id !== 'pewter')).toBe(true)
+    })
+
     it('FPRAIL=false (or bar handles) → no rails, plain sides', () => {
       const off = resolveCabinet(cab({ face_grid: threeDrawers, handle_schedule: sharkSched, rules: mergeRules(DEFAULT_RULES, { FPRAIL: false }) }))
       expect(off.case_parts.some(p => p.part_key.startsWith('fprail:'))).toBe(false)
