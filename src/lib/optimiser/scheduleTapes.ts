@@ -3,7 +3,8 @@
 // on the same board in the run — a job of only loose custom parts has none,
 // so its banded edges came through with no tape (Construct Building, 2026-11-05).
 // Same cascade as the resolver's assembly schedule: room → job (per class and
-// general) → shop default. Job / room schedules win over the shop default.
+// general) → shop default. Job / room schedules win over the shop default; a
+// colour's matched tape (material_match_id) wins over all of them.
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type TapeByMaterial = Map<string, { id: string; thickness: number }>
@@ -20,10 +21,11 @@ export async function loadScheduleTapes(sb: SupabaseClient, projectId: string, r
     p.base_assembly_schedule_id, p.wall_assembly_schedule_id, p.tall_assembly_schedule_id, p.assembly_schedule_id,
   ].filter((x): x is string => !!x)
   const order = [...new Set([...jobIds, ...(shopR.data?.id ? [shopR.data.id as string] : [])])]
-  if (!order.length) return new Map()
 
-  const { data: rows } = await sb.from('assembly_schedule_rows').select('schedule_id,material_id,edgeband_id')
-    .in('schedule_id', order).not('edgeband_id', 'is', null)
+  const { data: rows } = order.length
+    ? await sb.from('assembly_schedule_rows').select('schedule_id,material_id,edgeband_id')
+      .in('schedule_id', order).not('edgeband_id', 'is', null)
+    : { data: [] }
   const rank = new Map(order.map((id, i) => [id, i]))
   const best = new Map<string, { eb: string; rank: number }>()
   for (const r of (rows ?? []) as { schedule_id: string; material_id: string | null; edgeband_id: string }[]) {
@@ -32,11 +34,20 @@ export async function loadScheduleTapes(sb: SupabaseClient, projectId: string, r
     const cur = best.get(r.material_id)
     if (!cur || k < cur.rank) best.set(r.material_id, { eb: r.edgeband_id, rank: k })
   }
-  const ebIds = [...new Set([...best.values()].map(b => b.eb))]
-  if (!ebIds.length) return new Map()
-  const { data: ebs } = await sb.from('edge_banding').select('id,thickness').in('id', ebIds)
-  const thick = new Map(((ebs ?? []) as { id: string; thickness: number }[]).map(e => [e.id, Number(e.thickness)]))
   const out: TapeByMaterial = new Map()
-  for (const [mat, b] of best) { const t = thick.get(b.eb); if (t != null) out.set(mat, { id: b.eb, thickness: t }) }
+  const ebIds = [...new Set([...best.values()].map(b => b.eb))]
+  if (ebIds.length) {
+    const { data: ebs } = await sb.from('edge_banding').select('id,thickness').in('id', ebIds)
+    const thick = new Map(((ebs ?? []) as { id: string; thickness: number }[]).map(e => [e.id, Number(e.thickness)]))
+    for (const [mat, b] of best) { const t = thick.get(b.eb); if (t != null) out.set(mat, { id: b.eb, thickness: t }) }
+  }
+  // A colour's matched tape (edge_banding.material_match_id) wins over the
+  // schedule tape, as in the resolver's applyBoardColours. Custom parts on a
+  // colour no schedule names (RHK6376 Bronzed Oak face panels on a whiteboard
+  // job, 2026-11-10) otherwise had no tape and nested undeducted.
+  const { data: matched } = await sb.from('edge_banding').select('id,thickness,material_match_id')
+    .not('material_match_id', 'is', null).eq('active', true)
+  for (const e of (matched ?? []) as { id: string; thickness: number | null; material_match_id: string }[])
+    if (e.thickness != null) out.set(e.material_match_id, { id: e.id, thickness: Number(e.thickness) })
   return out
 }
