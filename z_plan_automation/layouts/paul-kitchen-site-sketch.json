@@ -1,0 +1,23 @@
+{
+  "_source": "Kitchen - Paul / Kitchen room: Mark's freehand site sketch on the plan (2026-11-10). Answers 2026-11-10: new room, sink cut to 800 so the left run ends on the 3298 wall end (end B2D dropped), BCNR/R blind on the left run, 140 kick.",
+  "projectName": "Kitchen - Paul",
+  "roomName": "Kitchen (site sketch)",
+  "roomHeight": 2400,
+  "roomRules": { "TOEH": 140 },
+  "walls": [
+    { "x": 0, "y": 3298, "length": 3298, "angle": 270, "_": "Wall 1: left wall, south end up to the corner" },
+    { "x": 0, "y": 0, "length": 1560, "angle": 0, "_": "Wall 2: top wall, corner east" }
+  ],
+  "cabinets": [
+    { "def": "BEPF", "wall": 1, "offset": 0, "dx": 18, "dy": 900, "dz": 580, "note": "open end of the left run" },
+    { "def": "BSK", "wall": 1, "offset": 18, "dx": 800, "dy": 900, "dz": 580, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink - sketch 900, cut to 800 to finish on the 3298 wall" },
+    { "def": "D3-SLL", "wall": 1, "offset": 818, "dx": 400, "dy": 900, "dz": 580 },
+    { "def": "D3-SLL", "wall": 1, "offset": 1218, "dx": 730, "dy": 900, "dz": 580 },
+    { "def": "BBIN", "wall": 1, "offset": 1948, "dx": 450, "dy": 900, "dz": 580 },
+    { "def": "BCNR/R", "wall": 1, "offset": 2398, "dx": 900, "dy": 900, "dz": 580, "note": "Blind corner, blind end into the corner (false panel 640 = 580 + 18 + 2 + 40)",
+      "set": { "face_grid": { "cols": [ { "col_index": 0, "width_locked": false }, { "width": 640, "col_index": 1, "width_locked": true } ], "rows": [ { "row_index": 0, "height_locked": false } ], "zones": [ { "col_index": 0, "face_type": "door", "row_index": 0, "hinge_side": "right" }, { "col_index": 1, "face_type": "false_panel", "row_index": 0 } ] } } },
+    { "def": "BFKW", "wall": 2, "offset": 600, "dx": 40, "dy": 900, "dz": 580, "note": "40 face filler off the blind corner" },
+    { "def": "B2D", "wall": 2, "offset": 640, "dx": 902, "dy": 900, "dz": 580, "note": "Sketch 660 - comes out 902 with the blind corner on the left run" },
+    { "def": "BEPF", "wall": 2, "offset": 1542, "dx": 18, "dy": 900, "dz": 580, "note": "open end of the top run (TBC)" }
+  ]
+}

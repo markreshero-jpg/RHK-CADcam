@@ -1,0 +1,33 @@
+{
+ "_source": "Kitchen - Paul job: Mark's freehand site sketch (2026-11-10). Bed 4: back 2840, returns 470 L / 650 R, CH 2380; 200x200 box in back-left corner not drawn (TBC)",
+ "projectName": "Kitchen - Paul",
+ "roomName": "Bed 4 Robe",
+ "roomHeight": 2380,
+ "roomRules": {
+  "TOEH": 140
+ },
+ "walls": [
+  {
+   "x": 0,
+   "y": 470,
+   "length": 470,
+   "angle": 270,
+   "_": "left return, open end up to the back corner"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 2840,
+   "angle": 0,
+   "_": "back wall"
+  },
+  {
+   "x": 2840,
+   "y": 0,
+   "length": 650,
+   "angle": 90,
+   "_": "right return, corner down to open end"
+  }
+ ],
+ "cabinets": []
+}
