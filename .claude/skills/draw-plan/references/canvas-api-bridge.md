@@ -77,6 +77,7 @@ literal `x / y / z` (cabinet frame: x along the wall, y up from pos_z, z from th
 `front`: dx = length, dy = height. Per-piece `no_cnc`, edges, ops (`source_part_key: custom_<part id>`). Re-resolve with a
 no-op `updateCabinet {dz}`. Script: `z_plan_automation/_tmp-6478-study-desk1.mjs`.
 
+- **Routes that turn a corner (LED round a 45) = `groove` ops, not pockets.** Area/pocket routes are always square to the part; a groove (`operation_type 'groove'`, `pos_x/pos_y` = start, `length`, `width` 18.5, `angle_az` degrees from +pos_x, 90 = along pos_y) runs at any angle and a wide one is cut in parallel lanes. Run each leg ~3.8 past the corner so the outer corner cuts square. Script `z_plan_automation/_tmp-6586-kit-led.mjs` (RHK6586 WC-10, 2026-11-11). Check new hand ops in the cabinet 3D + a headless optimiser cut sheet; the views and the CNC share `routes.opPartGeom`, and an op the views can't place logs `[handOpMarkers] hand ops not drawn` in the console.
 - **Custom part material = `material_override_id`.** The resolver writes the part role's scheduled material over `material_id` on every resolve, so a different board (glass, a second colour) only sticks with `material_override_id` set to it too (RHK6478 desk glass, 2026-11-05).
 
 ## Removing a system part (not made) — `part_hide_views`, NOT `hidden_parts`
