@@ -79,24 +79,24 @@ export function areaSubtraction(m: Extract<CabinetOpMarker, { kind: 'area' }>): 
   }
 }
 
-// A groove as a CSG box: its ends run along one of the part's axes (toCabinet keeps
-// them axis-aligned), its width is the cutter diameter. Same proud start as areas.
-export function grooveSubtraction(m: Extract<CabinetOpMarker, { kind: 'groove' }>): { center: [number, number, number]; size: [number, number, number] } {
-  const axes: Axis[] = ['x', 'y', 'z']
-  const lo: Record<Axis, number> = { x: Infinity, y: Infinity, z: Infinity }
-  const hi: Record<Axis, number> = { x: -Infinity, y: -Infinity, z: -Infinity }
-  for (const c of m.ends) for (const a of axes) { lo[a] = Math.min(lo[a], c[a]); hi[a] = Math.max(hi[a], c[a]) }
-  // Across the groove (the in-plane axis the ends don't move along): the cutter width.
-  for (const a of axes) if (a !== m.normal && hi[a] - lo[a] < 0.01) { lo[a] -= m.radius; hi[a] += m.radius }
-  // Along the groove: the cutter's round ends reach a radius past each end point.
-  for (const a of axes) if (a !== m.normal && hi[a] - lo[a] > 2 * m.radius + 0.01) { lo[a] -= m.radius; hi[a] += m.radius }
-  const face = lo[m.normal]
-  const nA = face - m.dir * 1, nB = face + m.dir * m.depth
-  lo[m.normal] = Math.min(nA, nB); hi[m.normal] = Math.max(nA, nB)
-  return {
-    center: [(lo.x + hi.x) / 2, (lo.y + hi.y) / 2, (lo.z + hi.z) / 2],
-    size: [Math.max(hi.x - lo.x, 0.1), Math.max(hi.y - lo.y, 0.1), Math.max(hi.z - lo.z, 0.1)],
-  }
+// A groove as a CSG box at any angle in the face: laid along the face's first
+// in-plane axis (normal y → x, x → y, z → x), length + the cutter's round ends,
+// cutter width across, then turned about the normal (`quat`) onto the groove's line.
+// Same proud start as areas. (RHK6586 WC-10 LED: grooves drew as orange markers.)
+export function grooveSubtraction(m: Extract<CabinetOpMarker, { kind: 'groove' }>): { center: [number, number, number]; size: [number, number, number]; quat: [number, number, number, number] } {
+  const [a, b] = m.ends
+  const d = { x: b.x - a.x, y: b.y - a.y, z: b.z - a.z }
+  const len = Math.hypot(d.x, d.y, d.z) + 2 * m.radius
+  const wid = Math.max(2 * m.radius, 0.1), dep = m.depth + 1
+  const face = a[m.normal]
+  const c: Record<Axis, number> = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, z: (a.z + b.z) / 2 }
+  c[m.normal] = face + m.dir * (m.depth - 1) / 2                 // 1 proud → depth inward
+  // Rotation about the normal that takes the base length axis onto d.
+  const th = m.normal === 'y' ? Math.atan2(-d.z, d.x) : m.normal === 'x' ? Math.atan2(d.z, d.y) : Math.atan2(d.y, d.x)
+  const s = Math.sin(th / 2), w = Math.cos(th / 2)
+  const quat: [number, number, number, number] = m.normal === 'x' ? [s, 0, 0, w] : m.normal === 'y' ? [0, s, 0, w] : [0, 0, s, w]
+  const size: [number, number, number] = m.normal === 'y' ? [len, dep, wid] : m.normal === 'x' ? [dep, len, wid] : [len, wid, dep]
+  return { center: [c.x, c.y, c.z], size, quat }
 }
 
 // A part's footprint frame + the cabinet coord of its mid-thickness plane along the
@@ -217,10 +217,4 @@ export function handOpMarkers(rp: ResolvedCabinet, ops: HandOpRow[], customParts
   // lounge LED (part key without its case_ prefix) went missing unnoticed.
   if (skipped.length) console.warn('[handOpMarkers] hand ops not drawn:', skipped.map(s => `${s.op.source_part_key} ${s.op.operation_type} (${s.why})`).join('; '))
   return out
-}
-
-/** A groove that runs along one of the cabinet's axes (a CSG box can cut it). */
-export function grooveAxisAligned(m: Extract<CabinetOpMarker, { kind: 'groove' }>): boolean {
-  const moves = (['x', 'y', 'z'] as const).filter(a => Math.abs(m.ends[1][a] - m.ends[0][a]) > 0.01)
-  return moves.length <= 1
 }

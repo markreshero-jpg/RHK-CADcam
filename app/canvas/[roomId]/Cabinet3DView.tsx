@@ -55,7 +55,7 @@ import { casePartItem, kickPartItem, internalPartItem, faceZoneItem, drawerBoxPa
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { PartAlpha, NO_ROTATION, EdgeEditContext } from '@/src/components/three/PartViewer'
 import { useHandOpMarkers, HandOpMarkers3D } from './HandOpMarkers'
-import { areaSubtraction, grooveSubtraction, grooveAxisAligned, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
+import { areaSubtraction, grooveSubtraction, type CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import { handleShape, type HandleShape } from '@/src/lib/handleGeometry'
 import Handle3D from '@/src/components/three/Handle3D'
 import Bin3D from '@/src/components/three/Bin3D'
@@ -1528,10 +1528,11 @@ export function CabinetScene({
   // read as real routes in 3D, the colour render and the shop-drawing line views.
   // Drills (and carcass grooves) stay as HandOpMarkers3D overlays.
   const pocketsByPart = useMemo(() => {
-    const m = new Map<string, { center: [number, number, number]; size: [number, number, number] }[]>()
+    const m = new Map<string, { center: [number, number, number]; size: [number, number, number]; quat?: [number, number, number, number] }[]>()
     for (const mk of handMarkers) {
+      // Grooves are cut too, at any angle (RHK6586 WC-10 LED showed as an orange marker).
       const cut = mk.kind === 'area' ? areaSubtraction(mk)
-        : mk.kind === 'groove' && mk.partKey.startsWith('zone_') && grooveAxisAligned(mk) ? grooveSubtraction(mk) : null
+        : mk.kind === 'groove' && /^(case|zone|custom)_/.test(mk.partKey) ? grooveSubtraction(mk) : null
       if (!cut) continue
       const arr = m.get(mk.partKey) ?? []
       arr.push(cut)

@@ -1,7 +1,7 @@
 // Hand-added ops on custom parts project into cabinet space (RHK6542 WC-08:
 // LED route in the underside of a flat under panel showed in no cabinet view).
 import { describe, it, expect } from 'vitest'
-import { handOpMarkers, type HandOpRow } from '../partOpProject'
+import { handOpMarkers, grooveSubtraction, type HandOpRow } from '../partOpProject'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 
 const rp = { case_parts: [], face_zones: [], internal_parts: [] } as unknown as ResolvedCabinet
@@ -38,6 +38,25 @@ describe('hand ops on custom parts', () => {
     expect(ends(0)).toEqual([[34.25, 100], [234.25, 100]])
     expect(ends(90)).toEqual([[34.25, 100], [34.25, 300]])
     expect(ends(315)).toEqual([[34.25, 100], [175.67, -41.42]])
+  })
+
+  // The 3D cuts the groove as a box turned about the panel normal onto its line.
+  it('grooveSubtraction turns the box onto the groove (any angle)', () => {
+    const rot = (q: number[], v: number[]) => {             // rotate v by unit quaternion q = [x, y, z, w]
+      const [x, y, z, w] = q, [vx, vy, vz] = v
+      const tx = 2 * (y * vz - z * vy), ty = 2 * (z * vx - x * vz), tz = 2 * (x * vy - y * vx)
+      return [vx + w * tx + (y * tz - z * ty), vy + w * ty + (z * tx - x * tz), vz + w * tz + (x * ty - y * tx)].map(n => +n.toFixed(4) + 0)
+    }
+    for (const az of [0, 90, 315]) {
+      const [m] = handOpMarkers(rp, [{ ...route, id: 'g', operation_type: 'groove', size_dx: null, size_dy: null,
+        pos_x: 34.25, pos_y: 100, length: 200, width: 18.5, angle_az: az }], [under])
+      if (m?.kind !== 'groove') throw new Error('no groove')
+      const s = grooveSubtraction(m)
+      const d = [m.ends[1].x - m.ends[0].x, m.ends[1].y - m.ends[0].y, m.ends[1].z - m.ends[0].z].map(n => n / 200)
+      expect(rot(s.quat, [1, 0, 0])).toEqual(d.map(n => +n.toFixed(4) + 0))   // base length axis → groove line
+      expect(s.size).toEqual([218.5, 10, 18.5])                                  // length + round ends, depth + 1 proud, width
+      expect(s.center[1]).toBe(4)                                                // underside, 9 up into the panel (1 proud)
+    }
   })
 
   // Views and CNC share routes.opPartGeom: an area set by its edges (no size) draws too.

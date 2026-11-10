@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import { Matrix4, Quaternion, Vector3 } from 'three'
-import { handOpMarkers, grooveAxisAligned, type CabinetOpMarker, type CustomPartGeom, type HandOpRow, type Pt } from '@/src/lib/optimiser/partOpProject'
+import { handOpMarkers, type CabinetOpMarker, type CustomPartGeom, type HandOpRow, type Pt } from '@/src/lib/optimiser/partOpProject'
 
 const COLS = 'id,source_part_key,operation_type,pos_x,pos_y,diameter,width,length,size_dx,size_dy,size_dz,depth,pos_z,plane_kind,repeat_count,repeat_spacing,repeat_axis,parameters,angle_az,offset_left_mm,offset_right_mm,offset_top_mm,offset_bottom_mm'
 const HAND_COLOR = '#f97316'   // orange — distinct from the resolver's drilling markers
@@ -124,7 +124,8 @@ export function HandOpMarkers3D({ markers, color = HAND_COLOR, csgPartKeys }: { 
         // the overlay marker so they aren't double-drawn.
         if (m.kind === 'area' && csgPartKeys?.has(m.partKey)) return null
         // Fronts cut their grooves too (Cabinet3DView pocketsByPart).
-        if (m.kind === 'groove' && m.partKey.startsWith('zone_') && csgPartKeys?.has(m.partKey) && grooveAxisAligned(m)) return null
+        // Grooves on CSG'd parts are cut into the mesh too (Cabinet3DView pocketsByPart).
+        if (m.kind === 'groove' && csgPartKeys?.has(m.partKey)) return null
         if (m.kind === 'groove') {
           // A slot turned along its own line — any angle in the face (an axis box around
           // the two ends drew a 45 groove as a big square, RHK6586 WC-10 LED).

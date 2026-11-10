@@ -426,7 +426,8 @@ export function Part({
   // through-drills). When present the panel renders as a single material colour
   // — CSG can't keep the 6 per-face colours (three-bvh-csg collapses them),
   // which is an accepted trade-off.
-  subtractions?:      { center: [number, number, number]; size: [number, number, number]; cylinder?: boolean }[]
+  // `quat` turns a box about its centre (a groove at an angle in the face).
+  subtractions?:      { center: [number, number, number]; size: [number, number, number]; cylinder?: boolean; quat?: [number, number, number, number] }[]
   // When false, the panel shows no hover edge highlight (used by the Part Editor,
   // where the single part is the whole scene and the orange hover line is noise).
   hoverHighlight?:    boolean
@@ -535,6 +536,7 @@ export function Part({
         s.center[1] - (shapeGeom ? b.y : core.y + core.h / 2),
         s.center[2] - (shapeGeom ? b.z : core.z + core.d / 2),
       )
+      if (s.quat) sub.quaternion.set(s.quat[0], s.quat[1], s.quat[2], s.quat[3])
       sub.updateMatrixWorld()
       const next = ev.evaluate(brush, sub, SUBTRACTION)
       if (cut) scratch.push(brush.geometry)   // intermediate result, superseded
