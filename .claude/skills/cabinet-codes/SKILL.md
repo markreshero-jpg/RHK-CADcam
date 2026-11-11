@@ -229,7 +229,7 @@ Pattern: class letter + `F` + `K` (sits at kick height) or `F` (runs to floor)
 | `BFF` | Base filler, runs to floor |
 | `BFKW` | Base filler, kick height, wide: the face filler in the door plane (70 default) |
 | `BFFW` | Base filler, floor, wide |
-| `WF` | Wall (overhead) filler — hangs, so no K/F variant |
+| `WF` | Wall (overhead) filler — hangs, so no K/F variant. **In the library 2026-11-11** (Mark, RHK6595 WC-01): the straight version of `WF-L`, material thickness: a **70 strip** standing side-on between the wall cabinet and the wall, full height, front edge flush with the door face (`z = cab.d + t.door + 2 - 70`), front + bottom taped. The overhead `BFK`. Set the width to the board (18 / 16.5) |
 | `WFW` | Wall filler, wide |
 | `WF-L` | Wall filler, L-shaped, material thickness: one board between a wall cabinet and the wall, seen on its front edge; side view is an L (70 front leg + 70 bottom leg, seen from underneath), front + bottom taped (Mark 2026-11-07) |
 | `TFK` / `TFF` (+`W`) | Tall fillers, same pattern as base |

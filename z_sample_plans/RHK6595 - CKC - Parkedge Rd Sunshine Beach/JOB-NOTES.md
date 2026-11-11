@@ -207,3 +207,10 @@ Applied with `_tmp-6595-r6.mjs` (db + resolve); before-state `_tmp-6595-r6-befor
 - Spec block handles line (Mark 2026-11-11): 'supplied + fitted by others' (`_tmp-6595-spec-hdl.mjs`). The C138 handle is still on the job schedule, so it may still be costed.
 - **WC-10 dividers -> bottom: 2 holes, 100 in from front + back** (Mark 2026-11-11, `_tmp-6595-wc10-2holes.mjs`). New library joint **5mm 2 Holes 100 in** (`0301f1d9`, a copy of 5mm Dynamic Holes with qty 2, 100 in, spacing D - 200), set per seam in WC-10 carcase_joints `int_divider_0..7:bottom`. The top keeps the dynamic holes. Resolve check pending (the dev server was down).
 - **Bulkhead markup tidied** (Mark 2026-11-11, colour confirmed): the TBC clouds on Wall 2 + Wall 4 were deleted (Mark named them). The notes now say just 'BULKHEAD(S) SUBLIME TEAK 18' with an arrow, on the General layer; the Wall 4 note got a leader. 'BULKHEAD OVERSIZED - CUT ON SITE' was kept (`_tmp-6595-bhclean.mjs`, before-state `_tmp-6595-bhclean-before.json`).
+- **WC-01 -> WF** (Mark 2026-11-11): new library item **WF** (`2d34ae94`, `_tmp-wf-def.mjs`), a straight side-on 70 strip
+  (WF-L without the L, the overhead BFK), front flush with the doors, front + bottom taped. WC-01 swapped in place to WF,
+  18 LX ABS Grain Sublime Teak (not the 16.5 Natural board, so the finish matches); the column WC-02 / WC-14 711 -> 709.5
+  (offset 18, still tight to WC-03) (`_tmp-6595-wc01-wf.mjs`, before `_tmp-6595-wc01-wf-before.json`). Resolve pending (dev server wedged).
+- **WC-10 one grid** (Mark 2026-11-11): shelves full width (818), no middle divider. One half-checked 6 x 3 grid,
+  5 full-height dividers, 2 shelves, squares 121.3 (`_tmp-6595-wc10-full.mjs`, before `_tmp-6595-wc10-full-before.json`).
+  The 2-holes-into-the-bottom joint keys int_divider_0..7 still cover the 5 dividers. Resolve pending.

@@ -1,0 +1,919 @@
+{
+ "cabs": [
+  {
+   "id": "d8cebd7c-9652-4837-a786-4e2c8d06b274",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-02",
+   "assembly_class": "wall",
+   "pos_x": 2753.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 711,
+   "dy": 1000,
+   "dz": 500,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "end_panel",
+   "right_neighbour_type": "end_panel",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "WALLZ": 950,
+    "BIFOLD": "L",
+    "BIFOLD_BOTTOM": "none"
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "hinges": [
+       100,
+       880
+      ],
+      "col_index": 0,
+      "face_type": "door",
+      "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "hinges": [
+       100,
+       880
+      ],
+      "col_index": 1,
+      "face_type": "door",
+      "grip_edge": "bottom",
+      "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f",
+      "row_index": 0,
+      "hinge_side": "right",
+      "handle_inset": 50,
+      "handle_offset": 20
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "Appliance / microwave cupboard on the stone: no bottom, 1000 sliding bi-fold doors (Finista BF-05, hung left, no bottom guide) with 1 adj shelf (min 500 clear for the coffee machine). Microwave sits inside. 390 PTO doors over are WC-14 (split 2026-10-31).",
+   "created_at": "2026-10-30T06:06:37.393509+00:00",
+   "updated_at": "2026-10-31T00:23:36.454741+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": [
+      {
+       "type": "adj_shelf",
+       "y_locked": false
+      }
+     ]
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [
+     {
+      "role": "outer",
+      "holes": [
+       {
+        "x": 337.5,
+        "y": 116,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 337.5,
+        "y": 84,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 337.5,
+        "y": 896,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 337.5,
+        "y": 864,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       }
+      ],
+      "col_index": 0,
+      "row_index": 0
+     },
+     {
+      "role": "leading",
+      "holes": [
+       {
+        "x": 330.5,
+        "y": 936,
+        "dia": 35,
+        "kind": "carriage",
+        "depth": 11.5
+       },
+       {
+        "x": 330.5,
+        "y": 872,
+        "dia": 35,
+        "kind": "carriage",
+        "depth": 11.5
+       },
+       {
+        "x": 15.5,
+        "y": 116,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 15.5,
+        "y": 84,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 15.5,
+        "y": 896,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 15.5,
+        "y": 864,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       }
+      ],
+      "col_index": 1,
+      "row_index": 0
+     }
+    ],
+    "warnings": [],
+    "bifold_cfg": {
+     "hand": "L",
+     "bottom": "none",
+     "centre": "standard"
+    },
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [
+     {
+      "y_locked": true,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 100,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 122.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 77.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 116,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 84,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": true,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 880,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 902.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 857.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 896,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 864,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 880,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     }
+    ],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {
+    "case_bottom": [
+     "plan",
+     "elevation",
+     "3d"
+    ]
+   },
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {
+    "case_back": {
+     "top": false,
+     "left": false,
+     "right": false,
+     "bottom": true
+    }
+   },
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": "none"
+  },
+  {
+   "id": "6f2b1294-6358-4d8a-b487-bb94c9e76cb5",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "8f73c140-bda9-4dce-b778-4ede7d792007",
+   "label": "WC-01",
+   "assembly_class": "wall",
+   "pos_x": 2770,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 16.5,
+   "dy": 1390,
+   "dz": 500,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": "Wall filler at the east wall beside the teak column (front filler)",
+   "created_at": "2026-10-30T06:06:35.847139+00:00",
+   "updated_at": "2026-10-30T06:06:35.847139+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "c3fa9eaa-8c94-4c3b-b95c-1c88bb520514",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-14",
+   "assembly_class": "wall",
+   "pos_x": 2753.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 711,
+   "dy": 390,
+   "dz": 500,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "end_panel",
+   "right_neighbour_type": "end_panel",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "REVB": 2
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 1,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "right"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "390 PTO doors over the WC-02 bi-fold appliance cupboard (split from WC-02 2026-10-31, easier to fit).",
+   "created_at": "2026-10-30T23:45:51.515428+00:00",
+   "updated_at": "2026-10-31T00:23:36.454741+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": []
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 290,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 312.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 267.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 306,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 274,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 288,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 102,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 124.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 79.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 118,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 86,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 687,
+        "y": 290,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 677.5,
+        "y": 312.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 677.5,
+        "y": 267.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 694.5,
+        "y": 306,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 694.5,
+        "y": 274,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 288,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 687,
+        "y": 102,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 677.5,
+        "y": 124.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 677.5,
+        "y": 79.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 694.5,
+        "y": 118,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 694.5,
+        "y": 86,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     }
+    ],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  }
+ ],
+ "cp": [
+  {
+   "id": "e1c21a52-c91d-4a4e-ac0c-5ed06e20444b",
+   "cabinet_instance_id": "6f2b1294-6358-4d8a-b487-bb94c9e76cb5",
+   "part_library_id": "0b364a0a-9018-4852-8ef5-172ab05dac32",
+   "name": "Applied Panel",
+   "dy": 1390,
+   "dx": 16.5,
+   "material_id": "d67d85b0-b12b-4b03-be3c-8bdbbf23cd11",
+   "edge_top": true,
+   "edge_bottom": true,
+   "edge_left": true,
+   "edge_right": true,
+   "visible": true,
+   "sort_order": 0,
+   "created_at": "2026-10-30T06:06:36.754615+00:00",
+   "updated_at": "2026-10-30T06:06:36.754615+00:00",
+   "x": 0,
+   "y": 0,
+   "z": 502,
+   "dz": 18,
+   "expressions": {
+    "z": "cab.d + 2",
+    "dx": "cab.w",
+    "dy": "cab.h",
+    "dz": "t.exposed"
+   },
+   "no_cnc": false,
+   "material_override_id": null,
+   "show_in_room": true,
+   "orientation": "front",
+   "hide_views": [],
+   "part_cutouts": [],
+   "outline": null,
+   "cutouts": null,
+   "grain_across": false,
+   "edge_band_id": null
+  }
+ ]
+}
