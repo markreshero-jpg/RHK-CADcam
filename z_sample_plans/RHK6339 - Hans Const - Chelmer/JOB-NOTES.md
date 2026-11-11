@@ -64,6 +64,10 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j02-stair-cupboard.json`, post `_
 - New handle **Custom Timber Pull 450** (solid timber, made in the shop, secret fixed, no CNC
   holes) + schedule "Custom Timber Pull 450 (tall doors)" on this room: vertical at the meeting
   edges, centre 1275 AFF (bottom 1050).
+- Pulls rebuilt 2026-11-12 (Mark: one per door, flush to the meeting edge, `_tmp-6339-j02-pull.mjs`):
+  timber pull (z_handles D19) = linear strip 35 x 35, 18 x 18 rebate on the hinge-side back edge,
+  new material **Solid Timber 35mm – Blackbutt**. TC-01 zones handle_length 450 / handle_inset 1165
+  (1050-1500 AFF), HANDLE_DRILL false (secret fixed), lh:0 / lh:1 No CNC. Pulls 1 apart (door gap 1).
 
 ### Open / TBC
 - [ ] Site measures: width, depth, ceiling.

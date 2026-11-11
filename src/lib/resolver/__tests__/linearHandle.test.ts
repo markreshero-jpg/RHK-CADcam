@@ -122,3 +122,29 @@ describe('linear strip sharknose shape (3D / drawings)', () => {
     expect(s.pts.find(q => q.y === 18 && q.x < 35)!.x).toBeCloseTo(run)
   })
 })
+
+describe('timber pull (D19): own thickness / stock, square rebate instead of the sharknose', () => {
+  const pull: HandleProductInput = { ...linear, id: 'tp', name: 'Timber Pull 450', strip_thick_mm: 35, strip_material_id: 'solid', rebate_mm: 18 }
+  const tallCab = () => cab({
+    assembly_class: 'tall', DY: 2300, handle_products: { tp: pull },
+    handle_schedule: { door_tall: { handle: pull, offset_from_edge_mm: 0, inset_from_side_mm: null, orientation: 'vertical' } },
+  })
+
+  it('35 x 35 blank in its own material, flush with the non-hinged edge, no tape', () => {
+    const rp = resolveCabinet(tallCab())
+    const [l] = rp.face_zones
+    expect(l.handle!.strip).toMatchObject({ x0: l.DX - 35, w: 35, bevel_edge: 'left', t: 35, material_id: 'solid', rebate: 18 })
+    expect(l.handle!.projection).toBe(35)
+    const p = strips(rp)[0]
+    expect(p).toMatchObject({ DY: 35, DZ: 35, material_id: 'solid', Z: l.Z + l.DZ })
+    expect(p.edge_band).toMatchObject({ top: false, bottom: false, left: false, right: false })
+    expect(p.lh).toMatchObject({ bevel_edge: 'left', rebate: 18 })
+  })
+
+  it('3D outline: 18 x 18 notch at the back of the hinge-side edge', async () => {
+    const { partShapes } = await import('../../partSolids')
+    const s = partShapes(resolveCabinet(tallCab())).get('case_lh:0')!
+    expect(s.extrude).toBe('up')
+    expect(s.pts).toEqual([{ x: 0, y: 0 }, { x: 35, y: 0 }, { x: 35, y: 35 }, { x: 18, y: 35 }, { x: 18, y: 17 }, { x: 0, y: 17 }])
+  })
+})

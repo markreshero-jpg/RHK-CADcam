@@ -184,8 +184,17 @@ function linearHandle(cab: CabinetInput, zone: ResolvedFaceZone, g: ZoneGrip): R
   const inset = zoneIn?.handle_inset ?? null
 
   // The strip's sharknose — on the strip, not the front (the front keeps a square edge).
-  const bv = sharknoseBevel(product, zone.DZ)!
-  const cut = { angle_deg: bv.angle_deg, land: bv.land }
+  // A timber pull (D19) has its own thickness / stock and a square rebate on that
+  // edge instead (bevel_edge = the finger edge either way).
+  const T = product.strip_thick_mm && product.strip_thick_mm > 0 ? product.strip_thick_mm : zone.DZ
+  const rebate = product.rebate_mm && product.rebate_mm > 0 ? Math.min(product.rebate_mm, T - 1, W - 1) : null
+  const bv = sharknoseBevel(product, T)!
+  const cut = {
+    angle_deg: rebate ? 0 : bv.angle_deg, land: rebate ? T : bv.land,
+    ...(product.strip_thick_mm ? { t: T } : {}),
+    ...(product.strip_material_id ? { material_id: product.strip_material_id } : {}),
+    ...(rebate ? { rebate } : {}),
+  }
   let strip: NonNullable<ResolvedHandle['strip']>
   if (vertical) {
     const y0 = zone.DY - (inset ?? 0) - length
@@ -228,7 +237,7 @@ function linearHandle(cab: CabinetInput, zone: ResolvedFaceZone, g: ZoneGrip): R
     x: strip.x0 + strip.w / 2, y: strip.y0 + strip.h / 2,
     length,
     bore_centres: null,
-    projection:   zone.DZ,
+    projection:   T,
     holes,
     hole_dia:     product.hole_dia_mm ?? 4.5,
     drilled,
@@ -250,17 +259,21 @@ export function linearHandleParts(zones: ResolvedFaceZone[]): ResolvedCasePart[]
     const s = z.handle?.strip
     if (!s || z.facet || z.AY) continue
     const horizontal = s.bevel_edge === 'top' || s.bevel_edge === 'bottom'
+    // Solid timber pull (D19, own material): no tape.
+    const solid = !!s.material_id
     out.push({
       part_key: `lh:${out.length}`,
       X: z.X + s.x0, Y: z.Y + s.y0, Z: z.Z + z.DZ,
-      DX: s.h, DY: s.w, DZ: z.DZ,
+      DX: s.h, DY: s.w, DZ: s.t ?? z.DZ,
       AX: 0, AY: 0, AZ: 0,
-      material_id: z.material_id,
+      material_id: s.material_id ?? z.material_id,
       grain_direction: horizontal ? 'horizontal' : 'vertical',
-      edge_band: horizontal
+      edge_band: solid
+        ? { top: false, bottom: false, left: false, right: false, id: undefined }
+        : horizontal
         ? { top: s.bevel_edge !== 'top', bottom: s.bevel_edge !== 'bottom', left: true, right: true, id: z.edge_band?.id }
         : { top: true, bottom: true, left: s.bevel_edge !== 'left', right: s.bevel_edge !== 'right', id: z.edge_band?.id },
-      lh: { bevel_edge: s.bevel_edge, angle_deg: s.angle_deg, land: s.land },
+      lh: { bevel_edge: s.bevel_edge, angle_deg: s.angle_deg, land: s.land, ...(s.rebate ? { rebate: s.rebate } : {}) },
     } as ResolvedCasePart)
   }
   return out

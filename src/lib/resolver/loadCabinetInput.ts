@@ -1274,7 +1274,7 @@ function loadHingeSchedule(roomId: string, projectId: string | undefined) {
 // is_default, then the schedule's role rows. A schedule with no rows falls back
 // to its legacy single handle_id for every role. The whole active catalogue is
 // returned too, for per-zone overrides.
-const HANDLE_COLS = 'id, name, grip_kind, handle_type, length, bore_centres, projection, cost_per_unit, hole_dia_mm, holes, needs_finger_gap, bevel_angle_deg, bevel_land_mm, strip_width_mm, screw_spacing_mm, screw_inset_mm'
+const HANDLE_COLS = 'id, name, grip_kind, handle_type, length, bore_centres, projection, cost_per_unit, hole_dia_mm, holes, needs_finger_gap, bevel_angle_deg, bevel_land_mm, strip_width_mm, screw_spacing_mm, screw_inset_mm, strip_thick_mm, strip_material_id, rebate_mm'
 
 function toHandleProduct(h: Record<string, unknown>): HandleProductInput {
   const num = (v: unknown) => (v == null ? null : Number(v))
@@ -1295,6 +1295,9 @@ function toHandleProduct(h: Record<string, unknown>): HandleProductInput {
     strip_width_mm:   num(h.strip_width_mm),
     screw_spacing_mm: num(h.screw_spacing_mm),
     screw_inset_mm:   num(h.screw_inset_mm),
+    strip_thick_mm:    num(h.strip_thick_mm),
+    strip_material_id: (h.strip_material_id as string | null) ?? null,
+    rebate_mm:         num(h.rebate_mm),
   }
 }
 

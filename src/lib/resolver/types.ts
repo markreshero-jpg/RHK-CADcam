@@ -1033,6 +1033,13 @@ export interface HandleProductInput {
   strip_width_mm?:   number | null              // null → 35
   screw_spacing_mm?: number | null              // null → 350
   screw_inset_mm?:   number | null              // null → 50
+  // Timber pull (D19): a strip of its own stock instead of the front's board —
+  // its thickness (null → the front's), material (null → the front's; set =
+  // solid timber, no edge tape) and a square rebate on the back of the finger
+  // edge in place of the sharknose (null → sharknose).
+  strip_thick_mm?:    number | null
+  strip_material_id?: string | null
+  rebate_mm?:         number | null
   // Custom hole pattern from the handle centre (offset_x along the handle,
   // offset_y across it). Empty → derived: two holes at ±bore_centres/2, or one
   // centre hole when bore_centres is unset (knob).
@@ -1086,6 +1093,8 @@ export interface ResolvedHandle {
     x0: number; y0: number; w: number; h: number
     bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number
     full: number; length: number; overridden: boolean
+    // Timber pull (D19): own thickness / material, rebate in place of the sharknose.
+    t?: number; material_id?: string; rebate?: number
   }
 }
 
@@ -1663,7 +1672,7 @@ export interface ResolvedCasePart extends ResolvedPart {
   fprail?: { cut: number; blockSetback: number; blockDia: number; blockDepth: number; shaped?: true; noBlocks?: true; setback?: number; base?: 'top' | 'bottom' }
   // Linear strip handle (z_handles D17): the sharknose edge (face-kind frame:
   // top / bottom = ends of DX, left / right = ends of DY) and its bevel.
-  lh?: { bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number }
+  lh?: { bevel_edge: 'top' | 'bottom' | 'left' | 'right'; angle_deg: number; land: number; rebate?: number }
   // Shaped cabinets (z_cabinet_shape 4a): vertical panels' angled ends, degrees
   // from square at the low / high end of the part's length axis (sides: Z,
   // back: X, side:/back:<edge>: its own length from the outer start corner).

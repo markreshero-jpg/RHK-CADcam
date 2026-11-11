@@ -167,6 +167,7 @@ export function linearStripShape(p: ResolvedCaseLike): PartShape | null {
   if (!lh) return null
   const b = caseBox(p)
   const d = b.d, land = Math.min(Math.max(lh.land, 0), d)
+  if (lh.rebate) return rebateShape(lh.bevel_edge, lh.rebate, b)
   const run = (d - land) * Math.tan((lh.angle_deg * Math.PI) / 180)
   if (lh.bevel_edge === 'bottom' || lh.bevel_edge === 'top') {
     const r = Math.min(run, b.h)   // across: x = depth from the back face, y = up
@@ -180,6 +181,22 @@ export function linearStripShape(p: ResolvedCaseLike): PartShape | null {
     : [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: land }, { x: b.w - r, y: d }, { x: 0, y: d }] }
 }
 type ResolvedCaseLike = ResolvedCabinet['case_parts'][number]
+
+/** A timber pull's square rebate (z_handles D19): r × r cut out of the back of
+ *  its finger edge, the same frames as the sharknose above. */
+function rebateShape(edge: 'top' | 'bottom' | 'left' | 'right', rb: number, b: { w: number; h: number; d: number }): PartShape {
+  const d = b.d
+  if (edge === 'bottom' || edge === 'top') {
+    const r = Math.min(rb, d - 1, b.h - 1)
+    return { extrude: 'across', tape: false, pts: edge === 'bottom'
+      ? [{ x: 0, y: r }, { x: r, y: r }, { x: r, y: 0 }, { x: d, y: 0 }, { x: d, y: b.h }, { x: 0, y: b.h }]
+      : [{ x: 0, y: 0 }, { x: d, y: 0 }, { x: d, y: b.h }, { x: r, y: b.h }, { x: r, y: b.h - r }, { x: 0, y: b.h - r }] }
+  }
+  const r = Math.min(rb, d - 1, b.w - 1)   // up: x across, y down from the front face (y = d at the back)
+  return { extrude: 'up', tape: false, pts: edge === 'left'
+    ? [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: d }, { x: r, y: d }, { x: r, y: d - r }, { x: 0, y: d - r }]
+    : [{ x: 0, y: 0 }, { x: b.w, y: 0 }, { x: b.w, y: d - r }, { x: b.w - r, y: d - r }, { x: b.w - r, y: d }, { x: 0, y: d }] }
+}
 
 /** A long edge mitred 45° (z_bulkhead B10) as a side profile across the part:
  *  x = depth from local z = 0, y = up. A flat part's `top` edge is its front

@@ -178,6 +178,7 @@ New tables need RLS policies (see access-control memory and `z_access_control/`)
 | **H8b** | 3D models in the views: `Handle3D` draws the model through `ModelAsset`, falls back to bar / knob; STL takes the `finish` colour | spec'd 2026-10-15 |
 | **H8c** | (optional) Elevation silhouette from the model, like `slideSilhouette.ts` | later |
 | **H9** | Linear applied strip handle (grip kind `linear`, D17): a strip of the front's own board on the face, full length, sharknose edge, screw holes, length override | ✅ built 2026-10-25 (7f03d61), applied to RHK6581 kitchen; in-app check pending. Sharknose bevel drawn on the strips (partSolids.linearStripShape → 3D, modal side / top views, cabinet sheets) 2026-10-25 — see D17 |
+| **H10** | Timber pull (D19): linear strip of its own stock + thickness, square rebate instead of the sharknose, no tape | ✅ built 2026-11-12, migration `migration_h10_timber_pull.sql` applied; first use RHK6339 J02. 3D in-app check pending |
 
 **D18. Cabinet-wide handle position (Mark, 2026-10-25) — H5c.** The cabinet
 panel (RHS, cabinet clicked) has "Edit position" under Handle schedule: **From
@@ -219,6 +220,22 @@ thickness proud. One strip per front:
   (350), `screw_inset_mm` (50); migration `z_handles/migration_h9_linear.sql`.
   Kitchen use: a room handle schedule with base / drawer / tall rows on the strip
   and the wall row push-to-open.
+
+**D19. Timber pull — a linear strip of its own stock** (Mark, 2026-11-12, RHK6339 J02, Croft WD 71 detail 9:
+35 x 35 solid timber, 18 x 18 rebate, 450 long, secret fixed).
+- Grip kind `linear` with three optional catalogue columns on `hardware_handles`:
+  `strip_thick_mm` (blank = the front's thickness), `strip_material_id` (blank = the
+  front's board; set = solid timber: no edge tape, cut list "solid timber pull,
+  r x r rebate, made in shop"), `rebate_mm` (a square rebate cut from the back of the
+  finger edge, in place of the sharknose bevel; `lh.rebate` on the part, drawn by
+  `partSolids.rebateShape`).
+- Placement as D17: flush with the non-hinged edge on tall doors (one per door, Mark
+  chose flush to the edge over a wider centre gap so the doors keep their gap),
+  `handle_length` / `handle_inset` per front for a short pull. Secret fixed = turn the
+  holes off (`HANDLE_DRILL` false / per-front `handle_drill`); tick the `lh:` parts No
+  CNC (made by hand).
+- Library → Materials → Handles: kind "Linear strip" + Strip W / Strip thk / Rebate
+  columns. The material is set in the DB for now (no picker).
 
 **H1 notes (2026-10-13):**
 - Migration applied to live: grip-kind columns on `hardware_handles`,

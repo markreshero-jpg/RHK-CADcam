@@ -106,6 +106,12 @@ export interface RawRoom { id: string; name: string }
 /** Door name prefix by hinge side (face_zones.hinge_side). */
 const HINGE_PREFIX: Record<string, string> = { left: 'Left ', right: 'Right ', top: 'Top ', bottom: 'Bottom ' }
 
+/** Cut-list note for a linear strip handle (z_handles D17 / D19). */
+function lhNote(r: Record<string, unknown>): string {
+  const rb = Number((r.lh as { rebate?: number } | null)?.rebate ?? 0)
+  return rb > 0 ? `solid timber pull, ${rb} x ${rb} rebate, made in shop` : 'sharknose edge, saw'
+}
+
 export interface RawCabinet { id: string; label: string | null; assembly_class: string; room_id: string; is_kick_assembly?: boolean | null; no_cnc?: boolean | null; part_no_cnc?: string[] | null; part_hide_views?: PartHideViews | null
   // resolved_drawer_hw->warnings (saved resolver warnings, z_material_colours MC5)
   warnings?: { code?: string; message?: string; material_id?: string }[] | null
@@ -343,7 +349,7 @@ export function normalizeProject(
     const piece = splitPieceSuffix(key, cutHere, backX).trim().replace(/[()]/g, '') || null
     const splitNote = splitPieceNote(key, cutHere, backX)
     push('case_parts', r, `case_${key}`, { typeKey: pieceOf, base: key.startsWith('fprail:') ? `Finger Rail ${Number(key.slice(7)) + 1}` : key.startsWith('fpbase:') ? `Finger Rail Base ${Number(key.slice(7)) + 1}` : key.startsWith('lh:') ? `Linear Handle ${Number(key.slice(3)) + 1}` : curvedEndPartLabel(key) ?? floatShelfPartLabel(key) ?? backPanelPartLabel(key) ?? humanize(pieceOf),
-      ...(bevel || piece || key.startsWith('lh:') ? { suffix: [bevel, piece, key.startsWith('lh:') ? 'sharknose edge, saw' : null].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
+      ...(bevel || piece || key.startsWith('lh:') ? { suffix: [bevel, piece, key.startsWith('lh:') ? lhNote(r) : null].filter(Boolean).map(t => ` (${t})`).join('') } : {}) },
       (r.grain_direction as string) ?? null, Number(r.nest_priority ?? 0), railStrip?.dims ?? turned,
       railStrip ? { ...eb, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0 } : eb, base)
     const last = parts[parts.length - 1]
@@ -524,7 +530,7 @@ export function normalizeProject(
 
 // Column selections shared by server + client loaders.
 export const PART_SELECTS = {
-  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,edge_mitre,outline,cutouts,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
+  case_parts: 'id,cabinet_instance_id,part_key,dx,dy,dz,bevel_lo,bevel_hi,edge_mitre,outline,cutouts,lh,material_id,grain_direction,nest_priority,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   internal_parts: 'id,cabinet_instance_id,part_type,sort_order,dx,dy,dz,outline,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_back,edge_band_front,edge_band_id',
   toekick_parts: 'id,cabinet_instance_id,part_key,sort_order,dx,dy,dz,bevel_lo,bevel_hi,grain_direction,material_id,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id',
   face_zones: 'id,cabinet_instance_id,facet,row_index,col_index,face_type,hinge_side,dx,dy,dz,bevel_l,bevel_r,material_id,grain_direction,output_to_cnc,edge_band_top,edge_band_bottom,edge_band_left,edge_band_right,edge_band_id,facing',

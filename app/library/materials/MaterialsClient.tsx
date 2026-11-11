@@ -176,6 +176,7 @@ const TABS: TabConfig[] = [
           { value: 'push',      label: 'Push to open' },
           { value: 'sharknose', label: 'Sharknose' },
           { value: 'setback',   label: 'Set back SQ edge' },
+          { value: 'linear',    label: 'Linear strip' },
           { value: 'rail',      label: 'Rail' },
           { value: 'channel',   label: 'Channel' },
         ],
@@ -199,6 +200,11 @@ const TABS: TabConfig[] = [
       { key: 'needs_finger_gap', label: 'Finger gap', type: 'boolean', w: 64 },
       { key: 'bevel_angle_deg', label: 'Tilt°',  type: 'number',  w: 52 },
       { key: 'bevel_land_mm', label: 'Land mm',  type: 'number',  w: 60 },
+      // Linear strip (D17) / timber pull (D19): strip width, its own thickness
+      // (blank = the front's) and a square rebate in place of the sharknose.
+      { key: 'strip_width_mm', label: 'Strip W', type: 'number',  w: 60 },
+      { key: 'strip_thick_mm', label: 'Strip thk', type: 'number', w: 64 },
+      { key: 'rebate_mm',     label: 'Rebate',   type: 'number',  w: 58 },
       { key: 'finish',        label: 'Finish',   type: 'text',    w: 110 },
       { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 65,  step: '0.01' },
       { key: 'active',        label: 'Active',   type: 'boolean', w: 48 },
