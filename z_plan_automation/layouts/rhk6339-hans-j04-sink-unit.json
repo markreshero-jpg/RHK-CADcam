@@ -1,0 +1,92 @@
+{
+  "_source": "_JOBS/RHK6300 - 6399/RHK6339 - Hans Const - 116 Queenscroft st Chelmer/SITE CHECK MEASURES/site Measured plans.pdf p5 (Croft WD 72 J04) + Rory site measures + Mark 2026-11-12",
+  "_notes": [
+    "Recess 2271 frame to frame (drawing 2780), 700 back of jamb to raw wall (no gyprock on the wall). Joinery flush with the jamb face: top 700, carcass 676 (as J05).",
+    "Floor 14 timber (as J05): 2228 raw floor to the underside of the shadow -> shelf top 2214 FFL. Bench top 900 FFL, 100 kick, carcass 865 incl kick, 35 solid timber top.",
+    "Base L->R: D3 580 (3 equal drawers) | B1D 550 | sink B2D 1141 (pair of doors, undermount SS sink, hot water unit, rails on edge).",
+    "Open shelf 420 high, 4 equal bays, 2243 between the 14 timber linings, 510 deep (setback scaled ~190 off the bench front). 33 veneer top / bottom / sides / divisions, 17 veneer back. Nosings left off for now (Mark).",
+    "14 timber lining both ends by others: display-only WEP pieces (Timber Lining 14mm, No CNC), bench top 900 to shelf top 2214.",
+    "A/C box over the shelf at the right: 1150 x 530 x 681 (front flush with the joinery), 35 shadow gap, 33 veneer box, 17 veneer removable front panel. Size TBC (Mark: this size for now)."
+  ],
+  "projectId": "cf31069b-1a56-49ee-91df-dade35f68fde",
+  "roomName": "J04 Sink Unit",
+  "roomHeight": 2800,
+  "walls": [
+    { "x": 0, "y": 700, "length": 700, "angle": 270, "_": "left end (jamb)" },
+    { "x": 0, "y": 0, "length": 2271, "angle": 0, "_": "back wall 2271 frame to frame" },
+    { "x": 2271, "y": 0, "length": 700, "angle": 90, "_": "right end (jamb)" }
+  ],
+  "cabinets": [
+    {
+      "def": "D3-SLL", "wall": 2, "offset": 0, "dx": 580, "dy": 865, "dz": 676,
+      "note": "J04 3 equal drawers",
+      "set": { "face_grid": {
+        "cols": [ { "col_index": 0, "width_locked": false } ],
+        "rows": [ { "row_index": 0, "height_locked": false }, { "row_index": 1, "height_locked": false }, { "row_index": 2, "height_locked": false } ],
+        "zones": [
+          { "col_index": 0, "row_index": 0, "face_type": "drawer_face" },
+          { "col_index": 0, "row_index": 1, "face_type": "drawer_face" },
+          { "col_index": 0, "row_index": 2, "face_type": "drawer_face" } ] } }
+    },
+    {
+      "def": "B1D", "wall": 2, "offset": 580, "dx": 550, "dy": 865, "dz": 676,
+      "note": "J04 one door, adj shelf",
+      "set": { "face_grid": {
+        "cols": [ { "col_index": 0, "width_locked": false } ],
+        "rows": [ { "row_index": 0, "height_locked": false } ],
+        "zones": [ { "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left" } ] } }
+    },
+    {
+      "def": "B2D", "wall": 2, "offset": 1130, "dx": 1141, "dy": 865, "dz": 676,
+      "note": "J04 sink: undermount SS sink + hot water unit (by others)",
+      "rules": { "RAIL_ORIENT": "vertical" },
+      "set": { "internal_grid": { "tree": { "type": "open", "fittings": [] } } }
+    },
+    {
+      "def": "WEP", "wall": 2, "offset": 0, "dx": 14, "dy": 1314, "dz": 700,
+      "note": "14 timber lining BY OTHERS (display only)",
+      "rules": { "WALLZ": 900, "SCRBK": 0 },
+      "set": { "no_cnc": true, "material_overrides": { "exposed": "3f6b71d6-8aa0-49eb-a4b7-38dd983037b9", "interior": "3f6b71d6-8aa0-49eb-a4b7-38dd983037b9" } }
+    },
+    {
+      "def": "WEP", "wall": 2, "offset": 2257, "dx": 14, "dy": 1314, "dz": 700,
+      "note": "14 timber lining BY OTHERS (display only)",
+      "rules": { "WALLZ": 900, "SCRBK": 0 },
+      "set": { "no_cnc": true, "material_overrides": { "exposed": "3f6b71d6-8aa0-49eb-a4b7-38dd983037b9", "interior": "3f6b71d6-8aa0-49eb-a4b7-38dd983037b9" } }
+    },
+    {
+      "def": "WOPN", "wall": 2, "offset": 14, "dx": 2243, "dy": 420, "dz": 510,
+      "note": "J04 open shelf 4 bays, 33 veneer, 17 veneer back",
+      "rules": { "WALLZ": 1794, "SCRBK": 0 },
+      "set": {
+        "has_face": false, "has_toekick": false, "top_type": "full_top", "exposed_interior": true,
+        "material_overrides": {
+          "interior": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "exposed": "fca041dc-30b7-469e-9e14-d8d3aae38a57",
+          "shelf": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "left_side": "fca041dc-30b7-469e-9e14-d8d3aae38a57",
+          "right_side": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "back": "0bed0f26-d551-4c03-ba6a-fd7f3309b6ad" },
+        "internal_grid": { "tree": { "type": "vsplit", "children": [
+          { "divider": "single", "section": { "type": "open", "fittings": [] } },
+          { "divider": "single", "section": { "type": "open", "fittings": [] } },
+          { "divider": "single", "section": { "type": "open", "fittings": [] } },
+          { "section": { "type": "open", "fittings": [] } } ] } }
+      }
+    },
+    {
+      "def": "W1D", "wall": 2, "offset": 1107, "dx": 1150, "dy": 530, "dz": 681,
+      "note": "A/C box: removable 17 veneer front panel, exhaust slots TBC. SIZE TBC",
+      "rules": { "WALLZ": 2249, "SCRBK": 0, "SCRBT": 0 },
+      "set": {
+        "exposed_interior": true,
+        "material_overrides": {
+          "interior": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "exposed": "fca041dc-30b7-469e-9e14-d8d3aae38a57",
+          "left_side": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "right_side": "fca041dc-30b7-469e-9e14-d8d3aae38a57",
+          "back": "fca041dc-30b7-469e-9e14-d8d3aae38a57" },
+        "internal_grid": { "tree": { "type": "open", "fittings": [] } },
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "false_panel" } ] }
+      }
+    }
+  ]
+}

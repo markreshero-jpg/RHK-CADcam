@@ -12,6 +12,9 @@ App project `cf31069b-1a56-49ee-91df-dade35f68fde`.
 - Fronts + exposed: **Veneer 17mm – Blackbutt** (new board `Veneer 17mm`, 2700 x 1205 - was 2408, T102),
   tape **0.5mm Matching 22 – Blackbutt** (50m rolls). Door style `Veneer 17mm` (17 blank,
   colour range `Veneer 17mm`, colour Blackbutt, grain vertical).
+- **Veneer 33mm – Blackbutt** (new board `Veneer 33mm` `0157a2d8`, colour `fca041dc`, 2700 x 1205,
+  T106 12 compression - T102 only cuts 25 deep), tape **0.5mm Matching 40 – Blackbutt** `579bc59a`
+  (Mark 2026-11-12, for J04).
 - Carcass: PT Colour Matt 16mm Black Matt (assembly schedule "16.5mm PT Black Matt").
 - Handles: Sharknose Finger Pull schedule.
 - Kick 100 (job TOEH). Base default 879 incl kick, 676 deep (fingerpull, 700 top).
@@ -75,12 +78,34 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j02-stair-cupboard.json`, post `_
   board **Veneer 17mm now 2700 x 1205** (whole board, all rooms). Headless nest: J02 veneer on
   2 sheets, nothing unplaced.
 
+## J04 Sink Unit - drawn 2026-11-12, room `b2252689-fdc9-4fd7-be9a-f29853f0391e`
+
+Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6339-j04-post.mjs`
+(lining depth, kick join, top, CAD), shots `_tmp-6339-j04-shot.mjs`. Croft WD 72 + Rory.
+
+- Recess 2271 frame to frame (drawing 2780), 700 back of jamb to raw wall (no gyprock). Walls 1 left
+  end, 2 back, 3 right end. Joinery flush with the jamb face: top 700, carcass 676 (as J05).
+- Floor 14 timber (Mark: as J05): 2228 raw to underside of shadow -> shelf top 2214 FFL. Bench 900 FFL,
+  100 kick, carcass 865 incl kick, 35 solid timber top 2271 x 700 wall to wall (Benchtop 1, 865).
+- Base L->R (Mark OK): BC-01 D3 580 equal drawers | BC-02 B1D 550 hinged left | BC-03 B2D 1141 sink,
+  no shelf, rails on edge, undermount SS sink + HWU by others. KICK 1 joined 2271.
+- WC-03 open shelf WOPN 2243 (between the linings) x 420 x 510 (setback ~190 scaled off the section),
+  WALLZ 1794, 4 equal bays (3 dividers): **33 veneer** top / bottom / sides / divisions, 17 veneer back
+  (Mark). 32 timber nosings left off for now - may add later.
+- WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
+  (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
+  exhaust slots TBC. Size from the drawing (Mark: this size for now).
+- 14 timber lining both ends BY OTHERS: WC-01 / WC-02 WEP 14 x 1314 x 700 (dz 681 + 19), bench top 900
+  to shelf top 2214, new display material **Timber Lining 14mm (by others)** `3f6b71d6`, cabinet No CNC.
+
+### Open / TBC
+- [ ] A/C box size, shadow gap (35), exhaust slots.
+- [ ] Nosings on the shelf (Mark: maybe later).
+- [ ] Back splashback finish (mirror struck out - lining only noted on the ends).
+
 ## Other rooms - not drawn
 - J01 garage: 4411 frame to frame - 12 sheet both sides = 4387. Ceiling TBC by Rory.
   Hoop pine 19 ply in the quote.
-- J02 stair cupboard: no site measures.
-- J04 sink unit: 2271 frame to frame (drawing 2780), 700 back of jamb to raw wall, 2228 raw floor
-  to underside of shadow, 14 timber lining both ends (mirror splashback struck out).
 - J06 desk: 4508 - 1x gyp, 735 off finished floor. Top only (trough + outriggers by others), join needed.
 - J07 shelf wall: 3547 beam to frame (Rory final measure), 305 frame to back of jamb, 150 filler
   at the window, 735 off FFL, 1492 to underside of beam. Call Rory re wall.
