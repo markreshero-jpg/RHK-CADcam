@@ -28,6 +28,17 @@ export const PART_TYPE_LABELS: Record<string, string> = {
   db_back:       'Drawer Box Back',
   // Bulkheads (z_bulkhead) — "bh:fascia" would humanize badly.
   'bh:fascia':   'Bulkhead Fascia',
+  // Vertical-grain fascia split into equal pieces, left → right (B13).
+  'bh:fascia_a': 'Bulkhead Fascia A',
+  'bh:fascia_b': 'Bulkhead Fascia B',
+  'bh:fascia_c': 'Bulkhead Fascia C',
+  'bh:fascia_d': 'Bulkhead Fascia D',
+  'bh:fascia_e': 'Bulkhead Fascia E',
+  'bh:fascia_f': 'Bulkhead Fascia F',
+  'bh:fascia_g': 'Bulkhead Fascia G',
+  'bh:fascia_h': 'Bulkhead Fascia H',
+  'bh:fascia_i': 'Bulkhead Fascia I',
+  'bh:fascia_j': 'Bulkhead Fascia J',
   'bh:ret_l':    'Bulkhead Left Return',
   'bh:ret_r':    'Bulkhead Right Return',
   'bh:ret_b':    'Bulkhead Bottom Return',

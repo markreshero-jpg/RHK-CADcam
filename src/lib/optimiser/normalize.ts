@@ -315,7 +315,10 @@ export function normalizeProject(
     // A turned island back panel (below) nests w = its width: tape pairs as a side's.
     // So does a vertical-grain finger rail / rail base (nested turned too, below):
     // its long-edge tape must follow the length onto w.
-    const sidePairs = isSide || ((key.startsWith('ibp:') || key.startsWith('lh:') || key.startsWith('fprail:') || key.startsWith('fpbase:')) && r.grain_direction === 'vertical')
+    // Vertical-grain bulkhead parts (B13) are stored as the IBP is (DX = height /
+    // depth, DY = length) and nest turned the same way.
+    const bhV = key.startsWith('bh:') && r.grain_direction === 'vertical'
+    const sidePairs = isSide || bhV || ((key.startsWith('ibp:') || key.startsWith('lh:') || key.startsWith('fprail:') || key.startsWith('fpbase:')) && r.grain_direction === 'vertical')
     const eb = ebFields(flagsOf(r), tFor(r),
       sidePairs ? ['left', 'right'] : ['bottom', 'top'],
       sidePairs ? ['bottom', 'top'] : ['left', 'right'])
@@ -325,7 +328,7 @@ export function normalizeProject(
     // Island back panels (z_island_back_panel) are vertical-grain applied panels,
     // turned the same way, their tape turning with them. Their Shaker routes are
     // generated in this turned frame (panelProfile.ts ibpTarget).
-    const turned = (key.startsWith('fprail:') || key.startsWith('ibp:') || key.startsWith('lh:')) && r.grain_direction === 'vertical'
+    const turned = bhV || ((key.startsWith('fprail:') || key.startsWith('ibp:') || key.startsWith('lh:')) && r.grain_direction === 'vertical')
       ? { w: Number(r.dy), h: Number(r.dx), thickness: Number(r.dz) } : undefined
     // Finger-pull rails narrower than the machine cuts well nest as a RAIL_NEST_W
     // strip; the shop trims it and tapes the long edges after (Mark, 2026-10-29), so

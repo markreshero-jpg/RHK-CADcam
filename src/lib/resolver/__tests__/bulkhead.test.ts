@@ -222,3 +222,39 @@ describe('cleat joint (B12)', () => {
   })
 })
 
+
+// B13 (Mark 2026-11-11, RHK6595 WC-08 / 09 / 11): vertical grain.
+describe('bulkhead grain (B13)', () => {
+  const grained = (w: number) => cab({ grain: 'vertical', right: on('mitre', 300) }, { DX: w, exposed_material: { ...board(T, 'exposed'), has_grain: true, sheet_dx: 2415, sheet_dy: 1211 } })
+  it('unset = horizontal: one fascia, no grain_direction, setting not stored', () => {
+    const ps = parts(cab({}))
+    expect(get(ps, 'bh:fascia')!.grain_direction).toBeUndefined()
+    expect(normaliseBulkhead({ ...DEFAULT_BULKHEAD })!.grain).toBeUndefined()
+    expect(normaliseBulkhead({ ...DEFAULT_SHADOWLINE, grain: 'vertical' })!.grain).toBeUndefined()
+  })
+  it('vertical, fits the sheet: one fascia + returns marked vertical, cleats not', () => {
+    const ps = parts(grained(890))
+    expect(ps.filter(p => p.part_key.startsWith('bh:fascia')).map(p => p.part_key)).toEqual(['bh:fascia'])
+    expect(get(ps, 'bh:fascia')!.grain_direction).toBe('vertical')
+    expect(get(ps, 'bh:ret_r')!.grain_direction).toBe('vertical')
+    expect(get(ps, 'bh:cleat_v')!.grain_direction).toBeUndefined()
+  })
+  it('vertical, longer than the sheet short side: equal pieces left → right, joins taped, end treatment kept', () => {
+    const ps = parts(grained(2042.5))
+    const fs = ps.filter(p => p.part_key.startsWith('bh:fascia'))
+    expect(fs.map(p => p.part_key)).toEqual(['bh:fascia_a', 'bh:fascia_b'])
+    expect(fs.map(p => p.DY)).toEqual([1021.3, 1021.2])
+    expect(fs.every(p => p.grain_direction === 'vertical' && p.DY <= 1200)).toBe(true)
+    const [a, b] = fs
+    expect(plan(a)).toMatchObject({ x0: 0, x1: 1021.3 })
+    expect(plan(b).x1).toBeCloseTo(2042.5 + 0, 0)
+    // a = left end (to the wall, taped since no left return), b = right end mitred to the return.
+    expect(a.edge_band).toMatchObject({ left: true, right: true })
+    expect(b.bevel_lo).toBe(45)
+    expect(b.edge_band).toMatchObject({ left: false, right: true })
+    expect(a.bevel_hi ?? 0).toBe(0)
+  })
+  it('mitre note follows the split pieces', () => {
+    expect(edgeMitreNote({ part_key: 'bh:fascia_b', edge_mitre: 'bottom' })).toMatch(/bottom edge to bottom return/)
+  })
+})

@@ -1854,6 +1854,15 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.cabinets.some(cab => !!cab.bulkhead?.h_adjust) },
   ]},
 
+  // Appended 2026-11-11 (z_bulkhead B13 — vertical grain).
+  { id: 'bulkhead_grain', level: 'intermediate', topic: 'cabinets', title: 'Run a bulkhead's grain up',
+    blurb: 'Set a woodgrain bulkhead to vertical grain: the fascia is made in pieces when it is longer than the sheet.',
+    keywords: 'bulkhead grain vertical horizontal woodgrain fascia join pieces BH timber', steps: [
+    { id: 'grain', title: 'Pick Vertical grain',
+      body: 'Select the bulkhead (BH). In the bulkhead section set Grain to Vertical (up the fascia). The fascia and its returns are nested turned so the grain runs up (front to back on the returns). A fascia longer than the sheet's short side (about 1200) is made in equal pieces, Fascia A, B…, taped at the joins. Horizontal takes it back to one piece along the fascia.',
+      canvas: true, done: c => c.cabinets.some(cab => cab.bulkhead?.grain === 'vertical') },
+  ]},
+
   // Appended 2026-11-08 (z_ai_helper AI1: read-only AI chat).
   { id: 'ai_chat', level: 'basics', topic: 'room', title: 'Ask the AI about a room',
     blurb: 'Ask questions about the room you have open: sizes, colours, kick lengths, what is TBC.',

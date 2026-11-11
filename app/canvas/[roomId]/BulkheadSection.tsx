@@ -82,6 +82,13 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
           <option value="carcase">Flush with carcase</option>
         </select>
       </div>}
+      {!curved && <div title="Board grain on the fascia and returns. Vertical runs up the fascia (front to back on the returns) and is nested turned; a fascia longer than the sheet's short side is made in equal pieces, taped at the joins.">
+        <label className={lbl}>Grain</label>
+        <select value={b.grain ?? 'horizontal'} onChange={e => put({ grain: e.target.value === 'vertical' ? 'vertical' : undefined })} className={inp}>
+          <option value="horizontal">Horizontal (along the fascia)</option>
+          <option value="vertical">Vertical (up the fascia)</option>
+        </select>
+      </div>}
       <label className="flex items-center gap-2 text-xs text-gray-300"
         title="Height fills from the wall-cabinet top to the ceiling, and follows soffit / ceiling changes. Typing a height switches this off.">
         <input type="checkbox" checked={b.auto_h}

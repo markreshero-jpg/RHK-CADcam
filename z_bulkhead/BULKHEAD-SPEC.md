@@ -11,7 +11,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B12 cleat butt joint built 2026-11-07 (migration b12 applied), check pending. B11 height adjust built 2026-11-07, check pending. B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
+> **RESUME HERE** → B13 vertical grain built 2026-11-11 (no schema change), check pending. B12 cleat butt joint built 2026-11-07 (migration b12 applied), check pending. B11 height adjust built 2026-11-07, check pending. B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
 > B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
 > migration_c7; no schema change) — in-app check pending, with B5. B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
@@ -88,6 +88,7 @@ underside when the bulkhead isn't sitting on cabinets.
     front: 'doors' | 'carcase',
     auto_h: boolean,                // height follows ceiling − wall-cab top
     h_adjust?: number,              // B11: top above (+) / below (−) the ceiling
+    grain?: 'vertical',             // B13: unset = horizontal
     cleat: boolean,
     left:   { on: boolean, depth: number, joint: 'mitre' | 'butt' },
     right:  { on: boolean, depth: number, joint: 'mitre' | 'butt' },
@@ -207,6 +208,17 @@ underside when the bulkhead isn't sitting on cabinets.
       leg's thickness. Construction Methods › Wall › joint defaults lists it
       under "Bulkheads (BH)". Supersedes "Hand-fixed: no seams / drilling" for
       the cleat only.
+- [~] **B13 — vertical grain** (built 2026-11-11, in-app check pending) (Mark,
+      RHK6595: "bulkheads WC-09, WC-08 and WC-11 need to be vertical grain").
+      Bulkhead section › Grain: Horizontal (default, unset) / Vertical. Vertical sets
+      `grain_direction: 'vertical'` on the fascia and the side / bottom returns
+      (cleats and the split rail keep none) and the optimiser nests `bh:` parts
+      with it turned, as the island back panel (h = DX = height / depth). The
+      fascia length then lies across the sheet: longer than
+      `kickFaceMaxLength(exposed, 'vertical')` (sheet short side, floored to 100)
+      it splits into equal pieces `bh:fascia_a`, `_b` … left → right (letters, as
+      the part_key check allows `bh:[a-z_]+`), end bevels / tape on the outer
+      pieces, joins taped (IBP rule). RHK6595 WC-09 2042.5 → 1021.3 + 1021.2.
 - [ ] **B5 — in-app check.** Plan, elevation, 3D, cut list, optimiser,
       dimension rows, reports.
 

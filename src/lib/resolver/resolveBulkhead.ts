@@ -5,7 +5,8 @@
 // underside, Z from the wall (0) toward the room. The fascia's front face sits
 // at the carcase front (DZ) or flush with the overhead doors' front.
 //
-//   bh:fascia            full width × full height, exposed board
+//   bh:fascia            full width × full height, exposed board (vertical grain
+//                        and longer than the sheet: bh:fascia_a, _b … equal pieces, B13)
 //   bh:ret_l / bh:ret_r  side returns, full height, running back `depth` from
 //                        the front (capped at the wall)
 //   bh:ret_b             bottom return (under-panel) between the side returns
@@ -34,6 +35,7 @@
 import type { CabinetInput, ConstructionRules, DeclaredSeam, ResolvedCasePart, EdgeBanding } from './types'
 import { resolveFaceZ } from './mergeRules'
 import { BH_CLEAT_LEG } from '../bulkhead'
+import { kickFaceMaxLength } from './resolveKickRun'
 
 const MITRE = 45
 
@@ -77,20 +79,35 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     if (p.DX > 0 && p.DY > 0 && p.DZ > 0) out.push({ AX: 0, AZ: 0, ...p, Y: p.Y + ts })
   }
 
+  // B13 grain (Mark 2026-11-11, RHK6595): vertical = the exposed parts run their
+  // grain up the fascia (and front → back on the returns), nested turned like the
+  // island back panel. The fascia's length then lies across the sheet, so a longer
+  // fascia splits into equal pieces (bh:fascia_a, _b … left → right, taped at the
+  // joins like the IBP), each no longer than the sheet's short side.
+  const grainV = b.grain === 'vertical'
+  const gd = grainV ? { grain_direction: 'vertical' as const } : {}
+  const maxL = grainV ? kickFaceMaxLength(cab.exposed_material, 'vertical') : null
+  const nF = maxL && W > maxL ? Math.ceil(W / maxL) : 1
+
   // Fascia — turned 180°: runs right → left from (W, Zf), outer face at the front.
   // Local x = 0 is the right end (bevel_lo / `left` edge), x = W the left end.
-  push({
-    part_key: 'bh:fascia',
-    DX: H, DY: W, DZ: t,
-    X: W, Y: 0, Z: Zf, AY: 180,
-    ...(mR ? { bevel_lo: MITRE } : aR > 0 ? { bevel_lo: aR } : {}),
-    ...(mL ? { bevel_hi: MITRE } : aL > 0 ? { bevel_hi: aL } : {}),
-    material_id: exp,
-    // Ends show unless mitred or scribed to a wall; the bottom edge shows
-    // unless mitred to the bottom return.
-    edge_band: band({ bottom: !mB, left: !mR && !(aR > 0), right: !mL && !(aL > 0) }),
-    ...(mB ? { edge_mitre: 'bottom' as const } : {}),
-  })
+  for (let i = 0; i < nF; i++) {
+    const xa = Math.round(i * W / nF * 10) / 10, xb = i === nF - 1 ? W : Math.round((i + 1) * W / nF * 10) / 10
+    const rightEnd = i === nF - 1, leftEnd = i === 0
+    push({
+      part_key: nF === 1 ? 'bh:fascia' : `bh:fascia_${'abcdefghij'[i]}`,
+      DX: H, DY: xb - xa, DZ: t,
+      X: xb, Y: 0, Z: Zf, AY: 180,
+      ...(rightEnd ? (mR ? { bevel_lo: MITRE } : aR > 0 ? { bevel_lo: aR } : {}) : {}),
+      ...(leftEnd ? (mL ? { bevel_hi: MITRE } : aL > 0 ? { bevel_hi: aL } : {}) : {}),
+      material_id: exp,
+      // Ends show unless mitred or scribed to a wall (joins between pieces are
+      // taped); the bottom edge shows unless mitred to the bottom return.
+      edge_band: band({ bottom: !mB, left: rightEnd ? !mR && !(aR > 0) : true, right: leftEnd ? !mL && !(aL > 0) : true }),
+      ...(mB ? { edge_mitre: 'bottom' as const } : {}),
+      ...gd,
+    })
+  }
 
   // Side returns, full height. Mitred: from the front corner; butt: behind the fascia.
   const side = (key: 'bh:ret_l' | 'bh:ret_r', ret: typeof L, mitre: boolean) => {
@@ -112,6 +129,7 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
       // Bottom edge always shows (the bottom return sits between the sides);
       // the back end shows when the return stops short of the wall.
       edge_band: band({ bottom: true, ...(isL ? { right: !atWall } : { left: !atWall }) }),
+      ...gd,
     })
   }
   side('bh:ret_l', L, mL)
@@ -136,6 +154,7 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
       edge_band: band({ bottom: full < Zf - 0.5, left: !L.on || bx0 > x0 + 0.5, right: !R.on || bx1 < x1 - 0.5 }),
       // Mitred: its front edge (band `top`) meets the fascia's bottom edge at 45°.
       ...(mB ? { edge_mitre: 'top' as const } : {}),
+      ...gd,
     })
   }
 
