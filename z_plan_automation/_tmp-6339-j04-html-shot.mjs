@@ -1,0 +1,10 @@
+import puppeteer from 'puppeteer-core'
+const [f, out] = process.argv.slice(2)
+const b = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: 'new', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })
+const p = await b.newPage(); await p.setViewport({ width: 1400, height: 900 })
+p.on('pageerror', e => console.log('ERR', e.message))
+await p.goto('file:///' + f, { waitUntil: 'networkidle0' }); await new Promise(r => setTimeout(r, 5000))
+await p.screenshot({ path: out + '-solid.png' })
+await p.evaluate(() => [...document.querySelectorAll('button')].find(e => /wire/i.test(e.textContent))?.click()); await new Promise(r => setTimeout(r, 2000))
+await p.screenshot({ path: out + '-wire.png' })
+await b.close()
