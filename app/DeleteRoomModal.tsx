@@ -43,8 +43,9 @@ export default function DeleteRoomModal({ room, counts, blocked, busy, error, on
             <p className="text-lg font-semibold text-ink mb-3">{room.name}</p>
 
             <p className="text-sm text-ink-muted mb-3">
-              This will permanently delete <span className="font-medium text-ink">{room.name}</span> and
-              all cabinets, walls, benchtops and fixtures within it. This cannot be undone.
+              <span className="font-medium text-ink">{room.name}</span> and everything drawn in it will be
+              removed from the job. Nothing is erased — restore it any time from
+              <span className="font-medium text-ink"> Deleted rooms</span> under the job on the main menu.
             </p>
 
             <div className="text-xs text-ink-subtle mb-5">

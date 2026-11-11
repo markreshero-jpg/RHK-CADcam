@@ -8,6 +8,18 @@ export type BottomType = 'full' | 'rails' | 'none'
 export type ToeType = 'ladder' | 'leg' | 'none'
 export type ProjectStatus = 'draft' | 'quoted' | 'approved' | 'in_production' | 'completed' | 'archived'
 
+/** Drawing status per room (z_dashboard/migration_room_status.sql). Archived rooms fold away on the main menu. */
+export type RoomStatus = 'draft' | 'draft_sent' | 'needs_site_measure' | 'waiting_approval' | 'approved' | 'sent_to_machine' | 'archived'
+export const ROOM_STATUS_OPTIONS: { value: RoomStatus; label: string; dot: string; text: string }[] = [
+  { value: 'draft',              label: 'Draft',               dot: 'bg-gray-500',   text: 'text-ink-muted' },
+  { value: 'draft_sent',         label: 'Draft sent',          dot: 'bg-sky-500',    text: 'text-sky-300' },
+  { value: 'needs_site_measure', label: 'Needs site measure',  dot: 'bg-orange-500', text: 'text-orange-300' },
+  { value: 'waiting_approval',   label: 'Waiting for approval', dot: 'bg-yellow-500', text: 'text-yellow-300' },
+  { value: 'approved',           label: 'Approved',            dot: 'bg-blue-500',   text: 'text-blue-300' },
+  { value: 'sent_to_machine',    label: 'Sent to machine',     dot: 'bg-green-500',  text: 'text-green-300' },
+  { value: 'archived',           label: 'Archived',            dot: 'bg-gray-600',   text: 'text-ink-subtle' },
+]
+
 // VJ line layout (z_doorFace_module VJ cascade) — see resolver/types VjLayout.
 export type VjLayoutValue = { qty?: number | null; spacing?: number | null; edge_gap?: number | null; direction?: "vertical" | "horizontal" | null }
 
@@ -68,6 +80,8 @@ export interface Room {
   id: string
   project_id: string
   name: string
+  /** Drawing status for this room. */
+  status?: RoomStatus
   sort_order: number
   room_dx: number | null    // room width mm
   room_dy: number | null    // ceiling height mm

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors, type DragEndEvent,
@@ -9,7 +9,7 @@ import {
   SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { Project, ProjectStatus, Room } from '@/src/lib/types'
+import { Project, ProjectStatus, Room, ROOM_STATUS_OPTIONS, type RoomStatus } from '@/src/lib/types'
 import { supabase } from '@/src/lib/supabase'
 import { useIsAdmin } from '@/src/lib/useRole'
 import RoomPropertiesModal from './canvas/[roomId]/RoomPropertiesModal'
@@ -122,20 +122,41 @@ const CncIcon = () => (
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-function dimSummary(r: Room): { text: string; set: boolean } {
+function dimSummary(r: Room): string | null {
   if (r.room_dx != null && r.room_dz != null && r.room_dy != null) {
-    return { text: `${r.room_dx} × ${r.room_dz} × ${r.room_dy}mm`, set: true }
+    return `${r.room_dx} × ${r.room_dz} × ${r.room_dy}mm`
   }
-  return { text: '— dimensions not set', set: false }
+  return null
+}
+
+/** Drawing status drop-down on a room row — saves straight to the room. */
+function RoomStatusSelect({ status, onChange }: { status: RoomStatus; onChange: (s: RoomStatus) => void }) {
+  const opt = ROOM_STATUS_OPTIONS.find(o => o.value === status) ?? ROOM_STATUS_OPTIONS[0]
+  return (
+    <span className="relative flex-none inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md border border-edge bg-surface-2/60 hover:border-edge-strong transition-colors" title="Drawing status">
+      <span className={`w-1.5 h-1.5 rounded-full ${opt.dot}`} />
+      <span className={opt.text}>{opt.label}</span>
+      <select
+        value={status}
+        onChange={e => onChange(e.target.value as RoomStatus)}
+        className="absolute inset-0 opacity-0 cursor-pointer bg-surface text-ink"
+        aria-label="Drawing status"
+      >
+        {/* Explicit colours — the popup otherwise inherits the badge's light text on a white list */}
+        {ROOM_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value} className="bg-surface text-ink">{o.label}</option>)}
+      </select>
+    </span>
+  )
 }
 
 // ── Sortable room row ───────────────────────────────────────────────────────────
 
-function SortableRoomRow({ room, removing, onEdit, onDelete }: {
+function SortableRoomRow({ room, removing, onEdit, onDelete, onStatus }: {
   room: Room
   removing: boolean
   onEdit: () => void
   onDelete: () => void
+  onStatus: (s: RoomStatus) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: room.id })
   const dim = dimSummary(room)
@@ -171,10 +192,11 @@ function SortableRoomRow({ room, removing, onEdit, onDelete }: {
         {room.name}
       </Link>
 
-      {/* Dimensions summary */}
-      <span className={`text-xs shrink-0 ${dim.set ? 'text-ink-muted' : 'text-ink-subtle italic'}`}>
-        {dim.text}
-      </span>
+      {/* Dimensions summary (only when set) */}
+      {dim && <span className="text-xs shrink-0 text-ink-muted">{dim}</span>}
+
+      {/* Drawing status */}
+      <RoomStatusSelect status={room.status ?? 'draft'} onChange={onStatus} />
 
       {/* Edit */}
       <button
@@ -250,6 +272,16 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     if (error) console.error('Failed to save room:', error)
   }
 
+  async function handleRoomStatus(roomId: string, status: RoomStatus) {
+    const prev = rooms
+    setRooms(rs => rs.map(r => (r.id === roomId ? { ...r, status } : r)))
+    const { error } = await supabase.from('rooms').update({ status }).eq('id', roomId)
+    if (error) {
+      console.error('Failed to update room status:', error)
+      setRooms(prev)
+    }
+  }
+
   function cancelAdd() {
     setAdding(false)
     setNewName('')
@@ -319,9 +351,9 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     const targetId = deleteRoom.id
     setDeleting(true)
     setDeleteError(null)
-    // FKs referencing rooms are ON DELETE CASCADE, so this removes all walls,
-    // cabinets, benchtops and room material rows in one statement.
-    const { error } = await supabase.from('rooms').delete().eq('id', targetId)
+    // Soft delete: the room is hidden (RLS) but nothing is erased; restore
+    // from "Deleted rooms" below the room list.
+    const { error } = await supabase.rpc('soft_delete_room', { p_room_id: targetId })
     setDeleting(false)
     if (error) {
       console.error('Failed to delete room:', error)
@@ -334,7 +366,34 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     window.setTimeout(() => {
       setRooms(prev => prev.filter(r => r.id !== targetId))
       setRemovingId(null)
+      void loadDeleted()
     }, 200)
+  }
+
+  // ── Archived + deleted rooms ──
+  const liveRooms = rooms.filter(r => r.status !== 'archived')
+  const archivedRooms = rooms.filter(r => r.status === 'archived')
+  const [showArchived, setShowArchived] = useState(false)
+  const [deletedRooms, setDeletedRooms] = useState<{ id: string; name: string; deleted_at: string }[]>([])
+  const [showDeleted, setShowDeleted] = useState(false)
+
+  async function loadDeleted() {
+    const { data, error } = await supabase.rpc('deleted_rooms', { p_project_id: project.id })
+    if (error) { console.error('Failed to load deleted rooms:', error); return }
+    setDeletedRooms((data ?? []) as { id: string; name: string; deleted_at: string }[])
+  }
+
+  useEffect(() => {
+    if (expanded) void loadDeleted()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded, project.id])
+
+  async function restoreRoom(id: string) {
+    const { error } = await supabase.rpc('restore_room', { p_room_id: id })
+    if (error) { console.error('Failed to restore room:', error); return }
+    const { data } = await supabase.from('rooms').select('*').eq('id', id).single()
+    if (data) setRooms(prev => [...prev, data as Room].sort((a, b) => a.sort_order - b.sort_order))
+    setDeletedRooms(prev => prev.filter(r => r.id !== id))
   }
 
   // Small activation distance so clicking the handle (or name) isn't read as a drag
@@ -343,12 +402,13 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
   async function handleDragEnd(e: DragEndEvent) {
     const { active, over } = e
     if (!over || active.id === over.id) return
-    const oldIndex = rooms.findIndex(r => r.id === active.id)
-    const newIndex = rooms.findIndex(r => r.id === over.id)
+    const oldIndex = liveRooms.findIndex(r => r.id === active.id)
+    const newIndex = liveRooms.findIndex(r => r.id === over.id)
     if (oldIndex < 0 || newIndex < 0) return
 
     const prev = rooms
-    const reordered = arrayMove(rooms, oldIndex, newIndex).map((r, i) => ({ ...r, sort_order: i }))
+    // Live rooms in their new order, archived rooms after them.
+    const reordered = [...arrayMove(liveRooms, oldIndex, newIndex), ...archivedRooms].map((r, i) => ({ ...r, sort_order: i }))
     setRooms(reordered) // optimistic
 
     // Single batch upsert — id is the conflict target; project_id + name satisfy
@@ -482,7 +542,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink px-2 py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
             aria-expanded={expanded}
           >
-            <span>{rooms.length} {rooms.length === 1 ? 'room' : 'rooms'}</span>
+            <span>{liveRooms.length} {liveRooms.length === 1 ? 'room' : 'rooms'}</span>
             <ChevronIcon expanded={expanded} />
           </button>
 
@@ -513,22 +573,77 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
           {rooms.length === 0 && !adding && (
             <p className="text-xs text-ink-subtle italic px-3 py-3">No rooms in this project yet</p>
           )}
-          {rooms.length > 0 && (
+          {liveRooms.length > 0 && (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={rooms.map(r => r.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={liveRooms.map(r => r.id)} strategy={verticalListSortingStrategy}>
                 <ul className="space-y-1">
-                  {rooms.map((r) => (
+                  {liveRooms.map((r) => (
                     <SortableRoomRow
                       key={r.id}
                       room={r}
                       removing={removingId === r.id}
                       onEdit={() => setEditRoom(r)}
                       onDelete={() => openDelete(r)}
+                      onStatus={s => handleRoomStatus(r.id, s)}
                     />
                   ))}
                 </ul>
               </SortableContext>
             </DndContext>
+          )}
+
+          {/* ── Archived rooms (folded away) ── */}
+          {archivedRooms.length > 0 && (
+            <div className="mt-1">
+              <button
+                onClick={() => setShowArchived(v => !v)}
+                className="flex items-center gap-1.5 text-[11px] font-medium text-ink-subtle hover:text-ink-muted px-2 py-1 transition-colors"
+              >
+                <ChevronIcon expanded={showArchived} />
+                Archived rooms ({archivedRooms.length})
+              </button>
+              {showArchived && (
+                <ul className="space-y-1 opacity-70">
+                  {archivedRooms.map(r => (
+                    <li key={r.id} className="flex items-center gap-2 px-2 py-1.5 pl-7 rounded-md hover:bg-surface">
+                      <Link href={`/canvas/${r.id}`} className="flex-1 min-w-0 text-sm text-ink-muted hover:text-accent-ink truncate">{r.name}</Link>
+                      <RoomStatusSelect status="archived" onChange={st => handleRoomStatus(r.id, st)} />
+                      <button onClick={() => openDelete(r)} className="flex-none text-ink-subtle hover:text-red-400 p-1.5 rounded hover:bg-surface-2 transition-colors" title="Delete room">
+                        <TrashIcon />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* ── Deleted rooms (soft delete, restorable) ── */}
+          {deletedRooms.length > 0 && (
+            <div className="mt-1">
+              <button
+                onClick={() => setShowDeleted(v => !v)}
+                className="flex items-center gap-1.5 text-[11px] font-medium text-ink-subtle hover:text-ink-muted px-2 py-1 transition-colors"
+              >
+                <ChevronIcon expanded={showDeleted} />
+                Deleted rooms ({deletedRooms.length})
+              </button>
+              {showDeleted && (
+                <ul className="space-y-1">
+                  {deletedRooms.map(r => (
+                    <li key={r.id} className="flex items-center gap-2 px-2 py-1.5 pl-7 rounded-md hover:bg-surface">
+                      <span className="flex-1 min-w-0 text-sm text-ink-subtle line-through truncate">{r.name}</span>
+                      <span className="text-[11px] text-ink-subtle shrink-0">
+                        deleted {new Date(r.deleted_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                      </span>
+                      <button onClick={() => restoreRoom(r.id)} className="text-[11px] font-medium text-accent-ink hover:text-accent-hover px-2 py-1 rounded hover:bg-surface-2 transition-colors">
+                        Restore
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           )}
 
           {/* ── Optimise / CNC ── */}

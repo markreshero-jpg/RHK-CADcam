@@ -1,6 +1,6 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { Room, Project, DEFAULT_DIMS } from '@/src/lib/types'
+import { Room, Project, DEFAULT_DIMS, ROOM_STATUS_OPTIONS, type RoomStatus } from '@/src/lib/types'
 import { DEFAULT_CONSTRUCTION_METHOD } from '@/src/lib/defaults/constructionMethod'
 import { supabase } from '@/src/lib/supabase'
 import DoorStandardsPanel, { type DoorClassRow, type DoorJobInherit } from './DoorStandardsPanel'
@@ -120,6 +120,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
 
   // Details
   const [name, setName] = useState(room.name)
+  const [status, setStatus] = useState<RoomStatus>(room.status ?? 'draft')
   const [roomDx, setRoomDx] = useState(room.room_dx ?? '')
   const [roomDy, setRoomDy] = useState(room.room_dy ?? '')
   const [roomDz, setRoomDz] = useState(room.room_dz ?? '')
@@ -263,6 +264,7 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
 
     await onSave({
       name: name.trim() || room.name,
+      status,
       class_dimension_defaults: classDims as Record<string, unknown>,
       room_dx: roomDx === '' ? null : Number(roomDx),
       room_dy: roomDy === '' ? null : Number(roomDy),
@@ -324,6 +326,13 @@ export default function RoomPropertiesModal({ room, project, initialTab, onClose
               <Field label="Room Name">
                 <input value={name} onChange={e => setName(e.target.value)}
                   className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500" />
+              </Field>
+
+              <Field label="Drawing Status">
+                <select value={status} onChange={e => setStatus(e.target.value as RoomStatus)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                  {ROOM_STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
               </Field>
 
               <div className="border-t border-gray-800 pt-4">
