@@ -55,6 +55,10 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j02-stair-cupboard.json`, post `_
 - TC-01 T2D 750 x 2665 incl 100 kick x 421, at 35: **35 shadow lines** each side + top (Mark),
   CAD arrows "35 SHADOW LINE" on the elevation. Gables Veneer Blackbutt (material_overrides
   left_side / right_side) so the shadow lines show veneer.
+- Shadow lines built (Mark 2026-11-11, `_tmp-6339-j02-sl*.mjs`): TC-02 / TC-03 = TFKW 35 veneer fillers each
+  side, dz 402 so the face (404-421) is flush with the carcass front, 19 behind the doors; on KICK 1 (joined
+  820 wall to wall). WC-01 = BH 820 x 35 at the ceiling (2665-2700), `front: 'carcase'` (fascia flush with
+  the fillers), fixed height (auto_h off), no cleat / returns, veneer fascia.
 - Pair of doors, 5 adj shelves black. Hinge 3 moved to 1470 (was over the shelf holes 1370/1402):
   hinges [100, 691.25, 1370, 1873.75, 2465] from the door bottom.
 - New handle **Custom Timber Pull 450** (solid timber, made in the shop, secret fixed, no CNC
