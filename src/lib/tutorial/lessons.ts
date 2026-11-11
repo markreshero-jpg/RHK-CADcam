@@ -1859,7 +1859,7 @@ export const LESSONS: TutorialLesson[] = [
     blurb: 'Set a woodgrain bulkhead to vertical grain: the fascia is made in pieces when it is longer than the sheet.',
     keywords: 'bulkhead grain vertical horizontal woodgrain fascia join pieces BH timber', steps: [
     { id: 'grain', title: 'Pick Vertical grain',
-      body: 'Select the bulkhead (BH). In the bulkhead section set Grain to Vertical (up the fascia). The fascia and its returns are nested turned so the grain runs up (front to back on the returns). A fascia longer than the sheet's short side (about 1200) is made in equal pieces, Fascia A, B…, taped at the joins. Horizontal takes it back to one piece along the fascia.',
+      body: 'Select the bulkhead (BH). In the bulkhead section set Grain to Vertical (up the fascia). The fascia and its returns are nested turned so the grain runs up (front to back on the returns). A fascia longer than the short side of the sheet (about 1200) is made in equal pieces, Fascia A, B…, taped at the joins. Horizontal takes it back to one piece along the fascia.',
       canvas: true, done: c => c.cabinets.some(cab => cab.bulkhead?.grain === 'vertical') },
   ]},
 
