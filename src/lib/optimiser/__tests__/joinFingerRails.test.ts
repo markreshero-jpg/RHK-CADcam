@@ -50,6 +50,18 @@ describe('joinFingerRails (z_handles D19)', () => {
     const [b, rb] = rail('b', 'B', 600, 600)
     expect(run([rail('a', 'A', 0, 600), [b, { ...rb, frontLine: 560 }]])).toHaveLength(2)
   })
+  it('joins set back base pieces (D24) along the run, only with bases', () => {
+    const base = (id: string, cab: string, x: number, len: number): [OptiPart, RailWallRect] => {
+      const [p, r] = rail(id, cab, x, len, 260, 16.5)
+      return [{ ...p, source_part_key: 'case_fpbase:0', label: 'Finger Rail Base 1', w: 33 }, r]
+    }
+    const out = run([base('a', 'BC-01', 0, 700), base('b', 'BC-02', 700, 700), base('c', 'BC-03', 1400, 678.5),
+      rail('d', 'BC-01', 0, 700, 260, 16.5)])
+    expect(out).toHaveLength(2)
+    const b = out.find(p => p.source_part_key === 'case_fpbase:0')!
+    expect(b.h).toBe(2078.5)
+    expect(b.comment).toBe('Joined rail base: BC-01 + BC-02 + BC-03')
+  })
   it('does not bridge a gap between cabinets', () => {
     expect(run([rail('a', 'A', 0, 600), rail('b', 'B', 650, 600)])).toHaveLength(2)
   })

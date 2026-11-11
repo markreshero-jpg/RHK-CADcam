@@ -383,6 +383,7 @@ cabinet. Rails run horizontally, with the grain along their length.
   - The block holes are unchanged: they sit in each side's inner face, so
     every cabinet still gets its blocks (except as D20).
   - `MAX_RAIL_RUN` = 2400. Tests in `joinFingerRails.test.ts`.
+  - Set back base pieces (`fpbase:`, D24) join the same way (2026-11-11).
 
 **D20. Knock-in blocks: drawn in 3D; none under an on-edge front rail (Mark, 2026-10-29).**
 - **No blocks on that rail.** When a base cabinet's top rails stand on edge
@@ -509,8 +510,11 @@ is, and which edge is the bottom, once the label is off.
 - Optimiser: the base piece nests like a rail (80 strip, trim, tape the front edge,
   D21), named "Finger Rail Base n". Display layer `finger_rails`.
 - Migration `z_handles/migration_d24_setback.sql` (grip kind + `fpbase:` part key) — applied.
-- Not yet: base pieces don't join along the run in the optimiser (D19 joins `fprail:`
-  only); shaped (footprint) cabinets ignore the setback; elevation shows the
+- Base pieces join along the run in the optimiser like the uprights (D19), bases
+  only with bases, comment "Joined rail base: …" (Mark, 2026-11-11, RHK6586 vanity
+  "stretch all 3 cabinets without a join"). `loadRailWallRects` places `fpbase:` by
+  its thickness band and front edge (z + DX).
+- Not yet: shaped (footprint) cabinets ignore the setback; elevation shows the
   square front + rail only (no base line).
 - Tests: `handles.test.ts` (D24 block), `fingerRailOps.test.ts` (notch).
 

@@ -9,6 +9,9 @@
 // Joined parts keep the first rail's identity (uid / source row / key); the
 // cabinet label lists every cabinet in the run. Rails carrying a drawn shape
 // or a hand size override stay as they are.
+// A set back rail's flat base piece (fpbase:, D24) runs the whole run too
+// (Mark, 2026-11-11: vanity rails stretch all 3 cabinets without a join). Bases
+// join only with bases.
 // Pure & framework-free.
 // ============================================================
 
@@ -23,16 +26,18 @@ export interface RailWallRect extends FrontWallRect {
 }
 
 const EPS = 0.5
-const isRail = (p: OptiPart) => p.source_table === 'case_parts' && p.source_part_key.startsWith('case_fprail:')
+const railKind = (p: OptiPart) => p.source_table !== 'case_parts' ? null
+  : p.source_part_key.startsWith('case_fprail:') ? 'rail' : p.source_part_key.startsWith('case_fpbase:') ? 'base' : null
 
 export function joinFingerRails(parts: OptiPart[], rects: Map<string, RailWallRect>, maxRun = MAX_RAIL_RUN): OptiPart[] {
   // Lines: rails that could join — same wall side, height band, depth, board.
   const lines = new Map<string, { p: OptiPart; r: RailWallRect }[]>()
   for (const p of parts) {
-    if (!isRail(p) || p.shape || p.size_overridden || !p.output_to_cnc) continue
+    const kind = railKind(p)
+    if (!kind || p.shape || p.size_overridden || !p.output_to_cnc) continue
     const r = rects.get(p.source_part_id)
     if (!r) continue
-    const k = [p.room_id, r.wallId, r.side, Math.round(r.rect.y * 2), Math.round(r.rect.h * 2),
+    const k = [kind, p.room_id, r.wallId, r.side, Math.round(r.rect.y * 2), Math.round(r.rect.h * 2),
       Math.round(r.frontLine * 2), p.material_id, p.thickness].join('|')
     lines.set(k, [...(lines.get(k) ?? []), { p, r }])
   }
@@ -84,7 +89,7 @@ function joined(run: OptiPart[]): OptiPart {
   const alongW = first.w > first.h
   const len = run.reduce((s, p) => s + (alongW ? p.w : p.h), 0)
   const labels = run.map(p => p.cabinet_label)
-  const note = `Joined rail: ${labels.join(' + ')}`
+  const note = `${railKind(first) === 'base' ? 'Joined rail base' : 'Joined rail'}: ${labels.join(' + ')}`
   const tape = new Map<string | null, number>()
   for (const p of run) for (const t of p.eb_tape ?? []) tape.set(t.id, (tape.get(t.id) ?? 0) + t.mm)
   const eb_tape = [...tape].map(([id, mm]) => ({ id, mm: Math.round(mm * 10) / 10 })).filter(t => t.mm > 0)

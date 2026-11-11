@@ -34,13 +34,16 @@ export function frontWallRect(
  * Wall rects for the finger-pull rails (case_parts fprail:<n>) of `cabIds`, keyed
  * by case_parts.id, for joining rails along a run (z_handles D19). Rails are
  * face-kind panels: DX = height, DY = width; frontLine = z + DZ.
+ * A set back rail's flat base piece (fpbase:<n>, D24) joins the same way: it lies
+ * flat (DX = depth, DY = length, DZ = thickness), so its band is its thickness
+ * and its front line is z + DX.
  */
 export async function loadRailWallRects(sb: SupabaseClient, cabIds: string[]): Promise<Map<string, FrontWallRect & { frontLine: number }>> {
   const out = new Map<string, FrontWallRect & { frontLine: number }>()
   if (!cabIds.length) return out
-  const { data: rails } = await sb.from('case_parts').select('id,cabinet_instance_id,x,y,z,dx,dy,dz')
-    .in('cabinet_instance_id', cabIds).like('part_key', 'fprail:%')
-  const rows = (rails ?? []) as { id: string; cabinet_instance_id: string; x: number; y: number; z: number; dx: number; dy: number; dz: number }[]
+  const { data: rails } = await sb.from('case_parts').select('id,cabinet_instance_id,part_key,x,y,z,dx,dy,dz')
+    .in('cabinet_instance_id', cabIds).or('part_key.like.fprail:%,part_key.like.fpbase:%')
+  const rows = (rails ?? []) as { id: string; cabinet_instance_id: string; part_key: string; x: number; y: number; z: number; dx: number; dy: number; dz: number }[]
   if (!rows.length) return out
   const { data: cabs } = await sb.from('cabinet_instances').select('*').in('id', [...new Set(rows.map(r => r.cabinet_instance_id))])
   const list = (cabs ?? []) as CabinetInstance[]
@@ -57,8 +60,9 @@ export async function loadRailWallRects(sb: SupabaseClient, cabIds: string[]): P
     const wall = cab?.wall_id ? wallById.get(cab.wall_id) : undefined
     const room = cab ? roomById.get(cab.room_id) : undefined
     if (!cab || !wall || !room) continue
-    const fr = frontWallRect(cab, wall, room, { x: Number(r.x), y: Number(r.y), dx: Number(r.dy), dy: Number(r.dx) })
-    out.set(r.id, { ...fr, frontLine: Number(r.z) + Number(r.dz) })
+    const flat = r.part_key.startsWith('fpbase:')
+    const fr = frontWallRect(cab, wall, room, { x: Number(r.x), y: Number(r.y), dx: Number(r.dy), dy: Number(flat ? r.dz : r.dx) })
+    out.set(r.id, { ...fr, frontLine: Number(r.z) + Number(flat ? r.dx : r.dz) })
   }
   return out
 }
