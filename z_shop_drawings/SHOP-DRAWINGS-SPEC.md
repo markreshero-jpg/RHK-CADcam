@@ -363,6 +363,9 @@ helpers (cabinetEditSvgHelpers + partSolids), not a copy of the modal's views. B
   fronts on SIDE and PLAN; shaped parts skipped (as the modal). Legend line at the page foot.
 Checked headless (`verify-sheet-shapes.mjs`, ROOM_ID = RHK6586 Kitchenette) on TC-02, BC-01, WC-04, WC-09,
 BC-04. **Check pending (Mark):** real PDF print; clutter on busy cabinets (e.g. WC-04 hood flue parts).
+- **No overall box on the PLAN** (Mark 2026-11-11, option 1): the heavy W × D rectangle under the plan parts is
+  gone — on angled / corner cabinets (TC-02) it read as a square box round the parts. Overall W / D dims stay.
+  FRONT and SIDE keep their overall box (it is the cabinet's true outline there).
 Not done: edge column in the cut list (the tape side → L/W mapping differs per table in normalize.ts —
 reuse that if wanted), dims on the SIDE view, custom parts on the sheet.
 

@@ -531,7 +531,6 @@ export default function CabinetSheetSVG({
     const PM: ToPage = (u, v) => [tx + (u - x0) * s, ty + (v - z0) * s]
     const [fx, fy] = PM(0, 0)
     const els: React.ReactNode[] = []
-    els.push(<rect key="ob" x={fx} y={fy} width={dx * s} height={dz * s} fill="white" stroke={INK} strokeWidth={OUT} />)
     const style: Record<Role, React.SVGProps<SVGPathElement>> = {
       case:     { fill: 'none', stroke: CASE_STROKE, strokeWidth: PART },
       kick:     { fill: 'none', stroke: INK2, strokeWidth: PART },
