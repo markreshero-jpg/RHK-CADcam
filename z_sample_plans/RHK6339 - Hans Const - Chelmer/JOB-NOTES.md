@@ -94,14 +94,20 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
 - WC-03 open shelf WOPN 2243 (between the linings) x 420 x 510 (setback ~190 scaled off the section),
   WALLZ 1794, 4 equal bays (3 dividers): **33 veneer** top / bottom / sides / divisions, 17 veneer back
   (Mark). 32 timber nosings left off for now - may add later.
+  Rev 1 (Mark 2026-11-12): top + right side out to the bench depth 700 - part size overrides
+  `part_pos_overrides` case_full_top / case_right_side `sd: 700` (grow forward from the back; optimiser
+  cuts 700). Left side, bottom, dividers stay 510.
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
   exhaust slots TBC. Size from the drawing (Mark: this size for now).
+  Rev 1 (Mark 2026-11-12, `_tmp-6339-j04-rev1.mjs`): sits ON WC-03 (WALLZ 2214, no shadow gap), no bottom
+  (BOTTOM_TYPE none), dz 700. Removable panel in between the sides: inset FACINS 1, side reveals
+  REVSL/REVSR 35 (2 clearance), 80 gap top (REVT 113 = 33 top + 80) and bottom (REVB 80) -> panel 1080 x 337.
 - 14 timber lining both ends BY OTHERS: WC-01 / WC-02 WEP 14 x 1314 x 700 (dz 681 + 19), bench top 900
   to shelf top 2214, new display material **Timber Lining 14mm (by others)** `3f6b71d6`, cabinet No CNC.
 
 ### Open / TBC
-- [ ] A/C box size, shadow gap (35), exhaust slots.
+- [ ] A/C box size, exhaust slots. Panel 1 back from the box front + 2 clearance each side - confirm.
 - [ ] Nosings on the shelf (Mark: maybe later).
 - [ ] Back splashback finish (mirror struck out - lining only noted on the ends).
 
