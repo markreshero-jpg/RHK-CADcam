@@ -166,3 +166,19 @@ Done in Rev 4 (2026-11-07); see below.
   TC-01 2400 x 900 at 0, TC-02 2400 x 70 at 1000, TC-03 2400 x 70 at 1170. Whiteboard 16.5, no tape (`_tmp-6595-loose-resolve.mjs`).
 - **WC-10** half-checked fixed shelves now drill into the left gable + the 418 division, and the egg-crate dividers into the
   bottom / top (Mark: V-D8 revised from "no drilling" to "drill the ends, never the crossings").
+
+## Rev 5 (2026-11-11) — check measure (Flavio, CKC, email "Check Measure - 1/21 Parkedge Rd" 10/11)
+Applied with `_tmp-6595-r5.mjs` (db + resolve) + `_tmp-6595-r5-oven.mjs`; before-state `_tmp-6595-r5-before.json`.
+- **Wall 2 = 2770 (was 2780).** East end came in 10 (Wall 1 return + Wall 2 start x 2780 -> 2770); the west end, sink and
+  DW 608.5 opening didn't move. BC-05 / BC-06 711 -> 706; overheads (Mark: off the 3 x 672) WC-04 / 05 / 06 -> 668.5 / 669 / 668.5;
+  WUP WC-12 2016 -> 2006; bulkhead WC-09 2052.5 -> 2042.5; KICK 1 2122 -> 2112; Benchtop 2 east edge 2770. Wall 2 markup
+  (DW box + text, bulkhead cloud) moved with it.
+- **WC-10 wine box 480 deep external** (Flavio asked 460 shelves / 470; Mark: 480). Front kept flush with the nook (pos_y 204 -> 414,
+  back 210 off the Wall 4 closure); WF-L fillers WC-15 / 16 the same. Cubby shelves / dividers 462 deep, half-checks follow.
+  Bulkhead WC-11 left at 690 (wall to front). Mark's "how deep" question note edited to the answer.
+- **WC-10 right bay: 1 adj shelf**, standard pin cluster (2 rows x 5 holes @ 32 each side).
+- **BC-11 oven to the top, drawer under** (reverses Rev 4's "no drawer"; the builder asked). Rows: drawer 224 front / open 600 locked;
+  fixed shelf under the oven (top at 226), oven fixture z 326. Handle on the drawer per the schedule (not drilled).
+- **No handle holes on this job:** project rule `HANDLE_DRILL: false` (the installer drills; owner keeps changing her mind).
+- Resolver: clean except BC-07 HINGE_RAIL_CLASH (hinge 1 ~726 vs the 750–830 upright rail). BC-07 wasn't touched, so this was already there. The oven fixture flags a clash with BC-01 / BC-14
+  (600 deep oven body vs the 560 cabinet, plan overlap), same as before the lift.

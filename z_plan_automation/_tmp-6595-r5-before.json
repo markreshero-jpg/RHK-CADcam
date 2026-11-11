@@ -1,0 +1,6353 @@
+{
+ "walls": [
+  {
+   "id": "0d747e63-63fa-4bda-ac27-6ff28ab97f0f",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "name": "Wall 1",
+   "sort_order": 0,
+   "length": 708,
+   "height": 2440,
+   "angle": 90,
+   "pos_x": 2780,
+   "pos_y": 2003,
+   "created_at": "2026-10-30T06:05:58.534578+00:00",
+   "thickness": 90,
+   "wall_type": "standard",
+   "soffit_height": null,
+   "top_profile": null
+  },
+  {
+   "id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "name": "Wall 2",
+   "sort_order": 1,
+   "length": 2780,
+   "height": 2440,
+   "angle": 180,
+   "pos_x": 2780,
+   "pos_y": 2711,
+   "created_at": "2026-10-30T06:05:58.798397+00:00",
+   "thickness": 90,
+   "wall_type": "standard",
+   "soffit_height": null,
+   "top_profile": null
+  }
+ ],
+ "bt2": {
+  "id": "71df84bb-d8a8-4974-b57a-2bb5a1a13196",
+  "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+  "label": "Benchtop 2",
+  "polygon": [
+   {
+    "x": 2780,
+    "y": 2711
+   },
+   {
+    "x": 16.5,
+    "y": 2711.0000000000005
+   },
+   {
+    "x": 15.999999999999927,
+    "y": 2111.000000000001
+   },
+   {
+    "x": 16,
+    "y": 2711.0000000000005
+   },
+   {
+    "x": 0,
+    "y": 2711.0000000000005
+   },
+   {
+    "x": -7.347880794884119e-14,
+    "y": 2111.0000000000005
+   },
+   {
+    "x": 2780,
+    "y": 2111
+   }
+  ],
+  "edge_tags": [
+   {
+    "type": "wall",
+    "edge_index": 0
+   },
+   {
+    "type": "wall",
+    "edge_index": 3
+   },
+   {
+    "type": "wall",
+    "edge_index": 4
+   },
+   {
+    "type": "wall",
+    "edge_index": 6
+   }
+  ],
+  "join_types": [],
+  "benchtop_build_method_id": null,
+  "benchtop_schedule_id": "da288276-4dfc-4410-b6f6-d53d1b38c8fd",
+  "notes": null,
+  "created_at": "2026-10-30T06:48:23.918947+00:00",
+  "updated_at": "2026-11-07T10:30:20.213666+00:00",
+  "arc_segments": [],
+  "cutout_polygons": [],
+  "segments": [
+   {
+    "p0": {
+     "x": 2780,
+     "y": 2711
+    },
+    "p1": {
+     "x": 16.5,
+     "y": 2711.0000000000005
+    },
+    "edge": {
+     "wall": true
+    },
+    "type": "line"
+   },
+   {
+    "p0": {
+     "x": 16.5,
+     "y": 2711.0000000000005
+    },
+    "p1": {
+     "x": 16.499999999999925,
+     "y": 2111.000000000001
+    },
+    "edge": {
+     "wall": false
+    },
+    "type": "line"
+   },
+   {
+    "p0": {
+     "x": 15.999999999999927,
+     "y": 2111.000000000001
+    },
+    "p1": {
+     "x": 16,
+     "y": 2711.0000000000005
+    },
+    "edge": {
+     "wall": false
+    },
+    "type": "line"
+   },
+   {
+    "p0": {
+     "x": 16,
+     "y": 2711.0000000000005
+    },
+    "p1": {
+     "x": 0,
+     "y": 2711.0000000000005
+    },
+    "edge": {
+     "wall": true
+    },
+    "type": "line"
+   },
+   {
+    "p0": {
+     "x": 0,
+     "y": 2711.0000000000005
+    },
+    "p1": {
+     "x": -7.347880794884119e-14,
+     "y": 2111.0000000000005
+    },
+    "edge": {
+     "wall": true
+    },
+    "type": "line"
+   },
+   {
+    "p0": {
+     "x": -7.347880794884119e-14,
+     "y": 2111.0000000000005
+    },
+    "p1": {
+     "x": 2780,
+     "y": 2111
+    },
+    "edge": {
+     "wall": false
+    },
+    "type": "line"
+   },
+   {
+    "p0": {
+     "x": 2780,
+     "y": 2111
+    },
+    "p1": {
+     "x": 2780,
+     "y": 2711
+    },
+    "edge": {
+     "wall": true
+    },
+    "type": "line"
+   }
+  ],
+  "joins": [],
+  "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+  "wall_side": "face",
+  "height_mm": null
+ },
+ "cabs": [
+  {
+   "id": "d8cebd7c-9652-4837-a786-4e2c8d06b274",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-02",
+   "assembly_class": "wall",
+   "pos_x": 2763.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 711,
+   "dy": 1000,
+   "dz": 500,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "end_panel",
+   "right_neighbour_type": "end_panel",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "WALLZ": 950,
+    "BIFOLD": "L",
+    "BIFOLD_BOTTOM": "none"
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "hinges": [
+       100,
+       880
+      ],
+      "col_index": 0,
+      "face_type": "door",
+      "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "hinges": [
+       100,
+       880
+      ],
+      "col_index": 1,
+      "face_type": "door",
+      "grip_edge": "bottom",
+      "handle_id": "82f50f69-277c-4e1c-b1f4-d629c43b7b4f",
+      "row_index": 0,
+      "hinge_side": "right",
+      "handle_inset": 50,
+      "handle_offset": 20
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "Appliance / microwave cupboard on the stone: no bottom, 1000 sliding bi-fold doors (Finista BF-05, hung left, no bottom guide) with 1 adj shelf (min 500 clear for the coffee machine). Microwave sits inside. 390 PTO doors over are WC-14 (split 2026-10-31).",
+   "created_at": "2026-10-30T06:06:37.393509+00:00",
+   "updated_at": "2026-10-31T00:23:36.454741+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": [
+      {
+       "type": "adj_shelf",
+       "y_locked": false
+      }
+     ]
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [
+     {
+      "role": "outer",
+      "holes": [
+       {
+        "x": 337.5,
+        "y": 116,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 337.5,
+        "y": 84,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 337.5,
+        "y": 896,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 337.5,
+        "y": 864,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       }
+      ],
+      "col_index": 0,
+      "row_index": 0
+     },
+     {
+      "role": "leading",
+      "holes": [
+       {
+        "x": 330.5,
+        "y": 936,
+        "dia": 35,
+        "kind": "carriage",
+        "depth": 11.5
+       },
+       {
+        "x": 330.5,
+        "y": 872,
+        "dia": 35,
+        "kind": "carriage",
+        "depth": 11.5
+       },
+       {
+        "x": 15.5,
+        "y": 116,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 15.5,
+        "y": 84,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 15.5,
+        "y": 896,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       },
+       {
+        "x": 15.5,
+        "y": 864,
+        "dia": 3,
+        "kind": "centre",
+        "depth": 10
+       }
+      ],
+      "col_index": 1,
+      "row_index": 0
+     }
+    ],
+    "warnings": [],
+    "bifold_cfg": {
+     "hand": "L",
+     "bottom": "none",
+     "centre": "standard"
+    },
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [
+     {
+      "y_locked": true,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 100,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 122.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 77.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 116,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 84,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": true,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 880,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 902.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 857.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 896,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 864,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 880,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     }
+    ],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {
+    "case_bottom": [
+     "plan",
+     "elevation",
+     "3d"
+    ]
+   },
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {
+    "case_back": {
+     "top": false,
+     "left": false,
+     "right": false,
+     "bottom": true
+    }
+   },
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": "none"
+  },
+  {
+   "id": "96b05139-0cda-4f65-9b93-8beabb8c5b44",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "8f73c140-bda9-4dce-b778-4ede7d792007",
+   "label": "WC-03",
+   "assembly_class": "wall",
+   "pos_x": 2052.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 18,
+   "dy": 1390,
+   "dz": 500,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": "Seen side panel of the teak column (west side)",
+   "created_at": "2026-10-30T06:06:38.813061+00:00",
+   "updated_at": "2026-10-30T06:06:38.813061+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "1e4a673e-9c86-4754-b9e9-6c8db8a9aefc",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "70066e18-9f84-4b53-bfb0-e0e2ff5fc4ee",
+   "label": "WC-09",
+   "assembly_class": "wall",
+   "pos_x": 2052.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 2052.5,
+   "dy": 110,
+   "dz": 320,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": "Bulkhead 2340 to ceiling over the overheads - oversized, cut on site",
+   "created_at": "2026-10-30T06:06:44.469559+00:00",
+   "updated_at": "2026-10-30T06:06:44.469559+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": {
+    "kind": "bulkhead",
+    "left": {
+     "on": false,
+     "depth": 350,
+     "joint": "mitre"
+    },
+    "cleat": true,
+    "front": "carcase",
+    "right": {
+     "on": false,
+     "depth": 600,
+     "joint": "mitre"
+    },
+    "split": {
+     "on": false,
+     "width": 60,
+     "setback": 10,
+     "material_id": null
+    },
+    "width": 60,
+    "auto_h": true,
+    "bottom": {
+     "on": false,
+     "depth": 600,
+     "joint": "mitre"
+    },
+    "h_adjust": 10
+   },
+   "part_hide_views": {
+    "case_bh:cleat_h": [
+     "plan"
+    ],
+    "case_bh:cleat_v": [
+     "plan"
+    ]
+   },
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "71c8d429-09ca-4a16-94ef-08954fd478fb",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "4d1a2dba-ccef-4002-b756-74b77b0e6704",
+   "cabinet_definition_id": "cf3eea4b-dd70-4f69-bb01-742a6732b1d0",
+   "label": "WC-15",
+   "assembly_class": "wall",
+   "pos_x": 0,
+   "pos_y": 204,
+   "pos_z": 0,
+   "rotation": 0,
+   "dx": 18,
+   "dy": 436,
+   "dz": 690,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "cabinet",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {
+    "exposed": "d67d85b0-b12b-4b03-be3c-8bdbbf23cd11"
+   },
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": null,
+   "created_at": "2026-11-07T11:01:35.611695+00:00",
+   "updated_at": "2026-11-07T11:01:35.611695+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "c3fa9eaa-8c94-4c3b-b95c-1c88bb520514",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-14",
+   "assembly_class": "wall",
+   "pos_x": 2763.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 711,
+   "dy": 390,
+   "dz": 500,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "end_panel",
+   "right_neighbour_type": "end_panel",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "REVB": 2
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 1,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "right"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "390 PTO doors over the WC-02 bi-fold appliance cupboard (split from WC-02 2026-10-31, easier to fit).",
+   "created_at": "2026-10-30T23:45:51.515428+00:00",
+   "updated_at": "2026-10-31T00:23:36.454741+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": []
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 290,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 312.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 267.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 306,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 274,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 288,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 102,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 124.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 79.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 118,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 86,
+        "z": 465,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 687,
+        "y": 290,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 677.5,
+        "y": 312.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 677.5,
+        "y": 267.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 694.5,
+        "y": 306,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 694.5,
+        "y": 274,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 288,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 687,
+        "y": 102,
+        "z": 502,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 677.5,
+        "y": 124.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 677.5,
+        "y": 79.5,
+        "z": 502,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 694.5,
+        "y": 118,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 694.5,
+        "y": 86,
+        "z": 465,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     }
+    ],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "9f275edf-0e4c-43ae-9202-281293097ffa",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "4d1a2dba-ccef-4002-b756-74b77b0e6704",
+   "cabinet_definition_id": "cf3eea4b-dd70-4f69-bb01-742a6732b1d0",
+   "label": "WC-16",
+   "assembly_class": "wall",
+   "pos_x": 872,
+   "pos_y": 204,
+   "pos_z": 0,
+   "rotation": 0,
+   "dx": 18,
+   "dy": 436,
+   "dz": 690,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "cabinet",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {
+    "exposed": "d67d85b0-b12b-4b03-be3c-8bdbbf23cd11"
+   },
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": null,
+   "created_at": "2026-11-07T11:01:38.754825+00:00",
+   "updated_at": "2026-11-07T11:01:38.754825+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "264eb650-8de4-4b48-876f-060563b66d8b",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-05",
+   "assembly_class": "wall",
+   "pos_x": 1362.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 672,
+   "dy": 747,
+   "dz": 320,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "cabinet",
+   "right_neighbour_type": "cabinet",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "SCRBT": 18
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 1,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "right"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "Overhead, fingerpull under + PTO. LED strip recessed in the under panel",
+   "created_at": "2026-10-30T06:06:40.67593+00:00",
+   "updated_at": "2026-10-30T06:06:40.67593+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": [
+      {
+       "type": "adj_shelf",
+       "y_locked": false
+      }
+     ]
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 23,
+        "y": 647,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 32.5,
+        "y": 669.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 32.5,
+        "y": 624.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 663,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 631,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 647,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 23,
+        "y": 100,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 32.5,
+        "y": 122.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 32.5,
+        "y": 77.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 116,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 84,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 649,
+        "y": 647,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 639.5,
+        "y": 669.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 639.5,
+        "y": 624.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 655.5,
+        "y": 663,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 655.5,
+        "y": 631,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 647,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 649,
+        "y": 100,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 639.5,
+        "y": 122.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 639.5,
+        "y": 77.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 655.5,
+        "y": 116,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 655.5,
+        "y": 84,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     }
+    ],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "6f2b1294-6358-4d8a-b487-bb94c9e76cb5",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "8f73c140-bda9-4dce-b778-4ede7d792007",
+   "label": "WC-01",
+   "assembly_class": "wall",
+   "pos_x": 2780,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 16.5,
+   "dy": 1390,
+   "dz": 500,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": "Wall filler at the east wall beside the teak column (front filler)",
+   "created_at": "2026-10-30T06:06:35.847139+00:00",
+   "updated_at": "2026-10-30T06:06:35.847139+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "4fe005a9-0d87-4364-a726-c91ad372724d",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "4d1a2dba-ccef-4002-b756-74b77b0e6704",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-10",
+   "assembly_class": "wall",
+   "pos_x": 18,
+   "pos_y": 204,
+   "pos_z": 0,
+   "rotation": 0,
+   "dx": 854,
+   "dy": 436,
+   "dz": 690,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "cabinet",
+   "right_neighbour_type": "cabinet",
+   "exposed_interior": true,
+   "rule_overrides": {
+    "SCRBK": 0
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 1,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "right"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "Open box over the fridge 1730-2166: 3 x 3 cubbies 124 on the left, open bay right. Carcass as panel",
+   "created_at": "2026-10-30T06:06:45.422982+00:00",
+   "updated_at": "2026-10-30T06:06:45.422982+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "vsplit",
+     "children": [
+      {
+       "size": 400,
+       "divider": "single",
+       "section": {
+        "type": "hsplit",
+        "children": [
+         {
+          "section": {
+           "type": "vsplit",
+           "children": [
+            {
+             "divider": "single",
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            },
+            {
+             "divider": "single",
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            },
+            {
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            }
+           ]
+          },
+          "separator": "fixed_shelf"
+         },
+         {
+          "section": {
+           "type": "vsplit",
+           "children": [
+            {
+             "divider": "single",
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            },
+            {
+             "divider": "single",
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            },
+            {
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            }
+           ]
+          },
+          "separator": "fixed_shelf"
+         },
+         {
+          "section": {
+           "type": "vsplit",
+           "children": [
+            {
+             "divider": "single",
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            },
+            {
+             "divider": "single",
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            },
+            {
+             "section": {
+              "type": "open",
+              "fittings": []
+             }
+            }
+           ]
+          }
+         }
+        ],
+        "half_check": true
+       }
+      },
+      {
+       "section": {
+        "type": "open",
+        "fittings": []
+       }
+      }
+     ]
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": {
+    "elev": {
+     "x": 65,
+     "y": 114
+    }
+   },
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "d6c6f360-c74e-4fcf-816a-473e5d436da6",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "70066e18-9f84-4b53-bfb0-e0e2ff5fc4ee",
+   "label": "WC-08",
+   "assembly_class": "wall",
+   "pos_x": 2780,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 727.5,
+   "dy": 110,
+   "dz": 500,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": "Bulkhead 2340 to ceiling over the teak column - oversized, cut on site",
+   "created_at": "2026-10-30T06:06:43.525371+00:00",
+   "updated_at": "2026-10-30T06:06:43.525371+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": {
+    "kind": "bulkhead",
+    "left": {
+     "on": false,
+     "depth": 350,
+     "joint": "mitre"
+    },
+    "cleat": true,
+    "front": "carcase",
+    "right": {
+     "on": true,
+     "depth": 300,
+     "joint": "mitre"
+    },
+    "split": {
+     "on": false,
+     "width": 60,
+     "setback": 10,
+     "material_id": null
+    },
+    "width": 60,
+    "auto_h": true,
+    "bottom": {
+     "on": false,
+     "depth": 600,
+     "joint": "mitre"
+    },
+    "h_adjust": 10
+   },
+   "part_hide_views": {
+    "case_bh:cleat_h": [
+     "plan"
+    ],
+    "case_bh:cleat_v": [
+     "plan"
+    ]
+   },
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "592e795a-4b78-403c-8f73-1ed355f55bc0",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-04",
+   "assembly_class": "wall",
+   "pos_x": 2034.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 672,
+   "dy": 747,
+   "dz": 320,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "end_panel",
+   "right_neighbour_type": "cabinet",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "SCRBT": 18
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 1,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "right"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "Overhead, fingerpull under + PTO. LED strip recessed in the under panel",
+   "created_at": "2026-10-30T06:06:39.70349+00:00",
+   "updated_at": "2026-10-30T06:06:39.70349+00:00",
+   "carcase_joints": {
+    "bottom:left_side": "ad0c6e3b-ed84-49e4-9a37-5a4d38f0add2"
+   },
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": [
+      {
+       "type": "adj_shelf",
+       "y_locked": false
+      }
+     ]
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 647,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 669.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 624.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 663,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 631,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 647,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 24,
+        "y": 100,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 33.5,
+        "y": 122.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 33.5,
+        "y": 77.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 116,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 84,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 649,
+        "y": 647,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 639.5,
+        "y": 669.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 639.5,
+        "y": 624.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 655.5,
+        "y": 663,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 655.5,
+        "y": 631,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 647,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 649,
+        "y": 100,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 639.5,
+        "y": 122.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 639.5,
+        "y": 77.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 655.5,
+        "y": 116,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 655.5,
+        "y": 84,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     }
+    ],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "4cb2b290-72e4-4f7d-9325-9ea57cd5c0d6",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "a74ea87c-7876-436e-8bb8-2a88fceaffca",
+   "cabinet_definition_id": "06416afb-c5ff-4708-aa8d-e1fea1464a02",
+   "label": "BC-11",
+   "assembly_class": "base",
+   "pos_x": 1006.5,
+   "pos_y": 302,
+   "pos_z": 100,
+   "rotation": 0,
+   "dx": 600,
+   "dy": 830,
+   "dz": 560,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "end_panel",
+   "right_neighbour_type": "cabinet",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "SCRBK": 0,
+    "BACK_TYPE": "rail"
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     },
+     {
+      "height": 600,
+      "row_index": 1,
+      "height_locked": true
+     },
+     {
+      "row_index": 2,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "false_panel",
+      "row_index": 0
+     },
+     {
+      "col_index": 0,
+      "face_type": "open",
+      "row_index": 1
+     },
+     {
+      "col_index": 0,
+      "face_type": "false_panel",
+      "row_index": 2
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "Under-bench oven: Westinghouse WVEP6716SD",
+   "created_at": "2026-10-30T06:06:48.18704+00:00",
+   "updated_at": "2026-10-30T06:06:48.18704+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": [
+      {
+       "type": "fixed_shelf",
+       "y_locked": false,
+       "align_face_row": {
+        "edge": "bottom",
+        "row_index": 1
+       }
+      }
+     ]
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": "26856916-64d9-4e5b-8aaf-c211ffbb7c5f",
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "b8a38b3d-ab4e-42bd-b68c-8fae76c2fd2d",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1ceb0a7f-f3ed-48ab-b80c-3497d75121f9",
+   "label": "WC-06",
+   "assembly_class": "wall",
+   "pos_x": 690.5,
+   "pos_y": 2711.0000000000005,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 672,
+   "dy": 747,
+   "dz": 320,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "full_top",
+   "toe_type": "ladder",
+   "left_neighbour_type": "cabinet",
+   "right_neighbour_type": "end_panel",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "SCRBT": 18
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     },
+     {
+      "col_index": 1,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 1,
+      "face_type": "door",
+      "row_index": 0,
+      "hinge_side": "right"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "Overhead, fingerpull under + PTO. LED strip recessed in the under panel",
+   "created_at": "2026-10-30T06:06:41.611837+00:00",
+   "updated_at": "2026-10-30T06:06:41.611837+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": [
+      {
+       "type": "adj_shelf",
+       "y_locked": false
+      }
+     ]
+    }
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 23,
+        "y": 647,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 32.5,
+        "y": 669.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 32.5,
+        "y": 624.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 663,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 631,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 647,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 0,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 23,
+        "y": 100,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 32.5,
+        "y": 122.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 32.5,
+        "y": 77.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "left",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "left_side"
+      },
+      "plate_drills": [
+       {
+        "x": 16.5,
+        "y": 116,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 16.5,
+        "y": 84,
+        "z": 285,
+        "axis": "x-",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 648,
+        "y": 647,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 638.5,
+        "y": 669.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 638.5,
+        "y": 624.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 0,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 655.5,
+        "y": 663,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 655.5,
+        "y": 631,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 647,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     },
+     {
+      "y_locked": false,
+      "col_index": 1,
+      "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/2da3710c-c396-43e5-8261-81d236d1a553/1780570727215-Blum_71B3590_split.glb",
+      "row_index": 0,
+      "cup_drills": [
+       {
+        "x": 648,
+        "y": 100,
+        "z": 322,
+        "axis": "z+",
+        "kind": "cup",
+        "radius": 17.5,
+        "depthLen": 13.5
+       },
+       {
+        "x": 638.5,
+        "y": 122.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       },
+       {
+        "x": 638.5,
+        "y": 77.5,
+        "z": 322,
+        "axis": "z+",
+        "kind": "anchor",
+        "radius": 4,
+        "depthLen": 12
+       }
+      ],
+      "hinge_edge": "right",
+      "hinge_name": "Blum 110",
+      "sort_order": 1,
+      "model_scale": 1,
+      "mount_target": {
+       "table": "case_parts",
+       "part_key": "right_side"
+      },
+      "plate_drills": [
+       {
+        "x": 655.5,
+        "y": 116,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       },
+       {
+        "x": 655.5,
+        "y": 84,
+        "z": 285,
+        "axis": "x+",
+        "kind": "plate",
+        "radius": 2.5,
+        "depthLen": 12
+       }
+      ],
+      "y_position_mm": 100,
+      "hinge_plate_id": "86ba27ef-f554-43c2-ba73-8aba32f11418",
+      "open_angle_deg": 110,
+      "plate_anchor_x": -12,
+      "plate_anchor_y": 0,
+      "plate_anchor_z": 30.5,
+      "bore_to_door_mm": 35,
+      "plate_model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/hinge-models/plate-86ba27ef-f554-43c2-ba73-8aba32f11418/1780693920809-Blum_173L6100_CLIP_mounting_plate.glb",
+      "mounting_surface": "auto",
+      "arm_fold_fraction": 0.5,
+      "hinge_hardware_id": "2da3710c-c396-43e5-8261-81d236d1a553",
+      "plate_model_scale": 1,
+      "cup_x_from_edge_mm": 22,
+      "shelf_snap_tolerance_mm": 3
+     }
+    ],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "63183953-7d46-4b81-9214-358a4700cb19",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "3356d06d-6f6c-42ae-b62d-8275b118a30e",
+   "label": "BC-05",
+   "assembly_class": "base",
+   "pos_x": 2763.5,
+   "pos_y": 2711,
+   "pos_z": 100,
+   "rotation": 180,
+   "dx": 711,
+   "dy": 830,
+   "dz": 560,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "end_panel",
+   "right_neighbour_type": "cabinet",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     },
+     {
+      "height": 323,
+      "row_index": 1,
+      "height_locked": true
+     },
+     {
+      "height": 202,
+      "row_index": 2,
+      "height_locked": true
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "drawer_face",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 0,
+      "face_type": "drawer_face",
+      "row_index": 1,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 0,
+      "face_type": "drawer_face",
+      "row_index": 2,
+      "hinge_side": "left"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "3 drawers 202 / 323 / 302 (same as the island)",
+   "created_at": "2026-10-30T06:06:30.899432+00:00",
+   "updated_at": "2026-10-30T06:06:30.899432+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": []
+    },
+    "stack_gap": 3
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": "089278c1-3c9f-46e0-9bed-37bfc7745da5",
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [
+     {
+      "holes": [
+       {
+        "x": 60,
+        "y": 15
+       },
+       {
+        "x": 70,
+        "y": 15
+       },
+       {
+        "x": 80,
+        "y": 15
+       }
+      ],
+      "col_index": 0,
+      "row_index": 0
+     },
+     {
+      "holes": [
+       {
+        "x": 60,
+        "y": 15
+       },
+       {
+        "x": 70,
+        "y": 15
+       }
+      ],
+      "col_index": 0,
+      "row_index": 1
+     },
+     {
+      "holes": [
+       {
+        "x": 60,
+        "y": 15
+       }
+      ],
+      "col_index": 0,
+      "row_index": 2
+     }
+    ],
+    "drawer_stacks": [
+     {
+      "box_X": 54,
+      "box_Y": 21.5,
+      "box_Z": 62,
+      "slides": [
+       {
+        "X": 16.5,
+        "Y": 21.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "left",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 32,
+          "y": 69,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 101,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 525,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 493,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 66,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 162,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 63.5,
+          "y": 34,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 165,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 197,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 301,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 269,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 355.5,
+          "y": 42.25,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "source": "db_back_joint",
+          "surface": "drawer_back",
+          "depthLen": 16.5,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       },
+       {
+        "X": 657,
+        "Y": 21.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "right",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 679,
+          "y": 69,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 101,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 525,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 493,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 66,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 162,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 647.5,
+          "y": 34,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 165,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 197,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 301,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 269,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       }
+      ],
+      "box_depth": 500,
+      "box_parts": [
+       {
+        "X": 54,
+        "Y": 34,
+        "Z": 562,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 476,
+        "DY": 603,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": false,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_bottom",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       },
+       {
+        "X": 60,
+        "Y": 34,
+        "Z": 86,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 166,
+        "DY": 591,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": true,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_back",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       }
+      ],
+      "box_width": 603,
+      "box_height": 178,
+      "drawer_type": "system",
+      "face_zone_col": 0,
+      "face_zone_row": 0
+     },
+     {
+      "box_X": 54,
+      "box_Y": 320.5,
+      "box_Z": 62,
+      "slides": [
+       {
+        "X": 16.5,
+        "Y": 320.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "left",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 32,
+          "y": 368,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 400,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 525,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 493,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 365,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 461,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 63.5,
+          "y": 333,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 464,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 496,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 301,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 269,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 355.5,
+          "y": 341.25,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "source": "db_back_joint",
+          "surface": "drawer_back",
+          "depthLen": 16.5,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       },
+       {
+        "X": 657,
+        "Y": 320.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "right",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 679,
+          "y": 368,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 400,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 525,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 493,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 365,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 461,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 647.5,
+          "y": 333,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 464,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 496,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 301,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 269,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       }
+      ],
+      "box_depth": 500,
+      "box_parts": [
+       {
+        "X": 54,
+        "Y": 333,
+        "Z": 562,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 476,
+        "DY": 603,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": false,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_bottom",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       },
+       {
+        "X": 60,
+        "Y": 333,
+        "Z": 86,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 166,
+        "DY": 591,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": true,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_back",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       }
+      ],
+      "box_width": 603,
+      "box_height": 178,
+      "drawer_type": "system",
+      "face_zone_col": 0,
+      "face_zone_row": 1
+     },
+     {
+      "box_X": 54,
+      "box_Y": 645.5,
+      "box_Z": 62,
+      "slides": [
+       {
+        "X": 16.5,
+        "Y": 645.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 127,
+        "DZ": 37.5,
+        "side": "left",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 32,
+          "y": 693,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 725,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 757,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 525,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 493,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 690,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 754,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 63.5,
+          "y": 658,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 301,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 269,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 355.5,
+          "y": 666.25,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "source": "db_back_joint",
+          "surface": "drawer_back",
+          "depthLen": 16.5,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "e049e805-85fd-4a18-8ce9-7e6a1f9beb99",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/e049e805-85fd-4a18-8ce9-7e6a1f9beb99/1793272332670-DTC_DragonPro_127x500_v2.glb",
+        "box_height": 127,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -122.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       },
+       {
+        "X": 657,
+        "Y": 645.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 127,
+        "DZ": 37.5,
+        "side": "right",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 679,
+          "y": 693,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 725,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 757,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 525,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 493,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 690,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 754,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 647.5,
+          "y": 658,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 301,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 269,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "e049e805-85fd-4a18-8ce9-7e6a1f9beb99",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/e049e805-85fd-4a18-8ce9-7e6a1f9beb99/1793272332670-DTC_DragonPro_127x500_v2.glb",
+        "box_height": 127,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -122.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       }
+      ],
+      "box_depth": 500,
+      "box_parts": [
+       {
+        "X": 54,
+        "Y": 658,
+        "Z": 562,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 476,
+        "DY": 603,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": false,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_bottom",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       },
+       {
+        "X": 60,
+        "Y": 658,
+        "Z": 86,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 115,
+        "DY": 591,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": true,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_back",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       }
+      ],
+      "box_width": 603,
+      "box_height": 127,
+      "drawer_type": "system",
+      "face_zone_col": 0,
+      "face_zone_row": 2
+     }
+    ],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "2d387cb0-a912-44c3-9bbf-deedea584c22",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": null,
+   "label": "KICK 1",
+   "assembly_class": "base",
+   "pos_x": 2763.5,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 2122,
+   "dy": 100,
+   "dz": 560,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": true,
+   "construction_method_id": null,
+   "top_type": null,
+   "toe_type": null,
+   "left_neighbour_type": null,
+   "right_neighbour_type": null,
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": null,
+   "created_at": "2026-10-30T06:11:09.094354+00:00",
+   "updated_at": "2026-10-30T06:11:09.094354+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": "089278c1-3c9f-46e0-9bed-37bfc7745da5",
+   "is_kick_assembly": true,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "9ab7393e-0518-4293-a24d-ad5477c073da",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "77c6913b-da58-488b-8a12-8836ec4b5f06",
+   "label": "WC-12",
+   "assembly_class": "wall",
+   "pos_x": 2034.5,
+   "pos_y": 2711,
+   "pos_z": 1593,
+   "rotation": 180,
+   "dx": 2016,
+   "dy": 18,
+   "dz": 300,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {
+    "UNDER_PANEL": true
+   },
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": null,
+   "created_at": "2026-10-30T06:10:03.537025+00:00",
+   "updated_at": "2026-10-30T06:10:03.537025+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "6335225d-dff6-490a-93c4-4e57dee3851e",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "1d09709e-60ce-4566-b54e-6f8ae55b7b36",
+   "label": "BC-04",
+   "assembly_class": "base",
+   "pos_x": 2780,
+   "pos_y": 2711,
+   "pos_z": 0,
+   "rotation": 180,
+   "dx": 16.5,
+   "dy": 930,
+   "dz": 560,
+   "has_carcass": false,
+   "has_internal": false,
+   "has_face": false,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "wall",
+   "right_neighbour_type": "wall",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": null,
+   "schema_version": "0.4",
+   "notes": "Panel at the east wall, below the bench",
+   "created_at": "2026-10-30T06:06:29.908295+00:00",
+   "updated_at": "2026-10-30T06:06:29.908295+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": null,
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": null,
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [],
+    "drawer_stacks": [],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  },
+  {
+   "id": "7b0d6618-9b42-4cc0-9072-596ee095dba0",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_definition_id": "3356d06d-6f6c-42ae-b62d-8275b118a30e",
+   "label": "BC-06",
+   "assembly_class": "base",
+   "pos_x": 2052.5,
+   "pos_y": 2711,
+   "pos_z": 100,
+   "rotation": 180,
+   "dx": 711,
+   "dy": 830,
+   "dz": 560,
+   "has_carcass": true,
+   "has_internal": true,
+   "has_face": true,
+   "has_toekick": false,
+   "construction_method_id": null,
+   "top_type": "front_rail",
+   "toe_type": "ladder",
+   "left_neighbour_type": "cabinet",
+   "right_neighbour_type": "cabinet",
+   "exposed_interior": false,
+   "rule_overrides": {},
+   "material_overrides": {},
+   "toekick_overrides": {},
+   "drawerbox_overrides": {},
+   "hardware_overrides": {},
+   "face_grid": {
+    "cols": [
+     {
+      "col_index": 0,
+      "width_locked": false
+     }
+    ],
+    "rows": [
+     {
+      "row_index": 0,
+      "height_locked": false
+     },
+     {
+      "height": 323,
+      "row_index": 1,
+      "height_locked": true
+     },
+     {
+      "height": 202,
+      "row_index": 2,
+      "height_locked": true
+     }
+    ],
+    "zones": [
+     {
+      "col_index": 0,
+      "face_type": "drawer_face",
+      "row_index": 0,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 0,
+      "face_type": "drawer_face",
+      "row_index": 1,
+      "hinge_side": "left"
+     },
+     {
+      "col_index": 0,
+      "face_type": "drawer_face",
+      "row_index": 2,
+      "hinge_side": "left"
+     }
+    ]
+   },
+   "schema_version": "0.4",
+   "notes": "3 drawers 202 / 323 / 302 (same as the island)",
+   "created_at": "2026-10-30T06:06:31.791318+00:00",
+   "updated_at": "2026-10-30T06:06:31.791318+00:00",
+   "carcase_joints": {},
+   "part_pos_overrides": {},
+   "part_labels": {},
+   "part_comments": {},
+   "internal_grid": {
+    "tree": {
+     "type": "open",
+     "fittings": []
+    },
+    "stack_gap": 3
+   },
+   "hidden_parts": [],
+   "no_cnc": false,
+   "kick_run_id": "089278c1-3c9f-46e0-9bed-37bfc7745da5",
+   "is_kick_assembly": false,
+   "part_names": {},
+   "part_expressions": {},
+   "footprint": null,
+   "faces": null,
+   "resolved_drawer_hw": {
+    "bifold": [],
+    "warnings": [],
+    "df_markers": [
+     {
+      "holes": [
+       {
+        "x": 60,
+        "y": 15
+       },
+       {
+        "x": 70,
+        "y": 15
+       },
+       {
+        "x": 80,
+        "y": 15
+       }
+      ],
+      "col_index": 0,
+      "row_index": 0
+     },
+     {
+      "holes": [
+       {
+        "x": 60,
+        "y": 15
+       },
+       {
+        "x": 70,
+        "y": 15
+       }
+      ],
+      "col_index": 0,
+      "row_index": 1
+     },
+     {
+      "holes": [
+       {
+        "x": 60,
+        "y": 15
+       }
+      ],
+      "col_index": 0,
+      "row_index": 2
+     }
+    ],
+    "drawer_stacks": [
+     {
+      "box_X": 54,
+      "box_Y": 21.5,
+      "box_Z": 62,
+      "slides": [
+       {
+        "X": 16.5,
+        "Y": 21.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "left",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 32,
+          "y": 69,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 101,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 525,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 493,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 66,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 162,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 63.5,
+          "y": 34,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 165,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 197,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 301,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 65.5,
+          "z": 269,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 355.5,
+          "y": 42.25,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "source": "db_back_joint",
+          "surface": "drawer_back",
+          "depthLen": 16.5,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       },
+       {
+        "X": 657,
+        "Y": 21.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "right",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 679,
+          "y": 69,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 101,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 525,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 493,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 66,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 162,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 647.5,
+          "y": 34,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 165,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 197,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 301,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 65.5,
+          "z": 269,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       }
+      ],
+      "box_depth": 500,
+      "box_parts": [
+       {
+        "X": 54,
+        "Y": 34,
+        "Z": 562,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 476,
+        "DY": 603,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": false,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_bottom",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       },
+       {
+        "X": 60,
+        "Y": 34,
+        "Z": 86,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 166,
+        "DY": 591,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": true,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_back",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       }
+      ],
+      "box_width": 603,
+      "box_height": 178,
+      "drawer_type": "system",
+      "face_zone_col": 0,
+      "face_zone_row": 0
+     },
+     {
+      "box_X": 54,
+      "box_Y": 320.5,
+      "box_Z": 62,
+      "slides": [
+       {
+        "X": 16.5,
+        "Y": 320.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "left",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 32,
+          "y": 368,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 400,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 525,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 493,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 365,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 461,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 63.5,
+          "y": 333,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 464,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 496,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 301,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 364.5,
+          "z": 269,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 355.5,
+          "y": 341.25,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "source": "db_back_joint",
+          "surface": "drawer_back",
+          "depthLen": 16.5,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       },
+       {
+        "X": 657,
+        "Y": 320.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 178,
+        "DZ": 37.5,
+        "side": "right",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 679,
+          "y": 368,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 400,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 525,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 493,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 365,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 461,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 647.5,
+          "y": 333,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 464,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 496,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 301,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 364.5,
+          "z": 269,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "23507573-f911-406d-906f-74daa520994b",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/23507573-f911-406d-906f-74daa520994b/1793272333179-DTC_DragonPro_178x500_v2.glb",
+        "box_height": 178,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -171.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       }
+      ],
+      "box_depth": 500,
+      "box_parts": [
+       {
+        "X": 54,
+        "Y": 333,
+        "Z": 562,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 476,
+        "DY": 603,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": false,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_bottom",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       },
+       {
+        "X": 60,
+        "Y": 333,
+        "Z": 86,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 166,
+        "DY": 591,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": true,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_back",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       }
+      ],
+      "box_width": 603,
+      "box_height": 178,
+      "drawer_type": "system",
+      "face_zone_col": 0,
+      "face_zone_row": 1
+     },
+     {
+      "box_X": 54,
+      "box_Y": 645.5,
+      "box_Z": 62,
+      "slides": [
+       {
+        "X": 16.5,
+        "Y": 645.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 127,
+        "DZ": 37.5,
+        "side": "left",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 32,
+          "y": 693,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 725,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 32,
+          "y": 757,
+          "z": 562,
+          "axis": "z+",
+          "side": "left",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 525,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 493,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 690,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 69,
+          "y": 754,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 63.5,
+          "y": 658,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 301,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 16.5,
+          "y": 689.5,
+          "z": 269,
+          "axis": "x-",
+          "side": "left",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 355.5,
+          "y": 666.25,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "left",
+          "radius": 2.5,
+          "source": "db_back_joint",
+          "surface": "drawer_back",
+          "depthLen": 16.5,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "e049e805-85fd-4a18-8ce9-7e6a1f9beb99",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/e049e805-85fd-4a18-8ce9-7e6a1f9beb99/1793272332670-DTC_DragonPro_127x500_v2.glb",
+        "box_height": 127,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -122.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       },
+       {
+        "X": 657,
+        "Y": 645.5,
+        "Z": 62,
+        "DX": 500,
+        "DY": 127,
+        "DZ": 37.5,
+        "side": "right",
+        "colour": "#eeece6",
+        "drills": [
+         {
+          "x": 679,
+          "y": 693,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 725,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 679,
+          "y": 757,
+          "z": 562,
+          "axis": "z+",
+          "side": "right",
+          "radius": 5,
+          "surface": "drawer_front",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 525,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 493,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 690,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 642,
+          "y": 754,
+          "z": 69.5,
+          "axis": "z+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_back",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 647.5,
+          "y": 658,
+          "z": 545.5,
+          "axis": "y+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "drawer_bottom",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 301,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         },
+         {
+          "x": 694.5,
+          "y": 689.5,
+          "z": 269,
+          "axis": "x+",
+          "side": "right",
+          "radius": 2.5,
+          "surface": "cabinet_member",
+          "depthLen": 12,
+          "machine_operation": "drill"
+         }
+        ],
+        "drawn_as": "dragon_pro",
+        "slide_id": "e049e805-85fd-4a18-8ce9-7e6a1f9beb99",
+        "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/slide-models/e049e805-85fd-4a18-8ce9-7e6a1f9beb99/1793272332670-DTC_DragonPro_127x500_v2.glb",
+        "box_height": 127,
+        "model_scale": 1,
+        "model_format": "glb",
+        "model_anchor_x": 0,
+        "model_anchor_y": -122.5,
+        "model_anchor_z": -500,
+        "nominal_length": 500,
+        "runner_thickness": 37.5
+       }
+      ],
+      "box_depth": 500,
+      "box_parts": [
+       {
+        "X": 54,
+        "Y": 658,
+        "Z": 562,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 476,
+        "DY": 603,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": false,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_bottom",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       },
+       {
+        "X": 60,
+        "Y": 658,
+        "Z": 86,
+        "AX": 0,
+        "AY": 0,
+        "AZ": 0,
+        "DX": 115,
+        "DY": 591,
+        "DZ": 16.5,
+        "edge_band": {
+         "id": "95cf1afd-2c19-4df5-b491-4af91295c570",
+         "top": true,
+         "left": false,
+         "right": false,
+         "bottom": false
+        },
+        "part_type": "db_back",
+        "material_id": "d081b2a1-38a8-472c-a415-f179699a1347"
+       }
+      ],
+      "box_width": 603,
+      "box_height": 127,
+      "drawer_type": "system",
+      "face_zone_col": 0,
+      "face_zone_row": 2
+     }
+    ],
+    "hinge_instances": [],
+    "internal_slides": []
+   },
+   "bulkhead": null,
+   "part_hide_views": {},
+   "part_no_cnc": [],
+   "curved_end": null,
+   "edge_overrides": {},
+   "label_offsets": null,
+   "float_shelf": null,
+   "back_panel": null,
+   "split": null,
+   "item_cad_hidden": [],
+   "grain_match_group_id": null,
+   "vj_layout": null,
+   "part_cutouts": {},
+   "rangehood": null,
+   "bottom_type": null
+  }
+ ],
+ "annots": [
+  {
+   "id": "191680f2-c00e-45d5-a2be-83eb4608728e",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "view": "elevation",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_id": null,
+   "sheet_view": null,
+   "kind": "text",
+   "geom": {
+    "at": {
+     "x": 119.77458177267792,
+     "y": -1404.3646830785462
+    },
+    "width": 25,
+    "height": 11.5
+   },
+   "text": "MICROWAVE CUPBOARD. BI-FOLD DOORS LEFT HINGED",
+   "style": {
+    "size": 2.5,
+    "align": "center"
+   },
+   "sort_order": 40,
+   "created_at": "2026-10-30T06:25:14.826136+00:00",
+   "updated_at": "2026-10-30T23:43:43.62+00:00",
+   "wall_side": "face",
+   "cad_layer_id": null
+  },
+  {
+   "id": "2a2501f1-b142-4da9-9004-49c350d5183a",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "view": "elevation",
+   "wall_id": "4d1a2dba-ccef-4002-b756-74b77b0e6704",
+   "cabinet_id": null,
+   "sheet_view": null,
+   "kind": "text",
+   "geom": {
+    "at": {
+     "x": -959.5797984977494,
+     "y": -2192.4519115123912
+    },
+    "width": 18,
+    "height": 20
+   },
+   "text": "How deep do you want the wine rack shelves?",
+   "style": {
+    "bg": "none",
+    "size": 2.5,
+    "align": "center",
+    "bgPad": 8,
+    "border": "none",
+    "weight": 0.18,
+    "arrowSize": 1,
+    "arrowStart": "closed",
+    "borderWeight": 0.18
+   },
+   "sort_order": 42,
+   "created_at": "2026-11-07T04:12:06.916+00:00",
+   "updated_at": "2026-11-07T04:12:46.964+00:00",
+   "wall_side": "face",
+   "cad_layer_id": "f9049b93-dbee-4a32-9876-19ceb37298b7"
+  },
+  {
+   "id": "74a8ac3a-9a96-4b9a-b06b-28d0268f3348",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "view": "elevation",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_id": null,
+   "sheet_view": null,
+   "kind": "rect",
+   "geom": {
+    "a": {
+     "x": 2160,
+     "y": -40
+    },
+    "b": {
+     "x": 2758.5,
+     "y": -850
+    }
+   },
+   "text": null,
+   "style": {
+    "src": "markup-std",
+    "dash": "dashed",
+    "size": 2.5,
+    "align": "center",
+    "weight": 0.25
+   },
+   "sort_order": 0,
+   "created_at": "2026-11-07T10:25:44.440635+00:00",
+   "updated_at": "2026-11-07T10:25:44.440635+00:00",
+   "wall_side": "face",
+   "cad_layer_id": "d189db92-71d7-47fb-adcc-425cc8a2eac4"
+  },
+  {
+   "id": "7abf847f-8b6c-4a5c-8159-a6bc98984d9a",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "view": "elevation",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_id": null,
+   "sheet_view": null,
+   "kind": "text",
+   "geom": {
+    "at": {
+     "x": 2190,
+     "y": -620
+    },
+    "width": 27
+   },
+   "text": "DISHWASHER 608.5 SPACE\nRE-USING EXISTING FREESTANDING 600",
+   "style": {
+    "src": "markup-std",
+    "size": 2.5,
+    "align": "center"
+   },
+   "sort_order": 0,
+   "created_at": "2026-11-07T10:25:44.440635+00:00",
+   "updated_at": "2026-11-07T10:25:44.440635+00:00",
+   "wall_side": "face",
+   "cad_layer_id": "d189db92-71d7-47fb-adcc-425cc8a2eac4"
+  },
+  {
+   "id": "0e5b34e1-e72a-460f-9331-72633cbb8aae",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "view": "elevation",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_id": null,
+   "sheet_view": null,
+   "kind": "cloud",
+   "geom": {
+    "pts": [
+     {
+      "x": 0,
+      "y": -2335
+     },
+     {
+      "x": 2780,
+      "y": -2335
+     },
+     {
+      "x": 2780,
+      "y": -2445
+     },
+     {
+      "x": 0,
+      "y": -2445
+     }
+    ]
+   },
+   "text": null,
+   "style": {
+    "src": "markup-std",
+    "size": 2.5,
+    "align": "center",
+    "weight": 0.25,
+    "cloudBump": 4
+   },
+   "sort_order": 0,
+   "created_at": "2026-11-07T10:25:44.440635+00:00",
+   "updated_at": "2026-11-07T10:25:44.440635+00:00",
+   "wall_side": "face",
+   "cad_layer_id": "f9049b93-dbee-4a32-9876-19ceb37298b7"
+  },
+  {
+   "id": "ec2e0972-a958-482b-9334-d50c2f943ad1",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "view": "elevation",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_id": null,
+   "sheet_view": null,
+   "kind": "text",
+   "geom": {
+    "at": {
+     "x": 2960,
+     "y": -2560
+    },
+    "width": 30,
+    "leader": [
+     {
+      "x": 2600,
+      "y": -2390
+     },
+     {
+      "x": 2920,
+      "y": -2535
+     }
+    ]
+   },
+   "text": "BULKHEAD COLOUR TBC - TEAK / WINTER SKY / WHITE?",
+   "style": {
+    "src": "markup-std",
+    "size": 2.5,
+    "align": "center"
+   },
+   "sort_order": 0,
+   "created_at": "2026-11-07T10:25:44.440635+00:00",
+   "updated_at": "2026-11-07T10:25:44.440635+00:00",
+   "wall_side": "face",
+   "cad_layer_id": "f9049b93-dbee-4a32-9876-19ceb37298b7"
+  },
+  {
+   "id": "d44e3c8f-20b6-4449-af35-97dd9e838707",
+   "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+   "view": "elevation",
+   "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+   "cabinet_id": null,
+   "sheet_view": null,
+   "kind": "text",
+   "geom": {
+    "at": {
+     "x": 2933.136956823322,
+     "y": -1533.1942686442003
+    },
+    "width": 30,
+    "leader": [
+     {
+      "x": 2592.5,
+      "y": -1593
+     },
+     {
+      "x": 2893.136956823322,
+      "y": -1508.1942686442003
+     }
+    ]
+   },
+   "text": "RECESSED LED STRIP UNDER OVERHEADS",
+   "style": {
+    "src": "markup-std",
+    "size": 2.5,
+    "align": "center"
+   },
+   "sort_order": 0,
+   "created_at": "2026-11-07T10:25:44.440635+00:00",
+   "updated_at": "2026-11-08T00:13:21.838+00:00",
+   "wall_side": "face",
+   "cad_layer_id": "7b2856f1-1387-4939-8900-db2333a69663"
+  }
+ ],
+ "project": {
+  "id": "0ebb6866-f1ff-4fcf-b000-17dceb207df4",
+  "rule_overrides": {
+   "RD": 80,
+   "TOEH": 100
+  }
+ },
+ "oven": {
+  "id": "f407f777-600c-46b7-b7ac-d110e7dbb7f1",
+  "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+  "catalog_id": "2d1a4f6c-d69d-4c06-8ea4-a430de4e6800",
+  "category": "appliance",
+  "kind": "Oven",
+  "name": "Generic oven 600",
+  "width": 600,
+  "depth": 600,
+  "height": 596,
+  "mount": "under_bench",
+  "colour": null,
+  "model_url": "https://xivrjteialwqmleahkfq.supabase.co/storage/v1/object/public/fixture-models/2d1a4f6c-d69d-4c06-8ea4-a430de4e6800/1791974848195-Miele_H2861BP_GRGR.glb",
+  "model_format": "glb",
+  "model_scale": 1000,
+  "model_rot_x": 0,
+  "model_rot_y": 0,
+  "model_off_x": 0,
+  "model_off_y": 0,
+  "model_off_z": 40,
+  "x": 1007,
+  "y": 280.5,
+  "rotation": 0,
+  "z": 213,
+  "wall_id": "a74ea87c-7876-436e-8bb8-2a88fceaffca",
+  "label": null,
+  "created_at": "2026-10-30T06:06:50.330063+00:00",
+  "updated_at": "2026-11-08T00:36:03.688+00:00",
+  "cutout_shape": null,
+  "cutout_w": 0,
+  "cutout_d": 0,
+  "cutout_radius": 0,
+  "cutout_off_x": 0,
+  "cutout_off_y": 0,
+  "bench_drop": 0,
+  "cabinet_id": "4cb2b290-72e4-4f7d-9325-9ea57cd5c0d6",
+  "link_x": 300.5,
+  "link_z": 278.5,
+  "link_rot": 0,
+  "hinge_side": "left",
+  "swing": "in",
+  "plan_shape": {
+   "v": 1,
+   "lines": [
+    [
+     [
+      0.07,
+      0.0575
+     ],
+     [
+      0.9275,
+      0.055
+     ],
+     [
+      0.9325,
+      0.08
+     ],
+     [
+      0.96,
+      0.0825
+     ],
+     [
+      0.96,
+      0.9625
+     ],
+     [
+      0.995,
+      0.9675
+     ],
+     [
+      0.9925,
+      1
+     ],
+     [
+      0.005,
+      0.9975
+     ],
+     [
+      0.005,
+      0.9675
+     ],
+     [
+      0.04,
+      0.9625
+     ],
+     [
+      0.04,
+      0.0825
+     ],
+     [
+      0.0675,
+      0.08
+     ],
+     [
+      0.07,
+      0.0575
+     ]
+    ],
+    [
+     [
+      0.6225,
+      0.055
+     ],
+     [
+      0.6275,
+      0.08
+     ],
+     [
+      0.9325,
+      0.08
+     ]
+    ],
+    [
+     [
+      0.0675,
+      0.08
+     ],
+     [
+      0.3725,
+      0.08
+     ],
+     [
+      0.375,
+      0.0575
+     ]
+    ],
+    [
+     [
+      0.3725,
+      0.08
+     ],
+     [
+      0.6275,
+      0.08
+     ]
+    ],
+    [
+     [
+      0.04,
+      0.2875
+     ],
+     [
+      0.96,
+      0.2875
+     ]
+    ],
+    [
+     [
+      0.0375,
+      0.965
+     ],
+     [
+      0.9625,
+      0.965
+     ]
+    ]
+   ]
+  },
+  "elev_shape": {
+   "v": 1,
+   "lines": [
+    [
+     [
+      0.005,
+      0.0025
+     ],
+     [
+      0.9925,
+      0
+     ],
+     [
+      0.995,
+      0.9925
+     ],
+     [
+      0.9625,
+      0.995
+     ],
+     [
+      0.9575,
+      1
+     ],
+     [
+      0.0425,
+      1
+     ],
+     [
+      0.0375,
+      0.995
+     ],
+     [
+      0.0075,
+      0.995
+     ],
+     [
+      0.005,
+      0.0025
+     ]
+    ],
+    [
+     [
+      0.045,
+      0.1884
+     ],
+     [
+      0.9525,
+      0.1859
+     ],
+     [
+      0.955,
+      0.1985
+     ],
+     [
+      0.9225,
+      0.201
+     ],
+     [
+      0.9175,
+      0.206
+     ],
+     [
+      0.0825,
+      0.206
+     ],
+     [
+      0.0775,
+      0.201
+     ],
+     [
+      0.0475,
+      0.201
+     ],
+     [
+      0.045,
+      0.1884
+     ]
+    ],
+    [
+     [
+      0.315,
+      0.0678
+     ],
+     [
+      0.3475,
+      0.0653
+     ],
+     [
+      0.365,
+      0.0829
+     ],
+     [
+      0.365,
+      0.108
+     ],
+     [
+      0.36,
+      0.1181
+     ],
+     [
+      0.3425,
+      0.1307
+     ],
+     [
+      0.3175,
+      0.1256
+     ],
+     [
+      0.3,
+      0.103
+     ],
+     [
+      0.3,
+      0.0879
+     ],
+     [
+      0.315,
+      0.0678
+     ]
+    ],
+    [
+     [
+      0.65,
+      0.0678
+     ],
+     [
+      0.6825,
+      0.0653
+     ],
+     [
+      0.7,
+      0.0879
+     ],
+     [
+      0.695,
+      0.1131
+     ],
+     [
+      0.6725,
+      0.1307
+     ],
+     [
+      0.6575,
+      0.1307
+     ],
+     [
+      0.64,
+      0.1181
+     ],
+     [
+      0.635,
+      0.108
+     ],
+     [
+      0.635,
+      0.0829
+     ],
+     [
+      0.65,
+      0.0678
+     ]
+    ],
+    [
+     [
+      0.165,
+      0.2236
+     ],
+     [
+      0.8325,
+      0.2211
+     ],
+     [
+      0.835,
+      0.2688
+     ],
+     [
+      0.1675,
+      0.2714
+     ],
+     [
+      0.165,
+      0.2236
+     ]
+    ]
+   ]
+  },
+  "cut_benchtop": true,
+  "brand": null,
+  "model_no": null,
+  "resizable": false,
+  "stretch": null,
+  "link_zone": {
+   "y": 113,
+   "col_index": 0,
+   "row_index": 1
+  },
+  "lock_group": null,
+  "display_name": null,
+  "label_offsets": null
+ }
+}
