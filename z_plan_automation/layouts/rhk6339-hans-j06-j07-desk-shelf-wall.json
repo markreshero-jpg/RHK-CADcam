@@ -1,0 +1,99 @@
+{
+  "_source": "_JOBS/RHK6300 - 6399/RHK6339 - Hans Const - 116 Queenscroft st Chelmer/SITE CHECK MEASURES/site Measured plans.pdf p7 (Croft WD 74 J06) + p8 (WD 75 J07) + Rory + Mark 2026-11-12",
+  "_notes": [
+    "One room: Wall 2 = J06 desk wall (W18/W19 windows) 4508 - 12 gyprock = 4496. Wall 3 = J07 wall off its end: 150 window filler + 3547 beam to frame = 3697. Wall 1 = W17 end of the desk (desk butts it).",
+    "J06 desk: 35 solid timber Blackbutt top only, 830 deep in front of the 130 trough (by others) -> y 130-960, wall W17 to the J07 wall (runs under the J07 left cupboard). Top 735 FFL -> height 700. Centre join. 50 recessed solid timber trim under the front edge (ours). Outriggers + trough by others.",
+    "J07: 305 overall (frame to back of jamb) -> carcass 286 + 17 + 2. Left bay 810 (150 + 810 = desk front 960): base cupboard under the desk with a fixed front, tall pair of doors on the desk (no bottom). Open shelving 2017 (2 bays, 33 veneer box + shelves, 17 back) on the bench. Tall 720 one door hinged right. Bench 35 Blackbutt 310 deep at 735 FFL.",
+    "Beam underside 735 + 1492 = 2227 FFL. 80 pelmet (BH) 2147-2227 over the filler, left cupboard and open bays to the window wall. Tall 720 to 2227.",
+    "Wall not gyprocked: cabinets straight onto the frame."
+  ],
+  "projectId": "cf31069b-1a56-49ee-91df-dade35f68fde",
+  "roomName": "J06 Desk + J07 Shelf Wall",
+  "roomHeight": 2700,
+  "walls": [
+    { "x": 0, "y": 1200, "length": 1200, "angle": 270, "_": "W17 end of the desk" },
+    { "x": 0, "y": 0, "length": 4496, "angle": 0, "_": "J06 desk wall 4508 - 12 gyp" },
+    { "x": 4496, "y": 0, "length": 3697, "angle": 90, "_": "J07 wall: 150 window filler + 3547 beam to frame, no gyprock" }
+  ],
+  "cabinets": [
+    {
+      "def": "B1D", "wall": 3, "offset": 150, "dx": 810, "dy": 700, "dz": 286,
+      "note": "J07 cupboard under the J06 desk, fixed front",
+      "set": {
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "false_panel" } ]
+        }
+      }
+    },
+    { "def": "B2D", "wall": 3, "offset": 960, "dx": 1008.5, "dy": 700, "dz": 286, "note": "J07 pair of doors under the bench" },
+    { "def": "B2D", "wall": 3, "offset": 1968.5, "dx": 1008.5, "dy": 700, "dz": 286, "note": "J07 pair of doors under the bench" },
+    {
+      "def": "TFKW", "wall": 3, "offset": 0, "dx": 150, "dy": 1412, "dz": 286,
+      "note": "J07 150 window filler, desk top to the pelmet",
+      "set": { "has_toekick": false, "pos_z": 735 }
+    },
+    {
+      "def": "T2D", "wall": 3, "offset": 150, "dx": 810, "dy": 1412, "dz": 286,
+      "note": "J07 pair of doors standing on the J06 desk, no bottom (desk top seen inside)",
+      "rules": { "REVB": 3, "BOTTOM_BACK_JOIN": "butts_into_back" },
+      "set": {
+        "has_toekick": false, "pos_z": 735,
+        "part_hide_views": { "case_bottom": ["plan", "elevation", "3d"] },
+        "internal_grid": { "tree": { "type": "open", "fittings": [
+          { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } },
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false }, { "col_index": 1, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [
+            { "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left", "handle_id": "cb24a933-5410-4582-bd8a-186d702918ea", "handle_length": 450, "handle_drill": false },
+            { "col_index": 1, "row_index": 0, "face_type": "door", "hinge_side": "right", "handle_id": "cb24a933-5410-4582-bd8a-186d702918ea", "handle_length": 450, "handle_drill": false }
+          ]
+        }
+      }
+    },
+    {
+      "def": "T2D", "wall": 3, "offset": 2977, "dx": 720, "dy": 2227, "dz": 286,
+      "note": "J07 tall cupboard, one door hinged right (D5 side)",
+      "set": {
+        "internal_grid": { "tree": { "type": "open", "fittings": [
+          { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } },
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [
+            { "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "right", "handle_id": "cb24a933-5410-4582-bd8a-186d702918ea", "handle_length": 450, "handle_drill": false }
+          ]
+        }
+      }
+    },
+    {
+      "def": "WOPN", "wall": 3, "offset": 960, "dx": 2017, "dy": 1412, "dz": 305,
+      "note": "J07 open shelving on the bench, 2 bays x 3 shelves, 33 veneer box + shelves, 17 veneer back, no bottom",
+      "rules": { "SCRBK": 0, "WALLZ": 735, "BOTTOM_BACK_JOIN": "butts_into_back" },
+      "set": {
+        "has_face": false, "has_toekick": false, "top_type": "full_top", "exposed_interior": true,
+        "part_hide_views": { "case_bottom": ["plan", "elevation", "3d"] },
+        "material_overrides": {
+          "back": "0bed0f26-d551-4c03-ba6a-fd7f3309b6ad",
+          "shelf": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "exposed": "fca041dc-30b7-469e-9e14-d8d3aae38a57",
+          "interior": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "left_side": "fca041dc-30b7-469e-9e14-d8d3aae38a57",
+          "right_side": "fca041dc-30b7-469e-9e14-d8d3aae38a57"
+        },
+        "internal_grid": { "tree": { "type": "vsplit", "children": [
+          { "divider": "single", "section": { "type": "hsplit", "children": [
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } },
+          { "section": { "type": "hsplit", "children": [
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
+            { "section": { "type": "open", "fittings": [] } } ] } }
+        ] } }
+      }
+    }
+  ]
+}

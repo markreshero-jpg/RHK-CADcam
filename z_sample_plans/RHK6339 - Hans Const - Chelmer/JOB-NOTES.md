@@ -111,9 +111,37 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
 - [ ] Nosings on the shelf (Mark: maybe later).
 - [ ] Back splashback finish (mirror struck out - lining only noted on the ends).
 
+## J06 Desk + J07 Shelf Wall (one room) - drawn 2026-11-12, room `3bd26e44-cc9a-4c6f-bbae-a4fa0d59aeef`
+
+Layout `z_plan_automation/layouts/rhk6339-hans-j06-j07-desk-shelf-wall.json`, post `_tmp-6339-j06-post.mjs`
+(kick join, pelmet BH, pulls, TC-02 hinges, tops), `_tmp-6339-j06-bh.mjs` / `-fix.mjs` (BH dy 80, bases
+back to 1008.5), CAD `_tmp-6339-j06-cad.mjs`, shots `_tmp-6339-j06-shot.mjs`. Croft WD 74 / WD 75 + Rory.
+
+Mark's answers 2026-11-12:
+- Wall 2 = J06 desk wall 4508 - 12 gyp = **4496**; Wall 3 = J07 wall off its end, **150 window filler past
+  the 3547** = 3697. Wall 1 = W17 end. J07 wall not gyprocked: cabinets straight onto the frame.
+- J06 desk (Desk A / Desk B): 35 Blackbutt, 830 deep in front of the 130 trough (y 130-960), wall to wall,
+  **runs through under the J07 left cupboard**, centre join (2248) for now. 50 recessed trims are ours,
+  front edge only (in the top notes, not modelled). 735 FFL (height 700). Trough + outriggers by others.
+- J07: 305 overall -> carcass 286 + 17 + 2. TC-01 TFKW 150 filler 735-2147 at the window.
+  BC-01 B1D 810 **fixed front** cupboard under the desk. TC-02 T2D 810 pair on the desk, **no bottom**
+  (case_bottom hidden, REVB 3), 3 adj. BC-02 / BC-03 B2D 1008.5 pairs under the bench. WC-01 WOPN 2017
+  open shelving on the bench (WALLZ 735, no bottom): **33 veneer** box / division / 3 shelves per bay,
+  17 back. TC-03 T2D 720 one door hinged right, floor to 2227. KICK 1 joined 3547.
+- Bench: 35 Blackbutt 310 deep (5 over the doors), y 960-2977, 735 FFL, same as J05.
+- WC-02 BH 80 pelmet 2147-2227 (beam underside), front 'doors', over TC-01 / TC-02 / WC-01 to the window
+  wall (Mark). Veneer fascia.
+- Tall door pulls = Custom Timber Pull 450 (as J02, zone handle_id), 770-1220 AFF scaled off the
+  elevation. Base doors sharknose. TC-02 hinges [100, 800, 1309] off the shelf holes.
+- Mark's "Infil" sketch = the desk height, 735 so everything lines up.
+
+### Open / TBC
+- [ ] J07 left bay 810 (drawing 760) so its side lines up with the desk front 960; open bays 1008.5
+  (drawing 940) to take up the 3547. Check with Mark.
+- [ ] Desk 830 + 130 trough nominal - confirm.
+- [ ] LF-9 LED in the pelmet - by whom, route or not.
+- [ ] 3547 final measure (Rory).
+
 ## Other rooms - not drawn
 - J01 garage: 4411 frame to frame - 12 sheet both sides = 4387. Ceiling TBC by Rory.
   Hoop pine 19 ply in the quote.
-- J06 desk: 4508 - 1x gyp, 735 off finished floor. Top only (trough + outriggers by others), join needed.
-- J07 shelf wall: 3547 beam to frame (Rory final measure), 305 frame to back of jamb, 150 filler
-  at the window, 735 off FFL, 1492 to underside of beam. Call Rory re wall.
