@@ -1,0 +1,57 @@
+# RHK6339 Hans Const - 116 Queenscroft St, Chelmer
+
+Client: Stacey & Ben Hollis (builder Hans Const, Dan). Architect: Croft Architects, joinery
+details WD 70-75 (Tender issue A, 06/08/25). Site check measures by Rory, red pen on
+`_JOBS/RHK6300 - 6399/RHK6339 - .../SITE CHECK MEASURES/site Measured plans.pdf`.
+Quote 18/09/2025: J01 J02 J04 J05 J06 J07 (J03 sun room lining is not ours).
+
+App project `cf31069b-1a56-49ee-91df-dade35f68fde`.
+
+## Job set-up (Mark 2026-11-11)
+
+- Fronts + exposed: **Veneer 17mm – Blackbutt** (new board `Veneer 17mm`, 2408 x 1205, T102),
+  tape **0.5mm Matching 22 – Blackbutt** (50m rolls). Door style `Veneer 17mm` (17 blank,
+  colour range `Veneer 17mm`, colour Blackbutt, grain vertical).
+- Carcass: PT Colour Matt 16mm Black Matt (assembly schedule "16.5mm PT Black Matt").
+- Handles: Sharknose Finger Pull schedule.
+- Kick 100 (job TOEH). Base default 879 incl kick, 676 deep (fingerpull, 700 top).
+- Tops: **35mm Solid Timber – Blackbutt** (benchtop schedule + build method "Solid Timber
+  (hand made)": measure + report only, made by hand in the shop).
+
+## J05 Study Bench (level 1) - drawn 2026-11-11, room `ab417075-b6e2-4189-93c5-c281e1f05f9b`
+
+Layout `z_plan_automation/layouts/rhk6339-hans-j05-study-bench.json`, post
+`_tmp-6339-j05-post.mjs` (top + kick join).
+
+- Wall 1 = back wall 2830 (site). Wall 2 = W16 window end, bench butts into the frame.
+- Top 700 x 2170 incl 35 waterfall leg at the left (x 660-2830). 716 site depth to the portal
+  column with 1x gyprock still to go on.
+- BC-01 D4 650, 4 equal drawers (127 boxes). BC-02 692.5 one door hinged left. BC-03 792.5 one
+  door hinged right + 100 false panel behind the portal column. KICK 1 joined 2135.
+- Rev 1 (Mark 2026-11-11): BC-02 split into two cupboards; BC-01 was 100 high with its kick
+  still on: its face_grid had no `zones`, so every re-resolve crashed (`grid.zones is not
+  iterable`) and the first placement's parts stayed. Zones added, re-resolved
+  (`_tmp-6339-j05-rev1.mjs`, `_tmp-6339-j05-dbg.mjs`). Spec block + SITE NOTES + BC-03 column
+  note (`_tmp-6339-j05-cad.mjs`).
+- Portal column (Mark 2026-11-11): 100 x 100 nominal nib wall "Portal column" off Wall 2, face
+  703 off Wall 1, 2700 high: solid in plan / 3D / Wall 2 elevation. On the Wall 1 elevation it
+  is a dashed see-through outline + "PORTAL COLUMN (IN FRONT)" (`_tmp-6339-j05-column.mjs`).
+  Column size is nominal - confirm on site.
+- Height: 928 raw floor to underside of window, 14 timber floor to come -> **914 FFL top**,
+  carcass 879 incl 100 kick (drawing said 930).
+
+### Open / TBC
+- [ ] 914 top height (= window underside off finished floor) - confirm.
+- [ ] 100 behind the portal column (BC-03 false panel) - OK for now, **check with builder**
+  (on the elevation + SITE NOTES).
+- Kick vertical grain, 2 pieces - Mark OK, on the spec block.
+
+## Other rooms - not drawn
+- J01 garage: 4411 frame to frame - 12 sheet both sides = 4387. Ceiling TBC by Rory.
+  Hoop pine 19 ply in the quote.
+- J02 stair cupboard: no site measures.
+- J04 sink unit: 2271 frame to frame (drawing 2780), 700 back of jamb to raw wall, 2228 raw floor
+  to underside of shadow, 14 timber lining both ends (mirror splashback struck out).
+- J06 desk: 4508 - 1x gyp, 735 off finished floor. Top only (trough + outriggers by others), join needed.
+- J07 shelf wall: 3547 beam to frame (Rory final measure), 305 frame to back of jamb, 150 filler
+  at the window, 735 off FFL, 1492 to underside of beam. Call Rory re wall.

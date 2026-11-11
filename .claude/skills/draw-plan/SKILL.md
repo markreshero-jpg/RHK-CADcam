@@ -119,6 +119,11 @@ line and mirrors the island elevation.
   2026-10-27): oversized for scribing. The cabinet stops short (shaped footprint
   ending in a short `open` edge) and a `TFKW` 40 in the door plane runs 10 past
   the wall line. A waterfall end against a 45° wall runs parallel to it.
+- **A `set.face_grid` must carry `zones`** (RHK6339 J05, 2026-11-11): a grid with
+  only `cols` / `rows` places fine but every later re-resolve throws `grid.zones is
+  not iterable` and nothing persists — the first placement's parts (kick included)
+  stay, so after joinKicks the cabinet sits a kick height too high. Always list a
+  zone per cell (drawers: `{col_index, row_index, face_type: 'drawer_face'}`).
 - **`face_grid` rows are bottom-up** — `row_index 0` = the BOTTOM row (a door
   under a TV panel = row 0 door, row 1 false_panel). Hand-written `footprint`s
   need `params: {}` or the canvas crashes (evalExpr).
