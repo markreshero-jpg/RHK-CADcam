@@ -204,3 +204,4 @@ Applied with `_tmp-6595-r6.mjs` (db + resolve); before-state `_tmp-6595-r6-befor
   pos_z 1593 -> 1575 (`_tmp-6595-oh765.mjs`). Doors 765. WC-07 WF-L was already 765.
 - Wall 2 elevation dim bench (950) -> under panel underside (1575) = 625, under WC-04 (`_tmp-6595-dim625.mjs`, markup-std, General layer).
 - **Spec block** on the plan (Mark 2026-11-11, `_tmp-6595-spec.mjs`, General layer, x 3700): BENCHTOP 20mm Stone colour TBC (the {benchtop} field filled '-'), {fronts} + teak extras, handles (builder drills), {carcass}, OVERHEADS 625 above benchtop to underside.
+- Spec block handles line (Mark 2026-11-11): 'supplied + fitted by others' (`_tmp-6595-spec-hdl.mjs`). The C138 handle is still on the job schedule, so it may still be costed.
