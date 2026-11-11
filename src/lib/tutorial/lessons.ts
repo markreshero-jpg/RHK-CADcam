@@ -1855,7 +1855,7 @@ export const LESSONS: TutorialLesson[] = [
   ]},
 
   // Appended 2026-11-11 (z_bulkhead B13 — vertical grain).
-  { id: 'bulkhead_grain', level: 'intermediate', topic: 'cabinets', title: 'Run a bulkhead's grain up',
+  { id: 'bulkhead_grain', level: 'intermediate', topic: 'cabinets', title: 'Run a bulkhead grain up',
     blurb: 'Set a woodgrain bulkhead to vertical grain: the fascia is made in pieces when it is longer than the sheet.',
     keywords: 'bulkhead grain vertical horizontal woodgrain fascia join pieces BH timber', steps: [
     { id: 'grain', title: 'Pick Vertical grain',
