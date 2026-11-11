@@ -55,6 +55,7 @@ export function fingerRailStrip(width: number, length: number, thickness: number
   return {
     dims: turned ? { w: length, h: RAIL_NEST_W, thickness } : { w: RAIL_NEST_W, h: length, thickness },
     note: `Cut ${RAIL_NEST_W} wide, trim to ${trim}, then ${tape} = ${width}`,
+    width, trim, tape,
   }
 }
 
@@ -352,7 +353,10 @@ export function normalizeProject(
     // inside face panel (crv:inner, unless its curved end runs horizontal grain) —
     // both were nesting their grain across (Mark, RHK6581 BC-01 / BC-03 2026-11-07).
     if ((pieceOf.startsWith('side:') || (pieceOf === 'crv:inner' && r.grain_direction !== 'horizontal')) && last?.source_part_id === r.id) last.grain_across = true
-    if (railStrip && last?.source_part_id === r.id) last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
+    if (railStrip && last?.source_part_id === r.id) {
+      last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
+      last.rail_strip = { width: railStrip.width, trim: railStrip.trim, tape: railStrip.tape, note: railStrip.note }
+    }
     if (splitNote && last?.source_part_id === r.id) last.comment = last.comment ? `${splitNote} · ${last.comment}` : splitNote
     // Long-edge mitre (bulkhead bottom return / fascia, z_bulkhead B10): nested
     // at the blank, mitred on the saw. Not doubled when a saved comment has it.

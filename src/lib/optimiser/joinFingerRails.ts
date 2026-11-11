@@ -69,6 +69,52 @@ export function joinFingerRails(parts: OptiPart[], rects: Map<string, RailWallRe
       }
     }
   }
+  if (!replace.size) return pairRailBases(parts)
+  const out: OptiPart[] = []
+  for (const p of parts) {
+    const r = replace.get(p.uid)
+    if (r === undefined) out.push(p)
+    else if (r) out.push(r)
+  }
+  return pairRailBases(out)
+}
+
+// One strip for a set back rail and its base (Mark, 2026-11-11, RHK6586): "if they
+// are cut at 100mm wide we can get both parts out of them". After the run joins,
+// each upright pairs with a base of the same run + length (fprail:n with fpbase:n
+// first) when both trim sizes plus saw allowance fit RAIL_PAIR_W; the shop rips
+// the strip, then trims + tapes each piece. A pair that doesn't fit (e.g. a 73.5
+// rail + 33 base) stays as two 80 strips.
+export const RAIL_PAIR_W = 100
+export const RAIL_PAIR_ALLOW = 10   // rip kerf + a clean-up pass on each ripped edge
+
+const keyNo = (p: OptiPart) => Number(p.source_part_key.split(':')[1] ?? 0)
+
+export function pairRailBases(parts: OptiPart[], stripW = RAIL_PAIR_W, allow = RAIL_PAIR_ALLOW): OptiPart[] {
+  const len = (p: OptiPart) => Math.max(p.w, p.h)
+  const groups = new Map<string, { rails: OptiPart[]; bases: OptiPart[] }>()
+  for (const p of parts) {
+    const kind = railKind(p)
+    if (!kind || !p.rail_strip || p.shape || p.size_overridden || !p.output_to_cnc) continue
+    const k = [p.room_id, p.cabinet_label, p.material_id, p.thickness, Math.round(len(p) * 2)].join('|')
+    const g = groups.get(k) ?? { rails: [], bases: [] }
+    ;(kind === 'rail' ? g.rails : g.bases).push(p)
+    groups.set(k, g)
+  }
+  const replace = new Map<string, OptiPart | null>()
+  for (const { rails, bases } of groups.values()) {
+    if (!rails.length || !bases.length) continue
+    rails.sort((a, b) => keyNo(a) - keyNo(b))
+    const free = [...bases].sort((a, b) => keyNo(a) - keyNo(b))
+    const fits = (r: OptiPart, b: OptiPart) => r.rail_strip!.trim + b.rail_strip!.trim + allow <= stripW + 1e-6
+    for (const r of rails) {
+      const b = free.find(b => keyNo(b) === keyNo(r) && fits(r, b)) ?? free.find(b => fits(r, b))
+      if (!b) continue
+      free.splice(free.indexOf(b), 1)
+      replace.set(r.uid, paired(r, b, stripW))
+      replace.set(b.uid, null)
+    }
+  }
   if (!replace.size) return parts
   const out: OptiPart[] = []
   for (const p of parts) {
@@ -77,6 +123,25 @@ export function joinFingerRails(parts: OptiPart[], rects: Map<string, RailWallRe
     else if (r) out.push(r)
   }
   return out
+}
+
+function paired(rail: OptiPart, base: OptiPart, stripW: number): OptiPart {
+  const alongW = rail.w > rail.h
+  const rs = rail.rail_strip!, bs = base.rail_strip!
+  const rest = (p: OptiPart) => (p.comment ?? '').split(' · ').filter(t => t && t !== p.rail_strip!.note && !t.startsWith('Joined rail base:'))
+  const head = `Cut ${stripW} wide, rip into ${rail.label} + ${base.label}: rail trim to ${rs.trim}, then ${rs.tape} = ${rs.width}; base trim to ${bs.trim}, then ${bs.tape} = ${bs.width}`
+  const extra = [...new Set([...rest(rail), ...rest(base)])]
+  const tape = new Map<string | null, number>()
+  for (const p of [rail, base]) for (const t of p.eb_tape ?? []) tape.set(t.id, (tape.get(t.id) ?? 0) + t.mm)
+  const eb_tape = [...tape].map(([id, mm]) => ({ id, mm: Math.round(mm * 10) / 10 })).filter(t => t.mm > 0)
+  return {
+    ...rail,
+    ...(alongW ? { h: stripW } : { w: stripW }),
+    label: `${rail.label} + ${base.label.replace(/^Finger Rail /, '')}`,
+    comment: [head, ...extra].join(' · '),
+    eb_tape: eb_tape.length ? eb_tape : undefined,
+    rail_strip: undefined,
+  }
 }
 
 // Rails are face-kind panels (DX = height, DY = length): the run adds up along h

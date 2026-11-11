@@ -54,6 +54,10 @@ export interface OptiPart {
   nest_priority: number
   output_to_cnc: boolean
   comment: string | null      // from cabinet_instances.part_comments[part_key]
+  // A narrow finger-pull rail / rail base nested as a strip (z_handles D21):
+  // finished width, trim-to size and the tape step — for pairing a rail with its
+  // base in one strip (pairRailBases).
+  rail_strip?: { width: number; trim: number; tape: string; note: string }
   // Set when part_pos_overrides sw/sh/sd changed this part's dims at snapshot
   // time (hand resize or shape-driven bbox — sizeOverrides.ts). base_* keep the
   // resolver's original footprint for display ("base → effective").

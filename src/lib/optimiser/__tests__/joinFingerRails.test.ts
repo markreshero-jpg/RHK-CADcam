@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { joinFingerRails, type RailWallRect } from '../joinFingerRails'
+import { joinFingerRails, pairRailBases, type RailWallRect } from '../joinFingerRails'
 import type { OptiPart } from '../types'
 
 // A rail part (w = height, h = length) + where it sits on the wall.
@@ -61,6 +61,24 @@ describe('joinFingerRails (z_handles D19)', () => {
     const b = out.find(p => p.source_part_key === 'case_fpbase:0')!
     expect(b.h).toBe(2078.5)
     expect(b.comment).toBe('Joined rail base: BC-01 + BC-02 + BC-03')
+  })
+  it('pairs a rail with its base in one 100 strip when both fit, else leaves two 80 strips', () => {
+    const strip = (id: string, key: string, label: string, width: number, trim: number): OptiPart => ({
+      ...rail(id, 'BC-01', 0, 700)[0], source_part_key: key, label, w: 80, h: 700,
+      comment: `Cut 80 wide, trim to ${trim}, then tape 1 long edge = ${width}`,
+      rail_strip: { width, trim, tape: 'tape 1 long edge', note: `Cut 80 wide, trim to ${trim}, then tape 1 long edge = ${width}` },
+      eb_tape: [{ id: 'pw', mm: 700 }],
+    })
+    const out = pairRailBases([
+      strip('r0', 'case_fprail:0', 'Finger Rail 1', 38.5, 37.5),
+      strip('r1', 'case_fprail:1', 'Finger Rail 2', 73.5, 72.5),
+      strip('b0', 'case_fpbase:0', 'Finger Rail Base 1', 33, 32),
+      strip('b1', 'case_fpbase:1', 'Finger Rail Base 2', 33, 32),
+    ])
+    expect(out.map(p => [p.label, p.w, p.h])).toEqual([
+      ['Finger Rail 1 + Base 1', 100, 700], ['Finger Rail 2', 80, 700], ['Finger Rail Base 2', 80, 700]])
+    expect(out[0].comment).toBe('Cut 100 wide, rip into Finger Rail 1 + Finger Rail Base 1: rail trim to 37.5, then tape 1 long edge = 38.5; base trim to 32, then tape 1 long edge = 33')
+    expect(out[0].eb_tape).toEqual([{ id: 'pw', mm: 1400 }])
   })
   it('does not bridge a gap between cabinets', () => {
     expect(run([rail('a', 'A', 0, 600), rail('b', 'B', 650, 600)])).toHaveLength(2)
