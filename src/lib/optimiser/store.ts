@@ -128,6 +128,10 @@ interface OptiState {
   /** Move a grain match block's fronts together (z_grain_match G4). */
   moveBlockBy: (uids: string[], dx: number, dy: number) => void
   rotatePart: (uid: string) => void
+  /** Turn a part in its own footprint (Mark, 2026-11-11): 'rotate180' = half
+   *  turn; 'mirror' = turned over left ↔ right; 'flip' = turned over top ↔
+   *  bottom (mirror + half turn). Turning over swaps its blind work A ↔ Z. */
+  turnPart: (uid: string, how: 'rotate180' | 'mirror' | 'flip') => void
   relocatePart: (uid: string, targetSheetIndex: number, x: number, y: number) => void
   removeToUnplaced: (uid: string) => void
   placeFromUnplaced: (uid: string, sheetIndex: number, x: number, y: number) => void
@@ -319,6 +323,24 @@ export const useOptiStore = create<OptiState>((set) => ({
       const pos = findNearestValid(s, uid, nw, nh, pl.x, pl.y, gap)
       if (!pos) return { editError: 'No room to rotate this part here.' }
       pl.w = nw; pl.h = nh; pl.rotated = !pl.rotated; pl.x = pos.x; pl.y = pos.y
+      return commit(st, next)
+    }
+    return {}
+  }),
+
+  turnPart: (uid, how) => set(st => {
+    if (!st.nestResult) return {}
+    const blk = blockOfUid(st.nestResult, uid)
+    if (blk?.pair) return { editError: `Paired part — it stays head to tail with its partner (${blk.name}). Cut it from the sheet and place it again to split the pair.` }
+    if (blk) return { editError: `Grain-matched front — it turns with its ${blk.name} block, never on its own.` }
+    const next = clone(st.nestResult)
+    for (const s of next.sheets) {
+      const pl = s.placements.find(p => p.uid === uid)
+      if (!pl) continue
+      if (how !== 'mirror') pl.turned = !pl.turned || undefined
+      if (how !== 'rotate180') pl.mirrored = !pl.mirrored || undefined
+      if (!pl.turned) delete pl.turned
+      if (!pl.mirrored) delete pl.mirrored
       return commit(st, next)
     }
     return {}

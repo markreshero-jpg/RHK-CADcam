@@ -16,7 +16,7 @@
 
 import type { NestedSheet } from './nest'
 import type { SheetRoute } from './gcode'
-import { drillKey, toSheet, ebShift, onDownFace, type PartRef } from './drills'
+import { drillKey, toSheet, ebShift, onDownFace, opProgram, type PartRef } from './drills'
 
 export interface RouteOpRaw {
   source_table: string
@@ -180,8 +180,9 @@ export function buildSheetRoutes(
   sheet: NestedSheet,
   partByUid: Map<string, PartRef>,
   routesByKey: Map<string, RouteOpRaw[]>,
-  twoSided = false,   // sheet runs as programs A + Z (drills.ts ProgramFace)
+  twoSided = false,   // the parts' own work needs programs A + Z (drills.ts ProgramFace)
   thickness = Infinity,
+  programs = twoSided, // sheet runs as A + Z (also when a mirrored part put work underneath)
 ): SheetRoute[] {
   const out: SheetRoute[] = []
   for (const pl of sheet.placements) {
@@ -197,7 +198,7 @@ export function buildSheetRoutes(
       const down = twoSided && onDownFace(part, op.output_face)
       const { sx, sy } = ebShift(part, op.output_face, down)
       const map = (ox: number, oy: number) => toSheet((down ? part.w - ox : ox) - sx, oy - sy, pl)
-      const prog = twoSided ? { program: down && depth < thickness - 1e-6 ? 'Z' as const : 'A' as const } : {}
+      const prog = programs ? { program: opProgram(down, depth < thickness - 1e-6, pl) } : {}
 
       const g = opPartGeom(op, part)
       if (!g) continue
@@ -224,7 +225,8 @@ export function buildSheetRoutes(
         fillStrategy: op.fill_strategy ?? null,
         // A set angle is on the part, so it turns with a part turned on the sheet
         // (RHK6542 WC-04 LED: 90 = along the panel, was cut across it). 0 stays auto.
-        rasterAngleDeg: op.raster_angle_deg ? op.raster_angle_deg + (pl.rotated ? 90 : 0) : 0,
+        // A mirrored (face down) part reflects it.
+        rasterAngleDeg: op.raster_angle_deg ? (pl.mirrored ? -op.raster_angle_deg : op.raster_angle_deg) + (pl.rotated ? 90 : 0) : 0,
         stepoverPct: op.raster_stepover_pct ?? 0,
         toolNumber: op.toolNumber, toolDiameter: op.toolDiameter, maxDepthPerPass: op.maxDepthPerPass,
         feed: op.feed ?? null, plunge: op.plunge ?? null, rpm: op.rpm ?? null, partKey: pl.uid, cutWidth: cutWidthAt(op, depth),

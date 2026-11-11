@@ -65,6 +65,7 @@ export default function Stage5Edit() {
   const placeFromUnplaced = useOptiStore(s => s.placeFromUnplaced)
   const relocatePart = useOptiStore(s => s.relocatePart)
   const rotatePart = useOptiStore(s => s.rotatePart)
+  const turnPartRaw = useOptiStore(s => s.turnPart)
   const copyToClipboard = useOptiStore(s => s.copyToClipboard)
   const cutToClipboard = useOptiStore(s => s.cutToClipboard)
   const pasteClipboard = useOptiStore(s => s.pasteClipboard)
@@ -158,6 +159,20 @@ export default function Stage5Edit() {
     () => new Set(drillOps && nestResult ? nestResult.sheets.filter(s => isTwoSidedSheet(s, drillOps)).map(s => s.index) : []),
     [drillOps, nestResult],
   )
+  // Rotate 180 / Mirror / Flip. Turning a part over puts its blind work underneath,
+  // so its sheet may now run as a 6th face pair — say so when it changes.
+  const turnPart = (uid: string, how: 'rotate180' | 'mirror' | 'flip') => {
+    const st0 = useOptiStore.getState()
+    const sh0 = st0.nestResult?.sheets.find(s => s.placements.some(p => p.uid === uid))
+    const was = !!(drillOps && sh0 && isTwoSidedSheet(sh0, drillOps))
+    turnPartRaw(uid, how)
+    const st1 = useOptiStore.getState()
+    if (st1.editError || !drillOps || !sh0) return
+    const sh1 = st1.nestResult?.sheets.find(s => s.index === sh0.index)
+    const now = !!(sh1 && isTwoSidedSheet(sh1, drillOps))
+    if (now && !was) st1.setEditError('Turned over — its machining is underneath now, so this sheet runs as a 6th face pair (program A, flip the sheet, program Z). Check it before cutting.')
+    else if (was && !now) st1.setEditError('This sheet no longer needs a 6th face pair — it runs as one program again.')
+  }
   const SIXTH_TIP = '6th face: parts on this sheet are machined on both faces. G-code makes two programs - A (back face + 5mm trims), flip the sheet over the long edge, then Z (face routes + parts out).'
   const routesBySheet = useMemo(
     () => (drillOps && nestResult ? projectSheetRoutes(nestResult.sheets, drillOps) : new Map<number, SheetRoute[]>()),
@@ -535,7 +550,7 @@ export default function Stage5Edit() {
               <InfoRow label="Height (DY)" value={`${Math.round(selectedInfo.pl.h)} mm`} />
               <InfoRow label="Thk (DZ)" value={selectedInfo.part ? `${selectedInfo.part.thickness} mm` : '—'} />
               <InfoRow label="Material" value={matName(selectedInfo.part?.material_id ?? null)} />
-              <InfoRow label="On sheet" value={`${selectedInfo.sheetIndex + 1}${selectedInfo.pl.rotated ? (selectedInfo.pl.turned ? ' · rotated 270°' : ' · rotated 90°') : selectedInfo.pl.turned ? ' · rotated 180°' : ''}`} />
+              <InfoRow label="On sheet" value={`${selectedInfo.sheetIndex + 1}${selectedInfo.pl.rotated ? (selectedInfo.pl.turned ? ' · rotated 270°' : ' · rotated 90°') : selectedInfo.pl.turned ? ' · rotated 180°' : ''}${selectedInfo.pl.mirrored ? ' · turned over' : ''}`} />
               {(() => { const t = grainMatchTags(nestResult).get(selectedInfo.pl.uid); return t ? <InfoRow label="Grain match" value={`${grainMatchLine(t)} · ${t.direction}`} /> : null })()}
               {selectedInfo.part?.comment && <InfoRow label="Comment" value={selectedInfo.part.comment} />}
 
@@ -572,8 +587,11 @@ export default function Stage5Edit() {
 
       {/* Context menu */}
       {ctxMenu && (
-        <div className="fixed z-50 w-40 bg-surface border border-edge-strong rounded-lg shadow-xl py-1" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={e => e.stopPropagation()}>
+        <div className="fixed z-50 w-52 bg-surface border border-edge-strong rounded-lg shadow-xl py-1" style={{ left: ctxMenu.x, top: ctxMenu.y }} onClick={e => e.stopPropagation()}>
           <CtxItem label="Rotate 90°" onClick={() => { rotatePart(ctxMenu.uid); setCtxMenu(null) }} />
+          <CtxItem label="Rotate 180°" onClick={() => { turnPart(ctxMenu.uid, 'rotate180'); setCtxMenu(null) }} />
+          <CtxItem label="Mirror part (left ↔ right)" onClick={() => { turnPart(ctxMenu.uid, 'mirror'); setCtxMenu(null) }} />
+          <CtxItem label="Flip part (top ↔ bottom)" onClick={() => { turnPart(ctxMenu.uid, 'flip'); setCtxMenu(null) }} />
           <CtxItem label="Copy" onClick={() => { copyToClipboard(ctxMenu.uid); setCtxMenu(null) }} />
           <CtxItem label="Cut" onClick={() => { cutToClipboard(ctxMenu.uid); setCtxMenu(null) }} />
           <CtxItem label="Delete from run" onClick={() => { removeToUnplaced(ctxMenu.uid); setCtxMenu(null) }} danger />
@@ -804,7 +822,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
                   {showLabel && (
                     <text x={cx} y={cyc + 8} textAnchor="middle" dominantBaseline="middle"
                       fill="#94a3b8" fontSize={labelFont} fontFamily="monospace">
-                      {label}
+                      {p.mirrored ? '⇋ ' : ''}{label}
                     </text>
                   )}
                 </g>

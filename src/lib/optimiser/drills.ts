@@ -82,10 +82,20 @@ function expand(op: DrillOpRaw): { ox: number; oy: number; d: number; depth: num
 // Part-local (origin bottom-left of natural w×h) → sheet coords.
 // rotated = part turned 90° CCW; the placed footprint is natH × natW, so
 // pl.w == natH and a local (ox,oy) maps to (pl.w - oy, ox).
-// turned = a further half turn inside the same footprint (shaped pairs).
-export function toSheet(ox: number, oy: number, pl: { x: number; y: number; w: number; h?: number; rotated: boolean; turned?: boolean }) {
-  const q = pl.rotated ? { x: pl.w - oy, y: ox } : { x: ox, y: oy }
+// turned = a further half turn inside the same footprint (shaped pairs, Flip).
+// mirrored = turned over (Mirror part): blank x → blank width − x, first.
+export function toSheet(ox: number, oy: number, pl: { x: number; y: number; w: number; h?: number; rotated: boolean; turned?: boolean; mirrored?: boolean }) {
+  const mx = pl.mirrored ? (pl.rotated ? (pl.h ?? 0) : pl.w) - ox : ox
+  const q = pl.rotated ? { x: pl.w - oy, y: mx } : { x: mx, y: oy }
   return pl.turned ? { x: pl.x + pl.w - q.x, y: pl.y + (pl.h ?? 0) - q.y } : { x: pl.x + q.x, y: pl.y + q.y }
+}
+
+// The program an op runs in. As laid out, a blind op on the down face of a
+// two-sided part runs in Z; a mirrored (turned over) part swaps A and Z for its
+// blind work. Through cuts always run in A, from the top.
+export function opProgram(down: boolean, blind: boolean, pl: { mirrored?: boolean }): ProgramFace {
+  const p: ProgramFace = down && blind ? 'Z' : 'A'
+  return pl.mirrored && blind ? (p === 'Z' ? 'A' : 'Z') : p
 }
 
 // Edgeband-deducted blank: how far part-local ops shift onto the deducted blank.
@@ -132,7 +142,8 @@ export function buildSheetDrills(
   partByUid: Map<string, PartRef>,
   opsByKey: Map<string, DrillOpRaw[]>,
   defaultDepth: number,
-  twoSided = false,   // sheet runs as programs A + Z (see ProgramFace)
+  twoSided = false,   // the parts' own work needs programs A + Z (see ProgramFace)
+  programs = twoSided, // sheet runs as A + Z (also when a mirrored part put work underneath)
 ): SheetDrill[] {
   const drills: SheetDrill[] = []
   for (const pl of sheet.placements) {
@@ -154,7 +165,7 @@ export function buildSheetDrills(
         const p = toSheet((flip ? part.w - hole.ox : hole.ox) - sx, hole.oy - sy, pl)
         drills.push({
           x: p.x, y: p.y, diameter: hole.d, depth, passes: hole.passes, pocket: hole.pocket ?? undefined,
-          ...(twoSided ? { program: down && depth < defaultDepth - 1e-6 ? 'Z' as const : 'A' as const } : {}),
+          ...(programs ? { program: opProgram(down, depth < defaultDepth - 1e-6, pl) } : {}),
           ...(op.tipExtra ? { tipExtra: op.tipExtra } : {}),
           ...(op.throughAdj != null ? { throughAdj: op.throughAdj } : {}),
         })

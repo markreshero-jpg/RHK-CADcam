@@ -161,7 +161,8 @@ export function buildLabelData(
   const holes = holesIn(pl, sheetDrills).map(hd => {
     const dx = pl.turned ? pl.x + pl.w - hd.x : hd.x - pl.x, dy = pl.turned ? pl.y + pl.h - hd.y : hd.y - pl.y
     const [x, y] = pl.rotated ? [dy, pl.w - dx] : [dx, dy]
-    return { x, y, d: hd.diameter }
+    // Turned over (Mirror): reflect back across the blank's length axis.
+    return { x: pl.mirrored ? (pl.rotated ? pl.h : pl.w) - x : x, y, d: hd.diameter }
   })
 
   return {

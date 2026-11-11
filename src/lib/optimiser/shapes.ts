@@ -243,10 +243,12 @@ function insetClean(orig: ShapePt[], off: ShapePt[]): boolean {
  *  draw it. Same transform as the drill holes (drills.ts toSheet + the
  *  up-face ebShift), so the outline and its holes line up. Null = no outline.
  *  On a deducted profile it is the cut blank's contour (cutBlank, O5). */
-type PlacedAs = { w: number; h?: number; rotated: boolean; turned?: boolean }
-// Blank-local → placement-local: the quarter turn, then a pair's half turn.
+type PlacedAs = { w: number; h?: number; rotated: boolean; turned?: boolean; mirrored?: boolean }
+// Blank-local → placement-local: turned over (Mirror) first, then the quarter
+// turn, then a half turn (pair / Flip) — the same order as drills.ts toSheet.
 const placeLocal = (p: { x: number; y: number }, pl: PlacedAs): ShapePt => {
-  const q = pl.rotated ? { x: pl.w - p.y, y: p.x } : { x: p.x, y: p.y }
+  const mx = pl.mirrored ? (pl.rotated ? (pl.h ?? 0) : pl.w) - p.x : p.x
+  const q = pl.rotated ? { x: pl.w - p.y, y: mx } : { x: mx, y: p.y }
   return pl.turned ? { x: pl.w - q.x, y: (pl.h ?? 0) - q.y } : q
 }
 

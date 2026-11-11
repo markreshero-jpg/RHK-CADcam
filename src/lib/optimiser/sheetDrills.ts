@@ -285,14 +285,20 @@ export async function loadResolvedDrillOps(
 // Safe to call on every nest edit.
 export function projectSheetDrills(sheets: NestedSheet[], ops: ResolvedDrillOps): Map<number, SheetDrill[]> {
   const bySheet = new Map<number, SheetDrill[]>()
-  for (const sheet of sheets) bySheet.set(sheet.index, buildSheetDrills(sheet, ops.partByUid, ops.opsByKey, sheet.thickness, isTwoSidedSheet(sheet, ops)))
+  for (const sheet of sheets) {
+    const f = sheetFaces(sheet, ops)
+    bySheet.set(sheet.index, buildSheetDrills(sheet, ops.partByUid, ops.opsByKey, sheet.thickness, f.own, f.own || f.mirrored))
+  }
   return bySheet
 }
 
 // Same, for routing features (grooves / routes / pockets).
 export function projectSheetRoutes(sheets: NestedSheet[], ops: ResolvedDrillOps): Map<number, SheetRoute[]> {
   const bySheet = new Map<number, SheetRoute[]>()
-  for (const sheet of sheets) bySheet.set(sheet.index, buildSheetRoutes(sheet, ops.partByUid, ops.routesByKey, isTwoSidedSheet(sheet, ops), sheet.thickness))
+  for (const sheet of sheets) {
+    const f = sheetFaces(sheet, ops)
+    bySheet.set(sheet.index, buildSheetRoutes(sheet, ops.partByUid, ops.routesByKey, f.own, sheet.thickness, f.own || f.mirrored))
+  }
   return bySheet
 }
 
@@ -310,8 +316,18 @@ export async function loadSheetDrills(
 // on its back; a gable drilled both sides). Cuts that go right through don't count
 // (they're made from either face). Every other sheet is one program, as before:
 // a part with work on one face only is right whichever way up it's cut.
+// A mirrored part (Mirror part, turned over) with any blind work also makes the
+// sheet two-sided: that work is now underneath.
 export function isTwoSidedSheet(sheet: NestedSheet, ops: ResolvedDrillOps): boolean {
+  const f = sheetFaces(sheet, ops)
+  return f.own || f.mirrored
+}
+
+// own = a part's own work is on both faces (the layout convention: down-face work
+// is un-mirrored and runs in Z); mirrored = a mirrored part has blind work.
+function sheetFaces(sheet: NestedSheet, ops: ResolvedDrillOps): { own: boolean; mirrored: boolean } {
   const th = sheet.thickness
+  let mirrored = false
   for (const pl of sheet.placements) {
     const part = ops.partByUid.get(pl.baseUid)
     if (!part) continue
@@ -323,7 +339,8 @@ export function isTwoSidedSheet(sheet: NestedSheet, ops: ResolvedDrillOps): bool
     }
     for (const d of ops.opsByKey.get(key) ?? []) see(d.output_face, d.depth)
     for (const r of ops.routesByKey.get(key) ?? []) see(r.output_face, r.depth ?? r.size_dz)
-    if (up && down) return true
+    if (up && down) return { own: true, mirrored }
+    if (pl.mirrored && (up || down)) mirrored = true
   }
-  return false
+  return { own: false, mirrored }
 }

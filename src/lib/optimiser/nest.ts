@@ -59,6 +59,11 @@ export interface Placement {
   // real outline's area, since a pair's two rectangles overlap on purpose.
   turned?: boolean
   trueArea?: number
+  // Stage 5 "Mirror part": the part is turned over — everything shown on it is
+  // reflected across its own length axis (blank x → width − x, before the turns)
+  // and its blind work changes face: A ↔ Z, so the sheet runs as a 6th face pair
+  // (sheetDrills.isTwoSidedSheet). Through cuts stay in A. Mark, 2026-11-11.
+  mirrored?: boolean
 }
 
 export interface NestedSheet {
