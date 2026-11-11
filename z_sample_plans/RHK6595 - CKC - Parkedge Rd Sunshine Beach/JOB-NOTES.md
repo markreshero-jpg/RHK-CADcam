@@ -182,3 +182,20 @@ Applied with `_tmp-6595-r5.mjs` (db + resolve) + `_tmp-6595-r5-oven.mjs`; before
 - **No handle holes on this job:** project rule `HANDLE_DRILL: false` (the installer drills; owner keeps changing her mind).
 - Resolver: clean except BC-07 HINGE_RAIL_CLASH (hinge 1 ~726 vs the 750–830 upright rail). BC-07 wasn't touched, so this was already there. The oven fixture flags a clash with BC-01 / BC-14
   (600 deep oven body vs the 560 cabinet, plan overlap), same as before the lift.
+
+## Rev 6 (2026-11-11) — Liam's reply ("RE: RHK6595 CKC ... (your job #3431)", Tue 10/11 7:43pm) + Mark
+Applied with `_tmp-6595-r6.mjs` (db + resolve); before-state `_tmp-6595-r6-before.json`.
+- **Bulkheads Sublime Teak 18** (Liam: match the overheads): WC-08 / 09 / 11 `material_overrides.exposed` teak. TBC notes
+  edited to the answer; the two TBC clouds (Wall 2 + Wall 4, markup-std) were left in place.
+- **Wine rack = the whole box** (client text 10/11 "can above fridge be all wine"): WC-10 right bay = a second 3 x 3 half-checked
+  block -> 6 x 3 square cubbies 121.3, middle divider full height. Rev 5's adj shelf is gone. CKC offered a fee: Mark is
+  checking the board quantities before quoting it.
+- **Overheads 350 incl doors** (Liam: they do 350 so the LED recess clears): carcass 320 -> 330 (+2 gap + 18 door). WC-04/05/06
+  dz 330, bulkhead WC-09 330, under panel WC-12 310 (20 set back kept). WC-02 / WC-14 column stays 500.
+- **Recessed LED** in under panel WC-12: pocket 18.5 x 9 (T110), back edge 30 off the back wall, full 2006 + 6 past both ends.
+- **WC-07 -> WF-L** (Mark): the west-wall WEP front filler is now the L-shaped wall filler (side-on 18 teak, 70 legs), in place,
+  dz 350 to the door face.
+- Ducting: Liam runs it down the cabinet behind the cooktop and boxes it in white himself. **No second back for BC-02** (Mark).
+- Fridge recess panel = white melamine, no edging: as drawn (Loose Parts).
+- Resolver clean except BC-07 HINGE_RAIL_CLASH, which was already there.
+- To check: the LED pocket sits at the back of WC-12 in the cabinet 3D / cut sheet (frame copied from RHK6586 WC-09).
