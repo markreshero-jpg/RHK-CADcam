@@ -133,7 +133,9 @@ interface OptiState {
   placeFromUnplaced: (uid: string, sheetIndex: number, x: number, y: number) => void
   copyToClipboard: (uid: string) => void
   cutToClipboard: (uid: string) => void
-  pasteClipboard: (sheetIndex: number) => void
+  /** Paste onto a sheet — best free spot, or exactly `at` (a drag-drop from
+   *  the pool strip, which may be a forced placement). */
+  pasteClipboard: (sheetIndex: number, at?: { x: number; y: number }) => void
   addSheet: (stock: SheetStock, materialId: string | null, thickness: number) => void
   deleteSheet: (index: number) => void
   resizeSheet: (index: number, w: number, h: number) => void
@@ -387,7 +389,7 @@ export const useOptiStore = create<OptiState>((set) => ({
     return { ...commit(st, next), clipboard: def ? [clone(def)] : [], clipboardMode: 'cut', selectedUid: null, ...(broke ? { editError: broke } : {}) }
   }),
 
-  pasteClipboard: (sheetIndex) => set(st => {
+  pasteClipboard: (sheetIndex, at) => set(st => {
     if (!st.nestResult || !st.clipboard.length) return {}
     const next = clone(st.nestResult)
     const sheet = next.sheets.find(s => s.index === sheetIndex)
@@ -395,6 +397,7 @@ export const useOptiStore = create<OptiState>((set) => ({
     const margins = st.snapshot ? buildMargins(st.snapshot, st.profileId) : { byMaterial: {}, fallback: 4 }
     const gap = (sheet.materialId != null ? margins.byMaterial[sheet.materialId] : undefined) ?? margins.fallback
     const sameGroup = (def: NestPartInput) => materialGroupKey(def.materialId, def.thickness) === materialGroupKey(sheet.materialId, sheet.thickness)
+    if (at && !st.clipboard.some(sameGroup)) return { editError: 'Part material/thickness does not match this sheet.' }
 
     if (st.clipboardMode === 'cut') {
       // Relocate the cut part(s) from the unplaced pool onto this sheet (no copy).
@@ -404,7 +407,7 @@ export const useOptiStore = create<OptiState>((set) => ({
         const idx = next.unplaced.findIndex(u => u.uid === def.uid)
         if (idx < 0) continue                       // already placed elsewhere
         const o = placedAs(def, sheet.stock)
-        const pos = findBestPlacement(sheet, o.w, o.h, gap)
+        const pos = at ?? findBestPlacement(sheet, o.w, o.h, gap)
         if (!pos) continue
         next.unplaced.splice(idx, 1)
         sheet.placements.push({ uid: def.uid, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, ...o })
@@ -422,7 +425,7 @@ export const useOptiStore = create<OptiState>((set) => ({
       const np: NestPartInput = { ...def, uid: nu }
       addedIdx[nu] = np
       const o = placedAs(def, sheet.stock)
-      const pos = findBestPlacement(sheet, o.w, o.h, gap)
+      const pos = at ?? findBestPlacement(sheet, o.w, o.h, gap)
       if (pos) sheet.placements.push({ uid: nu, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, ...o })
       else next.unplaced.push(np)
     }

@@ -15,7 +15,7 @@ import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBloc
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, isTwoSidedSheet, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { anchorSixthFace } from '@/src/lib/optimiser/sixthFaceLayout'
-import { grainOrient, type NestedSheet } from '@/src/lib/optimiser/nest'
+import { grainOrient, type NestedSheet, type NestPartInput } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import { sheetNumbers, sheetPartOrder } from '@/src/lib/optimiser/labels'
 import type { ShapePt } from '@/src/lib/shapePath'
@@ -34,11 +34,27 @@ function gapForSheet(sh: NestedSheet): number {
   return (sh.materialId != null ? margins.byMaterial[sh.materialId] : undefined) ?? margins.fallback
 }
 
+// Force place (Shift held while dropping, or the toolbar toggle): the part lands
+// exactly where it's dropped — no snap, no gap/trim/collision check. Mark, 2026-11-11.
+const FORCED_WARN = 'Force placed — it is inside the cut gap / trim or over another part. Check it before cutting.'
+
+/** Where a dragged part lands. gx/gy follow the cursor; sx/sy = the landing spot
+ *  (null = nowhere legal). forced = landing exactly at gx/gy; clean = that spot
+ *  is legal anyway. */
+export interface DropGhost { gx: number; gy: number; w: number; h: number; sx: number | null; sy: number | null; forced: boolean; clean: boolean }
+
+/** A chip in the pool strip: an unplaced part, or the copy clipboard. */
+type PoolItem = { kind: 'unplaced' | 'clip'; def: NestPartInput }
+type PoolPress = { item: PoolItem; x0: number; y0: number; cx: number; cy: number; shift: boolean; dragging: boolean; ghost: DropGhost | null }
+
+const near = (a: number, b: number) => Math.abs(a - b) < 0.01
+
 export default function Stage5Edit() {
   const nestResult = useOptiStore(s => s.nestResult)
   const currentSheet = useOptiStore(s => s.currentSheet)
   const selectedUid = useOptiStore(s => s.selectedUid)
   const clipboard = useOptiStore(s => s.clipboard)
+  const clipboardMode = useOptiStore(s => s.clipboardMode)
   const editError = useOptiStore(s => s.editError)
   const setCurrentSheet = useOptiStore(s => s.setCurrentSheet)
   const selectPlacement = useOptiStore(s => s.selectPlacement)
@@ -84,6 +100,16 @@ export default function Stage5Edit() {
   const [showRoutes, setShowRoutes] = useState(true)
   // Measure tool: click two points (snaps to hole centres, part corners, edges).
   const [measuring, setMeasuring] = useState(false)
+  // Force place toggle (Shift does the same for one drop).
+  const [forcePlace, setForcePlace] = useState(false)
+  // Drag from the pool strip (unplaced parts / copy clipboard) onto the sheet.
+  const sheetSvgRef = useRef<SVGSVGElement | null>(null)
+  const [press, setPress] = useState<PoolPress | null>(null)
+  const pressRef = useRef<PoolPress | null>(null)
+  const setPressBoth = (p: PoolPress | null) => { pressRef.current = p; setPress(p) }
+  const forceRef = useRef(false)
+  useEffect(() => { forceRef.current = forcePlace }, [forcePlace])
+  const suppressClick = useRef(false)
   const [drillOps, setDrillOps] = useState<ResolvedDrillOps | null>(null)
   const [drillsLoading, setDrillsLoading] = useState(false)
   useEffect(() => {
@@ -160,11 +186,86 @@ export default function Stage5Edit() {
       else if (mod && e.key.toLowerCase() === 'v') { e.preventDefault(); st.pasteClipboard(st.currentSheet) }
       else if (e.key === 'Delete' || e.key === 'Backspace') { if (st.selectedUid) { e.preventDefault(); st.removeToUnplaced(st.selectedUid) } }
       else if (!mod && e.key.toLowerCase() === 'm') { setMeasuring(m => !m) }
+      else if (!mod && e.key.toLowerCase() === 'f') { setForcePlace(f => !f) }
       else if (e.key === 'Escape') { st.selectPlacement(null); setCtxMenu(null) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  // Ghost for a pool-strip drag: the part centred under the cursor on the open
+  // sheet (null = cursor off the sheet). Reads the store live so the window
+  // listeners never see a stale sheet.
+  function poolGhost(p: PoolPress): DropGhost | null {
+    const st = useOptiStore.getState()
+    const sh = st.nestResult?.sheets.find(s => s.index === st.currentSheet) ?? st.nestResult?.sheets[0]
+    const el = sheetSvgRef.current
+    if (!sh || !el) return null
+    const r = el.getBoundingClientRect()
+    if (p.cx < r.left || p.cx > r.right || p.cy < r.top || p.cy > r.bottom) return null
+    const { w: W, h: H } = sh.stock
+    const k = r.width / W
+    const o = grainOrient(p.item.def, sh.stock) ?? { w: p.item.def.w, h: p.item.def.h }
+    const mx = (p.cx - r.left) / k, my = H - (p.cy - r.top) / k
+    const gx = Math.max(0, Math.min(W - o.w, mx - o.w / 2))
+    const gy = Math.max(0, Math.min(H - o.h, my - o.h / 2))
+    const sameMat = (p.item.def.materialId ?? null) === (sh.materialId ?? null) && p.item.def.thickness === sh.thickness
+    const fits = o.w <= W && o.h <= H
+    const valid = sameMat ? findNearestValid(sh, null, o.w, o.h, gx, gy, gapForSheet(sh)) : null
+    const clean = !!valid && near(valid.x, gx) && near(valid.y, gy)
+    const forced = sameMat && fits && (forceRef.current || p.shift)
+    return { gx, gy, w: o.w, h: o.h, forced, clean,
+      sx: forced ? gx : valid?.x ?? null, sy: forced ? gy : valid?.y ?? null }
+  }
+
+  // Window listeners while a pool chip is pressed: past 4px it's a drag; on
+  // release over the sheet the part lands at the ghost.
+  const pressing = press !== null
+  useEffect(() => {
+    if (!pressing) return
+    const move = (e: PointerEvent) => {
+      const p = pressRef.current
+      if (!p) return
+      const n: PoolPress = { ...p, cx: e.clientX, cy: e.clientY, shift: e.shiftKey,
+        dragging: p.dragging || Math.hypot(e.clientX - p.x0, e.clientY - p.y0) > 4 }
+      setPressBoth({ ...n, ghost: n.dragging ? poolGhost(n) : null })
+    }
+    const up = (e: PointerEvent) => {
+      const p = pressRef.current
+      setPressBoth(null)
+      if (!p?.dragging) return
+      suppressClick.current = true
+      const g = poolGhost({ ...p, cx: e.clientX, cy: e.clientY, shift: e.shiftKey })
+      if (!g) return                                   // dropped off the sheet
+      const st = useOptiStore.getState()
+      if (g.sx == null || g.sy == null) {
+        const sh = st.nestResult?.sheets.find(s => s.index === st.currentSheet)
+        const sameMat = sh && (p.item.def.materialId ?? null) === (sh.materialId ?? null) && p.item.def.thickness === sh.thickness
+        st.setEditError(sameMat ? 'No room there — hold Shift (or turn on Force) to place it anyway.' : 'Part material/thickness does not match this sheet.')
+        return
+      }
+      if (p.item.kind === 'unplaced') st.placeFromUnplaced(p.item.def.uid, st.currentSheet, g.sx, g.sy)
+      else st.pasteClipboard(st.currentSheet, { x: g.sx, y: g.sy })
+      if (g.forced && !g.clean) useOptiStore.getState().setEditError(FORCED_WARN)
+    }
+    const prevCursor = document.body.style.cursor
+    document.body.style.cursor = 'grabbing'
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    return () => {
+      document.body.style.cursor = prevCursor
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+    }
+  }, [pressing])
+
+  function onPoolDown(e: React.PointerEvent, item: PoolItem) {
+    if (e.button !== 0) return
+    e.preventDefault()                                 // no text selection while dragging
+    suppressClick.current = false
+    setPressBoth({ item, x0: e.clientX, y0: e.clientY, cx: e.clientX, cy: e.clientY, shift: e.shiftKey, dragging: false, ghost: null })
+  }
+  const extGhost = press?.ghost ?? null
 
   if (!nestResult || nestResult.sheets.length === 0) {
     return <div className="h-full flex items-center justify-center text-xs text-ink-subtle">Run nesting in Stage 4 first, or add a blank sheet below.</div>
@@ -258,6 +359,12 @@ export default function Stage5Edit() {
           <button disabled={!selectedUid} onClick={() => selectedUid && cutToClipboard(selectedUid)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 transition-colors">Cut</button>
           <button disabled={!clipboard.length} onClick={() => pasteClipboard(sheet.index)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-surface-2 disabled:opacity-40 transition-colors">Paste{clipboard.length ? ` (${clipboard.length})` : ''}</button>
           <button disabled={!selectedUid} onClick={() => selectedUid && removeToUnplaced(selectedUid)} className="px-2 py-1 rounded border border-edge-strong text-ink-muted hover:bg-red-900/30 hover:text-red-300 disabled:opacity-40 transition-colors">Delete</button>
+          <span className="mx-1 text-ink-subtle">|</span>
+          <button onClick={() => setForcePlace(f => !f)}
+            title="Force place (F) — a dropped part lands exactly where you let go: no snap, no gap or overlap check. Or hold Shift while dropping for one part."
+            className={`px-2 py-1 rounded border transition-colors ${forcePlace ? 'border-orange-500/70 text-orange-300 bg-orange-900/25' : 'border-edge-strong text-ink-muted hover:bg-surface-2'}`}>
+            Force place{forcePlace ? ' ✓' : ''}
+          </button>
           <span className="ml-auto text-ink-subtle">{matLabel(sheet)} · Sheet {sheetNo(sheet)}{sixthFace.has(sheet.index) ? ' · 6th face' : ''} · {(sheet.efficiency * 100).toFixed(1)}%{sheet.stock.isOffcut ? ' · offcut' : ''}</span>
         </div>
 
@@ -323,6 +430,10 @@ export default function Stage5Edit() {
               scrollRef={scrollRef}
               onSelect={selectPlacement}
               onMove={(uid, x, y) => movePartWithin(uid, x, y)}
+              svgRef={sheetSvgRef}
+              force={forcePlace}
+              extGhost={extGhost}
+              onForced={() => setEditError(FORCED_WARN)}
               blockFor={uid => blockOfUid(nestResult, uid)}
               blocks={nestResult.blocks ?? []}
               onMoveBlock={moveBlockBy}
@@ -333,30 +444,56 @@ export default function Stage5Edit() {
           </div>
         </div>
 
-        {/* Unplaced pool */}
+        {/* Unplaced pool + copy clipboard — click a chip to auto-place, or drag it
+            onto the sheet (Shift / Force place = exactly where you drop it). */}
         <div className="flex-none h-28 border-t border-edge px-6 py-2 overflow-y-auto">
           <p className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider mb-1.5">
-            Unplaced ({unplaced.length}) — click to place on sheet {sheet.index + 1}
+            Unplaced ({unplaced.length}) — click to place on sheet {sheetNo(sheet)}, or drag onto the sheet (Shift = force)
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {unplaced.length === 0 && <span className="text-[11px] text-ink-subtle">All parts placed.</span>}
-            {unplaced.map(p => (
-              <button key={p.uid}
-                onClick={() => {
-                  const gap = gapForSheet(sheet)
-                  const o = grainOrient(p, sheet.stock) ?? p
-                  const pos = findBestPlacement(sheet, o.w, o.h, gap)
-                  if (pos) placeFromUnplaced(p.uid, sheet.index, pos.x, pos.y)
-                  else setEditError('No room on this sheet for this part.')
-                }}
-                className="px-2 py-1 rounded border border-edge-strong text-[11px] text-ink-muted hover:bg-surface-2 hover:text-ink transition-colors"
-                title={`${Math.round(p.w)}×${Math.round(p.h)}mm`}>
-                {p.label} <span className="text-ink-subtle font-mono">{Math.round(p.w)}×{Math.round(p.h)}</span>
+            {clipboardMode === 'copy' && clipboard.map(p => (
+              <button key={'clip-' + p.uid}
+                onPointerDown={e => onPoolDown(e, { kind: 'clip', def: p })}
+                onClick={() => { if (suppressClick.current) { suppressClick.current = false; return } pasteClipboard(sheet.index) }}
+                style={{ touchAction: 'none' }}
+                className="px-2 py-1 rounded border border-dashed border-accent/60 text-[11px] text-accent-ink hover:bg-accent/10 transition-colors cursor-grab"
+                title={`Clipboard copy — drag onto the sheet, or click to paste. ${Math.round(p.w)}×${Math.round(p.h)}mm`}>
+                ⧉ {p.label} <span className="text-ink-subtle font-mono">{Math.round(p.w)}×{Math.round(p.h)}</span>
               </button>
             ))}
+            {unplaced.length === 0 && !(clipboardMode === 'copy' && clipboard.length) && <span className="text-[11px] text-ink-subtle">All parts placed.</span>}
+            {unplaced.map(p => {
+              const isCut = clipboardMode === 'cut' && clipboard.some(c => c.uid === p.uid)
+              return (
+                <button key={p.uid}
+                  onPointerDown={e => onPoolDown(e, { kind: 'unplaced', def: p })}
+                  onClick={() => {
+                    if (suppressClick.current) { suppressClick.current = false; return }
+                    const gap = gapForSheet(sheet)
+                    const o = grainOrient(p, sheet.stock) ?? p
+                    const pos = findBestPlacement(sheet, o.w, o.h, gap)
+                    if (pos) placeFromUnplaced(p.uid, sheet.index, pos.x, pos.y)
+                    else setEditError('No room on this sheet for this part — drag it on with Shift held to force it.')
+                  }}
+                  style={{ touchAction: 'none' }}
+                  className={`px-2 py-1 rounded border text-[11px] hover:bg-surface-2 hover:text-ink transition-colors cursor-grab ${isCut ? 'border-dashed border-accent/60 text-accent-ink' : 'border-edge-strong text-ink-muted'}`}
+                  title={`${isCut ? 'Cut part — ' : ''}${Math.round(p.w)}×${Math.round(p.h)}mm. Click to auto-place, or drag onto the sheet.`}>
+                  {isCut && '✂ '}{p.label} <span className="text-ink-subtle font-mono">{Math.round(p.w)}×{Math.round(p.h)}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
       </div>
+
+      {/* Chip following the cursor while dragging from the pool strip. */}
+      {press?.dragging && (
+        <div className="fixed z-50 pointer-events-none px-2 py-1 rounded border text-[11px] shadow-lg bg-surface border-edge-strong text-ink"
+          style={{ left: press.cx + 12, top: press.cy + 12 }}>
+          {press.item.def.label}
+          {(forcePlace || press.shift) && <span className="ml-1 text-orange-300">· force</span>}
+        </div>
+      )}
 
       {/* Right: parts-on-sheet list + selected-part inspector */}
       <div className="flex-none w-64 border-l border-edge flex flex-col overflow-hidden">
@@ -464,7 +601,15 @@ export default function Stage5Edit() {
 }
 
 // ── Interactive sheet (pointer drag with live snap preview) ────────────────────────
-function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock, blocks }: {
+function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring, onZoom, scrollRef, onSelect, onMove, onContext, outlineFor, holesFor, blockFor, onMoveBlock, blocks, svgRef, force, extGhost, onForced }: {
+  /** The sheet SVG — owned by the parent so a pool-strip drag can map the cursor. */
+  svgRef: React.RefObject<SVGSVGElement | null>
+  /** Force place on: drops land exactly where released (Shift does it per drop). */
+  force: boolean
+  /** Ghost of a part being dragged in from the pool strip (parent computes it). */
+  extGhost: DropGhost | null
+  /** A forced drop landed somewhere that isn't legal (gap / trim / overlap). */
+  onForced: () => void
   blocks: GrainBlockInfo[]
   /** Grain match block holding a front (z_grain_match G4): it drags as one. */
   blockFor: (uid: string) => GrainBlockInfo | undefined
@@ -486,14 +631,14 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
   const { w: W, h: H } = sheet.stock
   const scale = Math.min(MAX_W / W, MAX_H / H) * zoom
   const pxW = W * scale, pxH = H * scale
-  const svgRef = useRef<SVGSVGElement>(null)
   // gx / gy = the dragged rect's live spot under the cursor (free: it may overlap
   // other parts while dragging) — the part, or a grain match block's bounding
   // rect (block = its members + where that rect started). sx / sy = where it
   // lands on release: the nearest legal spot (gap + trims), shown as a ghost;
   // null = nowhere on the sheet, so it goes back where it was. (Mark, 2026-11-05)
+  // forced = landing exactly at gx / gy (Force place / Shift); clean = that spot is legal anyway.
   const [drag, setDrag] = useState<{ uid: string; offX: number; offY: number; gx: number; gy: number
-    sx: number | null; sy: number | null
+    sx: number | null; sy: number | null; forced?: boolean; clean?: boolean
     block?: { uids: Set<string>; x0: number; y0: number; w: number; h: number } } | null>(null)
   // Cursor anchor captured on wheel, consumed after the zoom re-renders to keep
   // the point under the cursor fixed (zoom-to-cursor). Fraction within the SVG +
@@ -520,7 +665,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
     }
     area.addEventListener('wheel', onWheel, { passive: false })
     return () => area.removeEventListener('wheel', onWheel)
-  }, [onZoom, scrollRef])
+  }, [onZoom, scrollRef, svgRef])
 
   // After a wheel-zoom re-renders at the new scale, nudge the scroll container so
   // the anchored fraction lands back under the original cursor point.
@@ -531,7 +676,7 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
     const r = el.getBoundingClientRect()
     sc.scrollLeft += r.left + a.fx * r.width - a.cx
     sc.scrollTop += r.top + a.fy * r.height - a.cy
-  }, [scale, scrollRef])
+  }, [scale, scrollRef, svgRef])
 
   // client → sheet mm (bottom-left origin)
   function toMm(clientX: number, clientY: number) {
@@ -560,13 +705,19 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
     const gx = Math.max(0, Math.min(W - w, mx - drag.offX))
     const gy = Math.max(0, Math.min(H - h, my - drag.offY))
     const pos = findNearestValid(sheet, drag.block ? drag.block.uids : drag.uid, w, h, gx, gy, gap)
-    setDrag({ ...drag, gx, gy, sx: pos?.x ?? null, sy: pos?.y ?? null })
+    const forced = force || e.shiftKey
+    const clean = !!pos && near(pos.x, gx) && near(pos.y, gy)
+    setDrag({ ...drag, gx, gy, forced, clean,
+      sx: forced ? gx : pos?.x ?? null, sy: forced ? gy : pos?.y ?? null })
   }
   function onPointerUp() {
     if (!drag) return
-    if (drag.sx != null && drag.sy != null) {
+    // A click (no move) isn't an edit — don't push an undo step for it.
+    const from = drag.block ? { x: drag.block.x0, y: drag.block.y0 } : sheet.placements.find(p => p.uid === drag.uid)
+    if (drag.sx != null && drag.sy != null && !(from && near(drag.sx, from.x) && near(drag.sy, from.y))) {
       if (drag.block) onMoveBlock([...drag.block.uids], drag.sx - drag.block.x0, drag.sy - drag.block.y0)
       else onMove(drag.uid, drag.sx, drag.sy)
+      if (drag.forced && !drag.clean) onForced()
     }
     setDrag(null)
   }
@@ -672,10 +823,26 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
           <rect x={drag.gx * scale} y={fy(drag.gy, h)} width={w * scale} height={h * scale}
             fill="#ef4444" fillOpacity={0.18} stroke="#ef4444" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
         )
+        if (drag.forced) return !drag.clean ? (
+          <rect x={drag.sx * scale} y={fy(drag.sy, h)} width={w * scale} height={h * scale}
+            fill="#f97316" fillOpacity={0.14} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" style={{ pointerEvents: 'none' }} />
+        ) : null
         return moved ? (
           <rect x={drag.sx * scale} y={fy(drag.sy, h)} width={w * scale} height={h * scale}
             fill="#22c55e" fillOpacity={0.12} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3" style={{ pointerEvents: 'none' }} />
         ) : null
+      })()}
+      {/* Pool-strip drag: the part under the cursor + where it will land
+          (green = snapped, orange = forced into a gap / overlap, red = nowhere). */}
+      {extGhost && (() => {
+        const g = extGhost
+        const at = (x: number, y: number, c: string, o: number, dash?: string) => (
+          <rect x={x * scale} y={fy(y, g.h)} width={g.w * scale} height={g.h * scale}
+            fill={c} fillOpacity={o} stroke={c} strokeWidth={1.5} strokeDasharray={dash} style={{ pointerEvents: 'none' }} />
+        )
+        if (g.sx == null || g.sy == null) return at(g.gx, g.gy, '#ef4444', 0.18)
+        if (g.forced) return at(g.sx, g.sy, g.clean ? '#22c55e' : '#f97316', 0.2, g.clean ? undefined : '5 3')
+        return <>{at(g.gx, g.gy, '#3b82f6', 0.15)}{at(g.sx, g.sy, '#22c55e', 0.12, '5 3')}</>
       })()}
       {/* Drill holes (sheet space, BL origin) — same source as Stage 6 G-code.
           Drawn at EXACT diameter (so ⌀5 vs ⌀8 vs ⌀35 read true-to-scale — zoom in
