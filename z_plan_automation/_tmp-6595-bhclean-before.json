@@ -1,0 +1,150 @@
+[
+ {
+  "id": "0e5b34e1-e72a-460f-9331-72633cbb8aae",
+  "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+  "view": "elevation",
+  "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+  "cabinet_id": null,
+  "sheet_view": null,
+  "kind": "cloud",
+  "geom": {
+   "pts": [
+    {
+     "x": 0,
+     "y": -2335
+    },
+    {
+     "x": 2770,
+     "y": -2335
+    },
+    {
+     "x": 2770,
+     "y": -2445
+    },
+    {
+     "x": 0,
+     "y": -2445
+    }
+   ]
+  },
+  "text": null,
+  "style": {
+   "src": "markup-std",
+   "size": 2.5,
+   "align": "center",
+   "weight": 0.25,
+   "cloudBump": 4
+  },
+  "sort_order": 0,
+  "created_at": "2026-11-07T10:25:44.440635+00:00",
+  "updated_at": "2026-11-07T10:25:44.440635+00:00",
+  "wall_side": "face",
+  "cad_layer_id": "f9049b93-dbee-4a32-9876-19ceb37298b7"
+ },
+ {
+  "id": "9648670e-e2ed-4552-adf5-a086d5c609b9",
+  "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+  "view": "elevation",
+  "wall_id": "4d1a2dba-ccef-4002-b756-74b77b0e6704",
+  "cabinet_id": null,
+  "sheet_view": null,
+  "kind": "cloud",
+  "geom": {
+   "pts": [
+    {
+     "x": 0,
+     "y": -2161
+    },
+    {
+     "x": 890,
+     "y": -2161
+    },
+    {
+     "x": 890,
+     "y": -2445
+    },
+    {
+     "x": 0,
+     "y": -2445
+    }
+   ]
+  },
+  "text": null,
+  "style": {
+   "src": "markup-std",
+   "size": 2.5,
+   "align": "center",
+   "weight": 0.25,
+   "cloudBump": 4
+  },
+  "sort_order": 0,
+  "created_at": "2026-11-07T10:25:44.440635+00:00",
+  "updated_at": "2026-11-07T10:25:44.440635+00:00",
+  "wall_side": "face",
+  "cad_layer_id": "f9049b93-dbee-4a32-9876-19ceb37298b7"
+ },
+ {
+  "id": "b08162ee-bd7d-4b62-b62e-99080bf603ee",
+  "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+  "view": "elevation",
+  "wall_id": "4d1a2dba-ccef-4002-b756-74b77b0e6704",
+  "cabinet_id": null,
+  "sheet_view": null,
+  "kind": "text",
+  "geom": {
+   "at": {
+    "x": 1000,
+    "y": -2420
+   },
+   "width": 30
+  },
+  "text": "BULKHEAD SUBLIME TEAK 18",
+  "style": {
+   "src": "markup-std",
+   "size": 2.5,
+   "align": "center"
+  },
+  "sort_order": 0,
+  "created_at": "2026-11-07T10:25:44.440635+00:00",
+  "updated_at": "2026-11-07T10:25:44.440635+00:00",
+  "wall_side": "face",
+  "cad_layer_id": "f9049b93-dbee-4a32-9876-19ceb37298b7"
+ },
+ {
+  "id": "ec2e0972-a958-482b-9334-d50c2f943ad1",
+  "room_id": "d113bd53-5e4a-4ded-9592-cc1f7bc0eecb",
+  "view": "elevation",
+  "wall_id": "c1be3640-632d-4a30-94be-117287719f6d",
+  "cabinet_id": null,
+  "sheet_view": null,
+  "kind": "text",
+  "geom": {
+   "at": {
+    "x": 2960,
+    "y": -2560
+   },
+   "width": 30,
+   "leader": [
+    {
+     "x": 2600,
+     "y": -2390
+    },
+    {
+     "x": 2920,
+     "y": -2535
+    }
+   ]
+  },
+  "text": "BULKHEADS SUBLIME TEAK 18 - MATCH THE OVERHEADS (LIAM 10/11)",
+  "style": {
+   "src": "markup-std",
+   "size": 2.5,
+   "align": "center"
+  },
+  "sort_order": 0,
+  "created_at": "2026-11-07T10:25:44.440635+00:00",
+  "updated_at": "2026-11-07T10:25:44.440635+00:00",
+  "wall_side": "face",
+  "cad_layer_id": "f9049b93-dbee-4a32-9876-19ceb37298b7"
+ }
+]
