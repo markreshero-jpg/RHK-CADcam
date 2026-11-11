@@ -71,6 +71,8 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j02-stair-cupboard.json`, post `_
   timber pull (z_handles D19) = linear strip 35 x 35, 18 x 18 rebate on the hinge-side back edge,
   new material **Solid Timber 35mm – Blackbutt**. TC-01 zones handle_length 450 / handle_inset 1165
   (1050-1500 AFF), HANDLE_DRILL false (secret fixed), lh:0 / lh:1 No CNC. Pulls 1 apart (door gap 1).
+- Plan CAD "TIMBER PULL DETAIL 1:4" box under the cupboard (Mark 2026-11-12, `_tmp-6339-j02-pulldet.mjs`,
+  style.src 'pull-detail', re-run replaces it): both meeting edges in section, dims overridden to true sizes.
 
 ### Open / TBC
 - [ ] Site measures: width, depth, ceiling.
