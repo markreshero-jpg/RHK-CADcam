@@ -122,6 +122,7 @@ orders by level / topic, not array position.
 | Intermediate › Production | Nest onto the sheets and offcuts you have | Open · Full sheets Qty · Offcuts Qty · If you run out |
 | Intermediate › Production | Pair shaped parts head to tail | Open · Turn on Pair shaped parts · Check the note · Pairs move together |
 | Intermediate › Cabinets | Force a cabinet exactly where you want it | Move · Hold Ctrl as you drop it |
+| Intermediate › Reports | More detail on cabinet sheets | Open Cabinet Sheets · What the new detail shows · Pick what shows |
 
 ## Phases
 

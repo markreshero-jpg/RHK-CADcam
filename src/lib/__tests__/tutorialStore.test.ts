@@ -210,4 +210,14 @@ describe('tutorial store', () => {
     st().emit('edgeband_print')
     expect(st().step).toBe(3)
   })
+
+  it('cabinet sheet detail: opening Cabinet Sheets finishes it', () => {
+    st().setCtx({ path: '/canvas/x', inCanvas: true })
+    st().setEnabled(true)
+    st().goTo(lessonIdx('cabinet_sheet_detail'))
+    st().setCtx({ report: 'parts_list_summary' })
+    expect(st().step).toBe(0)
+    st().setCtx({ report: 'cabinet_sheets' })
+    expect(st().step).toBe(3)
+  })
 })

@@ -19,12 +19,18 @@ const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 }, A3L: { w: 420, h: 297 }, A2L: { w: 594, h: 420 }, A1L: { w: 841, h: 594 },
 }
 const LS_KEY = 'cabinet-sheet-layers'
-const DEFAULT_LAYERS: CabinetSheetLayers = { internals: true, dims: true, threeD: true, cad: true }
-const TOGGLES: { key: keyof CabinetSheetLayers; label: string }[] = [
-  { key: 'internals', label: 'Internals' },
-  { key: 'dims',      label: 'Dimensions' },
-  { key: 'threeD',    label: '3D View' },
-  { key: 'cad',       label: 'CAD notes' },
+const DEFAULT_LAYERS: CabinetSheetLayers = { internals: true, dims: true, threeD: true, cad: true,
+  partDims: true, detailDims: true, drilling: true, labels: true, edging: true }
+const TOGGLES: { key: keyof CabinetSheetLayers; label: string; title?: string }[] = [
+  { key: 'internals',  label: 'Internals' },
+  { key: 'dims',       label: 'Dimensions', title: 'Overall width / height / depth' },
+  { key: 'partDims',   label: 'Part dims', title: 'Plan: aligned length of each carcase part and front (angled cabinets)' },
+  { key: 'detailDims', label: 'Detail dims', title: 'Front: height chain (bottom / shelves / top), clear widths, door + drawer front sizes' },
+  { key: 'labels',     label: 'Part labels', title: 'Part names with leaders: carcase parts on the plan, flat boards on the side' },
+  { key: 'drilling',   label: 'Drilling + routes', title: 'Joint, runner and hand-added holes, grooves and cut-outs, as in the Cabinet Edit modal' },
+  { key: 'edging',     label: 'Edging', title: 'Heavy line on every taped edge' },
+  { key: 'threeD',     label: '3D View' },
+  { key: 'cad',        label: 'CAD notes' },
 ]
 
 export default function CabinetSheetReport({ project, room, walls, cabinets, resolvedParts, materialNames, paperKey, batch, annotations, cadFields }: {
@@ -170,7 +176,7 @@ export default function CabinetSheetReport({ project, room, walls, cabinets, res
       <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-gray-800">
         <span className="text-[10px] text-gray-500 uppercase tracking-wider mr-1">Show:</span>
         {TOGGLES.map(t => (
-          <button key={t.key} onClick={() => setShow(s => ({ ...s, [t.key]: !s[t.key] }))}
+          <button key={t.key} title={t.title} onClick={() => setShow(s => ({ ...s, [t.key]: !s[t.key] }))}
             className={`px-2 py-0.5 rounded text-xs border transition-colors ${
               show[t.key] ? 'bg-blue-600/25 border-blue-600/50 text-blue-300'
                           : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'

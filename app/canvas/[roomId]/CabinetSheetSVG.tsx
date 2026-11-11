@@ -22,7 +22,13 @@ import {
   sideRect, tkSideRect, intSideRect, zoneSideRect, dbSideRect, slideSideRect,
   caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3, type Box3,
   doorProfileSvg, isSidePanel,
+  DrillOverlay, SlideDrillOverlay, EdgeTapeSVG, svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta,
 } from './cabinetEditSvgHelpers'
+import { cabinetSeamDrills, orientSeamDrills, caseBoxByKey, type DrillAxis } from '@/src/lib/jointDrilling'
+import { cabinetSlideDrills } from '@/src/lib/slideDrilling'
+import { cabinetHingeDrills } from '@/src/lib/resolver/resolveHinges'
+import { useHandOpMarkers, HandOpMarkersSVG } from './HandOpMarkers'
+import { useMemo } from 'react'
 import { zonePartId, dbPartId, shapedPartLabel, isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { buildPartSolids, prismOutline, type PartSolid, type SolidRole, type Prism, type V3, type View2D } from '@/src/lib/partSolids'
 import type { ShapeSegmentLike } from '@/src/lib/shapePath'
@@ -38,7 +44,19 @@ import type { ItemCadView } from '@/src/lib/annotations/itemCad'
 import { bifoldTracks, trackProfile } from '@/src/lib/resolver/resolveBifold'
 import AnnotationLayer from './AnnotationLayer'
 
-export interface CabinetSheetLayers { internals: boolean; dims: boolean; threeD: boolean; cad?: boolean }
+export interface CabinetSheetLayers {
+  internals: boolean; dims: boolean; threeD: boolean; cad?: boolean
+  /** Aligned length of each carcase part + front on the PLAN (angled cabinets). */
+  partDims?: boolean
+  /** Internal chain (bottom / shelves / top) on the FRONT, clear width, door sizes. */
+  detailDims?: boolean
+  /** Joint / slide / hinge holes + hand-added drilling and routes, as the modal shows. */
+  drilling?: boolean
+  /** Part names with leaders: carcase parts on the PLAN, horizontals on the SIDE. */
+  labels?: boolean
+  /** Edge tape as a heavy line on the taped edges. */
+  edging?: boolean
+}
 
 // Effective hardware schedules for the room (resolved room→project→shop default).
 export interface HardwareCfg {
@@ -134,6 +152,14 @@ export default function CabinetSheetSVG({
     const o = ov(id); return o ? { ...p, X: p.X + o.ox, Y: p.Y + o.oy, Z: p.Z + o.oz } : p
   }
 
+  // ── Drilling + routes: the modal's own sources (ResolvedViews) ─────────────
+  const handMarkers = useHandOpMarkers(cab.id, rpRaw, customParts)
+  const drillSets = useMemo(() => rpRaw ? {
+    seam:  orientSeamDrills(cabinetSeamDrills(rpRaw), caseBoxByKey(rpRaw), partOverrides),
+    slide: cabinetSlideDrills(rpRaw.drawer_stacks ?? [], rpRaw.internal_slides ?? []),
+    hinge: cabinetHingeDrills(rpRaw.hinge_instances ?? []),
+  } : null, [rpRaw, partOverrides])
+
   // ── True shapes: every part as the cabinet 3D view builds it ──────────────
   const shapeOvs: Record<string, { segments: ShapeSegmentLike[] }> = {}
   {
@@ -216,9 +242,111 @@ export default function CabinetSheetSVG({
     return <path key={`${key}${t.which}`} d={d} fill="none" stroke={INK2} strokeWidth={THIN} strokeLinejoin="round" />
   })
 
+  // ── Detail layers (Mark 2026-11-11: dims on angled parts, labels, drilling, tape) ──
+  const on = (k: keyof CabinetSheetLayers) => show[k] !== false
+  /** Cabinet axis the part's thickness runs along (0 X = side-on, 1 Y = flat, 2 Z = face-on). */
+  // The prism's thinnest extent, not its extrusion: a bevelled / angled panel is a
+  // plan profile extruded UP (TC-02's 22.5° backs), yet it stands like a side.
+  const thickAxis = (sol: Solid): 0 | 1 | 2 => {
+    const pts = sol.prism.outer.flatMap(p => [p, [p[0] + sol.prism.ext[0], p[1] + sol.prism.ext[1], p[2] + sol.prism.ext[2]] as V3])
+    const ext = [0, 1, 2].map(k => Math.max(...pts.map(p => p[k])) - Math.min(...pts.map(p => p[k])))
+    // An angled standing panel is wide in both X and Z: still standing (not flat).
+    if (ext[1] > Math.min(ext[0], ext[2]) && ext[1] > 60) return ext[0] <= ext[2] ? 0 : 2
+    return ext[1] <= ext[0] && ext[1] <= ext[2] ? 1 : ext[0] <= ext[2] ? 0 : 2
+  }
+  const isBoard = (sol: Solid) => sol.role === 'case' || sol.role === 'int'
+  function solidLabel(id: string): string {
+    if (id.startsWith('case_')) { const k = id.slice(5); return CASE_LABELS[k] ?? shapedPartLabel(k) ?? k.replace(/[_:]/g, ' ') }
+    if (id.startsWith('zone_')) { const z = rp?.face_zones.find(f => zonePartId(f) === id); return z ? FACE_LABELS[z.face_type] ?? z.face_type : 'Front' }
+    return partIdLabel(id)
+  }
+  type Pt = [number, number]
+  /** Dimension along a-b (page mm), set off `off` along the unit normal n (the side it sits on). */
+  function alignedDim(a: Pt, b: Pt, n: Pt, off: number, label: string, key: string) {
+    const els: React.ReactNode[] = []
+    const A: Pt = [a[0] + n[0] * off, a[1] + n[1] * off], B: Pt = [b[0] + n[0] * off, b[1] + n[1] * off]
+    const g = 0.8, ov = 1
+    els.push(<line key={`${key}e1`} x1={a[0] + n[0] * g} y1={a[1] + n[1] * g} x2={A[0] + n[0] * ov} y2={A[1] + n[1] * ov} stroke={INK3} strokeWidth={DIMS} />)
+    els.push(<line key={`${key}e2`} x1={b[0] + n[0] * g} y1={b[1] + n[1] * g} x2={B[0] + n[0] * ov} y2={B[1] + n[1] * ov} stroke={INK3} strokeWidth={DIMS} />)
+    els.push(<line key={`${key}l`} x1={A[0]} y1={A[1]} x2={B[0]} y2={B[1]} stroke={INK} strokeWidth={DIMS} />)
+    const L = Math.hypot(B[0] - A[0], B[1] - A[1]) || 1
+    const d: Pt = [(B[0] - A[0]) / L, (B[1] - A[1]) / L]
+    const tk: Pt = [(d[0] + n[0]) * 0.7, (d[1] + n[1]) * 0.7]   // 45° tick
+    ;[A, B].forEach((p, i) => els.push(<line key={`${key}t${i}`} x1={p[0] - tk[0]} y1={p[1] - tk[1]} x2={p[0] + tk[0]} y2={p[1] + tk[1]} stroke={INK} strokeWidth={DIMS} />))
+    let ang = Math.atan2(d[1], d[0]) * 180 / Math.PI
+    if (ang > 90) ang -= 180; else if (ang <= -90) ang += 180
+    const up: Pt = [Math.sin(ang * Math.PI / 180), -Math.cos(ang * Math.PI / 180)]   // text's up on the page
+    const fs = 2.3
+    const lift = n[0] * up[0] + n[1] * up[1] >= 0 ? 0.8 : 0.8 + fs * 0.75
+    const mx = (A[0] + B[0]) / 2 + n[0] * lift, my = (A[1] + B[1]) / 2 + n[1] * lift
+    els.push(<text key={`${key}x`} x={mx} y={my} textAnchor="middle" fontSize={fs} fill={INK} fontFamily={font}
+      transform={`rotate(${ang.toFixed(2)} ${mx.toFixed(2)} ${my.toFixed(2)})`}>{label}</text>)
+    return els
+  }
+  /** A run of chained dims between sorted stops along one page axis. */
+  function chain(stops: number[], fixed: number, axis: 'x' | 'y', key: string, s: number, minGap = 20) {
+    const els: React.ReactNode[] = []
+    const xs = [...stops].sort((a, b) => a - b).filter((v, i, arr) => i === 0 || v - arr[i - 1] > 0.5)
+    if (xs.length < 3) return els   // nothing between the two ends
+    const P = (v: number): Pt => axis === 'x' ? [v, fixed] : [fixed, v]
+    els.push(<line key={`${key}l`} x1={P(xs[0])[0]} y1={P(xs[0])[1]} x2={P(xs[xs.length - 1])[0]} y2={P(xs[xs.length - 1])[1]} stroke={INK} strokeWidth={DIMS} />)
+    xs.forEach((v, i) => { const [x, y] = P(v); els.push(<line key={`${key}t${i}`} x1={x - 0.6} y1={y + 0.6} x2={x + 0.6} y2={y - 0.6} stroke={INK} strokeWidth={DIMS} />) })
+    for (let i = 1; i < xs.length; i++) {
+      const gap = Math.abs(xs[i] - xs[i - 1]) / s
+      if (gap < minGap || Math.abs(xs[i] - xs[i - 1]) < 3) continue
+      const m = (xs[i] + xs[i - 1]) / 2
+      if (axis === 'x') els.push(<text key={`${key}x${i}`} x={m} y={fixed - 0.8} textAnchor="middle" fontSize={2.1} fill={INK} fontFamily={font}>{roundMm(gap)}</text>)
+      else els.push(<text key={`${key}x${i}`} x={fixed + 2.4} y={m} textAnchor="middle" fontSize={2.1} fill={INK} fontFamily={font} transform={`rotate(-90 ${fixed + 2.4} ${m})`}>{roundMm(gap)}</text>)
+    }
+    return els
+  }
+  type CabP = (x: number, y: number, z: number) => { x: number; y: number }
+  /** Drilling + routes in cabinet mm under a page transform (hole sizes stay true to scale). */
+  function drillEls(key: string, tx: number, ty: number, s: number, P: CabP, perp: 'x' | 'y' | 'z', dirOf: (a: DrillAxis) => { dx: number; dy: number }) {
+    if (!on('drilling') || !drillSets || s <= 0) return null
+    return (
+      <g key={key} transform={`translate(${tx} ${ty}) scale(${s})`}>
+        <DrillOverlay drills={drillSets.seam} project={P} color={INK2} />
+        <SlideDrillOverlay drills={drillSets.slide} perp={perp} project={P} dirOf={dirOf} color={INK2} />
+        <HandOpMarkersSVG markers={handMarkers} project={P} color={INK} />
+      </g>
+    )
+  }
+  /** Edge tape as a heavy band on each taped edge the view sees (EdgeTapeSVG, as the modal). */
+  function tapeEls(key: string, tx: number, ty: number, s: number, P: CabP, viewAxis: 'x' | 'y' | 'z', which: { case?: boolean; tk?: boolean; int?: boolean; faces?: boolean }) {
+    if (!on('edging') || !rp || s <= 0) return null
+    const t = 0.55 / s, eb = { color: INK, t }
+    const out: React.ReactNode[] = []
+    const one = (k: string, meta: ReturnType<typeof svgCaseMeta>, box: Box3) => {
+      if (special(meta.id) || !meta.edge) return
+      out.push(<EdgeTapeSVG key={k} box={box} edge={meta.edge} kind={meta.panelKind ?? 'face'} eb={eb} viewAxis={viewAxis} project={P} ov={partOverrides?.[meta.id]} />)
+    }
+    if (which.case) rp.case_parts.forEach((p, i) => one(`c${i}`, svgCaseMeta(p), caseBox(p)))
+    if (which.tk) rp.toekick_parts.forEach((p, i) => one(`t${i}`, svgTkMeta(p), tkBox3(p)))
+    if (which.int && show.internals) rp.internal_parts.forEach((p, i) => one(`i${i}`, svgIntMeta(p), intBox3(p)))
+    if (which.faces) rp.face_zones.filter(z => z.face_type !== 'open').forEach((z, i) => one(`f${i}`, svgZoneMeta(z), zoneBox3(z)))
+    return <g key={key} transform={`translate(${tx} ${ty}) scale(${s})`}>{out}</g>
+  }
+  /** Labels down one side with leaders; nudged apart so they don't stack. */
+  function sideLabels(items: { text: string; at: Pt }[], x: number, key: string, minY: number, maxY: number) {
+    const els: React.ReactNode[] = []
+    const sorted = [...items].sort((a, b) => a.at[1] - b.at[1])
+    const gap = 2.8
+    const ys: number[] = []
+    sorted.forEach((it, i) => { ys.push(Math.max(it.at[1], i ? ys[i - 1] + gap : minY)) })
+    for (let i = ys.length - 1; i >= 0; i--) { const lim = i === ys.length - 1 ? maxY : ys[i + 1] - gap; if (ys[i] > lim) ys[i] = lim }
+    sorted.forEach((it, i) => {
+      els.push(<polyline key={`${key}l${i}`} points={`${it.at[0]},${it.at[1]} ${x - 1.5},${ys[i]} ${x - 0.4},${ys[i]}`} fill="none" stroke={INK3} strokeWidth={THIN} />)
+      els.push(<circle key={`${key}d${i}`} cx={it.at[0]} cy={it.at[1]} r={0.35} fill={INK2} />)
+      els.push(<text key={`${key}x${i}`} x={x} y={ys[i] + 0.8} fontSize={2.2} fill={INK} fontFamily={font}>{it.text}</text>)
+    })
+    return els
+  }
+
   // ── FRONT (modal elevRect geometry, B&W) ──────────────────────────────────
   function front() {
-    const { s, tx, ty } = place(frontBox, dx, dy, 6, 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
+    const det = show.dims && on('detailDims') && !!rp
+    const { s, tx, ty } = place(frontBox, dx, dy, 6, det ? 9 : 5, show.dims ? (det ? 12 : 8) : 4, show.dims ? 9 : 4)
     const R = (ex: number, ey: number, ew: number, eh: number) => ({ x: tx + ex * s, y: ty + (dy - ey) * s, width: ew * s, height: eh * s })
     const FM: ToPage = (u, v) => [tx + u * s, ty + (dy - v) * s]
     const els: React.ReactNode[] = []
@@ -248,6 +376,14 @@ export default function CabinetSheetSVG({
         if (z.hinge_side === 'right') els.push(<line key={`fh${i}`} x1={rc.x + rc.width} y1={rc.y} x2={rc.x + rc.width} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
         const fp = !sp?.shaped && doorProfileSvg(z, { x: rc.x, y: rc.y, w: rc.width, h: rc.height }, INK, THIN, 0.9)
         if (fp) els.push(<g key={`fp${i}`}>{fp}</g>)
+        // Finished front size, W × H (detail dims).
+        if (det && rc.width > 4 && rc.height > 4) {
+          const txt = `${roundMm(z.DX)} × ${roundMm(z.DY)}`, fs = 2.1
+          const cx = rc.x + rc.width / 2, cy = rc.y + rc.height / 2
+          const turn = txt.length * fs * 0.5 > rc.width - 1 && rc.height > rc.width
+          els.push(<text key={`fs${i}`} x={cx} y={cy + fs * 0.35} textAnchor="middle" fontSize={fs} fill={INK} fontFamily={font}
+            transform={turn ? `rotate(-90 ${cx} ${cy})` : undefined}>{txt}</text>)
+        }
       })
       // Internals (lighter grey, on top so visible through faces)
       if (show.internals) {
@@ -282,8 +418,27 @@ export default function CabinetSheetSVG({
       els.push(<line key={`sp${i}`} x1={tx - 3} y1={y} x2={tx + dx * s + 3} y2={y} stroke={INK} strokeWidth={PART} strokeDasharray={DASH} />)
       els.push(<text key={`spt${i}`} x={tx + dx * s + 4} y={y + 1} fontSize={2.5} fill={INK} fontFamily={font}>SPLIT {roundMm(h)}</text>)
     })
+    const FP: CabP = (x, y) => ({ x, y: dy - y })
+    els.push(tapeEls('tpf', tx, ty, s, FP, 'z', { faces: true, tk: true }))
+    els.push(drillEls('drf', tx, ty, s, FP, 'z', a => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }))
+    let chainBelow = false
+    if (det) {
+      // Height chain on the right: floor, every flat board (bottom / shelves / top), top.
+      const ys = [0, dy], xs = [0, dx]
+      for (const sol of solids) {
+        if (!isBoard(sol) || (sol.role === 'int' && !show.internals)) continue
+        const o = prismOutline(sol.prism, 'front').outer
+        if (o.length < 3) continue
+        if (thickAxis(sol) === 1) { const v = o.map(q => q.y); ys.push(Math.min(...v), Math.max(...v)) }
+        else if (thickAxis(sol) === 0) { const v = o.map(q => q.x); if (Math.max(...v) - Math.min(...v) < 40) xs.push(Math.min(...v), Math.max(...v)) }   // square-on sides / dividers only
+      }
+      els.push(...chain(ys.filter(v => v >= -0.5 && v <= dy + 0.5).map(v => ty + (dy - v) * s), tx + dx * s + 3.5, 'y', 'fch', s))
+      const below = chain(xs.filter(v => v >= -0.5 && v <= dx + 0.5).map(v => tx + v * s), ty + dy * s + 4, 'x', 'fcw', s, 40)
+      chainBelow = below.length > 0
+      els.push(...below)
+    }
     if (show.dims) {
-      const yb = ty + dy * s + 4
+      const yb = ty + dy * s + (chainBelow ? 9 : 4)
       els.push(...dim(tx, yb, tx + dx * s, yb, `${roundMm(dx)}`, 'below', 'fw'))
       const xl = tx - 4.5
       els.push(...dim(xl, ty, xl, ty + dy * s, `${roundMm(dy)}`, 'left', 'fh'))
@@ -295,7 +450,8 @@ export default function CabinetSheetSVG({
 
   // ── SIDE (modal sideRect geometry, B&W) ───────────────────────────────────
   function side() {
-    const { s, tx, ty } = place(sideBox, dz, dy, 6, 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
+    const lab = on('labels') && !!rp
+    const { s, tx, ty } = place(sideBox, dz, dy, 6, lab ? 24 : 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
     const S = (sz: number, cyTop: number, w: number, h: number) => ({ x: tx + sz * s, y: ty + (dy - cyTop) * s, width: w * s, height: h * s })
     const SM: ToPage = (u, v) => [tx + u * s, ty + (dy - v) * s]
     const els: React.ReactNode[] = []
@@ -334,6 +490,23 @@ export default function CabinetSheetSVG({
         })
       }
     }
+    const SP: CabP = (_x, y, z) => ({ x: z, y: dy - y })
+    els.push(tapeEls('tps', tx, ty, s, SP, 'x', { case: true, int: true, faces: true }))
+    els.push(drillEls('drs', tx, ty, s, SP, 'x', a => a === 'z+' ? { dx: 1, dy: 0 } : a === 'z-' ? { dx: -1, dy: 0 } : a === 'y+' ? { dx: 0, dy: -1 } : { dx: 0, dy: 1 }))
+    // Flat boards (bottom / shelves / top / rails) named down the right-hand side.
+    if (lab) {
+      const items: { text: string; at: Pt }[] = []
+      let right = dz
+      for (const sol of solids) {
+        if (!isBoard(sol) || thickAxis(sol) !== 1 || (sol.role === 'int' && !show.internals)) continue
+        const o = prismOutline(sol.prism, 'side').outer
+        if (o.length < 3) continue
+        const u = Math.max(...o.map(q => q.x)), v = (Math.min(...o.map(q => q.y)) + Math.max(...o.map(q => q.y))) / 2
+        right = Math.max(right, u)
+        items.push({ text: solidLabel(sol.id), at: SM(u - Math.min(40, u / 4), v) })
+      }
+      els.push(...sideLabels(items, tx + right * s + 4, 'sl', ty + 1, ty + dy * s))
+    }
     if (show.dims) {
       const yb = ty + dy * s + 4
       els.push(...dim(tx, yb, tx + dz * s, yb, `${roundMm(dz)}`, 'below', 'sd'))
@@ -353,7 +526,8 @@ export default function CabinetSheetSVG({
     const outs = shown.map(sol => ({ sol, o: prismOutline(sol.prism, 'plan') }))
     let x0 = 0, z0 = 0, x1 = dx, z1 = dz
     for (const { o } of outs) for (const q of o.outer) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); z0 = Math.min(z0, q.y); z1 = Math.max(z1, q.y) }
-    const { s, tx, ty } = place(planBox, x1 - x0, z1 - z0, 6, 5, show.dims ? 8 : 4, show.dims ? 9 : 4)
+    const pd = show.dims && on('partDims') && !!rp, lab = on('labels') && !!rp
+    const { s, tx, ty } = place(planBox, x1 - x0, z1 - z0, pd ? 11 : 6, lab ? 24 : pd ? 9 : 5, show.dims ? (pd ? 13 : 8) : 4, show.dims ? (pd ? 14 : 9) : 4)
     const PM: ToPage = (u, v) => [tx + (u - x0) * s, ty + (v - z0) * s]
     const [fx, fy] = PM(0, 0)
     const els: React.ReactNode[] = []
@@ -370,10 +544,37 @@ export default function CabinetSheetSVG({
     const order: Role[] = ['case', 'kick', 'spreader', 'face', 'int', 'db']
     for (const role of order) outs.filter(x => x.sol.role === role).forEach(({ o }, i) =>
       els.push(<path key={`p${role}${i}`} d={outlineD(o, PM)} fillRule="evenodd" {...style[role]} />))
+    const PP: CabP = (x, _y, z) => ({ x: x - x0, y: z - z0 })
+    els.push(tapeEls('tpp', tx, ty, s, PP, 'y', { case: true, int: true, faces: true }))
+    els.push(drillEls('drp', tx, ty, s, PP, 'y', a => a === 'x+' ? { dx: 1, dy: 0 } : a === 'x-' ? { dx: -1, dy: 0 } : a === 'z+' ? { dx: 0, dy: 1 } : { dx: 0, dy: -1 }))
+    // Each standing carcase part + front: its length along its own face (aligned —
+    // reads true on an angled / corner cabinet), set off away from the middle.
+    if (pd || lab) {
+      const [cx, cy] = PM((x0 + x1) / 2, (z0 + z1) / 2)
+      const items: { text: string; at: Pt }[] = []
+      outs.filter(({ sol }) => (sol.role === 'case' && thickAxis(sol) !== 1) || sol.role === 'face').forEach(({ sol, o }, i) => {
+        const pts = o.outer
+        if (pts.length < 2) return
+        let bi = 0, bl = 0
+        pts.forEach((q, j) => { const r = pts[(j + 1) % pts.length]; const l = Math.hypot(r.x - q.x, r.y - q.y); if (l > bl) { bl = l; bi = j } })
+        if (bl < 30) return
+        const a = PM(pts[bi].x, pts[bi].y), b = PM(pts[(bi + 1) % pts.length].x, pts[(bi + 1) % pts.length].y)
+        const L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
+        let n: Pt = [-(b[1] - a[1]) / L, (b[0] - a[0]) / L]
+        const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+        if (n[0] * (mid[0] - cx) + n[1] * (mid[1] - cy) < 0) n = [-n[0], -n[1]]
+        if (pd) els.push(...alignedDim(a, b, n, 3.2, `${roundMm(bl)}`, `pa${i}`))
+        if (lab) {
+          const c = pts.reduce((acc, q) => [acc[0] + q.x / pts.length, acc[1] + q.y / pts.length], [0, 0])
+          items.push({ text: solidLabel(sol.id), at: PM(c[0], c[1]) })
+        }
+      })
+      if (lab) els.push(...sideLabels(items, tx + (x1 - x0) * s + (pd ? 9 : 4), 'pl', ty + 1, ty + (z1 - z0) * s))
+    }
     if (show.dims) {
-      const yb = ty + (z1 - z0) * s + 4
+      const yb = ty + (z1 - z0) * s + (pd ? 9 : 4)
       els.push(...dim(fx, yb, fx + dx * s, yb, `${roundMm(dx)}`, 'below', 'pw'))
-      const xl = tx - 4.5
+      const xl = tx - (pd ? 9.5 : 4.5)
       els.push(...dim(xl, fy, xl, fy + dz * s, `${roundMm(dz)}`, 'left', 'pd'))
     }
     els.push(...trackEls('trp', (x, _y, z) => PM(x, z)))
@@ -819,6 +1020,11 @@ export default function CabinetSheetSVG({
       {frame(planBox)}{caption(planBox, 'PLAN')}{plan()}
       {show.threeD && <>{frame(isoBox)}{caption(isoBox, '3D')}{iso()}</>}
 
+      {(on('edging') || on('drilling')) && rp && (
+        <text x={M} y={PH - M + 3.6} fontSize={2.2} fill={INK2} fontFamily={font}>
+          {[on('edging') && 'Heavy edge line = edge tape', on('drilling') && 'circles / slots = drilling', on('drilling') && 'thick lines = routes / grooves'].filter(Boolean).join('   ·   ')}
+        </text>
+      )}
       {cutList()}
       {hardwareTable()}
       {overrides()}

@@ -338,6 +338,34 @@ localStorage per room (`shop-drawings-scales`, `shop-drawings-offsets`) like the
 computer and headless exports start centred at the package scale. Checked headless on RHK6592 Main Bathroom:
 plan at 1:50 and dragged, elevation at 1:20, PDF headings and title blocks right.
 
+## Cabinet sheets: detail layers (Mark 2026-11-11)
+
+Mark: "update cabinet sheets report so the drawings are a bit more detailed" — picked internal dimensions,
+drilling + routes, part labels + edging, plus "dimension cupboards that are angled, eg TC-02 in rhk6586
+Kitchenette: plan view shows a box outline 602 each way, this shows nothing. We need aligned dimensions on
+each part of the carcass and maybe some part labels pointing to the pieces ... can we make it customisable?"
+
+Where the drawing comes from: `CabinetSheetSVG.tsx` draws its own B&W views from the modal's geometry
+helpers (cabinetEditSvgHelpers + partSolids), not a copy of the modal's views. Built, all report toggles
+(`CabinetSheetLayers`, localStorage `cabinet-sheet-layers`, default on — page extras, not display-layer items):
+- **Part dims** (PLAN): each standing carcase part + front gets an aligned dimension along its longest plan
+  edge, set off away from the cabinet's middle (`alignedDim`). "Standing" = the prism's thinnest extent isn't
+  Y (an angled / bevelled panel is a plan profile extruded up, so its extrusion axis lies). TC-02 now reads
+  Back 419.1, Back (back2) 402.6, sides 120, doors 293.8.
+- **Detail dims** (FRONT): height chain on the right through every flat board (floor, bottom, shelves, top);
+  clear-width chain under it through square-on sides / dividers (angled panels skipped); W × H on each front.
+- **Part labels**: names with leaders down the right of the PLAN (standing parts + fronts) and the SIDE
+  (flat boards), nudged apart.
+- **Drilling + routes**: the modal's sources — `cabinetSeamDrills`/`orientSeamDrills`, `cabinetSlideDrills`,
+  hand ops (`useHandOpMarkers`, incl. grooves / LED routes / cut-outs) — drawn in cabinet mm under a page
+  transform so hole sizes stay to scale; grey/black (`DrillOverlay` got an optional `color`).
+- **Edging**: `EdgeTapeSVG` with a 0.55 mm page band in black — fronts + kick on FRONT, carcase / internals /
+  fronts on SIDE and PLAN; shaped parts skipped (as the modal). Legend line at the page foot.
+Checked headless (`verify-sheet-shapes.mjs`, ROOM_ID = RHK6586 Kitchenette) on TC-02, BC-01, WC-04, WC-09,
+BC-04. **Check pending (Mark):** real PDF print; clutter on busy cabinets (e.g. WC-04 hood flue parts).
+Not done: edge column in the cut list (the tape side → L/W mapping differs per table in normalize.ts —
+reuse that if wanted), dims on the SIDE view, custom parts on the sheet.
+
 ### Print button + print presets (2026-11-02)
 Every drawing report (Shop Drawings, Plan View, Benchtop Quote, Elevation Views, Cabinet Sheets, 3D Colour
 Render) has **Print** beside Download PDF. It builds the same PDF and sends it to the browser print dialog

@@ -2132,6 +2132,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Cabinets pick it up when they re-resolve (open the room, or edit a cabinet). The rails then nest on that colour’s own sheets, so re-run the optimiser for any colour you had already nested.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+
+  // Appended 2026-11-11 (cabinet sheets: aligned part dims, detail dims, labels, drilling, edging).
+  { id: 'cabinet_sheet_detail', level: 'intermediate', topic: 'reports', title: 'More detail on cabinet sheets',
+    blurb: 'Print each cabinet with its part lengths (true on angled cabinets), shelf heights, door sizes, part names, drilling, routes and edge tape, and pick which of these show.',
+    keywords: 'cabinet sheet sheets report detail dimension aligned angled corner part dims labels drilling routes grooves edge tape edging shelf heights door size print pdf', steps: [
+    { id: 'open', title: 'Open Cabinet Sheets',
+      body: 'Reports → Room Reports… → Cabinet Sheets. Each cabinet gets one page: Front, Side, Plan, 3D and the cut list.',
+      canvas: true, done: c => c.report === 'cabinet_sheets' },
+    { id: 'read', title: 'What the new detail shows',
+      body: 'PLAN: every standing carcase part and front is dimensioned along its own face, so an angled corner cupboard (e.g. a 45° tall) reads 419 / 403 / 120 instead of just the 602 × 602 box, with the part names down the right. FRONT: a chain up the right gives the floor-to-bottom, shelf and top heights, the clear widths between sides / dividers show underneath, and each door or drawer front has its size (W × H) on it. SIDE: the flat boards (top, bottom, shelves) are named. Drilling, routes and cut-outs draw as in the Cabinet Edit modal, and a heavy edge line marks every taped edge.',
+      canvas: true, done: c => c.report === 'cabinet_sheets' },
+    { id: 'pick', title: 'Pick what shows',
+      body: 'The Show: buttons above the sheets turn each layer on or off: Part dims, Detail dims, Part labels, Drilling + routes, Edging (plus Internals, Dimensions, 3D View and CAD notes). Your picks are remembered for next time and used by Download PDF and Print.',
+      canvas: true, done: c => c.report === 'cabinet_sheets' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

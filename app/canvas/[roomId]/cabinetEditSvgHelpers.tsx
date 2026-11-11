@@ -475,16 +475,18 @@ export function partIdColor(id: string): string {
 
 const DRILL_COL: Record<SeamDrill['source'], string> = { cabinet: '#22c55e', method: '#60a5fa' }
 
-export function DrillOverlay({ drills, project }: {
+export function DrillOverlay({ drills, project, color }: {
   drills:  OrientedDrill[]
   project: (x: number, y: number, z: number) => { x: number; y: number }
+  /** One colour for every hole (print, e.g. the cabinet sheet); default by seam source. */
+  color?:  string
 }) {
   if (drills.length === 0) return null
   return (
     <g style={{ pointerEvents: 'none' }}>
       {drills.map((d, i) => {
         const { x: sx, y: sy } = project(d.x, d.y, d.z)
-        const col = DRILL_COL[d.source]
+        const col = color ?? DRILL_COL[d.source]
         const r   = Math.max(d.radius, 0.75)
 
         // Project the bore exit (entry + direction × depth). The bore direction is
