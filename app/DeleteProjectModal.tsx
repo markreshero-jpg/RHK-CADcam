@@ -25,8 +25,9 @@ export default function DeleteProjectModal({ project, counts, busy, error, onCan
         <p className="text-lg font-semibold text-ink mb-3">{project.name}</p>
 
         <p className="text-sm text-ink-muted mb-3">
-          This will permanently delete <span className="font-medium text-ink">{project.name}</span> and
-          all of its rooms, cabinets, walls, benchtops, and nest results. This cannot be undone.
+          <span className="font-medium text-ink">{project.name}</span> and all of its rooms go to
+          <span className="font-medium text-ink"> Deleted jobs</span> at the bottom of the main menu.
+          Nothing is erased — restore it from there. Only an admin can delete it permanently.
         </p>
 
         <div className="text-xs text-ink-subtle mb-5">

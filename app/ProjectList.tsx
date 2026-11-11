@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Project, Room, ProjectStatus } from '@/src/lib/types'
+import { Project, Room, ProjectStatus, ROOM_STATUS_OPTIONS, type RoomStatus } from '@/src/lib/types'
+import { supabase } from '@/src/lib/supabase'
 import ProjectCard from './ProjectCard'
 
 /** Room plus its latest edit time across everything drawn in it (room_last_activity RPC). */
@@ -11,17 +12,21 @@ type ProjectWithRooms = Project & { rooms: RoomWithActivity[] }
 
 // ── Status tiles ────────────────────────────────────────────────────────────────
 
-type StatusFilter = 'active' | ProjectStatus
+// Active / Archived count jobs; the tiles between count ROOMS by drawing
+// status (rooms.status) and pick the jobs that have a room at that status.
+type StatusFilter = 'active' | 'archived' | Exclude<RoomStatus, 'archived'>
 
-const STATUS_TILES: { key: StatusFilter; label: string; dot: string }[] = [
-  { key: 'active',        label: 'Active jobs',   dot: 'bg-accent' },
-  { key: 'draft',         label: 'Draft',         dot: 'bg-gray-500' },
-  { key: 'quoted',        label: 'Quoted',        dot: 'bg-yellow-500' },
-  { key: 'approved',      label: 'Approved',      dot: 'bg-blue-500' },
-  { key: 'in_production', label: 'In production', dot: 'bg-green-500' },
-  { key: 'completed',     label: 'Completed',     dot: 'bg-purple-500' },
-  { key: 'archived',      label: 'Archived',      dot: 'bg-gray-600' },
+const STATUS_TILES: { key: StatusFilter; label: string; dot: string; unit: 'jobs' | 'rooms' }[] = [
+  { key: 'active', label: 'Active jobs', dot: 'bg-accent', unit: 'jobs' },
+  ...ROOM_STATUS_OPTIONS.filter(o => o.value !== 'archived')
+    .map(o => ({ key: o.value as StatusFilter, label: o.label, dot: o.dot, unit: 'rooms' as const })),
+  { key: 'archived', label: 'Archived jobs', dot: 'bg-gray-600', unit: 'jobs' },
 ]
+
+const isRoomFilter = (f: StatusFilter) => f !== 'active' && f !== 'archived'
+const liveRooms = (p: ProjectWithRooms) => p.rooms.filter(r => r.status !== 'archived')
+
+type DeletedJob = { id: string; name: string; job_number: string | null; client_name: string | null; deleted_at: string }
 
 type SortKey = 'newest' | 'updated' | 'job'
 
@@ -125,14 +130,67 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
     setProjects(prev => prev.map(p => (p.id === id ? { ...p, status } : p)))
   }
 
+  function handleRoomsChange(id: string, rooms: Room[]) {
+    setProjects(prev => prev.map(p => {
+      if (p.id !== id) return p
+      const act = new Map(p.rooms.map(r => [r.id, r.last_activity_at]))
+      return { ...p, rooms: rooms.map(r => ({ ...r, last_activity_at: act.get(r.id) ?? r.updated_at })) }
+    }))
+  }
+
+  // ── Deleted jobs (soft delete) ──
+  const [deletedJobs, setDeletedJobs] = useState<DeletedJob[]>([])
+  const [showDeleted, setShowDeleted] = useState(false)
+  const [purgeArm, setPurgeArm] = useState<string | null>(null)
+
+  async function loadDeletedJobs() {
+    const { data, error } = await supabase.rpc('deleted_projects')
+    if (error) { console.error('Failed to load deleted jobs:', error); return }
+    setDeletedJobs((data ?? []) as DeletedJob[])
+  }
+  useEffect(() => {
+    let cancelled = false
+    supabase.rpc('deleted_projects').then(({ data }) => {
+      if (!cancelled) setDeletedJobs((data ?? []) as DeletedJob[])
+    })
+    return () => { cancelled = true }
+  }, [])
+
+  function handleDeleted(id: string) {
+    setProjects(prev => prev.filter(p => p.id !== id))
+    void loadDeletedJobs()
+  }
+
+  async function restoreJob(id: string) {
+    const { error } = await supabase.rpc('restore_project', { p_project_id: id })
+    if (error) { console.error('Failed to restore job:', error); return }
+    window.location.reload()   // brings the job back with its rooms
+  }
+
+  async function purgeJob(id: string) {
+    if (purgeArm !== id) { setPurgeArm(id); return }   // second click confirms
+    const { error } = await supabase.rpc('purge_project', { p_project_id: id })
+    setPurgeArm(null)
+    if (error) { console.error('Failed to permanently delete job:', error); return }
+    setDeletedJobs(prev => prev.filter(j => j.id !== id))
+  }
+
   const counts = useMemo(() => {
-    const c: Record<string, number> = { active: 0 }
+    const c: Record<string, number> = { active: 0, archived: 0 }
     for (const p of projects) {
-      c[p.status] = (c[p.status] ?? 0) + 1
-      if (p.status !== 'archived') c.active++
+      if (p.status === 'archived') { c.archived++; continue }
+      c.active++
+      for (const r of liveRooms(p)) c[r.status ?? 'draft'] = (c[r.status ?? 'draft'] ?? 0) + 1
     }
     return c
   }, [projects])
+
+  /** Does this job belong under the selected tile? */
+  function inFilter(p: ProjectWithRooms): boolean {
+    if (filter === 'active') return p.status !== 'archived'
+    if (filter === 'archived') return p.status === 'archived'
+    return p.status !== 'archived' && liveRooms(p).some(r => (r.status ?? 'draft') === filter)
+  }
 
   const recent = useMemo(
     () => projects
@@ -160,9 +218,9 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
     if (searching) {
       const h = haystack(p)
       if (!tokens.every(t => h.includes(t))) return false
-      return filter === 'active' ? true : p.status === filter
+      return filter === 'active' ? true : inFilter(p)
     }
-    return filter === 'active' ? p.status !== 'archived' : p.status === filter
+    return inFilter(p)
   })
 
   // Rooms whose name matches the search — those cards open so the room shows
@@ -220,7 +278,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
       </div>
 
       {/* ── Status tiles ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
         {STATUS_TILES.map(s => {
           const on = filter === s.key
           return (
@@ -234,8 +292,8 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
             >
               <div className="text-xl font-semibold text-ink tabular-nums leading-none">{counts[s.key] ?? 0}</div>
               <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-ink-muted">
-                <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                {s.label}
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
+                <span className="truncate" title={`${s.label} (${s.unit})`}>{s.label}</span>
               </div>
             </button>
           )
@@ -279,8 +337,10 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                 project={p}
                 initialRooms={p.rooms}
                 defaultExpanded={p.id === expand}
-                forceExpanded={roomHit(p)}
+                forceExpanded={roomHit(p) || isRoomFilter(filter)}
                 onStatusChange={s => handleStatusChange(p.id, s)}
+                onRoomsChange={rs => handleRoomsChange(p.id, rs)}
+                onDeleted={() => handleDeleted(p.id)}
               />
             ))}
           </div>
@@ -307,9 +367,53 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                       initialRooms={p.rooms}
                       defaultExpanded={p.id === expand}
                       onStatusChange={s => handleStatusChange(p.id, s)}
+                      onRoomsChange={rs => handleRoomsChange(p.id, rs)}
+                      onDeleted={() => handleDeleted(p.id)}
                     />
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {deletedJobs.length > 0 && !searching && (
+            <div className="mt-8">
+              <button
+                onClick={() => setShowDeleted(v => !v)}
+                className="flex items-center gap-2 text-xs font-semibold text-ink-subtle uppercase tracking-wider hover:text-ink-muted transition-colors mb-3"
+                aria-expanded={showDeleted}
+              >
+                <ChevronIcon expanded={showDeleted} />
+                Deleted jobs
+                <span className="normal-case font-normal tracking-normal">
+                  {deletedJobs.length} {deletedJobs.length === 1 ? 'job' : 'jobs'}
+                </span>
+              </button>
+              {showDeleted && (
+                <ul className="space-y-1">
+                  {deletedJobs.map(j => (
+                    <li key={j.id} className="flex items-center gap-3 px-4 py-2 rounded-lg border border-edge bg-surface">
+                      <span className="flex-1 min-w-0 truncate text-sm text-ink-subtle line-through">
+                        {j.job_number && !j.name.includes(j.job_number) ? `${j.job_number} ` : ''}{j.name}
+                      </span>
+                      {j.client_name && <span className="text-xs text-ink-subtle truncate max-w-[160px]">{j.client_name}</span>}
+                      <span className="text-[11px] text-ink-subtle shrink-0">
+                        deleted {new Date(j.deleted_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
+                      </span>
+                      <button onClick={() => restoreJob(j.id)}
+                        className="text-[11px] font-medium text-accent-ink hover:text-accent-hover px-2 py-1 rounded hover:bg-surface-2 transition-colors">
+                        Restore
+                      </button>
+                      {isAdmin && (
+                        <button onClick={() => purgeJob(j.id)} onBlur={() => setPurgeArm(null)}
+                          className={`text-[11px] font-medium px-2 py-1 rounded transition-colors ${purgeArm === j.id ? 'text-white bg-red-600 hover:bg-red-500' : 'text-ink-subtle hover:text-red-400 hover:bg-surface-2'}`}
+                          title="Admin only — erases the job, its rooms and everything in them">
+                          {purgeArm === j.id ? 'Click again to erase' : 'Delete permanently'}
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
             </div>
           )}

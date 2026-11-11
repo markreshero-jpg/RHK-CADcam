@@ -124,6 +124,16 @@ orders by level / topic, not array position.
 | Intermediate › Cabinets | Force a cabinet exactly where you want it | Move · Hold Ctrl as you drop it |
 | Intermediate › Reports | More detail on cabinet sheets | Open Cabinet Sheets · What the new detail shows · Pick what shows |
 
+## Tutorials to write (log)
+
+Features built without a lesson yet — Mark said not now, write them later.
+
+- **Main menu › Room drawing status, archive, delete / restore** (2026-11-11, dashboard):
+  set a room's status from the drop-down on its row (Draft → Draft sent → Needs site
+  measure → Waiting for approval → Approved → Sent to machine), status tiles filter jobs
+  by room status, Archived rooms fold under the job, deleted rooms / jobs go to
+  Deleted rooms / Deleted jobs with Restore (admin: Delete permanently).
+
 ## Phases
 
 - **T1** ✅ store, lessons, panel, File-menu toggle, ctx feed, lessons 1–3.

@@ -221,13 +221,17 @@ function SortableRoomRow({ room, removing, onEdit, onDelete, onStatus }: {
 
 // ── Component ─────────────────────────────────────────────────────────────────────
 
-export default function ProjectCard({ project, initialRooms, defaultExpanded = false, forceExpanded = false, onStatusChange }: {
+export default function ProjectCard({ project, initialRooms, defaultExpanded = false, forceExpanded = false, onStatusChange, onRoomsChange, onDeleted }: {
   project: Project
   initialRooms: Room[]
   defaultExpanded?: boolean
   /** Opens the card while true (dashboard search matched a room name), closes it again after. */
   forceExpanded?: boolean
   onStatusChange?: (status: ProjectStatus) => void
+  /** Rooms changed here (status, add, delete, reorder) — keeps the dashboard tiles current. */
+  onRoomsChange?: (rooms: Room[]) => void
+  /** Job soft-deleted — the dashboard moves it to Deleted jobs. */
+  onDeleted?: () => void
 }) {
   const isAdmin = useIsAdmin()
   const [expanded, setExpanded] = useState(defaultExpanded || forceExpanded)
@@ -237,6 +241,12 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     setExpanded(forceExpanded || defaultExpanded)
   }
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
+  const firstRooms = useRef(true)
+  useEffect(() => {
+    if (firstRooms.current) { firstRooms.current = false; return }
+    onRoomsChange?.(rooms)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rooms])
   const [editRoom, setEditRoom] = useState<Room | null>(null)
 
   // Add Room inline form
@@ -388,6 +398,15 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expanded, project.id])
 
+  const [purgeArm, setPurgeArm] = useState<string | null>(null)
+  async function purgeRoom(id: string) {
+    if (purgeArm !== id) { setPurgeArm(id); return }   // second click confirms
+    const { error } = await supabase.rpc('purge_room', { p_room_id: id })
+    setPurgeArm(null)
+    if (error) { console.error('Failed to permanently delete room:', error); return }
+    setDeletedRooms(prev => prev.filter(r => r.id !== id))
+  }
+
   async function restoreRoom(id: string) {
     const { error } = await supabase.rpc('restore_room', { p_room_id: id })
     if (error) { console.error('Failed to restore room:', error); return }
@@ -469,9 +488,9 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     if (deletingProject) return
     setDeletingProject(true)
     setDeleteProjectError(null)
-    // All FKs referencing projects (rooms, job materials, nest jobs) are
-    // ON DELETE CASCADE, and rooms cascade to their contents in turn.
-    const { error } = await supabase.from('projects').delete().eq('id', project.id)
+    // Soft delete — hidden by RLS, restorable from Deleted jobs; only an
+    // admin can purge it (purge_project).
+    const { error } = await supabase.rpc('soft_delete_project', { p_project_id: project.id })
     setDeletingProject(false)
     if (error) {
       console.error('Failed to delete project:', error)
@@ -481,7 +500,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     setDeleteProjectOpen(false)
     // Fade the card out, then drop it entirely (server list catches up on next load)
     setProjectRemoved('fading')
-    window.setTimeout(() => setProjectRemoved('gone'), 200)
+    window.setTimeout(() => { setProjectRemoved('gone'); onDeleted?.() }, 200)
   }
 
   if (projectRemoved === 'gone') return null
@@ -555,7 +574,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             {project.status === 'archived' ? <UnarchiveIcon /> : <ArchiveIcon />}
           </button>
 
-          {isAdmin && (
+          {(
             <button
               onClick={openDeleteProject}
               className="flex-none text-ink-subtle hover:text-red-400 p-1.5 rounded hover:bg-surface-2 transition-colors"
@@ -639,6 +658,13 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
                       <button onClick={() => restoreRoom(r.id)} className="text-[11px] font-medium text-accent-ink hover:text-accent-hover px-2 py-1 rounded hover:bg-surface-2 transition-colors">
                         Restore
                       </button>
+                      {isAdmin && (
+                        <button onClick={() => purgeRoom(r.id)} onBlur={() => setPurgeArm(null)}
+                          className={`text-[11px] font-medium px-2 py-1 rounded transition-colors ${purgeArm === r.id ? 'text-white bg-red-600 hover:bg-red-500' : 'text-ink-subtle hover:text-red-400 hover:bg-surface-2'}`}
+                          title="Admin only — erases the room and everything in it">
+                          {purgeArm === r.id ? 'Click again to erase' : 'Delete permanently'}
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

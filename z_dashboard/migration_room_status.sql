@@ -66,3 +66,60 @@ update public.rooms set status = case status
   when 'completed' then 'sent_to_machine' else status end;
 alter table public.rooms add constraint rooms_status_check
   check (status in ('draft','draft_sent','needs_site_measure','waiting_approval','approved','sent_to_machine','archived'));
+
+-- ── Job soft delete + admin-only permanent delete (2026-11-11) ──────────────
+alter table public.projects add column if not exists deleted_at timestamptz;
+
+drop policy if exists job_select on public.projects;
+create policy job_select on public.projects for select to authenticated
+  using (((select is_admin()) or can_access_project(id)) and deleted_at is null);
+
+-- Rooms of a deleted job disappear with it; hard delete of rooms is admin only.
+drop policy if exists job_access_select on public.rooms;
+create policy job_access_select on public.rooms for select to authenticated
+  using (((select is_admin()) or can_access_project(project_id)) and deleted_at is null
+         and exists (select 1 from projects p where p.id = project_id and p.deleted_at is null));
+drop policy if exists job_access_delete on public.rooms;
+create policy admin_delete on public.rooms for delete to authenticated using ((select is_admin()));
+
+create or replace function public.soft_delete_project(p_project_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not (is_admin() or can_access_project(p_project_id)) then raise exception 'not allowed'; end if;
+  update projects set deleted_at = now() where id = p_project_id and deleted_at is null;
+end $$;
+
+create or replace function public.restore_project(p_project_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not (is_admin() or can_access_project(p_project_id)) then raise exception 'not allowed'; end if;
+  update projects set deleted_at = null where id = p_project_id;
+end $$;
+
+create or replace function public.deleted_projects()
+returns table (id uuid, name text, job_number text, client_name text, deleted_at timestamptz)
+language sql stable security definer set search_path = public as $$
+  select p.id, p.name::text, p.job_number::text, p.client_name::text, p.deleted_at from projects p
+  where p.deleted_at is not null and (is_admin() or can_access_project(p.id))
+  order by p.deleted_at desc
+$$;
+
+-- Permanent delete: admin only, and only once it is already in Deleted.
+create or replace function public.purge_project(p_project_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'only an admin can permanently delete'; end if;
+  delete from projects where id = p_project_id and deleted_at is not null;
+end $$;
+
+create or replace function public.purge_room(p_room_id uuid)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not is_admin() then raise exception 'only an admin can permanently delete'; end if;
+  delete from rooms where id = p_room_id and deleted_at is not null;
+end $$;
+
+revoke execute on function public.soft_delete_project(uuid), public.restore_project(uuid), public.deleted_projects(),
+  public.purge_project(uuid), public.purge_room(uuid) from anon, public;
+grant execute on function public.soft_delete_project(uuid), public.restore_project(uuid), public.deleted_projects(),
+  public.purge_project(uuid), public.purge_room(uuid) to authenticated;
