@@ -215,3 +215,10 @@ Applied with `_tmp-6595-r6.mjs` (db + resolve); before-state `_tmp-6595-r6-befor
   5 full-height dividers, 2 shelves, squares 121.3 (`_tmp-6595-wc10-full.mjs`, before `_tmp-6595-wc10-full-before.json`).
   The 2-holes-into-the-bottom joint keys int_divider_0..7 still cover the 5 dividers. Resolve pending.
 - **Bulkheads vertical grain** (Mark 2026-11-11, new z_bulkhead B13): WC-08 / 09 / 11 Grain = Vertical. WC-09 fascia 2042.5 is now 2 pieces, 1021.3 + 1021.2 (taped joins, join over the WC-05 door gap); WC-08 727.5 + 300 return and WC-11 890 stay one piece each (`_tmp-6595-bh-grain.mjs`).
+
+## Machining run R3 (2026-11-11)
+- Kitchen + Loose Parts nested together in the browser, Pair shaped parts on, Balanced: 20 sheets, 83.3%, 210 parts
+  (Whiteboard 16.5 13, LX Abs Grain 18 Sublime Teak 5, LX Colour 16 Winter Sky 2). Mark checked Stage 5.
+- Saved run **RHK6595-R3**. Files: `SynologyDrive/CNCFiles/RHK6595 - CKC - 1-21 Parkedge Rd Sunshine/Kitchen + Loose Parts/`
+  (material sub folders with the .anc programs, `RHK6595 cut sheets.pdf` 26 pages, `RHK6595 labels 102x48.pdf` 210, `RHK6595-R3.rhkrun`).
+  One combined room folder (Mark): the Loose Parts pieces share Whiteboard 01 (2400 x 900 closure) and 13 (2 x 2400 x 70 rips) with Kitchen parts.
