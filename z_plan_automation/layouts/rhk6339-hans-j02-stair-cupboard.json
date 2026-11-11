@@ -1,0 +1,37 @@
+{
+  "_source": "_JOBS/RHK6300 - 6399/RHK6339 - Hans Const - 116 Queenscroft st Chelmer/SITE CHECK MEASURES/site Measured plans.pdf p4 (Croft WD 71 J02) + Mark 2026-11-11",
+  "_notes": [
+    "Ground floor Sun Room, recess at the foot of the stair. NO SITE MEASURES: drawn as per plan, all measurements to be site checked (Mark).",
+    "Recess 820 wall to wall (approx), 440 deep overall, ceiling 2700 (approx, CE-TI).",
+    "35 shadow lines each side + at the ceiling (Mark): T2D 750 at 35, top at 2665. Gables Veneer Blackbutt (seen in the side shadow lines).",
+    "Depth: 440 overall - 17 door - 2 = 421 carcass. 100 veneer kick. 5 adjustable shelves, black.",
+    "Pair of doors (left hinged left, right hinged right), Custom Timber Pull 450 at the meeting edges, bottom 1050 AFF."
+  ],
+  "projectId": "cf31069b-1a56-49ee-91df-dade35f68fde",
+  "roomName": "J02 Stair Cupboard",
+  "roomHeight": 2700,
+  "walls": [
+    { "x": 0, "y": 440, "length": 440, "angle": 270, "_": "left side of recess" },
+    { "x": 0, "y": 0, "length": 820, "angle": 0, "_": "back of recess 820" },
+    { "x": 820, "y": 0, "length": 440, "angle": 90, "_": "right side of recess" }
+  ],
+  "cabinets": [
+    {
+      "def": "T2D", "wall": 2, "offset": 35, "dx": 750, "dy": 2665, "dz": 421,
+      "note": "J02 pair of doors, 5 adj shelves, 35 shadow line each side + top. ALL SIZES TO BE SITE CHECKED.",
+      "set": {
+        "material_overrides": { "left_side": "0bed0f26-d551-4c03-ba6a-fd7f3309b6ad", "right_side": "0bed0f26-d551-4c03-ba6a-fd7f3309b6ad" },
+        "internal_grid": { "tree": { "type": "open", "fittings": [
+          { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false },
+          { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } },
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false }, { "col_index": 1, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [
+            { "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left" },
+            { "col_index": 1, "row_index": 0, "face_type": "door", "hinge_side": "right" }
+          ] }
+      }
+    }
+  ]
+}

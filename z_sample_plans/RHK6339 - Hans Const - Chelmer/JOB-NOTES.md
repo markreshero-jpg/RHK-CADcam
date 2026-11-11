@@ -9,7 +9,7 @@ App project `cf31069b-1a56-49ee-91df-dade35f68fde`.
 
 ## Job set-up (Mark 2026-11-11)
 
-- Fronts + exposed: **Veneer 17mm – Blackbutt** (new board `Veneer 17mm`, 2408 x 1205, T102),
+- Fronts + exposed: **Veneer 17mm – Blackbutt** (new board `Veneer 17mm`, 2700 x 1205 - was 2408, T102),
   tape **0.5mm Matching 22 – Blackbutt** (50m rolls). Door style `Veneer 17mm` (17 blank,
   colour range `Veneer 17mm`, colour Blackbutt, grain vertical).
 - Carcass: PT Colour Matt 16mm Black Matt (assembly schedule "16.5mm PT Black Matt").
@@ -45,6 +45,27 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j05-study-bench.json`, post
 - [ ] 100 behind the portal column (BC-03 false panel) - OK for now, **check with builder**
   (on the elevation + SITE NOTES).
 - Kick vertical grain, 2 pieces - Mark OK, on the spec block.
+
+## J02 Stair Cupboard (ground floor sun room) - drawn 2026-11-11, room `67a27d07-1012-4537-a58d-5d3b50764221`
+
+Layout `z_plan_automation/layouts/rhk6339-hans-j02-stair-cupboard.json`, post `_tmp-6339-j02-post.mjs`.
+**No site measures - drawn as per plan, ALL MEASUREMENTS TO BE SITE CHECKED** (Mark).
+
+- Recess 820 x 440 overall x 2700 ceiling (approx). Walls: 1 left side, 2 back, 3 right side.
+- TC-01 T2D 750 x 2665 incl 100 kick x 421, at 35: **35 shadow lines** each side + top (Mark),
+  CAD arrows "35 SHADOW LINE" on the elevation. Gables Veneer Blackbutt (material_overrides
+  left_side / right_side) so the shadow lines show veneer.
+- Pair of doors, 5 adj shelves black. Hinge 3 moved to 1470 (was over the shelf holes 1370/1402):
+  hinges [100, 691.25, 1370, 1873.75, 2465] from the door bottom.
+- New handle **Custom Timber Pull 450** (solid timber, made in the shop, secret fixed, no CNC
+  holes) + schedule "Custom Timber Pull 450 (tall doors)" on this room: vertical at the meeting
+  edges, centre 1275 AFF (bottom 1050).
+
+### Open / TBC
+- [ ] Site measures: width, depth, ceiling.
+- Doors 372.5 x 2565 were longer than the 2408 veneer sheet. Mark 2026-11-11: longer sheets -
+  board **Veneer 17mm now 2700 x 1205** (whole board, all rooms). Headless nest: J02 veneer on
+  2 sheets, nothing unplaced.
 
 ## Other rooms - not drawn
 - J01 garage: 4411 frame to frame - 12 sheet both sides = 4387. Ceiling TBC by Rory.
