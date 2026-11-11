@@ -10,7 +10,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useOptiStore } from '@/src/lib/optimiser/store'
-import { findNearestValid, findBestPlacement, usableBounds } from '@/src/lib/optimiser/edit'
+import { findNearestValid, findBestPlacement, usableBounds, type ShapeOpts } from '@/src/lib/optimiser/edit'
 import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, isTwoSidedSheet, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
@@ -41,7 +41,9 @@ const FORCED_WARN = 'Force placed — it is inside the cut gap / trim or over an
 /** Where a dragged part lands. gx/gy follow the cursor; sx/sy = the landing spot
  *  (null = nowhere legal). forced = landing exactly at gx/gy; clean = that spot
  *  is legal anyway. */
-export interface DropGhost { gx: number; gy: number; w: number; h: number; sx: number | null; sy: number | null; forced: boolean; clean: boolean }
+export interface DropGhost { gx: number; gy: number; w: number; h: number; sx: number | null; sy: number | null; forced: boolean; clean: boolean
+  /** The part's true outline (placement-local), drawn instead of its rectangle. */
+  loop?: ShapePt[] | null }
 
 /** A chip in the pool strip: an unplaced part, or the copy clipboard. */
 type PoolItem = { kind: 'unplaced' | 'clip'; def: NestPartInput }
@@ -80,6 +82,13 @@ export default function Stage5Edit() {
   // drill overlay must shift holes onto the deducted blanks the same way Stage 6 does.
   const deductEb = snap?.profiles.find(pr => pr.id === profileId)?.deduct_edgeband === true
   const partByUid = useMemo(() => new Map((snap?.parts ?? []).map(p => [p.uid, p])), [snap])
+  // True outlines for the snap (edit.ts ShapeOpts): a shaped part only blocks
+  // where it really is, so parts can tuck into an L's empty corner.
+  const outlineOfPl = (pl: { baseUid: string; w: number; h: number; rotated: boolean; turned?: boolean; mirrored?: boolean }) => {
+    const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null
+  }
+  const shapesFor = (moving: { baseUid: string; w: number; h: number; rotated: boolean } | null): ShapeOpts =>
+    ({ outlineOf: outlineOfPl, moving: moving ? outlineOfPl(moving) : null })
   // Drilling is read for the nested cabinets only — not the whole job. Keyed on
   // the nested part set so paste / re-place edits don't re-read it.
   const partIndex = useOptiStore(s => s.partIndex)
@@ -220,16 +229,17 @@ export default function Stage5Edit() {
     if (p.cx < r.left || p.cx > r.right || p.cy < r.top || p.cy > r.bottom) return null
     const { w: W, h: H } = sh.stock
     const k = r.width / W
-    const o = grainOrient(p.item.def, sh.stock) ?? { w: p.item.def.w, h: p.item.def.h }
+    const o = grainOrient(p.item.def, sh.stock) ?? { w: p.item.def.w, h: p.item.def.h, rotated: false }
+    const shapes = shapesFor({ baseUid: p.item.def.baseUid, ...o })
     const mx = (p.cx - r.left) / k, my = H - (p.cy - r.top) / k
     const gx = Math.max(0, Math.min(W - o.w, mx - o.w / 2))
     const gy = Math.max(0, Math.min(H - o.h, my - o.h / 2))
     const sameMat = (p.item.def.materialId ?? null) === (sh.materialId ?? null) && p.item.def.thickness === sh.thickness
     const fits = o.w <= W && o.h <= H
-    const valid = sameMat ? findNearestValid(sh, null, o.w, o.h, gx, gy, gapForSheet(sh)) : null
+    const valid = sameMat ? findNearestValid(sh, null, o.w, o.h, gx, gy, gapForSheet(sh), shapes) : null
     const clean = !!valid && near(valid.x, gx) && near(valid.y, gy)
     const forced = sameMat && fits && (forceRef.current || p.shift)
-    return { gx, gy, w: o.w, h: o.h, forced, clean,
+    return { gx, gy, w: o.w, h: o.h, forced, clean, loop: shapes.moving ?? null,
       sx: forced ? gx : valid?.x ?? null, sy: forced ? gy : valid?.y ?? null }
   }
 
@@ -272,6 +282,8 @@ export default function Stage5Edit() {
       window.removeEventListener('pointermove', move)
       window.removeEventListener('pointerup', up)
     }
+    // poolGhost reads the store live; the part outlines it uses can't change mid-drag.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pressing])
 
   function onPoolDown(e: React.PointerEvent, item: PoolItem) {
@@ -453,7 +465,7 @@ export default function Stage5Edit() {
               blocks={nestResult.blocks ?? []}
               onMoveBlock={moveBlockBy}
               onContext={(uid, x, y) => { selectPlacement(uid); setCtxMenu({ uid, x, y }) }}
-              outlineFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedOutline(p, pl, deductEb) : null }}
+              outlineFor={outlineOfPl}
               holesFor={pl => { const p = partByUid.get(pl.baseUid); return p ? placedHoles(p, pl, deductEb) : [] }}
             />
           </div>
@@ -485,8 +497,8 @@ export default function Stage5Edit() {
                   onClick={() => {
                     if (suppressClick.current) { suppressClick.current = false; return }
                     const gap = gapForSheet(sheet)
-                    const o = grainOrient(p, sheet.stock) ?? p
-                    const pos = findBestPlacement(sheet, o.w, o.h, gap)
+                    const o = grainOrient(p, sheet.stock) ?? { w: p.w, h: p.h, rotated: false }
+                    const pos = findBestPlacement(sheet, o.w, o.h, gap, shapesFor({ baseUid: p.baseUid, ...o }))
                     if (pos) placeFromUnplaced(p.uid, sheet.index, pos.x, pos.y)
                     else setEditError('No room on this sheet for this part — drag it on with Shift held to force it.')
                   }}
@@ -568,7 +580,7 @@ export default function Stage5Edit() {
                   const st = useOptiStore.getState()
                   const sh = st.nestResult?.sheets.find(s => s.index === target)
                   if (!sh) return
-                  const pos = findBestPlacement(sh, selectedInfo.pl.w, selectedInfo.pl.h, gapForSheet(sh))
+                  const pos = findBestPlacement(sh, selectedInfo.pl.w, selectedInfo.pl.h, gapForSheet(sh), shapesFor(selectedInfo.pl))
                   if (pos) relocatePart(selectedInfo.pl.uid, target, pos.x, pos.y)
                   else setEditError('No room on that sheet for this part.')
                 }}
@@ -722,7 +734,8 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
     // Follow the cursor freely (kept on the sheet); work out the landing spot.
     const gx = Math.max(0, Math.min(W - w, mx - drag.offX))
     const gy = Math.max(0, Math.min(H - h, my - drag.offY))
-    const pos = findNearestValid(sheet, drag.block ? drag.block.uids : drag.uid, w, h, gx, gy, gap)
+    const pos = findNearestValid(sheet, drag.block ? drag.block.uids : drag.uid, w, h, gx, gy, gap,
+      { outlineOf: outlineFor, moving: drag.block ? null : outlineFor(part) })
     const forced = force || e.shiftKey
     const clean = !!pos && near(pos.x, gx) && near(pos.y, gy)
     setDrag({ ...drag, gx, gy, forced, clean,
@@ -741,6 +754,12 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
   }
 
   const fy = (y: number, h: number) => (H - y - h) * scale
+  // A ghost box, or the part's outline when it has one (placement-local loop).
+  const ghostShape = (x: number, y: number, w: number, h: number, loop: ShapePt[] | null, c: string, o: number, dash?: string) => loop && loop.length >= 3
+    ? <polygon points={loop.map(q => `${(x + q.x) * scale},${(H - y - q.y) * scale}`).join(' ')}
+        fill={c} fillOpacity={o} stroke={c} strokeWidth={1.5} strokeDasharray={dash} style={{ pointerEvents: 'none' }} />
+    : <rect x={x * scale} y={fy(y, h)} width={w * scale} height={h * scale}
+        fill={c} fillOpacity={o} stroke={c} strokeWidth={1.5} strokeDasharray={dash} style={{ pointerEvents: 'none' }} />
   const partNo = new Map(sheetPartOrder(sheet.placements).map((pl, i) => [pl.uid, i + 1]))
 
   // ── Measure tool ── snap targets in sheet mm: sheet border, each part's outline (or rect), cutouts, drill holes.
@@ -832,32 +851,22 @@ function InteractiveSheet({ sheet, selectedUid, drills, routes, zoom, measuring,
         )
       })}
       {routes.length > 0 && <SheetRoutes routes={routes} H={H} scale={scale} />}
-      {/* Drag landing ghost: where the part / block will sit when released. */}
+      {/* Drag landing ghost: where the part / block will sit when released. A
+          shaped part's ghost is its true outline (the snap uses it too). */}
       {drag && (() => {
         const part = sheet.placements.find(p => p.uid === drag.uid)
         const w = drag.block ? drag.block.w : part?.w ?? 0, h = drag.block ? drag.block.h : part?.h ?? 0
+        const loop = !drag.block && part ? outlineFor(part) : null
         const moved = Math.abs(drag.gx - (drag.sx ?? drag.gx)) > 0.5 || Math.abs(drag.gy - (drag.sy ?? drag.gy)) > 0.5
-        if (drag.sx == null || drag.sy == null) return (
-          <rect x={drag.gx * scale} y={fy(drag.gy, h)} width={w * scale} height={h * scale}
-            fill="#ef4444" fillOpacity={0.18} stroke="#ef4444" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />
-        )
-        if (drag.forced) return !drag.clean ? (
-          <rect x={drag.sx * scale} y={fy(drag.sy, h)} width={w * scale} height={h * scale}
-            fill="#f97316" fillOpacity={0.14} stroke="#f97316" strokeWidth={1.5} strokeDasharray="5 3" style={{ pointerEvents: 'none' }} />
-        ) : null
-        return moved ? (
-          <rect x={drag.sx * scale} y={fy(drag.sy, h)} width={w * scale} height={h * scale}
-            fill="#22c55e" fillOpacity={0.12} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 3" style={{ pointerEvents: 'none' }} />
-        ) : null
+        if (drag.sx == null || drag.sy == null) return ghostShape(drag.gx, drag.gy, w, h, loop, '#ef4444', 0.18)
+        if (drag.forced) return !drag.clean ? ghostShape(drag.sx, drag.sy, w, h, loop, '#f97316', 0.14, '5 3') : null
+        return moved ? ghostShape(drag.sx, drag.sy, w, h, loop, '#22c55e', 0.12, '5 3') : null
       })()}
       {/* Pool-strip drag: the part under the cursor + where it will land
           (green = snapped, orange = forced into a gap / overlap, red = nowhere). */}
       {extGhost && (() => {
         const g = extGhost
-        const at = (x: number, y: number, c: string, o: number, dash?: string) => (
-          <rect x={x * scale} y={fy(y, g.h)} width={g.w * scale} height={g.h * scale}
-            fill={c} fillOpacity={o} stroke={c} strokeWidth={1.5} strokeDasharray={dash} style={{ pointerEvents: 'none' }} />
-        )
+        const at = (x: number, y: number, c: string, o: number, dash?: string) => ghostShape(x, y, g.w, g.h, g.loop ?? null, c, o, dash)
         if (g.sx == null || g.sy == null) return at(g.gx, g.gy, '#ef4444', 0.18)
         if (g.forced) return at(g.sx, g.sy, g.clean ? '#22c55e' : '#f97316', 0.2, g.clean ? undefined : '5 3')
         return <>{at(g.gx, g.gy, '#3b82f6', 0.15)}{at(g.sx, g.sy, '#22c55e', 0.12, '5 3')}</>
