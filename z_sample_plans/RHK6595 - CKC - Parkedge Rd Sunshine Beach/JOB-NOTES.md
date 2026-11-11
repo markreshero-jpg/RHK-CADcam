@@ -199,3 +199,6 @@ Applied with `_tmp-6595-r6.mjs` (db + resolve); before-state `_tmp-6595-r6-befor
 - Fridge recess panel = white melamine, no edging: as drawn (Loose Parts).
 - Resolver clean except BC-07 HINGE_RAIL_CLASH, which was already there.
 - To check: the LED pocket sits at the back of WC-12 in the cabinet 3D / cut sheet (frame copied from RHK6586 WC-09).
+- **Overheads 625 clear (Mark, same day):** they had been drawn 747 since the first draw, with the under panel inside the SCRBT 18
+  scribe = 643 clear, not the 625 in answer 13. WC-04/05/06 747 -> 765 (top 2340, underside 1575), under panel WC-12
+  pos_z 1593 -> 1575 (`_tmp-6595-oh765.mjs`). Doors 765. WC-07 WF-L was already 765.
