@@ -514,6 +514,15 @@ is, and which edge is the bottom, once the label is off.
   only with bases, comment "Joined rail base: …" (Mark, 2026-11-11, RHK6586 vanity
   "stretch all 3 cabinets without a join"). `loadRailWallRects` places `fpbase:` by
   its thickness band and front edge (z + DX).
+- **Rail + base in one 100 strip (Mark, 2026-11-11, RHK6586: "if they are cut at
+  100mm wide we can get both parts out of them").** After the run joins, each
+  upright pairs with a base of the same run and length (`fprail:n` with `fpbase:n`
+  first) when rail trim + base trim + 10 (rip kerf + clean-up) ≤ 100. The pair nests
+  as one 100 strip named "Finger Rail n + Base n", comment "Cut 100 wide, rip into …:
+  rail trim to …, then tape … = W; base trim to …", tape summed. A pair that doesn't
+  fit (a 73.5 rail + 33 base) stays as two 80 strips. `pairRailBases`
+  (joinFingerRails.ts), `RAIL_PAIR_W` / `RAIL_PAIR_ALLOW`; normalize carries
+  `rail_strip` on each strip part.
 - Not yet: shaped (footprint) cabinets ignore the setback; elevation shows the
   square front + rail only (no base line).
 - Tests: `handles.test.ts` (D24 block), `fingerRailOps.test.ts` (notch).
