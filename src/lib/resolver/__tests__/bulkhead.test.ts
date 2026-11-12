@@ -38,7 +38,7 @@ function plan(p: ResolvedCasePart) {
   const r = (n: number) => Math.round(n * 1000) / 1000
   return { x0: r(Math.min(...xs)), x1: r(Math.max(...xs)), z0: r(Math.min(...zs)), z1: r(Math.max(...zs)) }
 }
-const on = (joint: 'mitre' | 'butt' = 'mitre', depth = 600) => ({ on: true, depth, joint })
+const on = (joint: 'mitre' | 'butt' = 'mitre', depth = 0) => ({ on: true, depth, joint })
 
 describe('bulkhead parts', () => {
   it('fascia only: full width at the carcase front, exposed board, + L cleat in carcass board', () => {
@@ -69,7 +69,7 @@ describe('bulkhead parts', () => {
     expect([f.bevel_lo, f.bevel_hi]).toEqual([45, 45])
     expect(f.edge_band).toMatchObject({ left: false, right: false })
     const l = get(ps, 'bh:ret_l')!, r = get(ps, 'bh:ret_r')!
-    // Capped at the wall: 600 > 330 deep.
+    // Depth 0 = back to the wall.
     expect(l.DY).toBe(D)
     expect(plan(l)).toEqual({ x0: 0, x1: T, z0: 0, z1: D })
     expect(plan(r)).toEqual({ x0: W - T, x1: W, z0: 0, z1: D })
@@ -79,6 +79,14 @@ describe('bulkhead parts', () => {
     expect(l.edge_band).toMatchObject({ bottom: true, right: false })
     // The cleat fits between the returns.
     expect(plan(get(ps, 'bh:cleat_h')!)).toMatchObject({ x0: T, x1: W - T })
+  })
+
+  it('a return longer than the wall depth keeps its true length, the excess past the back (RHK6581 Bed 2)', () => {
+    const ps = parts(cab({ left: on('mitre', 630) }))
+    const l = get(ps, 'bh:ret_l')!
+    expect(l.DY).toBe(630)
+    expect(plan(l)).toEqual({ x0: 0, x1: T, z0: D - 630, z1: D })
+    expect(l.edge_band).toMatchObject({ right: false })   // reaches (passes) the wall line
   })
 
   it('butt returns stop behind the fascia, which keeps square banded ends', () => {

@@ -162,6 +162,16 @@ underside when the bulkhead isn't sitting on cabinets.
       it assumes a 20 front (18 door + 2) for "flush with doors", so it errs off
       the wall. Sidebar: Left / Right end angle °. Not automatic from the wall
       yet; not for shadowlines or curved bulkheads. Tutorial `bulkhead_angled_end`.
+- [~] **B14 — returns keep their true length** (built 2026-11-13, check pending)
+      (Mark, RHK6581 Bed 2 J08 WC-01: left return typed 630 showed 410). A
+      return's `depth` is used as typed, from the front face back — longer than
+      the front face's distance from the wall runs on past the back edge; it is
+      no longer capped at the wall (bulkhead, bottom return, split rail returns,
+      shadowline). `depth: 0` = back to the wall (`returnLength`), and ticking a
+      return on (sidebar or right-click) sets 0, so a flush-with-doors bulkhead
+      gets full depth to the wall. Existing returns typed past the wall that
+      relied on the cap were set to 0 (RHK6581 Master Store J12 WC-01 right,
+      Kitchen WC-10 / WC-12 left) — no part change.
 - [~] **B9 — part-width bottom return** (built 2026-11-02, in-app check pending)
       (Mark, RHK6581 WIR J11: "a bulkhead return under open space above door way
       ... run it past into TC-09 about 100mm"). `bulkhead.bottom.from / .to` (mm

@@ -24,6 +24,8 @@ export type BulkheadJoint = 'mitre' | 'butt'
  *  the fascia runs past the wall line, and that end gets no return. + = the
  *  wall closes in behind the end (the back is shorter than the front). */
 export interface BulkheadReturn {
+  /** mm back from the front face, used as typed (may run past the wall line);
+   *  0 = back to the wall (the default, Mark 2026-11-13). */
   on: boolean; depth: number; joint: BulkheadJoint; angle?: number
   /** Bottom return only: part width, mm from the bulkhead's left end (e.g. a
    *  soffit over a doorway, RHK6581 WIR). Unset = the full width. */
@@ -68,7 +70,11 @@ export function edgeMitreNote(p: { part_key: string; edge_mitre?: MitreEdge | nu
   return `MITRE ${EDGE_MITRE_DEG}° ${p.edge_mitre} edge`
 }
 
-export const BH_RETURN_DEPTH = 600
+/** Return depth 0 = back to the wall. */
+export const BH_RETURN_DEPTH = 0
+/** A return's length from the front face: the typed depth, or `toWall` (the
+ *  front face's distance from the wall) when it's 0. */
+export const returnLength = (depth: number, toWall: number): number => depth > 0 ? depth : toWall
 export const BH_MAX_END_ANGLE = 75
 // Two 100 mm legs; a bulkhead lower than this has no room for one.
 export const BH_CLEAT_LEG = 100
@@ -99,7 +105,7 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
   const sl = b.kind === 'shadowline'
   const r = (x: Partial<BulkheadReturn> | undefined, d: BulkheadReturn): BulkheadReturn => ({
     on: x?.on ?? d.on,
-    depth: x?.depth != null && x.depth > 0 ? x.depth : d.depth,
+    depth: x?.depth != null && x.depth >= 0 ? x.depth : d.depth,
     joint: x?.joint === 'butt' ? 'butt' : 'mitre',
     ...(x?.angle != null && x.angle > 0 ? { angle: Math.min(x.angle, BH_MAX_END_ANGLE) } : {}),
     ...(x?.from != null && x.from > 0 ? { from: x.from } : {}),

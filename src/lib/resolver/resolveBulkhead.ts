@@ -8,7 +8,9 @@
 //   bh:fascia            full width × full height, exposed board (vertical grain
 //                        and longer than the sheet: bh:fascia_a, _b … equal pieces, B13)
 //   bh:ret_l / bh:ret_r  side returns, full height, running back `depth` from
-//                        the front (capped at the wall)
+//                        the front — the true length typed, even past the
+//                        wall line (Mark 2026-11-13, RHK6581 Bed 2); 0 = back
+//                        to the wall
 //   bh:ret_b             bottom return (under-panel) between the side returns
 //   bh:cleat_v / _h      L fixing cleat (two 100 mm legs, carcass board) behind
 //                        the fascia's bottom edge — lifted by the bottom
@@ -34,7 +36,7 @@
 
 import type { CabinetInput, ConstructionRules, DeclaredSeam, ResolvedCasePart, EdgeBanding } from './types'
 import { resolveFaceZ } from './mergeRules'
-import { BH_CLEAT_LEG } from '../bulkhead'
+import { BH_CLEAT_LEG, returnLength } from '../bulkhead'
 import { kickFaceMaxLength } from './resolveKickRun'
 
 const MITRE = 45
@@ -71,8 +73,9 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   // A part-width bottom return (from / to) can't mitre to the full-width fascia: butted.
   const bPart = B.on && (B.from != null || B.to != null)
   const mL = L.on && L.joint === 'mitre', mR = R.on && R.joint === 'mitre', mB = B.on && B.joint === 'mitre' && !bPart
-  // Return length from the front face, never through the wall.
-  const len = (depth: number) => Math.min(depth, Zf)
+  // Return length from the front face: the typed depth as-is (the excess runs
+  // on past the back edge), 0 = back to the wall.
+  const len = (depth: number) => returnLength(depth, Zf)
 
   const out: ResolvedCasePart[] = []
   const push = (p: Omit<ResolvedCasePart, 'AX' | 'AZ'>) => {
@@ -258,11 +261,11 @@ function resolveShadowline(cab: CabinetInput): ResolvedCasePart[] {
     ...(mL || mR ? { outline: [{ x: 0, y: 0 }, { x: W, y: 0 }, { x: mR ? W - w : W, y: w }, { x: mL ? w : 0, y: w }] } : {}),
   })
 
-  // Returns, back `depth` from the front (capped at the wall). Mitred: from the
+  // Returns, back `depth` from the front (0 = to the wall). Mitred: from the
   // front corner, 45° across the strip width; butt: from behind the strip.
   const ret = (key: 'bh:sl_ret_l' | 'bh:sl_ret_r', r: typeof L) => {
     if (!r.on) return
-    const full = Math.min(r.depth, D)
+    const full = returnLength(r.depth, D)
     const mitre = r.joint === 'mitre'
     const l = mitre ? full : full - w
     const isL = key === 'bh:sl_ret_l'

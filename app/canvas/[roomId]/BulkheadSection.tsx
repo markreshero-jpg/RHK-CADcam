@@ -54,11 +54,12 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
       {RETURNS.filter(([k]) => k !== 'bottom').map(([k, name]) => (
         <div key={k} className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-1 items-center">
           <label className="flex items-center gap-2 text-xs text-gray-300">
-            <input type="checkbox" checked={b[k].on} onChange={e => putRet(k, { on: e.target.checked })} />
+            <input type="checkbox" checked={b[k].on} onChange={e => putRet(k, e.target.checked ? { on: true, depth: 0 } : { on: false })} />
             {name}
           </label>
           <CalcInput value={b[k].depth} decimals={1} disabled={!b[k].on}
-            onCommit={v => { if (v > 0) putRet(k, { depth: v }) }}
+            onCommit={v => { if (v >= 0) putRet(k, { depth: v }) }}
+            placeholder="wall"
             className={inp + ' text-right disabled:opacity-40'} />
           <select value={b[k].joint} disabled={!b[k].on}
             onChange={e => putRet(k, { joint: e.target.value as BulkheadReturn['joint'] })}
@@ -68,7 +69,7 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
           </select>
         </div>
       ))}
-      <p className="text-[10px] text-gray-600">Sits on the overhead tops, flush with their front. Depth = how far a return runs back from the front (stops at the wall). Set the soffit to the board thickness to meet the ceiling.</p>
+      <p className="text-[10px] text-gray-600">Sits on the overhead tops, flush with their front. Depth = how far a return runs back from the front, as typed (0 = back to the wall). Set the soffit to the board thickness to meet the ceiling.</p>
     </div>
   )
 
@@ -111,11 +112,12 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
         {RETURNS.map(([k, name]) => (
           <div key={k} className="grid grid-cols-[1fr_4.5rem_4.5rem] gap-1 items-center">
             <label className="flex items-center gap-2 text-xs text-gray-300">
-              <input type="checkbox" checked={b[k].on} onChange={e => putRet(k, { on: e.target.checked })} />
+              <input type="checkbox" checked={b[k].on} onChange={e => putRet(k, e.target.checked ? { on: true, depth: 0 } : { on: false })} />
               {name}
             </label>
             <CalcInput value={b[k].depth} decimals={1} disabled={!b[k].on}
-              onCommit={v => { if (v > 0) putRet(k, { depth: v }) }}
+              onCommit={v => { if (v >= 0) putRet(k, { depth: v }) }}
+            placeholder="wall"
               className={inp + ' text-right disabled:opacity-40'} />
             <select value={b[k].joint} disabled={!b[k].on}
               onChange={e => putRet(k, { joint: e.target.value as BulkheadReturn['joint'] })}
@@ -137,7 +139,7 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
               className={inp + ' text-right'} />
           </div>
         )}
-        <p className="text-[10px] text-gray-600">Depth = how far the return runs back from the front (stops at the wall).</p>
+        <p className="text-[10px] text-gray-600">Depth = how far the return runs back from the front, as typed — longer than the wall depth runs on past the back (0 = back to the wall).</p>
         <div className="grid grid-cols-[1fr_4.5rem] gap-1 items-center"
           title="0 = square. Where an end meets a wall that isn't square to the run (e.g. 45), type its angle: the fascia end is cut to it, the outline follows the wall and that end has no return.">
           {(['left', 'right'] as const).map(k => (

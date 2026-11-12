@@ -220,7 +220,7 @@ export function buildContextMenuGroups({
   if (bh && onUpdateBulkhead) {
     const tick = (on: boolean, label: string) => (on ? '✓ ' : '    ') + label
     const ret = (k: 'left' | 'right' | 'bottom', label: string) =>
-      ({ label: tick(bh[k].on, label), onClick: () => onUpdateBulkhead(cabId, { ...bh, [k]: { ...bh[k], on: !bh[k].on } }) })
+      ({ label: tick(bh[k].on, label), onClick: () => onUpdateBulkhead(cabId, { ...bh, [k]: bh[k].on ? { ...bh[k], on: false } : { ...bh[k], on: true, depth: 0 } }) })
     groups.push([bh.kind === 'shadowline'
       ? { label: 'Shadowline', children: [ret('left', 'Left return'), ret('right', 'Right return')] }
       : { label: 'Bulkhead', children: [
