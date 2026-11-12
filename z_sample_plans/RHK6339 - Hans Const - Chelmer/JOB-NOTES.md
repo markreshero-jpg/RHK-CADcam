@@ -142,23 +142,29 @@ Mark's answers 2026-11-12:
 - J06 desk (Desk A / Desk B): 35 Blackbutt, 830 deep in front of the 130 trough (y 130-960), wall to wall,
   **runs through under the J07 left cupboard**, centre join (2248) for now. 50 recessed trims are ours,
   front edge only (in the top notes, not modelled). 735 FFL (height 700). Trough + outriggers by others.
-- J07: 305 overall -> carcass 286 + 17 + 2. TC-01 TFKW 150 filler 735-2147 at the window.
+- J07: 305 overall -> carcass 286 + 17 + 2. TC-01 TFKW 150 filler 735-2227 at the window.
   BC-01 B1D 810 **fixed front** cupboard under the desk. TC-02 T2D 810 pair on the desk, **no bottom**
   (case_bottom hidden, REVB 3), 3 adj. BC-02 / BC-03 B2D 1008.5 pairs under the bench. WC-01 WOPN 2017
   open shelving on the bench (WALLZ 735, no bottom): **33 veneer** box / division / 3 shelves per bay,
   17 back. TC-03 T2D 720 one door hinged right, floor to 2227. KICK 1 joined 3547.
 - Bench: 35 Blackbutt 310 deep (5 over the doors), y 960-2977, 735 FFL, same as J05.
-- WC-02 BH 80 pelmet 2147-2227 (beam underside), front 'doors', over TC-01 / TC-02 / WC-01 to the window
-  wall (Mark). Veneer fascia.
+- ~~WC-02 BH 80 pelmet~~ -> **rev 1 (Mark 2026-11-12): WC-02 = full-depth 33 veneer Blackbutt top**, WUP
+  (UNDER_PANEL, part "Top", 33 veneer) 3697 x 385, window wall to the end of TC-03, **underside 2227 FFL**
+  (735 + 1492), 80 past the door faces + open shelves. TC-01 / TC-02 / WC-01 up 80 to the underside (dy 1492).
+  LED route 18.5 x 9 (T110) in the underside, centred in the 80 overhang (40 back from the front), over the
+  open shelves 960-2977, stopped both ends. Scripts `_tmp-6339-j07-top.mjs` / `-top2` (TC-02 middle hinge
+  850) / `-led.mjs` / `-top-cad.mjs` / `-top-cad2.mjs`.
 - Tall door pulls = Custom Timber Pull 450 (as J02, zone handle_id), 770-1220 AFF scaled off the
-  elevation. Base doors sharknose. TC-02 hinges [100, 800, 1309] off the shelf holes.
+  elevation. Base doors sharknose. TC-02 hinges [100, 850, 1389] off the shelf holes (rev 1).
 - Mark's "Infil" sketch = the desk height, 735 so everything lines up.
 
 ### Open / TBC
 - [ ] J07 left bay 810 (drawing 760) so its side lines up with the desk front 960; open bays 1008.5
   (drawing 940) to take up the 3547. Check with Mark.
 - [ ] Desk 830 + 130 trough nominal - confirm.
-- [ ] LF-9 LED in the pelmet - by whom, route or not.
+- [ ] LF-9 LED in the top route - by whom; route over the open shelves only (assumed) or full length?
+  Route size 18.5 x 9 assumed (Danny's robe size) - check against the LF-9 extrusion.
+- [ ] Top's seen right end (D5 side of TC-03): edged? Only the front edge is taped now.
 - [ ] 3547 final measure (Rory).
 
 ## Other rooms - not drawn

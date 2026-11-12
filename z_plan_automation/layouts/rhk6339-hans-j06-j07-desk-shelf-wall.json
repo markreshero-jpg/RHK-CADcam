@@ -5,7 +5,8 @@
     "J06 desk: 35 solid timber Blackbutt top only, 830 deep in front of the 130 trough (by others) -> y 130-960, wall W17 to the J07 wall (runs under the J07 left cupboard). Top 735 FFL -> height 700. Centre join. 50 recessed solid timber trim under the front edge (ours). Outriggers + trough by others.",
     "J07: 305 overall (frame to back of jamb) -> carcass 286 + 17 + 2. Left bay 810 (150 + 810 = desk front 960): base cupboard under the desk with a fixed front, tall pair of doors on the desk (no bottom). Open shelving 2017 (2 bays, 33 veneer box + shelves, 17 back) on the bench. Tall 720 one door hinged right. Bench 35 Blackbutt 310 deep at 735 FFL.",
     "Beam underside 735 + 1492 = 2227 FFL. 80 pelmet (BH) 2147-2227 over the filler, left cupboard and open bays to the window wall. Tall 720 to 2227.",
-    "Wall not gyprocked: cabinets straight onto the frame."
+    "Wall not gyprocked: cabinets straight onto the frame.",
+    "REV 1 (Mark 2026-11-12): the 80 pelmet is replaced by WC-02, a full-depth 33 veneer top (WUP 3697 x 385, underside 2227) with an LED route, and TC-01 / TC-02 / WC-01 go up to dy 1492. The layout below is the as-first-drawn state; _tmp-6339-j07-top.mjs applies rev 1."
   ],
   "projectId": "cf31069b-1a56-49ee-91df-dade35f68fde",
   "roomName": "J06 Desk + J07 Shelf Wall",
