@@ -97,9 +97,10 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
   Rev 1 (Mark 2026-11-12): top + right side out to the bench depth 700 - part size overrides
   `part_pos_overrides` case_full_top / case_right_side `sd: 700` (grow forward from the back; optimiser
   cuts 700). Left side, bottom, dividers stay 510.
-  Rev 2 (Mark 2026-11-12, `_tmp-6339-j04-rev2.mjs`): no left end - left_side Removed (part_hide_views all 3),
-  top / bottom / back sw 2210 ox -33 so they run into the 14 lining. Elevation ignores case size overrides
-  (draws them 33 short); 3D + optimiser use them.
+  Rev 2 (Mark 2026-11-12): no left end, top / bottom / back run into the 14 lining.
+  Rev 3 (Mark 2026-11-12, `_tmp-6339-j04-rev3.mjs`): rev 2 redone NATIVELY - Edit shape footprint
+  (rectangle) with the **left edge Open** (no panel; top / bottom / back 2210 from the lining). Rev 2's
+  Removed left side + ox/sw overrides taken off. Elevation now draws it right. Left bay 552.5, others 519.5.
   3D share HTML: `CABINET VISION DRAWINGS/PRODUCTION DRAWINGS/RHK6339-J04-Sink-Unit-3D.html` (share3d).
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
