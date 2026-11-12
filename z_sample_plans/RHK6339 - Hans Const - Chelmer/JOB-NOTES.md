@@ -104,6 +104,12 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
 - Rev 4 (Mark 2026-11-12, `_tmp-6339-j04-rev4.mjs`): bases finish inside the 14 linings, no fillers.
   Linings WC-01/02 now floor to shelf top (WALLZ 0, 2214). Base run 14-2257: BC-01 580 @14, BC-02 550 @594,
   sink BC-03 1141 -> **1113** @1144 (took the 28), KICK 1 @14 x 2243, benchtop 14-2257 (2243 x 700).
+- Rev 5 (Mark 2026-11-12, `_tmp-6339-j04-rev5.mjs`): BC-03 one adj shelf. **10 shadowline** on WC-03 = custom part
+  "Shadowline strip 10": PT Black Matt 16.5 on edge, 10 high, 1107 long (left wall -> WC-04 left edge), face set back
+  20 (680). Machine can't cut 10 wide well - rip / trim by hand. **Door jamb 31 x 220** (existing, fitted on site,
+  by others) = BC-04, a BUP with one custom part, board `Timber Jamb 31mm (existing, by others)` (No CNC, drawn
+  redder so it reads apart from our joinery). From Mark's "mark up for ai" CAD: x -206..14 (covers the 14 lining
+  edge), 700-731 off the back wall (Off wall 700), 2212 high.
   3D share HTML: `CABINET VISION DRAWINGS/PRODUCTION DRAWINGS/RHK6339-J04-Sink-Unit-3D.html` (share3d).
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
