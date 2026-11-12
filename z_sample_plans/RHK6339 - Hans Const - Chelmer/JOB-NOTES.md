@@ -174,6 +174,11 @@ Mark's answers 2026-11-12:
 - Rev 3 (Mark 2026-11-12, `_tmp-6339-j07-jamb2.mjs`): BC-04 = the whole door frame (3 custom parts, dz 800):
   near jamb on the return end, **800 head** across the top (2229-2260) running away from the J07 wall (door in
   the Wall 4 line), far jamb at its end (769-800). Jambs 31 x 220 x 2229. All existing / by others, No CNC.
+- Rev 4 (Mark 2026-11-12): **beam / window lintel** over the J06 desk (WD 75 elevation, hatched box top left,
+  "align pelmet to beam") = BC-05 on Wall 2, full 4496, 150 off the wall, underside 2227, 215 high (scaled off
+  the 1:20 elevation, TBC). BUP + one custom part, new board `Structural Beam (existing, by others)` (grey, No
+  CNC). `_tmp-6339-beam.mjs`. WC-01 + TC-02 no bottom redone natively: **Bottom Type none** (was case_bottom
+  hidden + BOTTOM_BACK_JOIN, which still read "Full bottom (inherited)"). `_tmp-6339-j07-nobottom.mjs`.
 - Tall door pulls = Custom Timber Pull 450 (as J02, zone handle_id), 770-1220 AFF scaled off the
   elevation. Base doors sharknose. TC-02 hinges [100, 850, 1389] off the shelf holes (rev 1).
 - Mark's "Infil" sketch = the desk height, 735 so everything lines up.
@@ -184,6 +189,8 @@ Mark's answers 2026-11-12:
 - [ ] Desk 830 + 130 trough nominal - confirm.
 - [x] LED: open shelves only, 18.5 x 9, electrician supplies + fits (rev 2).
 - [x] Top's right end butts the door jamb (rev 2) - no edge.
+- [ ] Beam size 150 x 215 scaled off the drawing - confirm. WC-02 top's first 150 (over the filler) sits
+  under the beam at the same 2227: top to start at the beam face (3547 long) or beam above it?
 - [ ] Door frame height 2260 assumed (door head over the 2227 leaf) - confirm.
 - [ ] 3547 final measure (Rory).
 

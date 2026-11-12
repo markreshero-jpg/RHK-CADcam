@@ -80,6 +80,13 @@ no-op `updateCabinet {dz}`. Script: `z_plan_automation/_tmp-6478-study-desk1.mjs
 - **Routes that turn a corner (LED round a 45) = `groove` ops, not pockets.** Area/pocket routes are always square to the part; a groove (`operation_type 'groove'`, `pos_x/pos_y` = start, `length`, `width` 18.5, `angle_az` degrees from +pos_x, 90 = along pos_y) runs at any angle and a wide one is cut in parallel lanes. Run each leg ~3.8 past the corner so the outer corner cuts square. Script `z_plan_automation/_tmp-6586-kit-led.mjs` (RHK6586 WC-10, 2026-11-11). Check new hand ops in the cabinet 3D + a headless optimiser cut sheet; the views and the CNC share `routes.opPartGeom`, and an op the views can't place logs `[handOpMarkers] hand ops not drawn` in the console.
 - **Custom part material = `material_override_id`.** The resolver writes the part role's scheduled material over `material_id` on every resolve, so a different board (glass, a second colour) only sticks with `material_override_id` set to it too (RHK6478 desk glass, 2026-11-05).
 
+## No bottom = Bottom Type none, not a hidden part (RHK6339 J07, 2026-11-12)
+
+A cabinet with no bottom (standing on a desk / bench, open box on a top) gets `bottom_type: 'none'` on
+`cabinet_instances` (sidebar Bottom Type) - the gables run to the floor line and the back drops to their bottom edge.
+Do NOT hide `case_bottom` in all views + `BOTTOM_BACK_JOIN`: it works on the cut list, but the cabinet panel still
+reads "Full bottom (inherited)" and Mark can't see or undo it.
+
 ## Removing a system part (not made) — `part_hide_views`, NOT `hidden_parts`
 
 A generated part is removed (off cut lists / optimiser / CNC / costing, Cabinet Vision "hide") only when it's hidden in

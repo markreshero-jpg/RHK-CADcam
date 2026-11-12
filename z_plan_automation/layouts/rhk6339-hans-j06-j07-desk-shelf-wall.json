@@ -38,10 +38,10 @@
     {
       "def": "T2D", "wall": 3, "offset": 150, "dx": 810, "dy": 1412, "dz": 286,
       "note": "J07 pair of doors standing on the J06 desk, no bottom (desk top seen inside)",
-      "rules": { "REVB": 3, "BOTTOM_BACK_JOIN": "butts_into_back" },
+      "rules": { "REVB": 3 },
       "set": {
         "has_toekick": false, "pos_z": 735,
-        "part_hide_views": { "case_bottom": ["plan", "elevation", "3d"] },
+        "bottom_type": "none",
         "internal_grid": { "tree": { "type": "open", "fittings": [
           { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } },
         "face_grid": {
@@ -72,10 +72,10 @@
     {
       "def": "WOPN", "wall": 3, "offset": 960, "dx": 2017, "dy": 1412, "dz": 305,
       "note": "J07 open shelving on the bench, 2 bays x 3 shelves, 33 veneer box + shelves, 17 veneer back, no bottom",
-      "rules": { "SCRBK": 0, "WALLZ": 735, "BOTTOM_BACK_JOIN": "butts_into_back" },
+      "rules": { "SCRBK": 0, "WALLZ": 735 },
       "set": {
         "has_face": false, "has_toekick": false, "top_type": "full_top", "exposed_interior": true,
-        "part_hide_views": { "case_bottom": ["plan", "elevation", "3d"] },
+        "bottom_type": "none",
         "material_overrides": {
           "back": "0bed0f26-d551-4c03-ba6a-fd7f3309b6ad",
           "shelf": "fca041dc-30b7-469e-9e14-d8d3aae38a57", "exposed": "fca041dc-30b7-469e-9e14-d8d3aae38a57",
