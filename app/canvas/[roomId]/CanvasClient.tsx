@@ -72,6 +72,7 @@ import { useCadLayerOps, CadLayerManagerModal } from './CadLayers'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import AiChatPanel from './AiChatPanel'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import { room3dScene, sceneToGlb, toBase64, buildViewerHtml, exportFileName, downloadText } from '@/src/lib/export3d/roomHtml'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
 import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, sitsOnCabinets, type StretchSide } from '@/src/lib/fixtureGeometry'
@@ -439,6 +440,40 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const camera3DStateRef = useRef<Camera3DState | null>(null)
   // Incrementing signal drives the "Reset view" button — snaps 3D back to default.
   const [reset3DSignal, setReset3DSignal] = useState(0)
+  // z_html_export H1: download the room as a self-contained 3D HTML viewer.
+  // The export is taken solid (the viewer has its own Wire button) with nothing
+  // selected, then the view goes back to how it was.
+  const [exporting3D, setExporting3D] = useState(false)
+  async function exportRoom3DHtml() {
+    if (exporting3D || !room3dScene.current) return
+    setExporting3D(true)
+    const wasWire = room3DStyle === 'wire'
+    const prevSel = selected
+    try {
+      if (wasWire) setRoom3DStyleState('solid')
+      setSelected(null)
+      await new Promise(r => setTimeout(r, 400))
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+      const scene = room3dScene.current
+      if (!scene) throw new Error('3D view closed')
+      const glb = await sceneToGlb(scene)
+      const job = project?.name ?? 'Job'
+      const html = buildViewerHtml({
+        title: `${room.name} 3D`, heading: job, sub: room.name,
+        glbBase64: toBase64(glb), view: camera3DStateRef.current,
+      })
+      const file = exportFileName(job, room.name)
+      downloadText(file, html)
+      useTutorial.getState().emit('export_3d_html')
+      setToast(`Saved ${file} (${(html.length / 1048576).toFixed(1)} MB)`)
+    } catch (e) {
+      setToast(`3D export failed: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      if (wasWire) setRoom3DStyleState('wire')
+      if (prevSel) setSelected(prevSel)
+      setExporting3D(false)
+    }
+  }
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
   const cabDragRef = useRef<{ cabId: string; assemblyClass: AssemblyClass; wall: Wall; cabDX: number; dragOffset: number } | null>(null)
   const cabDragOriginRef = useRef<Pt | null>(null)
@@ -3427,6 +3462,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               className="ml-2 px-2 py-1 text-xs rounded transition-colors bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-500"
             >
               ⟲ Reset view
+            </button>
+          )}
+          {canvasView === '3d' && !phone && (
+            <button
+              data-tour="export-3d-html"
+              onClick={() => { void exportRoom3DHtml() }}
+              disabled={exporting3D}
+              title="Download this room as a 3D HTML file anyone can open in a browser (Wire, Doors, Reset view). It opens at the view you have now; Reset view shows the whole room."
+              className="ml-1 px-2 py-1 text-xs rounded transition-colors bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-500 disabled:opacity-50"
+            >
+              {exporting3D ? 'Exporting…' : '⬇ Export 3D'}
             </button>
           )}
         </div>

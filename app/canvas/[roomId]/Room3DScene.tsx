@@ -2,6 +2,7 @@
 
 import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { useLongPressMenu } from './useLongPressMenu'
+import { room3dScene, sceneToGlb, toBase64 } from '@/src/lib/export3d/roomHtml'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
 import { Shape, ExtrudeGeometry, Vector3, Matrix4 } from 'three'
@@ -955,23 +956,19 @@ export interface Bt3DProps {
 type MenuState     = { x: number; y: number; cabId: string }
 type WallMenuState = { x: number; y: number }
 
-// Dev-only: window.__room3d.exportGLB() returns the live room scene as a GLB
-// (base64) for the shareable 3D HTML extract (z_plan_automation/_tmp-export-3d.mjs).
+// Hands the live scene to the 3D HTML export (z_html_export) while the 3D view is
+// mounted. Dev also gets window.__room3d.exportGLB() (base64) for the headless
+// share3d script (z_plan_automation/_tmp-export-3d.mjs).
 function SceneExportBridge() {
   const scene = useThree(s => s.scene)
   useEffect(() => {
-    if (process.env.NODE_ENV === 'production') return
+    room3dScene.current = scene
     const w = window as unknown as { __room3d?: { exportGLB: () => Promise<string> } }
-    w.__room3d = {
-      async exportGLB() {
-        const { GLTFExporter } = await import('three/examples/jsm/exporters/GLTFExporter.js')
-        const buf = await new GLTFExporter().parseAsync(scene, { binary: true, onlyVisible: true }) as ArrayBuffer
-        const bytes = new Uint8Array(buf); let bin = ''
-        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-        return btoa(bin)
-      },
+    if (process.env.NODE_ENV !== 'production') w.__room3d = { exportGLB: async () => toBase64(await sceneToGlb(scene)) }
+    return () => {
+      if (room3dScene.current === scene) room3dScene.current = null
+      delete w.__room3d
     }
-    return () => { delete w.__room3d }
   }, [scene])
   return null
 }

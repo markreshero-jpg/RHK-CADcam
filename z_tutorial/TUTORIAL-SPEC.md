@@ -123,6 +123,7 @@ orders by level / topic, not array position.
 | Intermediate › Production | Pair shaped parts head to tail | Open · Turn on Pair shaped parts · Check the note · Pairs move together |
 | Intermediate › Cabinets | Force a cabinet exactly where you want it | Move · Hold Ctrl as you drop it |
 | Intermediate › Reports | More detail on cabinet sheets | Open Cabinet Sheets · What the new detail shows · Pick what shows |
+| Basics › Reports | Send a room as a 3D file | 3D view · ⬇ Export 3D (`export_3d_html`) · What the file can do |
 
 ## Tutorials to write (log)
 

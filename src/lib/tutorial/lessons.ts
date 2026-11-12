@@ -2156,6 +2156,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The Show: buttons above the sheets turn each layer on or off: Part dims, Detail dims, Part labels, Drilling + routes, Edging (plus Internals, Dimensions, 3D View and CAD notes). Your picks are remembered for next time and used by Download PDF and Print.',
       canvas: true, done: c => c.report === 'cabinet_sheets' },
   ]},
+
+  // Appended 2026-11-12 (z_html_export H1).
+  { id: 'export_3d_html', level: 'basics', topic: 'reports', title: 'Send a room as a 3D file',
+    blurb: 'Save the room as one HTML file the client or builder opens in any browser and spins around.',
+    keywords: 'export 3d html share send client builder model viewer wire doors download file', steps: [
+    { id: '3d', title: 'Open the 3D view',
+      body: 'Click 3D. Set the layers and turn the view to how you want the client to see it first. The file opens at this view.',
+      target: 'view-3d', canvas: true, done: c => c.view === '3d' },
+    { id: 'export', title: 'Click Export 3D',
+      body: 'Click ⬇ Export 3D next to Reset view. The browser saves "<job> - <room> - 3D.html". Email it or put it on the drive. It needs internet to open.',
+      target: 'export-3d-html', canvas: true, done: (c, s) => ev(c, 'export_3d_html') > ev(s, 'export_3d_html') },
+    { id: 'open', title: 'What the file can do',
+      body: 'Double-click the file. Drag to rotate, scroll or pinch to zoom, right-drag to pan. Wire shows every part see-through with its edges, Doors hides the doors and drawer fronts so you can see inside, and Reset view shows the whole room. It is a snapshot: change the room and export it again.',
+      canvas: true, done: c => c.view === '3d' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
