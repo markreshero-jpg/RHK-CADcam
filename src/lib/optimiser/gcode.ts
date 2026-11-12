@@ -1833,14 +1833,17 @@ export function generateSheetPrograms(input: GcodeInput, trim = SIXTH_FACE_TRIM)
 }
 
 // File name (spec §5.8.3).
-export function gcodeFileName(opts: { batch: boolean; jobNumber: string | null; dateStr: string; materialCode: string; sheetNumber: number; ext?: string; runNo?: number | null; program?: 'A' | 'Z' | null }): string {
+export function gcodeFileName(opts: { batch: boolean; jobNumber: string | null; dateStr: string; materialCode: string; sheetNumber: number; ext?: string; runNo?: number | null; program?: 'A' | 'Z' | null; offcut?: { w: number; h: number } | null }): string {
   // The extension is a controller/file-browser convention, not a format, so it
   // comes from the machine profile (file_extension). The machine's known-good
   // files are .anc. Leading dots and anything unsafe for a filename are stripped.
   const ext = (opts.ext ?? DEFAULT_POST.file_extension).replace(/[^A-Za-z0-9]+/g, '') || 'nc'
   const mat = (opts.materialCode || 'MAT').replace(/[^A-Za-z0-9]+/g, '').slice(0, 12) || 'MAT'
   // 6th face pair: RHK6570_R3_Whiteboard16_01A.anc then ..._01Z.anc.
-  const n = String(opts.sheetNumber).padStart(2, '0') + (opts.program ?? '')
+  // Offcut sheets end "_OC_<w>_x_<h>" so the operator loads the right offcut
+  // (Mark, 2026-11-13): RHK6581_R19_LXAbsGrain18m_01_OC_1600_x_330.anc.
+  const oc = opts.offcut ? `_OC_${Math.round(opts.offcut.w)}_x_${Math.round(opts.offcut.h)}` : ''
+  const n = String(opts.sheetNumber).padStart(2, '0') + (opts.program ?? '') + oc
   // Saved run number (RHK6570_R3_…) so runs for one job never overwrite each other on the server.
   const job = (opts.jobNumber || 'JOB').replace(/[^A-Za-z0-9]+/g, '')
   if (opts.runNo) return `${opts.batch ? `BATCH_${job}` : job}_R${opts.runNo}_${mat}_${n}.${ext}`

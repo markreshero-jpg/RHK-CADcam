@@ -93,6 +93,7 @@ describe('6th face nesting', () => {
   it('names the pair _01A / _01Z', () => {
     expect(gcodeFileName({ batch: false, jobNumber: 'RHK6570', dateStr: '', materialCode: 'Whiteboard16', sheetNumber: 1, ext: 'anc', runNo: 3, program: 'A' })).toBe('RHK6570_R3_Whiteboard16_01A.anc')
     expect(gcodeFileName({ batch: false, jobNumber: 'RHK6570', dateStr: '', materialCode: 'Whiteboard16', sheetNumber: 1, ext: 'anc', runNo: 3 })).toBe('RHK6570_R3_Whiteboard16_01.anc')
+    expect(gcodeFileName({ batch: false, jobNumber: 'RHK6581', dateStr: '', materialCode: 'Oak', sheetNumber: 2, ext: 'anc', runNo: 19, offcut: { w: 910, h: 600 } })).toBe('RHK6581_R19_Oak_02_OC_910_x_600.anc')
   })
 })
 

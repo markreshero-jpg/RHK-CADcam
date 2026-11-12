@@ -288,7 +288,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       // 6th face: a two-sided sheet is a program pair (…_01A then …_01Z).
       const progFiles = programs.map(pr => ({
         sheetIndex: sheet.index, program: pr.program ?? undefined, simSheet: pr.program ? pr.sheet : undefined, outlines: pr.outlines, holes: pr.holes,
-        fileName: gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: sheetNos.get(sheet.index)!.no, ext: post.file_extension, runNo, program: pr.program }),
+        fileName: gcodeFileName({ batch: false, jobNumber: snap.jobNumber, dateStr: ds, materialCode: mat?.name ?? 'MAT', sheetNumber: sheetNos.get(sheet.index)!.no, ext: post.file_extension, runNo, program: pr.program, offcut: sheet.stock.isOffcut ? sheet.stock : null }),
         gcode: pr.gcode,
       }))
       const fileName = progFiles.map(f => f.fileName).join(' then ')

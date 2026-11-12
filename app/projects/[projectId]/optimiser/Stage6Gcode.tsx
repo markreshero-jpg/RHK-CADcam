@@ -272,7 +272,7 @@ export default function Stage6Gcode() {
         if (programs[0].warnings.length) sixthWarn.push(...programs[0].warnings.map(w => `Sheet ${sheetNo} (6th face): ${w}`))
         return programs.map(pr => ({
           sheetIndex: sheet.index,
-          fileName: gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: sheetNo, ext: post.file_extension, runNo, program: pr.program }),
+          fileName: gcodeFileName({ batch, jobNumber: snap.jobNumber, dateStr: ds, materialCode: matCode(sheet.materialId), sheetNumber: sheetNo, ext: post.file_extension, runNo, program: pr.program, offcut: sheet.stock.isOffcut ? sheet.stock : null }),
           gcode: pr.gcode, lines: pr.gcode.split('\n').length,
           findings: validateGcode(pr.gcode, { maxCommentLength: post.max_comment_length, ...zDepthLimit(post, sheet.thickness) }),
           outlines: pr.outlines, holes: pr.holes,
@@ -286,7 +286,7 @@ export default function Stage6Gcode() {
       const nameCount = new Map<string, number>()
       for (const g of gen) nameCount.set(g.fileName, (nameCount.get(g.fileName) ?? 0) + 1)
       gen.forEach((g, i) => {
-        if (nameCount.get(g.fileName)! > 1) g.fileName = g.fileName.replace(/_(\d{2,})([AZ]?)(\.[^.]+)$/, `_${String(g.sheetIndex + 1).padStart(2, '0')}x$2$3`)
+        if (nameCount.get(g.fileName)! > 1) g.fileName = g.fileName.replace(/_(\d{2,})([AZ]?)((?:_OC_\d+_x_\d+)?\.[^.]+)$/, `_${String(g.sheetIndex + 1).padStart(2, '0')}x$2$3`)
       })
 
       // Hard gate: a program with errors is never offered for download, and is
