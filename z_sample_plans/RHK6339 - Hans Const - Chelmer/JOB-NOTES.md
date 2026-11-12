@@ -110,6 +110,9 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
   by others) = BC-04, a BUP with one custom part, board `Timber Jamb 31mm (existing, by others)` (No CNC, drawn
   redder so it reads apart from our joinery). From Mark's "mark up for ai" CAD: x -206..14 (covers the 14 lining
   edge), 700-731 off the back wall (Off wall 700), 2212 high.
+- Rev 6 (Mark 2026-11-12, `_tmp-6339-j04-rev6.mjs`): same jamb at the Wall 3 end = BC-05, mirror of BC-04:
+  x 2257..2477 (covers the right 14 lining edge), 700-731, 2212 high. Gotcha: set the custom part AFTER a reload -
+  the app's save right after placeCabinet overwrote it with the BUP placeholder size (676 x 17) the first time.
   3D share HTML: `CABINET VISION DRAWINGS/PRODUCTION DRAWINGS/RHK6339-J04-Sink-Unit-3D.html` (share3d).
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
