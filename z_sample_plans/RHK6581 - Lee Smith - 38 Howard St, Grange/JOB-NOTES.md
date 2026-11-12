@@ -281,3 +281,11 @@ _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults
   (700 x 2470) and TC-13 filler (32 x 2470) → bottom piece 2400 (dy "2400", top end untaped) + top piece 70 at y 2400
   (dy "cab.h - 2400", bottom end untaped). Part comments "JOIN THEN EDGE · …" on every piece. TC-12 panel is 2370
   (on the kick) — fits, not split. Backup _bak_rhk6581_split2400_ccp_20261106 / _ci_.
+
+### Kitchen linear handles — run R19 (2026-11-13)
+- 22 sharknose strips nest as 10 pairs (80 blank, taped all round, rip + sharknose on the saw; z_handles D27) + 3 singles
+  (BC-05 863, BC-10 448 at 70; TC-02 broom 2368).
+- Mark's offcuts used first: 1600 x 330 (7 pairs) and 910 x 600 (3 pairs + 2 singles); the 2368 alone on a full sheet,
+  pushed to the top edge. Offcut programs end `_OC_<w>_x_<h>` (0cc759d).
+- Files: SynologyDrive\CNCFiles\RHK6581 …\J05 J06 Kitchen and Pantry\Linear Handles R19\18mm Lx Elegant Oak ABS Grain\
+  (one sub folder per sheet + cut sheets / labels PDFs + .rhkrun).
