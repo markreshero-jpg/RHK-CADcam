@@ -154,6 +154,12 @@ Mark's answers 2026-11-12:
   LED route 18.5 x 9 (T110) in the underside, centred in the 80 overhang (40 back from the front), over the
   open shelves 960-2977, stopped both ends. Scripts `_tmp-6339-j07-top.mjs` / `-top2` (TC-02 middle hinge
   850) / `-led.mjs` / `-top-cad.mjs` / `-top-cad2.mjs`.
+- Rev 2 (Mark 2026-11-12): LED route over the open shelves only, dimensioned on the Wall 3 elevation (2017
+  dim under the top); LED supplied + fitted by the electrician; route size 18.5 x 9 OK. The top's right end
+  butts a door jamb: **Wall 4 = 305 return** (frame to back of jamb, 220 thick) + **door jamb 31 x 220** on its
+  end = BC-04, same as J04 (BUP + custom part, Timber Jamb 31mm existing by others, No CNC), 305-336 off
+  Wall 3, floor to 2260 (door leaf top = beam U/S 2227 per WD 75). Scripts `_tmp-6339-j07-jamb.mjs`,
+  `-led-cad.mjs`.
 - Tall door pulls = Custom Timber Pull 450 (as J02, zone handle_id), 770-1220 AFF scaled off the
   elevation. Base doors sharknose. TC-02 hinges [100, 850, 1389] off the shelf holes (rev 1).
 - Mark's "Infil" sketch = the desk height, 735 so everything lines up.
@@ -162,9 +168,9 @@ Mark's answers 2026-11-12:
 - [ ] J07 left bay 810 (drawing 760) so its side lines up with the desk front 960; open bays 1008.5
   (drawing 940) to take up the 3547. Check with Mark.
 - [ ] Desk 830 + 130 trough nominal - confirm.
-- [ ] LF-9 LED in the top route - by whom; route over the open shelves only (assumed) or full length?
-  Route size 18.5 x 9 assumed (Danny's robe size) - check against the LF-9 extrusion.
-- [ ] Top's seen right end (D5 side of TC-03): edged? Only the front edge is taped now.
+- [x] LED: open shelves only, 18.5 x 9, electrician supplies + fits (rev 2).
+- [x] Top's right end butts the door jamb (rev 2) - no edge.
+- [ ] Door jamb height 2260 assumed (door head over the 2227 leaf) - confirm.
 - [ ] 3547 final measure (Rory).
 
 ## Other rooms - not drawn
