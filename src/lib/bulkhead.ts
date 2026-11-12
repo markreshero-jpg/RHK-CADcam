@@ -45,10 +45,11 @@ export interface BulkheadSettings {
    *  ceiling cavity. The bottom stays on the soffit line (wall-cab top), so the
    *  auto height grows / shrinks by the same amount. */
   h_adjust?: number
-  /** B13 (Mark 2026-11-11, RHK6595): exposed parts' grain. Unset = horizontal
-   *  (along the fascia). Vertical = up the fascia, front → back on the returns;
-   *  a fascia longer than the sheet's short side splits into equal pieces. */
-  grain?: 'vertical'
+  /** B13 (Mark 2026-11-11, RHK6595): exposed parts' grain. Vertical (the
+   *  default — unset reads as vertical, Mark 2026-11-13) = up the fascia,
+   *  front → back on the returns; a fascia longer than the sheet's short side
+   *  splits into equal pieces. Horizontal = along the fascia. */
+  grain?: 'vertical' | 'horizontal'
   cleat:  boolean
   left:   BulkheadReturn
   right:  BulkheadReturn
@@ -87,7 +88,7 @@ const NO_SPLIT: BulkheadSplit = { on: false, width: SPLIT_WIDTH, setback: SPLIT_
 const ret = (on: boolean): BulkheadReturn => ({ on, depth: BH_RETURN_DEPTH, joint: 'mitre' })
 
 export const DEFAULT_BULKHEAD: BulkheadSettings = {
-  kind: 'bulkhead', width: SL_WIDTH,
+  kind: 'bulkhead', width: SL_WIDTH, grain: 'vertical',
   front: 'doors', auto_h: true, cleat: true,
   left: ret(false), right: ret(false), bottom: ret(false), split: NO_SPLIT,
 }
@@ -117,7 +118,7 @@ export function normaliseBulkhead(b: Partial<BulkheadSettings> | null | undefine
     front:  b.front === 'carcase' ? 'carcase' : 'doors',
     auto_h: sl ? false : b.auto_h ?? DEFAULT_BULKHEAD.auto_h,
     ...(!sl && typeof b.h_adjust === 'number' && Number.isFinite(b.h_adjust) && b.h_adjust !== 0 ? { h_adjust: b.h_adjust } : {}),
-    ...(!sl && b.grain === 'vertical' ? { grain: 'vertical' as const } : {}),
+    ...(!sl ? { grain: b.grain === 'horizontal' ? 'horizontal' as const : 'vertical' as const } : {}),
     cleat:  sl ? false : b.cleat ?? DEFAULT_BULKHEAD.cleat,
     left:   r(b.left, DEFAULT_BULKHEAD.left),
     right:  r(b.right, DEFAULT_BULKHEAD.right),

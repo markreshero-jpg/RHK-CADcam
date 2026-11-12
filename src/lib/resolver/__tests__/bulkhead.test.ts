@@ -234,10 +234,11 @@ describe('cleat joint (B12)', () => {
 // B13 (Mark 2026-11-11, RHK6595 WC-08 / 09 / 11): vertical grain.
 describe('bulkhead grain (B13)', () => {
   const grained = (w: number) => cab({ grain: 'vertical', right: on('mitre', 300) }, { DX: w, exposed_material: { ...board(T, 'exposed'), has_grain: true, sheet_dx: 2415, sheet_dy: 1211 } })
-  it('unset = horizontal: one fascia, no grain_direction, setting not stored', () => {
-    const ps = parts(cab({}))
-    expect(get(ps, 'bh:fascia')!.grain_direction).toBeUndefined()
-    expect(normaliseBulkhead({ ...DEFAULT_BULKHEAD })!.grain).toBeUndefined()
+  it('unset = vertical (Mark 2026-11-13); horizontal only when chosen; shadowline has none', () => {
+    expect(get(parts(cab({})), 'bh:fascia')!.grain_direction).toBe('vertical')
+    expect(get(parts(cab({ grain: 'horizontal' })), 'bh:fascia')!.grain_direction).toBeUndefined()
+    expect(normaliseBulkhead({ ...DEFAULT_BULKHEAD, grain: undefined })!.grain).toBe('vertical')
+    expect(normaliseBulkhead({ ...DEFAULT_BULKHEAD, grain: 'horizontal' })!.grain).toBe('horizontal')
     expect(normaliseBulkhead({ ...DEFAULT_SHADOWLINE, grain: 'vertical' })!.grain).toBeUndefined()
   })
   it('vertical, fits the sheet: one fascia + returns marked vertical, cleats not', () => {

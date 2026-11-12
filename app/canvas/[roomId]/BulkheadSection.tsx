@@ -85,9 +85,9 @@ export default function BulkheadSection({ cabinet, wall, room, onUpdate, inp, lb
       </div>}
       {!curved && <div title="Board grain on the fascia and returns. Vertical runs up the fascia (front to back on the returns) and is nested turned; a fascia longer than the sheet's short side is made in equal pieces, taped at the joins.">
         <label className={lbl}>Grain</label>
-        <select value={b.grain ?? 'horizontal'} onChange={e => put({ grain: e.target.value === 'vertical' ? 'vertical' : undefined })} className={inp}>
-          <option value="horizontal">Horizontal (along the fascia)</option>
+        <select value={b.grain ?? 'vertical'} onChange={e => put({ grain: e.target.value === 'horizontal' ? 'horizontal' : 'vertical' })} className={inp}>
           <option value="vertical">Vertical (up the fascia)</option>
+          <option value="horizontal">Horizontal (along the fascia)</option>
         </select>
       </div>}
       <label className="flex items-center gap-2 text-xs text-gray-300"

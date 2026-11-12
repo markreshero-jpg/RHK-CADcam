@@ -87,7 +87,7 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
   // island back panel. The fascia's length then lies across the sheet, so a longer
   // fascia splits into equal pieces (bh:fascia_a, _b … left → right, taped at the
   // joins like the IBP), each no longer than the sheet's short side.
-  const grainV = b.grain === 'vertical'
+  const grainV = b.grain !== 'horizontal'   // unset = vertical (Mark 2026-11-13)
   const gd = grainV ? { grain_direction: 'vertical' as const } : {}
   const maxL = grainV ? kickFaceMaxLength(cab.exposed_material, 'vertical') : null
   const nF = maxL && W > maxL ? Math.ceil(W / maxL) : 1

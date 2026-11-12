@@ -162,6 +162,12 @@ underside when the bulkhead isn't sitting on cabinets.
       it assumes a 20 front (18 door + 2) for "flush with doors", so it errs off
       the wall. Sidebar: Left / Right end angle °. Not automatic from the wall
       yet; not for shadowlines or curved bulkheads. Tutorial `bulkhead_angled_end`.
+- [~] **B15 — vertical grain is the default** (2026-11-13, Mark: "all
+      bulkheads should be vertical … the default should always be vertical").
+      `bulkhead.grain` unset now reads as vertical; horizontal is an explicit
+      choice. All existing bulkheads (not shadowlines) set to vertical and
+      re-resolved, library BH / BHCRVFIXP too. 3D grain follows the setting
+      (was always drawn vertical). Check pending.
 - [~] **B14 — returns keep their true length** (built 2026-11-13, check pending)
       (Mark, RHK6581 Bed 2 J08 WC-01: left return typed 630 showed 410). A
       return's `depth` is used as typed, from the front face back — longer than
