@@ -289,3 +289,12 @@ _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults
   pushed to the top edge. Offcut programs end `_OC_<w>_x_<h>` (0cc759d).
 - Files: SynologyDrive\CNCFiles\RHK6581 …\J05 J06 Kitchen and Pantry\Linear Handles R19\18mm Lx Elegant Oak ABS Grain\
   (one sub folder per sheet + cut sheets / labels PDFs + .rhkrun).
+
+## Machining — upstairs J07–J10 (2026-11-13)
+- Bulkheads +10 scribe at the top via Height adjust (bulkhead.h_adjust 10): Bed 1 J09 WC-01 380 → 390, Bed 2 J08 WC-01 380 → 390,
+  Bed 3 J08 WC-01 375 → 385, Storage J10 WC-02 370 → 380 (fascias +10; bottoms stay on the soffit line). Play J07 / J07M NOT
+  changed — they already carry the +10 (walls drawn 2485 over the 2475 ceiling, WC-02 85 / fascia 75).
+- Run **R20** = Play J07 + J07M, Bed 2 + Bed 3 J08, Bed 1 J09, Storage J10: 315 parts, 56 sheets (Whiteboard 37, Elegant Oak 13,
+  Sunbaked Natural 5, MDF 10 1). All placed, no G-code errors. Sunbaked sheet 5 = only the two Play fascias 75 x 1546.5 (8%) —
+  cut from an offcut if there is one. Delivered to CNCFiles\RHK6581 …\J07 J08 J09 J10 Play Robes Storage R20\.
+- Robes J08/J09 + Storage J10 were not in the KB-approved Rev 2 set (4/11) — confirm approval before cutting.
