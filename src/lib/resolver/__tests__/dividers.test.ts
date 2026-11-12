@@ -209,3 +209,30 @@ describe('half-check crossings (z_dividers V5)', () => {
     expect(divEnds.map(j => j.part_b_key).sort()).toEqual(['bottom', 'bottom'])   // base: rails over, no full top
   })
 })
+
+// RHK6339 J07 WC-01 (Mark 2026-11-12): no bottom / no top → the divider runs to the gables' edges.
+describe('dividers with Bottom Type / Top Type none', () => {
+  const span = (c: CabinetInput) => {
+    const d = dividers(c)[0]
+    const h = [d.DX, d.DY, d.DZ].find(v => v > 600)!   // the height dim (the others: depth ~560, thickness 18)
+    return { bottom: d.Y, top: d.Y + h }
+  }
+  const sides = (c: CabinetInput) => resolveCabinet(c).case_parts.find(p => p.part_key === 'left_side')!
+  it('full box: divider between the bottom and the top', () => {
+    const c = cab(twoBays())
+    const s = span(c)
+    expect(s.bottom).toBe(sides(c).Y + 18)
+    expect(s.top).toBe(900 - 18)
+  })
+  it('bottom none: divider down to the gables’ bottom edge', () => {
+    const c = cab(twoBays(), { bottom_type: 'none' })
+    expect(span(c).bottom).toBe(sides(c).Y)
+    expect(span(c).top).toBe(900 - 18)
+  })
+  it('top none too: divider up to the gables’ top edge, back full height', () => {
+    const c = cab(twoBays(), { bottom_type: 'none', top_type: 'none' })
+    expect(span(c)).toEqual({ bottom: sides(c).Y, top: 900 })
+    const back = resolveCabinet(c).case_parts.find(p => p.part_key === 'back')!
+    expect(back.Y + back.DZ + back.DX).toBe(900)
+  })
+})

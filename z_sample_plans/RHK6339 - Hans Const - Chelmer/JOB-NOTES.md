@@ -179,6 +179,9 @@ Mark's answers 2026-11-12:
   the 1:20 elevation, TBC). BUP + one custom part, new board `Structural Beam (existing, by others)` (grey, No
   CNC). `_tmp-6339-beam.mjs`. WC-01 + TC-02 no bottom redone natively: **Bottom Type none** (was case_bottom
   hidden + BOTTOM_BACK_JOIN, which still read "Full bottom (inherited)"). `_tmp-6339-j07-nobottom.mjs`.
+- Rev 5 (Mark 2026-11-12): WC-01 **Top Type none** (WC-02 sits on it). Resolver fix: with Bottom / Top Type
+  none the interior runs to the gables' edges, so the centre division is now the full 1492 (bench to WC-02),
+  back full height. `_tmp-6339-j07-notop.mjs`.
 - Tall door pulls = Custom Timber Pull 450 (as J02, zone handle_id), 770-1220 AFF scaled off the
   elevation. Base doors sharknose. TC-02 hinges [100, 850, 1389] off the shelf holes (rev 1).
 - Mark's "Infil" sketch = the desk height, 735 so everything lines up.

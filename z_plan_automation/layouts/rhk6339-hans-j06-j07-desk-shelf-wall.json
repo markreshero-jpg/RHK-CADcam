@@ -74,7 +74,7 @@
       "note": "J07 open shelving on the bench, 2 bays x 3 shelves, 33 veneer box + shelves, 17 veneer back, no bottom",
       "rules": { "SCRBK": 0, "WALLZ": 735 },
       "set": {
-        "has_face": false, "has_toekick": false, "top_type": "full_top", "exposed_interior": true,
+        "has_face": false, "has_toekick": false, "top_type": "none", "exposed_interior": true,
         "bottom_type": "none",
         "material_overrides": {
           "back": "0bed0f26-d551-4c03-ba6a-fd7f3309b6ad",

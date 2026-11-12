@@ -17,12 +17,21 @@ export function caseBackT(cab: CabinetInput, r: ConstructionRules): number {
 
 /** Where the carcass floor sits (z_floating). TK is the kick lift, floorT the
  *  thickness of the carcass bottom, so the interior floor is at
- *  Y = TK + SCRBT + floorT. A floating cabinet has no kick. */
+ *  Y = TK + SCRBT + floorT. A floating cabinet has no kick. Bottom Type 'none'
+ *  → floorT 0: dividers / fixed-shelf splits run down to the gables' bottom edge
+ *  (Mark, RHK6339 J07 WC-01, 2026-11-12). */
 export function caseFloor(cab: CabinetInput, r: ConstructionRules): {
   TK: number; floorT: number; floating: boolean
 } {
   const floating = !!r.FLOAT
-  return { TK: floating || !cab.has_toekick ? 0 : r.TOEH, floorT: cab.material.DZ, floating }
+  const noBottom = (cab.bottom_type ?? r.BOTTOM_TYPE ?? 'full') === 'none'
+  return { TK: floating || !cab.has_toekick ? 0 : r.TOEH, floorT: noBottom ? 0 : cab.material.DZ, floating }
+}
+
+/** Thickness the top takes off the interior: 0 when Top Type is 'none', so
+ *  dividers run up to the gables' top edge (Mark, RHK6339 J07 WC-01, 2026-11-12). */
+export function caseTopT(cab: CabinetInput, r: ConstructionRules): number {
+  return (cab.top_type ?? r.TOP_TYPE) === 'none' ? 0 : cab.material.DZ
 }
 
 export function resolveCaseParts(
@@ -209,7 +218,8 @@ export function resolveCaseParts(
   // BKTOP (cabinet rule, mm up from the cabinet bottom): the back stops there
   // instead, e.g. at the top of a fixed shelf to leave a pipe zone open above
   // (Mark, RHK6586 Bed 1 TC-03, 2026-11-10). 0 / unset = full height.
-  const backTopFull  = DY - r.SCRT - (topBackJoin === 'sits_over_back' ? topT : 0)
+  // No top (Top Type none): nothing over the back, so it runs to the gables' top edge.
+  const backTopFull  = DY - r.SCRT - (topBackJoin === 'sits_over_back' && (cab.top_type ?? r.TOP_TYPE) !== 'none' ? topT : 0)
   const backTop3D    = r.BKTOP && r.BKTOP > 0 ? Math.min(backTopFull, r.BKTOP) : backTopFull
   const backDX       = backTop3D - backBottom3D
 

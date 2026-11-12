@@ -14,7 +14,7 @@ import {
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults, DEFAULT_DB_RULES,
 } from './types'
 import { Box, FittingCtx, resolveFittings, DEFAULT_STACK_GAP } from './fittings'
-import { caseBackT, caseFloor } from './resolveCase'
+import { caseBackT, caseFloor, caseTopT } from './resolveCase'
 import type { OutlinePt } from '../shapePath'
 
 // A drawer/rollout bay = an open compartment holding a drawer or rollout. Such a
@@ -106,7 +106,7 @@ export function resolveInternalParts(
   const DX  = cab.DX
   const DY  = cab.DY
   const DZ  = cab.DZ
-  const { TK, floorT } = caseFloor(cab, r)   // floorT: bottom panel (0 floating, z_floating)
+  const { TK, floorT } = caseFloor(cab, r)   // floorT: bottom panel (0 with Bottom Type none)
   const sid = cab.shelf_material.id
   const mid = cab.material.id
   // Vertical dividers: their own board when the 'divider' role is set, else the carcass.
@@ -118,7 +118,8 @@ export function resolveInternalParts(
   const TL  = cab.left_side_material?.DZ  ?? T   // gable overrides (roles left_side / right_side)
   const TR  = cab.right_side_material?.DZ ?? T
   const intW = DX - TL - TR - r.SCRL - r.SCRR     // interior width
-  const intH = DY - TK - floorT - T - r.SCRT - r.SCRBT   // interior height
+  const topT = caseTopT(cab, r)               // 0 with Top Type none
+  const intH = DY - TK - floorT - topT - r.SCRT - r.SCRBT   // interior height
   const BT   = caseBackT(cab, r)                // back panel thickness (0 = no back)
   const intD = DZ - r.SCRBK - BT                // interior depth
 
