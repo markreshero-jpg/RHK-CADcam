@@ -23,6 +23,7 @@ import { backPanelPartLabel } from '@/src/lib/backPanel'
 import { cutBaseKeys, splitBaseKey, splitPieceNote, splitPieceSuffix } from '@/src/lib/cabinetSplit'
 import { facedDoorNote } from '@/src/lib/facedDoor'
 import type { TapeByMaterial } from './scheduleTapes'
+import { pairLinearHandles } from './pairLinearHandles'
 
 export const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 
@@ -320,6 +321,7 @@ export function normalizeProject(
   const cutByCab = new Map([...keysByCab].map(([cab, keys]) => [cab, cutBaseKeys(keys)]))
   const splitByCab = new Map(cabsRaw.map(c => [c.id, c.split?.back_x ?? null]))
 
+  const sharknoseLh = new Set<string>()
   // partKey mirrors the svg*Meta synthetic ids so it matches part_operations.source_part_key.
   for (const r0 of cp) {
     const key = String(r0.part_key)
@@ -373,6 +375,8 @@ export function normalizeProject(
     // inside face panel (crv:inner, unless its curved end runs horizontal grain) —
     // both were nesting their grain across (Mark, RHK6581 BC-01 / BC-03 2026-11-07).
     if ((pieceOf.startsWith('side:') || (pieceOf === 'crv:inner' && r.grain_direction !== 'horizontal')) && last?.source_part_id === r.id) last.grain_across = true
+    // Sharknose linear handle strips pair up into 80 blanks (z_handles D27, below).
+    if (key.startsWith('lh:') && !lhNote(r).startsWith('solid') && last?.source_part_id === r.id) sharknoseLh.add(last.uid)
     if (railStrip && last?.source_part_id === r.id) {
       last.comment = last.comment ? `${railStrip.note} · ${last.comment}` : railStrip.note
       last.rail_strip = { width: railStrip.width, trim: railStrip.trim, tape: railStrip.tape, note: railStrip.note }
@@ -537,6 +541,9 @@ export function normalizeProject(
 
   // Small parts (< 60 wide or long) cut at 70 — after every comment above, so the
   // hand-cut size reads first on the label.
+  // Same-size sharknose linear handles: two per 80 blank, taped all round (z_handles D27).
+  const pairedParts = pairLinearHandles(parts, sharknoseLh)
+  if (pairedParts !== parts) parts.splice(0, parts.length, ...pairedParts)
   for (const p of parts) widenSmallPart(p)
 
   return { rooms, cabinets, parts }

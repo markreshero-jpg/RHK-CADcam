@@ -742,3 +742,19 @@ Still open (none block H1):
 1. Rail details for H6 (§7): notch position, top-rail height, knock-in block holes.
 2. Push-to-open visual (low priority).
 3. H8: which handles to model first, and test files to check Auto-fit against.
+
+**D27. Linear handle strips cut in pairs (Mark, 2026-11-12 — RHK6581 kitchen J05).**
+"Where there are more than one of the same size, pair them together, cut them at 80 wide, and have the
+short ends and two long ends edged."
+- Optimiser only (`src/lib/optimiser/pairLinearHandles.ts`, called in `normalizeProject` before the
+  small-part widening): two sharknose `lh:` strips in the same room with the same length, width, board,
+  thickness and grain nest as ONE blank, machine cut **80 wide** (`LH_PAIR_W`; finished = 80 + tape on
+  both long edges), taped on **both long edges + both ends**.
+- The shop rips the blank down the middle into the two strips and saws the sharknose on each ripped
+  edge, so each strip ends up as D17 (tape on one long edge + both ends, bevelled edge bare).
+- Paired in cabinet / key order, so a cabinet's own strips pair first. Label "Linear Handle 1 + 2 (pair)"
+  (or both names across cabinets, cabinet label "BC-04 + BC-06"); comment starts
+  "PAIR: cut 80 wide, edge both long edges + both ends, then rip into 2 x 35 strips (…)".
+- Exact sizes only (862 doesn't pair with 863). An odd one left over stays single and cuts at 70 under the
+  small-part rule. Timber pulls (D19) are never paired. The model / Parts tab keep each strip's true size.
+- First use RHK6581 kitchen: 22 strips → 10 pairs + 3 singles (BC-05 863, BC-10 448, TC-02 2370).
