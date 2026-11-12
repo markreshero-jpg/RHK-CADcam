@@ -115,7 +115,16 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
   the app's save right after placeCabinet overwrote it with the BUP placeholder size (676 x 17) the first time.
   3D share HTML: `CABINET VISION DRAWINGS/PRODUCTION DRAWINGS/RHK6339-J04-Sink-Unit-3D.html` (share3d).
 - Rev 7 (Mark 2026-11-12, `_tmp-6339-j04-rev7.mjs`): shadowline wider - strip 10 -> **60 high** ("Shadowline strip 60"),
-  shelf top 2214 -> 2274, still 1107 long, set back 20. 60 cuts on the machine now (no hand rip).
+  shelf top 2214 -> 2274, still 1107 long, set back 20. 60 cuts on the machine now (no hand rip). (Wrong read - see rev 8.)
+- Rev 8 (Mark 2026-11-12, `_tmp-6339-j04-rev8.mjs` + `rev8b`): shadowline = **10 thick x 60 wide on the flat** -
+  custom part orientation flat, 1107 long x 60 deep x 10, on the shelf top (2214-2224), front set back 20 (620-680).
+  Board still PT Black Matt 16.5 (no 10 black board in the library) - thickness to confirm.
+  **Sink + tap drawn** (spec "Gym basin", Reece quote #3132738): Memo Hugo Compact Sink No Taphole SS 2402708
+  (340 x 440 x 220, bowl 300 x 400 R25, cutout = bowl) undermount under the 35 top, centred on BC-03 (x 1700.5),
+  front 80 back from the bench front; Caroma Villa Sink Mixer Gunmetal 6905.914A, hole 60 behind the sink on its
+  centre line. New catalogue rows `3553c71c` (sink, Ohelu model stretched) / `6b7a9d8a` (tap, **Abey Lucia model as
+  a stand-in**). Sink note moved below BC-03's size label. Spec also lists a Memo Zenna sink + Villa mixer for
+  the J01 garage bench (not drawn yet).
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
   exhaust slots TBC. Size from the drawing (Mark: this size for now).
