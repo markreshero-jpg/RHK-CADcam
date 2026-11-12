@@ -171,6 +171,9 @@ Mark's answers 2026-11-12:
   end = BC-04, same as J04 (BUP + custom part, Timber Jamb 31mm existing by others, No CNC), 305-336 off
   Wall 3, floor to 2260 (door leaf top = beam U/S 2227 per WD 75). Scripts `_tmp-6339-j07-jamb.mjs`,
   `-led-cad.mjs`.
+- Rev 3 (Mark 2026-11-12, `_tmp-6339-j07-jamb2.mjs`): BC-04 = the whole door frame (3 custom parts, dz 800):
+  near jamb on the return end, **800 head** across the top (2229-2260) running away from the J07 wall (door in
+  the Wall 4 line), far jamb at its end (769-800). Jambs 31 x 220 x 2229. All existing / by others, No CNC.
 - Tall door pulls = Custom Timber Pull 450 (as J02, zone handle_id), 770-1220 AFF scaled off the
   elevation. Base doors sharknose. TC-02 hinges [100, 850, 1389] off the shelf holes (rev 1).
 - Mark's "Infil" sketch = the desk height, 735 so everything lines up.
@@ -181,7 +184,7 @@ Mark's answers 2026-11-12:
 - [ ] Desk 830 + 130 trough nominal - confirm.
 - [x] LED: open shelves only, 18.5 x 9, electrician supplies + fits (rev 2).
 - [x] Top's right end butts the door jamb (rev 2) - no edge.
-- [ ] Door jamb height 2260 assumed (door head over the 2227 leaf) - confirm.
+- [ ] Door frame height 2260 assumed (door head over the 2227 leaf) - confirm.
 - [ ] 3547 final measure (Rory).
 
 ## Other rooms - not drawn
