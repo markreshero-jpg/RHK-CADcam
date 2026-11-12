@@ -1,0 +1,13 @@
+{
+  "_notes": ["RHK6456 Morris: F&P integrated Double DishDrawer (standard) custom fronts + kick, 2pac Resene Alabaster on Satin Board 18. One TEPF carrier per piece; parts rewritten to fixed sizes by _tmp-6456-dd-parts.mjs."],
+  "projectId": "8889702c-459f-4f25-8ab7-fd748f6a390a",
+  "roomId": "7923445f-73fc-4e1c-bd0e-54eb736324ad",
+  "roomHeight": 2445,
+  "roomRules": {},
+  "walls": [],
+  "cabinets": [
+    { "def": "TEPF", "wall": 1, "offset": 0,    "dx": 18, "dy": 398, "dz": 600 },
+    { "def": "TEPF", "wall": 1, "offset": 800,  "dx": 18, "dy": 334, "dz": 600 },
+    { "def": "TEPF", "wall": 1, "offset": 1600, "dx": 18, "dy": 128, "dz": 600 }
+  ]
+}
