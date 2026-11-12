@@ -125,6 +125,8 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
   centre line. New catalogue rows `3553c71c` (sink, Ohelu model stretched) / `6b7a9d8a` (tap, **Abey Lucia model as
   a stand-in**). Sink note moved below BC-03's size label. Spec also lists a Memo Zenna sink + Villa mixer for
   the J01 garage bench (not drawn yet).
+- Rev 9 (Mark 2026-11-12, `_tmp-6339-j04-rev9.mjs`): "DOOR JAMB" text turned 90 (reads up) on each jamb in the
+  Wall 2 elevation, 1880 up - above the size labels and clear of Mark's leader arrows.
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
   exhaust slots TBC. Size from the drawing (Mark: this size for now).
