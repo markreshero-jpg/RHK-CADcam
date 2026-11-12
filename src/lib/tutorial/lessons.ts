@@ -1806,14 +1806,14 @@ export const LESSONS: TutorialLesson[] = [
       canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.PANEL_PROFILE) },
   ]},
   // Appended 2026-11-06 (Mark, RHK6592: narrow fillers move on the bed).
-  { id: 'narrow_filler_cut', level: 'basics', topic: 'production', title: 'Narrow fillers are cut at 70',
-    blurb: 'A filler under 60 wide is nested and cut at 70 so it doesn’t move on the machine; its comment says what to cut it down to.',
-    keywords: 'filler narrow small strip 70 cut size hand cut comment optimiser label moves bed BFK TFK', steps: [
+  { id: 'narrow_filler_cut', level: 'basics', topic: 'production', title: 'Small parts are cut at 70',
+    blurb: 'Any part under 60 wide or long is nested and cut at 70 so it doesn’t move on the machine; its comment says what to cut it down to.',
+    keywords: 'filler narrow small part strip block short 60 70 cut size hand cut comment optimiser label moves bed BFK TFK', steps: [
     { id: 'nest', title: 'Nest the job',
-      body: 'Production → Generate CNC… Any part named Filler that is under 60 wide (an 18 face filler on a BFK / TFK) is nested and cut at 70 wide, plus its edge tape. The cabinet, 3D and Parts tab keep the true size.',
+      body: 'Production → Generate CNC… Any part under 60 wide or under 60 long (an 18 face filler on a BFK / TFK, a short block) is nested and cut at 70 on that side, plus its edge tape — both sides small = 70 x 70. The cabinet, 3D and Parts tab keep the true size.',
       target: 'menu-Production', canvas: true, done: c => c.path.endsWith('/optimiser') },
     { id: 'label', title: 'Read the comment',
-      body: 'The part comment (on the label, sticker and cut sheet) reads e.g. “CUT AT 70, hand cut to 16 wide (18 after edging)”. Cut it down on the saw to that size, then edge it. Fillers 60 or wider, on-edge fillers and shaped fillers cut at their own size.',
+      body: 'The part comment (on the label, sticker and cut sheet) reads e.g. “CUT AT 70, hand cut to 16 wide (18 after edging)” or “CUT AT 70 x 70, hand cut to 45 long x 30 wide”. Cut it down on the saw to that size, then edge it. Shaped parts, finger-rail strips (cut at 80) and No CNC parts cut at their own size.',
       done: () => true },
   ]},
   // Appended 2026-11-07 (z_takeoff T7 — pick list room filter).

@@ -77,21 +77,32 @@ function ebFields(flags: EdgeFlags, t: number | undefined, wPair: EdgePair, hPai
 // (w = larger, h = smaller). Only safe for parts without a grain direction,
 // since it may swap w/h. Used for on-edge toe-kick spreaders whose thickness
 // would otherwise be read off the wrong axis.
-// Narrow fillers (Mark 2026-11-06, RHK6592): a filler strip under 60 wide moves on
-// the bed when it's cut at ~30-40, so it's nested and cut at 70 and the part comment
-// gives the size to cut it down to by hand. The model / Parts tab keep the true size.
-export const FILLER_MIN_MACHINE_W = 60
-export const FILLER_MACHINE_CUT_W = 70
+// Small parts (Mark 2026-11-12, grown from the 2026-11-06 RHK6592 filler rule):
+// anything under 60 wide or long moves on the bed when it's cut at its own size,
+// so the machine cuts that side at 70 and the part comment gives the size to cut
+// it down to by hand. The model / Parts tab keep the true size. The extra lands
+// on the far edge (footprint w / h side), so ops measured from the part's origin
+// corner stay put. Skipped: shaped parts / parts with cut holes (their outline
+// is the cut), finger-rail strips (own 80 rule, RAIL_NEST_W) and no-CNC parts.
+export const SMALL_PART_MIN = 60
+export const SMALL_PART_CUT = 70
 const r1 = (n: number) => Math.round(n * 10) / 10
-export function widenNarrowFiller(p: OptiPart, name: string): void {
-  if (!/filler/i.test(name) || p.shape || p.cut_holes?.length) return
-  const across = p.w <= p.h ? 'w' : 'h'
-  const [e1, e2] = across === 'w' ? [p.eb_w1, p.eb_w2] : [p.eb_h1, p.eb_h2]
-  const finished = p[across]
-  if (!(finished < FILLER_MIN_MACHINE_W)) return
-  const cut = r1(finished - (e1 ?? 0) - (e2 ?? 0))   // the machine's cut size (tape deducted)
-  p[across] = FILLER_MACHINE_CUT_W + (e1 ?? 0) + (e2 ?? 0)   // the machine cuts it at 70
-  const note = `CUT AT ${FILLER_MACHINE_CUT_W}, hand cut to ${cut} wide` + (cut !== finished ? ` (${r1(finished)} after edging)` : '')
+export function widenSmallPart(p: OptiPart): void {
+  if (p.shape || p.cut_holes?.length || p.rail_strip || p.output_to_cnc === false) return
+  const small = (['w', 'h'] as const).filter(a => p[a] < SMALL_PART_MIN)
+  if (!small.length) return
+  // Words follow the finished part: its smaller side is "wide", the larger "long".
+  const wideAxis = p.w <= p.h ? 'w' : 'h'
+  const bits: string[] = []
+  for (const a of small) {
+    const [e1, e2] = a === 'w' ? [p.eb_w1, p.eb_w2] : [p.eb_h1, p.eb_h2]
+    const finished = p[a]
+    const cut = r1(finished - (e1 ?? 0) - (e2 ?? 0))   // the machine's cut size (tape deducted)
+    p[a] = SMALL_PART_CUT + (e1 ?? 0) + (e2 ?? 0)        // the machine cuts it at 70
+    bits.push(`${cut} ${a === wideAxis ? 'wide' : 'long'}` + (cut !== finished ? ` (${r1(finished)} after edging)` : ''))
+  }
+  if (small.length === 2 && wideAxis === 'w') bits.reverse()   // "N long x M wide"
+  const note = `CUT AT ${SMALL_PART_CUT}${small.length === 2 ? ` x ${SMALL_PART_CUT}` : ''}, hand cut to ${bits.join(' x ')}`
   const c = (p.comment ?? '').trim()
   p.comment = c ? `${note}. ${c}` : note
 }
@@ -522,8 +533,11 @@ export function normalizeProject(
     // Grain across (e.g. a front-on wall cleat with horizontal grain): nest turned.
     const last = parts[parts.length - 1]
     if (r.grain_across && last?.source_part_id === r.id) last.grain_across = true
-    if (last?.source_part_id === r.id) widenNarrowFiller(last, String(r.name ?? ''))
   }
+
+  // Small parts (< 60 wide or long) cut at 70 — after every comment above, so the
+  // hand-cut size reads first on the label.
+  for (const p of parts) widenSmallPart(p)
 
   return { rooms, cabinets, parts }
 }
