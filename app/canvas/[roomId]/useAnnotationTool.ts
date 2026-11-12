@@ -12,7 +12,7 @@ import type { RoomAnnotation, AnnotationKind, Room } from '@/src/lib/types'
 import {
   type AnnotFrame, type Pt, type TextGeom, type Box,
   type LineGeom, type BoxGeom,
-  unmapPt, translateGeom, annotationFramePoints, boundsOf, boxesOverlap, layoutText, snapQuarter, rotatePt,
+  unmapPt, translateGeom, rotateGeom, annotationFramePoints, boundsOf, boxesOverlap, layoutText, snapQuarter, rotatePt,
   segAngle, segLength, withLength, withAngle, withBoxSize,
   angleSnap, dedupePts, leaderTextAt, type ArcGeom, type CircleGeom,
   offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, OFFSETTABLE, type OffsetKind,
@@ -635,6 +635,79 @@ export function useAnnotationTool({
     setAnnotations(xs => xs.map(a => liveSelected.has(a.id) ? { ...a, geom: translateGeom(a.kind, a.geom, dx, dy) } : a))
     for (const id of liveSelected) persistSoon(id)
   }, [liveSelected, snapshotForBurst, setAnnotations, persistSoon])
+
+  // ── Rotate (RO1) ─────────────────────────────────────────────────────────
+  // Right-click › Rotate: quarter turns / a typed angle about the selection's centre,
+  // or "about a point" — click a base point (snaps on), then move to turn (15° steps,
+  // Shift = free) or type the angle + Enter; click places. Angles on screen:
+  // + = anticlockwise, as the drawing-convention angle fields.
+
+  /** Frame degrees (rotatePt sense) for a screen turn of `ccw` degrees anticlockwise. */
+  const frameTurn = useCallback((ccw: number) => frame.flipY ? ccw : -ccw, [frame.flipY])
+  const selectionCentre = useCallback((rows: RoomAnnotation[]): Pt | null => {
+    const b = boundsOf(rows.flatMap(a => annotationFramePoints(a.kind, a.geom, a.text, resolveStyle(a.kind, a.style).size, k)))
+    return b ? { x: (b.minX + b.maxX) / 2, y: (b.minY + b.maxY) / 2 } : null
+  }, [k])
+
+  /** Turn the selection `ccw` degrees anticlockwise (on screen) about `about` (default:
+   *  the centre of its extents). One undo step, saved now. */
+  const rotateSelection = useCallback((ccw: number, about?: Pt) => {
+    if (!Number.isFinite(ccw) || Math.abs(ccw % 360) < 1e-9) return
+    const sel = annRef.current.filter(a => liveSelected.has(a.id))
+    const c = about ?? selectionCentre(sel)
+    if (!sel.length || !c) return
+    captureSnapshot()
+    const turned = new Map(sel.map(a => [a.id, rotateGeom(a.kind, a.geom, c, frameTurn(ccw))]))
+    setAnnotations(xs => xs.map(a => turned.has(a.id) ? { ...a, geom: turned.get(a.id)! } : a))
+    for (const [id, geom] of turned) void storeRef.current.update(id, { geom })
+  }, [liveSelected, selectionCentre, frameTurn, captureSnapshot, setAnnotations])
+
+  type RotOp = { orig: Map<string, RoomAnnotation['geom']>; base: Pt | null; ang: number; typed: string; moved: boolean }
+  const [rotOp, setRotOpS] = useState<RotOp | null>(null)
+  const rotOpRef = useRef<RotOp | null>(null)
+  const setRotOp = useCallback((r: RotOp | null) => { rotOpRef.current = r; setRotOpS(r) }, [])
+  /** Live preview: the picked items turned `ccw` about the base point. */
+  const previewRot = useCallback((r: RotOp, ccw: number) => {
+    if (!r.base) return
+    if (!r.moved) { captureSnapshot(); r.moved = true }
+    const base = r.base, fd = frameTurn(ccw)
+    setAnnotations(xs => xs.map(a => r.orig.has(a.id) ? { ...a, geom: rotateGeom(a.kind, r.orig.get(a.id)!, base, fd) } : a))
+  }, [captureSnapshot, frameTurn, setAnnotations])
+  const startRotatePick = useCallback(() => {
+    const sel = annRef.current.filter(a => liveSelected.has(a.id))
+    if (!sel.length) return
+    setTool('select')
+    setRotOp({ orig: new Map(sel.map(a => [a.id, a.geom])), base: null, ang: 0, typed: '', moved: false })
+  }, [liveSelected, setTool, setRotOp])
+  const cancelRotate = useCallback(() => {
+    const r = rotOpRef.current
+    if (!r) return
+    if (r.moved) setAnnotations(xs => xs.map(a => r.orig.has(a.id) ? { ...a, geom: r.orig.get(a.id)! } : a))
+    setRotOp(null)
+  }, [setAnnotations, setRotOp])
+  const commitRotate = useCallback((ccw: number) => {
+    const r = rotOpRef.current
+    if (!r?.base) return
+    setRotOp(null)
+    if (Math.abs(ccw % 360) < 1e-9) { if (r.moved) setAnnotations(xs => xs.map(a => r.orig.has(a.id) ? { ...a, geom: r.orig.get(a.id)! } : a)); return }
+    if (!r.moved) { captureSnapshot(); r.moved = true }
+    const base = r.base, fd = frameTurn(ccw)
+    const turned = new Map([...r.orig].map(([id, g]) => {
+      const a = annRef.current.find(x => x.id === id)
+      return [id, a ? rotateGeom(a.kind, g, base, fd) : g] as const
+    }))
+    setAnnotations(xs => xs.map(a => turned.has(a.id) ? { ...a, geom: turned.get(a.id)! } : a))
+    for (const [id, geom] of turned) void storeRef.current.update(id, { geom })
+  }, [setRotOp, setAnnotations, captureSnapshot, frameTurn])
+  // Leaving CAD, another drawing or another tool drops a half-done rotate.
+  const ownerK = ownerKey(owner)
+  useEffect(() => { cancelRotate() }, [active, ownerK, cancelRotate])
+  useEffect(() => { if (tool !== 'select') cancelRotate() }, [tool, cancelRotate])
+  /** Screen angle (deg, anticlockwise, 0 = right) from the base to p. */
+  const screenAngle = useCallback((base: Pt, p: Pt) => {
+    const dy = (frame.flipY ? 1 : -1) * (p.y - base.y)
+    return Math.atan2(dy, p.x - base.x) * 180 / Math.PI
+  }, [frame.flipY])
 
   /** CAD panel: replace one item's geometry (a typed coordinate). One undo step, saved now. */
   const patchGeom = useCallback((id: string, geom: RoomAnnotation['geom']) => {
@@ -1307,6 +1380,12 @@ export function useAnnotationTool({
     const ae = document.activeElement
     if (ae instanceof HTMLInputElement && ae.closest('[data-cad-panel]')) ae.blur()
     if (editing) { commitEdit(); return }   // first click outside the editor just finishes it
+    const ro = rotOpRef.current
+    if (ro) {   // RO1: first click = base point, second = place the turn
+      if (!ro.base) { setRotOp({ ...ro, base: toFrame(e, !e.shiftKey, null, new Set(ro.orig.keys())) }); return }
+      commitRotate(ro.typed ? parseFloat(ro.typed) || 0 : ro.ang)
+      return
+    }
     const pd = pendingRef.current
     if (pd) {   // second click of a click-click shape (typed W / H win over the click)
       pendingRef.current = null; setPending(null)
@@ -1343,10 +1422,25 @@ export function useAnnotationTool({
     if (route === 'place') clearTyped()
     if (route === 'marquee') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
-  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset, dimMode, pickDimClick])
+  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset, dimMode, pickDimClick, setRotOp, commitRotate])
 
   /** Rubber band for the segment being drawn. */
   const onCaptureMove = useCallback((e: React.PointerEvent) => {
+    const ro = rotOpRef.current
+    if (ro) {   // RO1: base point snaps; then the turn follows the cursor (15° steps, Shift = free)
+      if (!ro.base) { setCursor(toFrame(e, !e.shiftKey, null, new Set(ro.orig.keys()))); return }
+      const p = unmapPt(frame, toWorld(e))
+      setCursor(p)
+      if (ro.typed) return
+      const raw = screenAngle(ro.base, p)
+      const ang = e.shiftKey ? raw : Math.round(raw / 15) * 15
+      if (ang === ro.ang && ro.moved) return
+      const nr = { ...ro, ang }
+      rotOpRef.current = nr
+      previewRot(nr, ang)
+      setRotOpS(nr)
+      return
+    }
     const pd = pendingRef.current
     if (pd) {
       const raw = toFrame(e, !e.shiftKey)
@@ -1378,7 +1472,7 @@ export function useAnnotationTool({
     const axis = placing && dimMode === 'linear' ? dimAxisFor(d.pts[0], d.pts[1], cur, d.axis) : d.axis
     const nd = { ...d, cur, axis }
     drawingRef.current = nd; setDrawing(nd)
-  }, [toFrame, dimMode, tool, editing, frame, toWorld])
+  }, [toFrame, dimMode, tool, editing, frame, toWorld, screenAngle, previewRot])
 
   const onCaptureDouble = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
@@ -1401,8 +1495,8 @@ export function useAnnotationTool({
     hiddenId: editing ? editing.draft.id : null,
     hitWidth: 10 / zoom,
     // In plain select mode a click on an annotation opens CAD mode on it (decision 9).
-    hittable: !active || tool === 'select' || tool === 'offset' || tool === 'fillet' || tool === 'chamfer' || tool === 'join'
-      || (tool === 'dim' && PICK_DIM_MODES.has(dimMode)),
+    hittable: !rotOp && (!active || tool === 'select' || tool === 'offset' || tool === 'fillet' || tool === 'chamfer' || tool === 'join'
+      || (tool === 'dim' && PICK_DIM_MODES.has(dimMode))),
     onMenu: (e, id) => {
       e.preventDefault(); e.stopPropagation()
       if (editing) commitEdit()
@@ -1508,6 +1602,23 @@ export function useAnnotationTool({
       if (isInput(e.target)) return
       const mod = e.ctrlKey || e.metaKey
       const take = () => { e.preventDefault(); e.stopPropagation() }
+      const ro = rotOpRef.current
+      if (ro) {   // RO1: Esc cancels; after the base point, type the angle + Enter
+        if (e.key === 'Escape') { take(); cancelRotate(); return }
+        if (!ro.base) return
+        let typed = ro.typed
+        if (/^[0-9.\-]$/.test(e.key) && !mod) typed += e.key
+        else if (e.key === 'Backspace') typed = typed.slice(0, -1)
+        else if (e.key === 'Enter') { take(); if (typed) commitRotate(parseFloat(typed) || 0); return }
+        else return
+        take()
+        const n = parseFloat(typed)
+        const nr = { ...ro, typed, ang: Number.isFinite(n) ? n : 0 }
+        rotOpRef.current = nr
+        previewRot(nr, nr.ang)
+        setRotOpS(nr)
+        return
+      }
       if (e.key === 'Escape') {
         take()
         if (dragRef.current) return
@@ -1575,7 +1686,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, nudgeSelection, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen, dimMode, commitTyped])
+  }, [active, liveSelected, selected, tool, deleteSelected, nudgeSelection, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen, dimMode, commitTyped, cancelRotate, commitRotate, previewRot])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
@@ -1683,6 +1794,7 @@ export function useAnnotationTool({
     tool, setTool, selected, withEditing, selectedIds: liveSelected, setSelectedIds,
     editing, setEditText, commitEdit, cancelEdit,
     ribbonKind, ribbonStyle, ribbonByLayer, ribbonLayerId, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
+    rotateSelection, startRotatePick, cancelRotate, rotOp,
     deleteSelected, moveToLayer, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     dimMode, setDimMode, applyDimText, chain, arcMode, setArcMode, offsetSrc: offsetSrcA,
@@ -1694,7 +1806,7 @@ export function useAnnotationTool({
     trueWeights, setTrueWeights, hairline: trueWeights ? undefined : 1 / zoom,
     /** Cursor (frame mm) + the point Δ is measured from while drawing. */
     cursor: active ? cursor : null,
-    fromPt: drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null,
+    fromPt: rotOp?.base ?? (drawing?.pts.length ? drawing.pts[drawing.pts.length - 1] : pending ? pending.start : null),
     ribbonSize, applyLength, applyAngle, applyBoxSize, liveMeasure, patchGeom,
     typed, typedFields, setTyped, commitTyped, clearTyped, focusReq, selFocusReq, centreFocusReq, moveSelectionTo,
     /** Text block size helper for the editor overlay. */

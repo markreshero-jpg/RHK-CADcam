@@ -346,6 +346,61 @@ export function translateGeom(kind: AnnotationKind, geom: AnnotationGeom, dx: nu
   }
 }
 
+/** RO1: turn a geometry `deg` degrees about `c` (frame mm, frame orientation — the same
+ *  sense as rotatePt; the caller flips it for frames whose y runs up). Text and boxes
+ *  carry the turn in `rot`; a box turned onto a quarter swaps W / H and stays unrotated.
+ *  Linear dims turned a quarter swap axis; any other angle makes them aligned. */
+export function rotateGeom(kind: AnnotationKind, geom: AnnotationGeom, c: Pt, deg: number): AnnotationGeom {
+  const r = (p: Pt): Pt => add(c, rotatePt(sub(p, c), deg))
+  const norm = (a: number) => { const x = ((a % 360) + 360) % 360; return Math.abs(x - 360) < 1e-9 ? 0 : x }
+  switch (kind) {
+    case 'text': {
+      const g = geom as TextGeom
+      const rot = norm((g.rot ?? 0) + deg)
+      const out: TextGeom = { ...g, at: r(g.at), leader: g.leader?.map(r) }
+      if (Math.abs(rot) < 1e-9) delete out.rot; else out.rot = +rot.toFixed(6)
+      if (!g.leader) delete out.leader
+      return out
+    }
+    case 'line':
+    case 'cloud':   { const g = geom as LineGeom; return { ...g, pts: (g.pts ?? []).map(r) } }
+    case 'rect':
+    case 'ellipse': {
+      const g = geom as BoxGeom
+      const m = { x: (g.a.x + g.b.x) / 2, y: (g.a.y + g.b.y) / 2 }
+      const nc = r(m)
+      let hw = (g.b.x - g.a.x) / 2, hh = (g.b.y - g.a.y) / 2
+      // Both shapes look the same turned 180°, so only the turn mod 180 matters.
+      let rot = norm((g.rot ?? 0) + deg) % 180
+      if (Math.abs(rot - 90) < 1e-6) { [hw, hh] = [hh, hw]; rot = 0 }
+      if (Math.abs(rot) < 1e-6 || Math.abs(rot - 180) < 1e-6) rot = 0
+      const out: BoxGeom = { ...g, a: { x: nc.x - hw, y: nc.y - hh }, b: { x: nc.x + hw, y: nc.y + hh } }
+      if (rot) out.rot = +rot.toFixed(6); else delete out.rot
+      return out
+    }
+    case 'dim': {
+      if (isSpecialDim(geom)) {
+        const g = geom as SpecialDim
+        if (g.dt === 'angular') return { ...g, c: r(g.c), a: r(g.a), b: r(g.b), at: r(g.at) }
+        if (g.dt === 'arclen') return { ...g, c: r(g.c), a0: g.a0 + deg, a1: g.a1 + deg }
+        return { ...g, c: r(g.c), at: r(g.at) }
+      }
+      const g = geom as DimGeom
+      const p1 = r(g.p1), p2 = r(g.p2), line = r(dimLayout(g).d1)
+      let axis: 'x' | 'y' | undefined = undefined
+      if (g.axis) {
+        const q = norm(deg) / 90
+        if (Math.abs(q - Math.round(q)) < 1e-9) axis = Math.round(q) % 2 ? (g.axis === 'x' ? 'y' : 'x') : g.axis
+      }
+      const out: DimGeom = { ...g, p1, p2, offset: dimOffsetFor({ p1, p2, axis }, line) }
+      if (axis) out.axis = axis; else delete out.axis
+      return out
+    }
+    case 'arc':     { const g = geom as ArcGeom; return { ...g, c: r(g.c), a0: g.a0 + deg, a1: g.a1 + deg } }
+    case 'circle':  { const g = geom as CircleGeom; return { ...g, c: r(g.c) } }
+  }
+}
+
 export interface Box { minX: number; minY: number; maxX: number; maxY: number }
 
 export function boundsOf(pts: Pt[]): Box | null {

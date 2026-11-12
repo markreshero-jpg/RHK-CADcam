@@ -289,7 +289,9 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
     : cad.dimMode === 'arclen' ? (cad.drawing?.src ? 'Move to pull the dimension arc out · click to place' : 'Click an arc or rounded corner')
     : cad.dimMode === 'continue' || cad.dimMode === 'baseline' ? (cad.chain ? `Click the next point · click another dim to start from it · Esc ends` : 'Click a linear / aligned dim to carry on from (or just click — it follows the last one drawn)')
     : null
-  const drawHint = modHint ? modHint : dimHint ? dimHint : cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
+  const rotHint = !cad.rotOp ? null : !cad.rotOp.base ? 'Rotate: click the point to turn about (snaps on) · Esc cancels'
+    : `Rotate ${cad.rotOp.typed ? cad.rotOp.typed : Math.round(cad.rotOp.ang * 10) / 10}° (+ = anticlockwise): move to turn (15° steps, Shift = free) or type the angle + Enter · click places · Esc cancels`
+  const drawHint = rotHint ? rotHint : modHint ? modHint : dimHint ? dimHint : cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
     : cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Tab = type W / H · Esc cancels' : 'Click the opposite corner · Tab = type W / H · Esc cancels')
     : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'

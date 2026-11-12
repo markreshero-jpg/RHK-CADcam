@@ -3,7 +3,7 @@
 // Right-click menu on a CAD note / line (z_CAD_tool B4b). Corner items act on the
 // corner nearest the click; "all corners" on every corner of a line or box.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { CadLayer, RoomAnnotation } from '@/src/lib/types'
 import { sortCadLayers } from '@/src/lib/annotations/cadLayers'
 import { type LineGeom, segLength } from '@/src/lib/annotations/geometry'
@@ -24,6 +24,10 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock, ca
   // Move to layer list, open for this menu only (a new right-click starts it closed).
   const [layersFor, setLayersFor] = useState<typeof m>(null)
   const layersOpen = !!m && layersFor === m
+  // Rotate (RO1): expands in place, like Move to layer; typed angle (+ = anticlockwise).
+  const [rotFor, setRotFor] = useState<typeof m>(null)
+  const rotOpen = !!m && rotFor === m
+  const [rotAng, setRotAng] = useState('45')
   useEffect(() => {
     if (!m) return
     const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest?.('[data-cad-menu]')) cad.closeMenu() }
@@ -47,7 +51,7 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock, ca
     })
   }
   const run = (fn: () => void) => () => { fn(); cad.closeMenu() }
-  type Item = { label: string; act: () => void; danger?: boolean; color?: string } | 'sep'
+  type Item = { label: string; act: () => void; danger?: boolean; color?: string } | 'sep' | { node: ReactNode }
   const items: Item[] = []
   // Several selected: only what applies to them all (shape tools are one item at a time).
   const many = cad.selected.length > 1 && cad.selected.some(s => s.id === a.id)
@@ -65,6 +69,22 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock, ca
   if (!many && a.kind === 'rect') items.push({ label: 'Convert to lines', act: run(() => cad.convertToLines(a.id)) })
   if (!many && OFFSETTABLE.has(a.kind)) items.push({ label: 'Offset…', act: run(() => cad.startOffsetFrom(a.id)) })
   if (items.length) items.push('sep')
+  items.push({ label: `Rotate ${many ? `${cad.selected.length} items ` : ''}${rotOpen ? '▾' : '▸'}`, act: () => setRotFor(rotOpen ? null : m) })
+  if (rotOpen) {
+    items.push({ label: '    90° anticlockwise ↺', act: run(() => cad.rotateSelection(90)) })
+    items.push({ label: '    90° clockwise ↻', act: run(() => cad.rotateSelection(-90)) })
+    items.push({ label: '    180°', act: run(() => cad.rotateSelection(180)) })
+    const applyTyped = () => { const n = parseFloat(rotAng); if (Number.isFinite(n) && n) { cad.rotateSelection(n); cad.closeMenu() } }
+    items.push({ node: (
+      <div className="flex items-center gap-1.5 pl-6 pr-3 py-1 text-xs text-gray-300" title="Turn about the selection's centre. + = anticlockwise, − = clockwise">
+        <input type="number" value={rotAng} step={5} onChange={e => setRotAng(e.target.value)}
+          onKeyDown={e => { e.stopPropagation(); if (e.key === 'Enter') applyTyped(); if (e.key === 'Escape') cad.closeMenu() }}
+          className="w-16 bg-gray-900 border border-gray-600 rounded px-1 py-0.5 text-xs text-gray-100" />
+        <span className="text-gray-500">°</span>
+        <button onClick={applyTyped} className="ml-auto px-2 py-0.5 rounded bg-gray-700 hover:bg-gray-600">Turn</button>
+      </div>) })
+    items.push({ label: '    About a point…', act: run(() => cad.startRotatePick()) })
+  }
   items.push({ label: many ? `Duplicate ${cad.selected.length} items` : 'Duplicate', act: run(() => cad.paste(many ? cad.selected : [a])) })
   if (onSaveBlock) items.push({ label: cad.selected.length > 1 ? `Save ${cad.selected.length} items as CAD block…` : 'Save as CAD block…', act: run(onSaveBlock) })
   if (cadLayers && cadLayers.length > 1) {
@@ -87,6 +107,7 @@ export default function CadContextMenu({ cad, annotations, zoom, onSaveBlock, ca
       style={{ left: x, top: y }} onContextMenu={e => e.preventDefault()}>
       {items.map((it, i) => it === 'sep'
         ? <div key={i} className="my-1 border-t border-gray-700" />
+        : 'node' in it ? <div key={i}>{it.node}</div>
         : <button key={i} onClick={it.act}
             className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 whitespace-pre flex items-center gap-1.5 ${it.danger ? 'text-red-400' : 'text-gray-200'}`}>
             {it.color && <span className="w-2 h-2 rounded-sm shrink-0 ml-3" style={{ background: it.color }} />}{it.color ? it.label.trim() : it.label}</button>)}

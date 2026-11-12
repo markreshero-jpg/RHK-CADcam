@@ -730,3 +730,22 @@ check pending.
 
 Next: Mark's real test of the whole plan toolset, then A6 (elevations) (elevations: wall-local frame, canvas +
 Elevation Views report, wall-split remap).
+
+## RO1 — Rotate the selection (Mark, 2026-11-12)
+
+Right-click a CAD item (or inside a multi-selection) › **Rotate ▸**:
+
+- **90° anticlockwise / 90° clockwise / 180°**: turns about the centre of the selection's extents.
+- **Typed angle** + Turn (or Enter): same pivot. + = anticlockwise, the same as the drawing-convention angle fields.
+- **About a point…**: click the base point (object snaps on, Shift = free). Then move the cursor to turn
+  it, with a live preview in 15° steps (Shift = free), or type the angle and press Enter. A click places it and Esc cancels.
+  Leaving CAD, switching drawing or picking a tool cancels it.
+- Every kind turns (`rotateGeom` in `src/lib/annotations/geometry.ts`). Text and turned boxes / ellipses
+  carry it in `rot`. A box turned onto a quarter swaps W / H and stays unrotated, so its grips work.
+  Linear dims swap axis on quarter turns. Any other angle makes them aligned. Arcs and arc-length dims
+  shift `a0 / a1`. Elevation frames (y up) flip the sign, so the turn is the same on screen.
+- Each rotate is one undo step and is saved straight away.
+
+| Step | What | Status |
+|---|---|---|
+| RO1 | Rotate submenu + about-a-point pick + `rotateGeom` + tests | [x] built 2026-11-12; check pending (Mark) |

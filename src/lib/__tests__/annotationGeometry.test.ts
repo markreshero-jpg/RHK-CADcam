@@ -433,3 +433,52 @@ describe('B5 dimensions', () => {
     expect(dimLayout(base).value).toBe(1000)
   })
 })
+
+// ── Rotate (RO1) ─────────────────────────────────────────────────────────────
+import { rotateGeom, dimLayout as dimLayoutR, arcPoint as arcPointR } from '../annotations/geometry'
+
+describe('rotateGeom (RO1)', () => {
+  const O = { x: 0, y: 0 }
+  const close = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+    expect(a.x).toBeCloseTo(b.x, 6); expect(a.y).toBeCloseTo(b.y, 6)
+  }
+  it('turns line points about the centre', () => {
+    const g = rotateGeom('line', { pts: [{ x: 100, y: 0 }, { x: 100, y: 50 }] }, O, 90) as { pts: { x: number; y: number }[] }
+    close(g.pts[0], { x: 0, y: 100 }); close(g.pts[1], { x: -50, y: 100 })
+  })
+  it('a quarter turn swaps a box W / H and keeps it unrotated', () => {
+    const g = rotateGeom('rect', { a: { x: 0, y: 0 }, b: { x: 600, y: 200 } }, { x: 300, y: 100 }, 90) as { a: { x: number; y: number }; b: { x: number; y: number }; rot?: number }
+    close(g.a, { x: 200, y: -200 }); close(g.b, { x: 400, y: 400 }); expect(g.rot).toBeUndefined()
+  })
+  it('an odd angle goes into the box rot', () => {
+    const g = rotateGeom('ellipse', { a: { x: 0, y: 0 }, b: { x: 10, y: 10 } }, O, 30) as { rot?: number }
+    expect(g.rot).toBeCloseTo(30)
+  })
+  it('text turns its anchor, rot and leader', () => {
+    const g = rotateGeom('text', { at: { x: 10, y: 0 }, rot: 350, leader: [{ x: 0, y: 10 }] }, O, 90) as { at: { x: number; y: number }; rot?: number; leader?: { x: number; y: number }[] }
+    close(g.at, { x: 0, y: 10 }); expect(g.rot).toBeCloseTo(80); close(g.leader![0], { x: -10, y: 0 })
+  })
+  it('a linear dim swaps axis on a quarter turn and its line follows', () => {
+    const d = { p1: { x: 0, y: 0 }, p2: { x: 500, y: 0 }, offset: -100, axis: 'x' as const }
+    const g = rotateGeom('dim', d, O, 90) as typeof d & { axis?: 'x' | 'y' }
+    expect(g.axis).toBe('y')
+    close(dimLayoutR(g).d1, { x: 100, y: 0 })
+    close(dimLayoutR(g).d2, { x: 100, y: 500 })
+  })
+  it('a linear dim at an odd angle becomes aligned', () => {
+    const g = rotateGeom('dim', { p1: O, p2: { x: 500, y: 0 }, offset: 100, axis: 'x' }, O, 30) as { axis?: string }
+    expect(g.axis).toBeUndefined()
+  })
+  it('arcs keep their shape (end points turn)', () => {
+    const a = { c: { x: 50, y: 0 }, r: 20, a0: 0, a1: 90 }
+    const g = rotateGeom('arc', a, O, 90) as typeof a
+    close(arcPointR(g, g.a0), { x: 0, y: 70 })
+    close(g.c, { x: 0, y: 50 })
+  })
+  it('four quarter turns are a no-op', () => {
+    let g: unknown = { p1: { x: 3, y: 4 }, p2: { x: 50, y: 4 }, offset: 20, axis: 'x' }
+    for (let i = 0; i < 4; i++) g = rotateGeom('dim', g as never, { x: 7, y: 9 }, 90)
+    const d = g as { p1: { x: number; y: number }; offset: number; axis: string }
+    close(d.p1, { x: 3, y: 4 }); expect(d.offset).toBeCloseTo(20); expect(d.axis).toBe('x')
+  })
+})
