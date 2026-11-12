@@ -79,7 +79,7 @@ export function planSnapGeometry({ walls, cabinets, resolved, fixtures, benchtop
           g.points.push({ p: { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length }, kind: 'centre', src: 'annotations', owner: own })
         break
       }
-      case 'cloud': addOutline(g, (a.geom as LineGeom).pts ?? [], 'annotations', true, own, true); break
+      case 'cloud': { const cl = !(a.geom as { open?: boolean }).open; addOutline(g, (a.geom as LineGeom).pts ?? [], 'annotations', cl, own, cl); break }
       case 'rect': {
         const bg = a.geom as BoxGeom
         addOutline(g, turnBox(bg, boxCorners(bg)), 'annotations', true, own, true)

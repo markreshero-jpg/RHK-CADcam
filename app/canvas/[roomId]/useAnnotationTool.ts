@@ -23,6 +23,7 @@ import {
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
 import { ownShapeGeometry, type SnapGeometry } from '@/src/lib/annotations/cadSnap'
 import { ownedBy, ownerColumns, ownerKey, type AnnotOwner } from '@/src/lib/annotations/owner'
+import { eraseGeom, ERASABLE } from '@/src/lib/annotations/erase'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
 import { supabase } from '@/src/lib/supabase'
 import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
@@ -31,7 +32,7 @@ import type { LiveMeasure } from './CadMeasureOverlay'
 
 /** SK2: Sketch keeps the stroke as drawn ('raw', for handwriting) or thins it ('tidy'). */
 export type SketchMode = 'raw' | 'tidy'
-export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'sketch' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset' | 'fillet' | 'chamfer' | 'join'
+export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'sketch' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset' | 'fillet' | 'chamfer' | 'join' | 'erase'
 
 /** How the Arc tool draws (B3): start / through / end, centre / start / end, or two ends + radius. */
 export type ArcMode = '3pt' | 'centre' | 'ends'
@@ -44,7 +45,7 @@ export const PICK_DIM_MODES = new Set<DimMode>(['radius', 'diameter', 'arclen', 
 export interface ArcSource { c: Pt; r: number; a0?: number; a1?: number }
 
 export const CAD_TOOL_KEYS: Record<string, CadTool> = {
-  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', p: 'sketch', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset', g: 'fillet', h: 'chamfer', j: 'join',
+  s: 'select', t: 'text', b: 'textbox', q: 'leader', l: 'line', p: 'sketch', a: 'arrow', r: 'rect', e: 'ellipse', c: 'cloud', d: 'dim', k: 'arc', o: 'circle', f: 'offset', g: 'fillet', h: 'chamfer', j: 'join', x: 'erase',
 }
 
 /** Tools that drag out a shape on the canvas. */
@@ -54,8 +55,9 @@ const PLACE_TOOLS = new Set<CadTool>(['text', 'textbox', 'rect', 'ellipse', 'clo
 /** Tools that click out points one by one (each click → drawClick). A freehand cloud
  *  joins them once it has started. Every drawing tool must be here or in PLACE_TOOLS. */
 const POINT_TOOLS = new Set<CadTool>(['line', 'arrow', 'leader', 'dim', 'arc', 'circle'])
-export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'offset' | 'modify' | 'sketch' | 'none' {
+export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'place' | 'marquee' | 'offset' | 'modify' | 'sketch' | 'erase' | 'none' {
   if (tool === 'select') return 'marquee'
+  if (tool === 'erase') return 'erase'   // ER1: press and rub
   if (tool === 'sketch') return 'sketch'   // SK1: press, drag, release
   if (tool === 'offset') return 'offset'
   if (tool === 'fillet' || tool === 'chamfer' || tool === 'join') return 'modify'   // picks come through the items' hit areas
@@ -65,10 +67,10 @@ export function clickRoute(tool: CadTool, drawingActive: boolean): 'point' | 'pl
 
 /** Kind of row a tool makes, and whose remembered style it starts from. */
 const TOOL_KIND: Record<CadTool, AnnotationKind> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', sketch: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', sketch: 'line', arrow: 'line', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line', erase: 'line',
 }
 const TOOL_STYLE_KEY: Record<CadTool, StyleKey> = {
-  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', sketch: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line',
+  select: 'text', text: 'text', textbox: 'text', leader: 'text', line: 'line', sketch: 'line', arrow: 'arrow', rect: 'rect', ellipse: 'ellipse', cloud: 'cloud', dim: 'dim', arc: 'arc', circle: 'circle', offset: 'line', fillet: 'line', chamfer: 'line', join: 'line', erase: 'line',
 }
 
 /** A line / arrow / leader being clicked out. attachId = adding a leader to that text. */
@@ -178,6 +180,9 @@ type Drag =
   | { kind: 'marquee'; start: Pt; cur: Pt; additive: boolean }
   // SK1: a freehand stroke being drawn (frame mm, raw points).
   | { kind: 'sketch'; pts: Pt[] }
+  // ER1: an eraser stroke - last point, the rows it may cut (current state), which of
+  // them were there before (ids) and which it made; changed = an undo step was taken.
+  | { kind: 'erase'; last: Pt; work: Map<string, RoomAnnotation>; origIds: Set<string>; created: Set<string>; cut: Set<string>; changed: boolean }
   | { kind: 'place'; start: Pt; cur: Pt; tool: PlaceTool }
   // Corner of an unrotated box / ellipse (boxCorners order).
   | { kind: 'offset'; id: string; moved: boolean }
@@ -1130,12 +1135,91 @@ export function useAnnotationTool({
 
   // ── Pointer: drags via window listeners ───────────────────────────────────
 
+  // ── Eraser (ER1) ──────────────────────────────────────────────────────────
+  // Rubs out the part of lines / arcs / circles / boxes / ellipses / clouds under it;
+  // what's left stays as separate pieces (a box / ellipse becomes lines, a circle arcs).
+  // Text and dims are left alone. Size = screen px radius, remembered per browser.
+  const [eraserPx, setEraserPxS] = useState<number>(() => {
+    try { const n = parseFloat(localStorage.getItem('cad.eraserPx') ?? ''); return n > 0 ? n : 8 } catch { return 8 }
+  })
+  const eraserPxRef = useRef(eraserPx)
+  const setEraserPx = useCallback((n: number) => {
+    const v = Math.max(1, Math.min(100, n || 8))
+    eraserPxRef.current = v; setEraserPxS(v)
+    try { localStorage.setItem('cad.eraserPx', String(v)) } catch { /* private window */ }
+  }, [])
+  const startErase = useCallback((p: Pt): Extract<Drag, { kind: 'erase' }> => {
+    const work = new Map(annRef.current
+      .filter(a => ERASABLE.has(a.kind) && ownedBy(a, owner) && selectableRef.current?.(a) !== false)
+      .map(a => [a.id, a]))
+    return { kind: 'erase', last: p, work, origIds: new Set(work.keys()), created: new Set(), cut: new Set(), changed: false }
+  }, [owner])
+  /** Rub `stroke` out of everything the drag may cut; updates the canvas live. */
+  const eraseStep = useCallback((d: Extract<Drag, { kind: 'erase' }>, stroke: Pt[]) => {
+    const r = eraserPxRef.current / (zoom * frame.s)
+    let any = false
+    for (const [id, row] of [...d.work]) {
+      const pieces = eraseGeom(row.kind, row.geom, stroke, r)
+      if (!pieces) continue
+      if (!d.changed) { captureSnapshot(); d.changed = true }
+      any = true
+      d.work.delete(id); d.cut.add(id)
+      const base = resolveStyle(row.kind, row.style)
+      pieces.forEach((pc, i) => {
+        const style: AnnotationStyle = { ...row.style }
+        // A cut end loses its arrowhead; the shape's own ends keep theirs.
+        if (pc.cutStart && base.arrowStart !== 'none') style.arrowStart = 'none'
+        if (pc.cutEnd && base.arrowEnd !== 'none') style.arrowEnd = 'none'
+        const nid = i === 0 ? id : crypto.randomUUID()
+        if (i > 0) d.created.add(nid)
+        d.work.set(nid, { ...row, id: nid, kind: pc.kind, geom: pc.geom, style })
+      })
+      // Rubbed out completely: a piece made earlier in this stroke just goes.
+      if (!pieces.length) d.created.delete(id)
+    }
+    if (!any) return
+    const tracked = new Set([...d.origIds, ...d.created])
+    setAnnotations(xs => {
+      const out: RoomAnnotation[] = []
+      const seen = new Set<string>()
+      for (const a of xs) {
+        if (!tracked.has(a.id) && !d.work.has(a.id)) { out.push(a); continue }
+        const w = d.work.get(a.id)
+        if (w) { out.push(w); seen.add(a.id) }
+      }
+      for (const [id, w] of d.work) if (!seen.has(id) && d.created.has(id)) out.push(w)
+      return out
+    })
+  }, [zoom, frame.s, captureSnapshot, setAnnotations])
+  /** End of a stroke: save what changed (the stroke was one undo step). */
+  const finishErase = useCallback((d: Extract<Drag, { kind: 'erase' }>) => {
+    if (!d.changed) return
+    const removed: string[] = []
+    for (const id of d.origIds) {
+      const w = d.work.get(id)
+      if (!w) removed.push(id)
+      else if (d.cut.has(id)) void storeRef.current.update(id, { kind: w.kind, geom: w.geom, style: w.style })
+    }
+    if (removed.length) void storeRef.current.remove(removed)
+    const rows = [...d.created].map(id => d.work.get(id)).filter((x): x is RoomAnnotation => !!x)
+    if (rows.length) void insertRows(rows)
+    setSelectedIds(new Set())
+  }, [insertRows])
+
   const beginDrag = useCallback((d: Drag, startClient: { x: number; y: number }) => {
     dragRef.current = d; setDrag(d)
     const move = (ev: PointerEvent) => {
       const cur = dragRef.current
       if (!cur) return
       const far = Math.hypot(ev.clientX - startClient.x, ev.clientY - startClient.y) >= DRAG_PX
+      if (cur.kind === 'erase') {   // ER1: every sample, so a quick rub doesn't skip
+        const evs = (typeof ev.getCoalescedEvents === 'function' ? ev.getCoalescedEvents() : []) as PointerEvent[]
+        const pts = [cur.last, ...(evs.length ? evs : [ev]).map(e => unmapPt(frame, toWorld(e)))]
+        cur.last = pts[pts.length - 1]
+        setCursor(cur.last)
+        eraseStep(cur, pts)
+        return
+      }
       if (cur.kind === 'sketch') {
         // SK2: every sample the pen / mouse sent since the last frame (the browser batches
         // them to ~60 a second, which turned quick handwriting into straight chords).
@@ -1186,7 +1270,7 @@ export function useAnnotationTool({
         const a2 = annRef.current.find(x => x.id === cur.id)!
         const pts = [...vertsOf(a2)]
         const prev = pts[cur.i - 1] ?? pts[cur.i + 1] ?? null
-        pts[cur.i] = toFrame(ev, !ev.shiftKey, prev, new Set([cur.id]), ownShapeGeometry(pts, cur.i, a2.kind === 'cloud'))
+        pts[cur.i] = toFrame(ev, !ev.shiftKey, prev, new Set([cur.id]), ownShapeGeometry(pts, cur.i, a2.kind === 'cloud' && !(a2.geom as { open?: boolean }).open))
         setAnnotations(xs => xs.map(x => x.id === cur.id ? withVerts(x, pts) : x))
       } else if (cur.kind === 'edge') {
         if (!cur.moved && !far) return
@@ -1204,7 +1288,7 @@ export function useAnnotationTool({
           }
           const orig = vertsOf({ ...x, geom: cur.orig })
           const d = edgeDistanceFor(orig, cur.i, p) - edgeDistanceFor(orig, cur.i, cur.start)
-          return withVerts(x, moveEdge(orig, cur.i, d, x.kind === 'cloud' || !!(x.geom as LineGeom).closed))
+          return withVerts(x, moveEdge(orig, cur.i, d, (x.kind === 'cloud' && !(x.geom as { open?: boolean }).open) || !!(x.geom as LineGeom).closed))
         }))
       } else if (cur.kind === 'arcGrip') {
         if (!cur.moved && !far) return
@@ -1299,6 +1383,7 @@ export function useAnnotationTool({
       const cur = dragRef.current
       dragRef.current = null; setDrag(null); setSnapHit(null)
       if (!cur) return
+      if (cur.kind === 'erase') { finishErase(cur); return }
       if (cur.kind === 'sketch') {   // SK1: thin and save as a freehand line
         const px = 1 / (zoom * frame.s)
         const end = toFrame(ev, false)
@@ -1367,7 +1452,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
-  }, [captureSnapshot, toFrame, setAnnotations, k, finishPlace, cloudMode])
+  }, [captureSnapshot, toFrame, setAnnotations, k, finishPlace, cloudMode, eraseStep, finishErase, frame, toWorld])
 
   /** Empty canvas under CAD mode: place text / click out lines / start a marquee. */
   const onCaptureDown = useCallback((e: React.PointerEvent) => {
@@ -1401,6 +1486,13 @@ export function useAnnotationTool({
       if (offsetSrcRef.current) placeOffset(toFrame(e, !e.shiftKey, null, new Set([offsetSrcRef.current])))
       return
     }
+    if (route === 'erase') {   // ER1: a click rubs out a dot; dragging rubs along
+      const p = unmapPt(frame, toWorld(e))
+      const d = startErase(p)
+      beginDrag(d, { x: e.clientX, y: e.clientY })
+      eraseStep(d, [p])
+      return
+    }
     if (route === 'sketch') {   // SK1: the stroke starts here (Shift-free; snaps would fight the hand)
       beginDrag({ kind: 'sketch', pts: [toFrame(e, false)] }, { x: e.clientX, y: e.clientY })
       return
@@ -1422,7 +1514,7 @@ export function useAnnotationTool({
     if (route === 'place') clearTyped()
     if (route === 'marquee') beginDrag({ kind: 'marquee', start: p, cur: p, additive: e.shiftKey }, { x: e.clientX, y: e.clientY })
     else beginDrag({ kind: 'place', start: p, cur: p, tool: tool as PlaceTool }, { x: e.clientX, y: e.clientY })
-  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset, dimMode, pickDimClick, setRotOp, commitRotate])
+  }, [editing, commitEdit, toFrame, tool, beginDrag, drawClick, finishPlace, clearTyped, placeOffset, dimMode, pickDimClick, setRotOp, commitRotate, frame, toWorld, startErase, eraseStep])
 
   /** Rubber band for the segment being drawn. */
   const onCaptureMove = useCallback((e: React.PointerEvent) => {
@@ -1451,7 +1543,8 @@ export function useAnnotationTool({
     }
     const d = drawingRef.current
     if (!d) {   // hovering: a drawing tool shows what the first click would snap to
-      if (tool === 'offset') {   // offset preview follows the cursor
+      if (tool === 'erase') setCursor(unmapPt(frame, toWorld(e)))   // ER1: the eraser ring, no snaps
+      else if (tool === 'offset') {   // offset preview follows the cursor
         const p = toFrame(e, !e.shiftKey, null, offsetSrcRef.current ? new Set([offsetSrcRef.current]) : undefined)
         rawCursorRef.current = p; setOffsetCur(p)
       } else if (tool !== 'select' && !editing) {
@@ -1795,6 +1888,9 @@ export function useAnnotationTool({
     editing, setEditText, commitEdit, cancelEdit,
     ribbonKind, ribbonStyle, ribbonByLayer, ribbonLayerId, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
     rotateSelection, startRotatePick, cancelRotate, rotOp,
+    eraserPx, setEraserPx,
+    /** ER1: the eraser ring (frame mm centre + radius) while the Eraser is picked. */
+    eraser: active && tool === 'erase' && cursor ? { at: cursor, r: eraserPx / (zoom * frame.s) } : null,
     deleteSelected, moveToLayer, reorder, onCaptureDown, onCaptureMove, onCaptureDouble, onCaptureMenu, editProps, ghost,
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     dimMode, setDimMode, applyDimText, chain, arcMode, setArcMode, offsetSrc: offsetSrcA,

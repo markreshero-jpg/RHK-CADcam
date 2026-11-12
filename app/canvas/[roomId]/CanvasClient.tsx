@@ -874,7 +874,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       {/* CAD mode: an invisible sheet over the drawing takes the clicks (tools / marquee). */}
       {mode === 'cad' && (
         <rect x={-1e7} y={-1e7} width={2e7} height={2e7} fill="transparent"
-          style={{ pointerEvents: 'all', cursor: cad.tool === 'select' ? 'default' : 'crosshair' }}
+          style={{ pointerEvents: 'all', cursor: cad.tool === 'select' ? 'default' : cad.tool === 'erase' ? 'none' : 'crosshair', touchAction: cad.tool === 'erase' ? 'none' : undefined }}
           onPointerDown={cad.onCaptureDown} onPointerMove={cad.onCaptureMove}
           onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
       )}
@@ -886,6 +886,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       <CadMeasureOverlay live={cad.liveMeasure} frame={cadFrame} zoom={z}
         selected={mode === 'cad' && !cad.editing && cad.selected.length === 1 ? cad.selected[0] : null} />
       {cad.snapHit && <CadSnapMarker pt={mapPt(cadFrame, cad.snapHit.pt)} kind={cad.snapHit.kind} size={9 / z} />}
+      {mode === 'cad' && cad.eraser && (() => {   // ER1: the eraser ring
+        const c = mapPt(cadFrame, cad.eraser.at)
+        return <circle cx={c.x} cy={c.y} r={cad.eraser.r * cadFrame.s} fill="rgba(244,63,94,0.12)" stroke="#f43f5e"
+          strokeWidth={1 / z} style={{ pointerEvents: 'none' }} />
+      })()}
       {gh && cad.ghost && (
         <rect x={Math.min(gh.a.x, gh.b.x)} y={Math.min(gh.a.y, gh.b.y)}
           width={Math.abs(gh.b.x - gh.a.x)} height={Math.abs(gh.b.y - gh.a.y)}

@@ -43,6 +43,7 @@ const TOOLS: { id: CadTool; label: string; key: string; icon: React.ReactNode }[
   { id: 'offset',  label: 'Offset — click a line / box / cloud / ellipse / circle / arc, then click the side for a parallel copy (Tab = distance)', key: 'F', icon: <><path d="M3 11L11 3" /><path d="M6 13L13 6" strokeDasharray="2 1.5" /></> },
   { id: 'fillet',  label: 'Fillet (corner radius) — click two sides / lines; click a box to round all its corners', key: 'G', icon: <path d="M3 13V8a5 5 0 015-5h5" /> },
   { id: 'chamfer', label: 'Chamfer — click two sides / lines; click a box to chamfer all its corners', key: 'H', icon: <path d="M3 13V7l4-4h6" /> },
+  { id: 'erase',   label: 'Eraser — press and rub over lines, arcs, circles, boxes, ellipses or clouds to rub out just that part (text and dims: select + Delete)', key: 'X', icon: <><path d="M9.5 2.5l4 4-6.5 6.5H4.5l-2-2z" /><path d="M6 6l4 4M7 13h7" /></> },
   { id: 'join',    label: 'Join — click two lines to join their nearest ends (the same line twice closes it)', key: 'J', icon: <><path d="M2 11h5M9 5h5M7 11l2-6" /></> },
 ]
 
@@ -272,7 +273,7 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
   const arrows = kind === 'line' || kind === 'dim' || kind === 'arc'
   const nSel = cad.selected.length
   const NEXT: Record<CadTool, string> = {
-    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', sketch: 'sketch', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle', offset: 'offset copy', fillet: 'fillet', chamfer: 'chamfer', join: 'join',
+    select: 'text', text: 'text', textbox: 'text box', leader: 'leader note', line: 'line', sketch: 'sketch', arrow: 'arrow', rect: 'box', ellipse: 'ellipse', cloud: 'cloud', dim: 'dimension', arc: 'arc', circle: 'circle', offset: 'offset copy', fillet: 'fillet', chamfer: 'chamfer', join: 'join', erase: 'eraser stroke',
   }
   const what = cad.editing ? (cad.editing.isNew ? 'New text' : 'Editing text')
     : nSel > 1 ? `${nSel} selected` : nSel === 1 ? `Selected ${kind === 'text' && (cad.selected[0].geom as { width?: number }).width != null ? 'text box' : kind}`
@@ -291,7 +292,8 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
     : null
   const rotHint = !cad.rotOp ? null : !cad.rotOp.base ? 'Rotate: click the point to turn about (snaps on) · Esc cancels'
     : `Rotate ${cad.rotOp.typed ? cad.rotOp.typed : Math.round(cad.rotOp.ang * 10) / 10}° (+ = anticlockwise): move to turn (15° steps, Shift = free) or type the angle + Enter · click places · Esc cancels`
-  const drawHint = rotHint ? rotHint : modHint ? modHint : dimHint ? dimHint : cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
+  const eraseHint = cad.tool === 'erase' ? 'Press and rub over the CAD to rub that part out · each stroke is one undo · text / dims: select + Delete' : null
+  const drawHint = rotHint ? rotHint : eraseHint ? eraseHint : modHint ? modHint : dimHint ? dimHint : cad.tool === 'offset' ? (cad.offsetSrc ? 'Click the side for the copy · Tab = distance · Esc = pick another' : 'Click the item to offset')
     : cad.pending ? (cad.pending.tool === 'textbox' ? 'Click the opposite corner of the text box · Tab = type W / H · Esc cancels' : 'Click the opposite corner · Tab = type W / H · Esc cancels')
     : !cad.drawing ? null
     : cad.drawing.attachId ? 'Click where the leader points · Esc cancels'
@@ -344,6 +346,12 @@ export default function CadRibbon({ cad, viewSupported, scale, onScale, snap, on
           {drawHint && <div className="text-rose-200">{drawHint}</div>}
           {cad.modMsg && <div className="text-amber-300">{cad.modMsg}</div>}
         </div>
+        {cad.tool === 'erase' && (
+          <Group label="Eraser">
+            <Num title="Eraser size: radius in screen pixels (stays the same size on screen as you zoom)" value={cad.eraserPx} step={2} min={1} w="w-16" suffix="px"
+              onChange={n => cad.setEraserPx(n)} />
+          </Group>
+        )}
         {cad.tool === 'fillet' && (
           <Group label="Fillet">
             <Num title="Fillet radius (mm). 0 = just meet at a sharp corner" value={cad.filletR} step={5} min={0} w="w-16" suffix="R"

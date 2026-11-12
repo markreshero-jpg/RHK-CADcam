@@ -409,7 +409,7 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
   switch (a.kind) {
     case 'line':
     case 'cloud': {
-      const g = a.geom as LineGeom, pts = g.pts ?? [], closed = a.kind === 'cloud' || !!g.closed
+      const g = a.geom as LineGeom, pts = g.pts ?? [], closed = (a.kind === 'cloud' && !(a.geom as { open?: boolean }).open) || !!g.closed
       return <>
         {g.freehand
           ? <div className="text-[11px] text-gray-500">Freehand sketch ({pts.length} points). Drag to move; colour, weight and dash in the CAD tools.</div>

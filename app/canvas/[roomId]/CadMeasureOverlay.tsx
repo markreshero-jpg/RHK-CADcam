@@ -79,7 +79,7 @@ export default function CadMeasureOverlay({ live, selected, frame, zoom }: {
       out.push(<Tag key="r" at={mapPt(frame, arcPoint(g, 0))} zoom={zoom} dx={52} text={`R${fmt(g.r)}  Ø${fmt(g.r * 2)}`} />)
     }
     if (selected.kind === 'line') { const g = selected.geom as LineGeom; sideTags(g.pts ?? [], !!g.closed, g.bulges) }
-    else if (selected.kind === 'cloud') sideTags((selected.geom as LineGeom).pts ?? [], true)
+    else if (selected.kind === 'cloud') sideTags((selected.geom as LineGeom).pts ?? [], !(selected.geom as { open?: boolean }).open)
     else if ((selected.kind === 'rect' || selected.kind === 'ellipse') && !(selected.geom as BoxGeom).rot) {
       const g = selected.geom as BoxGeom
       const minX = Math.min(g.a.x, g.b.x), maxX = Math.max(g.a.x, g.b.x)

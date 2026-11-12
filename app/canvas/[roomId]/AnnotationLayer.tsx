@@ -326,7 +326,7 @@ function selection(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
   if ((a.kind === 'line' || a.kind === 'cloud') && single && !(a.geom as LineGeom).freehand) {
     const g = a.geom as LineGeom
     const pts = (g.pts ?? []).map(p => mapPt(f, p))
-    return vertexGrips(a.id, pts, edit, a.kind === 'cloud' || !!g.closed, true, g.bulges)
+    return vertexGrips(a.id, pts, edit, (a.kind === 'cloud' && !(a.geom as { open?: boolean }).open) || !!g.closed, true, g.bulges)
   }
   // Unrotated box / ellipse: a square grip on each corner of its frame. (Rotated ones
   // move and rotate only — resizing a turned box is left for later.)
@@ -441,8 +441,11 @@ function renderOne(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number
         : <ellipse cx={cx} cy={cy} rx={w / 2} ry={h / 2} {...props} />
     }
     case 'cloud': {
-      const pts = ((a.geom as CloudGeom).pts ?? []).map(p => mapPt(f, p))
-      return <path d={cloudPath(pts, Math.max(1, s.cloudBump) * k)} {...strokeProps(s, k)} {...shapeFill(s)} />
+      const cg = a.geom as CloudGeom
+      const pts = (cg.pts ?? []).map(p => mapPt(f, p))
+      // ER1: an erased piece is an open run; y-up frames mirror which side the bumps are on.
+      const openArea = cg.open ? (cg.side ?? 1) * (f.flipY ? -1 : 1) : undefined
+      return <path d={cloudPath(pts, Math.max(1, s.cloudBump) * k, openArea)} {...strokeProps(s, k)} {...(cg.open ? { fill: 'none' } : shapeFill(s))} />
     }
     case 'dim':     return <ManualDim a={a} s={s} f={f} k={k} />
     case 'arc': {

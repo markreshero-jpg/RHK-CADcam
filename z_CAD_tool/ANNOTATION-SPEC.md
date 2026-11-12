@@ -749,3 +749,34 @@ Right-click a CAD item (or inside a multi-selection) › **Rotate ▸**:
 | Step | What | Status |
 |---|---|---|
 | RO1 | Rotate submenu + about-a-point pick + `rotateGeom` + tests | [x] built 2026-11-12; check pending (Mark) |
+
+## ER1 — Eraser (Mark, 2026-11-12)
+
+Mark picked the partial eraser. Deleting whole items was already possible with select + Delete,
+or a marquee + Delete.
+
+- **Eraser tool** (ribbon, key **X**): press and rub. Only the part under the round eraser is
+  removed, and what's left stays as separate pieces. The eraser size is a radius in screen px
+  (ribbon, default 8, remembered per browser), so it feels the same at any zoom. The canvas
+  shows a red ring in place of the cursor.
+- **What it cuts** (`eraseGeom` in `src/lib/annotations/erase.ts`):
+  - **Lines, sketches and arrows**: they split into pieces. Bulged (filleted) segments stay
+    curved and keep a sub-arc bulge. A closed outline that's cut opens into one line starting
+    after the gap. A cut end loses its arrowhead, and the shape's own ends keep theirs.
+  - **Boxes and ellipses**: once touched they become lines. An ellipse becomes 72 straight
+    segments, so it loses its exact curve.
+  - **Circles**: they become arcs. **Arcs** split into arcs.
+  - **Clouds**: they stay clouds. A cut piece becomes an *open* cloud
+    (`CloudGeom.open` + `side` = the closed outline's frame shoelace sign, so the bumps stay
+    outside). It has no fill. Grips, offset, snaps and side tags treat it as open.
+  - **Text and dimensions are not cut**: select them and press Delete.
+- Only rows this drawing owns on selectable CAD layers are cut, so locked or hidden layers are safe.
+- **One stroke = one undo step.** The first rubbed item keeps its row id (updated with
+  `kind` / `geom` / `style`), extra pieces are inserted, and rows rubbed away are deleted,
+  all saved when you let go.
+- Maths: the stroke is a row of discs ≤ r/2 apart. Each segment's rubbed part is the union
+  of exact segment–disc (or arc–disc) intersections. Pieces shorter than r/10 are dropped.
+
+| Step | What | Status |
+|---|---|---|
+| ER1 | Eraser tool + `erase.ts` + open clouds + tests (`cadErase.test.ts`) | [x] built 2026-11-12; check pending (Mark), tutorial owed |

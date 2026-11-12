@@ -21,7 +21,9 @@ export interface TextGeom  { at: Pt; rot?: number; width?: number; height?: numb
 /** freehand (SK1): drawn with the Sketch tool - many points, so no per-vertex grips / end snaps. */
 export interface LineGeom  { pts: Pt[]; bulges?: number[]; closed?: boolean; freehand?: boolean }
 export interface BoxGeom   { a: Pt; b: Pt; rot?: number }
-export interface CloudGeom { pts: Pt[] }
+/** open (ER1): a piece left by the eraser — drawn as an open scalloped run, bumps on
+ *  the side the closed cloud had them (side = the closed outline's frame shoelace sign). */
+export interface CloudGeom { pts: Pt[]; open?: boolean; side?: 1 | -1 }
 /** Aligned (no axis): offset = signed distance (frame mm) of the dim line from p1→p2,
  *  + = left of p1→p2. Linear (A5): axis 'x' measures the horizontal span with the dim
  *  line at y = p1.y + offset; axis 'y' the vertical span at x = p1.x + offset. */
@@ -197,18 +199,19 @@ export function leaderAttachLocal(block: TextBlock, pad: number, lastLocal: Pt):
 
 /** Closed scalloped path through svg-space points; bumps bulge outward, each about
  *  `bump` long along the edge. */
-export function cloudPath(pts: Pt[], bump: number): string {
-  if (pts.length < 3 || bump <= 0) return ''
+export function cloudPath(pts: Pt[], bump: number, openArea?: number): string {
+  const open = openArea != null
+  if (pts.length < (open ? 2 : 3) || bump <= 0) return ''
   // Shoelace in svg coords (y down): > 0 = clockwise on screen → outward is the left of
-  // each edge, which a sweep-1 arc bulges towards.
-  let area = 0
-  for (let i = 0; i < pts.length; i++) {
+  // each edge, which a sweep-1 arc bulges towards. An open run (ER1) is told the sign.
+  let area = openArea ?? 0
+  if (!open) for (let i = 0; i < pts.length; i++) {
     const a = pts[i], b = pts[(i + 1) % pts.length]
     area += a.x * b.y - b.x * a.y
   }
   const sweep = area > 0 ? 1 : 0
   let d = `M${P(pts[0])}`
-  for (let i = 0; i < pts.length; i++) {
+  for (let i = 0; i < (open ? pts.length - 1 : pts.length); i++) {
     const a = pts[i], b = pts[(i + 1) % pts.length]
     const L = len(sub(b, a))
     if (L === 0) continue
@@ -219,7 +222,7 @@ export function cloudPath(pts: Pt[], bump: number): string {
       d += `A${f2(r)} ${f2(r)} 0 0 ${sweep} ${P(q)}`
     }
   }
-  return d + 'Z'
+  return open ? d : d + 'Z'
 }
 
 // ── Manual dimension ─────────────────────────────────────────────────────────
@@ -659,7 +662,7 @@ export const OFFSETTABLE = new Set<string>(['line', 'cloud', 'rect', 'ellipse', 
 export function offsetDistanceFor(kind: OffsetKind, geom: AnnotationGeom, p: Pt): number {
   switch (kind) {
     case 'line':  { const g = geom as LineGeom; return signedDistToPolyline(sampleBulged(g.pts ?? [], g.bulges, !!g.closed), !!g.closed, p) }
-    case 'cloud': return signedDistToPolyline((geom as LineGeom).pts ?? [], true, p)
+    case 'cloud': return signedDistToPolyline((geom as LineGeom).pts ?? [], !(geom as CloudGeom).open, p)
     case 'rect': {
       const g = geom as BoxGeom, l = boxLocal(g, p)
       return Math.max(Math.abs(l.x) - Math.abs(g.b.x - g.a.x) / 2, Math.abs(l.y) - Math.abs(g.b.y - g.a.y) / 2)
@@ -680,7 +683,7 @@ export function offsetDistanceFor(kind: OffsetKind, geom: AnnotationGeom, p: Pt)
 export function offsetGeom(kind: OffsetKind, geom: AnnotationGeom, d: number): AnnotationGeom | null {
   switch (kind) {
     case 'line':  { const g = geom as LineGeom; return { ...g, pts: offsetPolyline(g.pts ?? [], d, !!g.closed, g.bulges) } }
-    case 'cloud': return { pts: offsetPolyline((geom as LineGeom).pts ?? [], d, true) }
+    case 'cloud': { const g = geom as CloudGeom; return { ...g, pts: offsetPolyline(g.pts ?? [], d, !g.open) } }
     case 'rect':
     case 'ellipse': {
       const g = geom as BoxGeom
