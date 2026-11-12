@@ -114,6 +114,8 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
   x 2257..2477 (covers the right 14 lining edge), 700-731, 2212 high. Gotcha: set the custom part AFTER a reload -
   the app's save right after placeCabinet overwrote it with the BUP placeholder size (676 x 17) the first time.
   3D share HTML: `CABINET VISION DRAWINGS/PRODUCTION DRAWINGS/RHK6339-J04-Sink-Unit-3D.html` (share3d).
+- Rev 7 (Mark 2026-11-12, `_tmp-6339-j04-rev7.mjs`): shadowline wider - strip 10 -> **60 high** ("Shadowline strip 60"),
+  shelf top 2214 -> 2274, still 1107 long, set back 20. 60 cuts on the machine now (no hand rip).
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
   exhaust slots TBC. Size from the drawing (Mark: this size for now).
