@@ -141,8 +141,23 @@ const FACE_LABELS: Record<string, string> = {
 
 // ── PartMeta builders ─────────────────────────────────────────────────────────
 
+// Bulkhead grain (B13): the fascia / side returns are face-kind (local w = length,
+// h = height) and default to grain along the length; Vertical runs it up. The
+// bottom return (horizontal kind, d = depth) runs front → back when Vertical.
+// Mirrors the optimiser (normalize.ts bhV) — 3D was showing every bulkhead
+// vertical while unset ones nest along the fascia (Mark 2026-11-13).
+function bhGrainExt(p: ResolvedCasePart): PartMeta['grainExt'] {
+  const k = p.part_key
+  if (!/^bh:(fascia|ret_l|ret_r)/.test(k) && k !== 'bh:ret_b') return undefined
+  const v = p.grain_direction === 'vertical'
+  if (k === 'bh:ret_b') return v ? { grain: 'd', thick: 'h' } : undefined
+  return v ? { grain: 'h', thick: 'd' } : { grain: 'w', thick: 'd' }
+}
+
 function buildCaseInfo(p: ResolvedCasePart, b: Box): PartMeta {
+  const grainExt = bhGrainExt(p)
   return {
+    ...(grainExt ? { grainExt } : {}),
     id:        `case_${p.part_key}`,
     label:     CASE_LABELS[p.part_key] ?? shapedPartLabel(p.part_key) ?? p.part_key,
     w: b.w, h: b.h, d: b.d,

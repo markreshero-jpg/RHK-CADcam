@@ -105,9 +105,10 @@ export function boxGrainMaps(w: number, h: number, d: number, grainExt: Ext, thi
 //   'across' (sharknose profiles): walls = the faces, grain along the profile (u);
 //   other    (custom outlines): caps = the faces; grain up the outline (v),
 //            or along it (u) for horizontals and kick boards.
-export function shapedGrainMaps(extrude: 'up' | 'across' | undefined, kind: PanelKind, id: string): (THREE.Texture | null)[] {
+// `alongW` (a part's own grainExt): true = along the outline's u, false = up v.
+export function shapedGrainMaps(extrude: 'up' | 'across' | undefined, kind: PanelKind, id: string, alongW?: boolean): (THREE.Texture | null)[] {
   const tex = grainTexture().clone()
-  const alongU = extrude === 'across' || (!extrude && (kind === 'horizontal' || id.startsWith('tk_')))
+  const alongU = extrude === 'across' || (!extrude && (alongW ?? (kind === 'horizontal' || id.startsWith('tk_'))))
   if (alongU) tex.rotation = Math.PI / 2
   tex.repeat.set(1 / GRAIN_TILE.across, 1 / GRAIN_TILE.along)
   tex.needsUpdate = true

@@ -588,7 +588,7 @@ export function Part({
   const grainAcross = useContext(FrontGrainAcrossContext) && meta.id.startsWith('zone_')
   const grainMaps = useMemo(() => {
     if (!grainOn) return null
-    if (shapeGeom && !csgGeom) return shapedGrainMaps(shape?.extrude, meta.panelKind, meta.id)
+    if (shapeGeom && !csgGeom) return shapedGrainMaps(shape?.extrude, meta.panelKind, meta.id, meta.grainExt ? meta.grainExt.grain === 'w' : undefined)
     if (shapeGeom) return null   // shaped + pocket cuts: single flat material
     const ext = meta.grainExt ?? (grainAcross ? { grain: 'w' as const, thick: 'd' as const } : grainExtents(meta.panelKind, meta.id))
     return csgGeom

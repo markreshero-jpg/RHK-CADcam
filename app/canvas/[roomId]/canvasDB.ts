@@ -149,6 +149,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
       ...(p.bevel_lo ? { bevel_lo: Number(p.bevel_lo) } : {}),
       ...(p.bevel_hi ? { bevel_hi: Number(p.bevel_hi) } : {}),
       ...(p.edge_mitre ? { edge_mitre: p.edge_mitre } : {}),   // long-edge mitre (z_bulkhead B10)
+      ...(p.grain_direction ? { grain_direction: p.grain_direction } : {}),   // bulkhead grain in 3D (B13)
       ...(p.upright ? { upright: true } : {}),
       ...(p.wrap ? { wrap: p.wrap } : {}),
       ...(p.lh ? { lh: p.lh } : {}),   // linear strip handle's sharknose (z_handles D17)
