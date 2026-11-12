@@ -182,6 +182,10 @@ Mark's answers 2026-11-12:
 - Rev 5 (Mark 2026-11-12): WC-01 **Top Type none** (WC-02 sits on it). Resolver fix: with Bottom / Top Type
   none the interior runs to the gables' edges, so the centre division is now the full 1492 (bench to WC-02),
   back full height. `_tmp-6339-j07-notop.mjs`.
+- WC-02 top shortened in the app to start at the beam face: offset 147, **3550** long (to the jamb at 3697).
+  The LED route is measured from the top's own left end, so it moved 147 off the open shelves; re-centred
+  (pos_y 1821.5 -> 960-2977 along the wall), `_tmp-6339-j07-led2.mjs` (reads both positions, re-run after any
+  move of WC-01 / WC-02).
 - Tall door pulls = Custom Timber Pull 450 (as J02, zone handle_id), 770-1220 AFF scaled off the
   elevation. Base doors sharknose. TC-02 hinges [100, 850, 1389] off the shelf holes (rev 1).
 - Mark's "Infil" sketch = the desk height, 735 so everything lines up.
@@ -192,8 +196,8 @@ Mark's answers 2026-11-12:
 - [ ] Desk 830 + 130 trough nominal - confirm.
 - [x] LED: open shelves only, 18.5 x 9, electrician supplies + fits (rev 2).
 - [x] Top's right end butts the door jamb (rev 2) - no edge.
-- [ ] Beam size 150 x 215 scaled off the drawing - confirm. WC-02 top's first 150 (over the filler) sits
-  under the beam at the same 2227: top to start at the beam face (3547 long) or beam above it?
+- [ ] Beam size 150 x 215 scaled off the drawing - confirm. (Top now starts at 147, beam drawn 150 deep -
+  3 overlap; one of them to match the other.)
 - [ ] Door frame height 2260 assumed (door head over the 2227 leaf) - confirm.
 - [ ] 3547 final measure (Rory).
 
