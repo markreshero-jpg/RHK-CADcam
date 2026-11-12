@@ -298,3 +298,7 @@ _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults
   Sunbaked Natural 5, MDF 10 1). All placed, no G-code errors. Sunbaked sheet 5 = only the two Play fascias 75 x 1546.5 (8%) —
   cut from an offcut if there is one. Delivered to CNCFiles\RHK6581 …\J07 J08 J09 J10 Play Robes Storage R20\.
 - Robes J08/J09 + Storage J10 were not in the KB-approved Rev 2 set (4/11) — confirm approval before cutting.
+- Mark 2026-11-13 on the R20 checks: robes J08/J09 + J10 APPROVED. Bed 2 TC-01 applied panel back edge untaped (custom part
+  edge_left off). Bed 2 front-to-back rail fitted by hand, no drilling (the app doesn't drill hanging rails anyway). J10 false front
+  removable + window confirmed. Doors stay undrilled. Storage J10 TC-02 kick sub front: no edging (edge_overrides tk_kick_sub_front_1).
+  R20 files are now stale on those two parts — re-nest in the browser (Mark, up to Stage 5) and replace R20.
