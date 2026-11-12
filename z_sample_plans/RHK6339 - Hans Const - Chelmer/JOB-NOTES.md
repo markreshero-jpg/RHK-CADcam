@@ -101,6 +101,9 @@ Layout `z_plan_automation/layouts/rhk6339-hans-j04-sink-unit.json`, post `_tmp-6
   Rev 3 (Mark 2026-11-12, `_tmp-6339-j04-rev3.mjs`): rev 2 redone NATIVELY - Edit shape footprint
   (rectangle) with the **left edge Open** (no panel; top / bottom / back 2210 from the lining). Rev 2's
   Removed left side + ox/sw overrides taken off. Elevation now draws it right. Left bay 552.5, others 519.5.
+- Rev 4 (Mark 2026-11-12, `_tmp-6339-j04-rev4.mjs`): bases finish inside the 14 linings, no fillers.
+  Linings WC-01/02 now floor to shelf top (WALLZ 0, 2214). Base run 14-2257: BC-01 580 @14, BC-02 550 @594,
+  sink BC-03 1141 -> **1113** @1144 (took the 28), KICK 1 @14 x 2243, benchtop 14-2257 (2243 x 700).
   3D share HTML: `CABINET VISION DRAWINGS/PRODUCTION DRAWINGS/RHK6339-J04-Sink-Unit-3D.html` (share3d).
 - WC-04 A/C box W1D 1150 x 530 x 681 at the right end (offset 1107, flush with the shelf end), WALLZ 2249
   (35 shadow gap TBC), 33 veneer box incl back, front = false_panel = **17 veneer removable panel**,
