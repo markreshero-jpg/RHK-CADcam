@@ -9,13 +9,13 @@
 // ============================================================
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { useOptiStore } from '@/src/lib/optimiser/store'
+import { useOptiStore, orientsOn, bestFitOn, type PoolOrient } from '@/src/lib/optimiser/store'
 import { findNearestValid, findBestPlacement, usableBounds, type ShapeOpts } from '@/src/lib/optimiser/edit'
 import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
 import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, isTwoSidedSheet, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { anchorSixthFace } from '@/src/lib/optimiser/sixthFaceLayout'
-import { grainOrient, type NestedSheet, type NestPartInput } from '@/src/lib/optimiser/nest'
+import { type NestedSheet, type NestPartInput } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import { sheetNumbers, sheetPartOrder } from '@/src/lib/optimiser/labels'
 import type { ShapePt } from '@/src/lib/shapePath'
@@ -41,7 +41,7 @@ const FORCED_WARN = 'Force placed — it is inside the cut gap / trim or over an
 /** Where a dragged part lands. gx/gy follow the cursor; sx/sy = the landing spot
  *  (null = nowhere legal). forced = landing exactly at gx/gy; clean = that spot
  *  is legal anyway. */
-export interface DropGhost { gx: number; gy: number; w: number; h: number; sx: number | null; sy: number | null; forced: boolean; clean: boolean
+export interface DropGhost { gx: number; gy: number; w: number; h: number; rotated?: boolean; sx: number | null; sy: number | null; forced: boolean; clean: boolean
   /** The part's true outline (placement-local), drawn instead of its rectangle. */
   loop?: ShapePt[] | null }
 
@@ -229,18 +229,23 @@ export default function Stage5Edit() {
     if (p.cx < r.left || p.cx > r.right || p.cy < r.top || p.cy > r.bottom) return null
     const { w: W, h: H } = sh.stock
     const k = r.width / W
-    const o = grainOrient(p.item.def, sh.stock) ?? { w: p.item.def.w, h: p.item.def.h, rotated: false }
-    const shapes = shapesFor({ baseUid: p.item.def.baseUid, ...o })
-    const mx = (p.cx - r.left) / k, my = H - (p.cy - r.top) / k
-    const gx = Math.max(0, Math.min(W - o.w, mx - o.w / 2))
-    const gy = Math.max(0, Math.min(H - o.h, my - o.h / 2))
     const sameMat = (p.item.def.materialId ?? null) === (sh.materialId ?? null) && p.item.def.thickness === sh.thickness
-    const fits = o.w <= W && o.h <= H
-    const valid = sameMat ? findNearestValid(sh, null, o.w, o.h, gx, gy, gapForSheet(sh), shapes) : null
-    const clean = !!valid && near(valid.x, gx) && near(valid.y, gy)
-    const forced = sameMat && fits && (forceRef.current || p.shift)
-    return { gx, gy, w: o.w, h: o.h, forced, clean, loop: shapes.moving ?? null,
-      sx: forced ? gx : valid?.x ?? null, sy: forced ? gy : valid?.y ?? null }
+    const mx = (p.cx - r.left) / k, my = H - (p.cy - r.top) / k
+    // The way round it sat when cut first; the other way only if that won't go.
+    const ghostFor = (o: PoolOrient): DropGhost => {
+      const shapes = shapesFor({ baseUid: p.item.def.baseUid, ...o })
+      const gx = Math.max(0, Math.min(W - o.w, mx - o.w / 2))
+      const gy = Math.max(0, Math.min(H - o.h, my - o.h / 2))
+      const fits = o.w <= W && o.h <= H
+      const valid = sameMat ? findNearestValid(sh, null, o.w, o.h, gx, gy, gapForSheet(sh), shapes) : null
+      const clean = !!valid && near(valid.x, gx) && near(valid.y, gy)
+      const forced = sameMat && fits && (forceRef.current || p.shift)
+      return { gx, gy, w: o.w, h: o.h, rotated: o.rotated, forced, clean, loop: shapes.moving ?? null,
+        sx: forced ? gx : valid?.x ?? null, sy: forced ? gy : valid?.y ?? null }
+    }
+    const gs = orientsOn(p.item.def, sh.stock).map(ghostFor)
+    if (gs[0].forced) return gs[0]
+    return gs.find(g => g.clean) ?? gs.find(g => g.sx != null) ?? gs[0]
   }
 
   // Window listeners while a pool chip is pressed: past 4px it's a drag; on
@@ -269,8 +274,8 @@ export default function Stage5Edit() {
         st.setEditError(sameMat ? 'No room there — hold Shift (or turn on Force) to place it anyway.' : 'Part material/thickness does not match this sheet.')
         return
       }
-      if (p.item.kind === 'unplaced') st.placeFromUnplaced(p.item.def.uid, st.currentSheet, g.sx, g.sy)
-      else st.pasteClipboard(st.currentSheet, { x: g.sx, y: g.sy })
+      if (p.item.kind === 'unplaced') st.placeFromUnplaced(p.item.def.uid, st.currentSheet, g.sx, g.sy, g.rotated)
+      else st.pasteClipboard(st.currentSheet, { x: g.sx, y: g.sy }, g.rotated)
       if (g.forced && !g.clean) useOptiStore.getState().setEditError(FORCED_WARN)
     }
     const prevCursor = document.body.style.cursor
@@ -497,9 +502,8 @@ export default function Stage5Edit() {
                   onClick={() => {
                     if (suppressClick.current) { suppressClick.current = false; return }
                     const gap = gapForSheet(sheet)
-                    const o = grainOrient(p, sheet.stock) ?? { w: p.w, h: p.h, rotated: false }
-                    const pos = findBestPlacement(sheet, o.w, o.h, gap, shapesFor({ baseUid: p.baseUid, ...o }))
-                    if (pos) placeFromUnplaced(p.uid, sheet.index, pos.x, pos.y)
+                    const fit = bestFitOn(sheet, p, gap, o => shapesFor({ baseUid: p.baseUid, ...o }))
+                    if (fit) placeFromUnplaced(p.uid, sheet.index, fit.pos.x, fit.pos.y, fit.o.rotated)
                     else setEditError('No room on this sheet for this part — drag it on with Shift held to force it.')
                   }}
                   style={{ touchAction: 'none' }}

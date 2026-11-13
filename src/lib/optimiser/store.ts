@@ -10,7 +10,7 @@
 import { create } from 'zustand'
 import { materialGroupKey, buildMargins, type OptiSnapshot } from './types'
 import type { NormalizedProject } from './normalize'
-import { grainOrient, type GroupStock, type SheetStock, type NestResult, type NestPartInput, type Placement } from './nest'
+import { grainOrient, type GroupStock, type SheetStock, type NestResult, type NestPartInput, type Placement, type NestedSheet } from './nest'
 import { findBestPlacement, findNearestValid, sheetEfficiency } from './edit'
 import { blockOfUid, blockRectOn, detachFromBlock } from './grainBlocks'
 import { getUserPrefs, setUserPrefs } from '../userPrefs'
@@ -30,7 +30,38 @@ function reconcilePartCols(stored: string[] | null | undefined): string[] {
 
 const clone = <T,>(v: T): T => structuredClone(v)
 // How a part goes onto a sheet by hand: grain-locked parts take the sheet's grain.
-const placedAs = (def: NestPartInput, stock: SheetStock) => grainOrient(def, stock) ?? { w: def.w, h: def.h, rotated: false }
+// A part cut off a sheet keeps the way round it sat there (pooledAs); if that
+// doesn't fit, a non-grain part may go the other way round.
+export type PoolOrient = { w: number; h: number; rotated: boolean; turned?: boolean; mirrored?: boolean }
+export function orientsOn(def: NestPartInput, stock: SheetStock): PoolOrient[] {
+  const keep = def.pooledAs
+  const flags = { ...(keep?.turned ? { turned: true } : {}), ...(keep?.mirrored ? { mirrored: true } : {}) }
+  const g = grainOrient(def, stock)
+  if (g) return [{ ...g, ...flags }]
+  const flat: PoolOrient = { w: def.w, h: def.h, rotated: false }
+  const turned: PoolOrient = { w: def.h, h: def.w, rotated: true }
+  const first = keep?.rotated ? { ...turned, ...flags } : { ...flat, ...flags }
+  if (Math.abs(def.w - def.h) < 1e-6) return [first]
+  return [first, keep?.rotated ? flat : turned]
+}
+const placedAs = (def: NestPartInput, stock: SheetStock, rotated?: boolean) => {
+  const os = orientsOn(def, stock)
+  return (rotated == null ? undefined : os.find(o => o.rotated === rotated)) ?? os[0]
+}
+/** First orientation with a free spot on the sheet (best spot near centre). */
+export function bestFitOn(sheet: NestedSheet, def: NestPartInput, gap: number, shapesFor?: (o: PoolOrient) => Parameters<typeof findBestPlacement>[4]) {
+  for (const o of orientsOn(def, sheet.stock)) {
+    const pos = findBestPlacement(sheet, o.w, o.h, gap, shapesFor?.(o))
+    if (pos) return { o, pos }
+  }
+  return null
+}
+const pooled = (def: NestPartInput, p?: Placement): NestPartInput => {
+  const d = clone(def)
+  if (p) d.pooledAs = { rotated: p.rotated, ...(p.turned ? { turned: true } : {}), ...(p.mirrored ? { mirrored: true } : {}) }
+  return d
+}
+const stripPool = ({ pooledAs: _p, ...d }: NestPartInput): NestPartInput => d
 let pasteSeq = 0
 
 // Any change to what gets nested (selection, qty, settings, stock) invalidates a
@@ -134,12 +165,12 @@ interface OptiState {
   turnPart: (uid: string, how: 'rotate180' | 'mirror' | 'flip') => void
   relocatePart: (uid: string, targetSheetIndex: number, x: number, y: number) => void
   removeToUnplaced: (uid: string) => void
-  placeFromUnplaced: (uid: string, sheetIndex: number, x: number, y: number) => void
+  placeFromUnplaced: (uid: string, sheetIndex: number, x: number, y: number, rotated?: boolean) => void
   copyToClipboard: (uid: string) => void
   cutToClipboard: (uid: string) => void
   /** Paste onto a sheet — best free spot, or exactly `at` (a drag-drop from
    *  the pool strip, which may be a forced placement). */
-  pasteClipboard: (sheetIndex: number, at?: { x: number; y: number }) => void
+  pasteClipboard: (sheetIndex: number, at?: { x: number; y: number }, rotated?: boolean) => void
   addSheet: (stock: SheetStock, materialId: string | null, thickness: number) => void
   deleteSheet: (index: number) => void
   resizeSheet: (index: number, w: number, h: number) => void
@@ -374,16 +405,17 @@ export const useOptiStore = create<OptiState>((set) => ({
   removeToUnplaced: (uid) => set(st => {
     if (!st.nestResult) return {}
     const next = clone(st.nestResult)
-    for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { s.placements.splice(i, 1); break } }
+    let was: Placement | undefined
+    for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { was = s.placements.splice(i, 1)[0]; break } }
     const def = st.partIndex[uid]
-    if (def) next.unplaced.push(clone(def))
+    if (def) next.unplaced.push(pooled(def, was))
     const broke = detachFromBlock(next, uid, def?.label ?? 'a front')
     return { ...commit(st, next), selectedUid: null, ...(broke ? { editError: broke } : {}) }
   }),
 
-  placeFromUnplaced: (uid, sheetIndex, x, y) => set(st => {
+  placeFromUnplaced: (uid, sheetIndex, x, y, rotated) => set(st => {
     if (!st.nestResult) return {}
-    const def = st.partIndex[uid]
+    const def = st.nestResult.unplaced.find(p => p.uid === uid) ?? st.partIndex[uid]
     const next = clone(st.nestResult)
     const sheet = next.sheets.find(s => s.index === sheetIndex)
     if (!def || !sheet) return {}
@@ -391,13 +423,17 @@ export const useOptiStore = create<OptiState>((set) => ({
       return { editError: 'Part material/thickness does not match this sheet.' }
     }
     next.unplaced = next.unplaced.filter(p => p.uid !== uid)
-    sheet.placements.push({ uid, baseUid: def.baseUid, label: def.label, x, y, ...placedAs(def, sheet.stock) })
+    sheet.placements.push({ uid, baseUid: def.baseUid, label: def.label, x, y, ...placedAs(def, sheet.stock, rotated) })
     // If this was the cut part, the clipboard is now consumed.
     const clip = st.clipboardMode === 'cut' && st.clipboard.some(c => c.uid === uid) ? { clipboard: [] } : {}
     return { ...commit(st, next), ...clip }
   }),
 
-  copyToClipboard: (uid) => set(st => { const def = st.partIndex[uid]; return def ? { clipboard: [clone(def)], clipboardMode: 'copy' } : {} }),
+  copyToClipboard: (uid) => set(st => {
+    const def = st.partIndex[uid]
+    const was = st.nestResult?.sheets.flatMap(s => s.placements).find(p => p.uid === uid)
+    return def ? { clipboard: [pooled(def, was)], clipboardMode: 'copy' } : {}
+  }),
 
   // Cut → move the part to the unplaced pool (visible) and remember it so Paste
   // can relocate it. No duplicate is created on paste (unlike copy).
@@ -405,13 +441,16 @@ export const useOptiStore = create<OptiState>((set) => ({
     if (!st.nestResult) return {}
     const def = st.partIndex[uid]
     const next = clone(st.nestResult)
-    for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { s.placements.splice(i, 1); break } }
-    if (def && !next.unplaced.some(u => u.uid === uid)) next.unplaced.push(clone(def))
+    let was: Placement | undefined
+    for (const s of next.sheets) { const i = s.placements.findIndex(p => p.uid === uid); if (i >= 0) { was = s.placements.splice(i, 1)[0]; break } }
+    const inPool = next.unplaced.find(u => u.uid === uid)
+    const item = def ? (was ? pooled(def, was) : inPool ?? clone(def)) : undefined
+    if (item) { next.unplaced = next.unplaced.filter(u => u.uid !== uid); next.unplaced.push(item) }
     const broke = detachFromBlock(next, uid, def?.label ?? 'a front')
-    return { ...commit(st, next), clipboard: def ? [clone(def)] : [], clipboardMode: 'cut', selectedUid: null, ...(broke ? { editError: broke } : {}) }
+    return { ...commit(st, next), clipboard: item ? [clone(item)] : [], clipboardMode: 'cut', selectedUid: null, ...(broke ? { editError: broke } : {}) }
   }),
 
-  pasteClipboard: (sheetIndex, at) => set(st => {
+  pasteClipboard: (sheetIndex, at, rotated) => set(st => {
     if (!st.nestResult || !st.clipboard.length) return {}
     const next = clone(st.nestResult)
     const sheet = next.sheets.find(s => s.index === sheetIndex)
@@ -428,9 +467,9 @@ export const useOptiStore = create<OptiState>((set) => ({
         if (!sameGroup(def)) continue
         const idx = next.unplaced.findIndex(u => u.uid === def.uid)
         if (idx < 0) continue                       // already placed elsewhere
-        const o = placedAs(def, sheet.stock)
-        const pos = at ?? findBestPlacement(sheet, o.w, o.h, gap)
-        if (!pos) continue
+        const fit = at ? { o: placedAs(next.unplaced[idx], sheet.stock, rotated), pos: at } : bestFitOn(sheet, next.unplaced[idx], gap)
+        if (!fit) continue
+        const { o, pos } = fit
         next.unplaced.splice(idx, 1)
         sheet.placements.push({ uid: def.uid, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, ...o })
         moved = true
@@ -445,10 +484,10 @@ export const useOptiStore = create<OptiState>((set) => ({
       if (!sameGroup(def)) continue
       const nu = `${def.baseUid}#paste${++pasteSeq}`
       const np: NestPartInput = { ...def, uid: nu }
-      addedIdx[nu] = np
-      const o = placedAs(def, sheet.stock)
-      const pos = at ?? findBestPlacement(sheet, o.w, o.h, gap)
-      if (pos) sheet.placements.push({ uid: nu, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, ...o })
+      addedIdx[nu] = stripPool(np)
+      const fit = at ? { o: placedAs(def, sheet.stock, rotated), pos: at } : bestFitOn(sheet, def, gap)
+      const o = fit?.o, pos = fit?.pos
+      if (pos && o) sheet.placements.push({ uid: nu, baseUid: def.baseUid, label: def.label, x: pos.x, y: pos.y, ...o })
       else next.unplaced.push(np)
     }
     return { ...commit(st, next), partIndex: { ...st.partIndex, ...addedIdx } }
@@ -467,7 +506,7 @@ export const useOptiStore = create<OptiState>((set) => ({
     const next = clone(st.nestResult)
     const si = next.sheets.findIndex(s => s.index === index)
     if (si < 0) return {}
-    for (const p of next.sheets[si].placements) { const def = st.partIndex[p.uid]; if (def) next.unplaced.push(clone(def)) }
+    for (const p of next.sheets[si].placements) { const def = st.partIndex[p.uid]; if (def) next.unplaced.push(pooled(def, p)) }
     next.sheets.splice(si, 1)
     return { ...commit(st, next), currentSheet: 0 }
   }),

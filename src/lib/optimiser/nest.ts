@@ -35,6 +35,9 @@ export interface NestPartInput {
   grainLock: boolean     // true → orientation fixed to the sheet's grain (h = along the grain)
   grainAcross?: boolean  // grain runs along w instead (horizontal grain match fronts, z_grain_match G3)
   priority: number       // higher places earlier within its group
+  // Stage 5: how the part sat on its sheet when it was cut / sent back to the
+  // pool, so pasting it puts it down the same way round (not re-derived from w/h).
+  pooledAs?: { rotated: boolean; turned?: boolean; mirrored?: boolean }
 }
 
 export interface SheetStock {
