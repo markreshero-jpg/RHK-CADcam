@@ -46,6 +46,9 @@ export default function CutSheetsPanel() {
   const [sheetsOn, setSheetsOn] = useState<Set<number> | null>(null)   // null = all
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const frameRef = useRef<HTMLIFrameElement>(null)
+  // The PDF itself: saving reads this, not the preview's blob URL, which is
+  // revoked whenever the preview rebuilds (e.g. while Save As is open).
+  const pdfBlobRef = useRef<Blob | null>(null)
 
   useEffect(() => {
     if (!nestResult?.sheets.length) return
@@ -88,7 +91,9 @@ export default function CutSheetsPanel() {
       sixthFace, datum: { origin_corner: originCorner }, routesBySheet: routes ?? undefined,
     }, { sheets: sheetsOn, holes: opts.holes, routes: opts.routes && !!routes, partsList: opts.partsList }).then(doc => {
       if (dead) return
-      url = URL.createObjectURL(doc.output('blob'))
+      const blob = doc.output('blob')
+      pdfBlobRef.current = blob
+      url = URL.createObjectURL(blob)
       setPdfUrl(url)
     }).catch(e => setError(e instanceof Error ? e.message : String(e)))
     return () => { dead = true; if (url) URL.revokeObjectURL(url) }
@@ -108,12 +113,13 @@ export default function CutSheetsPanel() {
   })
   const print = () => { const w = frameRef.current?.contentWindow; if (w) { w.focus(); w.print() } }
   const downloadPdf = async () => {
-    if (!pdfUrl) return
+    const blob = pdfBlobRef.current
+    if (!pdfUrl || !blob) return
     // Save As (asks first, on the click), else a plain download.
     const name = `${snap.jobNumber ?? 'job'} cut sheets.pdf`
     const target = await pickSaveFile(name)
     if (target === null) return
-    await saveBlob(await (await fetch(pdfUrl)).blob(), name, target)
+    await saveBlob(blob, name, target)
   }
   const count = sheetsOn ? sheetsOn.size : sheetNos.length
 
