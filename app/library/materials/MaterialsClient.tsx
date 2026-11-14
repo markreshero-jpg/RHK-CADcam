@@ -91,7 +91,12 @@ const TABS: TabConfig[] = [
           { value: 'laminate',   label: 'Laminate' },
           { value: 'stone',      label: 'Stone' },
           { value: 'solid_wood', label: 'Solid Wood' },
+          { value: 'timber',     label: 'Timber' },
           { value: 'acrylic',    label: 'Acrylic' },
+          // Splashback surfaces (z_splashback S1)
+          { value: 'glass',      label: 'Glass' },
+          { value: 'tile',       label: 'Tile' },
+          { value: 'mirror',     label: 'Mirror' },
           { value: 'other',      label: 'Other' },
         ],
       },

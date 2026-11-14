@@ -13,6 +13,7 @@ const SCHED_TABLES: { key: SchedKey; table: string }[] = [
   { key: 'slide',           table: 'slide_schedules'           },
   { key: 'handle',          table: 'handle_schedules'          },
   { key: 'benchtop',        table: 'benchtop_schedules'        },
+  { key: 'splashback',      table: 'splashback_schedules'      },
 ]
 
 export default async function SettingsPage({ searchParams }: {

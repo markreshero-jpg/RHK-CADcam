@@ -56,6 +56,7 @@ export interface Project {
   slide_schedule_id:           string | null
   handle_schedule_id:          string | null
   benchtop_schedule_id:        string | null
+  splashback_schedule_id?:      string | null   // z_splashback S1
   benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   drawer_box_method_id:        string | null
@@ -107,6 +108,7 @@ export interface Room {
   slide_schedule_id:           string | null
   handle_schedule_id:          string | null
   benchtop_schedule_id:        string | null
+  splashback_schedule_id?:      string | null   // z_splashback S1
   benchtop_build_method_id:    string | null
   construction_schedule_id:    string | null
   inner_drawer_box_method_id:  string | null

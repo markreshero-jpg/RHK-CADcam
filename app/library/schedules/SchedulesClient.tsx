@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
 import { confirmDelete } from '@/src/components/ConfirmDeleteModal'
+import { SPLASHBACK_ROLES } from '@/src/lib/splashbackMaterials'
 
 // ── Tab config ────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ const TABS = [
   { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           type: 'slide_grid', valueCol: null,         ebCol: null           },
   { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          type: 'handle_roles', valueCol: null,       ebCol: null           },
   { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        type: 'bt_roles',   valueCol: null,          ebCol: null          },
+  { key: 'splashback',      label: 'Splashbacks',          table: 'splashback_schedules',      type: 'sb_roles',   valueCol: null,          ebCol: null          },
 ] as const
 
 type SchedKey = typeof TABS[number]['key']
@@ -124,7 +126,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     let cancelled = false
     async function load() {
       const [
-        asmR, tkR, frR, dbR, idbR, hiR, slR, haR, btR,
+        asmR, tkR, frR, dbR, idbR, hiR, slR, haR, btR, sbR,
         matsR, ebR, btMatsR, hingesR, slidesR, handlesR, platesR,
       ] = await Promise.all([
         supabase.from('assembly_schedules').select('id,name,description,is_default,active').order('name'),
@@ -135,7 +137,8 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         supabase.from('hinge_schedules').select('id,name,description,is_default,active,hinge_id,hinge_plate_id').order('name'),
         supabase.from('slide_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('handle_schedules').select('id,name,description,is_default,active,handle_id').order('name'),
-        supabase.from('benchtop_schedules').select('id,name,description,is_default,active,benchtop_id').order('name'),
+        supabase.from('benchtop_schedules').select('id,name,description,is_default,active').order('name'),
+        supabase.from('splashback_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('materials').select('id,name,dz').eq('active', true).order('name'),
         supabase.from('edge_banding').select('id,name,thickness,material_match_id').eq('active', true).order('name'),
         supabase.from('benchtop_materials').select('id,name,dz,material_type').eq('active', true).order('name'),
@@ -156,6 +159,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         slide:           (slR.data   ?? []) as SchedRecord[],
         handle:          (haR.data   ?? []) as SchedRecord[],
         benchtop:        (btR.data   ?? []) as SchedRecord[],
+        splashback:      (sbR.data   ?? []) as SchedRecord[],
       })
       setMaterials((matsR.data    ?? []) as MatItem[])
       setEdgebands((ebR.data      ?? []) as EbItem[])
@@ -192,7 +196,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     setRowData({})
     setSlideEntries([])
     setAddingInDepth({})
-    if (tab.type === 'asm_grid' || tab.type === 'tk_list' || tab.type === 'front_list' || tab.type === 'bt_roles') {
+    if (tab.type === 'asm_grid' || tab.type === 'tk_list' || tab.type === 'front_list' || tab.type === 'bt_roles' || tab.type === 'sb_roles') {
       setRowsLoading(true)
       const rows = await fetchRows(tab.type, id)
       setRowData(rows)
@@ -282,6 +286,18 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
       for (const r of (data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null; edgeband_id: string | null }[]) {
         const matId = r.material_id ?? r.benchtop_material_id
         if (matId) map[r.part_role] = matId
+        if (r.edgeband_id) map[`${r.part_role}|eb`] = r.edgeband_id
+      }
+    } else if (type === 'sb_roles') {
+      // Splashback rows (z_splashback L5): either library. The picked id is
+      // stored with a 'board:' / 'surface:' prefix so one dropdown can hold both.
+      const { data } = await supabase
+        .from('splashback_schedule_rows')
+        .select('part_role,material_id,benchtop_material_id,edgeband_id')
+        .eq('schedule_id', schedId)
+      for (const r of (data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null; edgeband_id: string | null }[]) {
+        if (r.material_id) map[r.part_role] = `board:${r.material_id}`
+        else if (r.benchtop_material_id) map[r.part_role] = `surface:${r.benchtop_material_id}`
         if (r.edgeband_id) map[`${r.part_role}|eb`] = r.edgeband_id
       }
     }
@@ -475,6 +491,41 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
     if (!selectedId || !rowData[partRole]) return
     const k = `${partRole}|eb`
     await supabase.from('benchtop_schedule_rows')
+      .update({ edgeband_id: ebId || null })
+      .eq('schedule_id', selectedId).eq('part_role', partRole)
+    setRowData(p => ebId ? { ...p, [k]: ebId } : (({ [k]: _, ...rest }) => rest)(p))
+  }
+
+  async function saveSbMat(partRole: string, pick: string) {
+    if (!selectedId) return
+    const [kind, id] = pick.split(':')
+    if (id) {
+      const isBoard = kind === 'board'
+      await supabase.from('splashback_schedule_rows').upsert(
+        {
+          schedule_id: selectedId, part_role: partRole,
+          material_id: isBoard ? id : null, benchtop_material_id: isBoard ? null : id,
+          // Banding only applies to board panels.
+          edgeband_id: isBoard ? (rowData[`${partRole}|eb`] || null) : null,
+        },
+        { onConflict: 'schedule_id,part_role' }
+      )
+      setRowData(p => {
+        const n = { ...p, [partRole]: pick }
+        if (!isBoard) delete n[`${partRole}|eb`]
+        return n
+      })
+    } else {
+      await supabase.from('splashback_schedule_rows').delete()
+        .eq('schedule_id', selectedId).eq('part_role', partRole)
+      setRowData(p => { const n = { ...p }; delete n[partRole]; delete n[`${partRole}|eb`]; return n })
+    }
+  }
+
+  async function saveSbEb(partRole: string, ebId: string) {
+    if (!selectedId || !rowData[partRole]) return
+    const k = `${partRole}|eb`
+    await supabase.from('splashback_schedule_rows')
       .update({ edgeband_id: ebId || null })
       .eq('schedule_id', selectedId).eq('part_role', partRole)
     setRowData(p => ebId ? { ...p, [k]: ebId } : (({ [k]: _, ...rest }) => rest)(p))
@@ -750,6 +801,52 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
                   >
                     <option value="">{matId ? '— no banding —' : '—'}</option>
                     {opts.map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  function renderSbRoles() {
+    return (
+      <div className="space-y-3">
+        <p className="text-[10px] text-ink-subtle">
+          Pick from the Board library (cut on the CNC) or the Benchtop library (stone, glass, tile, mirror — supply only).
+          Leave Panel empty to follow the room&apos;s benchtop material (Settings › Materials › Splashback uses benchtop material).
+        </p>
+        {SPLASHBACK_ROLES.map(role => {
+          const pick    = rowData[role.key] ?? ''
+          const ebId    = rowData[`${role.key}|eb`] ?? ''
+          const isBoard = pick.startsWith('board:')
+          const boardId = isBoard ? pick.slice(6) : ''
+          return (
+            <div key={role.key} className="flex items-start gap-3">
+              <div className="w-36 shrink-0 pt-1">
+                <p className="text-xs text-ink-muted">{role.label}</p>
+                <p className="text-[9px] text-ink-subtle">{role.desc}</p>
+              </div>
+              <div className="flex-1 space-y-1">
+                <select value={pick} onChange={e => saveSbMat(role.key, e.target.value)} className={sel}>
+                  <option value="">{role.key === 'panel' ? '— same as benchtop / not set —' : '— none —'}</option>
+                  <optgroup label="Benchtop library (supply)">
+                    {benchtopMats.map(m => (
+                      <option key={m.id} value={`surface:${m.id}`}>{m.name} ({m.dz}mm){m.material_type ? ` · ${m.material_type}` : ''}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Board library (CNC)">
+                    {materials.map(m => (
+                      <option key={m.id} value={`board:${m.id}`}>{m.name} ({m.dz}mm)</option>
+                    ))}
+                  </optgroup>
+                </select>
+                {isBoard && role.key === 'panel' && (
+                  <select value={ebId} onChange={e => saveSbEb(role.key, e.target.value)} className={selEb}>
+                    <option value="">— no banding —</option>
+                    {ebOpts(boardId).map(eb => <option key={eb.id} value={eb.id}>{eb.name} ({eb.thickness}mm)</option>)}
                   </select>
                 )}
               </div>
@@ -1070,6 +1167,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
           {tab.type === 'db_list'     && renderDbList()}
           {tab.type === 'idb_list'    && renderDbList(IDB_ROLES)}
           {tab.type === 'bt_roles'    && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderBtRoles()}</>}
+          {tab.type === 'sb_roles'    && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderSbRoles()}</>}
           {tab.type === 'hw_single'   && renderHwSingle()}
           {tab.type === 'handle_roles' && <>{rowsLoading ? <p className="text-xs text-ink-subtle">Loading…</p> : renderHandleRoles()}</>}
         </div>

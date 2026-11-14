@@ -3,8 +3,10 @@
 > **Purpose**: the living spec for splashbacks. Update status + decisions in the same change as the code.
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → 2026-11-14 spec written from Mark's brief (RHK6468 Mossman Crt). **Nothing built.**
-> The decisions marked **PROPOSED** wait for Mark's OK. First job: RHK6468 Kitchen (ST marble on the
+> **RESUME HERE** → 2026-11-14 **S1 built** (schedules, overrides tables, inherit setting, seeds, library
+> tab, Settings default + toggle, `src/lib/splashbackMaterials.ts` cascade + tests). Next: **S2** — create
+> `splashback_instances` (deferred from S1 so its shape follows the drawing code) and draw/edit in elevation.
+> S1 check pending: Mark to look at Settings › Materials Schedule › Splashbacks and Settings › Materials. First job: RHK6468 Kitchen (ST marble on the
 > kitchen run with a mitred return to the door jamb, RS reconstituted stone in the butler's pantry).
 
 ## Mark's brief (2026-11-14)
@@ -56,7 +58,46 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
   material — stone + splashback on one sheet for the stonemason; glass on its own list.
 - Not CNC'd (stone / glass by others).
 
-## Questions for Mark
+## Locked decisions (2026-11-14)
+
+- **L1 Draw first, auto later**: hand drawing (S2) comes before auto-build (S4).
+- **L2 Windows**: the splashback stops at a window, cut around the opening (reveal default 0, editable).
+  A sill / reveal wrap can be added later as a return.
+- **L3 Default height with no overheads**: up to the lowest of bulkhead underside, rangehood, room height.
+- **L4 Inherit benchtop stone**: a setting, `shop_settings.splashback_inherits_benchtop` (default true).
+  When on, an empty splashback schedule role takes the room's benchtop worktop material.
+- **L5 Materials (OK'd by Mark 2026-11-14)**: no separate splashback library. A `splashback_schedule_rows` row
+  names a material from **either** library, using the same two nullable FKs `benchtop_schedule_rows` already
+  has: `material_id` → `materials` (board stock + board colours, e.g. a WB 16.5 or laminate board splashback) or
+  `benchtop_material_id` → `benchtop_materials` (stone, timber, and new types `glass`, `tile`, `mirror`,
+  `acrylic`). Board splashbacks can then be cut parts (thickness from the board); surface ones are
+  supply-only, as stone tops are.
+- **L6 Roles**: `panel` (the splashback), `substrate` (backing board behind tile / glass), `packer`
+  (battens when set off the wall). A row holds one library's id only (CHECK constraint). A job / room
+  override replaces the whole choice for its role (a board override clears a stone id).
+
+## S1 as built (2026-11-14)
+
+- Migration `migration_s1_splashback_schedules.sql` (applied live): `splashback_schedules`,
+  `splashback_schedule_rows`, `job_splashback_materials`, `room_splashback_materials` (RLS: library read /
+  admin write; job_access), `projects.splashback_schedule_id`, `rooms.splashback_schedule_id`,
+  `shop_settings.splashback_schedule_id` + `splashback_inherits_benchtop` (default true).
+- Seeded surface materials: 12mm Stone, 6mm Toughened Glass – Colour Backed, Tile – By Others, 6mm Mirror,
+  6mm Acrylic Splashback (notes `seed: splashback S1`). Benchtop material Type list gains Timber, Glass, Tile,
+  Mirror.
+- Seeded schedules: **Same as Benchtop** (default, no panel row → inherits), 20mm Stone, 12mm Stone, 6mm
+  Glass – Colour Backed, Tile – By Others (+ WB 16.5 substrate), 6mm Mirror, Board – Whiteboard 16.5. Shop
+  default = Same as Benchtop.
+- Cascade: `src/lib/splashbackMaterials.ts` — `pickSplashbackScheduleId` (instance → room → job → shop →
+  is_default), `effectiveSplashbackRows` (job then room overrides, then inherit), `benchtopPanelMaterial`
+  (stone_slab, else worktop_panel). Tests `src/lib/__tests__/splashbackMaterials.test.ts`.
+- UI: Schedules library › Splashbacks tab (one dropdown per role, Benchtop and Board libraries grouped, banding
+  on a board panel); Settings › Materials › Splashbacks default + "Splashback uses benchtop material".
+- Fixed in passing: the Schedules library asked for a non-existent `benchtop_schedules.benchtop_id` column.
+- Not yet: job / room schedule pickers + per-role overrides in the room Materials tab (with S2, when there is
+  something to resolve).
+
+## Questions for Mark (original; answers above)
 
 1. Auto-build splashbacks from the tops (like Auto-build tops), or draw each by hand first?
 2. Materials: extend the benchtop material library with glass / tile / mirror types, or a separate
@@ -71,8 +112,8 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 
 | Phase | What | Status |
 |---|---|---|
-| S0 | Spec + Mark's answers | [~] spec written 2026-11-14, answers pending |
-| S1 | Tables + schedules + seed materials | [ ] |
+| S0 | Spec + Mark's answers | [x] 2026-11-14 |
+| S1 | Tables + schedules + seed materials | [x] 2026-11-14, check pending (instances table moved to S2) |
 | S2 | Draw / edit in elevation (rect + Edit shape), plan band, 3D | [ ] |
 | S3 | Returns, joints, cut-outs (+ auto from openings) | [ ] |
 | S4 | Auto-build from tops | [ ] |

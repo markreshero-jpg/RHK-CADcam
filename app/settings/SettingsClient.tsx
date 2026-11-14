@@ -67,12 +67,14 @@ export interface ShopSettings {
   slide_schedule_id: string | null
   handle_schedule_id: string | null
   benchtop_schedule_id: string | null
+  splashback_schedule_id?: string | null
+  splashback_inherits_benchtop?: boolean
   construction_schedule_id: string | null
 }
 
 export type SchedKey =
   | 'assembly' | 'toekick' | 'front' | 'drawerbox'
-  | 'inner_drawerbox' | 'hinge' | 'slide' | 'handle' | 'benchtop'
+  | 'inner_drawerbox' | 'hinge' | 'slide' | 'handle' | 'benchtop' | 'splashback'
 
 export type SchedListMap = Record<SchedKey, { id: string; name: string }[]>
 
@@ -88,6 +90,7 @@ const SCHED_TYPES: { key: SchedKey; label: string; col: keyof ShopSettings }[] =
   { key: 'slide',           label: 'Slides',               col: 'slide_schedule_id'           },
   { key: 'handle',          label: 'Handles',              col: 'handle_schedule_id'          },
   { key: 'benchtop',        label: 'Benchtops',            col: 'benchtop_schedule_id'        },
+  { key: 'splashback',      label: 'Splashbacks',          col: 'splashback_schedule_id'      },
 ]
 
 // ── Tab config ────────────────────────────────────────────────────────────────
@@ -519,6 +522,15 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
     for (const st of SCHED_TYPES) m[st.col] = (s[st.col] as string | null) ?? null
     return m
   })
+
+  // z_splashback L4: an empty splashback panel takes the benchtop's material.
+  const [sbInherit, setSbInherit] = useState<boolean>(s.splashback_inherits_benchtop ?? true)
+  async function handleSaveSbInherit(on: boolean) {
+    if (!s.id) return
+    setSbInherit(on)
+    const { error } = await supabase.from('shop_settings').update({ splashback_inherits_benchtop: on }).eq('id', s.id)
+    if (error) { setSbInherit(!on); console.error('splashback inherit save error:', error) }
+  }
 
   async function handleSaveSchedule(col: string, id: string | null) {
     if (!s.id) return
@@ -978,6 +990,11 @@ export default function SettingsClient({ settings: initSettings, schedLists, ini
                         </div>
                       )
                     })}
+                    <label className="flex items-center gap-4 px-4 py-3 bg-surface cursor-pointer">
+                      <div className="w-48 shrink-0 text-xs font-medium text-ink">Splashback uses benchtop material</div>
+                      <input type="checkbox" checked={sbInherit} onChange={e => handleSaveSbInherit(e.target.checked)} />
+                      <span className="text-[10px] text-ink-subtle">When a splashback schedule leaves Panel empty, use the room&apos;s benchtop stone / top.</span>
+                    </label>
                   </div>
                 </div>
                 <div className="pt-2 border-t border-edge">
