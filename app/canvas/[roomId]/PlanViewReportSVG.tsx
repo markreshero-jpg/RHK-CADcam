@@ -23,7 +23,7 @@ import { resolveStyle } from '@/src/lib/annotations/style'
 import { isSpecBlock } from '@/src/lib/annotations/blocks'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
-  toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces,
+  toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces, wallOutline, isDropWall, polygonCentroid,
   cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabT,
   cabinetToPlan, cabinetPlanFrame,
   planDrawOrder,
@@ -327,7 +327,7 @@ export default function PlanViewReportSVG({
             fill={layers.show('wall_fill') ? fillPaint(wallPat, HATCH_ID, INK) : 'white'}
             fillOpacity={layers.show('wall_fill') ? lp('wall_fill').opacity : 1}
             stroke={layers.show('walls') ? INK : 'none'} strokeWidth={lw('walls', sw)} strokeLinejoin="miter"
-            strokeOpacity={lp('walls').opacity} strokeDasharray={lp('walls').strokeDasharray}
+            strokeOpacity={lp('walls').opacity} strokeDasharray={isDropWall(w) ? `${6 * P} ${3 * P}` : lp('walls').strokeDasharray}
           />
         ))
       })}
@@ -346,9 +346,10 @@ export default function PlanViewReportSVG({
         const inward = wallInwardNormal(w, cx)
         const e = wallEnd(w)
         const half = w.wall_type === 'nib' ? 0 : w.thickness / 2   // a nib's line is already its centre
-        const mx = (w.pos_x + e.x) / 2 - inward.x * half
-        const my = (w.pos_y + e.y) / 2 - inward.y * half
-        const fs = Math.min(w.thickness * 0.7, layers.w('wall_names', 5 * P))   // never larger than the wall band
+        const shaped = wallOutline(w), sc = shaped && polygonCentroid(shaped)   // shaped nib: its centroid (N4)
+        const mx = sc ? sc.x : (w.pos_x + e.x) / 2 - inward.x * half
+        const my = sc ? sc.y : (w.pos_y + e.y) / 2 - inward.y * half
+        const fs = Math.min(sc ? 200 : w.thickness * 0.7, layers.w('wall_names', 5 * P))   // never larger than the wall band
         if (fs < 1) return null
         const textAngle = Math.cos(toRad(w.angle)) < -0.001 ? w.angle + 180 : w.angle
         return (

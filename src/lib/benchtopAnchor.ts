@@ -13,7 +13,7 @@
 // rather than stored per edge — it can't go stale when a wall or top moves.
 
 import type { Wall, BenchtopSegment } from './types'
-import { wallDir, wallInwardNormal, type Pt } from './geometry'
+import { wallDir, wallInwardNormal, isDropWall, type Pt } from './geometry'
 import { outlinePoints, outwardNormal, outlineCentroid, rotateFn, translateFn, mapSegments } from './benchtopGeometry'
 
 export type WallSide = 'face' | 'back'
@@ -54,6 +54,7 @@ export function wallContacts(segs: BenchtopSegment[], walls: Wall[], cx: Pt): Wa
     if (s.type !== 'line') return
     const nOut = outwardNormal(segs, i)
     for (const wall of walls) {
+      if (isDropWall(wall)) continue   // a bulkhead over the top isn't an edge it sits against (N4)
       for (const side of ['face', 'back'] as const) {
         const f = wallFrame(wall, side, cx)
         if (Math.abs(offOf(f, s.p0)) > CONTACT_TOL || Math.abs(offOf(f, s.p1)) > CONTACT_TOL) continue
@@ -88,6 +89,7 @@ export function autoAnchor(segs: BenchtopSegment[], walls: Wall[], cx: Pt): BtAn
   const c = outlineCentroid(segs)
   let best: (BtAnchor & { d: number }) | null = null
   for (const wall of walls) {
+    if (isDropWall(wall)) continue
     for (const side of ['face', 'back'] as const) {
       const f = wallFrame(wall, side, cx)
       const off = offOf(f, c)

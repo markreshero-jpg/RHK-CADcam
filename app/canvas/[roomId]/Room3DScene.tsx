@@ -12,6 +12,7 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
   wallDir, wallInwardNormal, centroid, wallEnd, lineIntersect, dist, wallPieces, wallSpanQuad, wallMitreCorners,
+  wallOutline, wallBaseZ, isDropWall, polygonCentroid,
 } from '@/src/lib/geometry'
 import { openingOnWall } from '@/src/lib/fixtureGeometry'
 import { wallTopPoints } from '@/src/lib/wallProfile'
@@ -102,7 +103,7 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
 
   const holesKey = JSON.stringify(holes ?? [])
   const holed = useMemo(() => {
-    if (wall.wall_type === 'island' || !holes?.length) return null
+    if (wall.wall_type === 'island' || !holes?.length || isDropWall(wall)) return null
     return wallPrisms(wall, walls, rc, height, holes).map(({ pts, z0, z1 }) => {
       const shape = new Shape()
       pts.forEach((p, i) => i ? shape.lineTo(p.x, -p.y) : shape.moveTo(p.x, -p.y))
@@ -121,7 +122,7 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
   // through the wall thickness. Ends stay square (no mitre) — fine for a rake.
   const topKey = JSON.stringify(wall.top_profile ?? null)
   const raked = useMemo(() => {
-    const top = wall.wall_type === 'island' ? null : wallTopPoints(wall)
+    const top = wall.wall_type === 'island' || isDropWall(wall) ? null : wallTopPoints(wall)
     if (!top) return null
     const shape = new Shape()
     shape.moveTo(0, 0)
@@ -141,20 +142,23 @@ function WallMesh({ wall, walls, room, rc, color = '#cbd5e1', alpha = 1, wire = 
   }, [topKey, wall.length, wall.thickness, wall.pos_x, wall.pos_y, wall.angle, wall.wall_type, rc])
   useEffect(() => () => { raked?.dispose() }, [raked])
 
+  // Drop / shaped nib (z_nib_wall N4): its outline (or rectangle) from base_height up.
+  const base = wallBaseZ(wall)
+  const outlineKey = JSON.stringify(wall.outline ?? null)
   const geometry = useMemo(() => {
     if (!corners || raked) return null
-    const [s, e, pEO, pSO] = corners
+    const foot: Pt[] = wallOutline(wall) ?? corners
+    if (height - base <= 0) return null
     const shape = new Shape()
-    shape.moveTo(s.x,   -s.y)
-    shape.lineTo(e.x,   -e.y)
-    shape.lineTo(pEO.x, -pEO.y)
-    shape.lineTo(pSO.x, -pSO.y)
+    foot.forEach((p, i) => i ? shape.lineTo(p.x, -p.y) : shape.moveTo(p.x, -p.y))
     shape.closePath()
-    const geo = new ExtrudeGeometry(shape, { depth: height, bevelEnabled: false })
+    const geo = new ExtrudeGeometry(shape, { depth: height - base, bevelEnabled: false, curveSegments: 1 })
     geo.rotateX(-Math.PI / 2)
+    if (base) geo.translate(0, base, 0)
     geo.computeVertexNormals()
     return geo
-  }, [corners, height, raked])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [corners, height, raked, base, outlineKey])
 
   useEffect(() => () => { geometry?.dispose() }, [geometry])
 
@@ -190,8 +194,9 @@ function WallLabel({ wall, room, rc }: { wall: Wall; room: Room; rc: RoomRef }) 
   // so the label sits over the wall centre rather than just the inner edge.
   const inward = wallInwardNormal(wall, rc)
   const half = wall.wall_type === 'nib' ? 0 : wall.thickness / 2   // a nib's line is already its centre
-  const midX = (wall.pos_x + e.x) / 2 - inward.x * half
-  const midZ = (wall.pos_y + e.y) / 2 - inward.y * half
+  const shaped = wallOutline(wall), sc = shaped && polygonCentroid(shaped)   // shaped nib: its centroid (N4)
+  const midX = sc ? sc.x : (wall.pos_x + e.x) / 2 - inward.x * half
+  const midZ = sc ? sc.y : (wall.pos_y + e.y) / 2 - inward.y * half
   const angleRad = wall.angle * TO_RAD
 
   return (

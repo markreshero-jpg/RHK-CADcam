@@ -3,7 +3,7 @@
 // next to another cabinet, REVENDL / REVENDR next to an end panel, wall or nothing
 // (resolveReveal). Detected in plan: a probe just past each side, near the front.
 import type { CabinetInstance, NeighbourType, Room, Wall } from './types'
-import { cabWallPerp, cabinetCornerPts, cabinetToPlan, cabsBlock, centroid, wallInwardNormal, wallMitreCorners, type Pt } from './geometry'
+import { cabWallPerp, cabinetCornerPts, cabinetToPlan, cabsBlock, centroid, wallInwardNormal, wallMitreCorners, isDropWall, type Pt } from './geometry'
 
 /** How far past the side the probe looks — a neighbour further off than this isn't touching. */
 const PROBE = 5
@@ -41,7 +41,8 @@ export function detectNeighbours(cabinets: CabinetInstance[], walls: Wall[], roo
     if (!w || c.is_kick_assembly) return []
     return [{ c, poly: cabinetCornerPts(c, w, cabWallPerp(c, w, wallInwardNormal(w, ref))) }]
   })
-  const wallPolys = walls.map(w => wallMitreCorners(w, walls, ref)).filter(p => p.length >= 3)
+  // Drop / shaped nibs (bulkheads off the floor, z_nib_wall N4) aren't a side for cabinets.
+  const wallPolys = walls.filter(w => !isDropWall(w)).map(w => wallMitreCorners(w, walls, ref)).filter(p => p.length >= 3)
 
   const out = new Map<string, NeighbourPair>()
   for (const cab of cabinets) {

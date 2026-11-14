@@ -5,7 +5,7 @@ import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile, type RoomAnnotation, type SplashbackInstance, type BenchtopSegment } from '@/src/lib/types'
-import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, nibsOnWall, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
+import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, nibsOnWall, dropWallsOnWall, wallBaseZ, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -1358,6 +1358,37 @@ export default function ElevationSVG({
                     textAnchor="middle" dominantBaseline="middle"
                     fontSize={layers.w('wall_names', 10 / z)} fill={layers.color('wall_names', '#ffffff')} opacity={layers.op('wall_names')}
                     transform={`rotate(-90,${midX},${midY})`}
+                    style={{ userSelect: 'none' }}>
+                    {nib.name}
+                  </text>}
+                </g>
+              )
+            })}
+
+            {/* Drop / shaped nib walls in front of this face (z_nib_wall N4, e.g. a curved PB bulkhead):
+                a band from base_height to the nib's height over its stretch along the wall. */}
+            {!isBack && dropWallsOnWall(wall, walls, centroid(walls)).map(({ nib, t0, t1 }) => {
+              const nH = nib.height ?? room.room_dy ?? 2400, b = wallBaseZ(nib)
+              const yT = roomH - nH, yB = roomH - b, midX = (t0 + t1) / 2, midY = (yT + yB) / 2
+              const patId = `drop-fill-${nib.id}`
+              const showFill = layers.show('wall_fill'), showLine = layers.show('walls')
+              const pat = layers.pattern('wall_fill', 'hatch')
+              return (
+                <g key={`drop-${nib.id}`} style={{ pointerEvents: 'none' }}>
+                  {showFill && (
+                    <defs>
+                      <FillPatternDef id={patId} pattern={pat} step={60} bg="#111827"
+                        color={layers.color('wall_fill', '#1f2937')} width={layers.w('wall_fill', 1.5) / lz} />
+                    </defs>
+                  )}
+                  <rect x={t0} y={yT} width={t1 - t0} height={yB - yT}
+                    fill={showFill ? fillPaint(pat, patId, layers.color('wall_fill', '#111827')) : 'none'}
+                    fillOpacity={layers.props('wall_fill', z).opacity}
+                    stroke={showLine ? layers.color('walls', '#4b5563') : 'none'} strokeWidth={layers.w('walls', 1) / lz}
+                    strokeOpacity={layers.props('walls', z).opacity} strokeDasharray={layers.props('walls', z).strokeDasharray} />
+                  {layers.show('wall_names') && <text x={midX} y={midY}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fontSize={layers.w('wall_names', 10 / z)} fill={layers.color('wall_names', '#ffffff')} opacity={layers.op('wall_names')}
                     style={{ userSelect: 'none' }}>
                     {nib.name}
                   </text>}

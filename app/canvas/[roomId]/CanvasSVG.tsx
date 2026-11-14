@@ -16,7 +16,7 @@ import { customExtents } from '@/src/lib/customPartBox'
 import {
   Pt, MIN_WALL_LEN, SNAP_PX,
   toRad, toDeg, dist,
-  wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallPieces, wallInwardNormal, centroid,
+  wallEnd, wallDir, wallPolygon, wallMitrePolygon, wallPieces, wallInwardNormal, centroid, wallOutline, isDropWall, polygonCentroid,
   cabWallPerp, cabinetPolygon, cabinetCenterPt, cabT, cabinetToPlan, cabinetPlanFrame,
   gridDots,
   planDrawOrder,
@@ -1128,7 +1128,7 @@ export default function CanvasSVG({
                   stroke={isSel ? '#3b82f6' : layers.show('walls') ? layers.color('walls', '#374151') : 'none'}
                   strokeWidth={isSel ? 2 / lz : layers.w('walls', 1) / lz}
                   strokeOpacity={isSel ? 1 : layers.props('walls', view.zoom).opacity}
-                  strokeDasharray={isSel ? undefined : layers.props('walls', view.zoom).strokeDasharray}
+                  strokeDasharray={isDropWall(w) ? `${10 / view.zoom} ${5 / view.zoom}` : isSel ? undefined : layers.props('walls', view.zoom).strokeDasharray}
                   style={{ cursor: mode === 'select' ? 'pointer' : undefined }}
                   onPointerDown={ev => onWallPointerDown(ev, w.id)}
                   onClick={onClick} onContextMenu={onCtx}
@@ -1138,8 +1138,9 @@ export default function CanvasSVG({
                 if (!layers.show('wall_names')) return null
                 const inorm = wallInwardNormal(w, cx)
                 const half = w.wall_type === 'nib' ? 0 : w.thickness / 2   // a nib's line is already its centre
-                const tx = midX - inorm.x * half
-                const ty = midY - inorm.y * half
+                const shaped = wallOutline(w), sc = shaped && polygonCentroid(shaped)   // shaped nib: its centroid (N4)
+                const tx = sc ? sc.x : midX - inorm.x * half
+                const ty = sc ? sc.y : midY - inorm.y * half
                 return (
                   <text x={tx} y={ty} textAnchor="middle" dominantBaseline="middle"
                     fontSize={layers.w('wall_names', wallNameFs)} fill={isSel ? '#93c5fd' : layers.color('wall_names', '#4b5563')} opacity={layers.op('wall_names')}

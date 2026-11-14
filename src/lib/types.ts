@@ -165,6 +165,13 @@ export interface Wall {
   pos_y: number             // room Y of wall start mm
   thickness: number         // wall thickness mm (default 90); 0 for island walls
   wall_type: WallType       // 'standard' | 'island'
+  /** Drop wall (z_nib_wall N4): mm above the floor the wall starts, e.g. a bulkhead from 1620 to the
+   *  ceiling. Null / 0 = from the floor. Nib walls only. */
+  base_height?: number | null
+  /** Shaped wall (z_nib_wall N4): closed plan polygon (room coords) used as the footprint instead of
+   *  the length x thickness rectangle, e.g. a curved bulkhead. pos / angle / length stay as its
+   *  reference line. Nib walls only; null = plain rectangle. */
+  outline?: { x: number; y: number }[] | null
   created_at: string
 }
 

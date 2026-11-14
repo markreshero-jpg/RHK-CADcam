@@ -292,6 +292,9 @@ export function wallMitreCorners(w: Wall, walls: Wall[], ref: RoomRef): Pt[] {
 
   const s = { x: w.pos_x, y: w.pos_y }
   const e = wallEnd(w)
+  // Shaped nib (N4): its own outline.
+  const shaped = wallOutline(w)
+  if (shaped) return shaped.map(p => ({ x: p.x, y: p.y }))
   // Nib: a plain rectangle centred on its line, square ends (no mitres).
   if (w.wall_type === 'nib') {
     const h = { x: inward.x * thick / 2, y: inward.y * thick / 2 }
@@ -322,6 +325,60 @@ export function wallMitreCorners(w: Wall, walls: Wall[], ref: RoomRef): Pt[] {
   return [s, e, pEO, pSO]
 }
 
+// ── Shaped / drop walls (z_nib_wall N4) ─────────────────────────────────────
+
+/** A shaped nib's plan outline (closed polygon, room coords), or null for a plain wall. */
+export function wallOutline(w: Wall): Pt[] | null {
+  if (w.wall_type !== 'nib') return null
+  const o = w.outline
+  return Array.isArray(o) && o.length >= 3 && o.every(p => Number.isFinite(p?.x) && Number.isFinite(p?.y)) ? o : null
+}
+
+/** Height above the floor the wall starts (0 = floor). Nib walls only. */
+export function wallBaseZ(w: Wall): number {
+  return w.wall_type === 'nib' ? Math.max(0, Number(w.base_height) || 0) : 0
+}
+
+/** A nib that isn't a plain floor-to-ceiling strip: shaped and/or starting above the floor. */
+export function isDropWall(w: Wall): boolean {
+  return !!wallOutline(w) || wallBaseZ(w) > 0
+}
+
+/** Area centroid of a closed polygon (falls back to the point average when degenerate). */
+export function polygonCentroid(pts: Pt[]): Pt {
+  let a = 0, cx = 0, cy = 0
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i], q = pts[(i + 1) % pts.length]
+    const k = p.x * q.y - q.x * p.y
+    a += k; cx += (p.x + q.x) * k; cy += (p.y + q.y) * k
+  }
+  if (Math.abs(a) < 1e-6) return { x: pts.reduce((s, p) => s + p.x, 0) / (pts.length || 1), y: pts.reduce((s, p) => s + p.y, 0) / (pts.length || 1) }
+  return { x: cx / (3 * a), y: cy / (3 * a) }
+}
+
+/**
+ * Drop / shaped nibs in front of a wall's face (within `maxOff` of it): their
+ * stretch along the wall (clipped to it), for the elevation band from
+ * base_height to the nib's height.
+ */
+export function dropWallsOnWall(wall: Wall, walls: Wall[], ref: RoomRef, maxOff = 1500): { nib: Wall; t0: number; t1: number }[] {
+  if (wall.wall_type === 'nib') return []
+  const d = wallDir(wall), n = wallInwardNormal(wall, ref)
+  const out: { nib: Wall; t0: number; t1: number }[] = []
+  for (const w of walls) {
+    if (w.id === wall.id || !isDropWall(w)) continue
+    const pts = wallMitreCorners(w, walls, ref)
+    if (pts.length < 3) continue
+    const ts = pts.map(p => (p.x - wall.pos_x) * d.x + (p.y - wall.pos_y) * d.y)
+    const offs = pts.map(p => (p.x - wall.pos_x) * n.x + (p.y - wall.pos_y) * n.y)
+    if (Math.min(...offs) < -NIB_TOL || Math.min(...offs) > maxOff) continue
+    const t0 = Math.max(0, Math.min(...ts)), t1 = Math.min(wall.length, Math.max(...ts))
+    if (t1 - t0 < 1) continue
+    out.push({ nib: w, t0, t1 })
+  }
+  return out.sort((a, b) => a.t0 - b.t0)
+}
+
 export function wallMitrePolygon(w: Wall, walls: Wall[], ref: RoomRef): string {
   return wallMitreCorners(w, walls, ref).map(p => `${p.x},${p.y}`).join(' ')
 }
@@ -340,7 +397,7 @@ function wallFaceLines(w: Wall, corners: Pt[]) {
 /** The wall footprint across one span (the bit under / over an opening): [insideA, insideB, outsideB, outsideA]. */
 export function wallSpanQuad(w: Wall, walls: Wall[], ref: RoomRef, span: WallSpan): Pt[] {
   const c = wallMitreCorners(w, walls, ref)
-  if (c.length < 4) return []
+  if (c.length !== 4 || wallOutline(w)) return []
   const { ins, out } = wallFaceLines(w, c)
   return [ins(span.t0), ins(span.t1), out(span.t1), out(span.t0)]
 }
@@ -356,7 +413,7 @@ export interface WallSpan { t0: number; t1: number }
  */
 export function wallPieces(w: Wall, walls: Wall[], ref: RoomRef, spans: WallSpan[]): Pt[][] {
   const c = wallMitreCorners(w, walls, ref)
-  if (c.length < 4 || !spans.length) return c.length ? [c] : []
+  if (c.length < 4 || !spans.length || wallOutline(w)) return c.length ? [c] : []   // shaped: no openings
   const [s, e, pEO, pSO] = c
   const { ins, out } = wallFaceLines(w, c)
   const pieces: Pt[][] = []
@@ -405,7 +462,7 @@ export function nibsOnWall(wall: Wall, walls: Wall[]): { nib: Wall; t: number }[
   const d = wallDir(wall)
   const out: { nib: Wall; t: number }[] = []
   for (const n of walls) {
-    if (n.wall_type !== 'nib') continue
+    if (n.wall_type !== 'nib' || isDropWall(n)) continue   // drop / shaped: dropWallsOnWall
     for (const p of [{ x: n.pos_x, y: n.pos_y }, wallEnd(n)]) {
       const rx = p.x - wall.pos_x, ry = p.y - wall.pos_y
       const t = rx * d.x + ry * d.y

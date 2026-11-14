@@ -17,7 +17,7 @@ import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
 import ReturnSectionSVG, { type ReturnSectionData } from './ReturnSectionSVG'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
-import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ, nibsOnWall } from '@/src/lib/geometry'
+import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ, nibsOnWall, dropWallsOnWall, wallBaseZ } from '@/src/lib/geometry'
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
 import type {
@@ -680,7 +680,28 @@ export default function ElevationPrintSVG({
         </g>
       )
     })
-    return (<>{left && render(left, true)}{right && render(right, false)}{nibs}</>)
+    // Drop / shaped nibs in front of the face (z_nib_wall N4): a band base_height → height.
+    const drops = isBack ? [] : dropWallsOnWall(wall, walls, centroid(walls)).map(({ nib, t0, t1 }) => {
+      const nH = nib.height ?? room.room_dy ?? 2400, b = wallBaseZ(nib)
+      const yT = roomH - nH, yB = roomH - b, midX = (t0 + t1) / 2, midY = (yT + yB) / 2
+      const patId = `print-drop-fill-${wall.id}-${nib.id}`
+      const pat = layers.pattern('wall_fill', 'hatch')
+      return (
+        <g key={`drop-${nib.id}`} pointerEvents="none">
+          {layers.show('wall_fill') && (
+            <defs><FillPatternDef id={patId} pattern={pat} step={60} color={INK3} width={atLeastMin(layers.w('wall_fill', thinSW), P)} bg="white" /></defs>
+          )}
+          <rect x={t0} y={yT} width={t1 - t0} height={yB - yT}
+            fill={layers.show('wall_fill') ? fillPaint(pat, patId, INK) : 'white'} fillOpacity={layers.show('wall_fill') ? lp('wall_fill').opacity : 1}
+            stroke={layers.show('walls') ? INK : 'none'} strokeWidth={atLeastMin(layers.w('walls', thinSW), P)}
+            strokeOpacity={lp('walls').opacity} strokeDasharray={lp('walls').strokeDasharray} />
+          {layers.show('wall_names') && <text x={midX} y={midY} textAnchor="middle" dominantBaseline="middle"
+            fontSize={layers.w('wall_names', dimFs)} fill={INK} opacity={layers.op('wall_names')}
+            fontFamily="Arial, Helvetica, sans-serif">{nib.name}</text>}
+        </g>
+      )
+    })
+    return (<>{left && render(left, true)}{right && render(right, false)}{nibs}{drops}</>)
   }
 
   // ── Reference lines (ceiling / soffit / wall-cab top) ─────────────────────

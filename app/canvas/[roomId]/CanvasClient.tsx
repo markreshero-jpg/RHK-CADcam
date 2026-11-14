@@ -1287,9 +1287,15 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     for (const id of ids) await dbDeleteWall(id)
   }
 
-  const handleUpdateWall = useCallback(async (id: string, u: Partial<Wall>) => {
+  const handleUpdateWall = useCallback(async (id: string, u0: Partial<Wall>) => {
     const currentWalls = wallsRef.current
     const old = currentWalls.find(w => w.id === id)
+    // A shaped nib (z_nib_wall N4) moves its outline with its start point.
+    let u = u0
+    if (old?.outline?.length && !('outline' in u0) && (u0.pos_x != null || u0.pos_y != null)) {
+      const dx = (u0.pos_x ?? old.pos_x) - old.pos_x, dy = (u0.pos_y ?? old.pos_y) - old.pos_y
+      if (dx || dy) u = { ...u0, outline: old.outline.map(p => ({ x: p.x + dx, y: p.y + dy })) }
+    }
     const propagated = old && isEndpointUpdate(u)
       ? computeJointUpdates(currentWalls, id, old, { ...old, ...u })
       : []

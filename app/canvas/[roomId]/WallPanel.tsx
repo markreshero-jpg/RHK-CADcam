@@ -119,6 +119,24 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onMoveBy, onDele
               className={inp + ' text-right'} />
           </div>
         </div>
+        {wall.wall_type === 'nib' && (
+          <div data-tour="wall-base-height">
+            <label className={lbl}>Base height (mm) — drop wall / bulkhead</label>
+            <CalcInput value={(wall.base_height ?? null) as number | null} decimals={1}
+              placeholder="0 — from the floor"
+              onCommit={v => onUpdate(wall.id, { base_height: v })}
+              onClear={() => onUpdate(wall.id, { base_height: null })}
+              className={inp + ' text-right'} />
+            <p className="text-[10px] text-gray-600 mt-0.5">The wall starts this far up (e.g. 1620) and runs to its height. Dashed in plan, a band on the elevation it faces.</p>
+            {wall.outline && wall.outline.length >= 3 && (
+              <div className="flex items-center justify-between mt-1">
+                <span className="text-[10px] text-gray-400">Shaped outline ({wall.outline.length} points)</span>
+                <button type="button" onClick={() => onUpdate(wall.id, { outline: null })}
+                  className="text-[10px] text-red-400 hover:text-red-300">Clear outline</button>
+              </div>
+            )}
+          </div>
+        )}
         <div>
           <label className={lbl}>Soffit Depth from top (mm)</label>
           <CalcInput value={(f('soffit_height') ?? null) as number | null} decimals={1}
