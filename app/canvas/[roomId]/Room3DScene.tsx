@@ -932,7 +932,7 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
             // measuring, nor in wire view outside F4 — a ghosted top would steal
             // clicks meant for the cabinets seen through it.
             selected={bt.selectedId === b.id} onSelect={!measuring && (pickBenchtops || !wire) ? () => bt.onSelect(b.id) : undefined}
-            color={layers.color('benchtops', '#e7e5e4')} alpha={layers.alpha('benchtops')} wire={wire} />
+            color={layers.colorOf('benchtops') ?? bt.info(b).color ?? '#e7e5e4'} alpha={layers.alpha('benchtops')} wire={wire} />
         )
       ))}
 

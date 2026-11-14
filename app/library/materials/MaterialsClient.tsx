@@ -101,6 +101,8 @@ const TABS: TabConfig[] = [
         ],
       },
       { key: 'finish',          label: 'Finish',    type: 'text',    w: 110 },
+      // Display colour of the top in 3D / elevation (z_benchtop_colours C1).
+      { key: 'color',           label: 'Colour',    type: 'colour',  w: 90 },
       { key: 'dz',              label: 'dz mm',     type: 'number',  w: 60 },
       { key: 'sheet_dx',        label: 'L mm',      type: 'number',  w: 65 },
       { key: 'sheet_dy',        label: 'W mm',      type: 'number',  w: 65 },

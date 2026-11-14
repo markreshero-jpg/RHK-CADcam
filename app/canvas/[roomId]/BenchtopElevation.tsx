@@ -36,6 +36,8 @@ export interface BtElevInfo {
   topZ: number
   thick: BtThickness
   defaultProfileId: string | null
+  /** Display colour of what the top is made of (z_benchtop_colours C1); null/absent = layer default. */
+  color?: string | null
 }
 
 const dot = (a: Pt, b: Pt) => a.x * b.x + a.y * b.y
@@ -105,12 +107,12 @@ export default function BenchtopElevation({
     <g style={{ pointerEvents: interactive ? undefined : 'none' }}>
       {shown.map((bt, k) => {
         const segs = btSegments(bt)
-        const { topZ, thick, defaultProfileId } = info(bt)
+        const { topZ, thick, defaultProfileId, color: matCol } = info(bt)
         const ts = outlinePoints(segs).map(p => alongOf(f, p))
         const t0 = Math.min(...ts), t1 = Math.max(...ts)
         const yTop = roomH - topZ, yBot = yTop + thick.total
         const isSel = bt.id === selectedId
-        const fill = print ? 'white' : layers.lineDrawing ? 'none' : layers.color('benchtops', '#134e4a')
+        const fill = print ? 'white' : layers.lineDrawing ? 'none' : layers.colorOf('benchtops') ?? matCol ?? '#134e4a'
         const fillOp = print ? 1 : layers.lineDrawing ? 0 : lp.fillOpacity
 
         // Front faces = exposed or not, edges whose outward normal faces the viewer.
