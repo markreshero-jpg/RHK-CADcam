@@ -127,6 +127,11 @@ Overhead hinges [100, 610, 831] to clear the adj shelf holes.
   TBC clouds (stone colour, handles, tap) on a new job layer "Questions for Client", filler scribe
   + D2 cut-in site notes.
 
+### Rev 2 (Mark 2026-11-14) - `_tmp-6468-laundry-sink.mjs`
+- Tub = library Abi Seba single U/M stretched to 545 x 480 (~45L at 205 deep), undermount under
+  the 20 stone, front 50 back from the top edge. Abey Lucia gooseneck mixer behind it (hole 45
+  behind the bowl, ~40 off the wall). Both linked to BC-01. Generic tub catalog row retired.
+
 ### Open / TBC
 - [ ] Stone colour.
 - [ ] Handles (drawn without).
