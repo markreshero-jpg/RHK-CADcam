@@ -48,9 +48,21 @@ export default function TakeOfflineButton({ projectId, rooms }: { projectId: str
   async function run() {
     if (status.kind === 'running' || !rooms.length) return
     if (!navigator.onLine) { setStatus({ kind: 'error', msg: 'Needs signal' }); return }
-    const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : undefined
-    if (!reg) { setStatus({ kind: 'error', msg: 'Offline support isn’t switched on in this browser' }); return }
-    await navigator.serviceWorker.ready
+    if (!('serviceWorker' in navigator)) { setStatus({ kind: 'error', msg: 'This browser can’t keep rooms offline' }); return }
+    let on = process.env.NODE_ENV === 'production'
+    try { if (localStorage.getItem('rhk.sw') === '1') on = true } catch { /* private window */ }
+    if (!on) { setStatus({ kind: 'error', msg: 'Offline only works on the live site' }); return }
+    // The page may not have finished setting up offline support yet (first visit after a
+    // deploy): set it up now rather than failing.
+    setStatus({ kind: 'running', done: 0, total: rooms.length, name: 'setting up' })
+    let reg = await navigator.serviceWorker.getRegistration()
+    try {
+      if (!reg) reg = await navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })
+      reg = await Promise.race([navigator.serviceWorker.ready, new Promise<never>((_, no) => setTimeout(() => no(new Error('timeout')), 30000))])
+    } catch (e) {
+      console.error('[offline] take offline', e)
+      setStatus({ kind: 'error', msg: 'Couldn’t switch on offline support, reload and try again' }); return
+    }
     let ok = 0
     for (let i = 0; i < rooms.length; i++) {
       setStatus({ kind: 'running', done: i, total: rooms.length, name: rooms[i].name })
