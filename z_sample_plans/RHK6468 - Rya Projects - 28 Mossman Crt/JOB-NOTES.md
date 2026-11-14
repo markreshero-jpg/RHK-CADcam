@@ -110,10 +110,13 @@ How it's drawn:
   Board 18); WC-04 over the veneer tall bank stays veneer.
 - Elevation fix: an island top now also draws on an island wall that runs under it (Wall 9 showed no stone).
 
-### Open / TBC (rev 2)
-- [ ] 13 pack behind the stone band (band 20 on the drawer backs vs panel 17 + moulding 33 flush with it).
-- [ ] 3 pack between the leg box and the stone apron (veneer 17 vs stone 20, both flush on the face).
-- [ ] BC-17 / BC-24 33 veneer gables beside the legs: still needed now the legs are wrapped?
+### Rev 3 (Mark 2026-11-14, answers to rev 2) - `_tmp-6468-island-rev3.mjs`
+- Stone band sits straight on the drawer backs; the 33x33 mouldings stick out 30 past it. Overhang kept 300 to
+  the band face (5888): drawers 721 deep (backs 5868), BC-03 5868-5885, mouldings 5885-5918.
+- Leg veneer sits 3 in from the stone so the stone's back touches the WB box all round: faces 274 x 620,
+  sides 1074 x 620 (stone 3 proud of the veneer).
+- BC-17 / BC-24 end gables beside the legs deleted. Wine opening kept 600 (BC-18 moved, BC-19 440 -> 476);
+  BC-23 runs to the leg (1055 -> 1091).
 
 ## Laundry - drawn 2026-11-14, room `874fed25-8e1b-4bbf-b1ff-3090361b5dad`
 
