@@ -2,7 +2,10 @@
 // One entry per row: later changes to the same row fold into the waiting one, so
 // the queue holds at most one write per row however long the connection is down.
 
-export type OutboxTable = 'room_annotations'
+export type OutboxTable = 'room_annotations' | 'annotation_clashes'
+
+/** Tables whose rows are checked for clashes (step 1b) before a queued change is sent. */
+export const CLASH_CHECKED: ReadonlySet<OutboxTable> = new Set(['room_annotations'])
 
 export type OutboxOp =
   | { op: 'upsert'; row: Record<string, unknown> & { id: string } }
@@ -18,6 +21,9 @@ export interface OutboxEntry {
   seq: number
   queuedAt: number
   item: OutboxOp
+  /** Step 1b: the row's server updated_at when this device first changed it.
+   *  undefined = a new row (or already checked) — no clash check. */
+  base?: string
 }
 
 export const entryKey = (table: OutboxTable, id: string) => `${table}:${id}`
@@ -61,4 +67,38 @@ export function isNetworkFailure(res: { status?: number; error?: { message?: str
   if (res.status === 0) return true
   const m = res.error?.message ?? ''
   return /Failed to fetch|NetworkError|FetchError|Load failed|network/i.test(m)
+}
+
+export type ClashKind = 'changed' | 'restored' | 'lost'
+
+export interface ClashFound {
+  kind: ClashKind
+  theirs: Record<string, unknown> | null
+  mine: Record<string, unknown>
+  theirUpdatedAt: string | null
+  /** What to send now: the queued change, a full row (to put a deleted item back), or null (nothing to send). */
+  send: OutboxOp | null
+}
+
+/** Step 1b: did someone else change / delete this row since this device last saw it?
+ *  Last change still wins — this only reports the clash and says what to send.
+ *  server = the row on the server now (undefined = gone); local = the full row this
+ *  device has on screen (to put back a deleted item a patch was made to). */
+export function checkClash(
+  e: OutboxEntry, server: (Record<string, unknown> & { updated_at?: string }) | undefined, local?: Record<string, unknown>,
+): ClashFound | null {
+  if (e.base === undefined) return null
+  const item = e.item
+  const mine = item.op === 'upsert' ? item.row : item.op === 'patch' ? item.patch : { id: e.id }
+  if (!server) {
+    if (item.op === 'delete') return null                       // both deleted it
+    if (item.op === 'upsert') return { kind: 'restored', theirs: null, mine, theirUpdatedAt: null, send: item }
+    if (local) {
+      const row = { ...local, ...item.patch, id: e.id } as Record<string, unknown> & { id: string }
+      return { kind: 'restored', theirs: null, mine: row, theirUpdatedAt: null, send: { op: 'upsert', row } }
+    }
+    return { kind: 'lost', theirs: null, mine, theirUpdatedAt: null, send: null }
+  }
+  if (server.updated_at === e.base) return null
+  return { kind: 'changed', theirs: server, mine, theirUpdatedAt: server.updated_at ?? null, send: item }
 }

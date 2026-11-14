@@ -257,6 +257,9 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   // bin fronts / cabinet codes. The text / markup / dims items above still apply inside.
   { id: 'item_cad',     group: 'annotations', label: 'Item CAD',          views: ['elevation'], default: ON,
     hint: 'Notes that come with a cabinet or front, e.g. PULLOUT BIN on bin fronts' },
+  // Offline clash flag (z_offline 1b): canvas only, never printed.
+  { id: 'annot_clash',  group: 'annotations', label: 'Clashes to check',  views: ['plan', 'elevation'], default: ON,
+    hint: 'Amber box + ! on CAD items two people changed at once (canvas only, never printed)' },
 ]
 
 export const LAYER_ITEM_BY_ID: Record<string, LayerItemDef> =

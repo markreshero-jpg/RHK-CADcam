@@ -2181,6 +2181,9 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'site', title: 'On site with no signal',
       body: 'Keep drawing markups, CAD and site measures as normal. Before you close the tab or turn the laptop off, wait for green "Saved" if you can. If you close it while amber, the changes are still on this device and send the next time you open the job on it. For now, open the job before you lose signal: a page reload with no signal will not load (offline opening is step 2).',
       target: 'save-status', canvas: true, done: c => c.view === 'plan' },
+    { id: 'clash', title: 'When two people changed the same thing',
+      body: 'If someone else changed or deleted a markup while your changes were waiting, your change still goes in (last change wins), but a ⚠ "1 to check" button appears next to the save light and the item gets an amber box with a !. Click ⚠ to see each one: Show selects it, Use theirs puts their version back, Delete it removes an item your edit brought back, Keep mine just clears the flag.',
+      target: 'save-status', canvas: true, done: c => c.view === 'plan' },
   ]},
 ]
 

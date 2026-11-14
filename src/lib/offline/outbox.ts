@@ -9,8 +9,8 @@
 import { create } from 'zustand'
 import { supabase } from '@/src/lib/supabase'
 import {
-  entryKey, isNetworkFailure, mergeOp, applyPending as applyPendingPure,
-  type OutboxEntry, type OutboxOp, type OutboxTable,
+  entryKey, isNetworkFailure, mergeOp, applyPending as applyPendingPure, checkClash, CLASH_CHECKED,
+  type OutboxEntry, type OutboxOp, type OutboxTable, type ClashFound,
 } from './outboxCore'
 
 export type SaveState = 'saved' | 'saving' | 'offline' | 'error'
@@ -77,6 +77,12 @@ async function idbAll(): Promise<OutboxEntry[]> {
 // ── Queue ──
 
 const queue = new Map<string, OutboxEntry>()
+// Step 1b: each row's server updated_at as this device last saw it (load or own save).
+const known = new Map<string, string>()
+// The full row as on screen, to put back an item someone else deleted (see checkClash).
+const lookups = new Map<OutboxTable, (id: string) => Record<string, unknown> | undefined>()
+export type ClashRow = Record<string, unknown> & { id: string; annotation_id: string; kind: string }
+const clashListeners = new Set<(rows: ClashRow[]) => void>()
 let seqCounter = 0
 let ready: Promise<void> | null = null
 
@@ -116,6 +122,8 @@ function enqueue(table: OutboxTable, id: string, roomId: string | null, op: Outb
   const e: OutboxEntry = {
     key, table, id, roomId: roomId ?? prev?.roomId ?? null,
     seq: ++seqCounter, queuedAt: prev?.queuedAt ?? Date.now(), item,
+    // The version this device was looking at when it first changed the row.
+    base: prev ? prev.base : CLASH_CHECKED.has(table) ? known.get(key) : undefined,
   }
   queue.set(key, e)
   void idbPut(e)
@@ -139,6 +147,16 @@ export const outbox = {
   },
   /** Resolves once everything queued so far has reached the server (or a send fails). */
   flushNow: () => flush(),
+  /** Step 1b: remember the server versions of rows just loaded (the clash check's baseline). */
+  track(table: OutboxTable, rows: { id: string; updated_at?: string | null }[]) {
+    for (const r of rows) if (r.updated_at) known.set(entryKey(table, r.id), r.updated_at)
+  },
+  /** The full row as on screen (lets a change to an item someone else deleted put it back). */
+  setLookup(table: OutboxTable, fn: ((id: string) => Record<string, unknown> | undefined) | null) {
+    if (fn) lookups.set(table, fn); else lookups.delete(table)
+  },
+  /** Called with each batch of clash records written to annotation_clashes. */
+  onClashes(fn: (rows: ClashRow[]) => void) { clashListeners.add(fn); return () => { clashListeners.delete(fn) } },
 }
 
 /** Waiting changes laid over rows just loaded from the server. */
@@ -160,21 +178,76 @@ function scheduleFlush(ms: number) {
   timer = setTimeout(() => { timer = null; void flush() }, ms)
 }
 
-function done(e: OutboxEntry) {
+/** Sent and accepted. stamps = the rows' new server updated_at (step 1b baseline). */
+function done(e: OutboxEntry, stamps?: Map<string, string>) {
+  const stamp = stamps?.get(e.id)
+  if (e.item.op === 'delete') known.delete(e.key)
+  else if (stamp) known.set(e.key, stamp)
   const cur = queue.get(e.key)
-  if (cur && cur.seq === e.seq) { queue.delete(e.key); void idbDelete(e.key) }
+  if (!cur) return
+  if (cur.seq === e.seq) { queue.delete(e.key); void idbDelete(e.key); return }
+  // Changed again while this was in flight: the next send builds on what was just saved.
+  if (cur.base === e.base) {
+    const next = { ...cur, base: e.item.op === 'delete' ? undefined : stamp ?? cur.base }
+    queue.set(e.key, next); void idbPut(next)
+  }
 }
 
-type Res = { status?: number; error?: { message?: string } | null }
+type Res = { status?: number; error?: { message?: string } | null; data?: unknown }
+
+function stampsOf(res: Res): Map<string, string> {
+  const m = new Map<string, string>()
+  for (const r of (Array.isArray(res.data) ? res.data : []) as { id: string; updated_at?: string }[]) if (r.updated_at) m.set(r.id, r.updated_at)
+  return m
+}
 
 async function send(table: OutboxTable, entries: OutboxEntry[]): Promise<Res> {
   const first = entries[0].item
+  const cols = CLASH_CHECKED.has(table) ? 'id, updated_at' : 'id'
   if (first.op === 'upsert') {
     // defaultToNull false: a row missing a column keeps the column's default.
-    return supabase.from(table).upsert(entries.map(e => (e.item as { row: Record<string, unknown> }).row), { onConflict: 'id', defaultToNull: false })
+    return supabase.from(table).upsert(entries.map(e => (e.item as { row: Record<string, unknown> }).row), { onConflict: 'id', defaultToNull: false }).select(cols)
   }
   if (first.op === 'delete') return supabase.from(table).delete().in('id', entries.map(e => e.id))
-  return supabase.from(table).update((first as { patch: Record<string, unknown> }).patch).eq('id', entries[0].id)
+  return supabase.from(table).update((first as { patch: Record<string, unknown> }).patch).eq('id', entries[0].id).select(cols)
+}
+
+/** Step 1b: before sending, check the rows this device changed against the server.
+ *  Clashes are written to annotation_clashes; the queued change still goes in (last
+ *  change wins). Returns false if the connection dropped. */
+async function checkClashes(snapshot: OutboxEntry[]): Promise<boolean> {
+  const toCheck = snapshot.filter(e => e.base !== undefined && CLASH_CHECKED.has(e.table))
+  if (!toCheck.length) return true
+  const res = await supabase.from('room_annotations').select('*').in('id', toCheck.map(e => e.id))
+  if (isNetworkFailure(res)) return false
+  if (res.error) { console.error('[outbox] clash check failed', res.error); return true }   // don't hold up saving
+  const server = new Map(((res.data ?? []) as (Record<string, unknown> & { id: string; updated_at?: string })[]).map(r => [r.id, r]))
+  const found: { e: OutboxEntry; c: ClashFound }[] = []
+  for (const e of toCheck) {
+    const c = checkClash(e, server.get(e.id), lookups.get(e.table)?.(e.id))
+    if (c) found.push({ e, c })
+  }
+  const rows = found.map(({ e, c }) => ({
+    room_id: e.roomId ?? (c.theirs?.room_id as string | undefined) ?? (c.mine.room_id as string | undefined),
+    annotation_id: e.id, kind: c.kind, my_op: e.item.op, theirs: c.theirs, mine: c.mine, their_updated_at: c.theirUpdatedAt,
+  })).filter(r => r.room_id)
+  if (rows.length) {
+    const ins = await supabase.from('annotation_clashes').insert(rows).select('*')
+    if (isNetworkFailure(ins)) return false
+    if (ins.error) console.error('[outbox] clash log failed', ins.error)
+    else if (ins.data?.length) for (const fn of clashListeners) fn(ins.data as ClashRow[])
+  }
+  // Checked: don't check (or log) these again on a retry.
+  const clashed = new Map(found.map(f => [f.e.key, f.c]))
+  for (const e of toCheck) {
+    const cur = queue.get(e.key)
+    if (!cur || cur.seq !== e.seq) continue
+    const c = clashed.get(e.key)
+    if (c && c.send === null) { queue.delete(e.key); void idbDelete(e.key); continue }   // nothing left to apply
+    const next: OutboxEntry = { ...cur, base: undefined, item: c?.send ?? cur.item }
+    queue.set(e.key, next); void idbPut(next)
+  }
+  return true
 }
 
 async function flush(): Promise<void> {
@@ -185,6 +258,7 @@ async function flush(): Promise<void> {
       if (!queue.size) { publish({ state: 'saved' }); break }
       if (typeof navigator !== 'undefined' && navigator.onLine === false) { publish({ state: 'offline' }); retryLater(); break }
       publish({ state: 'saving' })
+      if (!await checkClashes([...queue.values()])) { publish({ state: 'offline' }); retryLater(); break }
       const snapshot = [...queue.values()]
       // Batches: all upserts per table together, all deletes together, patches one by one.
       const groups: OutboxEntry[][] = []
@@ -206,13 +280,14 @@ async function flush(): Promise<void> {
             res = await send(e.table, [e])
             if (isNetworkFailure(res)) { offline = true; break }
             if (res.error) { error = res.error.message ?? 'Save rejected'; console.error('[outbox] rejected', e, res.error) }
-            else done(e)
+            else done(e, stampsOf(res))
           }
           if (offline) break
           continue
         }
         if (res.error) { error = res.error.message ?? 'Save rejected'; console.error('[outbox] rejected', g, res.error); continue }
-        g.forEach(done)
+        const stamps = stampsOf(res)
+        g.forEach(e => done(e, stamps))
       }
       if (offline) { publish({ state: 'offline' }); retryLater(); break }
       if (error) { publish({ state: 'error', lastError: error }); retryLater(); break }

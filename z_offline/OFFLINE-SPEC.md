@@ -1,6 +1,6 @@
 # Offline mode — spec
 
-Status: **Step 1 built 2026-11-14 (check pending on site).** Steps 2–3 not started.
+Status: **Step 1 built 2026-11-14, save light checked by Mark.** **Step 1b (clash flag) built 2026-11-14, check pending.** Steps 2–3 not started.
 
 ## Why
 
@@ -31,8 +31,8 @@ signal at all.
    so it doesn't hold up the rest.
 6. **Retry triggers:** the browser `online` event, the tab coming back to the front, the save
    light being clicked, and a backing-off timer (2 s doubling to 60 s).
-7. **Conflicts: the last change wins** (like Sheets). Step 1b adds a flag so you can check a
-   clash (see below).
+7. **Conflicts: the last change wins** (like Sheets), and each clash is logged so someone can
+   check it (step 1b).
 8. **The save light** sits top right of the canvas menu bar (`SaveStatusBadge`). It shows
    Saved / Saving… / Offline — n waiting / n not saved, and clicking it retries now. While
    anything is waiting, closing or reloading the tab asks first.
@@ -64,11 +64,45 @@ signal at all.
 - A page **reload with no signal won't load the page**. That's step 2. The light warns before
   leaving while changes are waiting.
 
-### Step 1b — clash flag (next, small)
+### Step 1b — clash flag ✅ built 2026-11-14 (check pending)
 
-When a queued patch is sent, compare the row's server `updated_at` with the value it had when
-the edit was made. If someone else changed it in between, still apply the edit (last change
-wins) but log the clash and show a "check" marker on the item.
+Locked decisions:
+- **The server stamps `updated_at`.** Trigger `room_annotations_touch` sets it to `now()` on
+  every insert and update. Undo used to write a row back with its old time, so the client's
+  value couldn't be trusted.
+- **Baseline = the version this device last saw.** `outbox.track()` records each row's
+  `updated_at` when it loads. Every accepted save returns the new `updated_at`
+  (`.select('id, updated_at')`), which becomes the next baseline. A queue entry keeps the
+  baseline from the device's *first* change to that row (`OutboxEntry.base`). New rows have
+  none, so they aren't checked.
+- **Check before sending** (`checkClashes` in `outbox.ts`, rules in `checkClash` in
+  `outboxCore.ts`). One `select *` covers every queued row that has a baseline:
+  - Server version differs from the baseline: **changed**. Their row is saved in the clash
+    record and mine still goes in.
+  - The row is gone and I edited it: **restored**. My full row (from the screen, via
+    `outbox.setLookup`) is upserted back.
+  - The row is gone and the device has no full row for it: **lost**. My patch is saved in the
+    clash record and nothing is sent.
+  - Both of us deleted it: no clash.
+  - Each entry is checked once. Its baseline is cleared after the check, so a retry doesn't log
+    the same clash twice.
+- **Clash records** go in table `annotation_clashes`, with the same job-access rules as
+  markups. It holds kind, `my_op`, theirs, mine and `their_updated_at`; `resolved_at` null
+  means still open. Migration: `z_offline/migration_o1b_clashes.sql`, applied.
+- **UI.**
+  - A **⚠ n to check** button sits next to the save light.
+  - It opens `ClashPanel`, where each clash has Show (selects the item) plus:
+    - changed: **Use theirs** or **Keep mine** (or Keep deleted).
+    - restored: **Delete it** or **Keep mine**.
+    - lost: **OK**.
+  - Resolving goes through the offline queue (`outbox.patch('annotation_clashes', …)`).
+  - On the canvas, an amber dashed box with a "!" marks each clashed item. It's display layer
+    item `annot_clash` (Annotations group, on by default) and is never printed.
+- **Not covered:** cabinets etc. (step 3). Edits made by the AI helper count as "someone
+  else", which is correct.
+- Tests: `outboxCore.test.ts` (checkClash). Headless: `verify-offline-o1b.mjs`. It covers
+  online drags making no clash, both of us moving an item (changed, then Use theirs), and one
+  of us deleting it (restored, then Delete it). All pass.
 
 ### Step 2 — open jobs with no signal
 
@@ -91,4 +125,4 @@ recomputed on sync.
 
 | Lesson id | Covers |
 |---|---|
-| `offline_save_light` | Save light states, working on site with no signal (step 1) |
+| `offline_save_light` | Save light states, working on site with no signal (step 1); step `clash` = the ⚠ list (1b) |

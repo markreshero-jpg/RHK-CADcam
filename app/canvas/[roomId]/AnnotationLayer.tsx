@@ -13,7 +13,7 @@ import {
   type ArcGeom, type CircleGeom, arcSvgPath, bulgedPath, sampleBulged,
   type SpecialDim, isSpecialDim, specialDimText, specialDimPoints, angularSector, angOf, arcPoint, arcStart, arcEnd, arcMid, arcSample, sweepOf,
   mapPt, mapRot, arrowHead, trimEnd, layoutText, leaderAttachLocal, rotatePt, cloudPath,
-  dimLayout, dimTextPt, readableAngle, dimText, annotLayerItem, boxCorners,
+  dimLayout, dimTextPt, readableAngle, dimText, annotLayerItem, boxCorners, annotationFramePoints,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, printStyle, dashPattern, type ResolvedStyle, type ArrowType } from '@/src/lib/annotations/style'
 import type { CadLayerView } from '@/src/lib/annotations/cadLayers'
@@ -40,6 +40,9 @@ export interface AnnotationLayerProps {
   centreMarks?:  boolean
   /** Canvas editing (A2): selection outlines, hit areas and grips. Reports omit it. */
   edit?: AnnotationEditProps
+  /** Canvas only (z_offline 1b): items with a clash to check get an amber dashed box + "!".
+   *  Display layer item `annot_clash`. Reports never pass it. */
+  clashIds?: ReadonlySet<string>
 }
 
 /** rotate / width: text grips. vN: drag vertex N of a line, cloud or leader. mN: drag
@@ -64,8 +67,9 @@ export interface AnnotationEditProps {
 
 const SEL = '#38bdf8'
 
-export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, cadLayers, printing, hairline, centreMarks, edit }: AnnotationLayerProps) {
+export default function AnnotationLayer({ annotations, frame, paper, layers, printColours = true, cadLayers, printing, hairline, centreMarks, edit, clashIds }: AnnotationLayerProps) {
   if (!annotations.length) return null
+  const showClash = !!clashIds?.size && !printing && (!layers || layers.show('annot_clash'))
   const sorted = [...annotations].sort((a, b) => a.sort_order - b.sort_order)
   return (
     <g data-layer="annotations" style={{ pointerEvents: 'none' }}>
@@ -92,9 +96,27 @@ export default function AnnotationLayer({ annotations, frame, paper, layers, pri
             )}
             {edit?.selectedIds.has(a.id) && selection(a, s, frame, paper, edit)}
             {centreMarks && edit && !hidden && centreMarksOf(a, frame, edit)}
+            {showClash && clashIds!.has(a.id) && clashMark(a, s, frame, paper, edit?.hitWidth)}
           </g>
         )
       })}
+    </g>
+  )
+}
+
+/** z_offline 1b: amber dashed box round an item with a clash to check, "!" on its corner. */
+function clashMark(a: RoomAnnotation, s: ResolvedStyle, f: AnnotFrame, k: number, hw = 12 * k): React.ReactNode {
+  const pts = annotationFramePoints(a.kind, a.geom, a.text, s.size, k / f.s).map(p => mapPt(f, p))
+  if (!pts.length) return null
+  const pad = hw * 0.8
+  const x0 = Math.min(...pts.map(p => p.x)) - pad, x1 = Math.max(...pts.map(p => p.x)) + pad
+  const y0 = Math.min(...pts.map(p => p.y)) - pad, y1 = Math.max(...pts.map(p => p.y)) + pad
+  const r = hw * 0.75
+  return (
+    <g data-clash-mark={a.id}>
+      <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} fill="none" stroke="#f59e0b" strokeWidth={hw / 5} strokeDasharray={`${hw / 2} ${hw / 3}`} />
+      <circle cx={x1} cy={y0} r={r} fill="#f59e0b" />
+      <text x={x1} y={y0} dy="0.35em" textAnchor="middle" fontSize={r * 1.5} fontWeight={700} fill="#111827" fontFamily={FONT}>!</text>
     </g>
   )
 }

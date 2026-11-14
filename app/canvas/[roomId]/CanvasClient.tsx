@@ -143,7 +143,9 @@ import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationS
 import { benchtopSeedFromCabinets, btFrontOverhang } from '@/src/lib/benchtopSeed'
 import { loadRoomHandleSchedule } from '@/src/lib/resolver/loadCabinetInput'
 import { ThemeToggle } from '@/app/ThemeToggle'
-import { initOutbox, applyPending } from '@/src/lib/offline/outbox'
+import { initOutbox, applyPending, outbox } from '@/src/lib/offline/outbox'
+import { useClashes } from '@/src/lib/offline/clashes'
+import ClashPanel from './ClashPanel'
 
 // Last canvas tab for a room (see canvasView state). A stored elevation wall that
 // no longer exists falls back to the first wall.
@@ -335,11 +337,20 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [annotations, setAnnotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
   // Offline queue (z_offline): changes still waiting on this device from an earlier visit
   // aren't on the server yet — lay them over what the page loaded, and send them.
+  // Step 1b: the loaded versions are the clash check's baseline; the clash list is per room.
+  const annotationsRef = useRef(annotations)
+  useEffect(() => { annotationsRef.current = annotations }, [annotations])
   useEffect(() => {
     let live = true
+    outbox.track('room_annotations', initialAnnotations ?? [])
+    outbox.setLookup('room_annotations', id => annotationsRef.current.find(a => a.id === id) as unknown as Record<string, unknown> | undefined)
+    void useClashes.getState().load(initRoom.id)
     void initOutbox().then(() => { if (live) setAnnotations(prev => applyPending(prev, 'room_annotations', initRoom.id)) })
-    return () => { live = false }
+    return () => { live = false; outbox.setLookup('room_annotations', null) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per room; initialAnnotations is that room's load
   }, [initRoom.id])
+  const clashList = useClashes(st => st.list)
+  const clashIds = useMemo(() => new Set(clashList.map(c => c.annotation_id)), [clashList])
   const planAnnotations = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   // Named CAD layers (z_cad_layers): on/off, ByLayer colour and print are for the whole job.
   const [cadLayers, setCadLayers] = useState<CadLayer[]>(initialCadLayers ?? [])
@@ -887,6 +898,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           onDoubleClick={cad.onCaptureDouble} onContextMenu={cad.onCaptureMenu} />
       )}
       <AnnotationLayer annotations={withFieldsFilled(cad.withEditing(viewAnnotations), cadFields)} frame={cadFrame} paper={annotScale} layers={layers} cadLayers={cadLayerV} hairline={cad.hairline} centreMarks={mode === 'cad'}
+        clashIds={clashIds}
         edit={{ ...cad.editProps, hittable: cad.editProps.hittable && mode === 'cad' }} />
       {cad.drawPreview && (
         <AnnotationLayer annotations={[cad.drawPreview]} frame={cadFrame} paper={annotScale} cadLayers={cadLayerV} hairline={cad.hairline} />
@@ -3582,6 +3594,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       )}
 
       <div className="flex flex-1 overflow-hidden relative">
+        <ClashPanel annotations={annotations} setAnnotations={setAnnotations} captureSnapshot={captureSnapshot}
+          select={ids => cad.setSelectedIds(new Set(ids))} />
         {aiOpen && (
           <AiChatPanel projectId={room.project_id} roomId={room.id} roomName={room.name} phone={phone}
             selectedIds={getSelectedCabinets().map(c => c.id)} selectedLabels={getSelectedCabinets().map(c => c.label ?? '?')}
