@@ -273,7 +273,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       const post: PostProfile = postFromProfile(profile, tool
         ? { base_feed_rate: tool.base_feed_rate as number | null, base_spindle_speed: tool.base_spindle_speed as number | null, plunge_feed_rate: tool.plunge_feed_rate as number | null }
         : undefined)
-      if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
+      if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) { post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100); post.material_feed_pct = mat.feed_rate_pct }
       const programs = generateSheetPrograms({
         sheet, thickness: sheet.thickness, profile: post, drills, routes,
         toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,

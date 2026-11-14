@@ -202,7 +202,7 @@ export async function loadResolvedDrillOps(
         }
       }
       // Resolve a cnc_tools id → concrete router bit, or null (with a warning).
-      type Bit = { toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null; feed: number | null; plunge: number | null; rpm: number | null; vAngleDeg: number | null; vTipDia: number | null }
+      type Bit = { toolNumber: number; toolDiameter: number; maxDepthPerPass: number | null; feed: number | null; feedFixed?: boolean; plunge: number | null; rpm: number | null; vAngleDeg: number | null; vTipDia: number | null }
       const numOrNull = (v: unknown) => v != null && Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null
       const bit = (toolId: string | null, label: string): Bit | null => {
         const t = toolId ? toolById.get(toolId) : undefined
@@ -248,7 +248,8 @@ export async function loadResolvedDrillOps(
             if (geom.corners_cleanup_r != null && !(geom.corners_cleanup_r > 0)) geom.corners_cleanup_r = prevRadius ?? 0
             if (geom.operation_type === 'route' && geom.corners_cleanup_r == null && !geom.on_line) prevRadius = b.toolDiameter / 2
             // A step may override its tool's feed / spindle.
-            if (m.feed_rate_override != null && m.feed_rate_override > 0) b.feed = Number(m.feed_rate_override)
+            // The override is absolute mm/min — the material Feed % doesn't scale it.
+            if (m.feed_rate_override != null && m.feed_rate_override > 0) { b.feed = Number(m.feed_rate_override); b.feedFixed = true }
             if (m.spindle_speed_override != null && m.spindle_speed_override > 0) b.rpm = Number(m.spindle_speed_override)
             resolved.push({ ...geom, ...b })
           }

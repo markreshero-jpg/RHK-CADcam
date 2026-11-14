@@ -250,7 +250,7 @@ export default function Stage6Gcode() {
           ? { base_feed_rate: tool.base_feed_rate as number | null, base_spindle_speed: tool.base_spindle_speed as number | null, plunge_feed_rate: tool.plunge_feed_rate as number | null }
           : undefined)
         // Material-level feed override (% of the tool/profile base feed).
-        if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100)
+        if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) { post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100); post.material_feed_pct = mat.feed_rate_pct }
         const outlines = outlinesFor(sheet)
         const holes = holesFor(sheet)
         const programs = generateSheetPrograms({

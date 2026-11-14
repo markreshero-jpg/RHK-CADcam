@@ -97,6 +97,11 @@ export interface PostProfile {
   // Absolute rather than a % of the cutting feed: the reference programs use a
   // fixed entry feed (F6000) independent of how fast the tool then cuts.
   plunge_feed_rate: number
+  // The sheet material's Feed % (materials.feed_rate_pct). base_feed_rate already
+  // has it applied (the outline); a route / pocket bit's own feed is scaled by it
+  // here so every cut on the board follows the material spec. 100 = as the tool.
+  // A tool-set step's feed_rate_override is absolute and is not scaled.
+  material_feed_pct: number
   // ── Drill-block emission (Anderson EVO49, spec §8) ──────────────────────────
   drill_block_work_offset: string  // work offset for drilling moves (e.g. G54)
   router_work_offset: string       // work offset for routing moves (e.g. G59)
@@ -163,7 +168,7 @@ export const DEFAULT_POST: PostProfile = {
   spindle_on_code: 'M03', spindle_off_code: 'M05', coolant_on_code: 'M08', coolant_off_code: 'M09',
   tool_change_code: 'T{n} M06', work_offset_code: 'G54', units_code: 'G21',
   decimal_places: 3, line_numbers_enabled: false, line_number_increment: 10,
-  base_feed_rate: 6000, base_spindle_speed: 18000, plunge_feed_rate: 1500,
+  base_feed_rate: 6000, base_spindle_speed: 18000, plunge_feed_rate: 1500, material_feed_pct: 100,
   drill_block_work_offset: 'G54', router_work_offset: 'G59',
   drill_cycle_code: 'G81', drill_return_code: 'G98',
   sign_y: -1, mirror_y: true, drill_bank_prep_codes: 'M23\nM21', drill_band_height_mm: 400,
@@ -195,8 +200,18 @@ export interface SheetDrill {
 // null → the machine profile / material routing tool values. `partKey` (the
 // placement) keeps each part's tool-set steps in their order across tool groups.
 export interface ToolCutData { feed?: number | null; plunge?: number | null; rpm?: number | null; partKey?: string
+  feedFixed?: boolean // feed is a tool-set step's override (absolute mm/min) — the material Feed % doesn't apply
   cutWidth?: number   // width the bit cuts at this depth (V-bit < diameter) — display only
   program?: 'A' | 'Z' // two-sided sheet only (6th face): the program it runs in
+}
+
+// A bit's cutting feed on this board: its own cnc_tools feed × the material's
+// Feed %, the same scaling the outline gets — so a custom route never runs
+// faster than the board's spec allows. A tool-set step override is absolute.
+export function bitFeed(r: ToolCutData, p: Pick<PostProfile, 'material_feed_pct'>): number {
+  const feed = r.feed ?? 0
+  const pct = p.material_feed_pct
+  return r.feedFixed || !(pct > 0) ? feed : Math.round(feed * pct / 100)
 }
 
 // An internal routing feature projected into sheet space (bottom-left origin),
@@ -827,7 +842,7 @@ function emitCircularPockets(
 
   for (const [toolN, hs] of byTool) {
     // The pocket bit's own feed (cnc_tools), else the profile/material tool's.
-    const base = hs[0].pocket!.feed != null && hs[0].pocket!.feed > 0 ? hs[0].pocket!.feed : p.base_feed_rate
+    const base = hs[0].pocket!.feed != null && hs[0].pocket!.feed > 0 ? bitFeed(hs[0].pocket!, p) : p.base_feed_rate
     const helicalFeed = f(Math.round(base * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
     const cutFeed = f(base)
     section(toolN, hs[0].pocket!.toolDiameter, (emit, c) => {
@@ -900,7 +915,7 @@ function emitRoutes(
   let helicalFeed = f(Math.round(p.base_feed_rate * (p.helical_feed_pct > 0 ? p.helical_feed_pct : 40) / 100))
   let rampFeed = f(Math.round(p.base_feed_rate * (p.ramp_in_feed_pct > 0 ? p.ramp_in_feed_pct : 50) / 100))
   const setFeeds = (r: ToolCutData) => {
-    const base = r.feed != null && r.feed > 0 ? r.feed : p.base_feed_rate
+    const base = r.feed != null && r.feed > 0 ? bitFeed(r, p) : p.base_feed_rate
     const plunge = r.plunge != null && r.plunge > 0 ? r.plunge : (r.feed != null && r.feed > 0 ? base : (p.plunge_feed_rate > 0 ? p.plunge_feed_rate : base))
     cutFeed = f(base)
     plungeFeed = f(plunge)
@@ -1664,6 +1679,7 @@ export function postFromProfile(row: Record<string, unknown> | null, tool?: { ba
     base_feed_rate: tool?.base_feed_rate ?? D.base_feed_rate,
     base_spindle_speed: tool?.base_spindle_speed ?? D.base_spindle_speed,
     plunge_feed_rate: tool?.plunge_feed_rate ?? D.plunge_feed_rate,
+    material_feed_pct: D.material_feed_pct,   // set per sheet by the caller from materials.feed_rate_pct
     drill_block_work_offset: s(row.drill_block_work_offset, D.drill_block_work_offset),
     router_work_offset: s(row.router_work_offset, D.router_work_offset),
     drill_cycle_code: s(row.drill_cycle_code, D.drill_cycle_code),

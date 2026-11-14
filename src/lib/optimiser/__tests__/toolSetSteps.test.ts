@@ -100,6 +100,20 @@ describe('each tool cuts at its own feed and rpm', () => {
   })
 })
 
+describe('the material Feed % governs route feeds too', () => {
+  const genPct = (routes: SheetRoute[], pct: number) => generateSheetGcode({ sheet, thickness: 18, profile: { ...profile, base_feed_rate: 21000, material_feed_pct: pct }, drills: [], routes, toolNumber: 101, toolDiameter: 10 }).split(/\r?\n/)
+  it('a route bit at 28000 on a 75% board cuts at 21000, like the outline', () => {
+    const ls = genPct([area({ toolNumber: 102, toolDiameter: 10, feed: 28000, plunge: 6000 })], 75)
+    expect(ls.some(l => /F28000\b/.test(l))).toBe(false)
+    expect(ls.some(l => /F21000\b/.test(l))).toBe(true)
+    expect(ls.some(l => /G1 Z-5 F6000\b/.test(l))).toBe(true)   // plunge stays absolute, as on the outline
+  })
+  it('a tool-set step feed override is absolute, not scaled', () => {
+    const ls = genPct([area({ toolNumber: 107, toolDiameter: 6, feed: 12000, feedFixed: true })], 75)
+    expect(ls.some(l => /F12000\b/.test(l))).toBe(true)
+  })
+})
+
 describe('step order is kept per part across tool groups', () => {
   it('a shaker’s 6mm never runs before its 40mm pocket because a glass door used the 6mm first', () => {
     const glass = (n: number, t: number, d: number) => area({ partKey: 'glass', toolNumber: t, toolDiameter: d, x: 1000 + n })
