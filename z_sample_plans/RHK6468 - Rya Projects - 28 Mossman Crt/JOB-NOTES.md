@@ -117,10 +117,11 @@ How it's drawn:
   sides 1074 x 620 (stone 3 proud of the veneer).
 - BC-17 / BC-24 end gables beside the legs deleted. Wine opening kept 600 (BC-18 moved, BC-19 440 -> 476);
   BC-23 runs to the leg (1055 -> 1091).
-- **Curved PB bulkhead** over the kitchen run (by builder, DWG 7.02 dashed line / 7.03 Elev 1): CAD only on the
-  General layer (`_tmp-6468-curved-bh.mjs`) - plan = dashed outline from the wall face, S-curves out to 460 over
-  the drawers / DW and back to the wall over the sink, grey wall fill; Wall 7 elevation = band 1620 - 2400.
-  Curve ends scaled off the plan (leaves the wall ~485 from the north end, back on it ~547 from the south end).
+- **Curved PB bulkhead** over the kitchen run (by builder, DWG 7.02 dashed line / 7.03 Elev 1) = a real wall
+  "Curved PB Bulkhead" (`_tmp-6468-curved-bh-wall.mjs`): drop / shaped nib wall (z_nib_wall N4, 469351a), outline =
+  wall face + S-curve out to 460 over the drawers / DW and back to the wall over the sink, base 1620 to the 2400
+  ceiling. Shows in plan (dashed, above), Wall 7 elevation (band) and 3D. Curve ends scaled off the plan (leaves
+  the wall ~485 from the north end, back on it ~547 from the south end). Replaced the earlier CAD stand-in.
 
 ## Laundry - drawn 2026-11-14, room `874fed25-8e1b-4bbf-b1ff-3090361b5dad`
 
