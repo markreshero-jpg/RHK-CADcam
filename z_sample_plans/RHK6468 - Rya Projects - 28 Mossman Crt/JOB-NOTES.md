@@ -92,5 +92,5 @@ How it's drawn:
   Honed" / "20mm Reconstituted Stone - Colour TBC".
 - Sinks / taps = library stand-ins labelled with the spec: Franke MRG620 double (Abi Zalo model) + Gessi
   pull-out bronze (Abi pull-out) on BC-07; Franke 370 single (Abi Ohelu) + Franke pull-out black steel +
-  Zip H5L783Z03AU TBC (Abey gooseneck) on BC-36.
+  Zip H5L783Z03AU TBC on BC-36 (real Zip HydroTap library model since 2026-11-14, tap hole unchanged).
 - Windows W8 2553 x 700 (920-1620) and W7 (size TBC) in Wall 2.

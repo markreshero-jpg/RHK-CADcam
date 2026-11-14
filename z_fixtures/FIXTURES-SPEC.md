@@ -366,6 +366,16 @@ Esc cancels; one undo step.
     cut 1025 × 502 rect**, cutout_off_y +21 (box runs from the open hood's back to the flange front).
     Stainless at metalness 0.25 — the canvas 3D has no environment map, full metal renders near
     black. Shapes traced headless. Not checked in-app.
+  - 2026-11-14 (user): **Zip HydroTap H5L783Z03AU matte black** — Zip supplied only a DWG
+    (`Models for import…/Zip-Hydrotap.dwg`, AutoCAD 2004, three 2D views as blocks of LINEs, no
+    3D solid). Read with LibreDWG WASM (npm `@mlightcad/libredwg-web`, scratch install, not a
+    project dependency), GLB **generated** from the side + plan views by
+    `z_fixtures/make-zip-hydrotap-glb.mjs` → `Zip_HydroTap_H5L783Z03AU_MatteBlack.glb` (public +
+    `Taps/`): column Ø46, 204 at the back / 170 at the front (sloped touch pad, 6 strips), spout
+    34 × 22 at 134–156, nose tip 123 forward of the column centre. Origin = tap-hole centre, +Z
+    spout. Taps group sort 60, **benchtop**, 46 × 146 × 204, Ø35 hole, cutout_off_y −50. Under-bench
+    unit not modelled. Swapped onto the RHK6468 Kitchen placeholder (was the Abey Lucia
+    stand-in), moved so the tap hole stays put. Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
