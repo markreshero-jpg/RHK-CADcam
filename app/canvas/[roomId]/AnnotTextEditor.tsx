@@ -4,9 +4,9 @@
 // canvas at the note's spot, sized and styled like the drawn text so typing looks
 // like the result. Enter = new line; Ctrl+Enter or clicking away = done; Esc = cancel.
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { AnnotFrame, Pt, TextGeom } from '@/src/lib/annotations/geometry'
-import { mapPt, mapRot, textWidth } from '@/src/lib/annotations/geometry'
+import { mapPt, mapRot, textWidth, wrapText } from '@/src/lib/annotations/geometry'
 import { resolveStyle } from '@/src/lib/annotations/style'
 import type { AnnotEditing } from './useAnnotationTool'
 
@@ -43,7 +43,22 @@ export default function AnnotTextEditor({ editing, frame, paper, zoom, toClient,
   const longest = Math.max(...lines.map(l => textWidth(l || ' ', s.size, s.bold)))
   const w = (g.width ?? Math.max(longest + s.size, s.size * 6)) * px
   const lh = s.size * s.lineSpacing
-  const h = Math.max(s.size * 1.15 + (lines.length - 1) * lh, g.height ?? 0) * px
+  // A text box wraps to its width: count the wrapped lines (as the drawing does), not
+  // just the Enter-separated ones, so the whole note shows while editing.
+  const shown = g.width != null ? wrapText(text, s.size, s.bold, g.width).length : lines.length
+  const h = Math.max(s.size * 1.15 + (shown - 1) * lh, g.height ?? 0) * px
+  const baseH = Math.max(h, s.size * 1.3 * px)
+  // The browser can wrap a touch differently from the estimate: grow to what it needs.
+  const [fitH, setFitH] = useState(0)
+  useLayoutEffect(() => {
+    const t = ref.current
+    if (!t) return
+    const prev = t.style.height
+    t.style.height = `${baseH}px`
+    const need = t.scrollHeight
+    t.style.height = prev
+    setFitH(need > baseH + 1 ? need : 0)
+  }, [text, w, baseH, s.size, s.bold, s.lineSpacing, px])
 
   return (
     <textarea
@@ -62,7 +77,7 @@ export default function AnnotTextEditor({ editing, frame, paper, zoom, toClient,
       wrap={g.width != null ? 'soft' : 'off'}
       className="fixed z-40 resize-none overflow-hidden outline-none placeholder:text-gray-500"
       style={{
-        left: at.x, top: at.y, width: w, height: Math.max(h, s.size * 1.3 * px),
+        left: at.x, top: at.y, width: w, height: Math.max(baseH, fitH),
         transform: rot ? `rotate(${rot}deg)` : undefined, transformOrigin: '0 0',
         padding: 0, margin: 0, border: 'none',
         boxShadow: '0 0 0 1px #38bdf8, 0 0 0 3px rgba(56,189,248,0.25)',
