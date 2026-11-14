@@ -26,7 +26,7 @@ import type { Pt } from '@/src/lib/geometry'
 import {
   btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallSkirt, skirtFace, apronSetbacks,
 } from '@/src/lib/benchtopGeometry'
-import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, type WallSide } from '@/src/lib/benchtopAnchor'
+import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, islandWallUnder, type WallSide } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
 import { roundMm } from '@/src/lib/format'
 import { PRINT_INK, MIN_PEN, pen } from '@/src/lib/shopDrawings/pens'
@@ -50,7 +50,7 @@ export function btElevBands(benchtops: BenchtopInstance[], walls: Wall[], wall: 
     : f0
   return benchtops.flatMap(bt => {
     const segs = btSegments(bt)
-    if (segs.length < 3 || !btShowsOn(bt, wallContacts(segs, walls, roomCx), wall, side)) return []
+    if (segs.length < 3 || !(btShowsOn(bt, wallContacts(segs, walls, roomCx), wall, side) || islandWallUnder(segs, wall))) return []
     const ts = outlinePoints(segs).map(p => alongOf(f, p))
     const { topZ, thick } = info(bt)
     const yTop = roomH - topZ
@@ -98,7 +98,7 @@ export default function BenchtopElevation({
 
   const shown = benchtops.filter(bt => {
     const segs = btSegments(bt)
-    return segs.length >= 3 && btShowsOn(bt, wallContacts(segs, walls, roomCx), wall, side)
+    return segs.length >= 3 && (btShowsOn(bt, wallContacts(segs, walls, roomCx), wall, side) || islandWallUnder(segs, wall))
   })
 
   return (

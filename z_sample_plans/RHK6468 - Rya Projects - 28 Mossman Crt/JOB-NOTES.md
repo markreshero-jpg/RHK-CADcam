@@ -95,6 +95,26 @@ How it's drawn:
   Zip H5L783Z03AU TBC on BC-36 (real Zip HydroTap library model since 2026-11-14, tap hole unchanged).
 - Windows W8 2553 x 700 (920-1620) and W7 (size TBC) in Wall 2.
 
+### Rev 2 - island seating side + 2pac bulkheads (Mark 2026-11-14, "Mark Ups for Ai" layer + DWG 7.04 Elev 5) - `_tmp-6468-island-seat.mjs`, `_tmp-6468-reres.mjs`
+- **Seating overhang 300** on the island back (more needs support). Stone band face 300 in from the top's back
+  edge (x 5888): new benchtop edge option **set-back apron** (2f9b24d) - 300 MA300 band along the drawer backs,
+  returns along the leg inner faces mitred to the leg aprons. Overhang edge = 20 plain polished.
+- Drawers BC-17..24 deepened 660 -> 691 (fronts unchanged) so their backs sit at 5838; Wall 8 moved to 5838.
+  **BC-03** veneer panel hard against the drawer backs (5838-5855), 620 high under the band; 33x33 mouldings
+  BC-27..30 5855-5888 flush with the stone face; Wall 9 moved to 5855 (its elevation = DWG Elev 5).
+- **Legs** 280 x 1080 (both ends): BC-01/02 inner box Whiteboard 16.5, 240 x 900 x 1040 (set in 20 for the
+  stone); 17 veneer wrap 620 high mitred all round = BC-25/26 back, BC-51/52 front, BC-53..56 sides (cut at
+  full outer size, MITRE 45 both vertical edges - in the cabinet notes, panels can't carry a mitre yet); 300
+  stone apron above wraps the leg front, end, back and inner face (island top split into 8 edges).
+- Bulkheads over the 2pac overheads (WC-05 south, WC-10 west, WC-13 north) now **2pac Colour TBC** (Satin
+  Board 18); WC-04 over the veneer tall bank stays veneer.
+- Elevation fix: an island top now also draws on an island wall that runs under it (Wall 9 showed no stone).
+
+### Open / TBC (rev 2)
+- [ ] 13 pack behind the stone band (band 20 on the drawer backs vs panel 17 + moulding 33 flush with it).
+- [ ] 3 pack between the leg box and the stone apron (veneer 17 vs stone 20, both flush on the face).
+- [ ] BC-17 / BC-24 33 veneer gables beside the legs: still needed now the legs are wrapped?
+
 ## Laundry - drawn 2026-11-14, room `874fed25-8e1b-4bbf-b1ff-3090361b5dad`
 
 Source: Mark's site-measure sketch on the Laundry plan (back wall 3721 o/a, CH 2603, door

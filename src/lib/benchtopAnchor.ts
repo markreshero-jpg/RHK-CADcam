@@ -115,6 +115,22 @@ export function btShowsOn(
   return contacts.some(c => c.wallId === wall.id && c.side === side)
 }
 
+/** An island wall running under a top (its midpoint inside the outline): the
+ *  top shows in that wall's elevations too, both sides. RHK6468: the island's
+ *  back line (seating recess) sits under the overhang, not at an edge. */
+export function islandWallUnder(segs: BenchtopSegment[], wall: Wall): boolean {
+  if (wall.wall_type !== 'island') return false
+  const d = wallDir(wall)
+  const m = { x: wall.pos_x + d.x * wall.length / 2, y: wall.pos_y + d.y * wall.length / 2 }
+  const pts = outlinePoints(segs)
+  let inside = false
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i], b = pts[j]
+    if ((a.y > m.y) !== (b.y > m.y) && m.x < ((b.x - a.x) * (m.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
+}
+
 // ── Position (P-f) ───────────────────────────────────────────────────────────
 
 export interface BtPosition { along: number; off: number; length: number; depth: number }

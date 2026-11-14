@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  wallFrame, wallContacts, autoAnchor, btShowsOn, btPosition, positionFn, reanchorFn, btTouches, stretchFn, btOverhangs,
+  wallFrame, wallContacts, autoAnchor, btShowsOn, islandWallUnder, btPosition, positionFn, reanchorFn, btTouches, stretchFn, btOverhangs,
 } from '../benchtopAnchor'
 import { segmentsFromLegacy, mapSegments, outlineBounds, outlinePoints, signedArea } from '../benchtopGeometry'
 import { centroid } from '../geometry'
@@ -57,6 +57,13 @@ describe('contacts + anchor', () => {
     expect(btShowsOn(bt, c, ROOM[0], 'back')).toBe(false)
     const isl = { wall_id: 'I', wall_side: 'face' as const }
     expect(btShowsOn(isl, [], ISLAND, 'back')).toBe(true)
+  })
+
+  it('an island wall running under a top (seating recess line) shows it too', () => {
+    const top = poly([[900, 1000], [2300, 1000], [2300, 1800], [900, 1800]])
+    expect(islandWallUnder(top, ISLAND)).toBe(true)
+    expect(islandWallUnder(top, wall('I2', 1000, 2500, 0, 1200, { thickness: 0, wall_type: 'island' }))).toBe(false)
+    expect(islandWallUnder(STRAIGHT, ROOM[0])).toBe(false)   // standard walls never
   })
 })
 
