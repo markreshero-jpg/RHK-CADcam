@@ -143,6 +143,9 @@ How it works, and the decisions locked with it:
     in-flight count from `netWatch`). It then saves its copy and posts `rhk-warm-done` to the
     job page. Every read it made has been cached by the service worker along the way.
   - The button then shows **On this device: n rooms** and refreshes the offline pages.
+  - After that the button reads **Offline: n of m rooms** (amber while some are missing) or
+    **Offline: all n rooms**. In the job's room list, each room with a copy on this device has a
+    green **Offline** tag (hover shows when it was saved).
 - **Lost-write warning** (`src/lib/offline/netWatch.ts`, the fetch passed to the browser
   Supabase client). Any write that fails for lack of signal and isn't in the queue (cabinets,
   walls, fixtures… which come in step 3) shows **✕ n not saved (needs signal)** in red next to

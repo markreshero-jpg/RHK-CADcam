@@ -13,7 +13,7 @@ import { Project, ProjectStatus, Room, ROOM_STATUS_OPTIONS, type RoomStatus } fr
 import { supabase } from '@/src/lib/supabase'
 import { useIsAdmin } from '@/src/lib/useRole'
 import RoomPropertiesModal from './canvas/[roomId]/RoomPropertiesModal'
-import TakeOfflineButton from './TakeOfflineButton'
+import TakeOfflineButton, { useOfflineRooms } from './TakeOfflineButton'
 import DeleteRoomModal from './DeleteRoomModal'
 import DeleteProjectModal from './DeleteProjectModal'
 
@@ -152,9 +152,11 @@ function RoomStatusSelect({ status, onChange }: { status: RoomStatus; onChange: 
 
 // ── Sortable room row ───────────────────────────────────────────────────────────
 
-function SortableRoomRow({ room, removing, onEdit, onDelete, onStatus }: {
+function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus }: {
   room: Room
   removing: boolean
+  /** When this room's copy on this device was saved (Take offline), if there is one. */
+  offlineAt?: number
   onEdit: () => void
   onDelete: () => void
   onStatus: (s: RoomStatus) => void
@@ -192,6 +194,15 @@ function SortableRoomRow({ room, removing, onEdit, onDelete, onStatus }: {
       >
         {room.name}
       </Link>
+
+      {/* Kept on this device for no signal (z_offline step 2) */}
+      {offlineAt !== undefined && (
+        <span data-room-offline={room.id} className="flex-none flex items-center gap-1 text-[11px] text-emerald-500"
+          title={`A copy is on this device (saved ${new Date(offlineAt).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}), so it opens with no signal`}>
+          <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" /></svg>
+          Offline
+        </span>
+      )}
 
       {/* Dimensions summary (only when set) */}
       {dim && <span className="text-xs shrink-0 text-ink-muted">{dim}</span>}
@@ -242,6 +253,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     setExpanded(forceExpanded || defaultExpanded)
   }
   const [rooms, setRooms] = useState<Room[]>(initialRooms)
+  const offlineRooms = useOfflineRooms(project.id)
   const firstRooms = useRef(true)
   useEffect(() => {
     if (firstRooms.current) { firstRooms.current = false; return }
@@ -566,7 +578,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             <ChevronIcon expanded={expanded} />
           </button>
 
-          {liveRooms.length > 0 && <TakeOfflineButton projectId={project.id} rooms={liveRooms} />}
+          {liveRooms.length > 0 && <TakeOfflineButton rooms={liveRooms} saved={offlineRooms} />}
 
           <button
             onClick={toggleArchive}
@@ -604,6 +616,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
                       key={r.id}
                       room={r}
                       removing={removingId === r.id}
+                      offlineAt={offlineRooms.get(r.id)}
                       onEdit={() => setEditRoom(r)}
                       onDelete={() => openDelete(r)}
                       onStatus={s => handleRoomStatus(r.id, s)}
