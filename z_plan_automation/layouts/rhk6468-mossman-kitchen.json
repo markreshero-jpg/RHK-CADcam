@@ -1,0 +1,2413 @@
+{
+ "_source": "ARCHITECTURALS/REVISED KITCHEN PRELIMINARY (2).pdf (Blake Sheridan 7.02-7.06 Rev A 09/09/26) + red site measures + Quote Issue 2 + APPLIANCES (Liebherr ECBN8872 / UWKES1752 / SUIG1514, Miele) + Mark's answers 2026-11-14",
+ "_notes": [
+  "Origin = butler's NW corner (finished faces). Kick 120 (job TOEH; ECBN8872 plinth 50-170). Base 900 incl kick + 20 stone = 920. Ceiling 2400 -> talls / overheads to 2370 + 30 BH.",
+  "All units framed by 33 Veneer (American Oak) gables to the floor, fronts Veneer 17 American Oak, Whiteboard 16.5 carcass, no handles for now.",
+  "Kitchen run 660 carcass (700 top). Island 4000 x 1080: 660 drawers + closed void + 17 back panel set back 33 + 33x33 mouldings; 280 mitred veneer end boxes. South / tall bank 620 (640 OA). West run 560. North run 480 (500)."
+ ],
+ "projectId": "21601535-e1c8-4087-96b8-bb2506b96c3d",
+ "roomId": "58bac32f-cdca-4a86-a1a4-c29af7ef9430",
+ "roomName": "Kitchen",
+ "roomHeight": 2400,
+ "wallCabinetTop": 2370,
+ "walls": [
+  {
+   "x": 6065,
+   "y": 2060,
+   "length": 640,
+   "angle": 90,
+   "_": "1 east return at the W7 drawers"
+  },
+  {
+   "x": 6065,
+   "y": 2700,
+   "length": 6065,
+   "angle": 180,
+   "_": "2 south wall E->W (E7): 6089 less 2 x 12 gyprock"
+  },
+  {
+   "x": 0,
+   "y": 2700,
+   "length": 2700,
+   "angle": 270,
+   "_": "3 butler's west wall (E8) 2700"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 3208,
+   "angle": 0,
+   "_": "4 butler's north wall (E9): 3220 to the cavity slider less 12"
+  },
+  {
+   "x": 3208,
+   "y": 0,
+   "length": 979,
+   "angle": 90,
+   "thickness": 120,
+   "_": "5 cavity slider wall (TBC)"
+  },
+  {
+   "x": 3208,
+   "y": -2893,
+   "length": 2893,
+   "angle": 90,
+   "thickness": 120,
+   "detached": true,
+   "_": "6 kitchen wall north of the slider (2860 site)"
+  },
+  {
+   "x": 3328,
+   "y": 979,
+   "length": 3872,
+   "angle": 270,
+   "type": "island",
+   "detached": true,
+   "_": "7 kitchen run backs (E1), drawn S->N so fronts face east"
+  },
+  {
+   "x": 5807,
+   "y": -2893,
+   "length": 4000,
+   "angle": 90,
+   "type": "island",
+   "detached": true,
+   "_": "8 island drawer backs (E3), drawn N->S so fronts face west"
+  },
+  {
+   "x": 6155,
+   "y": 1107,
+   "length": 4000,
+   "angle": 270,
+   "type": "island",
+   "detached": true,
+   "_": "9 island back panel face (E5), drawn S->N so the face side is east"
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "BEPF",
+   "wall": 7,
+   "offset": 0,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV end gable, seen - south end at the cavity slider opening",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BBIN",
+   "wall": 7,
+   "offset": 33,
+   "dx": 437,
+   "dy": 900,
+   "dz": 660,
+   "note": "Door mounted bin 400 double 2x31L per quote (BBIN drawn) - in front of the cavity slider",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left",
+       "drawer_type_config": {
+        "type": "bin"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 7,
+   "offset": 470,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "B2D",
+   "wall": 7,
+   "offset": 503,
+   "dx": 800,
+   "dy": 900,
+   "dz": 660,
+   "note": "SINK - Franke MRG620-3535SGFPC double undermount 760 wide, Gessi pull-out mixer. Rails on edge. In front of the cavity slider (fixing on site)",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   },
+   "rules": {
+    "RAIL_ORIENT": "vertical"
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 7,
+   "offset": 1303,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 7,
+   "offset": 1336,
+   "dx": 600,
+   "dy": 780,
+   "dz": 660,
+   "note": "Miele G 7939 SCi XXL integrated D/W front (TBC - plan says int. dish drawer)",
+   "set": {
+    "pos_z": 120,
+    "has_carcass": false,
+    "has_internal": false,
+    "has_toekick": false,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "bottom",
+       "hinges": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 7,
+   "offset": 1936,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 7,
+   "offset": 1969,
+   "dx": 600,
+   "dy": 900,
+   "dz": 660,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 7,
+   "offset": 2569,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 7,
+   "offset": 2602,
+   "dx": 602,
+   "dy": 900,
+   "dz": 660,
+   "note": "Drawers - 1336 split into 2 equal (Mark)",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 7,
+   "offset": 3204,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 7,
+   "offset": 3237,
+   "dx": 602,
+   "dy": 900,
+   "dz": 660,
+   "note": "Drawers - 1336 split into 2 equal (Mark)",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 7,
+   "offset": 3839,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV end gable, seen - north end, continue to the edge of the door jamb",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 8,
+   "offset": 280,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 8,
+   "offset": 913,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable - wine fridge Liebherr UWKES1752 in the 600 between",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 8,
+   "offset": 946,
+   "dx": 440,
+   "dy": 900,
+   "dz": 660,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 8,
+   "offset": 1386,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 8,
+   "offset": 1419,
+   "dx": 1180,
+   "dy": 900,
+   "dz": 660,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 8,
+   "offset": 2599,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 8,
+   "offset": 2632,
+   "dx": 1055,
+   "dy": 900,
+   "dz": 660,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 8,
+   "offset": 3687,
+   "dx": 33,
+   "dy": 900,
+   "dz": 660,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 9,
+   "offset": 0,
+   "dx": 280,
+   "dy": 620,
+   "dz": 1047,
+   "note": "Island end - mitred veneer box 280 x 1080 x 620, stone (ST) 300 on top. Build per detail",
+   "set": {
+    "has_toekick": false,
+    "top_type": "full_top",
+    "exposed_interior": true,
+    "material_overrides": {
+     "exposed": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e",
+     "interior": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e",
+     "left_side": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e",
+     "right_side": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "false_panel"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   },
+   "flip": true
+  },
+  {
+   "def": "B1D",
+   "wall": 9,
+   "offset": 3720,
+   "dx": 280,
+   "dy": 620,
+   "dz": 1047,
+   "note": "Island end - mitred veneer box 280 x 1080 x 620, stone (ST) 300 on top. Build per detail",
+   "set": {
+    "has_toekick": false,
+    "top_type": "full_top",
+    "exposed_interior": true,
+    "material_overrides": {
+     "exposed": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e",
+     "interior": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e",
+     "left_side": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e",
+     "right_side": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e"
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "false_panel"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   },
+   "flip": true
+  },
+  {
+   "def": "IBPF",
+   "wall": 9,
+   "offset": 280,
+   "dx": 3440,
+   "dy": 620,
+   "dz": 17,
+   "note": "Island back panel, Veneer 17 American Oak, set back 33 behind the stone face. Closed void behind the drawers",
+   "set": {
+    "material_overrides": {
+     "exposed": "8afde358-4ab0-4a2e-bb3c-4bbc89de9c9e"
+    }
+   },
+   "flip": true
+  },
+  {
+   "def": "IBPF",
+   "wall": 9,
+   "offset": 0,
+   "dx": 280,
+   "dy": 620,
+   "dz": 33,
+   "note": "End box back face, flush with the stone (part of the mitred box)",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "IBPF",
+   "wall": 9,
+   "offset": 3720,
+   "dx": 280,
+   "dy": 620,
+   "dz": 33,
+   "note": "End box back face, flush with the stone (part of the mitred box)",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 9,
+   "offset": 942,
+   "dx": 33,
+   "dy": 620,
+   "dz": 14,
+   "note": "33 x 33 TV moulding, flush with the stone apron above",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 9,
+   "offset": 1636,
+   "dx": 33,
+   "dy": 620,
+   "dz": 14,
+   "note": "33 x 33 TV moulding, flush with the stone apron above",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 9,
+   "offset": 2331,
+   "dx": 33,
+   "dy": 620,
+   "dz": 14,
+   "note": "33 x 33 TV moulding, flush with the stone apron above",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 9,
+   "offset": 3025,
+   "dx": 33,
+   "dy": 620,
+   "dz": 14,
+   "note": "33 x 33 TV moulding, flush with the stone apron above",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 2,
+   "offset": 0,
+   "dx": 33,
+   "dy": 900,
+   "dz": 620,
+   "note": "33 TV gable at the east wall",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 2,
+   "offset": 33,
+   "dx": 1173,
+   "dy": 900,
+   "dz": 620,
+   "note": "Drawers under window W7 - widened to take up the site measure (Mark)",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "TEPF",
+   "wall": 2,
+   "offset": 1206,
+   "dx": 33,
+   "dy": 2370,
+   "dz": 620,
+   "note": "33 TV gable, floor to 2370",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 1239,
+   "dx": 915,
+   "dy": 800,
+   "dz": 620,
+   "note": "Liebherr ECBN8872 freezer drawer panels (2), recess 915 x 2032-2072 x 635 min. Panel sizes to the Liebherr guide (lower = 526 - plinth)",
+   "set": {
+    "pos_z": 120,
+    "has_carcass": false,
+    "has_internal": false,
+    "has_toekick": false,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height": 406,
+       "height_locked": true
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "false_panel"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "false_panel"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 1239,
+   "dx": 915,
+   "dy": 1129,
+   "dz": 620,
+   "note": "Liebherr ECBN8872 integrated French door panels, recess top 2052 (2032-2072)",
+   "set": {
+    "pos_z": 920,
+    "has_carcass": false,
+    "has_internal": false,
+    "has_toekick": false,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left",
+       "hinges": []
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right",
+       "hinges": []
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 1239,
+   "dx": 915,
+   "dy": 318,
+   "dz": 620,
+   "note": "Cupboard over the fridge 2052-2370",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   }
+  },
+  {
+   "def": "TEPF",
+   "wall": 2,
+   "offset": 2154,
+   "dx": 33,
+   "dy": 2370,
+   "dz": 620,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 2187,
+   "dx": 600,
+   "dy": 2370,
+   "dz": 620,
+   "note": "WALL OVEN tower: drawer 120-526 (top = freezer drawer line), Miele H7464BP oven 526-1126, CVA7440 coffee 1126-1578, cupboard over. TBC: top of ovens 1578 vs overhead underside 1620",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height": 406,
+       "height_locked": true
+      },
+      {
+       "row_index": 1,
+       "height": 600,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 452,
+       "height_locked": true
+      },
+      {
+       "row_index": 3,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "open",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "open",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 3,
+       "face_type": "door",
+       "hinge_side": "right"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 373,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 583.5,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 435.5,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "TEPF",
+   "wall": 2,
+   "offset": 2787,
+   "dx": 33,
+   "dy": 2370,
+   "dz": 620,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 2820,
+   "dx": 600,
+   "dy": 2370,
+   "dz": 620,
+   "note": "COMBI tower: drawers 120-526 + 526-674, DGC7440 combi steam 674-1126, H7440BM micro 1126-1578, cupboard over",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height": 406,
+       "height_locked": true
+      },
+      {
+       "row_index": 1,
+       "height": 148,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 452,
+       "height_locked": true
+      },
+      {
+       "row_index": 3,
+       "height": 452,
+       "height_locked": true
+      },
+      {
+       "row_index": 4,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "open",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 3,
+       "face_type": "open",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 4,
+       "face_type": "door",
+       "hinge_side": "left"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 521,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 419,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 419,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "TEPF",
+   "wall": 2,
+   "offset": 3420,
+   "dx": 33,
+   "dy": 2370,
+   "dz": 620,
+   "note": "33 TV gable at the W8 window jamb",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "BBIN",
+   "wall": 2,
+   "offset": 3453,
+   "dx": 450,
+   "dy": 900,
+   "dz": 620,
+   "note": "Bin drawer 450",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left",
+       "drawer_type_config": {
+        "type": "bin"
+       }
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 2,
+   "offset": 3903,
+   "dx": 33,
+   "dy": 900,
+   "dz": 620,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 3936,
+   "dx": 884,
+   "dy": 900,
+   "dz": 620,
+   "note": "SINK - butler's 370 single undermount, Franke black steel pull-out mixer, Zip tap TBC. Rails on edge",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   },
+   "rules": {
+    "RAIL_ORIENT": "vertical"
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 2,
+   "offset": 4820,
+   "dx": 33,
+   "dy": 900,
+   "dz": 620,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 4853,
+   "dx": 600,
+   "dy": 780,
+   "dz": 620,
+   "note": "Miele G 7939 SCi XXL integrated D/W front (TBC)",
+   "set": {
+    "pos_z": 120,
+    "has_carcass": false,
+    "has_internal": false,
+    "has_toekick": false,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "bottom",
+       "hinges": []
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 2,
+   "offset": 5453,
+   "dx": 33,
+   "dy": 900,
+   "dz": 620,
+   "note": "33 TV gable - void corner beyond",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "W1D",
+   "wall": 2,
+   "offset": 3453,
+   "dx": 1156,
+   "dy": 750,
+   "dz": 300,
+   "note": "AVENTOS HK lift-up (2PK on the plan - finish TBC), 2 adj",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "top",
+       "hinges": []
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "W1D",
+   "wall": 2,
+   "offset": 4609,
+   "dx": 1156,
+   "dy": 750,
+   "dz": 300,
+   "note": "AVENTOS HK lift-up (2PK on the plan - finish TBC), 2 adj",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "top",
+       "hinges": []
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 1239,
+   "dx": 2214,
+   "dy": 30,
+   "dz": 620,
+   "note": "30 BH over the tall bank (ceiling 2400), seen return over the drawers",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": true,
+      "depth": 620,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 3453,
+   "dx": 2312,
+   "dy": 30,
+   "dz": 300,
+   "note": "30 BH over the overheads",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 300,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 3,
+   "offset": 639,
+   "dx": 33,
+   "dy": 900,
+   "dz": 560,
+   "note": "33 TV gable - void corner behind (south run)",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 3,
+   "offset": 672,
+   "dx": 731,
+   "dy": 900,
+   "dz": 560,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 3,
+   "offset": 1403,
+   "dx": 33,
+   "dy": 900,
+   "dz": 560,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 3,
+   "offset": 1436,
+   "dx": 732,
+   "dy": 900,
+   "dz": 560,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 3,
+   "offset": 2168,
+   "dx": 33,
+   "dy": 900,
+   "dz": 560,
+   "note": "33 TV gable - void corner behind (north run)",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "WOPN",
+   "wall": 3,
+   "offset": 0,
+   "dx": 300,
+   "dy": 750,
+   "dz": 300,
+   "note": "Corner open shelves (open both sides on the plan), 2 fixed",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "W1D",
+   "wall": 3,
+   "offset": 300,
+   "dx": 1050,
+   "dy": 750,
+   "dz": 300,
+   "note": "AVENTOS HK lift-up (2PK on the plan - finish TBC), 2 adj",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "top",
+       "hinges": []
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "W1D",
+   "wall": 3,
+   "offset": 1350,
+   "dx": 1050,
+   "dy": 750,
+   "dz": 300,
+   "note": "AVENTOS HK lift-up (2PK on the plan - finish TBC), 2 adj",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "top",
+       "hinges": []
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "WOPN",
+   "wall": 3,
+   "offset": 2400,
+   "dx": 300,
+   "dy": 750,
+   "dz": 300,
+   "note": "Corner open shelves (open both sides on the plan), 2 fixed",
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 3,
+   "offset": 0,
+   "dx": 2700,
+   "dy": 30,
+   "dz": 300,
+   "note": "30 BH over the overheads",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 300,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 4,
+   "offset": 579,
+   "dx": 33,
+   "dy": 900,
+   "dz": 480,
+   "note": "33 TV gable - void corner behind (west run)",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 4,
+   "offset": 612,
+   "dx": 792,
+   "dy": 900,
+   "dz": 480,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 4,
+   "offset": 1404,
+   "dx": 33,
+   "dy": 900,
+   "dz": 480,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 4,
+   "offset": 1437,
+   "dx": 792,
+   "dy": 900,
+   "dz": 480,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "BEPF",
+   "wall": 4,
+   "offset": 2229,
+   "dx": 33,
+   "dy": 900,
+   "dz": 480,
+   "note": "33 TV gable (Veneer 33 American Oak), to the floor",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 4,
+   "offset": 2262,
+   "dx": 793,
+   "dy": 900,
+   "dz": 480,
+   "note": "Drawers - 190 / 190 / rest",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height": 190,
+       "height_locked": true
+      },
+      {
+       "row_index": 2,
+       "height": 190,
+       "height_locked": true
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face",
+       "hinge_side": "left"
+      }
+     ]
+    }
+   }
+  },
+  {
+   "def": "TEPF",
+   "wall": 4,
+   "offset": 3055,
+   "dx": 33,
+   "dy": 2370,
+   "dz": 480,
+   "note": "33 TV tall end panel, floor to 2370. 120 gap beyond: CAVITY SLIDER TBC",
+   "set": {
+    "material_overrides": {
+     "exposed": "a8ec07f1-50df-4440-9157-686efefa56c2"
+    }
+   }
+  },
+  {
+   "def": "W1D",
+   "wall": 4,
+   "offset": 300,
+   "dx": 1377,
+   "dy": 750,
+   "dz": 300,
+   "note": "AVENTOS HK lift-up (2PK on the plan - finish TBC), 2 adj",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "top",
+       "hinges": []
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "W1D",
+   "wall": 4,
+   "offset": 1677,
+   "dx": 1378,
+   "dy": 750,
+   "dz": 300,
+   "note": "AVENTOS HK lift-up (2PK on the plan - finish TBC), 2 adj",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "top",
+       "hinges": []
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 4,
+   "offset": 300,
+   "dx": 2755,
+   "dy": 30,
+   "dz": 300,
+   "note": "30 BH over the overheads",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 300,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  }
+ ]
+}
