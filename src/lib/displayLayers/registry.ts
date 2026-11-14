@@ -57,7 +57,7 @@ export const LAYER_GROUPS: { id: LayerGroup; label: string }[] = [
   { id: 'internals',  label: 'Internals' },
   { id: 'hardware',   label: 'Hardware' },
   { id: 'panels',     label: 'Panels' },
-  { id: 'benchtops',  label: 'Benchtops' },
+  { id: 'benchtops',  label: 'Benchtops & splashbacks' },
   { id: 'fixtures',   label: 'Fixtures & appliances' },
   { id: 'room',       label: 'Room' },
   { id: 'labels',     label: 'Labels' },
@@ -193,6 +193,12 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   { id: 'benchtop_joins', group: 'benchtops', label: 'Benchtop join lines', views: ['plan', 'elevation'], default: ON },
   { id: 'benchtop_sizes', group: 'benchtops', label: 'Benchtop names, sizes + edge lengths', views: ['plan'], default: OFF,
     hint: 'Top name in the middle with its overall length × depth under it, and every edge length just inside the edge (Benchtop Quote report)' },
+
+  // Splashbacks (z_splashback S2) — in the benchtops group
+  { id: 'splashbacks',    group: 'benchtops', label: 'Splashbacks', views: ALL, default: ON,
+    hint: 'Elevation: outline + material fill (stone hatch, glass diagonals, tile grid), windows cut out; plan: thin band on the wall face; 3D: the panel' },
+  { id: 'splashback_labels', group: 'benchtops', label: 'Splashback names + sizes', views: ['elevation'], default: ON,
+    hint: 'SPLASHBACK – material, with width × height · thickness' },
 
   // Fixtures & appliances (z_fixtures) — one item per catalogue category
   { id: 'fixture_appliances', group: 'fixtures', label: 'Appliances', views: ALL, default: ON,

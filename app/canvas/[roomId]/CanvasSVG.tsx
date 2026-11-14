@@ -120,6 +120,10 @@ interface CanvasSVGProps {
   onCabMarkerClick: (e: React.MouseEvent, cab: CabinetInstance, side: 'left' | 'right' | 'front', wall: Wall, perp: Pt) => void
   cabFollowing: { id: string } | null
   onSVGClick: (e: React.MouseEvent) => void
+  /** Splashbacks (z_splashback S2): plan bands on the wall face; click selects. */
+  splashbackBands?: { id: string; pts: Pt[] }[]
+  selectedSplashbackId?: string | null
+  onSplashbackClick?: (id: string) => void
   // Benchtop drawing
   benchtops: BenchtopInstance[]
   selectedBenchtopId: string | null
@@ -207,6 +211,7 @@ export default function CanvasSVG({
   onPointerDown, onPointerMove, onPointerUp, onCancelDraw,
   setSelected, setContextMenu, onWallPointerDown, onWallEndPointerDown, alignGuides = [], onCabinetPointerDown, pickHoverId, onCabinetCrosshairClick, onCabinetContextMenu, onCabinetDoubleClick,
   onCabMarkerClick, cabFollowing, onSVGClick, onCabLabelMove, cabLabelMoving, onLabelMoveEnd,
+  splashbackBands, selectedSplashbackId, onSplashbackClick,
   benchtops, selectedBenchtopId, btDrawPoly, btDrawCursor, onBenchtopClick, onBenchtopEdgeClick, onBenchtopVertexClick,
   onBenchtopContextMenu, onBenchtopEdgeShiftClick, onBenchtopEdgeAltClick, onBtUndoVertex,
   btDrawArcs, btArcMode, btArcMidpoint, btRectStart, btRectCursor,
@@ -286,6 +291,29 @@ export default function CanvasSVG({
 
         <line x1={-30 / view.zoom} y1={0} x2={30 / view.zoom} y2={0} stroke="#374151" strokeWidth={1 / lz} />
         <line x1={0} y1={-30 / view.zoom} x2={0} y2={30 / view.zoom} stroke="#374151" strokeWidth={1 / lz} />
+
+        {/* ── Splashbacks (z_splashback S2) ── thin bands on the wall face */}
+        {layers.show('splashbacks') && splashbackBands?.map(sb => {
+          const isSel = sb.id === selectedSplashbackId
+          const pts = sb.pts.map(p => `${p.x},${p.y}`).join(' ')
+          return (
+            <g key={'sb_' + sb.id}>
+            <polygon points={pts}
+              fill={layers.lineDrawing ? 'none' : layers.color('splashbacks', '#38bdf8')} fillOpacity={0.35 * layers.op('splashbacks')}
+              stroke={isSel ? '#f59e0b' : layers.color('splashbacks', '#38bdf8')} strokeWidth={layers.w('splashbacks', isSel ? 2 : 1) / lz}
+              opacity={layers.op('splashbacks')}
+              style={{ cursor: mode === 'select' ? 'pointer' : undefined, pointerEvents: mode === 'select' ? undefined : 'none' }}
+              onPointerDown={e => { if (mode === 'select' && e.button === 0) e.stopPropagation() }}
+              onClick={e => { if (mode === 'select') { e.stopPropagation(); onSplashbackClick?.(sb.id) } }} />
+            {/* A 20 mm band is a hairline at room zoom — a wider invisible hit edge */}
+            {mode === 'select' && (
+              <polygon points={pts} fill="none" stroke="transparent" strokeWidth={10 / view.zoom} style={{ cursor: 'pointer' }}
+                onPointerDown={e => { if (e.button === 0) e.stopPropagation() }}
+                onClick={e => { e.stopPropagation(); onSplashbackClick?.(sb.id) }} />
+            )}
+            </g>
+          )
+        })}
 
         {/* ── Benchtop instances ── rendered below walls so cabinets/walls sit on top.
             Outline from segments (Phase 3); edge finishes + join lines are

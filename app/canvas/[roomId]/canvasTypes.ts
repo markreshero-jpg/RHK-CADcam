@@ -30,6 +30,8 @@ export type Mode =
   | 'cad'
   // z_cabinet_shape_edit E3: one cabinet's footprint on a dimmed plan — click edges / corners.
   | 'edit_cabinet_shape'
+  // z_splashback S2: in elevation, drag a rectangle or click a bench for the default size.
+  | 'draw_splashback'
 
 /** Smallest size (mm) a cabinet can be drag-stretched to — low enough for fillers / scribe strips. */
 export const MIN_STRETCH = 5
@@ -86,7 +88,7 @@ export type ArmedDefinition = {
   under?:         boolean
 }
 
-export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | { type: 'fixture'; id: string } | null
+export type Selected = { type: 'wall'; id: string } | { type: 'cabinet'; id: string } | { type: 'benchtop'; id: string } | { type: 'fixture'; id: string } | { type: 'splashback'; id: string } | null
 
 export type ContextMenuState = { x: number; y: number; cabId?: string; wallId?: string; elevWallId?: string; elevWallT?: number; benchtopId?: string; vertexContext?: { btId: string; vi: number }; fixtureId?: string }
 

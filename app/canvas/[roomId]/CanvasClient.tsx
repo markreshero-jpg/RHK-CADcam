@@ -9,7 +9,7 @@ import { normaliseSplit, splitSuggestions } from '@/src/lib/cabinetSplit'
 import { underPanelRun, carcassesOverPanel, isUnderPanel, withoutScribe, UNDER_PANEL_DEF } from '@/src/lib/underPanel'
 import { panelLinkSignature } from '@/src/lib/rangehoodLink'
 import { useIsAdmin } from '@/src/lib/useRole'
-import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem, CadLayer } from '@/src/lib/types'
+import { Project, Room, Wall, CabinetInstance, CabinetDefinition, AssemblyClass, DEFAULT_DIMS, BenchtopInstance, BenchtopSegment, RoomFixture, RoomAnnotation, FixtureCatalogItem, CadLayer, SplashbackInstance } from '@/src/lib/types'
 import {
   Pt, MIN_ZOOM, MAX_ZOOM, MIN_WALL_LEN, SNAP_PX, WALL_SNAP_PX,
   toDeg, dist,
@@ -134,6 +134,9 @@ import { useShapeCad } from './useShapeCad'
 import { useCabinetShapeEdit, shapeEditable, kickShapeEditable, type ShapeEditLayer } from './useCabinetShapeEdit'
 import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
+import { useSplashbacks } from './useSplashbacks'
+import SplashbackPanel from './SplashbackPanel'
+import { sbBounds, sbPlanQuad } from '@/src/lib/splashbackGeometry'
 import dynamic from 'next/dynamic'
 import SnapToolbar from './SnapToolbar'
 import { getUserPrefs, setUserPrefs, type PlanGridPrefs, type ViewStyle, type WallDrawPrefs } from '@/src/lib/userPrefs'
@@ -163,8 +166,9 @@ function loadStoredCanvasView(roomId: string, walls: Wall[]): { view: CanvasView
 
 // Shape Editor overlay is client-only and heavy — load it when first opened.
 const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
+const SplashbackShapeEditor = dynamic(() => import('./SplashbackShapeEditor'), { ssr: false })
 
-export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures, initialAnnotations, initialCadLayers, offlineCopy }: {
+export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures, initialAnnotations, initialCadLayers, initialSplashbacks, offlineCopy }: {
   project: Project | null
   room: Room
   walls: Wall[]
@@ -175,6 +179,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   initialAnnotations?: RoomAnnotation[]
   /** The job's named CAD layers (z_cad_layers). */
   initialCadLayers?: CadLayer[]
+  /** Splashbacks (z_splashback S2). */
+  initialSplashbacks?: SplashbackInstance[]
   /** Opened from this device's copy with no signal (z_offline step 2): when it was saved. */
   offlineCopy?: { savedAt: number }
 }) {
@@ -336,6 +342,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation' | 'joints'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
   const [benchtops, setBenchtops] = useState<BenchtopInstance[]>(initialBenchtops)
+  const [splashbacks, setSplashbacks] = useState<SplashbackInstance[]>(initialSplashbacks ?? [])
+  const [sbShapeId, setSbShapeId] = useState<string | null>(null)
   const [fixtures, setFixtures] = useState<RoomFixture[]>(initialFixtures ?? [])
   // CAD annotations (z_CAD_tool). F7 = CAD mode (mode 'cad'); authoring in useAnnotationTool.
   const [annotations, setAnnotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
@@ -422,7 +430,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }, [])
 
   const { captureSnapshot, handleUndo, handleRedo, wallsRef, cabinetsRef, canUndo, canRedo } =
-    useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected, fixtures, setFixtures, annotations, setAnnotations)
+    useCanvasHistory(walls, cabinets, benchtops, setWalls, setCabinets, setBenchtops, setSelected, fixtures, setFixtures, annotations, setAnnotations, splashbacks, setSplashbacks)
 
   const {
     resolvedParts, setResolvedParts,
@@ -541,6 +549,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const roomSwitcherRef = useRef<RoomSwitcherHandle>(null)
 
   const btCatalog = useBenchtopCatalog(room, project)
+  // Splashbacks (z_splashback S2): materials + CRUD.
+  const sbk = useSplashbacks({
+    room, project, splashbacks, setSplashbacks, benchtops,
+    btRowsFor: btCatalog.scheduleRowsFor, captureSnapshot, setSelected,
+  })
   // Cabinet plan frames for fixture links + overlap warnings (z_fixtures P4).
   const cabPlans = useMemo(() => cabinetPlans(cabinets, walls, centroid(walls)), [cabinets, walls])
   const fx = useFixtureInteraction({
@@ -1201,6 +1214,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         if (selected?.type === 'wall') handleDeleteWall(selected.id)
         if (selected?.type === 'benchtop') void bt.handleDeleteBenchtop(selected.id)
         if (selected?.type === 'fixture') void fx.remove(selected.id)
+        if (selected?.type === 'splashback') void sbk.remove(selected.id)
       }
     }
     const ku = (e: KeyboardEvent) => {
@@ -1264,6 +1278,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     setCabinets(cs => cs.filter(c => !(c.wall_id && ids.includes(c.wall_id))))
     // Benchtops anchored to the wall go with it, like its cabinets (undo restores them).
     setBenchtops(bs => bs.filter(b => !(b.wall_id && ids.includes(b.wall_id))))
+    // Splashbacks too (the DB cascades them with the wall).
+    setSplashbacks(ss => ss.filter(x => !ids.includes(x.wall_id)))
     setSelected(null); setMultiWalls([])
     // Cabinets must be deleted first — wall delete fails with FK violation if they exist
     await supabase.from('cabinet_instances').delete().in('wall_id', ids)
@@ -3174,6 +3190,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const selectedCab       = selected?.type === 'cabinet'   ? cabinets.find(c => c.id === selected.id) ?? null   : null
   const selectedBenchtop  = selected?.type === 'benchtop'  ? benchtops.find(b => b.id === selected.id) ?? null  : null
   const selectedFixture   = selected?.type === 'fixture'   ? fixtures.find(f => f.id === selected.id) ?? null   : null
+  const selectedSplashback = selected?.type === 'splashback' ? splashbacks.find(x => x.id === selected.id) ?? null : null
+  // Splashbacks draw in elevation: the tool brings the elevation up.
+  useEffect(() => {
+    // switchView drops the mode to select — put the tool back after it.
+    if (mode === 'draw_splashback' && canvasView !== 'elevation') { switchView('elevation'); setMode('draw_splashback') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- switchView is stable enough; only on mode change
+  }, [mode])
+  // Plan bands on the wall face (z_splashback S2).
+  const splashbackBands = useMemo(() => {
+    const rc = centroid(walls)
+    return splashbacks.flatMap(x => {
+      const w = walls.find(wl => wl.id === x.wall_id)
+      const b = sbBounds(x.segments)
+      return w && b ? [{ id: x.id, pts: sbPlanQuad(b, w, x.wall_side, rc, Number(x.offset_mm) || 0, sbk.infoFor(x).thick) }] : []
+    })
+  }, [splashbacks, walls, sbk.infoFor])
   // Click a fixture; Shift adds / removes it from the multi-pick (like cabinets).
   function pickFixture(id: string, shift = false) {
     setMultiSelect([]); setCabResize(null); setContextMenu(null)
@@ -3351,7 +3383,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }
 
   const modeHint =
-    mode === 'draw_benchtop_rect'? (!bt.btRectStart ? 'Click first corner · Shift=45° · Ctrl=ortho' : 'Click opposite corner to finish · Esc=cancel · Ctrl=ortho')
+    mode === 'draw_splashback' ? 'Splashback: click a benchtop for the default size, or drag a rectangle on the wall · Esc = cancel'
+    : mode === 'draw_benchtop_rect'? (!bt.btRectStart ? 'Click first corner · Shift=45° · Ctrl=ortho' : 'Click opposite corner to finish · Esc=cancel · Ctrl=ortho')
     : mode === 'draw_benchtop_line' ? (bt.btLinePts.length === 0 ? 'Line + offset: click the start of the back line on the wall · Shift = 45° · Ctrl = ortho · Esc = cancel' : bt.btLinePts.length === 1 ? 'Click the end of the back line · Tab = type length / angle' : 'Pull the depth off the line and click (snaps to cabinet fronts) · Tab = type the depth')
     : mode === 'draw_benchtop_l' ? (bt.btLPoints.length === 0 ? 'L-shape: click start of first leg · Ctrl=ortho · Esc=cancel' : bt.btLPoints.length === 1 ? 'Click inner corner · Ctrl=ortho' : 'Click end of second leg to complete L-shape')
     : mode === 'draw_benchtop_u' ? (['U-shape: click start of arm 1 · Ctrl=ortho · Esc=cancel', 'Click inner corner 1', 'Click inner corner 2', 'Click end of arm 2'][bt.btUPoints.length] ?? 'Click end of arm 2')
@@ -3717,6 +3750,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               onSVGClick={onSVGClick}
               benchtops={benchtopsDrawn}
               selectedBenchtopId={selectedBenchtop?.id ?? null}
+              splashbackBands={splashbackBands}
+              selectedSplashbackId={selectedSplashback?.id ?? null}
+              onSplashbackClick={id => { setSelected({ type: 'splashback', id }); setMultiSelect([]); setCabResize(null) }}
               btDrawPoly={bt.btDrawPoly}
               btDrawCursor={bt.btDrawCursor}
               onBenchtopClick={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]) }}
@@ -3979,6 +4015,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             waterfallOcc={wfOcc}
             edgeProfiles={btCatalog.profileById}
             onSelectBenchtop={id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]); setCabResize(null) }}
+            splashbacks={splashbacks}
+            splashbackInfo={sbk.infoFor}
+            onSelectSplashback={id => { setSelected({ type: 'splashback', id }); setMultiSelect([]); setCabResize(null) }}
+            onSplashbackSegments={(id, segs) => void sbk.update(id, { segments: segs })}
+            onCreateSplashback={async (wallId, side, segs) => {
+              const made = await sbk.create({ wall_id: wallId, wall_side: side, segments: segs })
+              if (made) setMode('select')
+            }}
             fixtures={movingFixtureId ? fixtures.filter(x => x.id !== movingFixtureId) : fixtures}
             fixtureClashIds={fixtureClashIds}
             onSelectFixture={(id, shift) => pickFixture(id, shift)}
@@ -4036,6 +4080,11 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               benchtops: benchtopsDrawn, info: btInfo, profiles: btCatalog.profileById,
               selectedId: selected?.type === 'benchtop' ? selected.id : null,
               onSelect: id => { setSelected({ type: 'benchtop', id }); setMultiSelect([]) },
+            }}
+            sb={{
+              splashbacks, infoFor: sbk.infoFor, fixtures,
+              selectedId: selectedSplashback?.id ?? null,
+              onSelect: id => { setSelected({ type: 'splashback', id }); setMultiSelect([]) },
             }}
             fx={{
               fixtures,
@@ -4334,6 +4383,32 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               defaultLabel={method ? `${method.name} default` : 'Method default'}
               onSave={segs => bt.handleDraftSave(segs)}
               onClose={() => bt.setShapeEditDraft(null)}
+            />
+          )
+        })()}
+        {selectedSplashback && !sbShapeId && mode !== 'place_definition' && (
+          <SplashbackPanel
+            key={selectedSplashback.id}
+            sb={selectedSplashback}
+            info={sbk.infoFor(selectedSplashback)}
+            wallName={walls.find(w => w.id === selectedSplashback.wall_id)?.name ?? 'Wall'}
+            schedules={sbk.scheduleOptions}
+            onUpdate={(id, u) => void sbk.update(id, u)}
+            onDelete={id => void sbk.remove(id)}
+            onClose={() => setSelected(null)}
+            onEditShape={id => setSbShapeId(id)}
+          />
+        )}
+        {sbShapeId && (() => {
+          const editing = splashbacks.find(x => x.id === sbShapeId)
+          if (!editing) return null
+          return (
+            <SplashbackShapeEditor
+              key={editing.id}
+              sb={editing}
+              refInput={{ walls, cabinets, room, benchtops, btInfo, fixtures }}
+              onSave={segs => void sbk.update(editing.id, { segments: segs })}
+              onClose={() => setSbShapeId(null)}
             />
           )
         })()}

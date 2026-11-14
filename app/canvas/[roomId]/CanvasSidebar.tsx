@@ -874,6 +874,12 @@ export default function CanvasSidebar({
                   active={mode === t.mode} onClick={() => onSelectMode(t.mode)} />
               </div>
             ))}
+            {/* Splashbacks (z_splashback S2) — drawn in elevation */}
+            <div className="border-t border-gray-800 my-1 mx-1" />
+            <ToolRow tone={TONES.benchtop} iconClass="text-sky-400" label="Draw Splashback" tour="mode-draw_splashback"
+              title="Splashback — in elevation, click a benchtop for the default size (up to the overheads / bulkhead / ceiling) or drag a rectangle"
+              icon={BT_ICON(<><rect x="2" y="3" width="12" height="8" fill="currentColor" fillOpacity="0.15"/><path d="M1 13h14" strokeWidth="2.2"/><path d="M4 9l3-4M8 9l3-4" strokeWidth="1"/></>)}
+              active={mode === 'draw_splashback'} onClick={() => onSelectMode('draw_splashback')} />
           </SectionBody>
         )}
 

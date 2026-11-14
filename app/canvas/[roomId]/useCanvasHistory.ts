@@ -1,13 +1,13 @@
 import { useRef, useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
-import type { Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
+import type { Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation, SplashbackInstance } from '@/src/lib/types'
 import type { Selected } from './canvasTypes'
 import { outbox } from '@/src/lib/offline/outbox'
 
 // fixtures optional: drag snapshots built by callers predate fixtures — an
 // absent list leaves fixtures as they are.
 // annotations likewise (z_CAD_tool A2).
-type Snapshot = { walls: Wall[]; cabinets: CabinetInstance[]; benchtops: BenchtopInstance[]; fixtures?: RoomFixture[]; annotations?: RoomAnnotation[] }
+type Snapshot = { walls: Wall[]; cabinets: CabinetInstance[]; benchtops: BenchtopInstance[]; fixtures?: RoomFixture[]; annotations?: RoomAnnotation[]; splashbacks?: SplashbackInstance[] }
 
 export function useCanvasHistory(
   walls: Wall[],
@@ -21,6 +21,8 @@ export function useCanvasHistory(
   setFixtures?: React.Dispatch<React.SetStateAction<RoomFixture[]>>,
   annotations: RoomAnnotation[] = [],
   setAnnotations?: React.Dispatch<React.SetStateAction<RoomAnnotation[]>>,
+  splashbacks: SplashbackInstance[] = [],
+  setSplashbacks?: React.Dispatch<React.SetStateAction<SplashbackInstance[]>>,
 ) {
   const undoStackRef   = useRef<Snapshot[]>([])
   const redoStackRef   = useRef<Snapshot[]>([])
@@ -29,6 +31,7 @@ export function useCanvasHistory(
   const benchtopsRef   = useRef<BenchtopInstance[]>(benchtops)
   const fixturesRef    = useRef<RoomFixture[]>(fixtures)
   const annotationsRef = useRef<RoomAnnotation[]>(annotations)
+  const splashbacksRef = useRef<SplashbackInstance[]>(splashbacks)
   const [version, setVersion] = useState(0)
 
   useEffect(() => { wallsRef.current     = walls     }, [walls])
@@ -36,10 +39,12 @@ export function useCanvasHistory(
   useEffect(() => { benchtopsRef.current = benchtops }, [benchtops])
   useEffect(() => { fixturesRef.current  = fixtures  }, [fixtures])
   useEffect(() => { annotationsRef.current = annotations }, [annotations])
+  useEffect(() => { splashbacksRef.current = splashbacks }, [splashbacks])
 
   const current = (): Snapshot => ({
     walls: wallsRef.current, cabinets: cabinetsRef.current,
     benchtops: benchtopsRef.current, fixtures: fixturesRef.current, annotations: annotationsRef.current,
+    splashbacks: splashbacksRef.current,
   })
 
   function captureSnapshot() {
@@ -54,9 +59,11 @@ export function useCanvasHistory(
     const pb = benchtopsRef.current
     const pf = fixturesRef.current
     const pa = annotationsRef.current
+    const ps = splashbacksRef.current
     setWalls(snap.walls); setCabinets(snap.cabinets); setBenchtops(snap.benchtops); setSelected(null)
     if (snap.fixtures && setFixtures) setFixtures(snap.fixtures)
     if (snap.annotations && setAnnotations) setAnnotations(snap.annotations)
+    if (snap.splashbacks && setSplashbacks) setSplashbacks(snap.splashbacks)
 
     // Sync walls
     const pwMap = new Map(pw.map(w => [w.id, w]))
@@ -112,6 +119,19 @@ export function useCanvasHistory(
       for (const f of snap.fixtures) {
         const p = pfMap.get(f.id)
         if (p && JSON.stringify(p) !== JSON.stringify(f)) await supabase.from('room_fixtures').update(f).eq('id', f.id)
+      }
+    }
+
+    // Sync splashbacks (z_splashback S2)
+    if (snap.splashbacks && setSplashbacks) {
+      const psMap = new Map(ps.map(x => [x.id, x]))
+      const ssIds = new Set(snap.splashbacks.map(x => x.id))
+      for (const x of ps) if (!ssIds.has(x.id)) await supabase.from('splashback_instances').delete().eq('id', x.id)
+      const newSb = snap.splashbacks.filter(x => !psMap.has(x.id))
+      if (newSb.length) await supabase.from('splashback_instances').insert(newSb)
+      for (const x of snap.splashbacks) {
+        const p = psMap.get(x.id)
+        if (p && JSON.stringify(p) !== JSON.stringify(x)) await supabase.from('splashback_instances').update(x).eq('id', x.id)
       }
     }
 

@@ -442,6 +442,31 @@ export interface BenchtopInstance {
   updated_at: string
 }
 
+// ── Splashback (z_splashback S2) ──────────────────────────────────────────────
+
+/** A splashback piece. Outline in its wall ELEVATION frame (src/lib/splashbackGeometry):
+ *  x = elevation x as seen on that side (back mirrored), y = height above the floor (up). */
+export interface SplashbackInstance {
+  id: string
+  room_id: string
+  label: string | null
+  wall_id: string
+  wall_side: 'face' | 'back'
+  segments: BenchtopSegment[]
+  /** Hand cut-outs (S3) — power points, switches; elevation frame. */
+  cutouts: Array<Array<{ x: number; y: number }>>
+  /** Set off the wall face (packer / batten), mm. */
+  offset_mm: number
+  /** Null = the panel material's thickness. */
+  thickness_mm: number | null
+  /** Gap kept around wall openings that cut it (L2), mm. */
+  opening_reveal_mm: number
+  splashback_schedule_id: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
 // ── Benchtop build method ─────────────────────────────────────────────────────
 
 export type BenchtopJoinType      = 'butt' | 'mitre'

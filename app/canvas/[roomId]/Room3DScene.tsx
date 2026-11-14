@@ -26,6 +26,7 @@ import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import Measure3D, { NO_MEASURE } from './Measure3D'
 import Fixtures3D, { type Fixtures3DProps } from './Fixtures3D'
 import { benchtopGeometries } from '@/src/lib/benchtopSolids'
+import Splashbacks3D, { type Sb3DProps } from './Splashback3D'
 import { cabPlacement3d } from '@/src/lib/cabPlacement3d'
 
 const TO_RAD = Math.PI / 180
@@ -747,7 +748,7 @@ function ResetView({ signal, controlsRef, position, target }: {
 
 // ── Room scene ────────────────────────────────────────────────────────────────
 
-export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, hiddenCabinetIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, fx, pickBenchtops, measuring, wire, printMode = false, floor = !printMode }: {
+export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, onCabContextMenu, resolvedParts, materialColours, ebByMatId, hiddenWallIds, hiddenCabinetIds, birdsEyeSignal, resetSignal, cameraStateRef, layers, bt, sb, fx, pickBenchtops, measuring, wire, printMode = false, floor = !printMode }: {
   /** Draw the floor (default: not in printMode). The colour render report keeps it. */
   floor?: boolean
   /** Shop drawings 3D shots: single cabinets left out (blockers in front of the subject). */
@@ -769,6 +770,7 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
   cameraStateRef?: React.MutableRefObject<Camera3DState | null>
   layers: LayerView
   bt?: Bt3DProps
+  sb?: Sb3DProps
   fx?: Fixtures3DProps
   pickBenchtops: boolean
   measuring: boolean
@@ -934,6 +936,9 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
         )
       ))}
 
+      {/* Splashbacks (z_splashback S2) — hidden with their wall */}
+      {sb && <Splashbacks3D sb={sb} walls={walls} rc={rc} layers={layers} hiddenWallIds={hiddenWallIds} pick={!measuring && !pickBenchtops && !wire} />}
+
       {/* Fixtures & appliances (z_fixtures) */}
       {fx && <Fixtures3D {...fx} layers={layers} hiddenWallIds={hiddenWallIds} pick={!pickBenchtops && !measuring} />}
 
@@ -973,7 +978,7 @@ function SceneExportBridge() {
   return null
 }
 
-export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, fx, pickBenchtops = false, measuring = false, wire = false, onSaveShot }: {
+export default function Room3DScene({ walls, cabinets, room, selectedId, onSelectCabinet, onDeselect, onEditCabinet, onDeleteCabinet, onReplaceCabinet, resolvedParts, materialColours, ebByMatId, cameraStateRef, resetSignal = 0, layers, bt, sb, fx, pickBenchtops = false, measuring = false, wire = false, onSaveShot }: {
   /** Right-click → "Save view for shop drawings": the current camera + hidden walls. */
   onSaveShot?: (cam: Camera3DState, hiddenWallIds: string[]) => void
   walls: Wall[]
@@ -992,6 +997,8 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   resetSignal?: number
   layers: LayerView
   bt?: Bt3DProps
+  /** Splashbacks (z_splashback S2). */
+  sb?: Sb3DProps
   /** Fixtures & appliances (z_fixtures P2). */
   fx?: Fixtures3DProps
   /** F4 Benchtop mode: only benchtops pick; cabinets ignore clicks. */
@@ -1098,6 +1105,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
               cameraStateRef={cameraStateRef}
               layers={layers}
               bt={bt}
+              sb={sb}
               fx={fx && {
                 ...fx,
                 // Same guard as cabinets: a hit stops the empty-space wall menu,

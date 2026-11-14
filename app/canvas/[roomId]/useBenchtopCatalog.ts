@@ -99,5 +99,5 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
     return { applies, defaultTape: applies ? top?.edgeband_id ?? null : null }
   }, [methodFor, scheduleRowsFor])
 
-  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, tapes, tapeContextFor, forRoom }
+  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, scheduleRowsFor, tapes, tapeContextFor, forRoom }
 }

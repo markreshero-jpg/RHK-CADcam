@@ -3,11 +3,10 @@
 > **Purpose**: the living spec for splashbacks. Update status + decisions in the same change as the code.
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → 2026-11-14 **S1 built** (schedules, overrides tables, inherit setting, seeds, library
-> tab, Settings default + toggle, `src/lib/splashbackMaterials.ts` cascade + tests). Next: **S2** — create
-> `splashback_instances` (deferred from S1 so its shape follows the drawing code) and draw/edit in elevation.
-> S1 check pending: Mark to look at Settings › Materials Schedule › Splashbacks and Settings › Materials. First job: RHK6468 Kitchen (ST marble on the
-> kitchen run with a mitred return to the door jamb, RS reconstituted stone in the butler's pantry).
+> **RESUME HERE** → 2026-11-14 **S2 built** (draw / select / move / stretch in elevation, Edit shape, plan
+> band, 3D panel, layers). First piece drawn: RHK6468 Kitchen Wall 7, 3872 × 700 (920 → 1620), SNB Arabescato
+> via "Same as Benchtop". **Check pending** (Mark). Next: **S3** — returns (Wall 7 north mitre), joints, hand
+> cut-outs; then the butler's pieces (Walls 4 + 3). S2 gaps listed under "S2 as built".
 
 ## Mark's brief (2026-11-14)
 
@@ -97,6 +96,29 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 - Not yet: job / room schedule pickers + per-role overrides in the room Materials tab (with S2, when there is
   something to resolve).
 
+## S2 as built (2026-11-14)
+
+- Table `splashback_instances` (`migration_s2_splashback_instances.sql`, applied live; RLS job_access; wall FK
+  cascades): `wall_id, wall_side, segments` (elevation frame), `cutouts` (S3), `offset_mm`, `thickness_mm`
+  (null = material), `opening_reveal_mm`, `splashback_schedule_id`, `label`, `notes`.
+- Geometry `src/lib/splashbackGeometry.ts` (+ tests): rect / bounds / stretchEdge / move, `defaultSplashbackRect`
+  (L3), `sbOpenings` + `openingHoles` (L2, live from the wall's openings, grown by the reveal), `sbElevPath`,
+  `sbPlanQuad`, `sbFrame` (= elevationFrame).
+- Canvas: `useSplashbacks` (catalog, `infoFor` = material / kind / thickness / board-or-supply via the S1 cascade;
+  inherit uses the benchtop on the same wall, else the room's first top), `SplashbackElevation` (fill per kind:
+  stone hatch, glass diagonals, tile 100 grid, board plain; label + size; select → drag to move, orange handles
+  stretch a rectangle's edges), `SplashbackPanel` (left / width / bottom / height, schedule, thickness, off wall,
+  reveal, Edit shape, notes, delete), `SplashbackShapeEditor` (y flipped in/out; wall, cabinets, tops, openings
+  as ghosts), `Splashback3D` (extruded off the face, glass see-through), plan band in `CanvasSVG`.
+- Sidebar Benchtop (F4) section › **Draw Splashback** → elevation: click a bench = default size, or drag a
+  rectangle. Selection type `splashback`; Delete key; undo / redo; wall delete takes its splashbacks.
+- Layers: `splashbacks` (all views) + `splashback_labels` (elevation) in the Benchtops group (now "Benchtops &
+  splashbacks").
+- **Gaps (later):** not on the shop-drawing / print elevations (`ElevationPrintSVG`) or plan report; not in the
+  offline room copy (`roomCache`); plan band can't be clicked where cabinets cover it (select in elevation / 3D);
+  the inherit lookup ignores benchtop job / room per-role overrides (same known gap as the benchtop display
+  thickness); not in reports / AI room summary / dashboard activity.
+
 ## Questions for Mark (original; answers above)
 
 1. Auto-build splashbacks from the tops (like Auto-build tops), or draw each by hand first?
@@ -114,7 +136,7 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 |---|---|---|
 | S0 | Spec + Mark's answers | [x] 2026-11-14 |
 | S1 | Tables + schedules + seed materials | [x] 2026-11-14, check pending (instances table moved to S2) |
-| S2 | Draw / edit in elevation (rect + Edit shape), plan band, 3D | [ ] |
+| S2 | Draw / edit in elevation (rect + Edit shape), plan band, 3D | [x] 2026-11-14, check pending; print + offline gaps |
 | S3 | Returns, joints, cut-outs (+ auto from openings) | [ ] |
 | S4 | Auto-build from tops | [ ] |
 | S5 | Benchtop Quote section | [ ] |
@@ -123,6 +145,6 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 ## First job: RHK6468 Kitchen (drawn once S2 lands)
 
 - Kitchen run (Wall 7): ST 20 SNB Arabescato honed, bench 920 to the PB bulkhead (700), full 3872, mitred return
-  at the north end to the door jamb (Elevation 2).
+  at the north end to the door jamb (Elevation 2). **Drawn 2026-11-14 (S2)** as "Splashback 1"; return waits on S3.
 - Butler's north + west (Walls 4 + 3): RS reconstituted stone, colour TBC, bench to the lift-up underside 1620
   (700). South (Wall 2): window W8 920-1620, no splashback under it.

@@ -4,7 +4,7 @@ import { rectEdgeSegs, coverOf, anyExposed, EXPOSED_BOARD_ITEMS } from '@/src/li
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
-import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile, type RoomAnnotation } from '@/src/lib/types'
+import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile, type RoomAnnotation, type SplashbackInstance, type BenchtopSegment } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, nibsOnWall, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
 import { stackShelfSegs } from '@/src/lib/floatShelf'
 import { Selected, CabResize, viewReducer, Mode, ArmedDefinition, placeInfoFor, isBenchtopMode, MIN_STRETCH } from './canvasTypes'
@@ -35,6 +35,11 @@ import { useHandOpMarkersMulti, HandOpMarkersSVG } from './HandOpMarkers'
 import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { kickLocal, kickHeightMarks } from '@/src/lib/kickDims'
 import BenchtopElevation, { btElevBands, type BtElevInfo } from './BenchtopElevation'
+import SplashbackElevation from './SplashbackElevation'
+import type { SbInfo } from './useSplashbacks'
+import { sbOpenings } from '@/src/lib/splashbackGeometry'
+import { fixtureCorners } from '@/src/lib/fixtureGeometry'
+import { alongOf } from '@/src/lib/benchtopAnchor'
 import { benchDimHeights } from './benchDims'
 import FixturesElevation, { OpeningHoles } from './FixturesElevation'
 import ReturnSectionSVG, { useReturnSectionData, returnCabinets } from './ReturnSectionSVG'
@@ -248,6 +253,13 @@ interface ElevationSVGProps {
   benchtopInfo?: (bt: BenchtopInstance) => BtElevInfo
   edgeProfiles?: Record<string, BenchtopEdgeProfile>
   onSelectBenchtop?: (id: string) => void
+  // Splashbacks (z_splashback S2) — drawn + edited in elevation
+  splashbacks?: SplashbackInstance[]
+  splashbackInfo?: (sb: SplashbackInstance) => SbInfo
+  onSelectSplashback?: (id: string) => void
+  onSplashbackSegments?: (id: string, segs: BenchtopSegment[]) => void
+  onCreateSplashback?: (wallId: string, side: 'face' | 'back', segs: BenchtopSegment[]) => void
+  onSplashbackContextMenu?: (e: React.MouseEvent, id: string) => void
   // Along-wall ranges of waterfall legs that block a mover on this wall + side
   waterfallOcc?: (wall: Wall, side: 'face' | 'back', mover: { assembly_class: string; dy: number; dz?: number }) => { t: number; dx: number }[]
   // Fixtures & appliances (z_fixtures P2)
@@ -300,6 +312,7 @@ export default function ElevationSVG({
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
+  splashbacks, splashbackInfo, onSelectSplashback, onSplashbackSegments, onCreateSplashback, onSplashbackContextMenu,
   fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
@@ -2189,6 +2202,40 @@ export default function ElevationSVG({
                 onSelect={id => onSelectBenchtop?.(id)}
               />
             )}
+
+            {/* Splashbacks (z_splashback S2) — on the wall, over the bench */}
+            {splashbacks && splashbackInfo && (splashbacks.length > 0 || mode === 'draw_splashback') && (() => {
+              const rc = centroid(walls)
+              const ef = elevationFrame(wall, elevWallSide, rc)
+              // Benches: tops on this side (elevation x + surface height).
+              const benches = benchtops && benchtopInfo
+                ? btElevBands(benchtops, walls, wall, elevWallSide, rc, roomH, benchtopInfo).map(bn => ({ t0: bn.t0, t1: bn.t1, topZ: roomH - bn.yTop }))
+                : []
+              // What a default stops under: any cabinet / appliance hung off the floor on this side.
+              const obstacles = [
+                ...wallCabs.map(c => ({ x0: elevX(c), x1: elevX(c) + c.dx, zBot: cabBottomZ(c, room, wall) })),
+                ...(fixtures ?? []).filter(f => f.category !== 'opening' && f.wall_id === wall.id && (Number(f.z) || 0) > 0).map(f => {
+                  const ts = fixtureCorners(f).map(p => alongOf(ef, p))
+                  return { x0: Math.min(...ts), x1: Math.max(...ts), zBot: Number(f.z) || 0 }
+                }),
+              ]
+              return (
+                <SplashbackElevation
+                  splashbacks={splashbacks} wallId={wall.id} side={elevWallSide} wallLength={wall.length}
+                  roomH={roomH} zoom={z} lineScale={lineScale} layers={layers}
+                  selectedId={selected?.type === 'splashback' ? selected.id : null}
+                  infoFor={splashbackInfo}
+                  openings={sbOpenings(fixtures ?? [], wall, elevWallSide, rc)}
+                  interactive={mode === 'select'}
+                  drawing={mode === 'draw_splashback'}
+                  benches={benches} obstacles={obstacles}
+                  onSelect={id => onSelectSplashback?.(id)}
+                  onChangeSegments={(id, segs) => onSplashbackSegments?.(id, segs)}
+                  onCreate={segs => onCreateSplashback?.(wall.id, elevWallSide, segs)}
+                  onContextMenu={onSplashbackContextMenu}
+                />
+              )
+            })()}
 
             {/* Return cabinet sections — over this wall's cabinets */}
             {showReturns && (
