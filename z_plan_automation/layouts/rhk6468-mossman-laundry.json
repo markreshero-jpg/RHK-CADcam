@@ -1,0 +1,218 @@
+{
+ "_source": "Mark's site measure sketch on the Laundry plan (3721 o/a, CH 2603) + DWG 2.01 Rev A (28 Mossman Court - Preliminary - A3.pdf) + Mark's answers 2026-11-14",
+ "_notes": [
+  "Origin = back wall left corner (-2510,-795). Returns 1400. Garage side open (no wall drawn). Kick 120 (job). Base 900 incl kick. Top line 2573 + 30 BH. Room colour 16 PT Classic White Matt."
+ ],
+ "projectId": "21601535-e1c8-4087-96b8-bb2506b96c3d",
+ "roomId": "874fed25-8e1b-4bbf-b1ff-3090361b5dad",
+ "roomName": "Laundry",
+ "roomHeight": 2603,
+ "wallCabinetTop": 2573,
+ "walls": [
+  {
+   "x": -2510,
+   "y": 605,
+   "length": 1400,
+   "angle": 270
+  },
+  {
+   "x": -2510,
+   "y": -795,
+   "length": 3721,
+   "angle": 0
+  },
+  {
+   "x": 1211,
+   "y": -795,
+   "length": 1400,
+   "angle": 90
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 0,
+   "dx": 650,
+   "dy": 673,
+   "dz": 580,
+   "note": "Cupboard over the WASHER / DRYER STACK SPACE 650W x 1900H (underside 1900, top 2573)"
+  },
+  {
+   "def": "TEPF",
+   "wall": 2,
+   "offset": 650,
+   "dx": 16.5,
+   "dy": 2573,
+   "dz": 580,
+   "note": "Tall end panel beside the stack space, floor to 2573"
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 666.5,
+   "dx": 1094,
+   "dy": 900,
+   "dz": 580,
+   "note": "TUB - generic 45L inset laundry tub (TBC). Rails on edge",
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left",
+       "hinges": [
+        100,
+        660
+       ]
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right",
+       "hinges": [
+        100,
+        660
+       ]
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   },
+   "rules": {
+    "RAIL_ORIENT": "vertical"
+   }
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 1760.5,
+   "dx": 1094,
+   "dy": 900,
+   "dz": 580,
+   "note": "Pair of doors, 1 adj shelf"
+  },
+  {
+   "def": "BEPF",
+   "wall": 2,
+   "offset": 2854.5,
+   "dx": 16.5,
+   "dy": 900,
+   "dz": 580,
+   "note": "Base end panel, seen - at the D2 door"
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 666.5,
+   "dx": 1094,
+   "dy": 953,
+   "dz": 301.5,
+   "note": "Overheads 320 deep incl doors, 1620-2573"
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 1760.5,
+   "dx": 1094,
+   "dy": 953,
+   "dz": 301.5,
+   "note": "Overheads 320 deep incl doors, 1620-2573"
+  },
+  {
+   "def": "WEP",
+   "wall": 2,
+   "offset": 2854.5,
+   "dx": 16.5,
+   "dy": 953,
+   "dz": 301.5,
+   "note": "Wall end panel, seen - at the D2 door"
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 0,
+   "dx": 666.5,
+   "dy": 30,
+   "dz": 580,
+   "note": "30 BH over the stack cupboard + tall panel (ceiling 2603), return where the depth steps to the overheads",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": true,
+      "depth": 278.5,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 666.5,
+   "dx": 2188,
+   "dy": 30,
+   "dz": 301.5,
+   "note": "30 BH over the overheads, seen return at the door end",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": true,
+      "depth": 301.5,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  }
+ ]
+}

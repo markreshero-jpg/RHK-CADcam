@@ -94,3 +94,34 @@ How it's drawn:
   pull-out bronze (Abi pull-out) on BC-07; Franke 370 single (Abi Ohelu) + Franke pull-out black steel +
   Zip H5L783Z03AU TBC on BC-36 (real Zip HydroTap library model since 2026-11-14, tap hole unchanged).
 - Windows W8 2553 x 700 (920-1620) and W7 (size TBC) in Wall 2.
+
+## Laundry - drawn 2026-11-14, room `874fed25-8e1b-4bbf-b1ff-3090361b5dad`
+
+Source: Mark's site-measure sketch on the Laundry plan (back wall 3721 o/a, CH 2603, door
+"to be cut in") + `ARCHITECTURALS/28 Mossman Court - Preliminary - A3.pdf` p1 = DWG 2.01 Rev A
+Ground Floor Plan (from Sean Parfitt, Rya, 2026-11-14). Layout
+`z_plan_automation/layouts/rhk6468-mossman-laundry.json` (`_tmp-6468-laundry-gen.mjs`),
+set-up `_tmp-6468-laundry-setup.mjs`, post `_tmp-6468-laundry-post.mjs`.
+
+Mark's answers (2026-11-14):
+- D2 door 820 (plan), 30 nib to the PDR wall. Returns 1400. Garage side left open (no wall drawn).
+- From the left: 650 washer/dryer stack space with a cupboard over | TEPF | sink cupboard |
+  B2D ("D2D") | BEPF. 2 x W2D overheads 320 deep incl doors, to the door.
+- Generic 45L tub for now (new catalog row "Generic 45L laundry tub (inset)", 545 x 480).
+- Room colour 16 PT Classic White Matt (Flat Panel 16mm style, room override) - "for now".
+- Top line 2573 + 30 BH (ceiling 2603). Overheads underside 1620 like the kitchen. Stack
+  space 1900 high.
+
+How it's drawn (Wall 2, 580 carcass, 120 kick, 900 incl kick):
+WC-01 stack cupboard 650 x 673 (1900-2573) | TC-01 TEPF 16.5 to 2573 | BC-01 tub 1094 (rails
+on edge, open) | BC-02 B2D 1094 | BC-03 BEPF 16.5 at the door = 2871. WC-02/03 overheads 1094
+x 953 (301.5 carcass, 320 OA) + WC-07 WUP 18 set back 20 + WC-04 WEP at the door. BH WC-05 over
+the stack (return 278.5 where it steps) + WC-06 over the overheads (seen return at the door).
+Overhead hinges [100, 610, 831] to clear the adj shelf holes.
+
+### Open / TBC
+- [ ] Benchtop not drawn (material / thickness) - tub z assumes a 920 top.
+- [ ] Tub make / model.
+- [ ] Stack cupboard WC-01 goes straight to the left wall (no filler) - filler wanted?
+- [ ] Garage side: wall / opening not drawn.
+- [ ] Spec block + markup not done yet.
