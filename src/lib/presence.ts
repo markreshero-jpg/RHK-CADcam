@@ -64,7 +64,9 @@ export function startPresence(getPath: () => string) {
     if (id) void start(id, email ?? '', getPath())
     else stop()
   }
-  supabase.auth.getUser().then(({ data }) => sync(data.user?.id, data.user?.email))
+  // No signal (z_offline): getUser fails — that isn't a sign-out, so leave it to the session
+  // events (stopping here raced the INITIAL_SESSION join and threw).
+  supabase.auth.getUser().then(({ data, error }) => { if (!error) sync(data.user?.id, data.user?.email) })
   const { data } = supabase.auth.onAuthStateChange((event, session) => {
     if (event === 'SIGNED_OUT') stop()
     else if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') sync(session?.user.id, session?.user.email)

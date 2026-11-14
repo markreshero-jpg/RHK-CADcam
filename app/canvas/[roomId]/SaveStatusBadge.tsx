@@ -5,17 +5,20 @@
 import { useEffect } from 'react'
 import { useOutboxStatus, outbox } from '@/src/lib/offline/outbox'
 import { useClashes } from '@/src/lib/offline/clashes'
+import { useNetWatch } from '@/src/lib/offline/netWatch'
 
 export default function SaveStatusBadge({ compact }: { compact?: boolean }) {
   const { state, pending, lastError } = useOutboxStatus()
   const clashes = useClashes(s => s.list.length)
   const clashOpen = useClashes(s => s.open)
   const setClashOpen = useClashes(s => s.setOpen)
+  // Step 2: cabinet / wall / fixture saves that failed with no signal (not queued — step 3).
+  const unsaved = useNetWatch(s => s.unsaved)
 
-  // Waiting changes are kept on this device, but with no signal a reload can't load the
-  // page again (until step 2) — so warn before leaving.
+  // Waiting changes are kept on this device. Without the service worker (step 2) a reload
+  // with no signal can't load the page again — so then warn before leaving.
   useEffect(() => {
-    if (!pending) return
+    if (!pending || navigator.serviceWorker?.controller) return
     const h = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = '' }
     window.addEventListener('beforeunload', h)
     return () => window.removeEventListener('beforeunload', h)
@@ -33,6 +36,12 @@ export default function SaveStatusBadge({ compact }: { compact?: boolean }) {
 
   return (
     <>
+      {unsaved > 0 && (
+        <span data-unsaved={unsaved} className="flex items-center gap-1 px-2.5 whitespace-nowrap text-red-300 bg-red-500/10"
+          title={`${unsaved} cabinet / wall / fixture change${unsaved === 1 ? '' : 's'} couldn't be saved with no signal and ${unsaved === 1 ? 'is' : 'are'} lost on reload. Only CAD and markups save offline for now. Redo ${unsaved === 1 ? 'it' : 'them'} when you have signal.`}>
+          ✕ {compact ? unsaved : `${unsaved} not saved (needs signal)`}
+        </span>
+      )}
       {clashes > 0 && (
         // Step 1b: items two people changed at once — opens the clash list.
         <button type="button" onClick={() => setClashOpen(!clashOpen)} data-clash-count={clashes} data-tour={compact ? undefined : 'clash-check'}

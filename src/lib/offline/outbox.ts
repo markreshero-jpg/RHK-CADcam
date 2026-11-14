@@ -12,6 +12,7 @@ import {
   entryKey, isNetworkFailure, mergeOp, applyPending as applyPendingPure, checkClash, CLASH_CHECKED,
   type OutboxEntry, type OutboxOp, type OutboxTable, type ClashFound,
 } from './outboxCore'
+import { idbPut as idbPutRaw, idbDelete as idbDeleteRaw, idbAll, idbClear } from './idb'
 
 export type SaveState = 'saved' | 'saving' | 'offline' | 'error'
 
@@ -28,51 +29,8 @@ export const useOutboxStatus = create<OutboxStatus>(() => ({
 
 // ── IndexedDB (falls back to memory only if the browser won't give us one) ──
 
-const DB_NAME = 'rhk-offline'
-const STORE = 'outbox'
-let dbPromise: Promise<IDBDatabase | null> | null = null
-
-function openDb(): Promise<IDBDatabase | null> {
-  if (dbPromise) return dbPromise
-  dbPromise = new Promise(resolve => {
-    try {
-      if (typeof indexedDB === 'undefined') return resolve(null)
-      const req = indexedDB.open(DB_NAME, 1)
-      req.onupgradeneeded = () => {
-        if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE, { keyPath: 'key' })
-      }
-      req.onsuccess = () => resolve(req.result)
-      req.onerror = () => { console.error('[outbox] IndexedDB open failed', req.error); resolve(null) }
-      req.onblocked = () => resolve(null)
-    } catch (e) { console.error('[outbox] IndexedDB unavailable', e); resolve(null) }
-  })
-  return dbPromise
-}
-
-async function idbPut(e: OutboxEntry) {
-  const db = await openDb(); if (!db) return
-  await new Promise<void>(res => {
-    const tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).put(e)
-    tx.oncomplete = () => res(); tx.onerror = () => { console.error('[outbox] save failed', tx.error); res() }
-  })
-}
-
-async function idbDelete(key: string) {
-  const db = await openDb(); if (!db) return
-  await new Promise<void>(res => {
-    const tx = db.transaction(STORE, 'readwrite'); tx.objectStore(STORE).delete(key)
-    tx.oncomplete = () => res(); tx.onerror = () => res()
-  })
-}
-
-async function idbAll(): Promise<OutboxEntry[]> {
-  const db = await openDb(); if (!db) return []
-  return new Promise(res => {
-    const req = db.transaction(STORE, 'readonly').objectStore(STORE).getAll()
-    req.onsuccess = () => res((req.result ?? []) as OutboxEntry[])
-    req.onerror = () => res([])
-  })
-}
+const idbPut = (e: OutboxEntry) => idbPutRaw('outbox', e)
+const idbDelete = (key: string) => idbDeleteRaw('outbox', key)
 
 // ── Queue ──
 
@@ -99,7 +57,7 @@ export function initOutbox(): Promise<void> {
   if (ready) return ready
   ready = (async () => {
     if (typeof window === 'undefined') return
-    const saved = await idbAll()
+    const saved = await idbAll<OutboxEntry>('outbox')
     for (const e of saved) {
       // Something queued this session (before the load finished) is newer — keep it.
       if (!queue.has(e.key)) queue.set(e.key, e)
@@ -147,10 +105,19 @@ export const outbox = {
   },
   /** Resolves once everything queued so far has reached the server (or a send fails). */
   flushNow: () => flush(),
+  /** Sign out: drop everything waiting (it must never send under another login). */
+  async discardAll() {
+    queue.clear(); known.clear()
+    await idbClear('outbox')
+    publish({ state: 'saved' })
+  },
   /** Step 1b: remember the server versions of rows just loaded (the clash check's baseline). */
   track(table: OutboxTable, rows: { id: string; updated_at?: string | null }[]) {
     for (const r of rows) if (r.updated_at) known.set(entryKey(table, r.id), r.updated_at)
   },
+  /** The server updated_at this device last saw for a row (room copies keep it, so the
+   *  offline canvas checks clashes against the right version — step 2). */
+  knownStamp(table: OutboxTable, id: string): string | undefined { return known.get(entryKey(table, id)) },
   /** The full row as on screen (lets a change to an item someone else deleted put it back). */
   setLookup(table: OutboxTable, fn: ((id: string) => Record<string, unknown> | undefined) | null) {
     if (fn) lookups.set(table, fn); else lookups.delete(table)

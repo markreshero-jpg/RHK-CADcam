@@ -146,6 +146,8 @@ import { ThemeToggle } from '@/app/ThemeToggle'
 import { initOutbox, applyPending, outbox } from '@/src/lib/offline/outbox'
 import { useClashes } from '@/src/lib/offline/clashes'
 import ClashPanel from './ClashPanel'
+import OfflineCopyBanner from './OfflineCopyBanner'
+import { useRoomSnapshot } from './useRoomSnapshot'
 
 // Last canvas tab for a room (see canvasView state). A stored elevation wall that
 // no longer exists falls back to the first wall.
@@ -162,7 +164,7 @@ function loadStoredCanvasView(roomId: string, walls: Wall[]): { view: CanvasView
 // Shape Editor overlay is client-only and heavy — load it when first opened.
 const BenchtopShapeEditor = dynamic(() => import('./BenchtopShapeEditor'), { ssr: false })
 
-export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures, initialAnnotations, initialCadLayers }: {
+export default function CanvasClient({ project: initProject, room: initRoom, walls: initWalls, initialCabinets, initialBenchtops, initialFixtures, initialAnnotations, initialCadLayers, offlineCopy }: {
   project: Project | null
   room: Room
   walls: Wall[]
@@ -173,6 +175,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   initialAnnotations?: RoomAnnotation[]
   /** The job's named CAD layers (z_cad_layers). */
   initialCadLayers?: CadLayer[]
+  /** Opened from this device's copy with no signal (z_offline step 2): when it was saved. */
+  offlineCopy?: { savedAt: number }
 }) {
   const [project, setProjectState] = useState<Project | null>(initProject)
   const [room, setRoomState] = useState<Room>(initRoom)
@@ -355,6 +359,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Named CAD layers (z_cad_layers): on/off, ByLayer colour and print are for the whole job.
   const [cadLayers, setCadLayers] = useState<CadLayer[]>(initialCadLayers ?? [])
   const cadLayerV = useMemo(() => cadLayerView(cadLayers), [cadLayers])
+  // Offline step 2: keep this room's copy on the device current (and Take offline's warm-up).
+  useRoomSnapshot({ project, room, walls, cabinets, benchtops, fixtures, annotations, cadLayers })
   // Current layer for new items, remembered per user per job; null / gone = General.
   const [cadLayerPick, setCadLayerPick] = useState<string | null>(() => getUserPrefs().cadLayerCurrent[initRoom.project_id] ?? null)
   const cadLayerCurrent = cadLayerPick && cadLayers.some(l => l.id === cadLayerPick && !l.is_default) ? cadLayerPick : null
@@ -3421,6 +3427,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   return (
     <div className="h-dvh flex flex-col bg-gray-950 text-white overflow-hidden touch-no-select">
 
+      {offlineCopy && <OfflineCopyBanner roomId={room.id} savedAt={offlineCopy.savedAt} />}
       <CanvasMenubar
         projectName={project?.name ?? 'Untitled'}
         roomName={room.name}

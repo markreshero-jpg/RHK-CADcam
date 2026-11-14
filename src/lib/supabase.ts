@@ -1,11 +1,14 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { watchedFetch } from './offline/netWatch'
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? ''
 
 const browserClient = createBrowserClient(
   url || 'https://placeholder.supabase.co',
-  key || 'placeholder'
+  key || 'placeholder',
+  // Offline (z_offline): count requests in flight + flag writes lost to no signal.
+  { global: { fetch: watchedFetch } },
 )
 
 type Client = typeof browserClient

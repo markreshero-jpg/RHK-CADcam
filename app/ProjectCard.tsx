@@ -13,6 +13,7 @@ import { Project, ProjectStatus, Room, ROOM_STATUS_OPTIONS, type RoomStatus } fr
 import { supabase } from '@/src/lib/supabase'
 import { useIsAdmin } from '@/src/lib/useRole'
 import RoomPropertiesModal from './canvas/[roomId]/RoomPropertiesModal'
+import TakeOfflineButton from './TakeOfflineButton'
 import DeleteRoomModal from './DeleteRoomModal'
 import DeleteProjectModal from './DeleteProjectModal'
 
@@ -564,6 +565,8 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             <span>{liveRooms.length} {liveRooms.length === 1 ? 'room' : 'rooms'}</span>
             <ChevronIcon expanded={expanded} />
           </button>
+
+          {liveRooms.length > 0 && <TakeOfflineButton projectId={project.id} rooms={liveRooms} />}
 
           <button
             onClick={toggleArchive}

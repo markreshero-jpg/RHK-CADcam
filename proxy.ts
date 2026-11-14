@@ -77,6 +77,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb)$).*)',
+    // sw.js + the offline pages (z_offline) are static shells with no job data: no login
+    // check, so the service worker can always keep them.
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline(?:/|$)|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb)$).*)',
   ],
 }

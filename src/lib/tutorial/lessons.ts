@@ -2184,6 +2184,12 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'clash', title: 'When two people changed the same thing',
       body: 'If someone else changed or deleted a markup while your changes were waiting, your change still goes in (last change wins), but a ⚠ "1 to check" button appears next to the save light and the item gets an amber box with a !. Click ⚠ to see each one: Show selects it, Use theirs puts their version back, Delete it removes an item your edit brought back, Keep mine just clears the flag.',
       target: 'save-status', canvas: true, done: c => c.view === 'plan' },
+    { id: 'take', title: 'Take a job offline before you go',
+      body: 'On the jobs page, click Take offline on the job card (with signal, before you leave). It opens each room in the background to keep a copy on this device; when it says "On this device: 4 rooms" you are set. Any room you open is also kept automatically. Do this on the laptop or iPad you are taking to site.',
+      target: 'save-status', canvas: true, done: c => c.view === 'plan' },
+    { id: 'open', title: 'Opening a room with no signal',
+      body: 'Open the room as normal. With no signal it opens the copy on this device, with an amber "Offline copy" bar across the top. View plans and elevations, draw CAD, markups and site measures; they send when signal comes back. Cabinet, wall and fixture changes still need signal: if one fails, a red "✕ not saved" shows next to the save light. "Rooms on this device" lists every room you can open offline.',
+      target: 'save-status', canvas: true, done: c => c.view === 'plan' },
   ]},
 ]
 
