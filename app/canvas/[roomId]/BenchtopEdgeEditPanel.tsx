@@ -13,6 +13,7 @@
 import { useMemo, useState } from 'react'
 import type { BenchtopInstance, BenchtopSegment, BenchtopEdgeProfile } from '@/src/lib/types'
 import WaterfallSkirtControls from './WaterfallSkirtControls'
+import ApronSetbackControls from './ApronSetbackControls'
 import { segPoint, outwardNormal, segLength, edgeProfileColor, effectiveProfileId, waterfallJoin, waterfallReturn } from '@/src/lib/benchtopGeometry'
 import { tapeable, edgeTape, tapeOverridden, tapeTotals, setTapes, setProfiles, tapeColour } from '@/src/lib/benchtopEdgeband'
 import { btLocal, type BtShapeEdit, type BtEdgeEdit } from './canvasTypes'
@@ -249,6 +250,14 @@ function ProfileTab({ segs, edit, profiles, profileById, defaultProfileId, profi
           </label>
           <WaterfallSkirtControls seg={selSeg!} index={edit.sel!} count={segs.length}
             onSet={k => onApply(s => s.map((x, i) => (i === edit.sel ? { ...x, edge: { ...x.edge, waterfall_skirt: k } } : x)))} />
+        </div>
+      )}
+
+      {selSeg && selSeg.type === 'line' && !selSeg.edge?.wall && !selSeg.edge?.joint
+        && selProf?.generates !== 'waterfall' && selProf?.generates !== 'apron' && (
+        <div className="border border-pink-900/60 rounded p-1.5">
+          <ApronSetbackControls seg={selSeg} profiles={profiles}
+            onSet={k => onApply(s => s.map((x, i) => (i === edit.sel ? { ...x, edge: { ...x.edge, apron_setback: k } } : x)))} />
         </div>
       )}
 

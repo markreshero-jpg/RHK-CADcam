@@ -12,7 +12,9 @@
 // reads as its own short band); the build-up line for built-up
 // methods; waterfall legs down to the floor with the mitre;
 // join seams on the front face; profile codes under the front
-// edges; mitred aprons as one face down to the apron drop. Gated by layer items benchtops / benchtop_edges /
+// edges; mitred aprons as one face down to the apron drop; set-back
+// aprons (edge.apron_setback) as the band + its returns under the
+// overhang, seen from the edge's side. Gated by layer items benchtops / benchtop_edges /
 // benchtop_joins.
 // ============================================================
 
@@ -22,7 +24,7 @@ import type { BenchtopInstance, BenchtopEdgeProfile, Wall } from '@/src/lib/type
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { Pt } from '@/src/lib/geometry'
 import {
-  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallSkirt, skirtFace,
+  btSegments, outlinePoints, outwardNormal, segSamples, segMid, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallSkirt, skirtFace, apronSetbacks,
 } from '@/src/lib/benchtopGeometry'
 import { wallFrame, alongOf, offOf, wallContacts, btShowsOn, type WallSide } from '@/src/lib/benchtopAnchor'
 import type { BtThickness } from './useBenchtopCatalog'
@@ -195,6 +197,15 @@ export default function BenchtopElevation({
           return reach >= t1 - 1
         })()
         const yBand = apronCovers ? Math.min(...aprons.map(a => a.yLow)) : yBot
+        // Set-back aprons on edges facing the viewer: the band, slab underside down
+        // to the apron bottom, plus corner returns (end-on, a thickness wide). A
+        // return past an in-line apron hides behind that apron's mitred end.
+        const setbackRects = apronSetbacks(segs, profiles, defaultProfileId, thick.total)
+          .filter(sb => dot(outwardNormal(segs, sb.i), f.n) > 0.5)
+          .flatMap(sb => [sb.band, ...sb.returns.filter(r => !r.inLine).map(r => r.quad)].map((q, j) => {
+            const ats = q.map(p => alongOf(f, p))
+            return { key: `sb${sb.i}-${j}`, a: Math.min(...ats), b: Math.max(...ats), yLow: yTop + sb.drop, band: j === 0 }
+          }))
         const yEdge = Math.max(yBot, ...aprons.map(a => a.yLow))   // lowest drawn edge (profile codes go under it)
 
         // Band outline: a mitred end-on leg takes the triangle under the 45° joint.
@@ -299,6 +310,16 @@ export default function BenchtopElevation({
                 </g>
               )
             })}
+
+            {setbackRects.map(r => (
+              <rect key={r.key} x={r.a} y={yBot} width={Math.max(0, r.b - r.a)} height={Math.max(0, r.yLow - yBot)}
+                fill={fill} fillOpacity={fillOp} stroke={isSel ? '#f59e0b' : stroke} strokeWidth={bandW(false)}
+                strokeDasharray={lp.strokeDasharray} opacity={lp.opacity}
+                style={{ cursor: 'pointer' }}
+                onClick={e => { e.stopPropagation(); onSelect(bt.id) }}>
+                <title>{r.band ? 'Set-back apron' : 'Apron return'}</title>
+              </rect>
+            ))}
 
             {/* Hit area: a top is only 20–40 mm tall (a few px zoomed out), so pick
                 over at least 16 screen px centred on the band. */}

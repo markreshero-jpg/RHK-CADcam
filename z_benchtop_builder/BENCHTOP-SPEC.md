@@ -31,6 +31,18 @@
 > cross section has it too); elevation draws it on the side that faces the apron. Panel: Skirt tick + edge + Foot
 > / Reach in the waterfall rows (WaterfallSkirtControls). Not drawn in plan; doesn't block cabinet placement.
 > In-app check pending.
+> **2026-11-14: set-back apron** (Mark, RHK6468 island Elev 5 / sheet 7.04, seating side): `edge.apron_setback
+> { inset_mm, profile_id }` on a straight exposed edge. The edge keeps its own profile (plain 20 polished — the
+> top overhangs the recess); a band of the apron profile's drop (MA300) hangs under the slab with its FACE `inset`
+> in from the edge, top-thickness thick, slab underside down to topZ − drop. Returns at both ends: where the next
+> edge carries on in line (the leg's back), the return sits just past this edge's end covering the leg's inner
+> face, outer end **mitred** (vertical 45°) to that edge's mitred apron, whose inner face stops T short; at a corner
+> the return sits inside the edge, square, behind the neighbour's apron. The band butts between the returns.
+> `apronSetbackPieces` (benchtopGeometry) feeds 3D + section (benchtopSolids keys `sb<i>`, `sb<i>s/e`), plan
+> (dashed band + returns, canvas + printed plan), elevation (band, + corner returns end-on, on the side the edge
+> faces) and the resolver (`apron_strip` supply parts "Set-back Apron (MA300) — 300 in from the edge" band length ×
+> (drop − T), "Apron Return (MA300) — mitre 45° outer end" (inset + T) × (drop − T)). F4 Edit edges: click the edge →
+> "Set-back apron" tick + In + profile (ApronSetbackControls). In-app check pending.
 >
 > **2026-10-29: built-up waterfalls** (Mark, RHK6592 "60 top + 60 waterfall"): where a waterfall
 > leg's end meets a straight mitred apron deeper than the top (MA60 on a 20 slab), that end gets a

@@ -13,6 +13,7 @@
 //                              cut to the top's real width at that point
 //   fascias                    front / back / side from the exposed edges
 //   profile parts              waterfall legs + apron strips from edge profiles
+//   set-back aprons            edge.apron_setback: band + 2 returns (supply)
 // Outsourced construction: worktop / stone / profile parts are supply items
 // carrying area, lineal metres per profile, cutouts and joins in `meta`.
 // Sink / cooktop cutouts: the worktop and subtop panels carry them as `holes`
@@ -22,7 +23,7 @@
 import type { BenchtopScheduleRow, BenchtopPartRole, BenchtopBuildMethod, BenchtopEdgeProfile } from '@/src/lib/types'
 import type { BenchtopResolverInput, ResolvedBenchtopPart, BenchtopPartMeta } from './types'
 import { DEFAULT_CROSS_MEMBER_SPACING, crossMemberPositions } from './construction'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints, waterfallReturn, waterfallSkirt, skirtFace } from '@/src/lib/benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, outlinePoints, waterfallReturn, waterfallSkirt, skirtFace, apronSetbackPieces } from '@/src/lib/benchtopGeometry'
 import {
   splitIntoPieces, pieceFrame, pieceArea, isRectangle, crossIntervals, edgeLength, pieceContains,
   type PieceSeg, type PieceFrame,
@@ -368,6 +369,31 @@ export function resolveBenchtopParts(input: BenchtopResolverInput): ResolvedBenc
           supply_item: outsourced, piece: pieceNo,
         })
       }
+    })
+
+    // ── Set-back aprons (edge.apron_setback): a band under the slab `inset` in
+    // from the edge + a return at each end, slab underside to the apron bottom.
+    const profRec = Object.fromEntries(profiles)
+    ps.forEach((s, i) => {
+      if (s.join) return
+      const sb = apronSetbackPieces(ps, i, profRec, method.default_edge_profile_id, thick.total)
+      if (!sb) return
+      const prof = profiles.get(sb.profileId)
+      const code = prof?.code ?? prof?.name ?? 'apron'
+      const H = Math.round(sb.drop - thick.total)
+      push({
+        ...wtMaterial, part_role: 'apron_strip', label: `Set-back Apron (${code}) — ${Math.round(sb.inset)} in from the edge${sfx}`,
+        length_mm: Math.round(sb.bandLength), width_mm: H, thickness_mm: thick.top, quantity: 1,
+        grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
+        supply_item: outsourced, piece: pieceNo,
+      })
+      for (const r of sb.returns) push({
+        ...wtMaterial, part_role: 'apron_strip',
+        label: `Apron Return (${code})${r.mitre ? ' — mitre 45° outer end' : ''}${sfx}`,
+        length_mm: Math.round(r.length), width_mm: H, thickness_mm: thick.top, quantity: 1,
+        grain_direction: 'length', edgeband_id: wtRow?.edgeband_id ?? null,
+        supply_item: outsourced, piece: pieceNo,
+      })
     })
   })
 

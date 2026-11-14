@@ -11,7 +11,7 @@
 import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
 import type { ReactNode, RefObject } from 'react'
 import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstance, BenchtopEdgeProfile, Room } from '@/src/lib/types'
-import { btSegments, outlinePath, outlinePoints, effectiveProfileId, waterfallPlanLines } from '@/src/lib/benchtopGeometry'
+import { btSegments, outlinePath, outlinePoints, effectiveProfileId, waterfallPlanLines, apronSetbackPlanLines } from '@/src/lib/benchtopGeometry'
 import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
 import { kickPlanSpans, kickChain, kickRuns, type KickSpan } from '@/src/lib/kickDims'
@@ -648,6 +648,14 @@ export default function PlanViewReportSVG({
                 {lines.map((pl, k) => (
                   <polyline key={k} points={pl.map(q => `${q.x},${q.y}`).join(' ')}
                     strokeWidth={lw('benchtops', pen(k ? 'thin' : 'front', P))} />
+                ))}
+              </g>
+            ))}
+            {btProfiles && btThickness && apronSetbackPlanLines(segs, btProfiles, btDefaultProfile?.(bt), btThickness(bt)).map(({ i, lines }) => (
+              <g key={`sb${i}`} fill="none" stroke={INK} strokeDasharray={`${1.6 * P} ${0.8 * P}`}>
+                {lines.map((pl, k) => (
+                  <polyline key={k} points={pl.map(q => `${q.x},${q.y}`).join(' ')}
+                    strokeWidth={lw('benchtops', pen('thin', P))} />
                 ))}
               </g>
             ))}

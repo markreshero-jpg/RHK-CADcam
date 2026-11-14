@@ -19,11 +19,16 @@
 // neighbouring apron's plane at one leg end, floor to the apron underside, from
 // the face piece (or the leg's inner face) out to a quarter-ellipse. It replaces
 // that end's return. One extruded solid.
+//
+// Set-back apron (edge.apron_setback, Mark RHK6468 2026-11-14): a band under
+// the slab `inset` in from the edge + a return at each end (apronSetbackPieces),
+// slab underside down to the apron's bottom. An in-line mitred apron next to a
+// return has its inner face stopped T short, so the two meet on a vertical 45°.
 
 import { Shape, ExtrudeGeometry, Matrix4, Vector2, Vector3, type BufferGeometry } from 'three'
 import type { BenchtopInstance, BenchtopEdgeProfile } from './types'
 import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js'
-import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallReturn, waterfallSkirt, skirtFace } from './benchtopGeometry'
+import { btSegments, outwardNormal, effectiveProfileId, waterfallJoin, waterfallBuildUp, waterfallReturn, waterfallSkirt, skirtFace, apronSetbacks } from './benchtopGeometry'
 import { loftSlab, undersideOutline, apronStrip, apronCornerTris } from './benchtopSlab3d'
 
 export interface BtSolidInfo { topZ: number; thick: { total: number }; defaultProfileId: string | null }
@@ -133,6 +138,10 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
   }
 
   const n = segs.length
+  const setbacks = topZ - T > 0 ? apronSetbacks(segs, profiles, defaultProfileId, T) : []
+  // Apron i's end that a set-back return mitres onto: its next edge's start return, its previous edge's end return.
+  const mitredBy = (i: number, side: 'start' | 'end') => setbacks.some(sb =>
+    sb.i === (side === 'end' ? (i + 1) % n : (i - 1 + n) % n) && sb.returns.some(r => r.mitre && r.side === (side === 'end' ? 'start' : 'end')))
   const builtAt = (j: number, side: 'start' | 'end') => waterfalls.find(w => w.i === (j + n) % n)?.bu[side] ?? 0
   for (const a of aprons) {
     const k0 = start[a.i], k1 = a.i + 1 < start.length ? start[a.i + 1] : topPts.length
@@ -154,7 +163,21 @@ export function benchtopGeometries(bt: BenchtopInstance, info: BtSolidInfo, prof
       return false
     }
     const capStart = trim(builtAt(a.i - 1, 'end'), 0), capEnd = trim(builtAt(a.i + 1, 'start'), 1)
+    // Mitred onto a set-back return: the inner face stops T short of the corner.
+    for (const e of [0, 1] as const) {
+      if (!mitredBy(a.i, e ? 'end' : 'start')) continue
+      const m = outer.length - 1, c = e ? outer[m] : outer[0], o = e ? outer[m - 1] : outer[1]
+      const L = Math.hypot(o.x - c.x, o.y - c.y) || 1
+      const k = e ? m : 0
+      inner[k] = { x: inner[k].x + ((o.x - c.x) / L) * T, y: inner[k].y + ((o.y - c.y) / L) * T }
+    }
     out.push({ key: `a${a.i}`, geo: apronStrip(outer, inner, topZ, under, topZ - a.drop, { capStart, capEnd, extra }) })
+  }
+  for (const sb of setbacks) {
+    const low = topZ - sb.drop
+    const prism = (q: { x: number; y: number }[]) => hull(q.flatMap(p => [[p.x, low, p.y], [p.x, under, p.y]]))
+    out.push({ key: `sb${sb.i}`, geo: prism(sb.band) })
+    for (const r of sb.returns) out.push({ key: `sb${sb.i}${r.side[0]}`, geo: prism(r.quad) })
   }
   return out
 }

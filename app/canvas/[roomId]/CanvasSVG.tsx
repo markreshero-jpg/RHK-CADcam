@@ -4,7 +4,7 @@ import React, { Fragment, useState, useMemo, useEffect } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
 import { Wall, CabinetInstance, BenchtopInstance, BenchtopArcSegment, BenchtopEdgeProfile, Room } from '@/src/lib/types'
 import {
-  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, waterfallReturn, waterfallPlanLines,
+  btSegments, outlinePath, outlinePoints, outlineCentroid, outwardNormal, segMid, segLength, waterfallJoin, waterfallBuildUp, waterfallReturn, waterfallPlanLines, apronSetbackPlanLines,
   edgePath, edgeProfileColor, effectiveProfileId,
 } from '@/src/lib/benchtopGeometry'
 import { edgeTape, tapeable, tapeOverridden, tapeColour } from '@/src/lib/benchtopEdgeband'
@@ -366,6 +366,18 @@ export default function CanvasSVG({
                   {lines.map((pl, k) => (
                     <polyline key={k} points={pl.map(q => `${q.x},${q.y}`).join(' ')}
                       strokeWidth={layers.w('benchtops', isSel ? 2 : 1.5) / lz * (k ? 0.75 : 1)} />
+                  ))}
+                </g>
+              ))}
+
+              {/* Set-back aprons (edge.apron_setback): the band + returns under the top, dashed */}
+              {btThickness && apronSetbackPlanLines(segs, edgeProfiles ?? {}, defaultProfileId, btThickness(bt)).map(({ i, lines }) => (
+                <g key={`sb${i}`} stroke={isSel ? '#f59e0b' : layers.color('benchtops', '#0d9488')}
+                  opacity={layers.op('benchtops')} fill="none" style={{ pointerEvents: 'none' }}
+                  strokeDasharray={`${6 / lz} ${4 / lz}`}>
+                  {lines.map((pl, k) => (
+                    <polyline key={k} points={pl.map(q => `${q.x},${q.y}`).join(' ')}
+                      strokeWidth={layers.w('benchtops', isSel ? 1.5 : 1) / lz} />
                   ))}
                 </g>
               ))}

@@ -379,8 +379,21 @@ export interface WaterfallSkirt {
   reach_mm: number
 }
 
+/** Set-back apron (Mark, RHK6468 island seating side 2026-11-14): the edge itself keeps
+ *  its own profile (the top overhangs there) and a stone band of `profile_id`'s apron
+ *  drop hangs under the slab with its FACE `inset_mm` in from the edge, top-thickness
+ *  thick, slab underside down to the apron's bottom. A return at each end runs back out
+ *  to the edge line, mitred to a neighbouring (in-line) mitred apron; the band butts
+ *  between the returns. (z_benchtop_builder, benchtopGeometry apronSetbackPieces.) */
+export interface ApronSetback {
+  inset_mm:   number
+  profile_id: string
+}
+
 export interface BenchtopEdge {
   wall?: boolean
+  /** A stone band set in under the top along this edge (edge keeps its own profile). */
+  apron_setback?: ApronSetback | null
   profile_id?: string | null
   /** Waterfall edges only: how the leg meets the top. Default 'mitre'. */
   waterfall_join?: BenchtopJoinType

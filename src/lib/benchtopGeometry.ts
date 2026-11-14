@@ -11,7 +11,7 @@
 
 import type {
   BenchtopInstance, BenchtopSegment, BenchtopJoinLine, BenchtopArcSegment,
-  BenchtopEdgeTag, BenchtopEdgeProfile, BenchtopJoinType, WaterfallSkirt,
+  BenchtopEdgeTag, BenchtopEdgeProfile, BenchtopJoinType, WaterfallSkirt, ApronSetback,
 } from './types'
 
 export type P = { x: number; y: number }
@@ -609,6 +609,137 @@ export function waterfallPlanLines(
     out.push({ i, lines: lines.map(pl => pl.map(([a, u]) => at(a, u))) })
   })
   return out
+}
+
+// ── Set-back apron (edge.apron_setback) ──────────────────────────────────────
+// Mark, RHK6468 island 2026-11-14: the stone wraps the end legs and returns in
+// along the drawer backs, so the top overhangs the recess for seating. On the
+// edge between the legs the top keeps its own (plain) edge; a band of the
+// apron profile's drop hangs under the slab with its face `inset` in from the
+// edge, and a return at each end runs back out to the edge line.
+//   Ends where the next edge carries on in line (the leg's back): the return
+//   sits just past the edge's end (a ∈ [−T, 0] / [L, L+T]) covering the leg's
+//   inner face, its outer end mitred (vertical 45°) to that edge's mitred apron
+//   when it has one. Ends at a corner: the return sits inside the edge
+//   (a ∈ [0, T]), square to it, starting behind the neighbour's apron if any.
+//   The band butts between the returns. All pieces run from the slab underside
+//   down to topZ − drop.
+
+/** The edge's set-back, when it has a usable one. */
+export function apronSetbackOf(s: BenchtopSegment): ApronSetback | null {
+  const k = s.edge?.apron_setback
+  if (!k || !k.profile_id) return null
+  const inset = Number(k.inset_mm)
+  return Number.isFinite(inset) && inset > 0 ? { inset_mm: inset, profile_id: k.profile_id } : null
+}
+
+export interface ApronSetbackReturn {
+  side: 'start' | 'end'
+  /** Plan footprint (4 points, room coords). */
+  quad: P[]
+  /** Blank length (long point) along the return. */
+  length: number
+  /** Outer end mitred to the in-line neighbour's apron. */
+  mitre: boolean
+  /** The next edge carries on in line (return sits past this edge's end). */
+  inLine: boolean
+}
+export interface ApronSetbackPieces {
+  i: number
+  inset: number
+  /** Apron drop from the top surface (the band's bottom = topZ − drop). */
+  drop: number
+  T: number
+  profileId: string
+  /** Band footprint (4 points: face start, face end, back end, back start). */
+  band: P[]
+  bandLength: number
+  /** The band's face line (along the edge, `inset` in). */
+  face: [P, P]
+  returns: ApronSetbackReturn[]
+}
+
+export function apronSetbackPieces(
+  segs: BenchtopSegment[], i: number,
+  profiles: Record<string, Pick<BenchtopEdgeProfile, 'generates' | 'apron_drop_mm'>>,
+  defaultProfileId: string | null | undefined, T: number,
+): ApronSetbackPieces | null {
+  const s = segs[i]
+  if (!s || s.type !== 'line' || s.edge?.wall || s.edge?.joint || !(T > 0)) return null
+  const k = apronSetbackOf(s)
+  if (!k) return null
+  const prof = profiles[k.profile_id]
+  const drop = prof?.generates === 'apron' ? Number(prof.apron_drop_mm) || 0 : 0
+  if (drop <= T) return null
+  const L = segLength(s)
+  if (L < 2 * T + 1) return null
+  const S = k.inset_mm
+  const n = outwardNormal(segs, i)
+  const d = { x: (s.p1.x - s.p0.x) / L, y: (s.p1.y - s.p0.y) / L }
+  const at = (a: number, u: number): P => ({ x: s.p0.x + d.x * a - n.x * u, y: s.p0.y + d.y * a - n.y * u })
+  const N = segs.length
+  const nbApron = (j: number) => {
+    const q = segs[(j + N) % N]
+    const pid = q.type === 'line' ? effectiveProfileId(q, defaultProfileId) : null
+    const p = pid ? profiles[pid] : undefined
+    return p?.generates === 'apron' && (Number(p.apron_drop_mm) || 0) > T
+  }
+  const inLine = (j: number) => {
+    const q = segs[(j + N) % N]
+    if (q.type !== 'line') return false
+    const ql = segLength(q) || 1
+    const qd = { x: (q.p1.x - q.p0.x) / ql, y: (q.p1.y - q.p0.y) / ql }
+    return Math.abs(d.x * qd.y - d.y * qd.x) < 0.05 && d.x * qd.x + d.y * qd.y > 0
+  }
+  let a0 = 0, a1 = L
+  const returns: ApronSetbackReturn[] = []
+  for (const side of ['start', 'end'] as const) {
+    const j = side === 'start' ? i - 1 : i + 1
+    const sg = side === 'start' ? -1 : 1           // outward along the edge at this end
+    const e = side === 'start' ? 0 : L
+    const ap = nbApron(j)
+    if (inLine(j)) {
+      // Past the edge's end, covering the leg's inner face; mitred at the outer corner.
+      const quad = ap
+        ? [at(e, 0), at(e, S + T), at(e + sg * T, S + T), at(e + sg * T, T)]
+        : [at(e, 0), at(e, S + T), at(e + sg * T, S + T), at(e + sg * T, 0)]
+      returns.push({ side, quad, length: S + T, mitre: ap, inLine: true })
+    } else {
+      // Corner: inside the edge, behind the neighbour's apron.
+      const u0 = ap ? T : 0
+      const e1 = e - sg * T
+      returns.push({ side, quad: [at(e, u0), at(e, S + T), at(e1, S + T), at(e1, u0)], length: S + T - u0, mitre: false, inLine: false })
+      if (side === 'start') a0 = T; else a1 = L - T
+    }
+  }
+  return {
+    i, inset: S, drop, T, profileId: k.profile_id,
+    band: [at(a0, S), at(a1, S), at(a1, S + T), at(a0, S + T)],
+    bandLength: a1 - a0,
+    face: [at(a0, S), at(a1, S)],
+    returns,
+  }
+}
+
+/** Every set-back apron on the top (plan, 3D, elevation, resolver). */
+export function apronSetbacks(
+  segs: BenchtopSegment[],
+  profiles: Record<string, Pick<BenchtopEdgeProfile, 'generates' | 'apron_drop_mm'>>,
+  defaultProfileId: string | null | undefined, T: number,
+): ApronSetbackPieces[] {
+  return segs.flatMap((_, i) => apronSetbackPieces(segs, i, profiles, defaultProfileId, T) ?? [])
+}
+
+/** Plan outlines of the set-back aprons (hidden under the top — draw dashed). */
+export function apronSetbackPlanLines(
+  segs: BenchtopSegment[],
+  profiles: Record<string, Pick<BenchtopEdgeProfile, 'generates' | 'apron_drop_mm'>>,
+  defaultProfileId: string | null | undefined, T: number,
+): { i: number; lines: P[][] }[] {
+  return apronSetbacks(segs, profiles, defaultProfileId, T).map(p => ({
+    i: p.i,
+    lines: [[...p.band, p.band[0]], ...p.returns.map(r => [...r.quad, r.quad[0]])],
+  }))
 }
 
 // ── Join lines ───────────────────────────────────────────────────────────────
