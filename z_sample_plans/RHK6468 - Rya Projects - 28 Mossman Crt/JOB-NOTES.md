@@ -119,9 +119,15 @@ x 953 (301.5 carcass, 320 OA) + WC-07 WUP 18 set back 20 + WC-04 WEP at the door
 the stack (return 278.5 where it steps) + WC-06 over the overheads (seen return at the door).
 Overhead hinges [100, 610, 831] to clear the adj shelf holes.
 
+### Rev 1 (Mark 2026-11-14) - `_tmp-6468-laundry-rev1.mjs`
+- 20 stone top (RS schedule, colour TBC) 2204.5 x 618.5, TEPF to the door, tub cut-out from the fixture.
+- 40 wall filler WC-08 (WEP turned front filler, 1900-2573); stack cupboard WC-01 now 610 at 40.
+- Tub: generic 45L stays. Garage side: no wall for now.
+- Spec block + SITE NOTES (plan, x 1901) and markup: stack space dashed boxes, tub stand-in,
+  TBC clouds (stone colour, handles, tap) on a new job layer "Questions for Client", filler scribe
+  + D2 cut-in site notes.
+
 ### Open / TBC
-- [ ] Benchtop not drawn (material / thickness) - tub z assumes a 920 top.
-- [ ] Tub make / model.
-- [ ] Stack cupboard WC-01 goes straight to the left wall (no filler) - filler wanted?
-- [ ] Garage side: wall / opening not drawn.
-- [ ] Spec block + markup not done yet.
+- [ ] Stone colour.
+- [ ] Handles (drawn without).
+- [ ] Laundry tap.
