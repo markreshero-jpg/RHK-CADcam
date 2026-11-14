@@ -164,3 +164,45 @@ Overhead hinges [100, 610, 831] to clear the adj shelf holes.
 - [ ] Stone colour.
 - [ ] Handles (drawn without).
 - [ ] Laundry tap.
+
+## Walk In Robe - drawn 2026-11-15, room `dfa682a3-020b-4704-8661-3dbbd6cdf224`
+
+Source: `ARCHITECTURALS/28 Mossman Court - WIR - A3 MARKED UP.pdf` (Blake Sheridan 7.07-7.09 Rev B)
+with Mark's red site measures. Walls `_tmp-6468-wir-setup.mjs`, layout
+`z_plan_automation/layouts/rhk6468-mossman-wir.json` (`_tmp-6468-wir-gen.mjs`), post
+`_tmp-6468-wir-post.mjs`, CAD `_tmp-6468-wir-cad.mjs` + `_tmp-6468-wir-cadfix.mjs`.
+
+Mark's answers (2026-11-15):
+1. North 5638 / south 3869 shortfall: take it off the 950 sections equally.
+2. North run stays 550 deep (nib 613 - gyp = 601; end panel at the bench seat flush with the nib).
+3. South run 550 deep, stands past the 518 return.
+4. East wall 2202.
+5. Mirror wall end = same line as the north run's inside face (mirror wall 1757).
+6. 30 bulkhead (CH 2693, top 2663).
+7. Board: PT Matt for now (drawn 16 PT Classic White Matt, as the Laundry).
+8. Push to open doors; drawers down 25 for finger gaps (REVT / GAPR 25).
+9. Doors on all half hanging + the east full hanging; open shelves + shoes open.
+10. Inner drawers behind the doors, 25+ finger gaps.
+11. Shoe shelves 15 deg, front low / back high.
+12. Mirror + robe hooks by others.
+13. RHK does the 32 frame round the mirror, mirror by others.
+14. 120 kick on all.
+
+How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate kick-only cabinets; 30 BH):
+- Wall 2 north (Elev 1): TEPF 601 deep at the nib | bench seat 871.5 (1 drawer, seat top 400) | bench 700
+  (4 drawers, top 1150) | 16.5 top shelf over both at 2120 | shoes 633 open (7 shelves) | open shelves 934
+  (4 drawers to 1120 + open box over) | half hanging 934.5 over 4 inner drawers | half hanging x 2 934.5 | 40 filler.
+- Wall 3 east (Elev 2): 2 x 1101 full hanging, blind corner each end (588 false panel + 511 PTO door).
+- Wall 4 south (Elev 3), east to west: 40 filler | half hanging x 2 878 | half hanging over inner drawers 878 |
+  open shelves 878 | shoes 633 (stands 32 past the 518 return).
+- Wall 6 mirror wall: 32-deep frame = 2 x 16.5 stiles each end, 120 face rail at the bottom, 30 BH on top.
+- Fixed shelves at 1120 / 2120 AFF (the drawing's 1000 / 1000). Inner drawers 4 x 127 boxes, 77 gaps,
+  hinges in the gaps [53, 720, 1055, 1700, 2440].
+
+### Open / TBC
+- [ ] North bays 934 / south bays 878: the 950s shrink by a different amount each side, so the bays (and the
+  shoe racks the plan says to align) are ~137 out across the aisle. Align them instead?
+- [ ] Tall doors ~2540 high: PT Matt in 2700 sheets?
+- [ ] Final board colour (PT Classic White Matt for now).
+- [ ] Shoe shelves drawn flat - 15 deg angle + lip detail to set up.
+- [ ] 32mm shelves / gables on the drawing: drawn as standard 16.5 (side-by-side gables = 33).

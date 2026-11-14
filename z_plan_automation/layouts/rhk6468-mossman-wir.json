@@ -1,0 +1,1551 @@
+{
+ "_source": "ARCHITECTURALS/28 Mossman Court - WIR - A3 MARKED UP.pdf (Blake Sheridan 7.07-7.09 Rev B, Mark site measures) + Mark answers 2026-11-15",
+ "_notes": [
+  "Origin = north wall west corner. Walls via _tmp-6468-wir-setup.mjs (roomId mode). Kick 120, top 2663 + 30 BH, CH 2693. 16 PT Classic White Matt room colour."
+ ],
+ "projectId": "21601535-e1c8-4087-96b8-bb2506b96c3d",
+ "roomId": "dfa682a3-020b-4704-8661-3dbbd6cdf224",
+ "roomName": "Walk In Robe",
+ "roomHeight": 2693,
+ "wallCabinetTop": 2663,
+ "walls": [],
+ "cabinets": [
+  {
+   "def": "TEPF",
+   "wall": 2,
+   "offset": 0,
+   "dx": 16.5,
+   "dy": 2663,
+   "dz": 583,
+   "note": "Full panel at the bench seat end, flush with the 601 nib wall (Mark markup), floor to 2663",
+   "set": {
+    "pos_z": 0
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 16.5,
+   "dx": 871.5,
+   "dy": 263.5,
+   "dz": 532,
+   "note": "BENCH SEAT: 1 drawer, seat top 400 AFF (16.5 top over)",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    }
+   },
+   "rules": {
+    "REVT": 25,
+    "GAPR": 25
+   }
+  },
+  {
+   "def": "WUP",
+   "wall": 2,
+   "offset": 16.5,
+   "dx": 871.5,
+   "dy": 16.5,
+   "dz": 550,
+   "note": "Bench seat top 16.5 PT, 383.5-400",
+   "set": {
+    "pos_z": 383.5
+   }
+  },
+  {
+   "def": "D4-SSSL",
+   "wall": 2,
+   "offset": 888,
+   "dx": 700,
+   "dy": 1013.5,
+   "dz": 532,
+   "note": "BENCH: 4 drawers, bench top 1150 AFF",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      },
+      {
+       "row_index": 2,
+       "height_locked": false
+      },
+      {
+       "row_index": 3,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 3,
+       "face_type": "drawer_face"
+      }
+     ]
+    }
+   },
+   "rules": {
+    "REVT": 25,
+    "GAPR": 25
+   }
+  },
+  {
+   "def": "WUP",
+   "wall": 2,
+   "offset": 888,
+   "dx": 700,
+   "dy": 16.5,
+   "dz": 550,
+   "note": "Bench top 16.5 PT, 1133.5-1150",
+   "set": {
+    "pos_z": 1133.5
+   }
+  },
+  {
+   "def": "WUP",
+   "wall": 2,
+   "offset": 17.5,
+   "dx": 1569.5,
+   "dy": 16.5,
+   "dz": 550,
+   "note": "Top shelf over the bench seat + bench, top 2120 AFF (robe hooks + mirror below by others)",
+   "set": {
+    "pos_z": 2103.5
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 1588,
+   "dx": 633,
+   "dy": 2543,
+   "dz": 550,
+   "note": "SHOES: open, 7 shoe shelves angled 15 deg (front low), top shelf 2120",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "has_face": false,
+    "exposed_interior": true,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "D4-SSSL",
+   "wall": 2,
+   "offset": 2221,
+   "dx": 934,
+   "dy": 1000,
+   "dz": 532,
+   "note": "OPEN SHELVES bay: 4 drawers below, top 1120",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      },
+      {
+       "row_index": 2,
+       "height_locked": false
+      },
+      {
+       "row_index": 3,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 3,
+       "face_type": "drawer_face"
+      }
+     ]
+    }
+   },
+   "rules": {
+    "REVT": 25,
+    "GAPR": 25
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 2221,
+   "dx": 934,
+   "dy": 1543,
+   "dz": 550,
+   "note": "OPEN SHELVES 1120-2663: 2 adj shelves, fixed shelf 2120",
+   "set": {
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 3155,
+   "dx": 934.5,
+   "dy": 2543,
+   "dz": 532,
+   "note": "HALF HANGING over 4 INNER DRAWERS (25+ finger gaps), PTO doors",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left",
+       "hinges": [
+        53,
+        720,
+        1055,
+        1700,
+        2440
+       ]
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right",
+       "hinges": [
+        53,
+        720,
+        1055,
+        1700,
+        2440
+       ]
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 92
+          },
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 314.5
+          },
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 537
+          },
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 759
+          }
+         ]
+        }
+       },
+       {
+        "size": 983.5,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 4089.5,
+   "dx": 934.5,
+   "dy": 2543,
+   "dz": 532,
+   "note": "HALF HANGING x 2, PTO doors",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 931.5
+          },
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "TFKW",
+   "wall": 2,
+   "offset": 5024,
+   "dx": 40,
+   "dy": 2543,
+   "dz": 532,
+   "note": "40 filler for the blind corner door (east units)",
+   "set": {
+    "pos_z": 120
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 16.5,
+   "dx": 1571.5,
+   "dy": 120,
+   "dz": 532,
+   "note": "120 kick, PT Classic White Matt",
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 1588,
+   "dx": 1567,
+   "dy": 120,
+   "dz": 532,
+   "note": "120 kick, PT Classic White Matt",
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 3155,
+   "dx": 1909,
+   "dy": 120,
+   "dz": 532,
+   "note": "120 kick, PT Classic White Matt",
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 0,
+   "dx": 2221,
+   "dy": 30,
+   "dz": 532,
+   "note": "30 BH 2663-2693 (CH 2693)",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 2221,
+   "dx": 1868.5,
+   "dy": 30,
+   "dz": 532,
+   "note": "30 BH 2663-2693 (CH 2693)",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 4089.5,
+   "dx": 992.5,
+   "dy": 30,
+   "dz": 532,
+   "note": "30 BH 2663-2693 (CH 2693)",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 3,
+   "offset": 0,
+   "dx": 1101,
+   "dy": 2543,
+   "dz": 532,
+   "note": "FULL HANGING, blind corner behind the north run (false panel 590), PTO door",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": true,
+       "width": 588
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "false_panel"
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 3,
+   "offset": 1101,
+   "dx": 1101,
+   "dy": 2543,
+   "dz": 532,
+   "note": "FULL HANGING, blind corner behind the south run (false panel 590), PTO door",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": true,
+       "width": 588
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right"
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "false_panel"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 3,
+   "offset": 0,
+   "dx": 2202,
+   "dy": 120,
+   "dz": 532,
+   "note": "120 kick, PT Classic White Matt",
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 3,
+   "offset": 0,
+   "dx": 2202,
+   "dy": 30,
+   "dz": 532,
+   "note": "30 BH 2663-2693 (CH 2693)",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "TFKW",
+   "wall": 4,
+   "offset": 550,
+   "dx": 40,
+   "dy": 2543,
+   "dz": 532,
+   "note": "40 filler for the blind corner door (east units)",
+   "set": {
+    "pos_z": 120
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 4,
+   "offset": 590,
+   "dx": 878,
+   "dy": 2543,
+   "dz": 532,
+   "note": "HALF HANGING x 2, PTO doors",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": true,
+           "y_position": 931.5
+          },
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 4,
+   "offset": 1468,
+   "dx": 878,
+   "dy": 2543,
+   "dz": 532,
+   "note": "HALF HANGING over 4 INNER DRAWERS (25+ finger gaps), PTO doors",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      },
+      {
+       "col_index": 1,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left",
+       "hinges": [
+        53,
+        720,
+        1055,
+        1700,
+        2440
+       ]
+      },
+      {
+       "col_index": 1,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right",
+       "hinges": [
+        53,
+        720,
+        1055,
+        1700,
+        2440
+       ]
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 92
+          },
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 314.5
+          },
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 537
+          },
+          {
+           "type": "inner_drawer",
+           "height": 127,
+           "y_locked": true,
+           "y_position": 759
+          }
+         ]
+        }
+       },
+       {
+        "size": 983.5,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "accessory",
+           "key": "HANGING_RAIL_OVAL",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "D4-SSSL",
+   "wall": 4,
+   "offset": 2346,
+   "dx": 878,
+   "dy": 1000,
+   "dz": 532,
+   "note": "OPEN SHELVES bay: 4 drawers below, top 1120",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      },
+      {
+       "row_index": 2,
+       "height_locked": false
+      },
+      {
+       "row_index": 3,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 2,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 3,
+       "face_type": "drawer_face"
+      }
+     ]
+    }
+   },
+   "rules": {
+    "REVT": 25,
+    "GAPR": 25
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 4,
+   "offset": 2346,
+   "dx": 878,
+   "dy": 1543,
+   "dz": 550,
+   "note": "OPEN SHELVES 1120-2663: 2 adj shelves, fixed shelf 2120",
+   "set": {
+    "has_face": false,
+    "exposed_interior": true,
+    "top_type": "full_top",
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 4,
+   "offset": 3224,
+   "dx": 633,
+   "dy": 2543,
+   "dz": 550,
+   "note": "SHOES: open, 7 shoe shelves angled 15 deg (front low), top shelf 2120. Sticks 32 past the 518 return",
+   "set": {
+    "pos_z": 120,
+    "has_toekick": false,
+    "top_type": "full_top",
+    "has_face": false,
+    "exposed_interior": true,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 1967,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 4,
+   "offset": 550,
+   "dx": 1796,
+   "dy": 120,
+   "dz": 532,
+   "note": "120 kick, PT Classic White Matt",
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 4,
+   "offset": 2346,
+   "dx": 1511,
+   "dy": 120,
+   "dz": 532,
+   "note": "120 kick, PT Classic White Matt",
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 4,
+   "offset": 532,
+   "dx": 936,
+   "dy": 30,
+   "dz": 532,
+   "note": "30 BH 2663-2693 (CH 2693)",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 4,
+   "offset": 1468,
+   "dx": 2389,
+   "dy": 30,
+   "dz": 532,
+   "note": "30 BH 2663-2693 (CH 2693)",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  },
+  {
+   "def": "TEPK",
+   "wall": 6,
+   "offset": 0,
+   "dx": 16.5,
+   "dy": 2543,
+   "dz": 14,
+   "note": "Mirror frame stile (2 x 16.5 = 33 wide, 32 deep)",
+   "set": {
+    "pos_z": 120
+   }
+  },
+  {
+   "def": "TEPK",
+   "wall": 6,
+   "offset": 16.5,
+   "dx": 16.5,
+   "dy": 2543,
+   "dz": 14,
+   "note": "Mirror frame stile (2 x 16.5 = 33 wide, 32 deep)",
+   "set": {
+    "pos_z": 120
+   }
+  },
+  {
+   "def": "TEPK",
+   "wall": 6,
+   "offset": 1724,
+   "dx": 16.5,
+   "dy": 2543,
+   "dz": 14,
+   "note": "Mirror frame stile (2 x 16.5 = 33 wide, 32 deep)",
+   "set": {
+    "pos_z": 120
+   }
+  },
+  {
+   "def": "TEPK",
+   "wall": 6,
+   "offset": 1740.5,
+   "dx": 16.5,
+   "dy": 2543,
+   "dz": 14,
+   "note": "Mirror frame stile (2 x 16.5 = 33 wide, 32 deep)",
+   "set": {
+    "pos_z": 120
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 6,
+   "offset": 0,
+   "dx": 1757,
+   "dy": 120,
+   "dz": 32,
+   "note": "120 kick, PT Classic White Matt",
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   },
+   "rules": {
+    "TOESCF": 0,
+    "TOESCB": 0
+   }
+  },
+  {
+   "def": "BH",
+   "wall": 6,
+   "offset": 0,
+   "dx": 1757,
+   "dy": 30,
+   "dz": 32,
+   "note": "30 BH 2663-2693 (CH 2693)",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  }
+ ]
+}
