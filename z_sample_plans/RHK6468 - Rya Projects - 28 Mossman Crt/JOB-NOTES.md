@@ -68,10 +68,29 @@ How it's drawn:
 - [ ] **Dishwashers** - 2 x Miele G7939 SCi XXL integrated assumed (plan says "int. dish drawer").
 - [ ] Cavity slider wall - 120 gap at the butler's north run, review when the wall is in.
 - [ ] Top of ovens 1578 vs overhead underside 1620 (both "align" notes can't hold) - which wins?
-- [ ] Overheads marked **2PK** on the plan, quote says veneer - finish?
-- [ ] Bin: quote says door-mounted 400 double bin; drawn as a BBIN 437 (resolver: no Teramo fits 404 inside).
-- [ ] North overheads 1377 / 1378 wide lift-ups (over 1200 warning) - OK for HK?
-- [ ] Corner open shelves open on both sides (plan) - drawn as a front-open box.
+- [ ] **2pac colour** for the butler's overheads + under panels (Colour TBC).
+- [ ] **RS** reconstituted stone colour (butler's tops + splashbacks).
+- [ ] North lift-ups 1377 / 1378 wide (over 1200 warning) - OK for Aventos, or narrower?
+- [ ] Aventos type (HK-top / HK-S / HK-XS) for 375 high flaps - see z_lift_systems spec.
+- [ ] Splashbacks - module spec'd (z_splashback), not built; drawn once it is.
+- [ ] W7 window size not measured (drawn 990 x 1450 over the drawers).
 - [ ] Fridge kick: vent grille per Liebherr; freezer / door panel sizes to the install guide.
-- [ ] Benchtop + 300 stone apron (island back + ends) not drawn yet.
 - [ ] 2700 butler's west wall used as finished (not reduced for gyprock) - check.
+
+### Rev 1 (Mark 2026-11-14) - `_tmp-6468-kit-rev1.mjs`, `_tmp-6468-kit-tops.mjs`, `_tmp-6468-kit-rev1-post.mjs`
+- "2PK" overheads = **2pac Colour TBC** (2 Pac Flat 18mm, colour "2 Pac - Colour TBC", exposed Satin Board 18).
+- Each lift-up split into **2 stacked cupboards**: upper 1995-2370 (WC-02/03/07/08/11/12) + lower 1620-1995
+  (WC-14..19, rule WALLZ 1620), new library cupboard **W1LU** (top-hinged flap, Aventos HK-top + TIP-ON push
+  to open, no hinges). Mechanism hardware not in the app yet (z_lift_systems spec).
+- Corner open shelves deleted (the elevation showed the next wall's cupboard ends): corners are voids under
+  the under panel. Under panels WC-20/21/22, 2pac, set back 20; the west one (WC-21) runs 0-2700 through
+  both corners.
+- BC-05 bin 300, sink BC-07 937.
+- Tops (6, one per wall): ST 20 SNB Arabescato honed on the kitchen run, island (MA300 mitred apron on the
+  back + ends, new profile) and the W7 drawers; RS 20 reconstituted stone Colour TBC in the butler's (south
+  + north run through the corners, west butt-jointed). New schedules "20mm Stone - SNB Arabescato Marble
+  Honed" / "20mm Reconstituted Stone - Colour TBC".
+- Sinks / taps = library stand-ins labelled with the spec: Franke MRG620 double (Abi Zalo model) + Gessi
+  pull-out bronze (Abi pull-out) on BC-07; Franke 370 single (Abi Ohelu) + Franke pull-out black steel +
+  Zip H5L783Z03AU TBC (Abey gooseneck) on BC-36.
+- Windows W8 2553 x 700 (920-1620) and W7 (size TBC) in Wall 2.

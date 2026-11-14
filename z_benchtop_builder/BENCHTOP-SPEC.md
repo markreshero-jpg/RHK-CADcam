@@ -705,7 +705,7 @@ defaults — **not locked** until Mark has tried it.
 - Tutorial: **Auto-build benchtops** (basics ▸ benchtops).
 
 ### Deferred
-Splashback module · CNC machining of profiles · automatic panel splits ·
+Splashback module (own spec since 2026-11-14: `z_splashback/SPLASHBACK-SPEC.md`) · CNC machining of profiles · automatic panel splits ·
 sharing the profile library with cabinet-part shapes.
 
 ---
