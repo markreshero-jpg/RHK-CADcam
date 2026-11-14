@@ -31,6 +31,7 @@ import { normaliseRangehood } from '@/src/lib/rangehood'
 import { normaliseBackPanel } from '@/src/lib/backPanel'
 import { normaliseCurvedEnd, curvedEndFootprint } from '@/src/lib/curvedEnd/settings'
 import { FLOAT_Z } from '@/src/lib/floating'
+import { outbox } from '@/src/lib/offline/outbox'
 
 const DIM_KEYS = new Set(['dx', 'dy', 'dz'])
 
@@ -1684,19 +1685,19 @@ export async function dbLoadAnnotations(roomId: string): Promise<RoomAnnotation[
 }
 
 export async function dbInsertAnnotation(draft: AnnotationDraft): Promise<RoomAnnotation | null> {
-  const { data, error } = await supabase.from('room_annotations').insert(draft).select('*').single()
-  if (error) { console.error('[annotation insert]', error); return null }
-  return data as RoomAnnotation
+  const now = new Date().toISOString()
+  const row = { ...draft, id: crypto.randomUUID(), created_at: now, updated_at: now } as RoomAnnotation
+  outbox.upsert('room_annotations', [row as unknown as Record<string, unknown> & { id: string }])
+  return row
 }
 
+// Annotation writes go through the offline queue (z_offline/OFFLINE-SPEC.md): kept on
+// this device first, sent to the server when there's signal, retried until accepted.
 export async function dbUpdateAnnotation(id: string, patch: AnnotationPatch): Promise<void> {
-  const { error } = await supabase.from('room_annotations')
-    .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
-  if (error) console.error('[annotation update]', error)
+  outbox.patch('room_annotations', id, { ...patch, updated_at: new Date().toISOString() })
 }
 
 export async function dbDeleteAnnotations(ids: string[]): Promise<void> {
   if (!ids.length) return
-  const { error } = await supabase.from('room_annotations').delete().in('id', ids)
-  if (error) console.error('[annotation delete]', error)
+  outbox.remove('room_annotations', ids)
 }

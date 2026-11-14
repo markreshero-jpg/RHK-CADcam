@@ -143,6 +143,7 @@ import { type ElevSnapSettings, type ElevSnapResult } from '@/src/lib/elevationS
 import { benchtopSeedFromCabinets, btFrontOverhang } from '@/src/lib/benchtopSeed'
 import { loadRoomHandleSchedule } from '@/src/lib/resolver/loadCabinetInput'
 import { ThemeToggle } from '@/app/ThemeToggle'
+import { initOutbox, applyPending } from '@/src/lib/offline/outbox'
 
 // Last canvas tab for a room (see canvasView state). A stored elevation wall that
 // no longer exists falls back to the first wall.
@@ -332,6 +333,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [fixtures, setFixtures] = useState<RoomFixture[]>(initialFixtures ?? [])
   // CAD annotations (z_CAD_tool). F7 = CAD mode (mode 'cad'); authoring in useAnnotationTool.
   const [annotations, setAnnotations] = useState<RoomAnnotation[]>(initialAnnotations ?? [])
+  // Offline queue (z_offline): changes still waiting on this device from an earlier visit
+  // aren't on the server yet — lay them over what the page loaded, and send them.
+  useEffect(() => {
+    let live = true
+    void initOutbox().then(() => { if (live) setAnnotations(prev => applyPending(prev, 'room_annotations', initRoom.id)) })
+    return () => { live = false }
+  }, [initRoom.id])
   const planAnnotations = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   // Named CAD layers (z_cad_layers): on/off, ByLayer colour and print are for the whole job.
   const [cadLayers, setCadLayers] = useState<CadLayer[]>(initialCadLayers ?? [])

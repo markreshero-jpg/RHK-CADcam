@@ -2171,6 +2171,17 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double-click the file. Drag to rotate, scroll or pinch to zoom, right-drag to pan. Wire shows every part see-through with its edges, Doors hides the doors and drawer fronts so you can see inside, and Reset view shows the whole room. It is a snapshot: change the room and export it again.',
       canvas: true, done: c => c.view === '3d' },
   ]},
+  // Appended 2026-11-14 (z_offline step 1: save queue + save light).
+  { id: 'offline_save_light', level: 'basics', topic: 'cad', title: 'Working with bad reception',
+    blurb: 'CAD and markups are kept on this device first, so a drop-out on site no longer loses them. The save light top right tells you when they have reached the server.',
+    keywords: 'offline reception signal internet site save saving saved waiting lost markup cad sync queue', steps: [
+    { id: 'light', title: 'Find the save light',
+      body: 'Top right of the menu bar. Green "Saved" = everything is on the server. Blue "Saving…" = being sent. Amber "Offline — 3 changes waiting" = no signal; your changes are safe on this device and send by themselves when signal comes back. Red "not saved" = the server refused them (still kept, still retrying). Click it to try again straight away.',
+      target: 'save-status', canvas: true, done: c => c.view === 'plan' },
+    { id: 'site', title: 'On site with no signal',
+      body: 'Keep drawing markups, CAD and site measures as normal. Before you close the tab or turn the laptop off, wait for green "Saved" if you can. If you close it while amber, the changes are still on this device and send the next time you open the job on it. For now, open the job before you lose signal: a page reload with no signal will not load (offline opening is step 2).',
+      target: 'save-status', canvas: true, done: c => c.view === 'plan' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

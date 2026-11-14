@@ -2,6 +2,7 @@ import { useRef, useEffect, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
 import type { Selected } from './canvasTypes'
+import { outbox } from '@/src/lib/offline/outbox'
 
 // fixtures optional: drag snapshots built by callers predate fixtures — an
 // absent list leaves fixtures as they are.
@@ -119,13 +120,13 @@ export function useCanvasHistory(
       const paMap = new Map(pa.map(a => [a.id, a]))
       const saIds = new Set(snap.annotations.map(a => a.id))
       const gone = pa.filter(a => !saIds.has(a.id)).map(a => a.id)
-      if (gone.length) await supabase.from('room_annotations').delete().in('id', gone)
-      const added = snap.annotations.filter(a => !paMap.has(a.id))
-      if (added.length) await supabase.from('room_annotations').insert(added)
-      for (const a of snap.annotations) {
+      // Through the offline queue (z_offline) so undo / redo of CAD works with no signal.
+      if (gone.length) outbox.remove('room_annotations', gone)
+      const changed = snap.annotations.filter(a => {
         const p = paMap.get(a.id)
-        if (p && JSON.stringify(p) !== JSON.stringify(a)) await supabase.from('room_annotations').update(a).eq('id', a.id)
-      }
+        return !p || JSON.stringify(p) !== JSON.stringify(a)
+      })
+      if (changed.length) outbox.upsert('room_annotations', changed as unknown as (Record<string, unknown> & { id: string })[])
     }
   }
 

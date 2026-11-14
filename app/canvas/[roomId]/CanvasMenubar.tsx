@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useRef } from 'react'
 import { MenuGroup } from './canvasTypes'
+import SaveStatusBadge from './SaveStatusBadge'
 
 type MenuItem = NonNullable<MenuGroup['items'][number]>
 
@@ -56,6 +57,7 @@ export default function CanvasMenubar({ projectName, roomName, openMenu, setOpen
         <div className="flex-1 min-w-0 flex items-center px-3 text-gray-400 truncate">
           <span className="truncate">{projectName} / {roomName}</span>
         </div>
+        <SaveStatusBadge compact />
         {openMenu === COMPACT_MENU && (
           <div className="absolute left-0 right-0 top-full z-50 bg-gray-800 border-b border-gray-700 shadow-xl py-1 max-h-[75vh] overflow-y-auto">
             {menus.map(menu => (
@@ -104,6 +106,9 @@ export default function CanvasMenubar({ projectName, roomName, openMenu, setOpen
           )}
         </div>
       ))}
+      <div className="ml-auto flex items-stretch border-l border-gray-800">
+        <SaveStatusBadge />
+      </div>
     </nav>
   )
 }

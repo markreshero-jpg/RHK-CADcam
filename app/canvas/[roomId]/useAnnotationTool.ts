@@ -25,8 +25,8 @@ import { ownShapeGeometry, type SnapGeometry } from '@/src/lib/annotations/cadSn
 import { ownedBy, ownerColumns, ownerKey, type AnnotOwner } from '@/src/lib/annotations/owner'
 import { eraseGeom, ERASABLE } from '@/src/lib/annotations/erase'
 import { getUserPrefs, setUserPrefs } from '@/src/lib/userPrefs'
-import { supabase } from '@/src/lib/supabase'
 import { dbUpdateAnnotation, dbDeleteAnnotations } from './canvasDB'
+import { outbox } from '@/src/lib/offline/outbox'
 import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 import type { LiveMeasure } from './CadMeasureOverlay'
 
@@ -210,10 +210,10 @@ export interface AnnotStore {
   remove: (ids: string[]) => void | Promise<void>
 }
 export const DB_ANNOT_STORE: AnnotStore = {
-  async insert(rows) {
+  // Through the offline queue (z_offline): kept on the device first, sent when there's signal.
+  insert(rows) {
     if (!rows.length) return
-    const { error } = await supabase.from('room_annotations').insert(rows)
-    if (error) console.error('[annotation insert]', error)
+    outbox.upsert('room_annotations', rows as unknown as (Record<string, unknown> & { id: string })[])
   },
   update: dbUpdateAnnotation,
   remove: dbDeleteAnnotations,

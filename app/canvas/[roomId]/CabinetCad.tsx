@@ -19,7 +19,6 @@ import { placeItemCad, asAnnotationRows, ownerId, sheetItemCadView, ITEM_CAD_FIE
 import { caseBox } from '@/src/lib/jointDrilling'
 import { bifoldTracks, trackProfile } from '@/src/lib/resolver/resolveBifold'
 import { SNAP_PX } from '@/src/lib/geometry'
-import { supabase } from '@/src/lib/supabase'
 import { useAnnotationTool } from './useAnnotationTool'
 import AnnotationLayer from './AnnotationLayer'
 import AnnotTextEditor from './AnnotTextEditor'
@@ -31,6 +30,7 @@ import CadPanel from './CadPanel'
 import { ELEV_PAD, type ModalCadHost } from './ResolvedViews'
 import { zoneElevRect } from './cabinetEditSvgHelpers'
 import { dbDeleteAnnotations } from './canvasDB'
+import { outbox } from '@/src/lib/offline/outbox'
 import { distinctTargets, hiddenOwners, type ItemCadApi } from './useItemCad'
 import { useTutorial } from '@/src/lib/tutorial/store'
 
@@ -253,9 +253,11 @@ export function useCabinetCad({ ctx, cabinet, rp, sheet = 'front', viewOn, onEnt
       id: crypto.randomUUID(), room_id: ctx.room.id, view: 'cabinet_sheet' as const, wall_id: null, wall_side: null,
       cabinet_id: cabinet.id, sheet_view: sheet, kind: it.kind, geom: it.geom, text: it.text, style: it.style, sort_order: base + i,
     }))
-    const { data, error } = await supabase.from('room_annotations').insert(rows).select('*')
-    if (error || !data) { console.error('[item cad copy]', error); return null }
-    return data as RoomAnnotation[]
+    // Through the offline queue (z_offline): shows straight away, saved when there's signal.
+    const now = new Date().toISOString()
+    const data = rows.map(r => ({ ...r, created_at: now, updated_at: now })) as unknown as RoomAnnotation[]
+    outbox.upsert('room_annotations', data as unknown as (Record<string, unknown> & { id: string })[])
+    return data
   }
 
   /** Library notes back into this cabinet's drawing to change, and cleared from the library. */
