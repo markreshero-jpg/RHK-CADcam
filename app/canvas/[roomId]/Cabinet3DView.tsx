@@ -26,7 +26,7 @@ import {
   panelFaceColors, unpackMatCol,
   Part, PartPropertiesPanel, PreviewCanvas, PassivePartsContext,
 } from '@/src/components/three/PartViewer'
-import { isSide, caseBox, internalBox, internalSeamPartKey, seamDrillsFor, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, dropNearDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
+import { isSide, caseBox, internalBox, internalSeamPartKey, seamDrillsFor, orientSlaveSeamDrills, type SeamDrill, intoPartFrame, seamExtentBoxes, coalesceOpposingDrills, dropNearDrills, type DrillOpPos, zoneBlank, zoneBevelNote, caseBevelNote, tkBevelNote } from '@/src/lib/jointDrilling'
 import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
@@ -1407,13 +1407,20 @@ export function CabinetScene({
   const holesByPartKey = useMemo(() => {
     const m = new Map<string, DrillOpPos[]>()
     if (!showDrilling) return m
-    const flat: DrillOpPos[] = []
+    const seamFlat: SeamDrill[] = []
     for (const sj of rp.seam_joints) {
       const bA = boxByKey[sj.part_a_key]
       const bB = boxByKey[sj.part_b_key]
       if (!bA || !bB) continue
-      flat.push(...seamDrillsFor(sj, rp, bA, bB))
+      seamFlat.push(...seamDrillsFor(sj, rp, bA, bB).map(d => ({ ...d, source: sj.source, seamKey: sj.seam_key })))
     }
+    // A rotated part takes its joints with it: the holes it bores into the parts
+    // around it follow its turn (same as the optimiser, orientSlaveSeamDrills).
+    // boxByKey already carries the offsets, so only the rotation is applied here.
+    const rotOnly = Object.fromEntries(Object.entries(partOverrides ?? {})
+      .filter(([, o]) => o.oax || o.oay || o.oaz)
+      .map(([k, o]) => [k, { ox: 0, oy: 0, oz: 0, oax: o.oax, oay: o.oay, oaz: o.oaz }]))
+    const flat: DrillOpPos[] = orientSlaveSeamDrills(seamFlat, boxByKey, rotOnly)
     // Turned panels measure their through-bore along their plan AABB (L3).
     const turned = rp.case_parts.filter(p => p.AY)
     const eb = turned.length ? seamExtentBoxes(rp) : null
@@ -1424,7 +1431,7 @@ export function CabinetScene({
       m.set(d.targetPartKey, arr)
     }
     return m
-  }, [rp, boxByKey, showDrilling])
+  }, [rp, boxByKey, showDrilling, partOverrides])
 
   // Slide-imposed drilling (cabinet member + drawer-box surfaces), already
   // resolved to absolute cabinet coords on each slide. Rendered as an overlay.
