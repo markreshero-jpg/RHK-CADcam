@@ -7,7 +7,8 @@ Project `063b0eab-a769-4b7d-a93c-d73ed639b3d1`, room **Kitchen** `5a1ef0f2-d86e-
 - `ARCHITECTURALS\Plan View.pdf` - the Bunnings plan (El A run between fridge and stairs).
 - `SUBCONTRACTOR QUOTES\STON EPLAN ...pdf` p4 - same plan as vector; scaled from it at 11.44 mm/pt (1545 / 2500 / 800s check).
 - `QUOTES\QUOTE RHK64571 ISSUE NO 1 ...pdf` - 20 stone Ambassador Dapple White, 3 waterfalls, PT Classic White Matt, Dragon Pro, Blum, set back SQ edge finger pulls, door bin 400 (dropped per markup), cutlery tray 450.
-- No site measure yet - Mark measuring the week of 2026-11-16. Appliances folder empty.
+- No site measure yet - Mark measuring the week of 2026-11-16.
+- `APPLIANCES\` - Geraldine's spec sheets (her email 12/11/2026 3:11pm, saved 2026-11-16): Westinghouse WRR626SB rangehood, Abey RHH6 ducting kit, Fienza Kuro 68612 sink, Linkware Elle mixer (photo), Bosch HBA574EB3A oven, Bosch PKE611BA2A cooktop, LG XD4B24PS DW.
 
 ## Mark's answers (2026-11-11)
 1. Kick 140. 2. All overheads the same height; CAD dim floor -> top of overheads on each elevation (2190, under the beams).
@@ -43,10 +44,20 @@ Mark: hold until after the site measure (week of 2026-11-16), then do it all in 
 - Andy is checking the rest of the drawings and will reply by early morning 2026-11-12. Add his further comments here.
 - Still no models for D/W, oven, cooktop, or the ARBC60TBS spec sheet.
 
+## Appliances applied (2026-11-16, Geraldine's specs) - script `_tmp-6571-appl.mjs` + `_tmp-6571-appl-fix.mjs`
+Andy is off the job (Mark 14/11): RHK supplies + installs, Geraldine + Pete did the rip-out 14-15/11. Geraldine's son's family arrives 8/12 - temporary benchtop OK if needed.
+- New library rows (stand-in 3D models, notes say which): Fienza Kuro 68612 sink, Linkware Elle mixer, Bosch HBA574EB3A oven, Bosch PKE611BA2A cooktop, LG XD4B24PS DW.
+- Sink fixture `99782f3f` swapped in place -> **Fienza Kuro 68612 granite single bowl, Matte Black, UNDERMOUNT** 540 x 440 x 215, cut-out = bowl 500 x 400 R10, centred on BC-04's door as before (room y 3077.3), 80 off the wall. Mixer (Linkware Elle, gooseneck 390 high) behind it, hole ~45 off the wall.
+- Oven fixture `1f6e267e` swapped in place -> Bosch HBA574EB3A (niche 585-595 H x 560-568 W x 550 D; BC-02 opening 600 H x 567 W, 575 deep).
+- Cooktop added on BC-02: Bosch PKE611BA2A 592 x 522, cut-out 560 x 495, 52.5 back / 52.5 front.
+- DW added in the 610 space: LG XD4B24PS freestanding 600 x 600 x 850 (880 under the top).
+- Appliance spec block now uses {ovens} {cooktops} {dishwashers}; rangehood line typed (no rangehood fixture, per the WRH convention). Cooktop + DW TBC clouds removed; sink cloud now "position TBC on site"; rangehood cloud "cut-out + duct TBC". SITE NOTES moved down to y 3700.
+- NOT done: WC-03 rangehood hole (still null) - WRR626SB slide-out body 555 W x 280 D x 230 H (272 with visor), 600 x 40 front; Abey RHH6 = HORIZONTAL 150 duct out through a wall, so the WRH flue notch up through shelf + top may be wrong. Asked Mark.
+
 ## Open
 - Site measure (all sizes from the Bunnings plan). On site: undermount single bowl sink - model, position over BC-04.
 - Quote update: undermount sink cut-out + El A waterfall variation.
 - Beam positions / widths / ceiling (beams 210 deep only because the ceiling is drawn 2400).
-- Sink, D/W, oven, cooktop models; rangehood ARBC60TBS cut-out (WC-03 has no hole yet).
-- Sink fixture needs linking to BC-04 (`updateFixture`, dev server) + a check that the top gets the cut-out.
+- Rangehood WRR626SB cut-out + horizontal duct route in WC-03 (asked Mark 2026-11-16).
+- Check Benchtop 2 / 3 get the sink + cooktop cut-outs (fixtures linked to BC-04 / BC-02 2026-11-16).
 - Check WCNP WC-04 (new library item) + its L under panel WC-16 in 3D / cut list.
