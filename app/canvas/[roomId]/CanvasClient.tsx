@@ -4378,6 +4378,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onEditEdges={startEdgeEdit}
             edgesChanged={bt.edgesChangedId === selectedBenchtop.id}
             onResolved={() => bt.setEdgesChangedId(null)}
+            topMaterialId={role => btCatalog.topOverrideFor(selectedBenchtop.id, role)}
+            onSetTopMaterial={(role, id) => btCatalog.setTopOverride(selectedBenchtop.id, role, id)}
           />
         )}
         {bt.shapeEditDraft && (() => {

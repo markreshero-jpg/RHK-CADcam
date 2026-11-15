@@ -147,7 +147,6 @@ export default function BenchtopColoursEditor({ type, colours, onColours }: {
                 <th className={head}>Swatch</th>
                 <th className={`${head} text-right`}>Slab L</th>
                 <th className={`${head} text-right`}>Slab W</th>
-                <th className={`${head} text-right`}>$/m</th>
                 <th className={head}>Source</th>
                 <th className={head}>Active</th>
               </tr>
@@ -180,7 +179,6 @@ export default function BenchtopColoursEditor({ type, colours, onColours }: {
                     <td className={cell}><ColourCell value={c.color} blankLabel="none" onCommit={v => save(id, { color: v })} /></td>
                     <td className={cell}><NumCell value={c.sheet_dx} overridden={over.has('sheet_dx')} onCommit={v => saveSheet(c, 'sheet_dx', v)} /></td>
                     <td className={cell}><NumCell value={c.sheet_dy} overridden={over.has('sheet_dy')} onCommit={v => saveSheet(c, 'sheet_dy', v)} /></td>
-                    <td className={cell}><NumCell value={c.cost_per_metre} step="0.01" onCommit={v => save(id, { cost_per_metre: num(v) })} /></td>
                     <td className={cell}>
                       {c.source_url ? <a href={String(c.source_url)} target="_blank" rel="noreferrer" className="text-[10px] text-accent-ink hover:underline">site</a> : <span className="text-ink-subtle">—</span>}
                       {c.notes ? <span title={String(c.notes)} className="ml-1 text-[10px] text-ink-subtle cursor-help">ⓘ</span> : null}

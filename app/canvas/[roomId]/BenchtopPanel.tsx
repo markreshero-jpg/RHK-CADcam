@@ -11,6 +11,8 @@ import type { BtThickness, BtTape, BtTapeContext } from './useBenchtopCatalog'
 import { tapeTotals } from '@/src/lib/benchtopEdgeband'
 import { btSegments, segLength, effectiveProfileId, outlineBounds, outlinePoints, signedArea, shapeWrite, waterfallJoin, waterfallReturn } from '@/src/lib/benchtopGeometry'
 import { resolveBenchtopFromDB, loadResolvedParts } from '@/src/lib/benchtop-resolver/resolveBenchtopFromDB'
+import { BenchtopSurfaceOptions, SURFACE_MAT_COLS, type SurfaceMat } from '@/src/components/BenchtopSurfaceOptions'
+import { useTutorial } from '@/src/lib/tutorial/store'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 
 interface BenchtopSchedule { id: string; name: string }
@@ -35,6 +37,7 @@ export default function BenchtopPanel({
   walls, position, baseHeight, thickness, onSetPosition, onReanchor, onMove,
   wallLength, overhang, onStretch,
   tapes, tapeCtx, onEditEdges, edgesChanged, onResolved,
+  topMaterialId, onSetTopMaterial,
 }: {
   benchtop: BenchtopInstance
   onUpdate: (id: string, u: Partial<BenchtopInstance>) => Promise<void>
@@ -76,12 +79,16 @@ export default function BenchtopPanel({
   /** Edges were edited since these parts were resolved. */
   edgesChanged: boolean
   onResolved: () => void
+  // z_benchtop_colours C5 — this top's own surface (stone colour), over the room / job schedule.
+  topMaterialId?: (role: string) => string | null
+  onSetTopMaterial?: (role: 'worktop_panel' | 'stone_slab', benchtopMaterialId: string | null) => Promise<void>
 }) {
   // Which end a typed length change moves (remembered while the panel is open).
   const [growEnd, setGrowEnd] = useState<'left' | 'right' | 'both'>('right')
   const [label, setLabel] = useState(benchtop.label ?? '')
   const [methods, setMethods] = useState<BenchtopBuildMethod[]>([])
   const [schedules, setSchedules] = useState<BenchtopSchedule[]>([])
+  const [surfaces, setSurfaces] = useState<SurfaceMat[]>([])
   const [parts, setParts] = useState<ResolvedBenchtopPart[]>([])
   const [resolving, setResolving] = useState(false)
   const [resolveError, setResolveError] = useState<string | null>(null)
@@ -97,6 +104,8 @@ export default function BenchtopPanel({
       .then(({ data }) => setMethods((data ?? []) as BenchtopBuildMethod[]))
     void supabase.from('benchtop_schedules').select('id, name').order('name')
       .then(({ data }) => setSchedules((data ?? []) as BenchtopSchedule[]))
+    void supabase.from('benchtop_materials').select(SURFACE_MAT_COLS).eq('active', true).order('name')
+      .then(({ data }) => setSurfaces((data ?? []) as unknown as SurfaceMat[]))
     // Load any previously resolved parts
     void loadResolvedParts(benchtop.id).then(setParts)
   }, [benchtop.id])
@@ -243,6 +252,30 @@ export default function BenchtopPanel({
             {schedules.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
         </div>
+
+        {/* This top's surface (C5): a stone colour for just this top — e.g. the island in a
+            different stone from the perimeter. Blank = the room / job Materials tab + schedule. */}
+        {method && onSetTopMaterial && topMaterialId && (() => {
+          const role = method.active_part_roles.includes('worktop_panel') || !method.active_part_roles.includes('stone_slab')
+            ? 'worktop_panel' as const : 'stone_slab' as const
+          const cur = topMaterialId(role) ?? ''
+          return (
+            <div>
+              <label className={lbl}>{role === 'stone_slab' ? 'Stone (this top)' : 'Surface (this top)'}</label>
+              <select value={cur}
+                onChange={e => {
+                  const v = e.target.value || null
+                  if (v) useTutorial.getState().emit('bt_top_material')
+                  void onSetTopMaterial(role, v)
+                }}
+                className={`${inp} ${cur ? 'border-amber-600' : ''}`}
+                title="Overrides the room / job material for this top only. Resolve again to update its parts.">
+                <option value="">(as room / job materials)</option>
+                <BenchtopSurfaceOptions mats={surfaces} typesLabel="Surfaces (stone, timber, laminate…)" />
+              </select>
+            </div>
+          )
+        })()}
 
         {/* ── Position (Phase 3b) — tops never drag on the plan; move them here ── */}
         <div className="border-t border-gray-800 pt-3 space-y-2">

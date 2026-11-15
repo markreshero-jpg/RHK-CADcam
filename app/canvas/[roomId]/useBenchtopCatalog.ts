@@ -32,7 +32,8 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
   // Stone slab photos (C4): surface material id → photo + the slab size it shows.
   const [surfaceTex, setSurfaceTex] = useState<Map<string, SlabTexture>>(new Map())
   const [boardCol, setBoardCol] = useState<Map<string, string>>(new Map())
-  // Job / room per-role material overrides (as loadBenchtopInput): room id → rows, '' = job level.
+  // Job / room / top per-role material overrides (as loadBenchtopInput): room id → rows,
+  // '' = job level, `bt:<id>` = one top (z_benchtop_colours C5, wins over room).
   const [overrides, setOverrides] = useState<Map<string, BtOverride[]>>(new Map())
   const [tapes, setTapes] = useState<BtTape[]>([])
 
@@ -64,14 +65,21 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
       if (pid) {
         const { data: rms } = await supabase.from('rooms').select('id').eq('project_id', pid)
         const roomIds = ((rms ?? []) as { id: string }[]).map(r => r.id)
-        const [jo, ro] = await Promise.all([
+        const [jo, ro, to] = await Promise.all([
           supabase.from('job_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('project_id', pid),
           roomIds.length
             ? supabase.from('room_benchtop_materials').select('room_id, part_role, material_id, benchtop_material_id').in('room_id', roomIds)
             : Promise.resolve({ data: [] }),
+          roomIds.length
+            ? supabase.from('benchtop_instance_materials').select('benchtop_id, part_role, material_id, benchtop_material_id, benchtop_instances!inner(room_id)').in('benchtop_instances.room_id', roomIds)
+            : Promise.resolve({ data: [] }),
         ])
         ovr.set('', (jo.data ?? []) as BtOverride[])
         for (const o of (ro.data ?? []) as (BtOverride & { room_id: string })[]) ovr.set(o.room_id, [...(ovr.get(o.room_id) ?? []), o])
+        for (const o of (to.data ?? []) as (BtOverride & { benchtop_id: string })[]) {
+          const k = `bt:${o.benchtop_id}`
+          ovr.set(k, [...(ovr.get(k) ?? []), { part_role: o.part_role, material_id: o.material_id, benchtop_material_id: o.benchtop_material_id }])
+        }
       }
       if (!live) return
       setOverrides(ovr)
@@ -106,7 +114,8 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
       const method = methodFor(bt)
       const schedId = bt.benchtop_schedule_id ?? method?.default_schedule_id ?? rm.benchtop_schedule_id
         ?? project?.benchtop_schedule_id ?? schedules.find(s => s.is_default)?.id ?? null
-      return applyOverrides(rows.filter(r => r.schedule_id === schedId), [...(overrides.get('') ?? []), ...(overrides.get(rm.id) ?? [])])
+      return applyOverrides(rows.filter(r => r.schedule_id === schedId),
+        [...(overrides.get('') ?? []), ...(overrides.get(rm.id) ?? []), ...(overrides.get(`bt:${bt.id}`) ?? [])])
     }
     const thicknessFor = (bt: BenchtopInstance): BtThickness => {
       const method = methodFor(bt)
@@ -147,7 +156,26 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
     return { applies, defaultTape: applies ? top?.edgeband_id ?? null : null }
   }, [methodFor, scheduleRowsFor])
 
-  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, colourFor, textureFor, scheduleRowsFor, tapes, tapeContextFor, forRoom }
+  // This top's own material for one role (C5) — null clears it (falls back to room / job / schedule).
+  const topOverrideFor = useCallback((btId: string, role: string): string | null =>
+    (overrides.get(`bt:${btId}`) ?? []).find(o => o.part_role === role)?.benchtop_material_id ?? null, [overrides])
+  const setTopOverride = useCallback(async (btId: string, role: BenchtopScheduleRow['part_role'], benchtopMaterialId: string | null) => {
+    const res = benchtopMaterialId
+      ? await supabase.from('benchtop_instance_materials').upsert(
+          { benchtop_id: btId, part_role: role, benchtop_material_id: benchtopMaterialId, material_id: null },
+          { onConflict: 'benchtop_id,part_role' })
+      : await supabase.from('benchtop_instance_materials').delete().eq('benchtop_id', btId).eq('part_role', role)
+    if (res.error) { console.error('[benchtop] top material', res.error); return }
+    const k = `bt:${btId}`
+    setOverrides(prev => {
+      const next = new Map(prev)
+      const rest = (prev.get(k) ?? []).filter(o => o.part_role !== role)
+      next.set(k, benchtopMaterialId ? [...rest, { part_role: role, material_id: null, benchtop_material_id: benchtopMaterialId }] : rest)
+      return next
+    })
+  }, [])
+
+  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, colourFor, textureFor, scheduleRowsFor, tapes, tapeContextFor, forRoom, topOverrideFor, setTopOverride }
 }
 
 type BtOverride = { part_role: BenchtopScheduleRow['part_role']; material_id: string | null; benchtop_material_id: string | null }

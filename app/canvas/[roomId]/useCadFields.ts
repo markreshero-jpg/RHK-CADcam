@@ -58,7 +58,7 @@ export function useCadFields({ project, room, resolvedParts, fixtures, cabinets 
       const styleIds = classes.map(c => pick(`${c}_door_style_id`) ?? pick('door_style_override_id') ?? str(j.default_door_style_id))
       const colourIds = classes.map(c => pick(`${c}_door_colour_id`))
       const btSched = pick('benchtop_schedule_id')
-      const [styles, colours, handle, hinge, slide, dbm, mats, btRows, btOver, bins] = await Promise.all([
+      const [styles, colours, handle, hinge, slide, dbm, mats, btRows, btOver, bins, btTop] = await Promise.all([
         supabase.from('door_styles').select('id,name').in('id', uniq(styleIds)),
         supabase.from('door_schedule_materials').select('id,colour_name').in('id', uniq(colourIds)),
         pick('handle_schedule_id') ? supabase.from('handle_schedules').select('name').eq('id', pick('handle_schedule_id')!).maybeSingle() : Promise.resolve({ data: null }),
@@ -69,6 +69,8 @@ export function useCadFields({ project, room, resolvedParts, fixtures, cabinets 
         btSched ? supabase.from('benchtop_schedule_rows').select('part_role,benchtop_materials(name,color)').eq('schedule_id', btSched) : Promise.resolve({ data: [] }),
         supabase.from('room_benchtop_materials').select('part_role,benchtop_materials(name,color)').eq('room_id', room.id),
         binIds.length ? supabase.from('hardware_slides').select('id,name,brand').in('id', binIds) : Promise.resolve({ data: [] }),
+        // Per-top surfaces (z_benchtop_colours C5) — listed after the room's, by the top's label.
+        supabase.from('benchtop_instance_materials').select('benchtop_materials(name,color),benchtop_instances!inner(room_id,label)').eq('benchtop_instances.room_id', room.id),
       ])
       if (dead) return
       const styleName = new Map(((styles.data ?? []) as Row[]).map(s => [s.id as string, s.name as string]))
@@ -83,13 +85,18 @@ export function useCadFields({ project, room, resolvedParts, fixtures, cabinets 
         return m ? [str(m.name), str(m.color)].filter(Boolean).join(' - ') : null
       }))
       const over = btName((btOver.data ?? []) as Row[])
+      const perTop = uniq(((btTop.data ?? []) as Row[]).map(x => {
+        const n = btName([x])[0]
+        const label = str((x.benchtop_instances as Row | null)?.label)
+        return n ? (label ? `${label}: ${n}` : n) : null
+      }))
       setNames({
         fronts,
         handles: str((handle.data as Row | null)?.name) ?? '',
         hinges: str((hinge.data as Row | null)?.name) ?? '',
         runnersName: str((slide.data as Row | null)?.name) ?? '',
         drawerSystem: str((dbm.data as Row | null)?.name) ?? '',
-        benchtop: (over.length ? over : btName((btRows.data ?? []) as Row[])).join(', '),
+        benchtop: [...(over.length ? over : btName((btRows.data ?? []) as Row[])), ...perTop].join(', '),
         materials: new Map(((mats.data ?? []) as Row[]).map(m => [m.id as string, m.name as string])),
         bins: new Map(((bins.data ?? []) as Row[]).map(b => {
           const name = str(b.name) ?? '', brand = str(b.brand)

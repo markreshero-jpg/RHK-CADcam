@@ -93,20 +93,22 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
     scheduleRows = (rows ?? []) as BenchtopScheduleRow[]
   }
 
-  // ── Per-role material overrides: job → room (room wins) ─────────────────
+  // ── Per-role material overrides: job → room → this top (top wins) ───────
   // Overlay onto the schedule rows so the resolver sees one effective set.
   const projectId = (rm as { project_id?: string } | null)?.project_id ?? null
-  const [jobOvrRes, roomOvrRes] = await Promise.all([
+  const [jobOvrRes, roomOvrRes, topOvrRes] = await Promise.all([
     projectId
       ? supabase.from('job_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('project_id', projectId)
       : Promise.resolve({ data: [] }),
     supabase.from('room_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('room_id', bt.room_id),
+    supabase.from('benchtop_instance_materials').select('part_role, material_id, benchtop_material_id').eq('benchtop_id', bt.id),
   ])
   type BtOverride = { part_role: BenchtopScheduleRow['part_role']; material_id: string | null; benchtop_material_id: string | null }
   const byRole = new Map(scheduleRows.map(r => [r.part_role, r]))
   for (const ovr of [
     ...((jobOvrRes.data ?? []) as BtOverride[]),
     ...((roomOvrRes.data ?? []) as BtOverride[]),
+    ...((topOvrRes.data ?? []) as BtOverride[]),
   ]) {
     if (!ovr.material_id && !ovr.benchtop_material_id) continue
     const existing = byRole.get(ovr.part_role)

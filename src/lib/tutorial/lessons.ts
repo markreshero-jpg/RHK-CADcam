@@ -2205,6 +2205,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click 3D. Tops show the slab photo at true size, veins running along the top’s longest edge and over its edges. Elevation fills the top in the stone’s swatch colour. A layer set that colours the Benchtops layer (e.g. Line drawing) shows that colour instead.',
       target: 'view-3d', canvas: true, done: c => c.view === '3d' },
   ]},
+
+  // Appended 2026-11-15 (z_benchtop_colours C5: per-top stone).
+  { id: 'top_stone', level: 'intermediate', topic: 'materials', title: 'A different stone on one top',
+    blurb: 'Give one benchtop (e.g. the island) its own stone colour while the rest follow the room / job materials.',
+    keywords: 'stone colour color island perimeter benchtop per top own material override two stones different', steps: [
+    { id: 'select', title: 'Select the top',
+      body: 'On the plan, click the benchtop that should be different, e.g. the island. Its panel opens on the right.',
+      canvas: true, done: c => c.selected?.type === 'benchtop' },
+    { id: 'pick', title: 'Pick its stone',
+      body: 'Under Material Schedule, open Stone (this top) (Surface (this top) on board tops) and pick the colour from its brand group. The box turns amber: this top now ignores the room / job stone. Pick “(as room / job materials)” to send it back. Click Resolve so its parts and the quote take the new stone. A whole different schedule for one top still goes in Material Schedule.',
+      canvas: true, done: (c, s) => ev(c, 'bt_top_material') > ev(s, 'bt_top_material') },
+    { id: 'see', title: 'See it in 3D',
+      body: 'Click 3D: this top shows its own slab, the others the room’s. The room spec block lists it by the top’s label (give the top a label such as Island).',
+      target: 'view-3d', canvas: true, done: c => c.view === '3d' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

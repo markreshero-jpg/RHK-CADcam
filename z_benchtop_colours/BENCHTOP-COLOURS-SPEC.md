@@ -3,8 +3,8 @@
 > **RESUME HERE (2026-11-15):** C1 (material colour), C2 (stone colours under a type) and C4
 > (supplier slab photos in 3D) built. 100 colours imported under 20mm Stone: YDL Mineral (43) +
 > Stone Ambassador Zenith / Kaya (57), 89 with slab photos. Checked headless on Test Kitchen /
-> Void Corner Demo (3D slab + library panel); Mark to check in-app. Next: C1b plan fill,
-> porcelain ranges (YDL porcelain, SA Vasari 12mm) if wanted, per-top colour.
+> Void Corner Demo (3D slab + library panel); Mark to check in-app. C5 per-top stone built
+> 2026-11-15 (checked headless). Next: C1b plan fill. Porcelain left out for now (Mark).
 
 Started 2026-11-14 from Mark: "do we have the ability to add stone patterns / colours to our
 benchtops yet". Answer then: no — every top drew in the one layer grey (#e7e5e4) in 3D and teal
@@ -47,6 +47,14 @@ That row points at a `benchtop_materials` row (stone, laminate, timber…) or a 
    coordinates (so tops side by side continue the pattern); box-projected on edges and legs.
    Shown untinted; a Benchtops layer colour wins (no photo then). 3D only; elevation uses the
    swatch hex (average colour of the photo).
+8. **(Mark 2026-11-15) No porcelain for now** — 20mm stone ranges only.
+9. **(Mark 2026-11-15) No prices on colours** — every job's stone is quoted by the supplier.
+   The $/m column is gone from the Colours panel (`cost_per_metre` stays in the table, unused there).
+10. **(Mark 2026-11-15) Room / job materials AND a per-top choice.** Cascade for a role's material:
+    schedule → job override → room override → **this top's override** (top wins). Stored in
+    `benchtop_instance_materials` (benchtop_id, part_role, material_id / benchtop_material_id,
+    edgeband_id; cascade-deletes with the top; RLS `can_access_benchtop`). A whole schedule per
+    top (`benchtop_instances.benchtop_schedule_id`) still works as before.
 
 ## Phases
 
@@ -80,11 +88,17 @@ That row points at a `benchtop_materials` row (stone, laminate, timber…) or a 
   no published slab, Jasmine / Silver Star White no swatch either), Stone Ambassador 20mm
   Zenith + Kaya 57 (51 photos; Nimbus Grey, Mink Grey, Terazio, Beton, Elysian White publish
   none, Pearl White / Carrara Mist photos over-exposed → swatch only). WA-only colours and the
-  discontinued Enchanted White skipped. Not imported yet: YDL porcelain, SA Vasari 12mm porcelain.
+  discontinued Enchanted White skipped. Not imported: YDL porcelain, SA Vasari 12mm porcelain (decision 8).
+- [x] **C5 (2026-11-15) Per-top stone.** Migration `migration_c5_top_materials.sql` (applied live).
+  Benchtop panel › **Stone (this top)** / **Surface (this top)** under Material Schedule (the top's
+  worktop_panel or stone_slab role, from the method), amber when set. Read by
+  `loadBenchtopInput` (parts / quote), `useBenchtopCatalog` (`topOverrideFor` / `setTopOverride`;
+  3D photo, elevation colour, thickness) and the room spec block (`useCadFields`, listed as
+  "<top label>: <stone>"). Tutorial `top_stone`. Checked headless on Void Corner Demo (picker
+  shows the colour; 3D loads that top's slab instead of the room's). Known gap: undoing a
+  deleted top restores the top but not its own stone. Surfaces only (no boards) in the picker,
+  same as the room Materials tab.
 
 ## Open questions for Mark
 
-1. Porcelain too (YDL porcelain 12mm, Stone Ambassador Vasari 12mm) — under "12mm Stone"?
-2. Prices per range (Zenith Premium, YDL Premium Plus…) — set $/m per colour, or per range?
-3. Per-top colour (two colours in one room, e.g. island vs perimeter) — a picker on the top, or
-   keep using a schedule per top?
+None open (porcelain / prices / per-top answered 2026-11-15 → decisions 8–10).
