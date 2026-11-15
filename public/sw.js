@@ -4,8 +4,10 @@
 //  static  /_next/static/* (hashed, never change), models, fonts: cache-first, saved as used.
 //  data    Supabase reads (REST GET + public storage): network-first. Every read the app makes
 //          online is saved, and handed back when there's no signal.
-//  Pages:  network-first. If /canvas/<room> can't load (no signal, or 15 s with bad
-//          reception), go to the offline canvas for that room; other pages -> /offline.
+//  Pages:  network-first. If /canvas/<room> can't load (no signal), go to the offline
+//          canvas for that room; other pages -> /offline. A slow load only falls back
+//          when the device says it's offline (Mark 2026-11-15: big rooms took > 15 s on
+//          good signal and opened as offline copies, with reads served stale).
 // Writes are never touched: the app's own offline queue handles CAD / markups.
 
 const SHELL = 'rhk-shell'
@@ -66,6 +68,18 @@ function timeout(ms) {
   return new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))
 }
 
+/** The network response; after `ms` gives up only if the device reports no signal —
+ *  online, a slow server is waited for instead of answered from the device copy. */
+async function fetchPatient(req, ms) {
+  const net = fetch(req)
+  try {
+    return await Promise.race([net, timeout(ms)])
+  } catch (err) {
+    if (err && err.message === 'timeout' && self.navigator.onLine !== false) return net
+    throw err
+  }
+}
+
 self.addEventListener('fetch', event => {
   const req = event.request
   if (req.method !== 'GET') return
@@ -89,7 +103,7 @@ self.addEventListener('fetch', event => {
 
 async function page(req, url) {
   try {
-    const res = await Promise.race([fetch(req), timeout(NAV_TIMEOUT)])
+    const res = await fetchPatient(req, NAV_TIMEOUT)
     // Keep the offline pages fresh whenever they're visited online.
     if (res.ok && SHELL_PAGES.includes(url.pathname) && !res.redirected) {
       const copy = res.clone()
@@ -118,7 +132,7 @@ async function networkFirst(req) {
   const cache = await caches.open(DATA)
   const key = req.url
   try {
-    const res = await Promise.race([fetch(req), timeout(DATA_TIMEOUT)])
+    const res = await fetchPatient(req, DATA_TIMEOUT)
     if (res.status === 200) cache.put(key, res.clone()).catch(() => {})
     return res
   } catch (err) {

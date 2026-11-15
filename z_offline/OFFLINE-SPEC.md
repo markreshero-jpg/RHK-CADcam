@@ -120,11 +120,14 @@ How it works, and the decisions locked with it:
     Cache-first, saved as they're used. Parts of the app first opened online on this device
     (3D, editors) are then available offline as well.
   - `rhk-data`: every Supabase read (REST GET, public storage), network-first with an 8 s
-    timeout. The cached copy is served when there's no signal. This covers every loader the
+    timeout. The cached copy is served when there's no signal; past 8 s it's served only
+    if the device reports offline — online, the read waits for the network (2026-11-15). This covers every loader the
     canvas runs (resolved parts, materials, settings, library…) without touching any of them.
     Writes are never intercepted.
-  - **Pages:** network-first. `/canvas/<room>` that can't load (no signal, or 15 s with bad
-    reception) goes to `/offline/canvas?room=<room>`. Any other page goes to `/offline`.
+  - **Pages:** network-first. `/canvas/<room>` that can't load (no signal, or 15 s while the
+    device reports offline) goes to `/offline/canvas?room=<room>`. Online, a slow page is
+    waited for (Mark 2026-11-15: big rooms took > 15 s on good signal and opened as
+    offline copies). Any other page goes to `/offline`.
 - **Room copies** are stored in IndexedDB `rhk-offline` → `rooms` (`src/lib/offline/roomCache.ts`;
   both stores share `src/lib/offline/idb.ts`, DB version 2).
   - The canvas saves its room 2 s after any change, and again on leaving the page
