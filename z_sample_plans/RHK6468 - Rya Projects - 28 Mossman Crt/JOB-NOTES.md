@@ -69,10 +69,15 @@ How it's drawn:
 - [ ] Cavity slider wall - 120 gap at the butler's north run, review when the wall is in.
 - [ ] Top of ovens 1578 vs overhead underside 1620 (both "align" notes can't hold) - which wins?
 - [ ] **2pac colour** for the butler's overheads + under panels (Colour TBC).
-- [ ] **RS** reconstituted stone colour (butler's tops + splashbacks).
+- [ ] **RS** reconstituted stone colour (butler's tops + splashbacks). The Kitchen's room stone pick (YDL Super
+  Arabescato) was overriding the butler's RS schedule: 2026-11-15 each butler's top got its own stone (C5) =
+  "20mm Reconstituted Stone - Colour TBC"; set the real colour there (the splashbacks follow).
 - [ ] North lift-ups 1377 / 1378 wide (over 1200 warning) - OK for Aventos, or narrower?
 - [ ] Aventos type (HK-top / HK-S / HK-XS) for 375 high flaps - see z_lift_systems spec.
-- [ ] Splashbacks - module spec'd (z_splashback), not built; drawn once it is.
+- [ ] Splashbacks drawn (z_splashback, 2026-11-14/15) - check: kitchen run "Splashback 1" (Wall 7, 3872 x 700,
+  mitred return 140 to the door jamb - length TBC; slab joint?); "Butler's north" (Wall 4, 0-3055 x 920-1620, to
+  the tall panel) + "Butler's west" (Wall 3, 2680, butts into the north piece at the NW corner). Wall 2 under W8:
+  none.
 - [ ] W7 window size not measured (drawn 990 x 1450 over the drawers).
 - [ ] Fridge kick: vent grille per Liebherr; freezer / door panel sizes to the install guide.
 - [ ] 2700 butler's west wall used as finished (not reduced for gyprock) - check.

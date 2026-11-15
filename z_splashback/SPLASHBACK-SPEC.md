@@ -9,8 +9,8 @@
 > cut-outs; then the butler's pieces (Walls 4 + 3). 2026-11-15 **S2b** closed the S2 gaps (prints, reports,
 > offline, plan pick, Materials tab, override fix) — see "S2b as built"; check pending.
 > 2026-11-15 **S3 built**: returns, slab joints, hand cut-outs (see "S3 as built"); Wall 7 north return set (wrap
-> round the wall end, mitre, 140 — length TBC on site). Check pending. Next: the butler's pieces (Walls 4 + 3),
-> then S4 auto-build.
+> round the wall end, mitre, 140 — length TBC on site). Check pending. 2026-11-15 butler's pieces drawn
+> (Walls 4 + 3). Next: S4 auto-build.
 
 ## Mark's brief (2026-11-14)
 
@@ -205,4 +205,7 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
   2026-11-15 (S3): right end, wrap round the wall end, mitre, 140 (Wall 6 is 120 + 20 stone) — length to the jamb
   TBC. 3872 long: a slab joint may be needed (not added — stonemason / Mark).
 - Butler's north + west (Walls 4 + 3): RS reconstituted stone, colour TBC, bench to the lift-up underside 1620
-  (700). South (Wall 2): window W8 920-1620, no splashback under it.
+  (700). South (Wall 2): window W8 920-1620, no splashback under it. **Drawn 2026-11-15**: "Butler's north"
+  Wall 4 x 0-3055 (to the tall panel TC-08), "Butler's west" Wall 3 x 0-2680 (butts into the north piece at the
+  NW corner). Material inherits the top on the same wall; the Kitchen's room stone (YDL Super Arabescato) was
+  overriding the butler's RS schedule, so the three butler's tops got a per-top stone (C5) = RS Colour TBC.
