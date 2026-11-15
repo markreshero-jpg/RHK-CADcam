@@ -11,9 +11,10 @@ const WARM_DONE = 'rhk-warm-done'   // = useRoomSnapshot's message
 const CHANGED = 'rhk-offline-rooms-changed'
 const ROOM_TIMEOUT = 75000
 
-type Status = { kind: 'idle' } | { kind: 'running'; done: number; total: number; name: string } | { kind: 'done'; ok: number; total: number } | { kind: 'error'; msg: string }
+type Status = { kind: 'idle' } | { kind: 'running'; done: number; total: number; name: string } | { kind: 'done'; ok: number; total: number; missed: string[] } | { kind: 'error'; msg: string }
 
-function warmRoom(roomId: string): Promise<boolean> {
+/** Opens the room in a hidden frame until it has saved its copy. null = saved, else why not. */
+function warmRoom(roomId: string): Promise<string | null> {
   return new Promise(resolve => {
     const frame = document.createElement('iframe')
     frame.src = `/canvas/${roomId}?warm=1`
@@ -22,15 +23,20 @@ function warmRoom(roomId: string): Promise<boolean> {
     // Real size (the canvas lays out to it) but off screen.
     Object.assign(frame.style, { position: 'fixed', left: '-20000px', top: '0', width: '1400px', height: '900px', opacity: '0', pointerEvents: 'none', border: '0' })
     let settled = false
-    const finish = (ok: boolean) => {
+    const finish = (why: string | null) => {
       if (settled) return
       settled = true
-      window.removeEventListener('message', onMsg); clearTimeout(t); frame.remove(); resolve(ok)
+      window.removeEventListener('message', onMsg); clearTimeout(t); frame.remove(); resolve(why)
     }
     const onMsg = (e: MessageEvent) => {
-      if (e.origin === window.location.origin && e.data?.type === WARM_DONE && e.data.roomId === roomId) finish(!!e.data.ok)
+      if (e.origin === window.location.origin && e.data?.type === WARM_DONE && e.data.roomId === roomId) finish(e.data.ok ? null : 'couldn’t write the copy on this device')
     }
-    const t = setTimeout(() => finish(false), ROOM_TIMEOUT)
+    const t = setTimeout(() => {
+      // Say how far it got: the room page may not have loaded at all.
+      let where = ''
+      try { where = frame.contentWindow?.location.pathname ?? '' } catch { /* other origin = login redirect */ }
+      finish(`took over ${ROOM_TIMEOUT / 1000}s${where && !where.startsWith('/canvas/') ? ` (ended up on ${where})` : ''}`)
+    }, ROOM_TIMEOUT)
     window.addEventListener('message', onMsg)
     document.body.appendChild(frame)
   })
@@ -73,23 +79,30 @@ export default function TakeOfflineButton({ rooms, saved }: { rooms: Room[]; sav
       console.error('[offline] take offline', e)
       setStatus({ kind: 'error', msg: 'Couldn’t switch on offline support, reload and try again' }); return
     }
-    let ok = 0
-    for (let i = 0; i < rooms.length; i++) {
-      setStatus({ kind: 'running', done: i, total: rooms.length, name: rooms[i].name })
-      if (await warmRoom(rooms[i].id)) ok++
+    // Every room once, then up to two more goes at any that didn't save.
+    let todo = rooms
+    for (let round = 0; round < 3 && todo.length; round++) {
+      const missed: Room[] = []
+      for (let i = 0; i < todo.length; i++) {
+        setStatus({ kind: 'running', done: rooms.length - todo.length + i, total: rooms.length, name: round ? `${todo[i].name} (again)` : todo[i].name })
+        const why = await warmRoom(todo[i].id)
+        if (why) { missed.push(todo[i]); console.warn(`[offline] Take offline: ${todo[i].name} not saved: ${why}`) }
+      }
+      todo = missed
     }
     reg.active?.postMessage('refresh-shell!')
-    setStatus({ kind: 'done', ok, total: rooms.length })
+    setStatus({ kind: 'done', ok: rooms.length - todo.length, total: rooms.length, missed: todo.map(r => r.name) })
     refresh()
   }
 
   const when = (t: number) => new Date(t).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
   const label = status.kind === 'running' ? `Saving ${status.done + 1}/${status.total}: ${status.name}…`
-    : status.kind === 'done' ? (status.ok === status.total ? `On this device: ${status.ok} room${status.ok === 1 ? '' : 's'}` : `${status.ok} of ${status.total} saved, try again`)
+    : status.kind === 'done' ? (status.ok === status.total ? `On this device: ${status.ok} room${status.ok === 1 ? '' : 's'}` : `${status.ok} of ${status.total} saved, ${status.missed.join(', ')} didn’t: try again`)
     : status.kind === 'error' ? status.msg
     : have ? (have.n < rooms.length ? `Offline: ${have.n} of ${rooms.length} rooms` : `Offline: all ${have.n} room${have.n === 1 ? '' : 's'}`) : 'Take offline'
+  const missing = rooms.filter(r => !saved.has(r.id)).map(r => r.name)
   const title = status.kind === 'running' ? 'Opening each room in the background to keep a copy on this device'
-    : have ? `${have.n} of ${rooms.length} rooms kept on this device for no-signal use (oldest copy ${when(have.at)}). Click to save them all now.`
+    : have ? `${have.n} of ${rooms.length} rooms kept on this device for no-signal use (oldest copy ${when(have.at)}).${missing.length ? ` Not on this device: ${missing.join(', ')}.` : ''} Click to save them all now.`
     : 'Keep a copy of every room on this device, so they open on site with no signal'
 
   return (
