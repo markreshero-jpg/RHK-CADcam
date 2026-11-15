@@ -24,7 +24,17 @@ Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 
   - Guest Ensuite: good to go.
   - US Powder / US Main Ensuite: middle support OK if required, set back not to protrude. [ ] **Mark 2026-11-15: supports left off for now** - floating shelves to be ordered in 33 Sublime Teak Chalk board (stiffer); sort supports before the optimiser.
   - US Bathroom: 2 middle supports OK, set back from the front and in from the ends. [ ] left off for now (as above).
-  - Laundry: Sublime Teak overheads above the sink incl open shelves (already Teak - confirm); remove the divider in the RH linen cupboard; 2pac 25W. [ ]
+  - Laundry: Sublime Teak overheads above the sink incl open shelves (already Teak - confirm); remove the divider in the RH linen cupboard; 2pac 25W. [x] 2026-11-15: overheads (room wall colour) + WC-04 open box + PDR vanity checked = Teak; TC-08 (RH linen) divider removed, 4 adj shelves full width (`_tmp-6478-lau-div.mjs`); TC-07/TC-08 hinge 3 locked at 640 (was 672, plate over the 693 shelf hole - new HINGE_SHELF_HOLE_CLASH check) (`_tmp-6478-lau-hinge.mjs`); spec text 25W. 0 errors.
+- **CAD notes 2026-11-13 (Friday, handwriting on the CAD layer, 541 items)** - read 2026-11-15, decisions pending with Mark room by room:
+  - Laundry: 2656 ✓, PDR 980 ✓, nib 115; talls wall **1822** (drawn 1824); **829** gap past the talls - "we need to make a door into the kitchen here" (= Darby's kitchen "door into laundry"). [ ] ask Mark
+  - Buffet: 2345 ✓; wall-cab end fillers 30 -> 18; "overall depth of bench top to be 600". [ ]
+  - WIP: top wall 2351 -> 2348; fillers 30 -> 18 both ends of the top wall + right end of the bottom wall; CH 2392 F/F; Wall 2 elevation "I/O 336-477 off floor" (access panel to the void?). [ ]
+  - Kitchen: 5697 ✓ 765 ✓ 1110 ✓; CH 2685; pocket unit fillers -> 18; "?" arrow between back run and island; stair stringer 1315 H off floor to underside near TC-08. [ ]
+  - US Broom: 481 ✓ 714 ✓, 18 fillers (done); 2595 to top of skirting; CH 2694 F/F. US Hallway Linen: CH 2698 F/F, 2600 top of shadow top. [ ]
+  - Robes: Bed 2 CH 2369, top of skirt 2271, all skirt 100; Bed 3 CH 2375, 2273 top of skirting (2173 ticked); Guest 2297 top of skirt, Wall 2 elevation "I/O 385-525". [ ]
+  - **New room: Guest Window Seat** 1959 F/P x 832 F/P, 397 H to sill; box 395 H less 15 flooring; box only in whiteboard, builders line top + face in flooring. [ ]
+  - Master WIR: bulkhead line + 88. DS TV Unit: 500 x 500 corner, 660 diagonal. [ ]
+- **Sublime Teak = Chalk everywhere** (Mark 2026-11-15): materials `67ecbeff` (16.5) + `8fae4f9c` (33) finish set to Chalk (only Dune uses them). Vanity floating shelves to go solid 33 Teak Chalk board (not built-up 2 x 16.5) - [ ] switch with the supports pass.
   - WIP: access panel on the fridge side to the void; 2pac 25W; open shelves on the fridge side Sublime Teak. [ ]
   - Study: splash panel Polytec Ravine Gossamer White; overheads on the stone side may need lifting 15 for the stone. [ ]
   - Kitchen: overheads above the cooktop adjusted for the rangehood exhaust; pocket doors to the appliance cupboard; door into the laundry to be sorted. Island: top drawer added to the tall drawer next to the D/W; curve on the front stone servery to match the benchtop end radius; finger tiles to the servery. Pocket unit: top open shelf + cupboard above the drawers Sublime Teak; open shelves 300 deep. [ ]
