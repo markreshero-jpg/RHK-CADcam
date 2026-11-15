@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '@/src/lib/supabase'
+import { benchtopTextureUrl, type SlabTexture } from '@/src/lib/benchtopTextures'
 import { topThickness, topRow } from '@/src/lib/benchtop-resolver/resolver'
 import { tapeApplies } from '@/src/lib/benchtopEdgeband'
 import { isBuildUp } from '@/src/lib/benchtop-resolver/construction'
@@ -28,6 +29,8 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
   const [surfaceDz, setSurfaceDz] = useState<Map<string, number>>(new Map())
   // Display colours (z_benchtop_colours C1): surface material `color`, board `face_colour`.
   const [surfaceCol, setSurfaceCol] = useState<Map<string, string>>(new Map())
+  // Stone slab photos (C4): surface material id → photo + the slab size it shows.
+  const [surfaceTex, setSurfaceTex] = useState<Map<string, SlabTexture>>(new Map())
   const [boardCol, setBoardCol] = useState<Map<string, string>>(new Map())
   // Job / room per-role material overrides (as loadBenchtopInput): room id → rows, '' = job level.
   const [overrides, setOverrides] = useState<Map<string, BtOverride[]>>(new Map())
@@ -40,7 +43,7 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
       supabase.from('benchtop_edge_profiles').select('*').order('category').order('sort_order').order('name'),
       supabase.from('benchtop_schedules').select('id, is_default'),
       supabase.from('benchtop_schedule_rows').select('*'),
-      supabase.from('benchtop_materials').select('id, dz, color'),
+      supabase.from('benchtop_materials').select('id, dz, color, texture_path, texture_w_mm, texture_h_mm'),
       supabase.from('edge_banding').select('id, name, thickness, width, color').eq('active', true).order('name'),
     ]).then(async ([m, p, s, r, bm, eb]) => {
       if (!live) return
@@ -50,9 +53,11 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
       setSchedules((s.data ?? []) as { id: string; is_default: boolean }[])
       const rowList = (r.data ?? []) as BenchtopScheduleRow[]
       setRows(rowList)
-      const surf = (bm.data ?? []) as { id: string; dz: number; color: string | null }[]
+      const surf = (bm.data ?? []) as { id: string; dz: number; color: string | null; texture_path: string | null; texture_w_mm: number | null; texture_h_mm: number | null }[]
       setSurfaceDz(new Map(surf.map(x => [x.id, Number(x.dz)])))
       setSurfaceCol(new Map(surf.filter(x => x.color).map(x => [x.id, x.color!])))
+      setSurfaceTex(new Map(surf.filter(x => x.texture_path && Number(x.texture_w_mm) > 0 && Number(x.texture_h_mm) > 0)
+        .map(x => [x.id, { url: benchtopTextureUrl(x.texture_path)!, wMm: Number(x.texture_w_mm), hMm: Number(x.texture_h_mm) }])))
       // Job / room overrides for this job (every room of it — the job reports draw other rooms).
       const pid = project?.id
       const ovr = new Map<string, BtOverride[]>()
@@ -121,11 +126,17 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
       return (top.benchtop_material_id ? surfaceCol.get(top.benchtop_material_id) : undefined)
         ?? (top.material_id ? boardCol.get(top.material_id) : undefined) ?? null
     }
-    return { methodFor, scheduleRowsFor, thicknessFor, defaultProfileIdFor, colourFor }
-  }, [methods, rows, schedules, boardDz, surfaceDz, surfaceCol, boardCol, overrides, project?.benchtop_build_method_id, project?.benchtop_schedule_id])
+    // Slab photo of the top's stone colour (C4); null = none (draw the flat colour).
+    const textureFor = (bt: BenchtopInstance): SlabTexture | null => {
+      const method = methodFor(bt)
+      const top = method ? topRow(method, scheduleRowsFor(bt)) : undefined
+      return (top?.benchtop_material_id ? surfaceTex.get(top.benchtop_material_id) : undefined) ?? null
+    }
+    return { methodFor, scheduleRowsFor, thicknessFor, defaultProfileIdFor, colourFor, textureFor }
+  }, [methods, rows, schedules, boardDz, surfaceDz, surfaceCol, surfaceTex, boardCol, overrides, project?.benchtop_build_method_id, project?.benchtop_schedule_id])
 
   const here = useMemo(() => forRoom(room), [forRoom, room])
-  const { methodFor, scheduleRowsFor, thicknessFor, defaultProfileIdFor, colourFor } = here
+  const { methodFor, scheduleRowsFor, thicknessFor, defaultProfileIdFor, colourFor, textureFor } = here
 
   // Same rule as the resolver: tape only on in-house board tops; the default
   // is the tape on the schedule row the top is made from.
@@ -136,7 +147,7 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
     return { applies, defaultTape: applies ? top?.edgeband_id ?? null : null }
   }, [methodFor, scheduleRowsFor])
 
-  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, colourFor, scheduleRowsFor, tapes, tapeContextFor, forRoom }
+  return { methods, profiles, profileById, methodFor, defaultProfileIdFor, thicknessFor, colourFor, textureFor, scheduleRowsFor, tapes, tapeContextFor, forRoom }
 }
 
 type BtOverride = { part_role: BenchtopScheduleRow['part_role']; material_id: string | null; benchtop_material_id: string | null }

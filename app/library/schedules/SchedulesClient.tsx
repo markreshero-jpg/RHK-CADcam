@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useState } from 'react'
+import { BenchtopSurfaceOptions, SURFACE_MAT_COLS, type SurfaceMat } from '@/src/components/BenchtopSurfaceOptions'
 import Link from 'next/link'
 import { supabase } from '@/src/lib/supabase'
 import { ThemeToggle } from '../../ThemeToggle'
@@ -62,7 +63,7 @@ type SchedRecord = {
 }
 
 type MatItem       = { id: string; name: string; dz: number }
-type BenchtopItem  = { id: string; name: string; dz: number; material_type: string | null }
+type BenchtopItem  = SurfaceMat
 type HwItem        = { id: string; name: string; brand: string | null; grip_kind?: string }
 
 // Handle schedule rows (z_handles D6) — one per role. Offset = grip edge → the
@@ -141,7 +142,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
         supabase.from('splashback_schedules').select('id,name,description,is_default,active').order('name'),
         supabase.from('materials').select('id,name,dz').eq('active', true).order('name'),
         supabase.from('edge_banding').select('id,name,thickness,material_match_id').eq('active', true).order('name'),
-        supabase.from('benchtop_materials').select('id,name,dz,material_type').eq('active', true).order('name'),
+        supabase.from('benchtop_materials').select(SURFACE_MAT_COLS).eq('active', true).order('name'),
         supabase.from('hardware_hinges').select('id,name,brand').eq('active', true).order('name'),
         supabase.from('hardware_slides').select('id,name,brand,nominal_length,box_height').eq('active', true).eq('kind', 'slide').order('name'),
         supabase.from('hardware_handles').select('id,name,brand,grip_kind').eq('active', true).order('name'),
@@ -788,9 +789,11 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
                   className={sel}
                 >
                   {!matId && <option value="">— not set —</option>}
-                  {(catalog as { id: string; name: string; dz: number }[]).map(m => (
-                    <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
-                  ))}
+                  {role.source === 'benchtop'
+                    ? <BenchtopSurfaceOptions mats={benchtopMats} />
+                    : (catalog as { id: string; name: string; dz: number }[]).map(m => (
+                      <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
+                    ))}
                 </select>
                 {role.hasEb && (
                   <select
@@ -832,11 +835,7 @@ export default function SchedulesClient({ embedded }: { embedded?: boolean }) {
               <div className="flex-1 space-y-1">
                 <select value={pick} onChange={e => saveSbMat(role.key, e.target.value)} className={sel}>
                   <option value="">{role.key === 'panel' ? '— same as benchtop / not set —' : '— none —'}</option>
-                  <optgroup label="Benchtop library (supply)">
-                    {benchtopMats.map(m => (
-                      <option key={m.id} value={`surface:${m.id}`}>{m.name} ({m.dz}mm){m.material_type ? ` · ${m.material_type}` : ''}</option>
-                    ))}
-                  </optgroup>
+                  <BenchtopSurfaceOptions mats={benchtopMats} prefix="surface:" typesLabel="Benchtop library (supply)" showType />
                   <optgroup label="Board library (CNC)">
                     {materials.map(m => (
                       <option key={m.id} value={`board:${m.id}`}>{m.name} ({m.dz}mm)</option>

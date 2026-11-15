@@ -1,6 +1,7 @@
 'use client'
 
 import { Fragment, useEffect, useState } from 'react'
+import { BenchtopSurfaceOptions, SURFACE_MAT_COLS, type SurfaceMat } from '@/src/components/BenchtopSurfaceOptions'
 import { supabase } from '@/src/lib/supabase'
 import BoardColourSelect, { type PickMat } from './BoardColourSelect'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -96,7 +97,7 @@ interface Props {
 export default function MaterialsScheduleTab({ mode, projectId, roomId, showSchedules = true, roleFilter }: Props) {
   const [loading,   setLoading]   = useState(true)
   const [allMats,    setAllMats]    = useState<PickMat[]>([])
-  const [allBtMats,  setAllBtMats]  = useState<{ id: string; name: string; dz: number; material_type: string | null }[]>([])
+  const [allBtMats,  setAllBtMats]  = useState<SurfaceMat[]>([])
   const [schedLists, setSchedLists] = useState<SchedListMap>({})
   const [ownIds,     setOwnIds]     = useState<SchedMap>({})
   const [parentIds,  setParentIds]  = useState<SchedMap>({})
@@ -132,7 +133,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
           ? supabase.from('room_toekick_materials').select('part_role, material_id').eq('room_id', roomId)
           : supabase.from('job_toekick_materials').select('part_role, material_id').eq('project_id', projectId),
         supabase.from('materials').select('id, name, dz, parent_id, colour_name').eq('active', true).order('name'),
-        supabase.from('benchtop_materials').select('id, name, dz, material_type').eq('active', true).order('name'),
+        supabase.from('benchtop_materials').select(SURFACE_MAT_COLS).eq('active', true).order('name'),
         mode === 'room' && roomId
           ? supabase.from('room_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('room_id', roomId)
           : supabase.from('job_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('project_id', projectId),
@@ -188,7 +189,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
       setTkOvr(to)
 
       setAllMats((matsRes.data ?? []) as PickMat[])
-      setAllBtMats((btMatsRes.data ?? []) as { id: string; name: string; dz: number; material_type: string | null }[])
+      setAllBtMats((btMatsRes.data ?? []) as SurfaceMat[])
 
       const bto: MatMap = {}
       for (const r of (btOvrRes.data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null }[]) {
@@ -366,6 +367,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
     const matCol = source === 'benchtop' ? 'benchtop_material_id' : 'material_id'
     // The other library's column is cleared — an override replaces the role's whole choice.
     const other = source === 'benchtop' ? 'material_id' : 'benchtop_material_id'
+    if (matId && source === 'benchtop') useTutorial.getState().emit('bt_surface_override')   // tutorial stone_colours
     if (mode === 'room' && roomId) {
       if (matId) {
         await supabase.from('room_benchtop_materials').upsert(
@@ -595,9 +597,11 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
                 <option value="">
                   {inh ? btMatName(inh, role.source) : '— no schedule value —'}
                 </option>
-                {(catalog as { id: string; name: string; dz: number }[]).map(m => (
-                  <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
-                ))}
+                {role.source === 'benchtop'
+                  ? <BenchtopSurfaceOptions mats={allBtMats} typesLabel="Surfaces (stone, timber, laminate…)" />
+                  : (catalog as { id: string; name: string; dz: number }[]).map(m => (
+                    <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
+                  ))}
               </select>
             </div>
           )
@@ -642,9 +646,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
                 className={`flex-1 max-w-xs ${selCls(!!cur)}`}
               >
                 <option value="">{inhText}</option>
-                <optgroup label="Surfaces (stone, glass, tile…) — supply only">
-                  {allBtMats.map(m => <option key={m.id} value={`surface:${m.id}`}>{m.name} ({m.dz}mm)</option>)}
-                </optgroup>
+                <BenchtopSurfaceOptions mats={allBtMats} prefix="surface:" typesLabel="Surfaces (stone, glass, tile…) — supply only" />
                 <optgroup label="Boards — cut parts">
                   {allMats.map(m => <option key={m.id} value={`board:${m.id}`}>{m.name} ({m.dz}mm)</option>)}
                 </optgroup>

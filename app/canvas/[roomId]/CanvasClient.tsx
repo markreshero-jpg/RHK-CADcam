@@ -742,7 +742,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const btBaseHeight = resolveClassDims('base', { room, project, shop: shopDims }).dy
   const btInfo = (b: BenchtopInstance) => {
     const thick = btCatalog.thicknessFor(b)
-    return { topZ: (b.height_mm ?? btBaseHeight) + thick.total, thick, defaultProfileId: btCatalog.defaultProfileIdFor(b), color: btCatalog.colourFor(b) }
+    return { topZ: (b.height_mm ?? btBaseHeight) + thick.total, thick, defaultProfileId: btCatalog.defaultProfileIdFor(b), color: btCatalog.colourFor(b), texture: btCatalog.textureFor(b) }
   }
   // Edit edges (Phase 7b): the editing top's default tape + profile lookup, for painting.
   const edgeEditBt = bt.edgeEdit ? benchtops.find(b => b.id === bt.edgeEdit!.btId) ?? null : null
@@ -4854,7 +4854,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             const c = btCatalog.forRoom(rm)
             return b => {
               const thick = c.thicknessFor(b)
-              return { topZ: (b.height_mm ?? base) + thick.total, thick, defaultProfileId: c.defaultProfileIdFor(b), color: c.colourFor(b) }
+              return { topZ: (b.height_mm ?? base) + thick.total, thick, defaultProfileId: c.defaultProfileIdFor(b), color: c.colourFor(b), texture: c.textureFor(b) }
             }
           }}
           onDeleteShopShot={id => saveShopShots((room.shop_3d_shots ?? []).filter(s => s.id !== id))}

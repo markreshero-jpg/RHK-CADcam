@@ -2191,6 +2191,20 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Open the room as normal. With no signal it opens the copy on this device, with an amber "Offline copy" bar across the top. View plans and elevations, draw CAD, markups and site measures; they send when signal comes back. Cabinet, wall and fixture changes still need signal: if one fails, a red "✕ not saved" shows next to the save light. "Rooms on this device" lists every room you can open offline.',
       target: 'save-status', canvas: true, done: c => c.view === 'plan' },
   ]},
+  // Appended 2026-11-15 (z_benchtop_colours C2 + C4: stone colours + slab photos).
+  { id: 'stone_colours', level: 'intermediate', topic: 'materials', title: 'Stone colours on benchtops',
+    blurb: 'Pick a YDL or Stone Ambassador colour for the tops and see the real slab in 3D.',
+    keywords: 'stone colour color benchtop slab photo marble veins ydl stone ambassador zenith kaya caesarstone texture 3d', steps: [
+    { id: 'library', title: 'Find the colours',
+      body: 'Go to Library → Materials → Benchtops and click 20mm Stone. Its Colours panel lists every YDL and Stone Ambassador colour with its slab photo, range (price group), finish and slab size. Filter by brand or type a name. + Add colour adds another brand’s colour; Upload puts a slab photo on it (the photo must show the whole slab).',
+      done: c => c.path.startsWith('/library/materials') },
+    { id: 'pick', title: 'Pick the colour for a room or job',
+      body: 'In a room: Room → Properties → Materials (or Job → Cabinet Standards for the whole job). Under Benchtops, open Stone Slab (or Worktop Panel) and pick the colour from its brand group, e.g. 20mm Stone · YDL → Calacatta Classico. Room wins over job.',
+      canvas: true, done: (c, s) => ev(c, 'bt_surface_override') > ev(s, 'bt_surface_override') },
+    { id: 'see', title: 'See it in 3D',
+      body: 'Click 3D. Tops show the slab photo at true size, veins running along the top’s longest edge and over its edges. Elevation fills the top in the stone’s swatch colour. A layer set that colours the Benchtops layer (e.g. Line drawing) shows that colour instead.',
+      target: 'view-3d', canvas: true, done: c => c.view === '3d' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

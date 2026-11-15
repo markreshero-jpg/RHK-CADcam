@@ -1,8 +1,10 @@
 # Benchtop colours + stone patterns (z_benchtop_colours)
 
-> **RESUME HERE (2026-11-14):** C1 built (3D + elevation take the colour of what the top is
-> made of; Library › Materials › Benchtops has a Colour column) — not checked in-app. Next: C1b
-> plan fill, then C2 once Mark answers the open questions below.
+> **RESUME HERE (2026-11-15):** C1 (material colour), C2 (stone colours under a type) and C4
+> (supplier slab photos in 3D) built. 100 colours imported under 20mm Stone: YDL Mineral (43) +
+> Stone Ambassador Zenith / Kaya (57), 89 with slab photos. Checked headless on Test Kitchen /
+> Void Corner Demo (3D slab + library panel); Mark to check in-app. Next: C1b plan fill,
+> porcelain ranges (YDL porcelain, SA Vasari 12mm) if wanted, per-top colour.
 
 Started 2026-11-14 from Mark: "do we have the ability to add stone patterns / colours to our
 benchtops yet". Answer then: no — every top drew in the one layer grey (#e7e5e4) in 3D and teal
@@ -34,6 +36,17 @@ That row points at a `benchtop_materials` row (stone, laminate, timber…) or a 
 3. **No colour set → old look** (3D #e7e5e4, elevation teal #134e4a).
 4. The canvas display now applies the job / room per-role overrides too (it didn't before —
    thickness ignored them), so thickness and colour match the parts list exactly.
+5. **(Mark 2026-11-15) Many colours under one material:** a stone colour is a child row of a
+   stone type (`parent_id`), like board colours (z_material_colours). Schedules / overrides /
+   quote / resolver still key on one `benchtop_material_id` (the colour's id).
+6. **(Mark 2026-11-15) Brands: Stone Ambassador and YDL Stone.** Real slab photos from their
+   sites (C4) instead of generated veining (C3 dropped). The photos are the suppliers' own
+   marketing images — used inside the app to show clients their stone, not republished.
+7. **Slab photo = one whole slab at true size** (`texture_w_mm × texture_h_mm` = the colour's
+   slab size). Laid in plan with the slab's long side along the top's longest edge, in room
+   coordinates (so tops side by side continue the pattern); box-projected on edges and legs.
+   Shown untinted; a Benchtops layer colour wins (no photo then). 3D only; elevation uses the
+   swatch hex (average colour of the photo).
 
 ## Phases
 
@@ -45,24 +58,33 @@ That row points at a `benchtop_materials` row (stone, laminate, timber…) or a 
   real colours on the materials to see a difference.
 - [ ] **C1b Plan fill** in the material colour (light tint under the outline, layer-gated, off
   in line drawing / print).
-- [ ] **C2 Stone colours without a material per colour.** Proposal (mirrors z_material_colours):
-  a colour is a child `benchtop_materials` row (`parent_id` → the stone type, inherits dz /
-  finish / cost, auto-named "20mm Stone – Calacatta Nuvo"), so schedules, overrides, the Benchtop
-  Quote and supply lists keep keying on one id. Library: Colours panel under a stone type (brand,
-  colour name, swatch hex). Job: pick the colour per top / room / job from the existing pickers.
-  *Waits on the open questions.*
-- [ ] **C3 Generated pattern.** Per material: `pattern` (none / marble veins / speckle /
-  concrete), `vein_color`, scale. Drawn procedurally (like woodGrain.ts — no image files), laid in
-  plan coordinates at true scale so veins run on across a top and its joins, waterfall legs
-  continue the slab. Gated by the Benchtops layer; elevation shows a light hint at most.
-- [ ] **C4 Supplier slab images (optional).** Image per stone colour (storage bucket, upload in
-  the library, true-size tile e.g. 3200 × 1600), used untinted instead of C3. Share the MC10
-  upload / bucket work. Needs the image files sourced (Caesarstone, SNB, Smartstone…).
+- [x] **C2 (2026-11-15) Stone colours under a stone type.** Migration
+  `migration_c2_stone_colours.sql` (applied live): `benchtop_materials.parent_id, colour_name,
+  colour_code, range_name, overridden, texture_path, thumb_path, texture_w_mm, texture_h_mm,
+  source_url`; trigger `benchtop_colour_inherit` copies dz / material_type / grain / edge profile
+  from the type, finish if blank, sheet size unless `overridden`, and names the row
+  "<type> – <brand> <colour>"; `benchtop_type_propagate` pushes type edits down. Library ›
+  Materials › Benchtops lists types only (chip "N colours"); clicking a type opens
+  `BenchtopColoursEditor` (photo, brand, colour, code, range, finish, swatch, slab size, $/m,
+  source link, active; brand filter + search; + Add colour; Upload / Replace / ✕ photo).
+  Pickers (job / room Materials tab benchtop + splashback roles, Library › Schedules) group the
+  colours per type + brand (`src/components/BenchtopSurfaceOptions.tsx`). Per-top colour = a
+  schedule per top for now.
+- ~~C3 Generated pattern~~ — dropped (Mark chose real slab photos).
+- [x] **C4 (2026-11-15) Supplier slab photos.** Public bucket `benchtop-textures` (admin write),
+  `<brand>/<colour>.jpg` (≤ 4096 px) + `-thumb.jpg`. `useBenchtopCatalog.textureFor` →
+  `BtElevInfo.texture` → `Room3DScene` BenchtopMesh: `src/components/three/slabTexture.ts`
+  (`useSlabTexture` cache, `slabUvGeometry` box projection). Import: `stone-colours.json` +
+  `import-stone-colours.mjs`; fetch / crop tooling + notes in `tools/README.md`.
+  Imported: YDL Mineral 43 (38 photos; Jasmine, Mondo Sand, Silver Star White, Star Burst have
+  no published slab, Jasmine / Silver Star White no swatch either), Stone Ambassador 20mm
+  Zenith + Kaya 57 (51 photos; Nimbus Grey, Mink Grey, Terazio, Beton, Elysian White publish
+  none, Pearl White / Carrara Mist photos over-exposed → swatch only). WA-only colours and the
+  discontinued Enchanted White skipped. Not imported yet: YDL porcelain, SA Vasari 12mm porcelain.
 
 ## Open questions for Mark
 
-1. C2: OK with "stone type → colours" (one 20mm Stone row, many colours under it), or keep one
-   material per colour as now?
-2. Which stone ranges / colours do you use most? (to seed C2 and set swatches)
-3. C3: is a generated marble / speckle look enough for client 3D views, or do you want the real
-   slab photos (C4) from the start?
+1. Porcelain too (YDL porcelain 12mm, Stone Ambassador Vasari 12mm) — under "12mm Stone"?
+2. Prices per range (Zenith Premium, YDL Premium Plus…) — set $/m per colour, or per range?
+3. Per-top colour (two colours in one room, e.g. island vs perimeter) — a picker on the top, or
+   keep using a schedule per top?

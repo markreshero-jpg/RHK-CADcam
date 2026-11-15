@@ -211,7 +211,7 @@ export default function BoardColoursEditor({ board, colours, edgebands, onColour
 
 // ── Inline cells: edit locally, save on blur / Enter ─────────────────────────
 
-function TextCell({ value, w, onCommit }: { value: unknown; w: number; onCommit: (v: string) => void }) {
+export function TextCell({ value, w, onCommit }: { value: unknown; w: number; onCommit: (v: string) => void }) {
   const init = value == null ? '' : String(value)
   const [v, setV] = useState(init)
   const [seen, setSeen] = useState(init)
@@ -227,7 +227,7 @@ function TextCell({ value, w, onCommit }: { value: unknown; w: number; onCommit:
   )
 }
 
-function NumCell({ value, step, overridden, onCommit }: { value: unknown; step?: string; overridden?: boolean; onCommit: (v: string) => void }) {
+export function NumCell({ value, step, overridden, onCommit }: { value: unknown; step?: string; overridden?: boolean; onCommit: (v: string) => void }) {
   const init = value == null ? '' : String(Number(value))
   const [v, setV] = useState(init)
   const [seen, setSeen] = useState(init)
@@ -247,7 +247,7 @@ function NumCell({ value, step, overridden, onCommit }: { value: unknown; step?:
   )
 }
 
-function ColourCell({ value, blankLabel, onCommit }: { value: unknown; blankLabel?: string; onCommit: (v: string | null) => void }) {
+export function ColourCell({ value, blankLabel, onCommit }: { value: unknown; blankLabel?: string; onCommit: (v: string | null) => void }) {
   const init = value ? String(value) : ''
   const [hex, setHex] = useState(init)
   const [seen, setSeen] = useState(init)

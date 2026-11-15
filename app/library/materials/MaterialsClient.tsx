@@ -9,6 +9,7 @@ import SlideDrillingEditor from './SlideDrillingEditor'
 import HingeDetailEditor from './HingeDetailEditor'
 import HandleModelEditor from './HandleModelEditor'
 import BoardColoursEditor from './BoardColoursEditor'
+import BenchtopColoursEditor from './BenchtopColoursEditor'
 import LiftSystemExtras, { parseCompanions } from './LiftSystemExtras'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -484,9 +485,11 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
   // Board Stock lists boards only; colour rows (parent_id set) live under their
   // board in the Colours panel (z_material_colours). The name filter also
   // finds a board by one of its colours.
+  // Benchtops do the same for stone colours (z_benchtop_colours C2).
   const isBoardTab = activeTab === 'board'
-  const baseRows = isBoardTab ? rows.filter(r => !r.parent_id) : rows
-  const coloursOf = (boardId: unknown) => isBoardTab ? rows.filter(r => r.parent_id === boardId) : []
+  const hasColours = isBoardTab || activeTab === 'benchtop'
+  const baseRows = hasColours ? rows.filter(r => !r.parent_id) : rows
+  const coloursOf = (boardId: unknown) => hasColours ? rows.filter(r => r.parent_id === boardId) : []
 
   const visibleRows = baseRows.filter(r => {
     if (!showInactive && r.active === false) return false
@@ -558,9 +561,9 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         }))
         // Board edits flow into its colours by DB trigger (name, thickness,
         // sheet size…): read them back so the Colours panel is current.
-        if (isBoardTab) {
-          const { data: cols } = await supabase.from('materials').select('*').eq('parent_id', editingId)
-          if (cols?.length) upsertBoardRows(cols as Record<string, unknown>[])
+        if (hasColours) {
+          const { data: cols } = await supabase.from(tab.table).select('*').eq('parent_id', editingId)
+          if (cols?.length) upsertBoardRows(cols as Record<string, unknown>[], activeTab)
         }
       } else {
         console.error('update error:', error)
@@ -578,12 +581,13 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
     setSaving(false)
   }
 
-  function upsertBoardRows(fresh: Record<string, unknown>[]) {
+  function upsertBoardRows(fresh: Record<string, unknown>[], tabId: string = 'board') {
     setAllRows(prev => {
       const byId = new Map(fresh.map(r => [r.id, r]))
-      const kept = prev.board.map(r => byId.has(r.id) ? { ...r, ...byId.get(r.id)! } : r)
-      const added = fresh.filter(r => !prev.board.some(x => x.id === r.id))
-      return { ...prev, board: [...kept, ...added] }
+      const cur = prev[tabId] ?? []
+      const kept = cur.map(r => byId.has(r.id) ? { ...r, ...byId.get(r.id)! } : r)
+      const added = fresh.filter(r => !cur.some(x => x.id === r.id))
+      return { ...prev, [tabId]: [...kept, ...added] }
     })
   }
 
@@ -848,6 +852,20 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
           )
         })()}
 
+        {/* ── Stone colours (z_benchtop_colours C2), when editing a benchtop type ── */}
+        {activeTab === 'benchtop' && editingId && (() => {
+          const r = rows.find(x => x.id === editingId)
+          if (!r || r.parent_id) return null
+          return (
+            <BenchtopColoursEditor
+              key={`btcolours-${editingId}`}
+              type={r}
+              colours={coloursOf(editingId)}
+              onColours={fresh => upsertBoardRows(fresh, 'benchtop')}
+            />
+          )
+        })()}
+
         {/* ── Board colours (z_material_colours MC2), when editing a board ── */}
         {isBoardTab && editingId && (() => {
           const r = rows.find(x => x.id === editingId)
@@ -947,7 +965,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                             {row[f.key] ? String(row[f.key]) : '—'}
                           </span>
                         </>
-                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : isSupportKey(f.key) ? supportLabel(row[f.key]) : isBoardTab && f.key === 'name' ? (
+                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : isSupportKey(f.key) ? supportLabel(row[f.key]) : hasColours && f.key === 'name' ? (
                         <>
                           {fmtCell(row[f.key], f)}
                           {(() => {

@@ -19,6 +19,7 @@
 // ============================================================
 
 import { Fragment } from 'react'
+import type { SlabTexture } from '@/src/lib/benchtopTextures'
 import { useLineScale } from '@/src/lib/usePhone'
 import type { BenchtopInstance, BenchtopEdgeProfile, Wall } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -38,6 +39,8 @@ export interface BtElevInfo {
   defaultProfileId: string | null
   /** Display colour of what the top is made of (z_benchtop_colours C1); null/absent = layer default. */
   color?: string | null
+  /** Slab photo of the stone colour (z_benchtop_colours C4) — 3D only. */
+  texture?: SlabTexture | null
 }
 
 const dot = (a: Pt, b: Pt) => a.x * b.x + a.y * b.y

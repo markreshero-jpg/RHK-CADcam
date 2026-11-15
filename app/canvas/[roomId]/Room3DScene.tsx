@@ -27,6 +27,9 @@ import type { CabinetOpMarker } from '@/src/lib/optimiser/partOpProject'
 import Measure3D, { NO_MEASURE } from './Measure3D'
 import Fixtures3D, { type Fixtures3DProps } from './Fixtures3D'
 import { benchtopGeometries } from '@/src/lib/benchtopSolids'
+import { btSegments } from '@/src/lib/benchtopGeometry'
+import { slabUvGeometry, useSlabTexture } from '@/src/components/three/slabTexture'
+import type { SlabTexture } from '@/src/lib/benchtopTextures'
 import Splashbacks3D, { type Sb3DProps } from './Splashback3D'
 import { cabPlacement3d } from '@/src/lib/cabPlacement3d'
 
@@ -221,7 +224,7 @@ function WallLabel({ wall, room, rc }: { wall: Wall; room: Room; rc: RoomRef }) 
 // its surface sits at topZ, plus waterfall legs and mitred aprons — built by
 // benchtopGeometries (src/lib/benchtopSolids.ts). Same plan → world mapping as WallMesh.
 
-function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wire = false }: {
+function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, texture, alpha, wire = false }: {
   bt: BenchtopInstance
   info: BtElevInfo
   profiles: Record<string, BenchtopEdgeProfile>
@@ -229,6 +232,8 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
   /** Absent (click-through) while measuring, or in wire view outside F4 Benchtop mode. */
   onSelect?: () => void
   color: string
+  /** Stone slab photo (z_benchtop_colours C4), drawn untinted at true size; absent = flat colour. */
+  texture?: SlabTexture | null
   alpha: number
   wire?: boolean
 }) {
@@ -236,15 +241,28 @@ function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, alpha, wi
   // eslint-disable-next-line react-hooks/exhaustive-deps -- info is rebuilt per render; its fields are the inputs
   const geos = useMemo(() => benchtopGeometries(bt, info, profiles), [bt, info.topZ, info.thick.total, info.defaultProfileId, profiles])
   useEffect(() => () => { geos.forEach(g => g.geo.dispose()) }, [geos])
+  // Slab photo: UVs in slab units, the slab's long side along the top's longest edge.
+  const map = useSlabTexture(wire ? null : texture?.url)
+  const uvGeos = useMemo(() => {
+    if (!map || !texture) return null
+    let best = 0, angle = 0
+    for (const s of btSegments(bt)) {
+      const L = Math.hypot(s.p1.x - s.p0.x, s.p1.y - s.p0.y)
+      if (L > best) { best = L; angle = Math.atan2(s.p1.y - s.p0.y, s.p1.x - s.p0.x) }
+    }
+    return geos.map(g => slabUvGeometry(g.geo, texture.wMm, texture.hMm, angle))
+  }, [geos, map, texture, bt])
+  useEffect(() => () => { uvGeos?.forEach(g => g.dispose()) }, [uvGeos])
 
   if (!geos.length) return null
-  const col = selected ? '#f59e0b' : color
+  const textured = !!(map && uvGeos && !selected)
+  const col = selected ? '#f59e0b' : textured ? '#ffffff' : color
   const click = onSelect ? (e: { stopPropagation: () => void }) => { e.stopPropagation(); onSelect() } : undefined
   return (
     <group>
-      {geos.map(m => (
-        <mesh key={m.key + (wire ? '-w' : '')} geometry={m.geo} onClick={click}>
-          <meshStandardMaterial color={col} roughness={0.5} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
+      {geos.map((m, i) => (
+        <mesh key={m.key + (wire ? '-w' : '') + (textured ? '-t' : '')} geometry={textured ? uvGeos![i] : m.geo} onClick={click}>
+          <meshStandardMaterial color={col} map={textured ? map : null} roughness={textured ? 0.35 : 0.5} metalness={0} {...alphaMat(wire ? Math.min(alpha, WIRE_GHOST_ALPHA) : alpha)} />
           <Edges threshold={20} color={selected ? '#f59e0b' : wire ? WIRE_EDGE : '#64748b'} transparent opacity={wire ? Math.max(alpha, 0.8) : alpha} />
         </mesh>
       ))}
@@ -937,7 +955,9 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
             // measuring, nor in wire view outside F4 — a ghosted top would steal
             // clicks meant for the cabinets seen through it.
             selected={bt.selectedId === b.id} onSelect={!measuring && (pickBenchtops || !wire) ? () => bt.onSelect(b.id) : undefined}
-            color={layers.colorOf('benchtops') ?? bt.info(b).color ?? '#e7e5e4'} alpha={layers.alpha('benchtops')} wire={wire} />
+            color={layers.colorOf('benchtops') ?? bt.info(b).color ?? '#e7e5e4'}
+            // A layer colour wins over the stone (decision 2) — no photo then.
+            texture={layers.colorOf('benchtops') ? null : bt.info(b).texture} alpha={layers.alpha('benchtops')} wire={wire} />
         )
       ))}
 
