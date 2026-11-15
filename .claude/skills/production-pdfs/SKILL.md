@@ -21,8 +21,9 @@ Two PDFs per batch of rooms, all rooms of the batch in ONE PDF, named like the o
 | Kick plan | Plan View only (one plan page per room) | **Kicks** | same name + ` KICK PLAN.pdf` |
 
 e.g. `RHK6581 - Lee Smith - J11 J12 WIR and Master Store.pdf` + `… KICK PLAN.pdf`. Look at the folder's
-existing names first and match them. Never overwrite a file that's there — if the name exists, ask
-(Mark moves old ones to `_Superseeded`).
+existing names first and match them. Never overwrite a file that's there — if the name exists, ask. When Mark asks
+to redo one, move the old one to `PDF\Production\_Superseeded\` with its date added
+(`… KICK PLAN 13.11.26.pdf`) and save the new one under the same name.
 
 ## How
 
@@ -38,6 +39,11 @@ node z_plan_automation/export-shop-drawings.mjs <any roomId of the job> "$O" --o
 
 - `--only` takes the room names exactly as the app shows them (`WIR J11`, `Master Store J12`).
 - Default set is Line Drawing Print; `--set` changes it. `--report plan_view_v2` = plan only.
+- Joined kicks print their names (KICK 1, KICK 2 …) on the kick plan (Kick names layer, on in the Kicks set).
+  A cabinet's own kick (not joined) has no kick name.
+- A big room at 1:20 can push the spec block off the right edge of the Plan View page — look at the
+  render; if it's cut off, re-export with `--scale 25` (RHK6581 kitchen). Don't use the Shop Drawings
+  report for the kick plan: on the Kicks set it drops the notes and spec block (seen 2026-11-15).
 - The app names them `Shop_Drawings-<job>-<n>-rooms.pdf` / `Plan_View-<job>-<n>-rooms.pdf`; copy to the
   Production name.
 

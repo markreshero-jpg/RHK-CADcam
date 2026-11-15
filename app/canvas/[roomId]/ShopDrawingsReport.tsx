@@ -176,7 +176,11 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   const [elevSet, setElevSetId] = useReportLayerSet('elevation-print-layer-set', layerSets, activeLayerSetId)
   // Shop drawings never print cabinet names on the plan nor sizes on the elevations
   // (Mark, 2026-10-21), whatever the layer set — the spec block / schedules carry them.
-  const planLayers = useMemo(() => without(resolveLayerView(planSet, 'plan'), 'cabinet_labels', 'kick_labels'), [planSet])
+  // Kick names only where the set turns them on outright (the Kicks set's KICK PLAN, Mark 2026-11-15).
+  const planLayers = useMemo(() => {
+    const kickNames = planSet?.settings?.plan?.items?.kick_labels?.visible === true
+    return without(resolveLayerView(planSet, 'plan'), 'cabinet_labels', ...(kickNames ? [] : ['kick_labels']))
+  }, [planSet])
   const elevLayers = useMemo(() => without(resolveLayerView(elevSet, 'elevation'), 'cabinet_sizes'), [elevSet])
   const planAnnots = useMemo(() => annotations.filter(a => a.view === 'plan'), [annotations])
   const [planShow] = useState<PlanViewPageOptions>(() => ({
