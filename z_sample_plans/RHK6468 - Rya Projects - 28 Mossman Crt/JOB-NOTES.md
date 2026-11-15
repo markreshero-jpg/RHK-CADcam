@@ -160,6 +160,11 @@ Overhead hinges [100, 610, 831] to clear the adj shelf holes.
   the 20 stone, front 50 back from the top edge. Abey Lucia gooseneck mixer behind it (hole 45
   behind the bowl, ~40 off the wall). Both linked to BC-01. Generic tub catalog row retired.
 
+### Rev 3 (Mark 2026-11-15) - `_tmp-6468-laundry-oh5.mjs`, `-oh5b.mjs`
+- Top overhangs 5 past the BEPF at the door: BC-01 / BC-02 1094 -> 1091.5, BEPF (BC-03)
+  2854.5 -> 2849.5, KICK 1 2188 -> 2183. Top unchanged (to 2871). Tub + tap re-centred on BC-01.
+- Overheads WC-02 / WC-03 / WEP WC-04 left as they were (still to 2871).
+
 ### Open / TBC
 - [ ] Stone colour.
 - [ ] Handles (drawn without).
