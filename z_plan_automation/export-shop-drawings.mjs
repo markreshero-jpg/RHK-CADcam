@@ -1,6 +1,9 @@
 // Download a job's Shop Drawings PDFs headlessly through Job Reports.
 //   node z_plan_automation/export-shop-drawings.mjs <roomId> <outDir> [--one] [--set "<layer set name>"] [--skip "<room name>"]…
+//        [--only "<room name>"]… [--report plan_view_v2]
 // One PDF per ticked room (all rooms), or with --one a single combined PDF.
+// --only: tick just these rooms. --report: another Job Reports drawing report (default shop_drawings;
+// plan_view_v2 = plan only, e.g. the KICK PLAN with --set Kicks).
 // Layer set for the plan, elevations and 3D: "Line Drawing Print" unless --set (Mark, 2026-10-28).
 import fs from 'node:fs'
 import path from 'node:path'
@@ -13,6 +16,8 @@ const OUT = path.resolve(OUT_ARG)
 const ONE = argv.includes('--one')
 const SET_NAME = argv.includes('--set') ? argv[argv.indexOf('--set') + 1] : 'Line Drawing Print'
 const SKIP = argv.flatMap((a, i) => a === '--skip' ? [argv[i + 1]] : [])
+const ONLY = argv.flatMap((a, i) => a === '--only' ? [argv[i + 1]] : [])
+const REPORT = argv.includes('--report') ? argv[argv.indexOf('--report') + 1] : 'shop_drawings'
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 fs.mkdirSync(OUT, { recursive: true })
 const START = Date.now()
@@ -49,7 +54,7 @@ try {
   }
   await clickText('Reports'); await clickText('Room Reports…')
   await clickText('Job Reports', 'button')
-  await page.click('[data-tour="report-shop_drawings"]'); await sleep(1500)
+  await page.click(`[data-tour="report-${REPORT}"]`); await sleep(1500)
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => /^Download \d+ rooms?$/.test(b.textContent.trim())), { timeout: 60000 })
   // --skip "<room name>" (repeatable): untick that room in the Rooms row (its ☑ button sits before the name).
   for (const name of SKIP) {
@@ -57,8 +62,19 @@ try {
     if (!ok) throw new Error('room to skip not found: ' + name)
     console.log('skipped room:', name); await sleep(500)
   }
+  // --only "<room name>" (repeatable): untick every other room.
+  if (ONLY.length) {
+    const r = await page.evaluate(only => {
+      const rows = [...document.querySelectorAll('button')].filter(e => /^[☑☐]$/.test(e.previousElementSibling?.textContent.trim() ?? ''))
+      const names = rows.map(b => b.textContent.trim())
+      for (const b of rows) { const ticked = b.previousElementSibling.textContent.trim() === '☑'; if (ticked !== only.includes(b.textContent.trim())) b.previousElementSibling.click() }
+      return { names, missing: only.filter(n => !names.includes(n)) }
+    }, ONLY)
+    if (r.missing.length) throw new Error('rooms not found: ' + r.missing.join(', ') + ' — have: ' + r.names.join(', '))
+    console.log('only rooms:', ONLY.join(', ')); await sleep(800)
+  }
   const shown = await page.evaluate(() => [...document.querySelectorAll('select[data-report-layer-set]')].map(s => s.selectedOptions[0]?.textContent))
-  console.log('report layer sets (plan | elevations | 3D):', shown.join(' | '))
+  console.log('report layer sets (plan | elevations | 3D):', shown.length ? shown.join(' | ') : `(no picker shown — seeded "${SET.name}" via localStorage)`)
   if (shown.some(n => n !== SET.name)) throw new Error(`a report section is not on "${SET.name}"`)
   const label = await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(b => /^Download \d+ rooms?$/.test(b.textContent.trim())); b.click(); return b.textContent.trim() })
   console.log(label, ONE ? '(one PDF)' : '(one per room)')
