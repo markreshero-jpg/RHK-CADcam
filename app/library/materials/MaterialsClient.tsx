@@ -9,6 +9,7 @@ import SlideDrillingEditor from './SlideDrillingEditor'
 import HingeDetailEditor from './HingeDetailEditor'
 import HandleModelEditor from './HandleModelEditor'
 import BoardColoursEditor from './BoardColoursEditor'
+import LiftSystemExtras from './LiftSystemExtras'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,6 +42,7 @@ interface InitialData {
   handles:  Record<string, unknown>[]
   slides:   Record<string, unknown>[]
   accessories: Record<string, unknown>[]
+  lifts:       Record<string, unknown>[]
 }
 
 // ─── Tab configs ──────────────────────────────────────────────────────────────
@@ -276,6 +278,69 @@ const TABS: TabConfig[] = [
       { key: 'active',        label: 'Active',   type: 'boolean', w: 48 },
     ],
   },
+  {
+    // Lift systems (z_lift_systems LS1): Blum Aventos mechanisms + the lines
+    // that go with them. LS code = Lincoln Sentry product code (what we order);
+    // Blum code kept for Blum's docs. Mechanism rows carry the power factor
+    // (KH mm x front kg, handle x2) and cabinet height ranges the pick uses.
+    id: 'lifts', label: 'Lift systems', table: 'hardware_lift_systems', initKey: 'lifts',
+    defaults: { name: '', brand: 'Blum', family: 'hk_top', role: 'mechanism', supplier_code: null, maker_code: null, lf_min: null, lf_max: null, kh_min: null, kh_max: null, kb_max: null, max_front_kg: null, tip_on: false, fixing: null, colour: null, qty_per_front: 1, cost_per_unit: 0, is_default: false, active: true },
+    fields: [
+      { key: 'name',          label: 'Name',      type: 'text',    w: 220 },
+      { key: 'brand',         label: 'Brand',     type: 'text',    w: 70 },
+      { key: 'family',        label: 'Family',    type: 'select',  w: 80,
+        options: [
+          { value: 'hk_top', label: 'HK top' },
+          { value: 'hk_s',   label: 'HK-S' },
+          { value: 'hk_xs',  label: 'HK-XS' },
+          { value: 'hf_top', label: 'HF top' },
+          { value: 'hl_top', label: 'HL top' },
+          { value: 'hs_top', label: 'HS top' },
+          { value: 'hki',    label: 'HKi' },
+          { value: 'other',  label: 'Other' },
+        ],
+      },
+      { key: 'role',          label: 'Part',      type: 'select',  w: 100,
+        options: [
+          { value: 'mechanism',      label: 'Mechanism' },
+          { value: 'lever_arm',      label: 'Lever arm' },
+          { value: 'front_bracket',  label: 'Front bracket' },
+          { value: 'cabinet_fixing', label: 'Cabinet fixing' },
+          { value: 'cover_cap',      label: 'Cover cap' },
+          { value: 'tip_on',         label: 'TIP-ON' },
+          { value: 'opening_stop',   label: 'Opening stop' },
+          { value: 'hinge',          label: 'Hinge' },
+          { value: 'servo',          label: 'SERVO-DRIVE' },
+          { value: 'other',          label: 'Other' },
+        ],
+      },
+      { key: 'supplier_code', label: 'LS code',   type: 'text',    w: 70 },
+      { key: 'maker_code',    label: 'Blum code', type: 'text',    w: 80 },
+      { key: 'lf_min',        label: 'PF min',    type: 'number',  w: 60 },
+      { key: 'lf_max',        label: 'PF max',    type: 'number',  w: 60 },
+      { key: 'kh_min',        label: 'Ht min',    type: 'number',  w: 56 },
+      { key: 'kh_max',        label: 'Ht max',    type: 'number',  w: 56 },
+      { key: 'kb_max',        label: 'W max',     type: 'number',  w: 56 },
+      { key: 'max_front_kg',  label: 'Max kg',    type: 'number',  w: 54 },
+      { key: 'tip_on',        label: 'TIP-ON',    type: 'boolean', w: 52 },
+      { key: 'fixing',        label: 'Fixing',    type: 'select',  w: 90,
+        options: [
+          { value: '',          label: '—' },
+          { value: 'chipboard', label: 'Chipboard' },
+          { value: 'system',    label: 'System screw' },
+          { value: 'screw_on',  label: 'Screw-on' },
+          { value: 'edowel',    label: 'E-dowel' },
+          { value: 'expando',   label: 'EXPANDO' },
+          { value: 'expando_t', label: 'EXPANDO T' },
+        ],
+      },
+      { key: 'colour',        label: 'Colour',    type: 'text',    w: 80 },
+      { key: 'qty_per_front', label: 'Qty/front', type: 'number',  w: 62 },
+      { key: 'cost_per_unit', label: '$/ea',      type: 'number',  w: 60,  step: '0.01' },
+      { key: 'is_default',    label: 'Default',   type: 'boolean', w: 52 },
+      { key: 'active',        label: 'Active',    type: 'boolean', w: 48 },
+    ],
+  },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -339,7 +404,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
     if (initialData) return
     let cancelled = false
     async function load() {
-      const [boards, bands, benchtops, hinges, handles, slides, accessories] = await Promise.all([
+      const [boards, bands, benchtops, hinges, handles, slides, accessories, lifts] = await Promise.all([
         supabase.from('materials').select('*').order('name'),
         supabase.from('edge_banding').select('*').order('name'),
         supabase.from('benchtop_materials').select('*').order('name'),
@@ -347,6 +412,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         supabase.from('hardware_handles').select('*').order('name'),
         supabase.from('hardware_slides').select('*').order('name'),
         supabase.from('hardware_accessories').select('*').order('name'),
+        supabase.from('hardware_lift_systems').select('*').order('name'),
       ])
       if (cancelled) return
       setAllRows({
@@ -357,6 +423,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         handles:  (handles.data   ?? []) as Record<string, unknown>[],
         slides:   (slides.data    ?? []) as Record<string, unknown>[],
         accessories: (accessories.data ?? []) as Record<string, unknown>[],
+        lifts:       (lifts.data ?? []) as Record<string, unknown>[],
       })
     }
     load()
@@ -745,6 +812,25 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                 setAllRows(prev => ({
                   ...prev,
                   handles: prev.handles.map(x => x.id === editingId ? { ...x, ...patch } : x),
+                }))
+              }}
+            />
+          )
+        })()}
+
+        {/* ── Lift system companions + model (z_lift_systems LS1) ── */}
+        {activeTab === 'lifts' && editingId && (() => {
+          const r = rows.find(x => x.id === editingId)
+          if (!r) return null
+          return (
+            <LiftSystemExtras
+              key={`lift-${editingId}`}
+              row={r}
+              allRows={rows}
+              onSaved={patch => {
+                setAllRows(prev => ({
+                  ...prev,
+                  lifts: prev.lifts.map(x => x.id === editingId ? { ...x, ...patch } : x),
                 }))
               }}
             />

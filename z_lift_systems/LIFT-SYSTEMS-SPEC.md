@@ -1,11 +1,8 @@
 # Lift systems (Blum Aventos) — Spec & Phase Tracker
 
-> **RESUME HERE** → 2026-11-14 Mark OK'd the library shape (own **Lift systems** tab, Lincoln Sentry codes,
-> GLBs later). Power factor rules + LS codes (checked against the LS price list, no prices) collected below.
-> **Nothing built.** Next: LS1 (table + tab + seed). Still open: Q1 / Q3 below, HK-S front fixing code.
->
-> Library cupboard **W1LU** exists (wall, one top-hinged lift-up flap, no hinges, TIP-ON push to open,
-> 375 x 600 x 300 default) — RHK6468 butler's pantry.
+> **RESUME HERE** → 2026-11-15 **LS1 built**: table `hardware_lift_systems` (63 Blum rows, LS codes, cost 0),
+> **Lift systems** tab in Materials & Hardware, parts list ("Goes with it") + 3D model upload under each row.
+> In-app check pending. Next: LS2 (pick per front by power factor). Still open: Q1 / Q3, HK-S front fixing code.
 
 ## Done
 
@@ -137,24 +134,32 @@ Old-generation HF (20F…, 21F…) lines are also on the list (7102326, 7102364�
 
 Source pages: Blum catalogue 2024-25 pp.20–22 (HF top), 44–47 (HK top), 54–56 (HK-S), 61–63 (HK-XS).
 
-## Proposed data (LS1)
+## Data (LS1, built 2026-11-15)
 
-- `hardware_lift_systems` — one row per **orderable kit line**: `name, brand, family` (hk_top / hk_s /
-  hk_xs / hf_top / hl_top / hs_top), `code` (LS), `maker_code` (Blum), `role` (`mechanism` / `lever_arm` /
-  `front_bracket` / `cabinet_fixing` / `cover_cap` / `tip_on` / `servo`), `lf_min, lf_max, kh_min, kh_max,
-  kb_max, max_front_kg`, `tip_on` bool, `fixing` (chip / sys), `colour`, `cost`, `model_url`, `active`,
-  `notes`.
-- A **lift set** the front picks = one mechanism row + its companion rows (`companions` jsonb: [{id, qty}])
-  so the hardware list prints every LS line (mechanism pair, brackets, cover caps, TIP-ON unit, arms).
-- Face zone `lift_id` (like `handle_id`) = the family/default; the resolver picks the mechanism row in
-  that family from LF. W1LU defaults to HK top + TIP-ON.
+Migration `migration_ls1_lift_systems.sql` (applied).
+
+- `hardware_lift_systems` — one row per orderable LS line: `name, brand, family` (hk_top / hk_s / hk_xs /
+  hf_top / hl_top / hs_top / hki / other), `role` (mechanism / lever_arm / front_bracket / cabinet_fixing /
+  cover_cap / tip_on / opening_stop / hinge / servo / other), `supplier_code` (LS code — same column name as
+  the other hardware tables), `maker_code` (Blum), `lf_min, lf_max, kh_min, kh_max, kb_max, max_front_kg`,
+  `tip_on`, `fixing` (chipboard / system / screw_on / edowel / expando / expando_t), `colour`,
+  `qty_per_front`, `companions`, `cost_per_unit` (0 / blank until RHKCRM), `is_default`, `active`, `notes`,
+  `model_url, model_format, model_scale`. Policies: read authenticated, write admin.
+- `companions` = `[{id, qty}]` per **mechanism row**; per front the hardware list takes
+  `qty × qty_per_front`. HK-XS mechanisms are each (`qty_per_front` 2), each with 1 cabinet + 1 front fixing.
+  Seeded: HK top → E-dowel front bracket + white cover caps; HK-S → 2 front fixings (+ TIP-ON 50 on the T
+  versions); HK-XS → cabinet + front fixing; HF top → white cover caps (lever arm picked by height in LS2,
+  arms mount on 177H3100 hinge plates from the Hinges tab).
+- Bucket `lift-models` (public read, admin write, own policies).
+- Still to come (LS2): face zone `lift_id` (like `handle_id`) = the family/default; the resolver picks the
+  mechanism row in that family from LF. W1LU defaults to HK top + TIP-ON.
 
 ## Phases
 
 | Phase | What | Status |
 |---|---|---|
 | LS0 | Spec, Blum rules, LS codes | [x] 2026-11-14 |
-| LS1 | `hardware_lift_systems` table + policies + Lift systems tab + seed | [ ] |
+| LS1 | `hardware_lift_systems` table + policies + Lift systems tab + seed | [x] 2026-11-15, check pending |
 | LS2 | Face `lift_id`, power factor pick + warnings, hardware list lines | [ ] |
 | LS3 | Drilling (gable mechanism screws, front brackets, TIP-ON) via joints library — needs Blum assembly pages | [ ] |
 | LS4 | Elevation symbol (lift arc), GLB upload + 3D open/closed | [ ] |
