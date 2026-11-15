@@ -143,6 +143,24 @@ export function useSplashbacks(args: {
     return sb
   }
 
+  /** Several new pieces at once (S4 auto-build): one undo step, labels continue the count. */
+  async function createMany(ds: Pick<SplashbackInstance, 'wall_id' | 'wall_side' | 'segments' | 'notes'>[]) {
+    if (!ds.length) return []
+    captureSnapshot()
+    const rows = ds.map((d, i) => ({
+      room_id: room.id,
+      label: `Splashback ${splashbacks.length + i + 1}`,
+      ...d,
+      cutouts: [], offset_mm: 0, thickness_mm: null, opening_reveal_mm: 0,
+      splashback_schedule_id: null,
+    }))
+    const { data, error } = await supabase.from('splashback_instances').insert(rows).select()
+    if (error || !data) { console.error('Failed to create splashbacks:', error); return [] }
+    const made = data as SplashbackInstance[]
+    setSplashbacks(s => [...s, ...made])
+    return made
+  }
+
   async function update(id: string, u: Partial<SplashbackInstance>, snapshot = true) {
     if (snapshot) captureSnapshot()
     const patch = { ...u, updated_at: new Date().toISOString() }
@@ -167,5 +185,5 @@ export function useSplashbacks(args: {
 
   const scheduleOptions = useMemo(() => schedules, [schedules])
 
-  return { infoFor, forRoom, create, update, remove, sizeOf, scheduleOptions }
+  return { infoFor, forRoom, create, createMany, update, remove, sizeOf, scheduleOptions }
 }

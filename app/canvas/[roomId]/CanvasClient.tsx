@@ -127,6 +127,8 @@ import BenchtopPanel from './BenchtopPanel'
 import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPanel'
 import BenchtopJoinDialog from './BenchtopJoinDialog'
 import BenchtopAutoBuildDialog from './BenchtopAutoBuildDialog'
+import SplashbackAutoBuildDialog from './SplashbackAutoBuildDialog'
+import { autoBuildSplashbacks, type AutoSbPiece } from '@/src/lib/splashbackAutoBuild'
 import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
 import CabinetShapeEditPanel from './CabinetShapeEditPanel'
 import CabinetShapeEditPlan, { shapeEditGeo, shapeEditPickAt } from './CabinetShapeEditPlan'
@@ -827,6 +829,22 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (!isBenchtopMode(mode)) setMode('benchtop_select')
     setAutoBuild({ cabIds, front })
     useTutorial.getState().emit('bt_autobuild_open')   // tutorial auto_tops
+  }
+
+  // F4 → Auto-build splashbacks (z_splashback S4): one piece per wall face a top
+  // sits against, listed for ticking; walls already drawn are skipped.
+  const [sbAuto, setSbAuto] = useState<AutoSbPiece[] | null>(null)
+  function openSplashbackAutoBuild() {
+    const stub = (wall_id: string, wall_side: 'face' | 'back') =>
+      ({ id: '', room_id: room.id, label: null, wall_id, wall_side, segments: [], cutouts: [], offset_mm: 0, thickness_mm: null,
+        opening_reveal_mm: 0, splashback_schedule_id: null, notes: null }) as unknown as SplashbackInstance
+    setSbAuto(autoBuildSplashbacks({
+      walls, room, cabinets, fixtures, benchtops, existing: splashbacks,
+      topZ: b => btInfo(b).topZ,
+      thickFor: (w, s) => sbk.infoFor(stub(w, s)).thick,
+      thickOf: s => sbk.infoFor(s).thick,
+    }))
+    setMultiSelect([])
   }
 
   // ── Coordinate helpers ────────────────────────────────────────────────────
@@ -3676,6 +3694,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           setBenchtopMenuOpen={bt.setBenchtopMenuOpen}
           onDrawBenchtopInShapeEditor={drawBenchtopInShapeEditor}
           onAutoBuildBenchtops={() => void openAutoBuild()}
+          onAutoBuildSplashbacks={openSplashbackAutoBuild}
           fixtureMenuOpen={fx.menuOpen}
           setFixtureMenuOpen={fx.setMenuOpen}
           armedFixtureId={fx.carry?.kind === 'place' ? fx.carry.item.id : null}
@@ -4278,6 +4297,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             thickness={Math.round(btCatalog.thicknessFor(NEW_TOP).total)}
             onBuild={tops => { setAutoBuild(null); void bt.commitAutoBuild(tops); useTutorial.getState().emit('bt_autobuild') }}
             onCancel={() => setAutoBuild(null)}
+          />
+        )}
+        {sbAuto && (
+          <SplashbackAutoBuildDialog
+            pieces={sbAuto}
+            onBuild={ps => {
+              setSbAuto(null)
+              void sbk.createMany(ps.map(p => ({ wall_id: p.wall_id, wall_side: p.wall_side, segments: p.segments, notes: 'Auto-built (S4)' })))
+            }}
+            onCancel={() => setSbAuto(null)}
           />
         )}
         {bt.joinDialogIds && (() => {

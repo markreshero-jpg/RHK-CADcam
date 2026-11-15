@@ -263,7 +263,7 @@ export default function CanvasSidebar({
   armedDefinitionId, onArmDefinition, armedDraft = null, matColours, ebByMatId,
   wallMenuOpen, setWallMenuOpen,
   cabMenuOpen, setCabMenuOpen,
-  benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor, onAutoBuildBenchtops,
+  benchtopMenuOpen, setBenchtopMenuOpen, onDrawBenchtopInShapeEditor, onAutoBuildBenchtops, onAutoBuildSplashbacks,
   fixtureMenuOpen = false, setFixtureMenuOpen, armedFixtureId = null, onArmFixture,
   cadOn = false, onToggleCad, cadPanel,
   clipboard, sidebarW, libRefresh = 0,
@@ -289,6 +289,8 @@ export default function CanvasSidebar({
   onDrawBenchtopInShapeEditor?: () => void
   /** F4 → Auto-build tops: one top per base cabinet run, click-through dialog (Phase 8). */
   onAutoBuildBenchtops?: () => void
+  /** F4 → Auto-build splashbacks (z_splashback S4). */
+  onAutoBuildSplashbacks?: () => void
   /** F6 Fixtures & appliances (z_fixtures P2). */
   fixtureMenuOpen?: boolean
   setFixtureMenuOpen?: (v: boolean) => void
@@ -880,6 +882,12 @@ export default function CanvasSidebar({
               title="Splashback — in elevation, click a benchtop for the default size (up to the overheads / bulkhead / ceiling) or drag a rectangle"
               icon={BT_ICON(<><rect x="2" y="3" width="12" height="8" fill="currentColor" fillOpacity="0.15"/><path d="M1 13h14" strokeWidth="2.2"/><path d="M4 9l3-4M8 9l3-4" strokeWidth="1"/></>)}
               active={mode === 'draw_splashback'} onClick={() => onSelectMode('draw_splashback')} />
+            {onAutoBuildSplashbacks && (
+              <ToolRow tone={TONES.benchtop} iconClass="text-sky-400" label="Auto-build splashbacks…" active={false} tour="tool-splashback-autobuild"
+                title="A splashback on every wall a top sits against — bench up to the overheads / rangehood / bulkhead / wall top, split at talls and windows. Tick which to build."
+                icon={BT_ICON(<><rect x="2" y="3" width="12" height="8" fill="currentColor" fillOpacity="0.15"/><path d="M1 13h14" strokeWidth="2.2"/><path d="M8 4.5l.6 1.3 1.3.6-1.3.6L8 8.3l-.6-1.3-1.3-.6 1.3-.6z" /></>)}
+                onClick={onAutoBuildSplashbacks} />
+            )}
           </SectionBody>
         )}
 

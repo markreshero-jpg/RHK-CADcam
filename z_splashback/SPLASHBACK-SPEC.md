@@ -10,7 +10,8 @@
 > offline, plan pick, Materials tab, override fix) — see "S2b as built"; check pending.
 > 2026-11-15 **S3 built**: returns, slab joints, hand cut-outs (see "S3 as built"); Wall 7 north return set (wrap
 > round the wall end, mitre, 140 — length TBC on site). Check pending. 2026-11-15 butler's pieces drawn
-> (Walls 4 + 3). Next: S4 auto-build.
+> (Walls 4 + 3). 2026-11-15 **S4 built** (F4 → Auto-build splashbacks…, see "S4 as built"); check pending.
+> Next: S5 Benchtop Quote section, S6 tutorial.
 
 ## Mark's brief (2026-11-14)
 
@@ -174,6 +175,27 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
   returns follow the piece's height at that end, not their own shape. Corner meets between two splashbacks on
   adjoining walls are just drawn to length (no linked joint).
 
+## S4 as built (2026-11-15)
+
+- `src/lib/splashbackAutoBuild.ts` (+ tests) `autoBuildSplashbacks`: per wall face a top's edges sit against
+  (`wallContacts`, grouped by bench height), one piece along that stretch from the bench surface up to the
+  **lowest overheads' underside / drop bulkhead over the run, else the wall top** (L3) — one height, as a click in
+  Draw Splashback gives (the first try stepped up to the ceiling wherever the overheads stopped short of a run
+  end; dropped). A wall-hung fixture lower than that (rangehood) steps the top down over its own width only.
+- Split by anything standing through the band (talls, a fridge — bottom under bench + 150, top above it) and by a
+  window whose sill is within 50 of the bench (L2); a higher window stays a live hole. Pieces under 100 dropped.
+- Inside corners: where two pieces meet, the shorter stops short by the other's thickness (its material); a new
+  piece meeting one already drawn always stops short. A face stretch that already has a splashback is listed as
+  skipped — auto-build never replaces or edits drawn pieces.
+- UI: F4 → **Auto-build splashbacks…** (`SplashbackAutoBuildDialog`): each proposed piece with a thumbnail, size,
+  x range, heights, notes (corner stops, splits); tick which to build → `useSplashbacks.createMany` (one undo
+  step, labels continue "Splashback n", notes "Auto-built (S4)").
+- RHK6468 Kitchen check (dialog only, not built): Wall 7 3872 × 700, Wall 4 3055 × 700, Wall 3 700 high — all
+  skipped as drawn, matching the hand pieces; proposes Wall 1 640 × 1480 and Wall 2 105 × 1480 by the W7 drawers
+  (no overheads there → wall top). Not built — Mark's call.
+- Not done: no plan preview in the dialog (list + elevation thumbnails); a top's front edge never gets one
+  (islands with a wall: only edges against a wall face count).
+
 ## Questions for Mark (original; answers above)
 
 1. Auto-build splashbacks from the tops (like Auto-build tops), or draw each by hand first?
@@ -194,7 +216,7 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 | S2 | Draw / edit in elevation (rect + Edit shape), plan band, 3D | [x] 2026-11-14, check pending |
 | S2b | S2 gaps: prints, reports + supply, offline, plan pick, Materials tab, override fix | [x] 2026-11-15, check pending |
 | S3 | Returns, joints, cut-outs (+ auto from openings) | [x] 2026-11-15, check pending |
-| S4 | Auto-build from tops | [ ] |
+| S4 | Auto-build from tops | [x] 2026-11-15, check pending |
 | S5 | Benchtop Quote section | [ ] |
 | S6 | Tutorial lesson | [ ] |
 
