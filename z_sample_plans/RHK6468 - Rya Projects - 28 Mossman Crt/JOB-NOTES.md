@@ -202,7 +202,15 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 ### Open / TBC
 - [ ] North bays 934 / south bays 878: the 950s shrink by a different amount each side, so the bays (and the
   shoe racks the plan says to align) are ~137 out across the aisle. Align them instead?
-- [ ] Tall doors ~2540 high: PT Matt in 2700 sheets?
 - [ ] Final board colour (PT Classic White Matt for now).
 - [ ] Shoe shelves drawn flat - 15 deg angle + lip detail to set up.
 - [ ] 32mm shelves / gables on the drawing: drawn as standard 16.5 (side-by-side gables = 33).
+
+### WIR rev 1 (Mark 2026-11-15) - `_tmp-6468-wir-rev1.mjs`
+- WC-03 top shelf over the bench seat / bench deleted (not needed).
+- Open drawer cupboards BC-01 / 02 / 03 / 08: fronts INSET between the gables (native rules: FACINS 16,
+  REVSL / REVSR / REVB 18.5, REVT 41.5 = top + 25 finger gap, GAPR 25), carcass 550 so the gables line up with the doors.
+- Mirror frame = one cabinet TC-17 (T2D 1757 x 2543 x 32, gables / top / bottom, back Removed, no face) with a
+  "Mirror (by others)" custom part (Mirror 4mm, no CNC). TC-12..15 stiles deleted; TC-16 120 face rail stays under it.
+- TC-03 / TC-10: bottom inner drawer at the bottom (boxes 16.5 / 264 / 511.5 / 759), hinges [213, 708, 1055, 1700, 2440].
+- PT Matt comes in 3100 sheets, so the ~2540 doors are fine (TBC note removed).
