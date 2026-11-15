@@ -214,3 +214,10 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
   "Mirror (by others)" custom part (Mirror 4mm, no CNC). TC-12..15 stiles deleted; TC-16 120 face rail stays under it.
 - TC-03 / TC-10: bottom inner drawer at the bottom (boxes 16.5 / 264 / 511.5 / 759), hinges [213, 708, 1055, 1700, 2440].
 - PT Matt comes in 3100 sheets, so the ~2540 doors are fine (TBC note removed).
+
+### WIR rev 2 (Mark 2026-11-15)
+- TC-05 / TC-08 40 fillers: own kick off (`has_toekick false`, pos_z 120) - the run kicks BC-06 / BC-09 run under them.
+- TC-17 mirror frame in 33 (2 x 16.5): new board "PT Colour Matt 33mm" + "– Classic White Matt" (copied from the 16 rows,
+  sheet 2415 x 1211 copied too) as TC-17's exposed / interior material. Gables 2543 x 32 x 33, top / bottom 1691 x 32 x 33,
+  mirror 1691 x 2477. `_tmp-6468-wir-fillers.mjs`, `_tmp-6468-wir-frame33.mjs`.
+- [ ] Shoe shelves: Mark to sketch the detail.
