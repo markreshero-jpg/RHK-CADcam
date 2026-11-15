@@ -1170,6 +1170,43 @@ export function orientSeamDrills(
   })
 }
 
+// The seam's master (owning) part key — part_a — in the seam / override vocabulary.
+function seamMasterKey(seamKey: string): string {
+  return seamKey.includes('|') ? seamKey.slice(0, seamKey.indexOf('|')) : seamKey.slice(0, seamKey.indexOf(':'))
+}
+
+// Snap a direction vector to its dominant cabinet axis.
+function nearestAxis([x, y, z]: [number, number, number]): DrillAxis {
+  const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z)
+  if (ax >= ay && ax >= az) return x < 0 ? 'x-' : 'x+'
+  if (ay >= az) return y < 0 ? 'y-' : 'y+'
+  return z < 0 ? 'z-' : 'z+'
+}
+
+// For machining (Mark 2026-11-15, RHK6468 WIR shoe shelves): a joint is attached
+// to its master part's edge and follows it however the part is rotated (the
+// Part Editor / cabinet edit modal rotate override). The holes bored INTO the
+// master stay in its own frame (the part is cut flat, then turned), so only the
+// holes in the OTHER part (e.g. the gable a tilted shelf screws to) move: they
+// take the master's rotated position, and the bore axis is snapped to the
+// nearest cabinet axis. Seams whose master has no override pass through as-is.
+export function orientSlaveSeamDrills<T extends SeamDrill>(
+  drills: T[],
+  boxByKey: Record<string, Box>,
+  overrides: Record<string, PartPosOv> | null | undefined,
+): T[] {
+  if (!overrides || !Object.keys(overrides).length) return drills
+  const oriented = orientSeamDrills(drills, boxByKey, overrides)
+  return drills.map((d, i) => {
+    const master = seamMasterKey(d.seamKey)
+    const target = d.targetPartKey
+    if (target === master || `int_${target}` === master || target === `int_${master}`) return d
+    const o = oriented[i]
+    if (o.x === d.x && o.y === d.y && o.z === d.z && o.dir === AXIS_VEC[d.axis]) return d
+    return { ...d, x: o.x, y: o.y, z: o.z, axis: nearestAxis(o.dir) }
+  })
+}
+
 // Merge opposing coincident bores — same target part, same axis line, same
 // radius, entered from opposite faces — into a single through-bore when their
 // combined depth crosses the panel. This is how a division drilled from both

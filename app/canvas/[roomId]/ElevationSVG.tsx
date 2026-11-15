@@ -1,5 +1,8 @@
 ﻿'use client'
 import SliderShapesSVG from '@/src/components/svg/SliderShapesSVG'
+import { rotatedInternalFrontFace, isRotatedOv } from '@/src/lib/partRotateElev'
+import { internalSeamPartKey } from '@/src/lib/jointDrilling'
+import { useRoomPosOverrides } from './useRoomPosOverrides'
 import { rectEdgeSegs, coverOf, anyExposed, EXPOSED_BOARD_ITEMS } from '@/src/lib/exposedEdges'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
 import { useLineScale } from '@/src/lib/usePhone'
@@ -419,6 +422,8 @@ export default function ElevationSVG({
   const chainFxWall = chainFx.filter(s => s.row === 'wall'), chainFxFloor = chainFx.filter(s => s.row === 'floor')
   // Hand-added part_operations for every cabinet on this wall → cabinet-space markers.
   const handMarkersByCab = useHandOpMarkersMulti(wallCabs.map(c => c.id), resolvedParts)
+  // Rotate overrides (cabinet edit modal / Part Editor): turned internals draw turned (partRotateElev).
+  const posOvByCab = useRoomPosOverrides(wallCabs.map(c => c.id), resolvedPartsRaw)
 
   // Drawer-slide model outlines: load every slide's uploaded 3D model across all
   // cabinets on this wall (a hook, so it must run unconditionally at the top level).
@@ -1677,6 +1682,13 @@ export default function ElevationSVG({
                         const iit = internalPartItem(p.part_type)
                         const fill = layers.colorOf(iit) ?? PART_COLORS[p.part_type] ?? '#818cf8'
                         const ldStroke = layers.colorOf(iit) ?? LINE_DRAW_COLORS[p.part_type] ?? '#a78bfa'
+                        const turned = rotatedInternalFrontFace(p, posOvByCab.get(cab.id)?.[internalSeamPartKey(p)])
+                        if (turned) {
+                          return <polygon key={`ip-${i}`} points={turned.map(q => { const t = toSVGPt(q.x, q.y); return `${t.x},${t.y}` }).join(' ')}
+                            fill={isLineDrawing ? 'none' : fill} fillOpacity={isLineDrawing ? 0 : 0.6}
+                            stroke={isLineDrawing ? ldStroke : fill} strokeWidth={layers.w(iit, isLineDrawing ? 1 : 0.5) / lz}
+                            opacity={intEffP.opacity} style={{ pointerEvents: 'none' }} />
+                        }
                         const am = p.accessory?.model
                         const atris = am ? triMap.get(triKey({ model_url: am.url, model_format: am.format as SlideModelFormat }) ?? '') : undefined
                         if (atris && atris.length > 0) {
@@ -2000,7 +2012,8 @@ export default function ElevationSVG({
 
                       {/* Shelf labels — "adj sh" / "fix sh" at each shelf's top-left corner. */}
                       {layers.show('shelf_labels') &&
-                        rp.internal_parts.filter(p => (p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf') && showInt(internalPartItem(p.part_type))).map((p, i) => {
+                        rp.internal_parts.filter(p => (p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf') && showInt(internalPartItem(p.part_type))
+                          && !isRotatedOv(posOvByCab.get(cab.id)?.[internalSeamPartKey(p)])).map((p, i) => {   // turned shelves (shoe shelves / rails) go unlabelled
                           const { ex, ey, ew, eh } = shelfElevRect(p)
                           const { x, y, w } = toSVG(ex, ey, ew, eh)
                           if (w < 30 / z) return null

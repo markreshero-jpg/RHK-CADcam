@@ -227,6 +227,6 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
   533.5, tilted 15 deg front low (part_pos_overrides oax 15 about its back-bottom corner, y = front + 138) + a 50 front
   rail (a 50-deep fixed shelf, oax -90, oz 50 = standing up at the front, 16.5 thick). Bottom level on the cab bottom;
   upper levels sloped shelf + rail only. Top fixed shelf 2120 stays.
-- Known gaps: the room elevation draws the shelves flat at their unrotated height; the optimiser / CNC gable drilling
-  does not apply rotation overrides (only sizes), so the sloped shelves' gable holes would come out flat - see TBC.
-- [ ] Gable drilling for the sloped shoe shelves (CNC ignores the tilt).
+- 2026-11-15 (Mark): joints follow a rotated part - the optimiser drill sync now moves the holes a turned shelf bores
+  into the gables with it (orientSlaveSeamDrills); the room + print elevations draw turned internals turned (front-most
+  face, partRotateElev) and drop their "fix sh" labels.

@@ -14,7 +14,7 @@
 
 import { supabase } from '@/src/lib/supabase'
 import { resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { cabinetSeamDrills, caseBox } from '@/src/lib/jointDrilling'
+import { cabinetSeamDrills, caseBox, caseBoxByKey, orientSlaveSeamDrills, type PartPosOv } from '@/src/lib/jointDrilling'
 import { caseFrame, zoneFrame, boxFrame, intFrame, projectToFrame, type FootprintFrame } from './partFootprint'
 import { coalesceByKey } from './coalesce'
 import type { ResolvedCabinet, ResolvedCasePart, ResolvedInternalPart, ResolvedDrawerBoxPart, ResolvedDrawerSlide } from '@/src/lib/resolver/types'
@@ -128,7 +128,10 @@ function innerBoxPartFor(
 /** Holes closer than this to a back width cut (z_cabinet_split back_x) are left out. */
 export const BACK_CUT_CLEAR = 20
 
-export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows: GeneratedDrill[]; skipped: number } {
+// `posOverrides` = cabinet_instances.part_pos_overrides: a rotated part (cabinet
+// edit modal / Part Editor rotate) takes its joints with it, so the holes it
+// bores into the parts around it follow its turned position (orientSlaveSeamDrills).
+export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string, posOverrides?: Record<string, PartPosOv> | null): { rows: GeneratedDrill[]; skipped: number } {
   rp = filterRemovedParts(rp)   // removed parts cause no drilling (PART-HIDE-SPEC R-D3)
   const rows: GeneratedDrill[] = []
   let skipped = 0
@@ -186,7 +189,7 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string): { rows
 
   // 1. Seam joints → case parts (carcase seams) or internal shelves/dividers
   //    (internal seams — targetPartKey already carries the int_… identity).
-  for (const d of cabinetSeamDrills(rp)) {
+  for (const d of orientSlaveSeamDrills(cabinetSeamDrills(rp), caseBoxByKey(rp), posOverrides)) {
     const tool = { router_tool_id: d.router_tool_id ?? null, drill_id: d.drill_id ?? null, auto_tool: d.auto_tool ?? false }
     if (d.targetPartKey.startsWith('int_')) {
       const ip = intByKey.get(d.targetPartKey.slice(4))
@@ -809,7 +812,8 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
     }
     throw e
   }
-  const { rows, skipped } = collectDrillRows(rp, cabinetId)
+  const { data: ovRow } = await supabase.from('cabinet_instances').select('part_pos_overrides').eq('id', cabinetId).maybeSingle()
+  const { rows, skipped } = collectDrillRows(rp, cabinetId, (ovRow?.part_pos_overrides ?? null) as Record<string, PartPosOv> | null)
 
   // Generated routes + grooves (finger-rail notches + reliefs) — same wholesale replace.
   const hasRails = rp.case_parts.some(p => p.part_key.startsWith('fprail:'))

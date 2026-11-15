@@ -35,7 +35,9 @@ import { elevationShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
 import { customExtents } from '@/src/lib/customPartBox'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { HandleElevSVG, HandleHolesSVG, SharknoseLinesSVG } from './HandleSVG'
-import { tkBoxAABB, caseBoxAABB } from '@/src/lib/jointDrilling'
+import { tkBoxAABB, caseBoxAABB, internalSeamPartKey } from '@/src/lib/jointDrilling'
+import { rotatedInternalFrontFace, isRotatedOv } from '@/src/lib/partRotateElev'
+import { useRoomPosOverrides } from './useRoomPosOverrides'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { splitBaseKey } from '@/src/lib/cabinetSplit'
 import { binOutlines } from '@/src/lib/binGeometry'
@@ -189,6 +191,8 @@ export default function ElevationPrintSVG({
   const frontGrainDir = (c: CabinetInstance): 'h' | 'v' => gmGroups.find(g => g.id === c.grain_match_group_id)?.direction === 'horizontal' ? 'h' : 'v'
   // Turned facet hardware (z_cabinet_shape 3b) flattened to cabinet X/Y for this front view.
   const resolvedParts = frontViewHardwareMap(resolvedPartsRaw)
+  // Rotate overrides: turned internals (e.g. tilted shoe shelves) print turned (partRotateElev).
+  const posOvByCab = useRoomPosOverrides(cabinets.filter(c => c.wall_id === wall.id).map(c => c.id), resolvedPartsRaw)
   const P = scale
   const roomH = wall.height ?? room.room_dy ?? 2400
   const isBack = side === 'back'
@@ -546,7 +550,14 @@ export default function ElevationPrintSVG({
             {/* Internals — shelves / dividers / accessories / inner drawers + pull-outs */}
             {rp.internal_parts.map((p, i) => {
               const it = internalPartItem(p.part_type)
-              return showOrOpen(it) ? fineRect(`ip-${i}`, it, shelfElevRect(p), true) : null
+              if (!showOrOpen(it)) return null
+              const turned = rotatedInternalFrontFace(p, posOvByCab.get(cab.id)?.[internalSeamPartKey(p)])
+              if (turned) {
+                const pp = lp(it)
+                return <polygon key={`ip-${i}`} points={turned.map(q => { const t = toSVG(q.x, q.y, 0, 0); return `${t.x},${t.y}` }).join(' ')}
+                  fill="none" stroke={INK2} strokeWidth={lw(it, partSW)} opacity={pp.opacity} />
+              }
+              return fineRect(`ip-${i}`, it, shelfElevRect(p), true)
             })}
             {layers.show('inner_drawer_runners') && (rp.internal_slides ?? []).map((s, i) =>
               fineRect(`is-${i}`, 'inner_drawer_runners', slideElevRect(s)))}
@@ -574,7 +585,8 @@ export default function ElevationPrintSVG({
 
             {/* Shelf labels — "adj sh" / "fix sh" at each shelf's top-left corner. */}
             {layers.show('shelf_labels') &&
-              rp.internal_parts.filter(p => (p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf') && layers.show(internalPartItem(p.part_type))).map((p, i) => {
+              rp.internal_parts.filter(p => (p.part_type === 'adj_shelf' || p.part_type === 'fixed_shelf') && layers.show(internalPartItem(p.part_type))
+                && !isRotatedOv(posOvByCab.get(cab.id)?.[internalSeamPartKey(p)])).map((p, i) => {
                 const { x, y, w } = (({ ex, ey, ew, eh }) => toSVG(ex, ey, ew, eh))(shelfElevRect(p))
                 const fs = layers.w('shelf_labels', dimFs * 0.75)
                 if (w < fs * 4) return null
