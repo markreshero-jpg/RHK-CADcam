@@ -150,8 +150,9 @@ function applyOverrides(rows: BenchtopScheduleRow[], ovrs: BtOverride[]): Bencht
     const ex = byRole.get(o.part_role)
     byRole.set(o.part_role, {
       id: ex?.id ?? `override-${o.part_role}`, schedule_id: ex?.schedule_id ?? '', part_role: o.part_role,
-      material_id: o.material_id ?? ex?.material_id ?? null,
-      benchtop_material_id: o.benchtop_material_id ?? ex?.benchtop_material_id ?? null,
+      // An override replaces the whole choice — never a board id AND a stone id on one role.
+      material_id: o.material_id ?? null,
+      benchtop_material_id: o.benchtop_material_id ?? null,
       edgeband_id: ex?.edgeband_id ?? null,
     })
   }

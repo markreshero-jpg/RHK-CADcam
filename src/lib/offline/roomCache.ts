@@ -2,7 +2,7 @@
 // room it has open saved here (a moment after each change), so with no signal the
 // offline canvas (/offline/canvas?room=…) can open it exactly as it was last seen.
 
-import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation, CadLayer } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation, CadLayer, SplashbackInstance } from '@/src/lib/types'
 import { idbAll, idbDelete, idbGet, idbPut, idbClear } from './idb'
 
 export interface RoomSnapshotData {
@@ -14,6 +14,8 @@ export interface RoomSnapshotData {
   fixtures: RoomFixture[]
   annotations: RoomAnnotation[]
   cadLayers: CadLayer[]
+  /** Splashbacks (z_splashback) — missing on copies saved before S2. */
+  splashbacks?: SplashbackInstance[]
 }
 
 export interface RoomSnapshot {

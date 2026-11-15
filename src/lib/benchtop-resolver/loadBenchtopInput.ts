@@ -114,8 +114,9 @@ export async function loadBenchtopInput(benchtopId: string): Promise<BenchtopRes
       id:                   existing?.id ?? `override-${ovr.part_role}`,
       schedule_id:          existing?.schedule_id ?? scheduleId ?? '',
       part_role:            ovr.part_role,
-      material_id:          ovr.material_id ?? existing?.material_id ?? null,
-      benchtop_material_id: ovr.benchtop_material_id ?? existing?.benchtop_material_id ?? null,
+      // An override replaces the whole choice — never a board id AND a stone id on one role.
+      material_id:          ovr.material_id ?? null,
+      benchtop_material_id: ovr.benchtop_material_id ?? null,
       edgeband_id:          existing?.edgeband_id ?? null,
     })
   }

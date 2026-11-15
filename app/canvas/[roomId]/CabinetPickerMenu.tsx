@@ -20,18 +20,23 @@ function kindOf(c: CabinetInstance): string {
 }
 
 /** Cabinet ids under a client point (top-drawn first), from the plan hit polygons. */
-export function cabinetsAtPoint(clientX: number, clientY: number): string[] {
+export function cabinetsAtPoint(clientX: number, clientY: number, attr = 'data-cab-id'): string[] {
   const ids: string[] = []
   for (const el of document.elementsFromPoint(clientX, clientY)) {
-    const id = el.getAttribute('data-cab-id')
+    const id = el.getAttribute(attr)
     if (id && !ids.includes(id)) ids.push(id)
   }
   return ids
 }
 
-export default function CabinetPickerMenu({ cabinets, fixtures = [], clientX, clientY, selectedId, onPick, onHover, onClose }: {
+/** Splashback ids under a client point — plan bands sit under the cabinets (z_splashback). */
+export const splashbacksAtPoint = (clientX: number, clientY: number) => cabinetsAtPoint(clientX, clientY, 'data-sb-id')
+
+export default function CabinetPickerMenu({ cabinets, fixtures = [], splashbacks = [], clientX, clientY, selectedId, onPick, onHover, onClose }: {
   cabinets: CabinetInstance[]; fixtures?: RoomFixture[]; clientX: number; clientY: number; selectedId: string | null
-  onPick: (id: string, kind: 'cabinet' | 'fixture') => void; onHover: (id: string | null) => void; onClose: () => void
+  /** Splashbacks under the click (plan bands under the cabinets). */
+  splashbacks?: { id: string; label: string; size: string }[]
+  onPick: (id: string, kind: 'cabinet' | 'fixture' | 'splashback') => void; onHover: (id: string | null) => void; onClose: () => void
 }) {
   useEffect(() => {
     const down = () => onClose()
@@ -41,7 +46,7 @@ export default function CabinetPickerMenu({ cabinets, fixtures = [], clientX, cl
     return () => { clearTimeout(t); window.removeEventListener('pointerdown', down); window.removeEventListener('keydown', key) }
   }, [onClose])
 
-  const count = cabinets.length + fixtures.length
+  const count = cabinets.length + fixtures.length + splashbacks.length
   const menuH = count * 30 + 44
   const top  = Math.max(8, Math.min(clientY + 6, window.innerHeight - menuH - 8))
   const left = Math.max(8, Math.min(clientX + 6, window.innerWidth - 228))
@@ -55,7 +60,7 @@ export default function CabinetPickerMenu({ cabinets, fixtures = [], clientX, cl
       onPointerLeave={() => onHover(null)}
     >
       <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-500 border-b border-gray-700 bg-gray-900/60">
-        {count} {fixtures.length ? 'items' : 'cabinets'} here — pick one
+        {count} {fixtures.length || splashbacks.length ? 'items' : 'cabinets'} here — pick one
       </div>
       {fixtures.map(f => (
         <button
@@ -67,6 +72,18 @@ export default function CabinetPickerMenu({ cabinets, fixtures = [], clientX, cl
           <span className="w-2 h-2 rounded-sm flex-none bg-gray-400" />
           <span className="flex-1 truncate">{fixtureDisplayName(f)}</span>
           <span className="text-gray-500 text-[10px] shrink-0">{f.category} · {Math.round(f.width)}×{Math.round(f.height)}</span>
+        </button>
+      ))}
+      {splashbacks.map(s => (
+        <button
+          key={s.id}
+          className={`w-full text-left px-3 py-1.5 text-xs hover:bg-gray-700 hover:text-white flex items-center gap-2 ${s.id === selectedId ? 'text-white bg-gray-700/50' : 'text-gray-300'}`}
+          onPointerEnter={() => onHover(null)}
+          onClick={() => onPick(s.id, 'splashback')}
+        >
+          <span className="w-2 h-2 rounded-sm flex-none" style={{ background: '#38bdf8' }} />
+          <span className="flex-1 truncate">{s.label}</span>
+          <span className="text-gray-500 text-[10px] shrink-0">splashback · {s.size}</span>
         </button>
       ))}
       {cabinets.map(c => (

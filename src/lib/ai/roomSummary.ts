@@ -5,7 +5,8 @@
 // detail when it needs it. Output order is deterministic so it prompt-caches.
 
 import { supabase } from '@/src/lib/supabase'
-import type { CabinetInstance, Wall, Room, RoomFixture } from '@/src/lib/types'
+import type { CabinetInstance, Wall, Room, RoomFixture, SplashbackInstance } from '@/src/lib/types'
+import { sbBounds } from '@/src/lib/splashbackGeometry'
 import { cabBottomZ, cabWallSide, wallCabTop } from '@/src/lib/geometry'
 
 export interface RoomSummaryData {
@@ -20,6 +21,9 @@ export interface RoomSummaryData {
   carcass: { cabinet_instance_id: string; material_id: string | null }[]
   materialNames: Map<string, string>
   handleNames: Map<string, string>
+  /** Splashbacks (z_splashback) + the names of the schedules set on them. */
+  splashbacks?: Pick<SplashbackInstance, 'id' | 'label' | 'wall_id' | 'wall_side' | 'segments' | 'splashback_schedule_id'>[]
+  sbScheduleNames?: Map<string, string>
 }
 
 /** Offset of a cabinet along its wall (mm from the wall's start), as getState() reports it. */
@@ -85,16 +89,34 @@ export function formatRoomSummary(d: RoomSummaryData): string {
       lines.push(`${f.display_name || f.label || f.name} | ${(f.cabinet_id && labelById.get(f.cabinet_id)) || '-'}`)
     }
   }
+
+  if (d.splashbacks?.length) {
+    lines.push('', 'Splashbacks (label | wall [back] | from–to along the wall as seen | bottom–top off floor | schedule):')
+    const wallName = new Map(d.walls.map(w => [w.id, w.name]))
+    for (const s of [...d.splashbacks].sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''))) {
+      const b = sbBounds(s.segments)
+      if (!b) continue
+      lines.push([
+        s.label ?? 'Splashback',
+        `${wallName.get(s.wall_id) ?? '?'}${s.wall_side === 'back' ? ' back' : ''}`,
+        `${Math.round(b.x0)}–${Math.round(b.x1)}`,
+        `${Math.round(b.z0)}–${Math.round(b.z1)}`,
+        (s.splashback_schedule_id && d.sbScheduleNames?.get(s.splashback_schedule_id)) || 'room/job default',
+      ].join(' | '))
+    }
+  }
   return lines.join('\n')
 }
 
 /** Load everything formatRoomSummary needs for one room (8 reads, run in parallel where possible). */
 export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryData> {
-  const [roomQ, wallsQ, cabsQ, fixQ] = await Promise.all([
+  const [roomQ, wallsQ, cabsQ, fixQ, sbQ, sbSchedQ] = await Promise.all([
     supabase.from('rooms').select('*').eq('id', roomId).single(),
     supabase.from('walls').select('*').eq('room_id', roomId),
     supabase.from('cabinet_instances').select('*').eq('room_id', roomId),
     supabase.from('room_fixtures').select('id, label, display_name, name, cabinet_id').eq('room_id', roomId),
+    supabase.from('splashback_instances').select('id, label, wall_id, wall_side, segments, splashback_schedule_id').eq('room_id', roomId),
+    supabase.from('splashback_schedules').select('id, name'),
   ])
   if (roomQ.error) throw new Error(`room ${roomId}: ${roomQ.error.message}`)
   const cabinets = (cabsQ.data ?? []) as CabinetInstance[]
@@ -124,6 +146,8 @@ export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryDa
     fronts, carcass,
     materialNames: names(matsQ.data as { id: string; name: string }[] | null),
     handleNames: names(handlesQ.data as { id: string; name: string }[] | null),
+    splashbacks: (sbQ.data ?? []) as RoomSummaryData['splashbacks'],
+    sbScheduleNames: names(sbSchedQ.data as { id: string; name: string }[] | null),
   }
 }
 

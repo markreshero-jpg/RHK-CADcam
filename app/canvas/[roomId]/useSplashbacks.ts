@@ -19,6 +19,12 @@ type SchedRow = MatRef & { schedule_id: string }
 interface Surface { id: string; name: string; dz: number; material_type: string | null; color: string | null }
 interface Board { id: string; name: string; dz: number }
 
+/** Splashbacks for a printed drawing (reports / shop drawings): the room's pieces + what each is made of. */
+export interface SbPrint {
+  splashbacks: SplashbackInstance[]
+  info: (sb: SplashbackInstance) => SbInfo
+}
+
 /** What a splashback is made of, for drawing + the panel. */
 export interface SbInfo {
   /** Panel material name, or null when nothing resolves. */
@@ -49,7 +55,8 @@ export function useSplashbacks(args: {
   const [schedules, setSchedules] = useState<{ id: string; name: string; is_default: boolean }[]>([])
   const [rows, setRows] = useState<SchedRow[]>([])
   const [jobOvr, setJobOvr] = useState<MatRef[]>([])
-  const [roomOvr, setRoomOvr] = useState<MatRef[]>([])
+  // Room overrides for every room of the job (room id → rows) — Job Reports draw other rooms.
+  const [roomOvr, setRoomOvr] = useState<Map<string, MatRef[]>>(new Map())
   const [shop, setShop] = useState<{ splashback_schedule_id: string | null; splashback_inherits_benchtop: boolean }>({ splashback_schedule_id: null, splashback_inherits_benchtop: true })
   const projectId = project?.id ?? null
   const [surfaces, setSurfaces] = useState<Map<string, Surface>>(new Map())
@@ -61,7 +68,13 @@ export function useSplashbacks(args: {
       supabase.from('splashback_schedules').select('id, name, is_default').eq('active', true).order('name'),
       supabase.from('splashback_schedule_rows').select('schedule_id, part_role, material_id, benchtop_material_id, edgeband_id'),
       projectId ? supabase.from('job_splashback_materials').select('part_role, material_id, benchtop_material_id, edgeband_id').eq('project_id', projectId) : Promise.resolve({ data: [] }),
-      supabase.from('room_splashback_materials').select('part_role, material_id, benchtop_material_id, edgeband_id').eq('room_id', room.id),
+      projectId
+        ? supabase.from('rooms').select('id').eq('project_id', projectId).then(async ({ data: rms }) => {
+            const ids = ((rms ?? []) as { id: string }[]).map(x => x.id)
+            if (!ids.includes(room.id)) ids.push(room.id)
+            return supabase.from('room_splashback_materials').select('room_id, part_role, material_id, benchtop_material_id, edgeband_id').in('room_id', ids)
+          })
+        : supabase.from('room_splashback_materials').select('room_id, part_role, material_id, benchtop_material_id, edgeband_id').eq('room_id', room.id),
       supabase.from('shop_settings').select('splashback_schedule_id, splashback_inherits_benchtop').limit(1).maybeSingle(),
       supabase.from('benchtop_materials').select('id, name, dz, material_type, color'),
       supabase.from('materials').select('id, name, dz'),
@@ -70,7 +83,9 @@ export function useSplashbacks(args: {
       setSchedules((s.data ?? []) as { id: string; name: string; is_default: boolean }[])
       setRows((r.data ?? []) as SchedRow[])
       setJobOvr((j.data ?? []) as MatRef[])
-      setRoomOvr((rm.data ?? []) as MatRef[])
+      const ro = new Map<string, MatRef[]>()
+      for (const o of (rm.data ?? []) as (MatRef & { room_id: string })[]) ro.set(o.room_id, [...(ro.get(o.room_id) ?? []), o])
+      setRoomOvr(ro)
       if (sh.data) setShop(sh.data as typeof shop)
       setSurfaces(new Map(((bm.data ?? []) as Surface[]).map(x => [x.id, { ...x, dz: Number(x.dz) }])))
       setBoards(new Map(((m.data ?? []) as Board[]).map(x => [x.id, { ...x, dz: Number(x.dz) }])))
@@ -78,23 +93,20 @@ export function useSplashbacks(args: {
     return () => { live = false }
   }, [room.id, projectId])
 
-  /** The benchtop a splashback sits on: one on the same wall that overlaps it, else any top in the room. */
-  const benchUnder = useCallback((sb: SplashbackInstance) => {
-    const onWall = benchtops.filter(b => b.wall_id === sb.wall_id)
-    return onWall[0] ?? benchtops[0] ?? null
-  }, [benchtops])
-
-  const infoFor = useCallback((sb: SplashbackInstance): SbInfo => {
+  /** What a splashback is made of, for any room of the job (Job Reports draw other rooms):
+   *  that room's schedule + overrides, and its tops (rowsFor = that room's benchtop rows). */
+  const forRoom = useCallback((rm: Pick<Room, 'id' | 'splashback_schedule_id'>, bts: BenchtopInstance[], rowsFor: (bt: BenchtopInstance) => BenchtopScheduleRow[]) => (sb: SplashbackInstance): SbInfo => {
     const scheduleId = pickSplashbackScheduleId(
-      sb.splashback_schedule_id, room.splashback_schedule_id, project?.splashback_schedule_id,
+      sb.splashback_schedule_id, rm.splashback_schedule_id, project?.splashback_schedule_id,
       shop.splashback_schedule_id, schedules.find(x => x.is_default)?.id,
     )
-    const bt = benchUnder(sb)
+    // The benchtop it sits on: one on the same wall, else any top in the room.
+    const bt = bts.find(b => b.wall_id === sb.wall_id) ?? bts[0] ?? null
     const eff = effectiveSplashbackRows({
       scheduleRows: rows.filter(r => r.schedule_id === scheduleId),
-      jobOverrides: jobOvr, roomOverrides: roomOvr,
+      jobOverrides: jobOvr, roomOverrides: roomOvr.get(rm.id) ?? [],
       inheritBenchtop: shop.splashback_inherits_benchtop,
-      benchtopPanel: bt ? benchtopPanelMaterial(btRowsFor(bt)) : null,
+      benchtopPanel: bt ? benchtopPanelMaterial(rowsFor(bt)) : null,
     })
     const panel = eff.find(r => r.part_role === 'panel')
     const board = panel?.material_id ? boards.get(panel.material_id) : undefined
@@ -108,7 +120,9 @@ export function useSplashbacks(args: {
       source: panel?.source ?? null,
       scheduleId,
     }
-  }, [rows, jobOvr, roomOvr, shop, schedules, boards, surfaces, benchUnder, btRowsFor, room.splashback_schedule_id, project?.splashback_schedule_id])
+  }, [rows, jobOvr, roomOvr, shop, schedules, boards, surfaces, project?.splashback_schedule_id])
+
+  const infoFor = useMemo(() => forRoom(room, benchtops, btRowsFor), [forRoom, room, benchtops, btRowsFor])
 
   // ── CRUD ───────────────────────────────────────────────────────────────────
 
@@ -153,5 +167,5 @@ export function useSplashbacks(args: {
 
   const scheduleOptions = useMemo(() => schedules, [schedules])
 
-  return { infoFor, create, update, remove, sizeOf, scheduleOptions }
+  return { infoFor, forRoom, create, update, remove, sizeOf, scheduleOptions }
 }

@@ -19,6 +19,7 @@ import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { useCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
 import ShopTitleBlock, { sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
+import type { SbPrint } from './useSplashbacks'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 },
@@ -38,7 +39,9 @@ const TOGGLES: { key: keyof PlanViewPageOptions; label: string }[] = [
   { key: 'annotColours', label: 'Annotation colours' },
 ]
 
-export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops, btProfiles, btDefaultProfile, btThickness, quote, batch }: {
+export default function PlanViewReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, annotations, benchtops, btProfiles, btDefaultProfile, btThickness, quote, batch, sb }: {
+  /** Splashbacks (z_splashback) — plan band on the wall face. */
+  sb?: SbPrint
   /** Edge profiles + each top's default — profile codes on exposed edges. */
   btProfiles?: Record<string, BenchtopEdgeProfile>
   btThickness?: (bt: BenchtopInstance) => number
@@ -222,6 +225,7 @@ export default function PlanViewReport({ project, room, walls, cabinets, resolve
       {/* Preview */}
       <div className="bg-white rounded overflow-hidden shadow-inner" style={{ minHeight: 300 }}>
         <PlanViewReportSVG
+          sb={sb}
           walls={walls}
           cabinets={cabinets}
           room={room}

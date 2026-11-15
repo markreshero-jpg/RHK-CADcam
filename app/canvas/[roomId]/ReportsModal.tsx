@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback, useRef, type ComponentProps 
 import { startCombined, finishCombined, cancelCombined, armSave, armSaveFolder, armPrint, disarmSave } from './pdfCombine'
 import { usePrintPresets, PrintPresetBar, currentSets, applyPresetSets, type PrintPreset } from './PrintPresets'
 import { supabase } from '@/src/lib/supabase'
-import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation } from '@/src/lib/types'
+import type { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation, SplashbackInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { dbLoadResolvedParts } from './canvasDB'
@@ -18,6 +18,7 @@ import ShopDrawingsReport from './ShopDrawingsReport'
 import Render3DReport from './Render3DReport'
 import type { Bt3DPrint } from './Room3DCapture'
 import type { BtElevInfo } from './BenchtopElevation'
+import type { SbInfo, SbPrint } from './useSplashbacks'
 import { useCadFields } from './useCadFields'
 import { withFieldsFilled } from '@/src/lib/annotations/blocks'
 import { annotationsForPrint, ALL_CAD_LAYERS, type CadLayerView } from '@/src/lib/annotations/cadLayers'
@@ -25,6 +26,7 @@ import CabinetSheetReport from './CabinetSheetReport'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import { BenchtopSupplySheet, supplyPrintHtml } from './BenchtopSupplyReport'
 import { buildSupplyLines, supplyTotals } from '@/src/lib/benchtop-resolver/supply'
+import { splashbackSupplyLines } from '@/src/lib/splashbackSupply'
 import { quoteTops, quoteTotals } from '@/src/lib/benchtopQuote'
 import { ApplianceScheduleSheet, buildSchedule, schedulePrintHtml, type CatalogRef } from './ApplianceScheduleReport'
 import { OpeningScheduleSheet, buildOpeningSchedule, openingSchedulePrintHtml } from './OpeningScheduleReport'
@@ -182,7 +184,11 @@ const PAPER = {
   A1L: { w: 841, h: 594, label: 'A1 Landscape' },
 }
 
-export default function ReportsModal({ initialScope, initialReport, bt3d, btInfoFor, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], cadLayers = ALL_CAD_LAYERS, materialColours, ebByMatId, layerSets, activeLayerSetId, onClose }: {
+export default function ReportsModal({ initialScope, initialReport, bt3d, btInfoFor, onDeleteShopShot, project, room, walls, cabinets, resolvedParts, benchtops, benchTopZ, fixtures = [], annotations = [], cadLayers = ALL_CAD_LAYERS, materialColours, ebByMatId, layerSets, activeLayerSetId, onClose, splashbacks = [], sbInfoFor }: {
+  /** Splashbacks (z_splashback) of this room — drawn on the plan / elevation / shop drawings. */
+  splashbacks?: SplashbackInstance[]
+  /** What a splashback is made of, for any room of the job (its tops = that room's benchtops). */
+  sbInfoFor?: (rm: Room, bts: BenchtopInstance[]) => (sb: SplashbackInstance) => SbInfo
   /** Material colours for the 3D colour render (keyed by material id). */
   materialColours?: ComponentProps<typeof Render3DReport>['materialColours']
   ebByMatId?: ComponentProps<typeof Render3DReport>['ebByMatId']
@@ -234,6 +240,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   const [roomBtParts, setRoomBtParts] = useState<StoredBtPart[]>([])
   const [jobBtInstances, setJobBtInstances] = useState<BenchtopInstance[]>([])
   const [jobBtParts, setJobBtParts] = useState<StoredBtPart[]>([])
+  const [jobSplashbacks, setJobSplashbacks] = useState<SplashbackInstance[]>([])
 
   const [materialNames, setMaterialNames] = useState<Record<string, string>>({})
   const [jobFixtures, setJobFixtures] = useState<RoomFixture[]>([])
@@ -282,12 +289,14 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
       if (!rms) { setLoadingJob(false); return }
       setJobRooms(rms as Room[])
       const roomIds = rms.map(r => r.id)
-      const [{ data: cabs }, { data: bts }, { data: fxs }, { data: wls }] = await Promise.all([
+      const [{ data: cabs }, { data: bts }, { data: fxs }, { data: wls }, { data: sbs }] = await Promise.all([
         supabase.from('cabinet_instances').select('*').in('room_id', roomIds),
         supabase.from('benchtop_instances').select('*').in('room_id', roomIds),
         supabase.from('room_fixtures').select('*').in('room_id', roomIds),
         supabase.from('walls').select('*').in('room_id', roomIds),
+        supabase.from('splashback_instances').select('*').in('room_id', roomIds),
       ])
+      setJobSplashbacks((sbs ?? []) as SplashbackInstance[])
       setJobFixtures((fxs ?? []) as RoomFixture[])
       setJobWalls((wls ?? []) as Wall[])
       if (!cabs) { setLoadingJob(false); return }
@@ -359,13 +368,24 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     })
   }, [rooms, allCabinets, allResolved, allBtInstances, allBtParts, materialNames, sizeOv, shapes])
 
-  const supplyData = useMemo(() => rooms.map(r => ({
-    room: r,
-    lines: buildSupplyLines(allBtInstances.filter(bt => bt.room_id === r.id), allBtParts),
-  })), [rooms, allBtInstances, allBtParts])
   // Appliance schedule: brand / model no. come from the library row each fixture was placed from.
   const allFixtures = scope === 'room' ? fixtures : jobFixtures
   const allWalls    = scope === 'room' ? walls    : jobWalls
+  const allSplashbacks = scope === 'room' ? splashbacks : jobSplashbacks
+  // Surface splashbacks (stone / glass / tile …) are order items too — after each room's tops.
+  const supplyData = useMemo(() => rooms.map(r => {
+    const bts = allBtInstances.filter(bt => bt.room_id === r.id)
+    const sbs = allSplashbacks.filter(s => s.room_id === r.id)
+    return {
+      room: r,
+      lines: [
+        ...buildSupplyLines(bts, allBtParts),
+        ...(sbs.length && sbInfoFor
+          ? splashbackSupplyLines(sbs, sbInfoFor(r, bts), allWalls.filter(w => w.room_id === r.id), allFixtures.filter(x => x.room_id === r.id))
+          : []),
+      ],
+    }
+  }), [rooms, allBtInstances, allBtParts, allSplashbacks, sbInfoFor, allWalls, allFixtures])
   useEffect(() => {
     const ids = [...new Set(allFixtures.map(f => f.catalog_id).filter((x): x is string => !!x))].filter(id => !fixtureCatalog.has(id))
     if (!ids.length) return
@@ -459,6 +479,13 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const drawBtInfo = useMemo(() => isHere ? bt3d?.info : btInfoFor?.(drawRoom), [isHere, drawRoom.id, bt3d, btInfoFor])
   const drawBenchTopZ = isHere ? benchTopZ : drawBtInfo && ((b: BenchtopInstance) => drawBtInfo(b).topZ)
+  // Splashbacks of the room drawn (z_splashback), with what each is made of.
+  const drawSb = useMemo((): SbPrint | undefined => {
+    const list = isHere ? splashbacks : jobSplashbacks.filter(s => s.room_id === drawRoom.id)
+    if (!list.length || !sbInfoFor) return undefined
+    return { splashbacks: list, info: sbInfoFor(drawRoom, drawBenchtops) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the room id (the room object is rebuilt per job load)
+  }, [isHere, splashbacks, jobSplashbacks, drawRoom.id, drawBenchtops, sbInfoFor])
   const drawBt3d = drawBtInfo && bt3d ? { info: drawBtInfo, profiles: bt3d.profiles } : undefined
   const drawBtDefaultProfile = useMemo(() => drawBtInfo && ((b: BenchtopInstance) => drawBtInfo(b).defaultProfileId), [drawBtInfo])
   // Benchtop Quote: per-top schedule from the drawing; material from the supply rows when resolved.
@@ -844,6 +871,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
               ) : selectedReport === 'shop_drawings' ? (
                 <ShopDrawingsReport
                   key={reportKey}
+                  sb={drawSb}
                   batch={batch}
                   project={project}
                   room={drawRoom}
@@ -866,6 +894,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
               ) : selectedReport === 'benchtop_quote' ? (
                 <PlanViewReport
                   key={`bq-${reportKey}`}
+                  sb={drawSb}
                   batch={batch}
                   project={project}
                   room={drawRoom}
@@ -887,6 +916,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
               ) : selectedReport === 'plan_view_v2' ? (
                 <PlanViewReport
                   key={reportKey}
+                  sb={drawSb}
                   batch={batch}
                   project={project}
                   room={drawRoom}
@@ -907,6 +937,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
               ) : selectedReport === 'elevation_view_v2' ? (
                 <ElevationPrintReport
                   key={reportKey}
+                  sb={drawSb}
                   batch={batch}
                   project={project}
                   room={drawRoom}
@@ -927,6 +958,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
               ) : selectedReport === 'render_3d' ? (
                 <Render3DReport
                   key={reportKey}
+                  sb={drawSb}
                   batch={batch}
                   project={project}
                   room={drawRoom}

@@ -13,6 +13,7 @@ import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import type { BtElevInfo } from './BenchtopElevation'
 import { RoomScene } from './Room3DScene'
+import type { SbPrint } from './useSplashbacks'
 import { captureHiddenLines, type HiddenLineResult } from '@/src/lib/shopDrawings/hiddenLine'
 import type { Shot3D } from '@/src/lib/shopDrawings/shots3d'
 import { PEN, PRINT_INK } from '@/src/lib/shopDrawings/pens'
@@ -71,7 +72,9 @@ function CaptureDriver({ shot, minMs, onDone }: { shot: Shot3D; minMs: number; o
   return null
 }
 
-export default function Room3DCapture({ shots, walls, cabinets, room, resolvedParts, layers, fixtures, bt, onCaptured }: {
+export default function Room3DCapture({ shots, walls, cabinets, room, resolvedParts, layers, fixtures, bt, sb, onCaptured }: {
+  /** Splashbacks (z_splashback) in the views. */
+  sb?: SbPrint
   shots: Shot3D[]
   walls: Wall[]
   cabinets: CabinetInstance[]
@@ -103,6 +106,7 @@ export default function Room3DCapture({ shots, walls, cabinets, room, resolvedPa
             birdsEyeSignal={0} resetSignal={0}
             layers={layers}
             bt={bt && { ...bt, selectedId: null, onSelect: NOOP }}
+            sb={sb && { splashbacks: sb.splashbacks, infoFor: sb.info, fixtures, selectedId: null, onSelect: NOOP }}
             fx={{ fixtures, selectedId: null, onSelect: NOOP }}
             pickBenchtops={false} measuring={false} wire={false}
           />
@@ -135,7 +139,9 @@ function RenderDriver({ shot, minMs, onDone }: { shot: Shot3D; minMs: number; on
 }
 
 /** Off-screen colour render of each shot in turn, at width × height pixels. */
-export function Room3DRender({ shots, width, height, walls, cabinets, room, resolvedParts, layers, fixtures, bt, materialColours, ebByMatId, onCaptured }: {
+export function Room3DRender({ shots, width, height, walls, cabinets, room, resolvedParts, layers, fixtures, bt, sb, materialColours, ebByMatId, onCaptured }: {
+  /** Splashbacks (z_splashback) in the views. */
+  sb?: SbPrint
   shots: Shot3D[]
   width: number
   height: number
@@ -171,6 +177,7 @@ export function Room3DRender({ shots, width, height, walls, cabinets, room, reso
             birdsEyeSignal={0} resetSignal={0}
             layers={layers}
             bt={bt && { ...bt, selectedId: null, onSelect: NOOP }}
+            sb={sb && { splashbacks: sb.splashbacks, infoFor: sb.info, fixtures, selectedId: null, onSelect: NOOP }}
             fx={{ fixtures, selectedId: null, onSelect: NOOP }}
             pickBenchtops={false} measuring={false} wire={false}
           />

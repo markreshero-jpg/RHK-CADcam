@@ -15,6 +15,9 @@ import type { Room, Wall, CabinetInstance, RoomFixture, BenchtopInstance, Bencht
 import { openingOnWall, fixtureChainSpans, fixtureLayer } from '@/src/lib/fixtureGeometry'
 import { OpeningElev, FixturesElevationPrint } from './FixturesElevation'
 import BenchtopElevation, { type BtElevInfo } from './BenchtopElevation'
+import SplashbackElevation from './SplashbackElevation'
+import type { SbPrint } from './useSplashbacks'
+import { sbOpenings } from '@/src/lib/splashbackGeometry'
 import ReturnSectionSVG, { type ReturnSectionData } from './ReturnSectionSVG'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { cabT, wallEnd, dist, cabWallSide, centroid, wallCabTop, cabBottomZ, nibsOnWall, dropWallsOnWall, wallBaseZ } from '@/src/lib/geometry'
@@ -150,8 +153,10 @@ const PRINT_DRILLING = false
 const FACE_SHADE = '#ededed'   // light shade so faced zones read differently from open shelves
 
 export default function ElevationPrintSVG({
-  wall, side = 'face', walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [], returnSec,
+  wall, side = 'face', walls, cabinets, room, resolvedParts: resolvedPartsRaw, svgRef, scale = 20, layers, show, fixtures = [], benchHeights = [], benchtops = [], btInfo, btProfiles, annotations = [], returnSec, sb,
 }: {
+  /** Splashbacks (z_splashback) on this side — ink outline + material hatch + label. */
+  sb?:           SbPrint
   /** Which side of the wall is drawn. The back is seen from outside, so it runs right-to-left
    *  (x = length − t − dx), the same as the canvas elevation. Islands print both. */
   side?:         'face' | 'back'
@@ -914,6 +919,15 @@ export default function ElevationPrintSVG({
         <BenchtopElevation benchtops={benchtops} walls={walls} wall={wall} side={side} roomCx={centroid(walls)} roomH={roomH}
           zoom={2 / P} layers={layers} selectedId={null} info={btInfo} profiles={btProfiles ?? {}}
           onSelect={NO_SELECT} interactive={false} print={{ P }} />
+      )}
+
+      {/* Splashbacks on this side (z_splashback) — on the wall, over the bench */}
+      {sb && sb.splashbacks.length > 0 && (
+        <SplashbackElevation splashbacks={sb.splashbacks} wallId={wall.id} side={side} wallLength={wall.length}
+          roomH={roomH} zoom={2 / P} layers={layers} selectedId={null} infoFor={sb.info}
+          openings={sbOpenings(fixtures, wall, side, centroid(walls))}
+          interactive={false} drawing={false} benches={[]} obstacles={[]}
+          onSelect={NO_SELECT} onChangeSegments={NO_SELECT} onCreate={NO_SELECT} print={{ P, fs: 2.2 * P }} />
       )}
 
       {/* Return cabinet sections (z_section_view R1) — outlines up to this wall's cabinet depth */}

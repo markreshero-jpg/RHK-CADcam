@@ -21,6 +21,7 @@ import { useTutorial } from '@/src/lib/tutorial/store'
 import { useCompanyTitle } from '@/src/lib/shopDrawings/companyTitle'
 import ShopTitleBlock, { sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
 import { elevationViews } from '@/src/lib/shopDrawings/elevationViews'
+import type { SbPrint } from './useSplashbacks'
 
 const PAPER: Record<string, { w: number; h: number }> = {
   A4L: { w: 297, h: 210 }, A3L: { w: 420, h: 297 }, A2L: { w: 594, h: 420 }, A1L: { w: 841, h: 594 },
@@ -35,7 +36,9 @@ const TOGGLES: { key: keyof ElevationPageOptions; label: string }[] = [
   { key: 'annotColours', label: 'Annotation colours' },
 ]
 
-export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, benchtops, benchTopZ, btInfo, btProfiles, annotations, batch }: {
+export default function ElevationPrintReport({ project, room, walls, cabinets, resolvedParts, layerSets, activeLayerSetId, scale, paperKey, fixtures, benchtops, benchTopZ, btInfo, btProfiles, annotations, batch, sb }: {
+  /** Splashbacks (z_splashback) on each wall's elevation. */
+  sb?: SbPrint
   /** CAD notes (z_CAD_tool A6c) — each wall's face-side elevation notes print on its page. */
   annotations?: RoomAnnotation[]
   /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
@@ -189,7 +192,7 @@ export default function ElevationPrintReport({ project, room, walls, cabinets, r
             cabinets={cabinets}
             fixtures={fixtures}
             annotations={annotations}
-            benchtops={benchtops} btInfo={btInfo} btProfiles={btProfiles}
+            benchtops={benchtops} btInfo={btInfo} btProfiles={btProfiles} sb={sb}
             benchHeights={benchTopZ ? benchDimHeights(w.id, benchtops ?? [], benchTopZ, (fixtures ?? []).filter(f => layers.show(fixtureLayer(f.category, f.kind)))) : []}
             room={room}
             resolvedParts={resolvedParts}

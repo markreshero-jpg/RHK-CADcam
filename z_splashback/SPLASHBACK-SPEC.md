@@ -6,7 +6,8 @@
 > **RESUME HERE** → 2026-11-14 **S2 built** (draw / select / move / stretch in elevation, Edit shape, plan
 > band, 3D panel, layers). First piece drawn: RHK6468 Kitchen Wall 7, 3872 × 700 (920 → 1620), SNB Arabescato
 > via "Same as Benchtop". **Check pending** (Mark). Next: **S3** — returns (Wall 7 north mitre), joints, hand
-> cut-outs; then the butler's pieces (Walls 4 + 3). S2 gaps listed under "S2 as built".
+> cut-outs; then the butler's pieces (Walls 4 + 3). 2026-11-15 **S2b** closed the S2 gaps (prints, reports,
+> offline, plan pick, Materials tab, override fix) — see "S2b as built"; check pending.
 
 ## Mark's brief (2026-11-14)
 
@@ -93,8 +94,7 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 - UI: Schedules library › Splashbacks tab (one dropdown per role, Benchtop and Board libraries grouped, banding
   on a board panel); Settings › Materials › Splashbacks default + "Splashback uses benchtop material".
 - Fixed in passing: the Schedules library asked for a non-existent `benchtop_schedules.benchtop_id` column.
-- Not yet: job / room schedule pickers + per-role overrides in the room Materials tab (with S2, when there is
-  something to resolve).
+- Job / room schedule pickers + per-role overrides in the Materials tab: built in S2b.
 
 ## S2 as built (2026-11-14)
 
@@ -117,7 +117,35 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 - **Gaps (later):** not on the shop-drawing / print elevations (`ElevationPrintSVG`) or plan report; not in the
   offline room copy (`roomCache`); plan band can't be clicked where cabinets cover it (select in elevation / 3D);
   the inherit lookup ignores benchtop job / room per-role overrides (same known gap as the benchtop display
-  thickness); not in reports / AI room summary / dashboard activity.
+  thickness); not in reports / AI room summary / dashboard activity. → all closed in S2b.
+
+## S2b as built (2026-11-15) — the S2 gaps
+
+- **Prints:** `SplashbackElevation` has a `print` mode (ink pens, white fill + material hatch, haloed label, no
+  handles; hatch ink set on the pattern lines — `currentColor` took the page text colour). Drawn by
+  `ElevationPrintSVG` (Elevation Views + Shop Drawings elevations), a grey band on the wall face in
+  `PlanViewReportSVG` (Plan View, Benchtop Quote, Shop Drawings plan — drawn over the bench, since it stands above
+  it), and in the 3D shots (`Room3DCapture` / `Room3DRender`: shop drawing 3D views + 3D Colour Render).
+  Bundle type `SbPrint` (`useSplashbacks.ts`): the room's pieces + `info`.
+- **Job Reports:** `ReportsModal` loads the job's `splashback_instances`; `useSplashbacks.forRoom(room, tops,
+  rowsFor)` gives the material cascade for any room (room overrides now loaded for every room of the job).
+- **Benchtop Supply:** surface splashbacks are order lines after each room's tops (`src/lib/splashbackSupply.ts`
+  + tests): size, area less window holes, holes listed as cut-outs, outline thumbnail when shaped. Board
+  splashbacks stay off (cut parts, L5). `SupplyLine.role` gains `'splashback'`.
+- **Offline:** `splashbacks` in the room copy (`roomCache`, optional — older copies have none) and the offline canvas.
+- **Plan pick:** bands carry `data-sb-id`; a cabinet click over one opens the stacked pick list with the
+  splashback in it (`splashbacksAtPoint`, `CabinetPickerMenu` `splashbacks`).
+- **Materials tab** (`MaterialsScheduleTab`): Splashbacks schedule in Schedule Assignments (room) / at the top of
+  the Splashbacks block (Job Properties, which hides assignments); Panel / Substrate / Packer overrides pick from
+  surfaces or boards (`surface:` / `board:` values); blank Panel shows "same as the benchtop" when inherit is on.
+- **Override fix (benchtops too):** a job / room override replaces the role's whole choice — `loadBenchtopInput`
+  and `useBenchtopCatalog.applyOverrides` no longer keep the schedule's other-library id; the benchtop override
+  save clears the other column. (Live data had no double-id rows.) The splashback inherit now follows benchtop
+  overrides (scheduleRowsFor already applied them).
+- Dashboard: `room_last_activity()` includes `splashback_instances` (`migration_s2b_room_activity.sql`, applied).
+  Delete-room counts list splashbacks. AI room summary lists them (label | wall | x range | heights | schedule);
+  the AI still can't edit them.
+- Not done: the canvas reloads job / room splashback overrides only on open (as benchtops).
 
 ## Questions for Mark (original; answers above)
 
@@ -136,7 +164,8 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 |---|---|---|
 | S0 | Spec + Mark's answers | [x] 2026-11-14 |
 | S1 | Tables + schedules + seed materials | [x] 2026-11-14, check pending (instances table moved to S2) |
-| S2 | Draw / edit in elevation (rect + Edit shape), plan band, 3D | [x] 2026-11-14, check pending; print + offline gaps |
+| S2 | Draw / edit in elevation (rect + Edit shape), plan band, 3D | [x] 2026-11-14, check pending |
+| S2b | S2 gaps: prints, reports + supply, offline, plan pick, Materials tab, override fix | [x] 2026-11-15, check pending |
 | S3 | Returns, joints, cut-outs (+ auto from openings) | [ ] |
 | S4 | Auto-build from tops | [ ] |
 | S5 | Benchtop Quote section | [ ] |

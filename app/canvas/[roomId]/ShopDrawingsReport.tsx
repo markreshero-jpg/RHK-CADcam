@@ -29,6 +29,7 @@ import AnnotationLayer from './AnnotationLayer'
 import { IDENTITY_FRAME } from '@/src/lib/annotations/geometry'
 import { isSpecBlock, layoutSpecSheet, drawnBounds } from '@/src/lib/annotations/blocks'
 import { elevationViews, type ElevSide } from '@/src/lib/shopDrawings/elevationViews'
+import type { SbPrint } from './useSplashbacks'
 
 const PAPER: Record<string, { w: number; h: number; label: string }> = {
   A4L: { w: 297, h: 210, label: 'A4' }, A3L: { w: 420, h: 297, label: 'A3' },
@@ -140,7 +141,9 @@ function without(v: LayerView, ...ids: string[]): LayerView {
 }
 
 export default function ShopDrawingsReport({ project, room, walls, cabinets, planResolved, elevResolved, threeDResolved, bt3d, fixtures = [], annotations = [],
-  benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey, onDeleteSavedShot, batch }: {
+  benchtops = [], benchTopZ, layerSets, activeLayerSetId, scale, paperKey, onDeleteSavedShot, batch, sb }: {
+  /** Splashbacks (z_splashback) — plan band + on the elevations. */
+  sb?: SbPrint
   /** Job Reports, several rooms: download as soon as ready, then call this (useBatchDownload). */
   batch?: () => void
   /** Remove a view saved from the 3D view (room.shop_3d_shots). */
@@ -513,13 +516,14 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                 <ElevationPrintSVG
                   wall={sheet.wall} side={sheet.side} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} annotations={annotations} resolvedParts={elevResolved}
-                  benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles}
+                  benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles} sb={sb}
                   benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category, f.kind)))) : []}
                   svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }}
                   scale={scaleOf(sheet.key)} layers={elevLayers} show={elevShow} returnSec={returnSec}
                 />
               ) : (
                 <PlanViewReportSVG
+                  sb={sb}
                   walls={walls} cabinets={cabinets} room={room} fixtures={fixtures} annotations={planAnnots} benchtops={benchtops}
                   btProfiles={bt3d?.profiles} btDefaultProfile={bt3d && (b => bt3d.info(b).defaultProfileId)}
                   btThickness={bt3d && (b => bt3d.info(b).thick.total)}
@@ -540,7 +544,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       {ticked.has(KEY_3D) && !captured && (
         <Room3DCapture key={captureRun} shots={pending}
           walls={walls} cabinets={cabinets} room={room} resolvedParts={threeDResolved} layers={threeDLayers}
-          fixtures={fixtures} bt={bt3d && { ...bt3d, benchtops }}
+          fixtures={fixtures} bt={bt3d && { ...bt3d, benchtops }} sb={sb}
           onCaptured={(id, r) => setShotResults(prev => ({ ...prev, [id]: r }))} />
       )}
     </div>

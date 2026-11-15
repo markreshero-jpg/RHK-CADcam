@@ -23,7 +23,7 @@ export function useRoomSnapshot(data: RoomSnapshotData) {
   useEffect(() => {
     const t = setTimeout(() => { void saveRoomSnapshot(withStamps(latest.current)) }, SAVE_AFTER_MS)
     return () => clearTimeout(t)
-  }, [data.project, data.room, data.walls, data.cabinets, data.benchtops, data.fixtures, data.annotations, data.cadLayers])
+  }, [data.project, data.room, data.walls, data.cabinets, data.benchtops, data.fixtures, data.annotations, data.cadLayers, data.splashbacks])
 
   // Leaving the page: save now.
   useEffect(() => {

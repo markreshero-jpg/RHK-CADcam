@@ -46,6 +46,8 @@ import { shapedFrontMarks, sweepFlag, drawerLineOffset, benchReach, bifoldPlanMa
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 import { FillPatternDef, fillPaint } from './FillPattern'
+import type { SbPrint } from './useSplashbacks'
+import { sbBounds, sbPlanQuad } from '@/src/lib/splashbackGeometry'
 
 /** Report-only page extras (not drawing layers). Wall names + wall hatch moved to
  *  the layer set (wall_names / wall_fill, 2026-10-26). */
@@ -87,8 +89,10 @@ function cabinetTypeFill(cab: CabinetInstance): string {
 }
 
 export default function PlanViewReportSVG({
-  walls, cabinets, room, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false, btProfiles, btDefaultProfile, btThickness,
+  walls, cabinets, room, resolvedParts, svgRef, scale = 20, layers, show, fixtures = [], annotations = [], benchtops = [], hideSpecBlocks = false, btProfiles, btDefaultProfile, btThickness, sb,
 }: {
+  /** Splashbacks (z_splashback) — a band on the wall face at its thickness. */
+  sb?:         SbPrint
   walls:       Wall[]
   /** The room — cabinet heights for the ceiling-down draw order (planDrawOrder). */
   room?:       Room
@@ -674,6 +678,18 @@ export default function PlanViewReportSVG({
                 fs={layers.w('benchtop_sizes', 2.2 * P)} gap={2.2 * P} fill={INK} opacity={layers.op('benchtop_sizes')} avoid={fixtureBoxes} />
             )}
           </g>
+        )
+      })}
+
+      {/* ── Splashbacks — stand above the bench, so drawn over it: a band on the wall face ── */}
+      {sb && layers.show('splashbacks') && sb.splashbacks.map(x => {
+        const w = walls.find(wl => wl.id === x.wall_id)
+        const b = sbBounds(x.segments)
+        if (!w || !b) return null
+        const q = sbPlanQuad(b, w, x.wall_side, cx, Number(x.offset_mm) || 0, sb.info(x).thick)
+        return (
+          <polygon key={`sb-${x.id}`} points={q.map(p => `${p.x},${p.y}`).join(' ')} opacity={layers.op('splashbacks')}
+            fill="#d4d4d4" stroke={INK} strokeWidth={lw('splashbacks', pen('thin', P))} strokeLinejoin="miter" />
         )
       })}
 

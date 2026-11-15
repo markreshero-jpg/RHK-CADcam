@@ -2,7 +2,7 @@
 
 import { Room } from '@/src/lib/types'
 
-type Counts = { cabinets: number; walls: number; benchtops: number; fixtures?: number }
+type Counts = { cabinets: number; walls: number; benchtops: number; fixtures?: number; splashbacks?: number }
 
 export default function DeleteRoomModal({ room, counts, blocked, busy, error, onCancel, onConfirm }: {
   room: Room
@@ -57,6 +57,7 @@ export default function DeleteRoomModal({ room, counts, blocked, busy, error, on
                   {counts.walls} {counts.walls === 1 ? 'wall' : 'walls'},{' '}
                   {counts.benchtops} {counts.benchtops === 1 ? 'benchtop' : 'benchtops'}
                   {!!counts.fixtures && <>, {counts.fixtures} {counts.fixtures === 1 ? 'fixture' : 'fixtures'}</>}
+                  {!!counts.splashbacks && <>, {counts.splashbacks} {counts.splashbacks === 1 ? 'splashback' : 'splashbacks'}</>}
                 </>
               )}
             </div>

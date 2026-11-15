@@ -23,6 +23,7 @@ import {
 } from '@/src/lib/splashbackGeometry'
 import type { SbInfo } from './useSplashbacks'
 import type { BenchtopSegment } from '@/src/lib/types'
+import { PRINT_INK, MIN_PEN, pen } from '@/src/lib/shopDrawings/pens'
 
 const r1 = (v: number) => Math.round(v)
 
@@ -43,20 +44,22 @@ const KIND_COLOUR: Record<string, string> = {
   timber: '#d6a35c', solid_wood: '#d6a35c', laminate: '#a3a3a3', board: '#e5e7eb',
 }
 
-function Patterns({ zoom }: { zoom: number }) {
+function Patterns({ zoom, sw: swIn, id = 'sb', ink }: { zoom: number; sw?: number; id?: string; ink: string }) {
+  // Hatch ink set on the lines: currentColor in a pattern takes the pattern's own
+  // surroundings (the page text colour), not the path that uses it.
   // Pattern spacing in mm so it scales with the drawing; lines stay hairline.
-  const sw = 0.8 / zoom
+  const sw = swIn ?? 0.8 / zoom
   return (
     <defs>
-      <pattern id="sb-hatch-stone" patternUnits="userSpaceOnUse" width={60} height={60} patternTransform="rotate(45)">
-        <line x1={0} y1={0} x2={0} y2={60} stroke="currentColor" strokeWidth={sw} />
+      <pattern id={`${id}-hatch-stone`} patternUnits="userSpaceOnUse" width={60} height={60} patternTransform="rotate(45)">
+        <line x1={0} y1={0} x2={0} y2={60} stroke={ink} strokeWidth={sw} />
       </pattern>
-      <pattern id="sb-hatch-glass" patternUnits="userSpaceOnUse" width={240} height={240} patternTransform="rotate(-45)">
-        <line x1={0} y1={0} x2={0} y2={90} stroke="currentColor" strokeWidth={sw} />
-        <line x1={25} y1={0} x2={25} y2={60} stroke="currentColor" strokeWidth={sw} />
+      <pattern id={`${id}-hatch-glass`} patternUnits="userSpaceOnUse" width={240} height={240} patternTransform="rotate(-45)">
+        <line x1={0} y1={0} x2={0} y2={90} stroke={ink} strokeWidth={sw} />
+        <line x1={25} y1={0} x2={25} y2={60} stroke={ink} strokeWidth={sw} />
       </pattern>
-      <pattern id="sb-hatch-tile" patternUnits="userSpaceOnUse" width={100} height={100}>
-        <path d="M 0 0 H 100 M 0 0 V 100" fill="none" stroke="currentColor" strokeWidth={sw} />
+      <pattern id={`${id}-hatch-tile`} patternUnits="userSpaceOnUse" width={100} height={100}>
+        <path d="M 0 0 H 100 M 0 0 V 100" fill="none" stroke={ink} strokeWidth={sw} />
       </pattern>
     </defs>
   )
@@ -72,8 +75,11 @@ type Drag =
 
 export default function SplashbackElevation({
   splashbacks, wallId, side, wallLength, roomH, zoom, lineScale = 1, layers, selectedId, infoFor, openings,
-  interactive, drawing, benches, obstacles, onSelect, onChangeSegments, onCreate, onContextMenu,
+  interactive, drawing, benches, obstacles, onSelect, onChangeSegments, onCreate, onContextMenu, print,
 }: {
+  /** Shop drawing / report elevation (ElevationPrintSVG): ink pens, white fill + hatch, no handles.
+   *  P = model mm per paper mm; fs = label font size (model mm). */
+  print?: { P: number; fs: number }
   splashbacks: SplashbackInstance[]
   wallId: string
   side: 'face' | 'back'
@@ -139,12 +145,14 @@ export default function SplashbackElevation({
     setDrag(null)
   }
 
-  const stroke = layers.color('splashbacks', '#38bdf8')
+  const stroke = print ? PRINT_INK : layers.color('splashbacks', '#38bdf8')
   const hs = 7 / z   // handle half-size, screen px
+  // Hatch ids are per wall side — a report page holds several elevations.
+  const pid = print ? `sbp-${wallId.slice(0, 8)}-${side}` : 'sb'
 
   return (
     <g>
-      <Patterns zoom={z} />
+      <Patterns zoom={z} id={pid} sw={print ? pen('thin', print.P) : undefined} ink={stroke} />
       {here.map(sb => {
         const segs = liveSegs(sb)
         const b = sbBounds(segs)
@@ -155,7 +163,7 @@ export default function SplashbackElevation({
         const isSel = sb.id === selectedId
         const col = KIND_COLOUR[info.kind] ?? '#a8a29e'
         const hatch = hatchFor(info.kind)
-        const fs = 11 / z
+        const fs = print ? print.fs : 11 / z
         const label = `SPLASHBACK${info.name ? ' – ' + info.name : ''}`
         return (
           <g key={sb.id} style={{ pointerEvents: interactive ? undefined : 'none', cursor: interactive ? (isSel ? 'move' : 'pointer') : undefined }}
@@ -181,15 +189,18 @@ export default function SplashbackElevation({
             onContextMenu={e => { if (interactive && onContextMenu) { e.preventDefault(); e.stopPropagation(); onSelect(sb.id); onContextMenu(e, sb.id) } }}
           >
             <path d={d} fillRule="evenodd"
-              fill={layers.lineDrawing ? 'none' : col} fillOpacity={layers.lineDrawing ? 0 : Math.min(0.35, lp.fillOpacity ?? 0.35)}
-              stroke={isSel ? '#f59e0b' : stroke} strokeWidth={layers.w('splashbacks', isSel ? 2 : 1.25) / lz} opacity={layers.op('splashbacks')} />
+              fill={print ? 'white' : layers.lineDrawing ? 'none' : col} fillOpacity={print ? 1 : layers.lineDrawing ? 0 : Math.min(0.35, lp.fillOpacity ?? 0.35)}
+              stroke={isSel ? '#f59e0b' : stroke}
+              strokeWidth={print ? Math.max(layers.w('splashbacks', pen('front', print.P)), MIN_PEN * print.P) : layers.w('splashbacks', isSel ? 2 : 1.25) / lz}
+              opacity={layers.op('splashbacks')} />
             {hatch && (
-              <path d={d} fillRule="evenodd" fill={`url(#sb-hatch-${hatch})`} stroke="none"
-                style={{ color: isSel ? '#f59e0b' : stroke }} opacity={0.6 * layers.op('splashbacks')} />
+              <path d={d} fillRule="evenodd" fill={`url(#${pid}-hatch-${hatch})`} stroke="none"
+                style={{ color: isSel ? '#f59e0b' : stroke }} opacity={(print ? 0.45 : 0.6) * layers.op('splashbacks')} />
             )}
             {layers.show('splashback_labels') && (
               <text x={(b.x0 + b.x1) / 2} y={roomH - (b.z0 + b.z1) / 2} fontSize={fs} textAnchor="middle" dominantBaseline="middle"
-                fill={isSel ? '#f59e0b' : stroke} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                fill={isSel ? '#f59e0b' : stroke} style={{ pointerEvents: 'none', userSelect: 'none' }}
+                {...(print ? { stroke: 'white', strokeWidth: fs * 0.3, paintOrder: 'stroke' } : {})}>
                 <tspan x={(b.x0 + b.x1) / 2} dy={-fs * 0.6}>{label}</tspan>
                 <tspan x={(b.x0 + b.x1) / 2} dy={fs * 1.25}>{`${r1(b.x1 - b.x0)} × ${r1(b.z1 - b.z0)}${info.thick ? ` · ${info.thick}` : ''}`}</tspan>
               </text>

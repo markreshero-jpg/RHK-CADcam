@@ -16,6 +16,7 @@ import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
 import ShopTitleBlock, { SheetHeading, HEADING_H, sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
 import { useBatchDownload } from './useBatchDownload'
 import { Room3DRender, type Bt3DPrint } from './Room3DCapture'
+import type { SbPrint } from './useSplashbacks'
 import type { RoomScene } from './Room3DScene'
 
 const PAPER: Record<string, { w: number; h: number; label: string }> = {
@@ -27,7 +28,9 @@ const MARGIN = 10
 const RENDER_W = 2400
 const LS_OFF = 'render-3d-off'
 
-export default function Render3DReport({ project, room, walls, cabinets, resolvedParts, fixtures, benchtops, bt3d, materialColours, ebByMatId, layerSets, activeLayerSetId, paperKey, batch }: {
+export default function Render3DReport({ project, room, walls, cabinets, resolvedParts, fixtures, benchtops, bt3d, materialColours, ebByMatId, layerSets, activeLayerSetId, paperKey, batch, sb }: {
+  /** Splashbacks (z_splashback). */
+  sb?: SbPrint
   project: Project | null
   room: Room
   walls: Wall[]
@@ -179,7 +182,7 @@ export default function Render3DReport({ project, room, walls, cabinets, resolve
       {!done && (
         <Room3DRender key={run} shots={pending} width={RENDER_W} height={renderH}
           walls={walls} cabinets={cabinets} room={room} resolvedParts={resolvedParts} layers={layers}
-          fixtures={fixtures} bt={bt3d && { ...bt3d, benchtops }}
+          fixtures={fixtures} bt={bt3d && { ...bt3d, benchtops }} sb={sb}
           materialColours={materialColours} ebByMatId={ebByMatId}
           onCaptured={(id, url) => setImages(prev => ({ ...prev, [id]: url }))} />
       )}

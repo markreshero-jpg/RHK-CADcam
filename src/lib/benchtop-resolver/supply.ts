@@ -16,7 +16,8 @@ export interface SupplyLine {
   benchtopId:  string
   source:      string            // the top's label
   roomId:      string
-  role:        ResolvedBenchtopPart['part_role']
+  /** 'splashback' = a surface splashback (z_splashback, splashbackSupply.ts). */
+  role:        ResolvedBenchtopPart['part_role'] | 'splashback'
   label:       string
   piece:       number | null
   length:      number

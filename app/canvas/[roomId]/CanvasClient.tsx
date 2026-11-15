@@ -94,7 +94,7 @@ import ElevationSVG from './ElevationSVG'
 import SectionSVG from './SectionSVG'
 import CrossSectionView from './CrossSectionView'
 import CanvasContextMenu from './CanvasContextMenu'
-import CabinetPickerMenu, { cabinetsAtPoint } from './CabinetPickerMenu'
+import CabinetPickerMenu, { cabinetsAtPoint, splashbacksAtPoint } from './CabinetPickerMenu'
 import { buildContextMenuGroups } from './canvasContextItems'
 import ConfirmDeleteModal from '@/src/components/ConfirmDeleteModal'
 import SplitCabinetModal from './SplitCabinetModal'
@@ -253,7 +253,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   }, [selected, multiWalls])
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   // Stacked cabinets under one plan click → pick one (CabinetPickerMenu).
-  const [cabPicker, setCabPicker] = useState<{ ids: string[]; x: number; y: number } | null>(null)
+  const [cabPicker, setCabPicker] = useState<{ ids: string[]; sbIds?: string[]; x: number; y: number } | null>(null)
   const [cabPickHover, setCabPickHover] = useState<string | null>(null)
   const [deleteWallPending, setDeleteWallPending] = useState<string[] | null>(null)
   const [deleteCabsPending, setDeleteCabsPending] = useState<string[] | null>(null)
@@ -368,7 +368,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [cadLayers, setCadLayers] = useState<CadLayer[]>(initialCadLayers ?? [])
   const cadLayerV = useMemo(() => cadLayerView(cadLayers), [cadLayers])
   // Offline step 2: keep this room's copy on the device current (and Take offline's warm-up).
-  useRoomSnapshot({ project, room, walls, cabinets, benchtops, fixtures, annotations, cadLayers })
+  useRoomSnapshot({ project, room, walls, cabinets, benchtops, fixtures, annotations, cadLayers, splashbacks })
   // Current layer for new items, remembered per user per job; null / gone = General.
   const [cadLayerPick, setCadLayerPick] = useState<string | null>(() => getUserPrefs().cadLayerCurrent[initRoom.project_id] ?? null)
   const cadLayerCurrent = cadLayerPick && cadLayers.some(l => l.id === cadLayerPick && !l.is_default) ? cadLayerPick : null
@@ -2964,7 +2964,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     // More than one cabinet under the pointer → list them, select on pick.
     if (!shiftRef.current) {
       const ids = cabinetsAtPoint(e.clientX, e.clientY)
-      if (ids.length > 1) { setCabPickHover(null); setCabPicker({ ids, x: e.clientX, y: e.clientY }); return }
+      // Splashback bands sit under the cabinets on the wall face — list them too.
+      const sbIds = splashbacksAtPoint(e.clientX, e.clientY)
+      if (ids.length > 1 || sbIds.length) { setCabPickHover(null); setCabPicker({ ids, sbIds, x: e.clientX, y: e.clientY }); return }
     }
     setSelected({ type: 'cabinet', id: cab.id })
 
@@ -3203,6 +3205,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     if (mode === 'draw_splashback' && canvasView !== 'elevation') { switchView('elevation'); setMode('draw_splashback') }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- switchView is stable enough; only on mode change
   }, [mode])
+  // Splashback material for any room of the job (reports: drawings + supply sheet).
+  const sbInfoFor = useCallback((rm: Room, bts: BenchtopInstance[]) => sbk.forRoom(rm, bts, btCatalog.forRoom(rm).scheduleRowsFor),
+    [sbk.forRoom, btCatalog.forRoom])
   // Plan bands on the wall face (z_splashback S2).
   const splashbackBands = useMemo(() => {
     const rc = centroid(walls)
@@ -4467,11 +4472,16 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       {cabPicker && (
         <CabinetPickerMenu
           cabinets={cabPicker.ids.map(id => cabinets.find(c => c.id === id)).filter((c): c is CabinetInstance => !!c)}
+          splashbacks={(cabPicker.sbIds ?? []).flatMap(id => {
+            const s = splashbacks.find(x => x.id === id)
+            return s ? [{ id, label: s.label ?? 'Splashback', size: sbk.sizeOf(s) }] : []
+          })}
           clientX={cabPicker.x} clientY={cabPicker.y}
-          selectedId={selected?.type === 'cabinet' ? selected.id : null}
+          selectedId={selected?.type === 'cabinet' || selected?.type === 'splashback' ? selected.id : null}
           onHover={setCabPickHover}
-          onPick={id => {
+          onPick={(id, kind) => {
             setCabPicker(null); setCabPickHover(null)
+            if (kind === 'splashback') { setSelected({ type: 'splashback', id }); setMultiSelect([]); return }
             setSelected({ type: 'cabinet', id }); setMultiSelect([])
             useTutorial.getState().emit('plan_cab_pick')
           }}
@@ -4846,6 +4856,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             }
           }}
           onDeleteShopShot={id => saveShopShots((room.shop_3d_shots ?? []).filter(s => s.id !== id))}
+          splashbacks={splashbacks}
+          sbInfoFor={sbInfoFor}
           project={project}
           room={room}
           walls={walls}

@@ -17,7 +17,7 @@ import TakeOfflineButton, { useOfflineRooms } from './TakeOfflineButton'
 import DeleteRoomModal from './DeleteRoomModal'
 import DeleteProjectModal from './DeleteProjectModal'
 
-type RoomCounts = { cabinets: number; walls: number; benchtops: number; fixtures: number }
+type RoomCounts = { cabinets: number; walls: number; benchtops: number; fixtures: number; splashbacks: number }
 type ProjectCounts = { rooms: number; cabinets: number }
 
 // ── Status config (shared shape with the projects page) ─────────────────────────
@@ -352,13 +352,14 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
     setDeleteBlocked(false)
     // Fetch cascade counts before showing the confirmation
     void (async () => {
-      const [cab, wal, ben, fix] = await Promise.all([
+      const [cab, wal, ben, fix, sbk] = await Promise.all([
         supabase.from('cabinet_instances').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
         supabase.from('walls').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
         supabase.from('benchtop_instances').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
         supabase.from('room_fixtures').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
+        supabase.from('splashback_instances').select('*', { count: 'exact', head: true }).eq('room_id', room.id),
       ])
-      setDeleteCounts({ cabinets: cab.count ?? 0, walls: wal.count ?? 0, benchtops: ben.count ?? 0, fixtures: fix.count ?? 0 })
+      setDeleteCounts({ cabinets: cab.count ?? 0, walls: wal.count ?? 0, benchtops: ben.count ?? 0, fixtures: fix.count ?? 0, splashbacks: sbk.count ?? 0 })
     })()
   }
 

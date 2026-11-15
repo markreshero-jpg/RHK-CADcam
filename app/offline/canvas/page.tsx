@@ -43,6 +43,7 @@ export default function OfflineCanvasPage() {
       initialFixtures={d.fixtures}
       initialAnnotations={d.annotations}
       initialCadLayers={d.cadLayers}
+      initialSplashbacks={d.splashbacks ?? []}
       offlineCopy={{ savedAt: state.snap.savedAt }}
     />
   )

@@ -17,6 +17,7 @@ const SCHED_TYPES = [
   { key: 'slide',           label: 'Slides',               table: 'slide_schedules',           col: 'slide_schedule_id'           },
   { key: 'handle',          label: 'Handles',              table: 'handle_schedules',          col: 'handle_schedule_id'          },
   { key: 'benchtop',        label: 'Benchtops',            table: 'benchtop_schedules',        col: 'benchtop_schedule_id'        },
+  { key: 'splashback',      label: 'Splashbacks',          table: 'splashback_schedules',      col: 'splashback_schedule_id'      },
 ] as const
 
 type SchedKey = typeof SCHED_TYPES[number]['key']
@@ -57,6 +58,17 @@ const BT_ROLES_CONFIG = [
   { key: 'back_fascia',          label: 'Back Fascia',       desc: 'Exposed back (islands)',     source: 'board'    as const },
 ]
 
+// Splashback roles (z_splashback L6). A pick is from either library — board
+// (cut part) or surface (stone / glass / tile…, supply only) — stored as
+// `board:<id>` / `surface:<id>`; an override replaces the role's whole choice.
+const SB_ROLES_CONFIG = [
+  { key: 'panel',     label: 'Panel',     desc: 'The splashback itself' },
+  { key: 'substrate', label: 'Substrate', desc: 'Board behind tile / glass' },
+  { key: 'packer',    label: 'Packer',    desc: 'Packers / battens off the wall' },
+]
+const sbKey = (r: { material_id: string | null; benchtop_material_id: string | null }) =>
+  r.material_id ? `board:${r.material_id}` : r.benchtop_material_id ? `surface:${r.benchtop_material_id}` : ''
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface Schedule { id: string; name: string; is_default: boolean }
@@ -94,6 +106,10 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
   const [schedMat,   setSchedMat]   = useState<MatMap>({})  // `${cls}|${role}` → mat_id (from schedules)
   const [schedTk,    setSchedTk]    = useState<MatMap>({})  // role → mat_id (from toekick schedule)
   const [schedBt,    setSchedBt]    = useState<MatMap>({})  // part_role → mat_id (from benchtop schedule)
+  const [sbOvr,      setSbOvr]      = useState<MatMap>({})  // splashback part_role → board:/surface: id
+  const [schedSb,    setSchedSb]    = useState<MatMap>({})  // splashback part_role → board:/surface: id (from schedule)
+  const [sbInherits, setSbInherits] = useState(true)        // shop_settings.splashback_inherits_benchtop
+  const [shopSbId,   setShopSbId]   = useState<string | null>(null) // the shop's splashback schedule
 
   useEffect(() => {
     let cancelled = false
@@ -101,7 +117,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
       setLoading(true)
 
       // Load all 9 schedule lists + own row + parent row + overrides + materials catalogs in parallel
-      const [listsResults, ownRes, parentRes, matOvrRes, tkOvrRes, matsRes, btMatsRes, btOvrRes] = await Promise.all([
+      const [listsResults, ownRes, parentRes, matOvrRes, tkOvrRes, matsRes, btMatsRes, btOvrRes, sbOvrRes, shopRes] = await Promise.all([
         Promise.all(SCHED_TYPES.map(st => supabase.from(st.table).select('id, name, is_default').order('name'))),
         mode === 'room' && roomId
           ? supabase.from('rooms').select(ALL_SCHED_COLS).eq('id', roomId).single()
@@ -120,6 +136,10 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
         mode === 'room' && roomId
           ? supabase.from('room_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('room_id', roomId)
           : supabase.from('job_benchtop_materials').select('part_role, material_id, benchtop_material_id').eq('project_id', projectId),
+        mode === 'room' && roomId
+          ? supabase.from('room_splashback_materials').select('part_role, material_id, benchtop_material_id').eq('room_id', roomId)
+          : supabase.from('job_splashback_materials').select('part_role, material_id, benchtop_material_id').eq('project_id', projectId),
+        supabase.from('shop_settings').select('splashback_schedule_id, splashback_inherits_benchtop').limit(1).maybeSingle(),
       ])
 
       if (cancelled) return
@@ -146,6 +166,12 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
           parent[st.key] = (lists[st.key] ?? []).find(s => s.is_default)?.id ?? null
         })
       }
+      // Splashbacks: the shop default lives in Settings (shop_settings), before is_default.
+      const shop = shopRes.data as { splashback_schedule_id: string | null; splashback_inherits_benchtop: boolean } | null
+      if (shop) setSbInherits(shop.splashback_inherits_benchtop !== false)
+      const shopSb = shop?.splashback_schedule_id ?? (lists.splashback ?? []).find(s => s.is_default)?.id ?? null
+      if (mode !== 'room') parent.splashback = shopSb
+      setShopSbId(shopSb)
       setParentIds(parent)
 
       // Build per-role override maps
@@ -171,12 +197,19 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
       }
       setBtOvr(bto)
 
+      const sbo: MatMap = {}
+      for (const r of (sbOvrRes.data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null }[]) {
+        if (sbKey(r)) sbo[r.part_role] = sbKey(r)
+      }
+      setSbOvr(sbo)
+
       // Load schedule rows for effective assembly, toekick, front, benchtop schedules
       const effAsm   = own.assembly   ?? parent.assembly   ?? null
       const effTk    = own.toekick    ?? parent.toekick    ?? null
       const effFront = own.front      ?? parent.front      ?? null
       const effBt    = own.benchtop   ?? parent.benchtop   ?? null
       await loadScheduleRows(effAsm, effTk, effFront, effBt, cancelled)
+      await loadSbRows(own.splashback ?? parent.splashback ?? shopSb, cancelled)
 
       if (!cancelled) setLoading(false)
     }
@@ -223,6 +256,19 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
     setSchedBt(sbt)
   }
 
+  // Splashback schedule rows → role → board:/surface: id.
+  async function loadSbRows(sbId: string | null, cancelled = false) {
+    const { data } = sbId
+      ? await supabase.from('splashback_schedule_rows').select('part_role, material_id, benchtop_material_id').eq('schedule_id', sbId)
+      : { data: [] }
+    if (cancelled) return
+    const ssb: MatMap = {}
+    for (const r of (data ?? []) as { part_role: string; material_id: string | null; benchtop_material_id: string | null }[]) {
+      if (sbKey(r)) ssb[r.part_role] = sbKey(r)
+    }
+    setSchedSb(ssb)
+  }
+
   // ── Save schedule assignment ───────────────────────────────────────────────
 
   async function saveScheduleId(key: SchedKey, schedId: string | null) {
@@ -233,6 +279,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
     const newOwn = { ...ownIds, [key]: schedId }
     setOwnIds(newOwn)
 
+    if (key === 'splashback') await loadSbRows(schedId ?? parentIds.splashback ?? shopSbId)
     if (key === 'assembly' || key === 'toekick' || key === 'front' || key === 'benchtop') {
       const effAsm   = (key === 'assembly'  ? schedId : ownIds.assembly)  ?? parentIds.assembly  ?? null
       const effTk    = (key === 'toekick'   ? schedId : ownIds.toekick)   ?? parentIds.toekick   ?? null
@@ -297,12 +344,32 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
     }
   }
 
+  async function saveSbOverride(role: string, pick: string) {
+    // pick = 'board:<id>' | 'surface:<id>' | '' (clear). Both columns written, so a
+    // change of library never leaves the old id behind (one id per row — L6).
+    const [lib, id] = pick.split(':')
+    const cols = { material_id: lib === 'board' ? id : null, benchtop_material_id: lib === 'surface' ? id : null }
+    const room = mode === 'room' && roomId
+    const table = room ? 'room_splashback_materials' : 'job_splashback_materials'
+    const key = room ? 'room_id' : 'project_id'
+    const keyVal = room ? roomId : projectId
+    if (pick) {
+      await supabase.from(table).upsert({ [key]: keyVal, part_role: role, ...cols }, { onConflict: `${key},part_role` })
+      setSbOvr(p => ({ ...p, [role]: pick }))
+    } else {
+      await supabase.from(table).delete().eq(key, keyVal).eq('part_role', role)
+      setSbOvr(p => { const n = { ...p }; delete n[role]; return n })
+    }
+  }
+
   async function saveBtOverride(role: string, matId: string, source: 'board' | 'benchtop') {
     const matCol = source === 'benchtop' ? 'benchtop_material_id' : 'material_id'
+    // The other library's column is cleared — an override replaces the role's whole choice.
+    const other = source === 'benchtop' ? 'material_id' : 'benchtop_material_id'
     if (mode === 'room' && roomId) {
       if (matId) {
         await supabase.from('room_benchtop_materials').upsert(
-          { room_id: roomId, part_role: role, [matCol]: matId },
+          { room_id: roomId, part_role: role, [matCol]: matId, [other]: null },
           { onConflict: 'room_id,part_role' }
         )
         setBtOvr(p => ({ ...p, [role]: matId }))
@@ -313,7 +380,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
     } else {
       if (matId) {
         await supabase.from('job_benchtop_materials').upsert(
-          { project_id: projectId, part_role: role, [matCol]: matId },
+          { project_id: projectId, part_role: role, [matCol]: matId, [other]: null },
           { onConflict: 'project_id,part_role' }
         )
         setBtOvr(p => ({ ...p, [role]: matId }))
@@ -531,6 +598,56 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
                 {(catalog as { id: string; name: string; dz: number }[]).map(m => (
                   <option key={m.id} value={m.id}>{m.name} ({m.dz}mm)</option>
                 ))}
+              </select>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Splashback per-role overrides (z_splashback) */}
+      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2">Splashbacks</p>
+      <div className="border border-gray-700 rounded overflow-hidden divide-y divide-gray-700/60">
+        {/* Job Properties hides Schedule Assignments — the splashback schedule is picked here. */}
+        {!showSchedules && (
+          <div className="flex items-center gap-3 px-3 py-2 bg-gray-900">
+            <div className="w-36 shrink-0">
+              <p className={`text-xs font-medium ${ownIds.splashback ? 'text-blue-300' : 'text-gray-300'}`}>Schedule</p>
+              <p className="text-[9px] text-gray-600">Library › Schedules › Splashbacks</p>
+            </div>
+            <select
+              value={ownIds.splashback ?? ''}
+              onChange={e => saveScheduleId('splashback', e.target.value || null)}
+              className={`flex-1 max-w-xs ${selCls(!!ownIds.splashback)}`}
+            >
+              <option value="">← {inheritLabel}: {(schedLists.splashback ?? []).find(s => s.id === parentIds.splashback)?.name ?? inheritedSchedName('splashback')}</option>
+              {(schedLists.splashback ?? []).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+        )}
+        {SB_ROLES_CONFIG.map(role => {
+          const cur = sbOvr[role.key] ?? ''
+          const inh = schedSb[role.key] ?? ''
+          const [ilib, iid] = inh.split(':')
+          const inhText = inh ? btMatName(iid, ilib === 'surface' ? 'benchtop' : 'board')
+            : role.key === 'panel' && sbInherits ? '— same as the benchtop —' : '— no schedule value —'
+          return (
+            <div key={role.key} className="flex items-center gap-3 px-3 py-2 bg-gray-900">
+              <div className="w-36 shrink-0">
+                <p className={`text-xs font-medium ${cur ? 'text-blue-300' : 'text-gray-300'}`}>{role.label}</p>
+                <p className="text-[9px] text-gray-600">{role.desc}</p>
+              </div>
+              <select
+                value={cur}
+                onChange={e => saveSbOverride(role.key, e.target.value)}
+                className={`flex-1 max-w-xs ${selCls(!!cur)}`}
+              >
+                <option value="">{inhText}</option>
+                <optgroup label="Surfaces (stone, glass, tile…) — supply only">
+                  {allBtMats.map(m => <option key={m.id} value={`surface:${m.id}`}>{m.name} ({m.dz}mm)</option>)}
+                </optgroup>
+                <optgroup label="Boards — cut parts">
+                  {allMats.map(m => <option key={m.id} value={`board:${m.id}`}>{m.name} ({m.dz}mm)</option>)}
+                </optgroup>
               </select>
             </div>
           )

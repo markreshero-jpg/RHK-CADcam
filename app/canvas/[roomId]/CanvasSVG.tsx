@@ -298,7 +298,7 @@ export default function CanvasSVG({
           const pts = sb.pts.map(p => `${p.x},${p.y}`).join(' ')
           return (
             <g key={'sb_' + sb.id}>
-            <polygon points={pts}
+            <polygon points={pts} data-sb-id={sb.id}
               fill={layers.lineDrawing ? 'none' : layers.color('splashbacks', '#38bdf8')} fillOpacity={0.35 * layers.op('splashbacks')}
               stroke={isSel ? '#f59e0b' : layers.color('splashbacks', '#38bdf8')} strokeWidth={layers.w('splashbacks', isSel ? 2 : 1) / lz}
               opacity={layers.op('splashbacks')}
@@ -307,7 +307,7 @@ export default function CanvasSVG({
               onClick={e => { if (mode === 'select') { e.stopPropagation(); onSplashbackClick?.(sb.id) } }} />
             {/* A 20 mm band is a hairline at room zoom — a wider invisible hit edge */}
             {mode === 'select' && (
-              <polygon points={pts} fill="none" stroke="transparent" strokeWidth={10 / view.zoom} style={{ cursor: 'pointer' }}
+              <polygon points={pts} data-sb-id={sb.id} fill="none" stroke="transparent" strokeWidth={10 / view.zoom} style={{ cursor: 'pointer' }}
                 onPointerDown={e => { if (e.button === 0) e.stopPropagation() }}
                 onClick={e => { e.stopPropagation(); onSplashbackClick?.(sb.id) }} />
             )}
