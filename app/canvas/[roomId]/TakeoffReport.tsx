@@ -54,9 +54,9 @@ export interface TakeoffData {
   tapeWaste: number
 }
 
-type ProductRow = { id: string; name: string; brand?: string | null; supplier_code?: string | null }
+type ProductRow = { id: string; name: string; brand?: string | null; supplier_code?: string | null; maker_code?: string | null }
 const toMap = (rows: ProductRow[] | null) =>
-  new Map<string, HardwareProduct>((rows ?? []).map(r => [r.id, { name: r.name, brand: r.brand ?? null, code: r.supplier_code ?? null }]))
+  new Map<string, HardwareProduct>((rows ?? []).map(r => [r.id, { name: r.name, brand: r.brand ?? null, code: r.supplier_code ?? r.maker_code ?? null }]))
 
 function sumSheetLines(lists: SheetLine[][]): SheetLine[] {
   const by = new Map<string, SheetLine>()
@@ -100,11 +100,11 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
     if (!active || products) return
     let cancelled = false
     void Promise.all([
-      supabase.from('hardware_hinges').select('id,name,brand,supplier_code'),
-      supabase.from('hardware_hinge_plates').select('id,name,brand,supplier_code'),
-      supabase.from('hardware_slides').select('id,name,brand'),
-      supabase.from('hardware_handles').select('id,name,brand'),
-      supabase.from('hardware_accessories').select('id,name,brand,supplier_code'),
+      supabase.from('hardware_hinges').select('id,name,brand,supplier_code,maker_code'),
+      supabase.from('hardware_hinge_plates').select('id,name,brand,supplier_code,maker_code'),
+      supabase.from('hardware_slides').select('id,name,brand,supplier_code,maker_code'),
+      supabase.from('hardware_handles').select('id,name,brand,supplier_code,maker_code'),
+      supabase.from('hardware_accessories').select('id,name,brand,supplier_code,maker_code'),
     ]).then(([h, p, s, hd, a]) => {
       if (cancelled) return
       setProducts({

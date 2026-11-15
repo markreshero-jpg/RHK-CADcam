@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic'
 export default async function MaterialsPage() {
   const supabase = await createServerClient()
 
-  const [boards, bands, benchtops, hinges, handles, slides, accessories, lifts] = await Promise.all([
+  const [boards, bands, benchtops, hinges, handles, slides, accessories, lifts, suppliers] = await Promise.all([
     supabase.from('materials').select('*').order('name'),
     supabase.from('edge_banding').select('*').order('name'),
     supabase.from('benchtop_materials').select('*').order('name'),
@@ -15,6 +15,7 @@ export default async function MaterialsPage() {
     supabase.from('hardware_slides').select('*').order('name'),
     supabase.from('hardware_accessories').select('*').order('name'),
     supabase.from('hardware_lift_systems').select('*').order('name'),
+    supabase.from('suppliers').select('*').order('name'),
   ])
 
   return (
@@ -28,6 +29,7 @@ export default async function MaterialsPage() {
         slides:    (slides.data    ?? []) as Record<string, unknown>[],
         accessories: (accessories.data ?? []) as Record<string, unknown>[],
         lifts:       (lifts.data ?? []) as Record<string, unknown>[],
+        suppliers:   (suppliers.data ?? []) as Record<string, unknown>[],
       }}
     />
   )

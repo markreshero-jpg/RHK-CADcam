@@ -44,9 +44,23 @@ interface InitialData {
   slides:   Record<string, unknown>[]
   accessories: Record<string, unknown>[]
   lifts:       Record<string, unknown>[]
+  suppliers:   Record<string, unknown>[]
 }
 
 // ─── Tab configs ──────────────────────────────────────────────────────────────
+
+// Buying fields (z_ordering O1) — the same on every hardware tab. Brand =
+// the maker; Supplier = who we buy from; Sup code = their product code (what
+// goes on the order / matches the CRM price list); Maker code = e.g. Blum's.
+// No stocked flag (RHKCRM decides) and no prices (RHKCRM owns them).
+const BUY_FIELDS: FieldConfig[] = [
+  { key: 'supplier_id',   label: 'Supplier',   type: 'select', w: 110, options: [] },
+  { key: 'supplier_code', label: 'Sup code',   type: 'text',   w: 76 },
+  { key: 'maker_code',    label: 'Maker code', type: 'text',   w: 84 },
+  { key: 'order_uom',     label: 'Unit',       type: 'text',   w: 44, placeholder: 'EA' },
+  { key: 'pack_qty',      label: 'Pack',       type: 'number', w: 48 },
+]
+const BUY_DEFAULTS = { supplier_id: null, supplier_code: null, maker_code: null, order_uom: null, pack_qty: null }
 
 const TABS: TabConfig[] = [
   {
@@ -123,7 +137,7 @@ const TABS: TabConfig[] = [
   },
   {
     id: 'hinges', label: 'Hinges', table: 'hardware_hinges', initKey: 'hinges',
-    defaults: { name: '', brand: null, hinge_type: 'euro', default_hinge_edge: 'left', cup_diameter: 35, cup_depth_mm: 12, cup_x_from_edge_mm: 22, boring_depth: 13, overlay: 'half', opening_angle: 110, mount_angle_deg: 0, pie_role: null, soft_close: true, supplier_code: null, cost_per_unit: null, active: true },
+    defaults: { ...BUY_DEFAULTS, name: '', brand: null, hinge_type: 'euro', default_hinge_edge: 'left', cup_diameter: 35, cup_depth_mm: 12, cup_x_from_edge_mm: 22, boring_depth: 13, overlay: 'half', opening_angle: 110, mount_angle_deg: 0, pie_role: null, soft_close: true, supplier_code: null, cost_per_unit: null, active: true },
     fields: [
       { key: 'name',          label: 'Name',     type: 'text',    w: 150 },
       { key: 'brand',         label: 'Brand',    type: 'text',    w: 90 },
@@ -166,14 +180,14 @@ const TABS: TabConfig[] = [
         ],
       },
       { key: 'soft_close',    label: 'Soft-C',   type: 'boolean', w: 52 },
-      { key: 'supplier_code', label: 'Supplier', type: 'text',    w: 90 },
+      ...BUY_FIELDS,
       { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 60,  step: '0.01' },
       { key: 'active',        label: 'Active',   type: 'boolean', w: 48 },
     ],
   },
   {
     id: 'handles', label: 'Handles', table: 'hardware_handles', initKey: 'handles',
-    defaults: { name: '', brand: null, grip_kind: 'hardware', handle_type: 'bar', length: null, bore_centres: null, projection: null, hole_dia_mm: null, needs_finger_gap: false, bevel_angle_deg: null, bevel_land_mm: null, finish: null, cost_per_unit: null, active: true },
+    defaults: { ...BUY_DEFAULTS, name: '', brand: null, grip_kind: 'hardware', handle_type: 'bar', length: null, bore_centres: null, projection: null, hole_dia_mm: null, needs_finger_gap: false, bevel_angle_deg: null, bevel_land_mm: null, finish: null, cost_per_unit: null, active: true },
     fields: [
       { key: 'name',          label: 'Name',     type: 'text',    w: 160 },
       { key: 'brand',         label: 'Brand',    type: 'text',    w: 100 },
@@ -216,13 +230,14 @@ const TABS: TabConfig[] = [
       { key: 'strip_thick_mm', label: 'Strip thk', type: 'number', w: 64 },
       { key: 'rebate_mm',     label: 'Rebate',   type: 'number',  w: 58 },
       { key: 'finish',        label: 'Finish',   type: 'text',    w: 110 },
+      ...BUY_FIELDS,
       { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 65,  step: '0.01' },
       { key: 'active',        label: 'Active',   type: 'boolean', w: 48 },
     ],
   },
   {
     id: 'slides', label: 'Slides', table: 'hardware_slides', initKey: 'slides',
-    defaults: { name: '', brand: null, nominal_length: null, box_height: null, runner_thickness: 12, side_deduction: 13, min_runner_depth: null, max_runner_depth: null, soft_close: true, full_extension: true, cost_per_pair: null, colour: null, active: true },
+    defaults: { ...BUY_DEFAULTS, name: '', brand: null, nominal_length: null, box_height: null, runner_thickness: 12, side_deduction: 13, min_runner_depth: null, max_runner_depth: null, soft_close: true, full_extension: true, cost_per_pair: null, colour: null, active: true },
     fields: [
       { key: 'name',             label: 'Name',       type: 'text',    w: 160 },
       { key: 'brand',            label: 'Brand',      type: 'text',    w: 100 },
@@ -234,6 +249,7 @@ const TABS: TabConfig[] = [
       { key: 'max_runner_depth', label: 'Max dep',    type: 'number',  w: 68  },
       { key: 'soft_close',       label: 'Soft-C',     type: 'boolean', w: 52  },
       { key: 'full_extension',   label: 'Full ext',   type: 'boolean', w: 60  },
+      ...BUY_FIELDS,
       { key: 'cost_per_pair',    label: '$/pair',     type: 'number',  w: 70,  step: '0.01' },
       { key: 'colour',           label: 'Colour',     type: 'colour',  w: 90  },
       { key: 'active',           label: 'Active',     type: 'boolean', w: 48  },
@@ -243,7 +259,7 @@ const TABS: TabConfig[] = [
     // Accessories (z_accessories A1): hanging rails + their supports now,
     // wardrobe / pantry / misc items later — one list, filtered by category.
     id: 'accessories', label: 'Accessories', table: 'hardware_accessories', initKey: 'accessories',
-    defaults: { name: '', brand: null, category: 'hanging_rail', supplier_code: null, profile: null, width_mm: null, height_mm: null, stock_length_mm: null, max_span_mm: null, end_support_id: null, centre_support_id: null, colour: null, finish: null, cost_per_unit: null, is_default: false, active: true },
+    defaults: { ...BUY_DEFAULTS, name: '', brand: null, category: 'hanging_rail', supplier_code: null, profile: null, width_mm: null, height_mm: null, stock_length_mm: null, max_span_mm: null, end_support_id: null, centre_support_id: null, colour: null, finish: null, cost_per_unit: null, is_default: false, active: true },
     fields: [
       { key: 'name',          label: 'Name',     type: 'text',    w: 200 },
       { key: 'brand',         label: 'Brand',    type: 'text',    w: 100 },
@@ -256,7 +272,6 @@ const TABS: TabConfig[] = [
           { value: 'other',        label: 'Other' },
         ],
       },
-      { key: 'supplier_code', label: 'Supplier', type: 'text',    w: 80 },
       { key: 'profile',       label: 'Profile',  type: 'select',  w: 70,
         options: [
           { value: '',      label: '—' },
@@ -273,6 +288,7 @@ const TABS: TabConfig[] = [
       { key: 'centre_support_id', label: 'Centre support', type: 'select', w: 150, options: [] },
       { key: 'colour',        label: 'Colour',   type: 'colour',  w: 90 },
       { key: 'finish',        label: 'Finish',   type: 'text',    w: 100 },
+      ...BUY_FIELDS,
       { key: 'cost_per_unit', label: '$/ea',     type: 'number',  w: 60,  step: '0.01' },
       // The rail a hanging-rail fitting uses when it doesn't pick one.
       { key: 'is_default',    label: 'Default',  type: 'boolean', w: 52 },
@@ -285,7 +301,7 @@ const TABS: TabConfig[] = [
     // Blum code kept for Blum's docs. Mechanism rows carry the power factor
     // (KH mm x front kg, handle x2) and cabinet height ranges the pick uses.
     id: 'lifts', label: 'Lift systems', table: 'hardware_lift_systems', initKey: 'lifts',
-    defaults: { name: '', brand: 'Blum', family: 'hk_top', role: 'mechanism', supplier_code: null, maker_code: null, lf_min: null, lf_max: null, kh_min: null, kh_max: null, kb_max: null, max_front_kg: null, tip_on: false, fixing: null, colour: null, qty_per_front: 1, cost_per_unit: 0, is_default: false, active: true },
+    defaults: { ...BUY_DEFAULTS, name: '', brand: 'Blum', family: 'hk_top', role: 'mechanism', supplier_code: null, maker_code: null, lf_min: null, lf_max: null, kh_min: null, kh_max: null, kb_max: null, max_front_kg: null, tip_on: false, fixing: null, colour: null, qty_per_front: 1, cost_per_unit: 0, is_default: false, active: true },
     fields: [
       { key: 'name',          label: 'Name',      type: 'text',    w: 220 },
       { key: 'brand',         label: 'Brand',     type: 'text',    w: 70 },
@@ -315,8 +331,6 @@ const TABS: TabConfig[] = [
           { value: 'other',          label: 'Other' },
         ],
       },
-      { key: 'supplier_code', label: 'LS code',   type: 'text',    w: 70 },
-      { key: 'maker_code',    label: 'Blum code', type: 'text',    w: 80 },
       { key: 'lf_min',        label: 'PF min',    type: 'number',  w: 60 },
       { key: 'lf_max',        label: 'PF max',    type: 'number',  w: 60 },
       { key: 'kh_min',        label: 'Ht min',    type: 'number',  w: 56 },
@@ -337,9 +351,24 @@ const TABS: TabConfig[] = [
       },
       { key: 'colour',        label: 'Colour',    type: 'text',    w: 80 },
       { key: 'qty_per_front', label: 'Qty/front', type: 'number',  w: 62 },
+      ...BUY_FIELDS,
       { key: 'cost_per_unit', label: '$/ea',      type: 'number',  w: 60,  step: '0.01' },
       { key: 'is_default',    label: 'Default',   type: 'boolean', w: 52 },
       { key: 'active',        label: 'Active',    type: 'boolean', w: 48 },
+    ],
+  },
+  {
+    // Suppliers (z_ordering O1): who we buy hardware from. CRM id = the
+    // supplier's id in RHKCRM, used when orders are sent.
+    id: 'suppliers', label: 'Suppliers', table: 'suppliers', initKey: 'suppliers',
+    defaults: { name: '', account_no: null, crm_id: null, website: null, notes: null, active: true },
+    fields: [
+      { key: 'name',       label: 'Name',       type: 'text',    w: 180 },
+      { key: 'account_no', label: 'Account no', type: 'text',    w: 110 },
+      { key: 'crm_id',     label: 'CRM id',     type: 'text',    w: 110 },
+      { key: 'website',    label: 'Website',    type: 'text',    w: 220 },
+      { key: 'notes',      label: 'Notes',      type: 'text',    w: 260 },
+      { key: 'active',     label: 'Active',     type: 'boolean', w: 48 },
     ],
   },
 ]
@@ -416,7 +445,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
     if (initialData) return
     let cancelled = false
     async function load() {
-      const [boards, bands, benchtops, hinges, handles, slides, accessories, lifts] = await Promise.all([
+      const [boards, bands, benchtops, hinges, handles, slides, accessories, lifts, suppliers] = await Promise.all([
         supabase.from('materials').select('*').order('name'),
         supabase.from('edge_banding').select('*').order('name'),
         supabase.from('benchtop_materials').select('*').order('name'),
@@ -425,6 +454,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         supabase.from('hardware_slides').select('*').order('name'),
         supabase.from('hardware_accessories').select('*').order('name'),
         supabase.from('hardware_lift_systems').select('*').order('name'),
+        supabase.from('suppliers').select('*').order('name'),
       ])
       if (cancelled) return
       setAllRows({
@@ -436,6 +466,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
         slides:   (slides.data    ?? []) as Record<string, unknown>[],
         accessories: (accessories.data ?? []) as Record<string, unknown>[],
         lifts:       (lifts.data ?? []) as Record<string, unknown>[],
+        suppliers:   (suppliers.data ?? []) as Record<string, unknown>[],
       })
     }
     load()
@@ -459,6 +490,11 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
   const supportOptions = [{ value: '', label: '— none —' }, ...supports.map(r => ({ value: String(r.id), label: String(r.name) }))]
   const isSupportKey = (k: string) => k === 'end_support_id' || k === 'centre_support_id'
   const supportLabel = (id: unknown) => String(supports.find(r => r.id === id)?.name ?? '—')
+
+  // Supplier picks on every hardware tab (z_ordering O1).
+  const supplierRows = allRows.suppliers ?? []
+  const supplierOptions = [{ value: '', label: '— none —' }, ...supplierRows.filter(r => r.active !== false).map(r => ({ value: String(r.id), label: String(r.name) }))]
+  const supplierLabel = (id: unknown) => id ? String(supplierRows.find(r => r.id === id)?.name ?? '—') : '—'
 
   const [forms, setForms] = useState<Record<string, Record<string, FVal>>>(() =>
     Object.fromEntries(TABS.map(t => [t.id, mkForm(t.defaults)]))
@@ -715,7 +751,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                     onChange={e => patchForm({ [f.key]: e.target.value })}
                     className="bg-transparent border-b border-edge-strong text-xs text-ink focus:outline-none focus:border-accent py-0.5 w-full"
                   >
-                    {(f.key === 'cnc_tool_id' ? toolOptions : isSupportKey(f.key) ? supportOptions : f.options!).map(o => (
+                    {(f.key === 'cnc_tool_id' ? toolOptions : f.key === 'supplier_id' ? supplierOptions : isSupportKey(f.key) ? supportOptions : f.options!).map(o => (
                       <option key={o.value} value={o.value} className="bg-surface">{o.label}</option>
                     ))}
                   </select>
@@ -965,7 +1001,7 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                             {row[f.key] ? String(row[f.key]) : '—'}
                           </span>
                         </>
-                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : isSupportKey(f.key) ? supportLabel(row[f.key]) : hasColours && f.key === 'name' ? (
+                      ) : f.key === 'cnc_tool_id' ? toolLabel(row[f.key]) : f.key === 'supplier_id' ? supplierLabel(row[f.key]) : isSupportKey(f.key) ? supportLabel(row[f.key]) : hasColours && f.key === 'name' ? (
                         <>
                           {fmtCell(row[f.key], f)}
                           {(() => {
