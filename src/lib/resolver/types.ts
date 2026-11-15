@@ -1175,7 +1175,9 @@ export interface ResolvedHingeDrill {
   axis:    'x-' | 'x+' | 'y-' | 'y+' | 'z-' | 'z+'
   radius:  number
   depthLen: number
-  kind:    'cup' | 'anchor' | 'plate'
+  // 'marker' = the top-of-cabinet mark on the gable (5 dia x 2 deep, between
+  // the top hinge's plate holes) — rides in plate_drills, ignored by clash checks.
+  kind:    'cup' | 'anchor' | 'plate' | 'marker'
   // Exact bore direction (unit) when the surface is off-axis — a plate on an
   // angled side panel of a shaped cabinet. `axis` is then the nearest axis.
   dir?:    { x: number; y: number; z: number }

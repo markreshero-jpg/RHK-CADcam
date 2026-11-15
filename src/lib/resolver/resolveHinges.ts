@@ -104,6 +104,11 @@ function pickHinge(cab: CabinetInput, angle: number): { hw: HingeHardwareInput; 
 // their identity stable when the lead door's hinge count changes.
 const BIFOLD_SORT = 100
 
+// Top-of-cabinet marker (2026-11-16): a 5 dia x 2 deep hole on the gable at the
+// top hinge's centre height, 16 back from the gable's front edge, so the shop
+// can see which end of a gable is the top. Side-hung doors only.
+export const TOP_MARKER = { diameter: 5, depth: 2, fromFront: 16 }
+
 export function resolveHinges(
   cab: CabinetInput,
   zones: ResolvedFaceZone[],
@@ -201,6 +206,7 @@ export function resolveHinges(
       pos = positions(count, span, topInset, bottomInset)
     }
 
+    const zoneStart = out.length
     pos.forEach((alongPos, i) => {
       const key = `${z.facet ?? ''}:${z.row_index}:${z.col_index}:${i}`
       const locked = useManual ? undefined : lockedByKey.get(key)
@@ -320,9 +326,36 @@ export function resolveHinges(
         })
       }
     })
+
+    if (!shaped) addTopMarker(out.slice(zoneStart), caseParts)
   }
 
   return out
+}
+
+// Marker hole on the gable under the door's top side-hung hinge, between its
+// plate holes (hinge centre height), TOP_MARKER.fromFront back from the front.
+function addTopMarker(hinges: ResolvedHingeInstance[], caseParts: ResolvedCasePart[]) {
+  let top: ResolvedHingeInstance | null = null
+  for (const h of hinges) {
+    if (h.pie === 'bifold' || (h.hinge_edge !== 'left' && h.hinge_edge !== 'right')) continue
+    const key = h.mount_target?.table === 'case_parts' ? h.mount_target.part_key : null
+    if ((key !== 'left_side' && key !== 'right_side') || !h.plate_drills.length || !h.cup_drills.length) continue
+    if (!top || h.cup_drills[0].y > top.cup_drills[0].y) top = h
+  }
+  if (!top) return
+  const gable = caseParts.find(p => p.part_key === top!.mount_target!.part_key)
+  if (!gable) return
+  const pd = top.plate_drills[0]
+  top.plate_drills.push({
+    x: pd.x,
+    y: top.cup_drills[0].y,
+    z: gable.Z + gable.DX - TOP_MARKER.fromFront,   // side gable: Z..Z+DX front-to-back extent
+    axis: pd.axis,
+    radius: TOP_MARKER.diameter / 2,
+    depthLen: TOP_MARKER.depth,
+    kind: 'marker',
+  })
 }
 
 // ── Cup + anchor drills on the door back face ─────────────────────────────────

@@ -94,7 +94,7 @@ export function adjShelfHoles(
 
 // Keep-out box (y, z) of one hinge's plate, or null when it has no plate drills.
 function plateBox(h: ResolvedHingeInstance) {
-  const ds = h.plate_drills ?? []
+  const ds = (h.plate_drills ?? []).filter(d => d.kind !== 'marker')
   if (!ds.length) return null
   const ys = ds.map(d => d.y), zs = ds.map(d => d.z)
   return {

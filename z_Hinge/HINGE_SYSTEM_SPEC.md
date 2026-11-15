@@ -754,3 +754,24 @@ After migration, verify the following before marking complete:
 - [ ] All 10 previously-RLS-disabled tables reject requests from the anon role
 - [ ] `schema_versions` shows version '0.6'
 - [ ] No existing cabinet_instance, face_zone, or case_parts data was altered
+
+---
+
+## Section 13 — Top-of-cabinet marker hole (2026-11-16, built)
+
+Locked decisions (Mark):
+
+- Every **left or right** hinged door gets one marker hole on the gable its plates fire into.
+  Top / bottom hinged (flap / lift) doors get none.
+- Position: at the **top hinge's centre height** (directly between its plate holes),
+  **16 mm back from the gable's front edge**.
+- Size: **5 mm dia x 2 mm deep**, bored into the gable's inner face (same face as the plate holes).
+- Purpose: a quick visual of which end of the gable is the top.
+
+Implementation: `TOP_MARKER` + `addTopMarker` in `src/lib/resolver/resolveHinges.ts`. The marker
+rides in the top hinge's `plate_drills` with `kind: 'marker'`, so it reaches the gable's CNC
+program as a `hinge_plate` op (auto tool by diameter). Plate clash checks (`hingeClash.ts`) and
+rangehood cover notches ignore markers. Not yet on shaped-cabinet (angled panel) doors.
+Test: `src/lib/resolver/__tests__/hingeTopMarker.test.ts`.
+
+- [ ] Check on the machine: marker lands top end, 16 back from the front, 2 deep

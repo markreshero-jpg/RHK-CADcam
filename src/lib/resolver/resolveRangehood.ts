@@ -175,7 +175,8 @@ export function rangehoodCover(cab: CabinetInput, caseParts: ResolvedCasePart[],
   for (const h of hinges) {
     const side = h.mount_target?.part_key === 'left_side' ? 'left' : h.mount_target?.part_key === 'right_side' ? 'right' : null
     if (!side) continue
-    const drills = h.plate_drills.length ? h.plate_drills : h.cup_drills
+    const plates = h.plate_drills.filter(d => d.kind !== 'marker')
+    const drills = plates.length ? plates : h.cup_drills
     if (!drills.length) continue
     const y = drills.reduce((s, d) => s + d.y, 0) / drills.length
     // Face frame y runs down from the cover's top.
