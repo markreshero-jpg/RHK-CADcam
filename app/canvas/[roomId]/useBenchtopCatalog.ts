@@ -16,6 +16,9 @@ export interface BtTape { id: string; name: string; thickness: number; width: nu
 /** Edge tape for one top (Phase 7): applies = in-house board top; defaultTape = its schedule row's tape. */
 export interface BtTapeContext { applies: boolean; defaultTape: string | null }
 
+/** Window event: job / room benchtop materials were edited (Materials tab) — the canvas reloads them. */
+export const BT_MATERIALS_CHANGED = 'rhk:benchtop-materials-changed'
+
 // Build methods + edge profiles for the plan canvas (benchtop Phase 3):
 // edge colours / codes on the plan, the Shape Editor profile picker and the
 // BenchtopPanel edge list. Phase 3b adds the schedules + material thicknesses
@@ -36,6 +39,13 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
   // '' = job level, `bt:<id>` = one top (z_benchtop_colours C5, wins over room).
   const [overrides, setOverrides] = useState<Map<string, BtOverride[]>>(new Map())
   const [tapes, setTapes] = useState<BtTape[]>([])
+  // The Materials tab changes a job / room stone with the canvas open → reload (BT_MATERIALS_CHANGED).
+  const [reload, setReload] = useState(0)
+  useEffect(() => {
+    const on = () => setReload(n => n + 1)
+    window.addEventListener(BT_MATERIALS_CHANGED, on)
+    return () => window.removeEventListener(BT_MATERIALS_CHANGED, on)
+  }, [])
 
   useEffect(() => {
     let live = true
@@ -94,7 +104,7 @@ export function useBenchtopCatalog(room: Room, project: Project | null) {
       setBoardCol(new Map(boards.filter(x => x.face_colour).map(x => [x.id, x.face_colour!])))
     })
     return () => { live = false }
-  }, [project?.id])
+  }, [project?.id, reload])
 
   const profileById = useMemo(() => Object.fromEntries(profiles.map(p => [p.id, p])), [profiles])
 

@@ -5,6 +5,7 @@ import { BenchtopSurfaceOptions, SURFACE_MAT_COLS, type SurfaceMat } from '@/src
 import { supabase } from '@/src/lib/supabase'
 import BoardColourSelect, { type PickMat } from './BoardColourSelect'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import { BT_MATERIALS_CHANGED } from './useBenchtopCatalog'
 
 // ── Schedule type config ──────────────────────────────────────────────────────
 
@@ -391,6 +392,7 @@ export default function MaterialsScheduleTab({ mode, projectId, roomId, showSche
         setBtOvr(p => { const n = { ...p }; delete n[role]; return n })
       }
     }
+    window.dispatchEvent(new Event(BT_MATERIALS_CHANGED))   // canvas 3D / elevation reload
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
