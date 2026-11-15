@@ -12,7 +12,7 @@
 // Custom parts carry their own list (cabinet_custom_parts.hide_views).
 
 import type { ResolvedCabinet, PartHideViews, PartHideView, ResolvedHingeMountTarget } from './types'
-import { zonePartId, dbPartId } from '@/src/lib/cabinetShape/partKeys'
+import { zonePartId, dbPartId, bhPieceBase } from '@/src/lib/cabinetShape/partKeys'
 
 type LayerViewId = PartHideView
 export const PART_HIDE_VIEWS: readonly PartHideView[] = ['plan', 'elevation', '3d']
@@ -39,7 +39,8 @@ export function filterHiddenParts(rp: ResolvedCabinet, view: LayerViewId): Resol
 
   return {
     ...rp,
-    case_parts:     rp.case_parts.filter(p => !H.has(`case_${p.part_key}`)),
+    // A split bulkhead piece follows a hide on its whole part (B16).
+    case_parts:     rp.case_parts.filter(p => !H.has(`case_${p.part_key}`) && !H.has(`case_${bhPieceBase(p.part_key)}`)),
     toekick_parts:  rp.toekick_parts.filter(p => !H.has(`tk_${p.part_key}_${p.sort_order}`)),
     internal_parts: rp.internal_parts.filter(p => !H.has(`int_${p.part_type}_${p.sort_order}`)),
     face_zones:     rp.face_zones.filter(z => !H.has(zonePartId(z))),

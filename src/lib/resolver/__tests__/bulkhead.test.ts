@@ -9,6 +9,7 @@ import { cabVExtent, bulkheadOutline } from '../../geometry'
 import type { Room } from '../../types'
 import { isShapedPanelKey } from '../../cabinetShape/partKeys'
 import { bulkheadCleatSeams } from '../resolveBulkhead'
+import { filterHiddenParts } from '../filterHidden'
 
 // z_bulkhead B2: fascia + returns + L cleat from the bulkhead settings.
 const board = (t: number, id = `m${t}`): Material => ({ id, name: `Board ${t}`, DZ: t, sheet_dx: 2400, sheet_dy: 1200, has_grain: false })
@@ -262,6 +263,24 @@ describe('bulkhead grain (B13)', () => {
     expect(b.bevel_lo).toBe(45)
     expect(b.edge_band).toMatchObject({ left: false, right: true })
     expect(a.bevel_hi ?? 0).toBe(0)
+  })
+  it('B16: cleat legs longer than the carcass sheet split into equal pairs, each with its own seam', () => {
+    const ps = parts(cab({}, { DX: 2940 }))
+    const keys = ps.filter(p => p.part_key.startsWith('bh:cleat')).map(p => p.part_key).sort()
+    expect(keys).toEqual(['bh:cleat_h_a', 'bh:cleat_h_b', 'bh:cleat_v_a', 'bh:cleat_v_b'])
+    expect(plan(get(ps, 'bh:cleat_v_a')!)).toMatchObject({ x0: 0, x1: 1470 })
+    expect(plan(get(ps, 'bh:cleat_v_b')!)).toMatchObject({ x0: 1470, x1: 2940 })
+    expect(caseBox(get(ps, 'bh:cleat_h_b')!)).toMatchObject({ x: 1470, w: 1470 })
+    expect(get(ps, 'bh:cleat_v_b')!.edge_band).toMatchObject({ bottom: true })
+    expect(isShapedPanelKey('bh:cleat_v_a')).toBe(true)
+    expect(isShapedPanelKey('bh:cleat_h_a')).toBe(false)
+    expect(bulkheadCleatSeams(ps).map(s => s.seam_key)).toEqual(['bh:cleat_h_a|bh:cleat_v_a', 'bh:cleat_h_b|bh:cleat_v_b'])
+    // A hide on the whole cleat still hides its pieces.
+    const rp = resolveCabinet(cab({}, { DX: 2940 }))
+    const shown = filterHiddenParts({ ...rp, part_hide_views: { 'case_bh:cleat_v': ['elevation'] } }, 'elevation').case_parts
+    expect(shown.some(p => p.part_key.startsWith('bh:cleat_v'))).toBe(false)
+    // Fits the sheet: one pair, keys unchanged.
+    expect(parts(cab({}, { DX: 2400 })).filter(p => p.part_key.startsWith('bh:cleat')).map(p => p.part_key).sort()).toEqual(['bh:cleat_h', 'bh:cleat_v'])
   })
   it('mitre note follows the split pieces', () => {
     expect(edgeMitreNote({ part_key: 'bh:fascia_b', edge_mitre: 'bottom' })).toMatch(/bottom edge to bottom return/)

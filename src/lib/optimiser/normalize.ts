@@ -80,13 +80,13 @@ function ebFields(flags: EdgeFlags, t: number | undefined, wPair: EdgePair, hPai
 // would otherwise be read off the wrong axis.
 // Small parts (Mark 2026-11-12, grown from the 2026-11-06 RHK6592 filler rule):
 // anything under 60 wide or long moves on the bed when it's cut at its own size,
-// so the machine cuts that side at 70 and the part comment gives the size to cut
-// it down to by hand. The model / Parts tab keep the true size. The extra lands
+// so the machine cuts that side at 80 (was 70; Mark 2026-11-15, RHK6581 J11 J12
+// fillers) and the part comment gives the size to cut it down to by hand. The model / Parts tab keep the true size. The extra lands
 // on the far edge (footprint w / h side), so ops measured from the part's origin
 // corner stay put. Skipped: shaped parts / parts with cut holes (their outline
 // is the cut), finger-rail strips (own 80 rule, RAIL_NEST_W) and no-CNC parts.
 export const SMALL_PART_MIN = 60
-export const SMALL_PART_CUT = 70
+export const SMALL_PART_CUT = 80
 const r1 = (n: number) => Math.round(n * 10) / 10
 export function widenSmallPart(p: OptiPart): void {
   if (p.shape || p.cut_holes?.length || p.rail_strip || p.output_to_cnc === false) return
@@ -99,7 +99,7 @@ export function widenSmallPart(p: OptiPart): void {
     const [e1, e2] = a === 'w' ? [p.eb_w1, p.eb_w2] : [p.eb_h1, p.eb_h2]
     const finished = p[a]
     const cut = r1(finished - (e1 ?? 0) - (e2 ?? 0))   // the machine's cut size (tape deducted)
-    p[a] = SMALL_PART_CUT + (e1 ?? 0) + (e2 ?? 0)        // the machine cuts it at 70
+    p[a] = SMALL_PART_CUT + (e1 ?? 0) + (e2 ?? 0)        // the machine cuts it at SMALL_PART_CUT
     bits.push(`${cut} ${a === wideAxis ? 'wide' : 'long'}` + (cut !== finished ? ` (${r1(finished)} after edging)` : ''))
   }
   if (small.length === 2 && wideAxis === 'w') bits.reverse()   // "N long x M wide"
@@ -539,7 +539,7 @@ export function normalizeProject(
     if (r.grain_across && last?.source_part_id === r.id) last.grain_across = true
   }
 
-  // Small parts (< 60 wide or long) cut at 70 — after every comment above, so the
+  // Small parts (< 60 wide or long) cut at 80 — after every comment above, so the
   // hand-cut size reads first on the label.
   // Same-size sharknose linear handles: two per 80 blank, taped all round (z_handles D27).
   const pairedParts = pairLinearHandles(parts, sharknoseLh)

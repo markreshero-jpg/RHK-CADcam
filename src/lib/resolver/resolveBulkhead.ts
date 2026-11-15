@@ -167,21 +167,36 @@ export function resolveBulkhead(cab: CabinetInput, r: ConstructionRules): Resolv
     const back = Zf - t           // fascia back face
     const hx0 = Math.max(x0, xLo(back - BH_CLEAT_LEG)), hx1 = Math.min(x1, xHi(back - BH_CLEAT_LEG))
     const vx0 = Math.max(x0, xLo(back - tc)), vx1 = Math.min(x1, xHi(back - tc))
-    // Flat leg butts into the upright's back face (B12, Mark 2026-11-07).
-    push({
-      part_key: 'bh:cleat_h',
-      DX: BH_CLEAT_LEG - tc, DY: hx1 - hx0, DZ: tc,
-      X: hx0, Y: y0, Z: back - BH_CLEAT_LEG, AY: 0,
-      material_id: cab.material.id,
-      edge_band: band({}),
+    // B16 (Mark 2026-11-15, RHK6581 WIR WC-04 2940): legs longer than the
+    // carcass sheet split into equal pieces (bh:cleat_h_a / _v_a, _b … left →
+    // right), both legs cut at the same points so each pair keeps its B12 seam.
+    const maxC = sheetMaxLength(cab.material)
+    const nC = maxC && Math.max(hx1 - hx0, vx1 - vx0) > maxC ? Math.ceil(Math.max(hx1 - hx0, vx1 - vx0) / maxC) : 1
+    const cuts = Array.from({ length: nC - 1 }, (_, i) => Math.round((vx0 + (i + 1) * (vx1 - vx0) / nC) * 10) / 10)
+    const pieces = (a: number, b: number) => {
+      const xs = [a, ...cuts, b]
+      return xs.slice(0, -1).map((xa, i) => [xa, xs[i + 1]] as const)
+    }
+    const key = (k: 'bh:cleat_h' | 'bh:cleat_v', i: number) => (nC === 1 ? k : `${k}_${'abcdefghij'[i]}`) as ResolvedCasePart['part_key']
+    pieces(hx0, hx1).forEach(([xa, xb], i) => {
+      // Flat leg butts into the upright's back face (B12, Mark 2026-11-07).
+      push({
+        part_key: key('bh:cleat_h', i),
+        DX: BH_CLEAT_LEG - tc, DY: xb - xa, DZ: tc,
+        X: xa, Y: y0, Z: back - BH_CLEAT_LEG, AY: 0,
+        material_id: cab.material.id,
+        edge_band: band({}),
+      })
     })
-    // Upright leg runs to the bottom; its bottom edge shows — taped (carcass tape).
-    push({
-      part_key: 'bh:cleat_v',
-      DX: BH_CLEAT_LEG, DY: vx1 - vx0, DZ: tc,
-      X: vx1, Y: y0, Z: back, AY: 180,
-      material_id: cab.material.id,
-      edge_band: { top: false, bottom: true, left: false, right: false, id: cab.interior_edgeband_id },
+    pieces(vx0, vx1).forEach(([xa, xb], i) => {
+      // Upright leg runs to the bottom; its bottom edge shows — taped (carcass tape).
+      push({
+        part_key: key('bh:cleat_v', i),
+        DX: BH_CLEAT_LEG, DY: xb - xa, DZ: tc,
+        X: xb, Y: y0, Z: back, AY: 180,
+        material_id: cab.material.id,
+        edge_band: { top: false, bottom: true, left: false, right: false, id: cab.interior_edgeband_id },
+      })
     })
   }
   if (ts > 0) {
@@ -295,12 +310,18 @@ export const BH_CLEAT_SEAM = 'bh:cleat'
  * from that face, centred on the flat's thickness.
  */
 export function bulkheadCleatSeams(caseParts: ResolvedCasePart[]): DeclaredSeam[] {
-  const h = caseParts.find(p => p.part_key === 'bh:cleat_h')
-  const v = caseParts.find(p => p.part_key === 'bh:cleat_v')
-  if (!h || !v) return []
-  return [{
-    seam_key: 'bh:cleat_h|bh:cleat_v', generic_key: BH_CLEAT_SEAM,
-    part_a_key: 'bh:cleat_h', part_b_key: 'bh:cleat_v',
+  // One seam per flat / upright pair (split legs pair by suffix, B16).
+  return caseParts.filter(p => /^bh:cleat_h(_[a-j])?$/.test(p.part_key)).flatMap(h => {
+    const vKey = h.part_key.replace('cleat_h', 'cleat_v')
+    const v = caseParts.find(p => p.part_key === vKey)
+    return v ? [cleatSeam(h, v)] : []
+  })
+}
+
+function cleatSeam(h: ResolvedCasePart, v: ResolvedCasePart): DeclaredSeam {
+  return {
+    seam_key: `${h.part_key}|${v.part_key}`, generic_key: BH_CLEAT_SEAM,
+    part_a_key: h.part_key, part_b_key: v.part_key,
     geom: {
       origin: { x: h.X, y: h.Y, z: h.Z + h.DX },
       along:  { x: 1, y: 0, z: 0 },
@@ -308,5 +329,12 @@ export function bulkheadCleatSeams(caseParts: ResolvedCasePart[]): DeclaredSeam[
       toward: { x: 0, y: 0, z: -1 },
       length: h.DY, width: h.DZ,
     },
-  }]
+  }
+}
+
+/** Longest part the board's sheet takes, rounded down to 100 (2415 → 2400);
+ *  null when the sheet size isn't known. */
+export function sheetMaxLength(mat: { sheet_dx?: number | null; sheet_dy?: number | null } | null | undefined): number | null {
+  const l = Math.max(Number(mat?.sheet_dx) || 0, Number(mat?.sheet_dy) || 0)
+  return l > 0 ? Math.floor(l / 100) * 100 : null
 }

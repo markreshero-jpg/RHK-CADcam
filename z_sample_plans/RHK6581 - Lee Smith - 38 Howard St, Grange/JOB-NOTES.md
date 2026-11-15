@@ -302,3 +302,14 @@ _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults
   edge_left off). Bed 2 front-to-back rail fitted by hand, no drilling (the app doesn't drill hanging rails anyway). J10 false front
   removable + window confirmed. Doors stay undrilled. Storage J10 TC-02 kick sub front: no edging (edge_overrides tk_kick_sub_front_1).
   R20 files are now stale on those two parts — re-nest in the browser (Mark, up to Stage 5) and replace R20.
+
+## Machining prep — WIR J11 + Master Store J12 (Mark 2026-11-15)
+- KICK 2 (2922): native Kick split › manual, sub front seam at 2400 (2400 + 522), back mirrored (522 + 2400); face stays 3 x 974.
+- WC-04 (2940): cleats split in 2 (1461 + 1461 each leg) by the new bulkhead rule B16 (legs over the carcass sheet split);
+  the 2930 MDF shadow strip is No CNC — cut by hand.
+- Bulkheads +10 scribe (h_adjust 10): J11 WC-04 / WC-05 / WC-06 400 → 410 (fascias 400), J12 WC-01 390 → 400 (fascia 390).
+- Panels + fillers: back edge untaped (one long edge + both ends). Side panels edge_left off (J11 TC-01 / TC-07 / TC-08,
+  J12 TC-03 510 scribe panel); face fillers lose the wall-side long edge (J11 BC-01 / TC-04 left, TC-03 / TC-10 right; J12 TC-01 left).
+- Small parts now cut at 80 (was 70) — fillers 22 / 30 / 40 / 50 cut at 80, hand cut to size.
+- Top hanging rails unlocked (TC-02 top, TC-05, TC-06) so they hang at the centre-support drop; TC-02 lower rail stays at 810.
+- Re-resolved 2026-11-15: 221 parts, nothing over 2400.

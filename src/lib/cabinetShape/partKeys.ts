@@ -14,7 +14,7 @@ import { backPanelPartLabel } from '../backPanel'
 export function isShapedPanelKey(k: string): boolean {
   return k.startsWith('side:') || k.startsWith('back:') || k.startsWith('fprail:') || k.startsWith('cleat:')
     || k.startsWith('lh:')   // linear strip handles on the fronts (z_handles D17)
-    || (isBulkheadKey(k) && !BH_HORIZONTAL.has(k))
+    || (isBulkheadKey(k) && !BH_HORIZONTAL.has(bhPieceBase(k)))
     || isCurvedEndUprightKey(k)
     || k.startsWith('ibp:')   // island back panels (z_island_back_panel)
     || k.startsWith('ap:')    // applied end panels on shaped edges (z_cabinet_shape_edit E1)
@@ -28,6 +28,12 @@ export function isShapedPanelKey(k: string): boolean {
 export const BH_HORIZONTAL = new Set(['bh:ret_b', 'bh:cleat_h', 'bh:sl_front', 'bh:sl_ret_l', 'bh:sl_ret_r', 'bh:split', 'bh:split_l', 'bh:split_r'])
 export function isBulkheadKey(k: string): boolean {
   return k.startsWith('bh:')
+}
+/** A split bulkhead piece's whole-part key: bh:cleat_v_b → bh:cleat_v,
+ *  bh:fascia_a → bh:fascia (B13 / B16). Other keys come back as they are. */
+export function bhPieceBase(k: string): string {
+  const m = /^(bh:(?:cleat_[hv]|fascia))_[a-j]$/.exec(k)
+  return m ? m[1] : k
 }
 
 /** Curved fixed-panel cabinet parts (z_curved_end, resolveCurvedEnd). The

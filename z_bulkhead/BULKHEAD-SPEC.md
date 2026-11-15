@@ -11,7 +11,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **RESUME HERE** → B13 vertical grain built 2026-11-11 (no schema change), check pending. B12 cleat butt joint built 2026-11-07 (migration b12 applied), check pending. B11 height adjust built 2026-11-07, check pending. B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
+> **RESUME HERE** → B16 long cleats split built 2026-11-15, check pending. B13 vertical grain built 2026-11-11 (no schema change), check pending. B12 cleat butt joint built 2026-11-07 (migration b12 applied), check pending. B11 height adjust built 2026-11-07, check pending. B10 bottom-return mitre (show + MITRE comment) built 2026-11-03, check pending. B8 angled ends built 2026-10-27 (no schema change), check pending.
 > B7 shadowline split built 2026-10-24 (MDF 10mm board added by z_curved_end
 > migration_c7; no schema change) — in-app check pending, with B5. B0–B4 built 2026-10-18 (migrations b1 + b4 applied; BH is in the library under Wall → Bulkheads). Next: B5 in-app check by Mark — place BH over overheads with a soffit set; tick returns; check 3D, elevation, cut list.
 
@@ -162,6 +162,14 @@ underside when the bulkhead isn't sitting on cabinets.
       it assumes a 20 front (18 door + 2) for "flush with doors", so it errs off
       the wall. Sidebar: Left / Right end angle °. Not automatic from the wall
       yet; not for shadowlines or curved bulkheads. Tutorial `bulkhead_angled_end`.
+- [~] **B16 — long cleats split** (built 2026-11-15, check pending) (Mark, RHK6581
+      WIR J11 WC-04 2940: "split them in 2"). Cleat legs longer than the carcass
+      board's sheet (longest side rounded down to 100: 2415 → 2400) split into
+      equal pieces `bh:cleat_h_a` / `bh:cleat_v_a`, `_b` … left → right; both legs
+      cut at the same points so each flat / upright pair keeps its own B12 seam
+      (`bh:cleat_h_a|bh:cleat_v_a`). A hide on the whole cleat (`case_bh:cleat_v`)
+      covers its pieces (`bhPieceBase`). The split rail is not split — tick it
+      No CNC and cut it by hand when it's over the sheet (WC-04 did).
 - [~] **B15 — vertical grain is the default** (2026-11-13, Mark: "all
       bulkheads should be vertical … the default should always be vertical").
       `bulkhead.grain` unset now reads as vertical; horizontal is an explicit
