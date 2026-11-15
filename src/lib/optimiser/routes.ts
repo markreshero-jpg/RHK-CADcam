@@ -9,9 +9,10 @@
 // drills.ts toSheet + ebShift so routes land on exactly the same
 // blank as the holes. Pure/testable.
 //
-// Face/flip is intentionally NOT applied here: every route emits on
-// the back / material-up pass for now (Phase B §3c). plane_kind is
-// carried for the future front pass but not yet acted on.
+// Face: generated ops by output_face (pre-mirrored down face, as drills);
+// hand ops by plane_kind via the loader's hand_down (handOpFace.ts) — on a
+// two-sided sheet they go to program Z where they sit, and a part whose only
+// blind work is underneath is turned over instead (flipHandDownParts).
 // ============================================================
 
 import type { NestedSheet } from './nest'
@@ -25,7 +26,8 @@ export interface RouteOpRaw {
   operation_type: string          // 'route' | 'groove'
   operation_action: string | null // route: 'pocket' clears the area; else outline
   output_face?: string | null     // entry face — picks the eb-deduct edge (like drills)
-  plane_kind?: string | null       // carried for the future front pass; unused here
+  plane_kind?: string | null       // hand ops' face (handOpFace.ts) — read by the loader
+  hand_down?: boolean              // set by the loader: a hand op on the face DOWN as laid
   // Geometry inputs (part-local, origin bottom-left; x → DX/u, y → DY/v).
   pos_x: number | null; pos_y: number | null
   size_dx: number | null; size_dy: number | null
@@ -196,9 +198,11 @@ export function buildSheetRoutes(
       if (!(depth > 0)) continue                    // no depth → nothing to cut (loader warns)
       // Two-sided sheet: a down-face route is un-mirrored to where it sits seen from
       // above and goes to program Z (a through cut stays in A, from the top).
-      const down = twoSided && onDownFace(part, op.output_face)
-      const { sx, sy } = ebShift(part, op.output_face, down)
-      const map = (ox: number, oy: number) => toSheet((down ? part.w - ox : ox) - sx, oy - sy, pl)
+      // A hand op on the down face (hand_down) is stored as it sits: program Z, no un-mirror.
+      const pre = twoSided && onDownFace(part, op.output_face)
+      const down = pre || !!op.hand_down
+      const { sx, sy } = ebShift(part, op.output_face, pre)
+      const map = (ox: number, oy: number) => toSheet((pre ? part.w - ox : ox) - sx, oy - sy, pl)
       const prog = programs ? { program: opProgram(down, depth < thickness - 1e-6, pl) } : {}
 
       const g = opPartGeom(op, part)

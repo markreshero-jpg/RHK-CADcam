@@ -45,7 +45,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const { nest } = await import('../nest')
     const { buildGrainBlocks, expandGrainBlocks } = await import('../grainBlocks')
     const { cutBlank, placedOutline, placedHoles } = await import('../shapes')
-    const { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts } = await import('../sheetDrills')
+    const { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts, flipHandDownParts } = await import('../sheetDrills')
     const { anchorSixthFace } = await import('../sixthFaceLayout')
     const { generateSheetPrograms, postFromProfile, gcodeFileName, zDepthLimit } = await import('../gcode')
     const { validateGcode, errorsOf, warningsOf, formatFinding } = await import('../gcodeValidate')
@@ -222,7 +222,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     const preferredPocketToolNumber = profile?.pocket_router_tool_number != null ? Number(profile.pocket_router_tool_number) : null
     const drillOps = await loadResolvedDrillOps(nestedParts(snap.parts, index), { sync: true, blockDiameters, routerTools, preferredPocketToolNumber, deductEdgeband: deductEb })
     // 6th face sheets against the trimmed edges, as Stage 5 / 6 (sixthFaceLayout.ts).
-    nestResult = anchorSixthFace(nestResult, s => isTwoSidedSheet(s, drillOps), { origin_corner: (prof?.origin_corner as string | null) ?? 'top_left' })
+    nestResult = anchorSixthFace(flipHandDownParts(nestResult, drillOps), s => isTwoSidedSheet(s, drillOps), { origin_corner: (prof?.origin_corner as string | null) ?? 'top_left' })
     const sheetDrills = projectSheetDrills(nestResult.sheets, drillOps)
     const sheetRoutes = projectSheetRoutes(nestResult.sheets, drillOps)
     const drillWarnings = drillOps.warnings

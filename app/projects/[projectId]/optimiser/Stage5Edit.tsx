@@ -13,7 +13,7 @@ import { useOptiStore, orientsOn, bestFitOn, type PoolOrient } from '@/src/lib/o
 import { findNearestValid, findBestPlacement, usableBounds, type ShapeOpts } from '@/src/lib/optimiser/edit'
 import { blockOfUid, blockRectOn, grainMatchTags, grainMatchLine, type GrainBlockInfo } from '@/src/lib/optimiser/grainBlocks'
 import { buildMargins } from '@/src/lib/optimiser/types'
-import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, isTwoSidedSheet, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
+import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, nestedParts, isTwoSidedSheet, flipHandDownParts, type ResolvedDrillOps } from '@/src/lib/optimiser/sheetDrills'
 import { anchorSixthFace } from '@/src/lib/optimiser/sixthFaceLayout'
 import { type NestedSheet, type NestPartInput } from '@/src/lib/optimiser/nest'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
@@ -156,7 +156,8 @@ export default function Stage5Edit() {
   const originCorner = snap?.profiles.find(pr => pr.id === profileId)?.origin_corner ?? 'top_left'
   useEffect(() => {
     if (!drillOps || !nestResult || editCount > 0 || savedNest === nestResult) return
-    const anchored = anchorSixthFace(nestResult, s => isTwoSidedSheet(s, drillOps), { origin_corner: originCorner })
+    // Parts whose only blind work is underneath turn over first (one program, not a 6th face pair).
+    const anchored = anchorSixthFace(flipHandDownParts(nestResult, drillOps), s => isTwoSidedSheet(s, drillOps), { origin_corner: originCorner })
     if (anchored !== nestResult) setNestQuiet(anchored)
   }, [drillOps, nestResult, editCount, savedNest, originCorner, setNestQuiet])
   const drillsBySheet = useMemo(

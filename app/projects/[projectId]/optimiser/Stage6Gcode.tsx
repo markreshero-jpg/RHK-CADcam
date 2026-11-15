@@ -15,7 +15,7 @@ import { useOptiStore } from '@/src/lib/optimiser/store'
 import { generateSheetPrograms, postFromProfile, gcodeFileName, zDepthLimit, type PostProfile } from '@/src/lib/optimiser/gcode'
 import type { NestedSheet } from '@/src/lib/optimiser/nest'
 import { validateGcode, errorsOf, warningsOf, formatFinding, type Finding } from '@/src/lib/optimiser/gcodeValidate'
-import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts } from '@/src/lib/optimiser/sheetDrills'
+import { loadResolvedDrillOps, projectSheetDrills, projectSheetRoutes, isTwoSidedSheet, nestedParts, flipHandDownParts } from '@/src/lib/optimiser/sheetDrills'
 import { anchorSixthFace } from '@/src/lib/optimiser/sixthFaceLayout'
 import { placedOutline, placedHoles } from '@/src/lib/optimiser/shapes'
 import type { DrillBlockConfig } from '@/src/lib/optimiser/gangDrill'
@@ -194,7 +194,7 @@ export default function Stage6Gcode() {
       const st0 = useOptiStore.getState()
       let nest = nestResult
       if (st0.editPast.length === 0 && st0.savedRun?.nest !== nestResult) {
-        nest = anchorSixthFace(nestResult, s => isTwoSidedSheet(s, drillOps), { origin_corner: post0.origin_corner })
+        nest = anchorSixthFace(flipHandDownParts(nestResult, drillOps), s => isTwoSidedSheet(s, drillOps), { origin_corner: post0.origin_corner })
         if (nest !== nestResult) st0.setNestQuiet(nest)
       }
       const sheetDrills = projectSheetDrills(nest.sheets, drillOps)

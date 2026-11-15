@@ -51,7 +51,17 @@ sheet that needs it runs as **two programs with a whole-sheet flip between**.
   `ebShift`): an op is on the DOWN face when its `output_face` sign differs from the
   part's up sign (doors + gables `+`, everything else `-`). Face A = the up face of
   today's single program (doors: the back / hinge side). Hand ops have no
-  `output_face` and stay on the up face (program A), as they always cut.
+  `output_face`: their face is the Part Editor's `plane_kind` (2026-11-15, `handOpFace.ts`).
+  `face_back` on a part whose +normal face is up as laid (custom flat / front parts,
+  carcass bottoms + tops, shelves) is on the DOWN face (`hand_down`, stored as it sits,
+  not pre-mirrored). `face_front` and every other part type stay on the up face as before.
+- **Down-face work only → turn the part over, not a 6th face** (Mark 2026-11-15): a part
+  whose only blind work is hand ops underneath is nested mirrored (`flipHandDownParts`, a
+  fresh nest only, like `anchorSixthFace`) so it runs in the one program. Through cuts
+  don't count. True-shape parts aren't turned; they run as a 6th face pair. Blind work on
+  BOTH faces = 6th face pair, the down-face hand op in Z where it sits. Found on RHK6586
+  WC-09: the underside LED pocket was routed into the top, so with the LED turned down
+  the rangehood hole sat at the wrong end (recut R9).
 - **Two-sided sheet** (`sheetDrills.ts isTwoSidedSheet`): any part on it with a
   non-through op on each face. Through cuts don't count and run in A from the top.
   Every other sheet is byte-identical to before (one program, stored mirrors kept).

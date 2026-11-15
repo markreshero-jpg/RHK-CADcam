@@ -20,6 +20,8 @@ import type { NestedSheet } from './nest'
 import type { SheetDrill, SheetRoute } from './gcode'
 import type { OptiPart } from './types'
 import { cutBlank } from './shapes'
+import { handOpUpNormal, handOpOnDownFace } from './handOpFace'
+import type { NestResult } from './nest'
 
 export interface SheetDrillsResult {
   bySheet: Map<number, SheetDrill[]>
@@ -141,7 +143,7 @@ export async function loadResolvedDrillOps(
   if (opts.sync && cabIds.length) await syncDrillingForParts(parts, { force: opts.sync === 'force' })
 
   const opRows = cabIds.length
-    ? await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool,output_face', cabIds, ['drill'])
+    ? await selectCabinetOps('source_table,source_cabinet_id,source_part_key,operation_key,pos_x,pos_y,diameter,depth,repeat_count,repeat_spacing,repeat_axis,output_to_cnc,operation_type,drill_id,auto_tool,output_face,plane_kind', cabIds, ['drill'])
     : []
   const drillOps = (opRows as unknown as (DrillOpRaw & { output_to_cnc: boolean | null })[]).filter(o => o.output_to_cnc !== false)
 
@@ -270,6 +272,23 @@ export async function loadResolvedDrillOps(
     }
   }
 
+  // Hand ops on the face that is down as laid (handOpFace.ts): Part Editor
+  // 'Back face' on a flat panel = its underside. A custom part's frame depends
+  // on its orientation, read here (only for parts that have such an op).
+  const handBack = [...drillOps, ...[...routesByKey.values()].flat()].filter(o => o.output_face == null && o.plane_kind === 'face_back')
+  if (handBack.length) {
+    const customIds = [...new Set(handBack.filter(o => o.source_table === 'custom_parts' && o.source_part_key?.startsWith('custom_')).map(o => o.source_part_key!.slice(7)))]
+    const orient = new Map<string, string | null>()
+    if (customIds.length) {
+      const { data } = await supabase.from('cabinet_custom_parts').select('id,orientation').in('id', customIds)
+      for (const r of data ?? []) orient.set(`custom_${r.id}`, (r.orientation as string | null) ?? null)
+    }
+    for (const o of handBack) {
+      const up = handOpUpNormal(o.source_table, o.source_part_key ?? '', orient.get(o.source_part_key ?? ''))
+      if (handOpOnDownFace(o, up)) o.hand_down = true
+    }
+  }
+
   const partByUid = new Map<string, PartRef>(parts.map(p => {
     // Ops shift by how far the cut blank's edges came in (a shaped part's
     // banded-edge offset, O5; the tape on a rectangle's sides).
@@ -277,6 +296,7 @@ export async function loadResolvedDrillOps(
     return [p.uid, {
       source_table: p.source_table, cabinet_instance_id: p.cabinet_instance_id, source_part_key: p.source_part_key, w: p.w, h: p.h,
       deduct: !!opts.deductEdgeband, eb_w1: b.sx, eb_w2: b.sx2, eb_h1: b.sy,
+      ...(isShaped(p) ? { shaped: true } : {}),
     }]
   }))
   return { opsByKey, routesByKey, partByUid, warnings: [...warnings] }
@@ -291,6 +311,14 @@ export function projectSheetDrills(sheets: NestedSheet[], ops: ResolvedDrillOps)
     bySheet.set(sheet.index, buildSheetDrills(sheet, ops.partByUid, ops.opsByKey, sheet.thickness, f.own, f.own || f.mirrored))
   }
   return bySheet
+}
+
+// A drawn / resolver outline that isn't a plain axis-aligned rectangle.
+function isShaped(p: OptiPart): boolean {
+  const poly = p.shape?.op_polygon
+  if (!poly || poly.length < 3) return false
+  const xs = [...new Set(poly.map(q => Math.round(q.x * 100)))], ys = [...new Set(poly.map(q => Math.round(q.y * 100)))]
+  return !(poly.length === 4 && xs.length === 2 && ys.length === 2)
 }
 
 // Same, for routing features (grooves / routes / pockets).
@@ -324,24 +352,63 @@ export function isTwoSidedSheet(sheet: NestedSheet, ops: ResolvedDrillOps): bool
   return f.own || f.mirrored
 }
 
+// Each part's blind work by face: up, down (generated, pre-mirrored — cut from the
+// top as stored on a one-program sheet) and handDown (a hand op on the face that is
+// down as laid, stored as it sits — handOpFace.ts).
+function partFaces(part: PartRef, ops: ResolvedDrillOps, th: number): { up: boolean; down: boolean; handDown: boolean } {
+  const key = drillKey(part.source_table, part.cabinet_instance_id, part.source_part_key)
+  let up = false, down = false, handDown = false
+  const see = (o: { output_face?: string | null; hand_down?: boolean }, depth: number | null | undefined) => {
+    if (depth == null || !(depth > 0) || depth >= th - 1e-6) return   // through (or nothing)
+    if (o.hand_down) handDown = true
+    else if (onDownFace(part, o.output_face)) down = true
+    else up = true
+  }
+  for (const d of ops.opsByKey.get(key) ?? []) see(d, d.depth)
+  for (const r of ops.routesByKey.get(key) ?? []) see(r, r.depth ?? r.size_dz)
+  return { up, down, handDown }
+}
+
 // own = a part's own work is on both faces (the layout convention: down-face work
 // is un-mirrored and runs in Z); mirrored = a mirrored part has blind work.
+// Hand ops underneath (handDown): turned over (flipHandDownParts) they come up and
+// the part is one-sided again; left as laid they need program Z.
 function sheetFaces(sheet: NestedSheet, ops: ResolvedDrillOps): { own: boolean; mirrored: boolean } {
   const th = sheet.thickness
   let mirrored = false
   for (const pl of sheet.placements) {
     const part = ops.partByUid.get(pl.baseUid)
     if (!part) continue
-    const key = drillKey(part.source_table, part.cabinet_instance_id, part.source_part_key)
-    let up = false, down = false
-    const see = (face: string | null | undefined, depth: number | null | undefined) => {
-      if (depth == null || !(depth > 0) || depth >= th - 1e-6) return   // through (or nothing)
-      if (onDownFace(part, face)) down = true; else up = true
-    }
-    for (const d of ops.opsByKey.get(key) ?? []) see(d.output_face, d.depth)
-    for (const r of ops.routesByKey.get(key) ?? []) see(r.output_face, r.depth ?? r.size_dz)
+    const { up, down, handDown } = partFaces(part, ops, th)
     if (up && down) return { own: true, mirrored }
+    if (handDown && !pl.mirrored) return { own: true, mirrored }
+    // Turned over: up / generated down work goes underneath; hand-down work comes up.
     if (pl.mirrored && (up || down)) mirrored = true
   }
   return { own: false, mirrored }
+}
+
+// A part whose only blind work is hand ops on the face that is down as laid (the
+// RHK6586 WC-09 under panel: LED pocket in the underside, rangehood hole through)
+// is turned over (Mirror part) so that work is on top and the sheet stays one
+// program — a 6th face pair is only for work on BOTH faces (Mark, 2026-11-15).
+// True-shape parts aren't turned (a mirrored outline could foul its neighbours):
+// they run as a 6th face pair. Applied to a fresh nest, like anchorSixthFace.
+export function flipHandDownParts(nest: NestResult, ops: ResolvedDrillOps): NestResult {
+  let changed = false
+  const sheets = nest.sheets.map(sheet => {
+    let sheetChanged = false
+    const placements = sheet.placements.map(pl => {
+      const part = ops.partByUid.get(pl.baseUid)
+      if (!part || pl.mirrored || part.shaped) return pl
+      const f = partFaces(part, ops, sheet.thickness)
+      if (!f.handDown || f.up || f.down) return pl
+      sheetChanged = true
+      return { ...pl, mirrored: true }
+    })
+    if (!sheetChanged) return sheet
+    changed = true
+    return { ...sheet, placements }
+  })
+  return changed ? { ...nest, sheets } : nest
 }

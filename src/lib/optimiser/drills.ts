@@ -19,6 +19,10 @@ export interface DrillOpRaw {
   // Entry face (± the part's footprint normal) — used to tell pre-mirrored
   // down-face bores apart when shifting ops onto an edgeband-deducted blank.
   output_face?: string | null
+  // Hand ops have no output_face: their face is plane_kind (handOpFace.ts), and
+  // the loader sets hand_down when that face is DOWN as laid (not pre-mirrored).
+  plane_kind?: string | null
+  hand_down?: boolean
   diameter: number | null; depth: number | null
   repeat_count: number | null; repeat_spacing: number | null; repeat_axis: string | null
   // Tool assignment — resolved to a concrete bit (and an effective diameter/depth)
@@ -47,6 +51,9 @@ export interface PartRef {
   // For a shaped part these are the cut blank's edge moves (shapes.cutBlank, O5).
   deduct?: boolean
   eb_w1?: number; eb_w2?: number; eb_h1?: number
+  // A true-shape part (outline not a plain rectangle): never turned over by
+  // flipHandDownParts — a mirrored outline could foul its interlocked neighbours.
+  shaped?: boolean
 }
 
 // Faces on the + side of a footprint axis (see partFootprint FACE_FOR_AXIS).
@@ -154,11 +161,14 @@ export function buildSheetDrills(
     for (const op of ops) {
       // Edgeband-deducted blank: shift holes by the tape on the edge that became
       // the blank origin (shared with routes via ebShift).
-      const down = twoSided && onDownFace(part, op.output_face)
-      const shift = ebShift(part, op.output_face, down)
-      const flip = down || mirrorsOnDrawerFront(part, op)
+      // pre = a pre-mirrored down-face bore, un-mirrored on a two-sided sheet; a hand
+      // op on the down face (hand_down) is stored as it sits, so only its program moves.
+      const pre = twoSided && onDownFace(part, op.output_face)
+      const down = pre || !!op.hand_down
+      const shift = ebShift(part, op.output_face, pre)
+      const flip = pre || mirrorsOnDrawerFront(part, op)
       // Mirrored front holes measure from the far finished edge, so that edge's tape.
-      const sx = !down && flip && part.deduct ? part.eb_w2 ?? 0 : shift.sx
+      const sx = !pre && flip && part.deduct ? part.eb_w2 ?? 0 : shift.sx
       const sy = shift.sy
       for (const hole of expand(op)) {
         const depth = hole.depth ?? defaultDepth
