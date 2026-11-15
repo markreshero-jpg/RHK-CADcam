@@ -204,3 +204,4 @@ Mark's answers 2026-11-12:
 ## Other rooms - not drawn
 - J01 garage: 4411 frame to frame - 12 sheet both sides = 4387. Ceiling TBC by Rory.
   Hoop pine 19 ply in the quote.
+- **LED route face (2026-11-15):** the J07 WC-02 top's LED route (Part Editor Back face = underside) now cuts in the underside: the optimiser turns the top over on the sheet, one program (fix de6e349). Not cut yet. The top is 3550 long, so it needs stock longer than the standard sheet (a headless run left it unplaced).

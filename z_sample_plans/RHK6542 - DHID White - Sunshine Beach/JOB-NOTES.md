@@ -93,3 +93,4 @@ Robe: 520 carcass, 600 end panel right (S), 200 deep panel left (N) against the 
 ## Rangehood Cabinet (room 06981ab6) — 2026-11-04
 
 - Room set to 2pac (Mark): doors "2 Pac Flat 18mm", colour **Resene Alabaster** (new row on the 2pac range, Satin Board 18mm, finish "Satin" — sheen TBC); panels = exposed role on base/wall/tall → Satin Board 18mm. No cabinets drawn yet.
+- **LED route face (2026-11-15):** three LED parts were cut with the pocket in the TOP face (the optimiser ignored the Part Editor's Back face, fixed de6e349): **TC-03 top** (R3) and **WC-08 under panel** (R8) have no holes and full-length pockets, so **turn them over to fit**. **WC-04 bottom** (R7, 33 walnut) has blind drilling on its top face, so the pocket is on the inside: **recut it or route the LED in the underside by hand**. A recut now runs as a 6th face A/Z pair; future runs turn TC-03 / WC-08 over on the sheet.

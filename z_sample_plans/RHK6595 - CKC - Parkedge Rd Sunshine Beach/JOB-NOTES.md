@@ -222,3 +222,4 @@ Applied with `_tmp-6595-r6.mjs` (db + resolve); before-state `_tmp-6595-r6-befor
 - Saved run **RHK6595-R3**. Files: `SynologyDrive/CNCFiles/RHK6595 - CKC - 1-21 Parkedge Rd Sunshine/Kitchen + Loose Parts/`
   (material sub folders with the .anc programs, `RHK6595 cut sheets.pdf` 26 pages, `RHK6595 labels 102x48.pdf` 210, `RHK6595-R3.rhkrun`).
   One combined room folder (Mark): the Loose Parts pieces share Whiteboard 01 (2400 x 900 closure) and 13 (2 x 2400 x 70 rips) with Kitchen parts.
+- **LED route face (2026-11-15):** WC-12 under panel was cut in **R3** with the LED pocket in the TOP face (the optimiser ignored the Part Editor's Back face, fixed de6e349). The panel has no holes and the pocket runs full length, 30 off the back, so **turn it over to fit** (over the long edge, the back stays the back). Future runs turn it over on the sheet automatically.
