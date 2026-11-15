@@ -261,6 +261,8 @@ interface ElevationSVGProps {
   splashbackInfo?: (sb: SplashbackInstance) => SbInfo
   onSelectSplashback?: (id: string) => void
   onSplashbackSegments?: (id: string, segs: BenchtopSegment[]) => void
+  /** Cut-out / joint drags on a selected splashback (z_splashback S3). */
+  onSplashbackUpdate?: (id: string, u: Partial<SplashbackInstance>) => void
   onCreateSplashback?: (wallId: string, side: 'face' | 'back', segs: BenchtopSegment[]) => void
   onSplashbackContextMenu?: (e: React.MouseEvent, id: string) => void
   // Along-wall ranges of waterfall legs that block a mover on this wall + side
@@ -315,7 +317,7 @@ export default function ElevationSVG({
   elevMeasureStart, elevMeasureEnd, elevMeasureCursor,
   setElevMeasureStart, setElevMeasureEnd, setElevMeasureCursor,
   benchtops, benchtopInfo, edgeProfiles, onSelectBenchtop, waterfallOcc,
-  splashbacks, splashbackInfo, onSelectSplashback, onSplashbackSegments, onCreateSplashback, onSplashbackContextMenu,
+  splashbacks, splashbackInfo, onSelectSplashback, onSplashbackSegments, onCreateSplashback, onSplashbackContextMenu, onSplashbackUpdate,
   fixtures, fixtureClashIds, onSelectFixture, fixtureHighlight,
   fixtureStretching, onFixtureStretchHandle, onFixtureStretchMove, onFixtureStretchCommit,
   fixtureGhost, onFixtureCarryMove, onFixtureCarryDrop, onFixtureMoveHandle,
@@ -2275,6 +2277,7 @@ export default function ElevationSVG({
                   benches={benches} obstacles={obstacles}
                   onSelect={id => onSelectSplashback?.(id)}
                   onChangeSegments={(id, segs) => onSplashbackSegments?.(id, segs)}
+                  onUpdate={onSplashbackUpdate}
                   onCreate={segs => onCreateSplashback?.(wall.id, elevWallSide, segs)}
                   onContextMenu={onSplashbackContextMenu}
                 />

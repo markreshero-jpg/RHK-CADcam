@@ -466,6 +466,28 @@ export interface BenchtopInstance {
 
 /** A splashback piece. Outline in its wall ELEVATION frame (src/lib/splashbackGeometry):
  *  x = elevation x as seen on that side (back mirrored), y = height above the floor (up). */
+/** A hand cut-out in a splashback (z_splashback S3). x / y = bottom-left, measured from the
+ *  piece's bottom-left corner (so it moves with the piece); round: w = h = diameter. */
+export interface SbCutout {
+  id: string
+  kind: 'gpo' | 'switch' | 'rect' | 'round'
+  x: number
+  y: number
+  w: number
+  h: number
+  label?: string | null
+}
+
+/** A splashback return round a corner (z_splashback S3). 'back' wraps a wall end / external
+ *  corner (into the wall, e.g. to a door jamb); 'out' turns an inside corner toward the room.
+ *  length_mm = the return's overall length (long point, includes the panel thickness). */
+export interface SbReturn {
+  end: 'left' | 'right'
+  dir: 'back' | 'out'
+  length_mm: number
+  join: 'mitre' | 'butt'
+}
+
 export interface SplashbackInstance {
   id: string
   room_id: string
@@ -473,8 +495,12 @@ export interface SplashbackInstance {
   wall_id: string
   wall_side: 'face' | 'back'
   segments: BenchtopSegment[]
-  /** Hand cut-outs (S3) — power points, switches; elevation frame. */
-  cutouts: Array<Array<{ x: number; y: number }>>
+  /** Hand cut-outs (S3) — power points, switches, tap holes; from the piece's bottom-left. */
+  cutouts: SbCutout[]
+  /** Returns round a corner at either end (S3). */
+  returns?: SbReturn[]
+  /** Vertical slab joints, mm from the piece's left edge (S3). */
+  joints?: number[]
   /** Set off the wall face (packer / batten), mm. */
   offset_mm: number
   /** Null = the panel material's thickness. */

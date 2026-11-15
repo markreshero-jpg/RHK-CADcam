@@ -24,4 +24,24 @@ describe('splashback supply lines', () => {
   it('board splashbacks are cut parts — not on the supply sheet', () => {
     expect(splashbackSupplyLines([sb('a')], () => ({ name: 'Whiteboard', thick: 16.5, isBoard: true }), [wall, wall2], [])).toEqual([])
   })
+
+  it('joints split the piece; cut-outs go to the piece they sit in', () => {
+    const lines = splashbackSupplyLines([sb('S', {
+      joints: [1800],
+      cutouts: [{ id: 'g', kind: 'gpo', x: 200, y: 100, w: 125, h: 70 }, { id: 'r', kind: 'round', x: 2500, y: 300, w: 35, h: 35 }],
+    })], () => ({ name: 'Stone', thick: 20, isBoard: false }), [wall, wall2], [])
+    expect(lines.map(l => [l.piece, l.length, l.width])).toEqual([[1, 1800, 700], [2, 1200, 700]])
+    expect(lines[0].cutouts).toEqual([{ w: 125, h: 70, round: false }])
+    expect(lines[1].cutouts).toEqual([{ w: 35, h: 35, round: true }])
+    expect(lines[0].joins).toEqual([{ type: 'butt', length: 700 }])
+    expect(lines[0].area_m2).toBeCloseTo((1800 * 700 - 125 * 70) / 1e6, 2)
+  })
+
+  it('a wrap-round return: its own line, and the main piece runs on to the outer corner', () => {
+    const lines = splashbackSupplyLines([sb('S', { returns: [{ end: 'right', dir: 'back', length_mm: 110, join: 'mitre' }] })],
+      () => ({ name: 'Stone', thick: 20, isBoard: false }), [wall, wall2], [])
+    expect(lines).toHaveLength(2)
+    expect(lines[0]).toMatchObject({ length: 3020, width: 700, joins: [{ type: 'mitre', length: 700 }] })
+    expect(lines[1]).toMatchObject({ label: 'Return – right end', length: 700, width: 110, joins: [{ type: 'mitre', length: 700 }] })
+  })
 })

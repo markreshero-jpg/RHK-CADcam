@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
+  sbReturnGeos, clipPolyX, cutoutHoles, jointXs,
   rectSegments, sbBounds, isRect, stretchEdge, defaultSplashbackRect, openingHoles, sbPlanQuad, flipForEditor, moveSegments,
 } from '../splashbackGeometry'
 import type { Wall } from '../types'
@@ -59,5 +60,36 @@ describe('splashback geometry', () => {
     const s = rectSegments(r)
     expect(sbBounds(flipForEditor(flipForEditor(s)))).toEqual(r)
     expect(sbBounds(flipForEditor(s))).toEqual({ x0: 100, x1: 3972, z0: -1620, z1: -920 })
+  })
+})
+
+describe('splashback S3: returns, joints, cut-outs', () => {
+  const segs = rectSegments({ x0: 0, x1: 3000, z0: 920, z1: 1620 })
+  const b = { x0: 0, x1: 3000, z0: 920, z1: 1620 }
+
+  it('a mitred wrap-round return sits past the end, into the wall', () => {
+    const [g] = sbReturnGeos({ segments: segs, offset_mm: 0, returns: [{ end: 'right', dir: 'back', length_mm: 140, join: 'mitre' }] }, b, 20)
+    expect(g.poly).toEqual([{ x: 3000, y: 0 }, { x: 3020, y: 20 }, { x: 3020, y: -120 }, { x: 3000, y: -120 }])
+    expect(g.wedge).toEqual([{ x: 3000, y: 0 }, { x: 3020, y: 20 }, { x: 3000, y: 20 }])
+    expect(g.strip).toEqual({ x0: 3000, x1: 3020, z0: 920, z1: 1620 })
+    expect(g.supplyLen).toBe(140)
+  })
+
+  it('a butt inside-corner return at the left end comes out toward the room', () => {
+    const [g] = sbReturnGeos({ segments: segs, offset_mm: 0, returns: [{ end: 'left', dir: 'out', length_mm: 100, join: 'butt' }] }, b, 20)
+    expect(g.poly).toEqual([{ x: 0, y: 20 }, { x: 0, y: 100 }, { x: 20, y: 100 }, { x: 20, y: 20 }])
+    expect(g.wedge).toBeNull()
+    expect(g.supplyLen).toBe(80)
+  })
+
+  it('clips an outline to an x range', () => {
+    const sq = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }]
+    expect(clipPolyX(sq, 2, 6).map(p => p.x).sort()).toEqual([2, 2, 6, 6])
+  })
+
+  it('cut-outs are offsets from the piece corner; joints outside the piece are dropped', () => {
+    const [h] = cutoutHoles(b, [{ id: 'a', kind: 'round', x: 100, y: 50, w: 35, h: 0 }])
+    expect(h).toMatchObject({ x0: 100, x1: 135, z0: 970, z1: 1005, round: true })
+    expect(jointXs({ joints: [1500, 0, 3000, 4000] }, b)).toEqual([1500])
   })
 })

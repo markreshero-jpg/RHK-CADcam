@@ -15,10 +15,11 @@
 // ============================================================
 
 import { useState } from 'react'
-import type { SplashbackInstance } from '@/src/lib/types'
+import type { SbCutout, SplashbackInstance } from '@/src/lib/types'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import {
-  sbBounds, sbElevPath, isRect, stretchEdge, moveSegments, rectSegments, openingHoles, defaultSplashbackRect,
+  sbBounds, sbElevPath, isRect, stretchEdge, moveSegments, rectSegments, defaultSplashbackRect,
+  sbAllHoles, cutoutHoles, jointXs, sbReturnGeos, CUTOUT_PRESETS,
   MIN_SB, type SbRect, type SbEdge, type SbObstacle,
 } from '@/src/lib/splashbackGeometry'
 import type { SbInfo } from './useSplashbacks'
@@ -72,11 +73,16 @@ type Drag =
   | { kind: 'edge'; id: string; edge: SbEdge; segs: BenchtopSegment[] }
   | { kind: 'move'; id: string; start: { x: number; y: number }; segs: BenchtopSegment[]; moved: boolean }
   | { kind: 'draw'; start: { x: number; y: number }; cur: { x: number; y: number } }
+  // S3: a selected piece's cut-out (offsets from the piece corner) or slab joint.
+  | { kind: 'cut'; id: string; cid: string; start: { x: number; y: number }; cutouts: SbCutout[]; moved: boolean }
+  | { kind: 'joint'; id: string; idx: number; joints: number[] }
 
 export default function SplashbackElevation({
   splashbacks, wallId, side, wallLength, roomH, zoom, lineScale = 1, layers, selectedId, infoFor, openings,
-  interactive, drawing, benches, obstacles, onSelect, onChangeSegments, onCreate, onContextMenu, print,
+  interactive, drawing, benches, obstacles, onSelect, onChangeSegments, onCreate, onContextMenu, print, onUpdate,
 }: {
+  /** Cut-out / joint drags (S3). */
+  onUpdate?: (id: string, u: Partial<SplashbackInstance>) => void
   /** Shop drawing / report elevation (ElevationPrintSVG): ink pens, white fill + hatch, no handles.
    *  P = model mm per paper mm; fs = label font size (model mm). */
   print?: { P: number; fs: number }
@@ -118,10 +124,12 @@ export default function SplashbackElevation({
     return p ? { x: p.x, z: roomH - p.y } : null
   }
 
-  // Live outline while dragging.
-  const liveSegs = (sb: SplashbackInstance) => {
-    if (!drag || drag.kind === 'draw' || drag.id !== sb.id) return sb.segments
-    return drag.segs
+  // Live piece while dragging (outline, cut-outs or joints).
+  const live = (sb: SplashbackInstance): SplashbackInstance => {
+    if (!drag || drag.kind === 'draw' || drag.id !== sb.id) return sb
+    if (drag.kind === 'cut') return { ...sb, cutouts: drag.cutouts }
+    if (drag.kind === 'joint') return { ...sb, joints: drag.joints }
+    return { ...sb, segments: drag.segs }
   }
 
   function endDrag(e: React.PointerEvent) {
@@ -129,6 +137,8 @@ export default function SplashbackElevation({
     ;(e.currentTarget as Element).releasePointerCapture?.(e.pointerId)
     if (drag.kind === 'edge') onChangeSegments(drag.id, drag.segs)
     if (drag.kind === 'move' && drag.moved) onChangeSegments(drag.id, drag.segs)
+    if (drag.kind === 'cut' && drag.moved) onUpdate?.(drag.id, { cutouts: drag.cutouts })
+    if (drag.kind === 'joint') onUpdate?.(drag.id, { joints: drag.joints })
     if (drag.kind === 'draw') {
       const a = drag.start, b = drag.cur
       if (Math.abs(b.x - a.x) >= MIN_SB && Math.abs(b.y - a.y) >= MIN_SB) {
@@ -153,12 +163,16 @@ export default function SplashbackElevation({
   return (
     <g>
       <Patterns zoom={z} id={pid} sw={print ? pen('thin', print.P) : undefined} ink={stroke} />
-      {here.map(sb => {
-        const segs = liveSegs(sb)
+      {here.map(sb0 => {
+        const sb = live(sb0)
+        const segs = sb.segments
         const b = sbBounds(segs)
         if (!b) return null
-        const info = infoFor(sb)
-        const holes = openingHoles(b, openings, Number(sb.opening_reveal_mm) || 0)
+        const info = infoFor(sb0)
+        const holes = sbAllHoles(sb, b, openings)
+        const cuts = cutoutHoles(b, sb.cutouts)
+        const jxs = jointXs(sb, b)
+        const rets = sbReturnGeos(sb, b, info.thick)
         const d = sbElevPath(segs, holes, roomH)
         const isSel = sb.id === selectedId
         const col = KIND_COLOUR[info.kind] ?? '#a8a29e'
@@ -174,7 +188,7 @@ export default function SplashbackElevation({
               const p = local(e)
               if (!p) return
               ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-              setDrag({ kind: 'move', id: sb.id, start: { x: p.x, y: p.z }, segs: sb.segments, moved: false })
+              setDrag({ kind: 'move', id: sb.id, start: { x: p.x, y: p.z }, segs: sb0.segments, moved: false })
             }}
             onPointerMove={e => {
               if (drag?.kind !== 'move' || drag.id !== sb.id) return
@@ -182,7 +196,7 @@ export default function SplashbackElevation({
               if (!p) return
               const dx = r1(p.x - drag.start.x), dz = r1(p.z - drag.start.y)
               if (!drag.moved && Math.abs(dx) * z < 4 && Math.abs(dz) * z < 4) return
-              setDrag({ ...drag, segs: moveSegments(sb.segments, dx, dz), moved: true })
+              setDrag({ ...drag, segs: moveSegments(sb0.segments, dx, dz), moved: true })
             }}
             onPointerUp={e => { if (drag?.kind === 'move') { e.stopPropagation(); endDrag(e) } }}
             onClick={e => { if (interactive) e.stopPropagation() }}
@@ -205,6 +219,74 @@ export default function SplashbackElevation({
                 <tspan x={(b.x0 + b.x1) / 2} dy={fs * 1.25}>{`${r1(b.x1 - b.x0)} × ${r1(b.z1 - b.z0)}${info.thick ? ` · ${info.thick}` : ''}`}</tspan>
               </text>
             )}
+            {/* Slab joints (S3) */}
+            {jxs.map((x, i) => (
+              <line key={'j' + i} x1={x} y1={roomH - b.z0} x2={x} y2={roomH - b.z1}
+                stroke={isSel ? '#f59e0b' : stroke} strokeDasharray={print ? `${6 * print.P} ${2 * print.P}` : `${10 / z} ${4 / z}`}
+                strokeWidth={print ? pen('thin', print.P) : 1.25 / lz} opacity={layers.op('splashbacks')} style={{ pointerEvents: 'none' }} />
+            ))}
+            {/* Returns, seen edge-on at the end (S3) */}
+            {rets.map((g, i) => (
+              <g key={'r' + i} style={{ pointerEvents: 'none' }} opacity={layers.op('splashbacks')}>
+                <rect x={g.strip.x0} y={roomH - g.strip.z1} width={g.strip.x1 - g.strip.x0} height={g.strip.z1 - g.strip.z0}
+                  fill={print ? 'white' : col} fillOpacity={print ? 1 : 0.5} stroke={isSel ? '#f59e0b' : stroke}
+                  strokeWidth={print ? pen('front', print.P) : 1.25 / lz} />
+                {layers.show('splashback_labels') && (
+                  <text x={g.r.end === 'left' ? g.strip.x0 - fs * 0.4 : g.strip.x1 + fs * 0.4} y={roomH - (g.z0 + g.z1) / 2}
+                    fontSize={fs * 0.8} textAnchor={g.r.end === 'left' ? 'end' : 'start'} dominantBaseline="middle"
+                    fill={isSel ? '#f59e0b' : stroke} {...(print ? { stroke: 'white', strokeWidth: fs * 0.25, paintOrder: 'stroke' } : {})}>
+                    {`RETURN ${r1(Number(g.r.length_mm) || 0)} ${g.r.join.toUpperCase()}`}
+                  </text>
+                )}
+              </g>
+            ))}
+            {/* Cut-out tags (GPO / SW) */}
+            {layers.show('splashback_labels') && cuts.map(h => CUTOUT_PRESETS[h.c.kind]?.tag ? (
+              <text key={'t' + h.c.id} x={(h.x0 + h.x1) / 2} y={roomH - (h.z0 + h.z1) / 2} fontSize={Math.min(fs * 0.7, (h.z1 - h.z0) * 0.45)}
+                textAnchor="middle" dominantBaseline="middle" fill={isSel ? '#f59e0b' : stroke} style={{ pointerEvents: 'none', userSelect: 'none' }}>
+                {CUTOUT_PRESETS[h.c.kind].tag}
+              </text>
+            ) : null)}
+            {/* Selected: drag a cut-out to move it, or a joint along the piece */}
+            {isSel && interactive && onUpdate && cuts.map(h => (
+              <rect key={'c' + h.c.id} x={h.x0} y={roomH - h.z1} width={h.x1 - h.x0} height={h.z1 - h.z0}
+                fill="#f59e0b" fillOpacity={0.2} stroke="#f59e0b" strokeWidth={1.25 / z} style={{ cursor: 'move' }}
+                onPointerDown={e => {
+                  if (e.button !== 0) return
+                  e.stopPropagation()
+                  const p = local(e)
+                  if (!p) return
+                  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+                  setDrag({ kind: 'cut', id: sb.id, cid: h.c.id, start: { x: p.x, y: p.z }, cutouts: sb0.cutouts, moved: false })
+                }}
+                onPointerMove={e => {
+                  if (drag?.kind !== 'cut' || drag.cid !== h.c.id) return
+                  const p = local(e)
+                  if (!p) return
+                  const dx = r1(p.x - drag.start.x), dz = r1(p.z - drag.start.y)
+                  if (!drag.moved && Math.abs(dx) * z < 3 && Math.abs(dz) * z < 3) return
+                  setDrag({ ...drag, moved: true, cutouts: sb0.cutouts.map(c => c.id === h.c.id ? { ...c, x: r1(c.x + dx), y: r1(c.y + dz) } : c) })
+                }}
+                onPointerUp={e => { e.stopPropagation(); endDrag(e) }} />
+            ))}
+            {isSel && interactive && onUpdate && jxs.map((x, i) => (
+              <rect key={'jh' + i} x={x - hs} y={roomH - b.z1} width={hs * 2} height={b.z1 - b.z0}
+                fill="#f59e0b" fillOpacity={0.15} style={{ cursor: 'ew-resize' }}
+                onPointerDown={e => {
+                  if (e.button !== 0) return
+                  e.stopPropagation()
+                  ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
+                  setDrag({ kind: 'joint', id: sb.id, idx: i, joints: jointXs(sb0, b).map(v => r1(v - b.x0)) })
+                }}
+                onPointerMove={e => {
+                  if (drag?.kind !== 'joint' || drag.idx !== i) return
+                  const p = local(e)
+                  if (!p) return
+                  const v = Math.min(Math.max(r1(p.x - b.x0), MIN_SB), r1(b.x1 - b.x0) - MIN_SB)
+                  setDrag({ ...drag, joints: drag.joints.map((j, k) => k === i ? v : j) })
+                }}
+                onPointerUp={e => { e.stopPropagation(); endDrag(e) }} />
+            ))}
             {/* Edge handles on a selected rectangle */}
             {isSel && interactive && isRect(segs) && ([
               ['left',   b.x0, (b.z0 + b.z1) / 2],
@@ -219,14 +301,14 @@ export default function SplashbackElevation({
                   if (e.button !== 0) return
                   e.stopPropagation()
                   ;(e.currentTarget as Element).setPointerCapture(e.pointerId)
-                  setDrag({ kind: 'edge', id: sb.id, edge, segs: sb.segments })
+                  setDrag({ kind: 'edge', id: sb.id, edge, segs: sb0.segments })
                 }}
                 onPointerMove={e => {
                   if (drag?.kind !== 'edge' || drag.id !== sb.id || drag.edge !== edge) return
                   const p = local(e)
                   if (!p) return
                   const v = edge === 'left' || edge === 'right' ? r1(p.x) : r1(p.z)
-                  setDrag({ ...drag, segs: stretchEdge(sb.segments, edge, v) })
+                  setDrag({ ...drag, segs: stretchEdge(sb0.segments, edge, v) })
                 }}
                 onPointerUp={e => { e.stopPropagation(); endDrag(e) }}
               />

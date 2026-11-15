@@ -136,7 +136,7 @@ import { edgeTape } from '@/src/lib/benchtopEdgeband'
 import { useBenchtopCatalog } from './useBenchtopCatalog'
 import { useSplashbacks } from './useSplashbacks'
 import SplashbackPanel from './SplashbackPanel'
-import { sbBounds, sbPlanQuad } from '@/src/lib/splashbackGeometry'
+import { sbPlanPolys } from '@/src/lib/splashbackGeometry'
 import dynamic from 'next/dynamic'
 import SnapToolbar from './SnapToolbar'
 import { getUserPrefs, setUserPrefs, type PlanGridPrefs, type ViewStyle, type WallDrawPrefs } from '@/src/lib/userPrefs'
@@ -3213,8 +3213,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     const rc = centroid(walls)
     return splashbacks.flatMap(x => {
       const w = walls.find(wl => wl.id === x.wall_id)
-      const b = sbBounds(x.segments)
-      return w && b ? [{ id: x.id, pts: sbPlanQuad(b, w, x.wall_side, rc, Number(x.offset_mm) || 0, sbk.infoFor(x).thick) }] : []
+      // The band + any returns (S3) — one entry per polygon, same id.
+      return w ? sbPlanPolys(x, w, rc, sbk.infoFor(x).thick).map(pts => ({ id: x.id, pts })) : []
     })
   }, [splashbacks, walls, sbk.infoFor])
   // Click a fixture; Shift adds / removes it from the multi-pick (like cabinets).
@@ -4030,6 +4030,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             splashbackInfo={sbk.infoFor}
             onSelectSplashback={id => { setSelected({ type: 'splashback', id }); setMultiSelect([]); setCabResize(null) }}
             onSplashbackSegments={(id, segs) => void sbk.update(id, { segments: segs })}
+            onSplashbackUpdate={(id, u) => void sbk.update(id, u)}
             onCreateSplashback={async (wallId, side, segs) => {
               const made = await sbk.create({ wall_id: wallId, wall_side: side, segments: segs })
               if (made) setMode('select')
@@ -4403,6 +4404,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             sb={selectedSplashback}
             info={sbk.infoFor(selectedSplashback)}
             wallName={walls.find(w => w.id === selectedSplashback.wall_id)?.name ?? 'Wall'}
+            wallThick={Number(walls.find(w => w.id === selectedSplashback.wall_id)?.thickness) || 0}
             schedules={sbk.scheduleOptions}
             onUpdate={(id, u) => void sbk.update(id, u)}
             onDelete={id => void sbk.remove(id)}

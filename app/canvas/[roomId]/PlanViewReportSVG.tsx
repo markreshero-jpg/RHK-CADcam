@@ -47,7 +47,7 @@ import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
 import { FillPatternDef, fillPaint } from './FillPattern'
 import type { SbPrint } from './useSplashbacks'
-import { sbBounds, sbPlanQuad } from '@/src/lib/splashbackGeometry'
+import { sbPlanPolys } from '@/src/lib/splashbackGeometry'
 
 /** Report-only page extras (not drawing layers). Wall names + wall hatch moved to
  *  the layer set (wall_names / wall_fill, 2026-10-26). */
@@ -684,13 +684,12 @@ export default function PlanViewReportSVG({
       {/* ── Splashbacks — stand above the bench, so drawn over it: a band on the wall face ── */}
       {sb && layers.show('splashbacks') && sb.splashbacks.map(x => {
         const w = walls.find(wl => wl.id === x.wall_id)
-        const b = sbBounds(x.segments)
-        if (!w || !b) return null
-        const q = sbPlanQuad(b, w, x.wall_side, cx, Number(x.offset_mm) || 0, sb.info(x).thick)
-        return (
-          <polygon key={`sb-${x.id}`} points={q.map(p => `${p.x},${p.y}`).join(' ')} opacity={layers.op('splashbacks')}
+        if (!w) return null
+        // The band + any returns round the corner (S3).
+        return sbPlanPolys(x, w, cx, sb.info(x).thick).map((q, i) => (
+          <polygon key={`sb-${x.id}-${i}`} points={q.map(p => `${p.x},${p.y}`).join(' ')} opacity={layers.op('splashbacks')}
             fill="#d4d4d4" stroke={INK} strokeWidth={lw('splashbacks', pen('thin', P))} strokeLinejoin="miter" />
-        )
+        ))
       })}
 
       {/* ── Fixtures & appliances (sinks, hobs, taps, appliances …) — over the benchtops ── */}

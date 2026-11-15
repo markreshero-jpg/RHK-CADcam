@@ -8,6 +8,9 @@
 > via "Same as Benchtop". **Check pending** (Mark). Next: **S3** — returns (Wall 7 north mitre), joints, hand
 > cut-outs; then the butler's pieces (Walls 4 + 3). 2026-11-15 **S2b** closed the S2 gaps (prints, reports,
 > offline, plan pick, Materials tab, override fix) — see "S2b as built"; check pending.
+> 2026-11-15 **S3 built**: returns, slab joints, hand cut-outs (see "S3 as built"); Wall 7 north return set (wrap
+> round the wall end, mitre, 140 — length TBC on site). Check pending. Next: the butler's pieces (Walls 4 + 3),
+> then S4 auto-build.
 
 ## Mark's brief (2026-11-14)
 
@@ -147,6 +150,30 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
   the AI still can't edit them.
 - Not done: the canvas reloads job / room splashback overrides only on open (as benchtops).
 
+## S3 as built (2026-11-15)
+
+- Columns `returns`, `joints` (jsonb, default `[]`) on `splashback_instances`
+  (`migration_s3_returns_joints.sql`, applied live). `cutouts` (unused polygon list, all rows empty) is now a list
+  of cut-out records. Types `SbCutout`, `SbReturn` (`src/lib/types.ts`).
+- **Cut-outs**: `{ id, kind: gpo | switch | rect | round, x, y, w, h }`, x / y = bottom-left measured from the
+  piece's bottom-left (they move with the piece; stretching the left edge shifts them). Default sizes
+  (`CUTOUT_PRESETS`): Double GPO 125 × 70, Switch / single GPO 70 × 115, Cut-out 100 × 100, Round Ø35 —
+  editable, **check against the fittings**. New ones land mid-piece, centred 150 above the bottom. Holes in
+  elevation (GPO / SW tag), prints, 3D; dragged in elevation when the piece is selected.
+- **Joints**: vertical slab joints (butt), mm from the piece's left edge. "+ Joint" halves the longest piece; drag
+  the joint in elevation. Dashed line in elevation / prints. Supply: one line per piece ("piece 1 of 2"), butt join
+  on each side, cut-outs to the piece holding their centre.
+- **Returns**: per end (as seen in the elevation): `dir` **back** = wrap round the wall end / external corner
+  (into the wall — the RHK6468 door-jamb case; default length = wall thickness + panel, mitre) or **out** = inside
+  corner toward the room (default 100, butt); `length_mm` = overall, long point (panel thickness included).
+  Geometry `sbReturnGeos` (local plan frame) → plan polygons (`sbPlanPolys`: band + return + the corner block a
+  back return adds to the main piece), elevation strip seen edge-on + "RETURN 140 MITRE", 3D extrusion. Supply:
+  the return is its own line (height × length, long point for a mitre, short for a butt); a back return adds the
+  panel thickness to the main piece; the join is listed on both lines.
+- Not done: a return isn't drawn on the adjacent wall's elevation (an 'out' return would be seen face-on there);
+  returns follow the piece's height at that end, not their own shape. Corner meets between two splashbacks on
+  adjoining walls are just drawn to length (no linked joint).
+
 ## Questions for Mark (original; answers above)
 
 1. Auto-build splashbacks from the tops (like Auto-build tops), or draw each by hand first?
@@ -166,7 +193,7 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 | S1 | Tables + schedules + seed materials | [x] 2026-11-14, check pending (instances table moved to S2) |
 | S2 | Draw / edit in elevation (rect + Edit shape), plan band, 3D | [x] 2026-11-14, check pending |
 | S2b | S2 gaps: prints, reports + supply, offline, plan pick, Materials tab, override fix | [x] 2026-11-15, check pending |
-| S3 | Returns, joints, cut-outs (+ auto from openings) | [ ] |
+| S3 | Returns, joints, cut-outs (+ auto from openings) | [x] 2026-11-15, check pending |
 | S4 | Auto-build from tops | [ ] |
 | S5 | Benchtop Quote section | [ ] |
 | S6 | Tutorial lesson | [ ] |
@@ -174,6 +201,8 @@ cabinet), drawn and edited in **elevation** the way a benchtop is drawn and edit
 ## First job: RHK6468 Kitchen (drawn once S2 lands)
 
 - Kitchen run (Wall 7): ST 20 SNB Arabescato honed, bench 920 to the PB bulkhead (700), full 3872, mitred return
-  at the north end to the door jamb (Elevation 2). **Drawn 2026-11-14 (S2)** as "Splashback 1"; return waits on S3.
+  at the north end to the door jamb (Elevation 2). **Drawn 2026-11-14 (S2)** as "Splashback 1"; return added
+  2026-11-15 (S3): right end, wrap round the wall end, mitre, 140 (Wall 6 is 120 + 20 stone) — length to the jamb
+  TBC. 3872 long: a slab joint may be needed (not added — stonemason / Mark).
 - Butler's north + west (Walls 4 + 3): RS reconstituted stone, colour TBC, bench to the lift-up underside 1620
   (700). South (Wall 2): window W8 920-1620, no splashback under it.

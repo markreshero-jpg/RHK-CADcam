@@ -8,7 +8,7 @@
 // toward the viewer, so the panel's back sits at offset_mm and its front at
 // offset_mm + thickness.
 
-import type { BenchtopSegment, RoomFixture, Wall } from './types'
+import type { BenchtopSegment, RoomFixture, SbCutout, SbReturn, SplashbackInstance, Wall } from './types'
 import type { Pt } from './geometry'
 import { elevationFrame, openingOnWall } from './fixtureGeometry'
 import { mapSegments, outlinePath, outlinePoints } from './benchtopGeometry'
@@ -124,12 +124,136 @@ export function sbOpenings(fixtures: RoomFixture[], wall: Wall, side: WallSide, 
   })
 }
 
-const rectRing = (r: SbRect): Pt[] => [{ x: r.x0, y: r.z0 }, { x: r.x1, y: r.z0 }, { x: r.x1, y: r.z1 }, { x: r.x0, y: r.z1 }]
-
 /** SVG path in elevation svg coords (y = roomH − height), holes included (evenodd). */
-export function sbElevPath(segs: BenchtopSegment[], holes: SbRect[], roomH: number): string {
+export function sbElevPath(segs: BenchtopSegment[], holes: SbHole[], roomH: number): string {
   const flip = (p: Pt) => ({ x: p.x, y: roomH - p.y })
-  return outlinePath(mapSegments(segs, flip, true), holes.map(h => rectRing(h).map(flip)))
+  return outlinePath(mapSegments(segs, flip, true), holes.map(h => holeRing(h).map(flip)))
+}
+
+// ── S3: hand cut-outs, joints, returns ───────────────────────────────────────
+
+/** A hole through the piece (elevation frame); round = a circle in the rect. */
+export type SbHole = SbRect & { round?: boolean }
+
+/** Cut-out kinds with their default size (editable per cut-out; check against the fitting). */
+export const CUTOUT_PRESETS: Record<SbCutout['kind'], { w: number; h: number; label: string; tag: string }> = {
+  gpo:    { w: 125, h: 70,  label: 'Double GPO',          tag: 'GPO' },
+  switch: { w: 70,  h: 115, label: 'Switch / single GPO', tag: 'SW' },
+  rect:   { w: 100, h: 100, label: 'Cut-out',             tag: '' },
+  round:  { w: 35,  h: 35,  label: 'Round hole',          tag: '' },
+}
+
+/** The hole's outline ring (circle as 32 points). */
+export function holeRing(h: SbHole): Pt[] {
+  if (!h.round) return [{ x: h.x0, y: h.z0 }, { x: h.x1, y: h.z0 }, { x: h.x1, y: h.z1 }, { x: h.x0, y: h.z1 }]
+  const cx = (h.x0 + h.x1) / 2, cz = (h.z0 + h.z1) / 2, r = (h.x1 - h.x0) / 2
+  return Array.from({ length: 32 }, (_, i) => ({ x: cx + r * Math.cos(i * Math.PI / 16), y: cz + r * Math.sin(i * Math.PI / 16) }))
+}
+
+/** Hand cut-outs as elevation holes (absolute: offsets are from the piece's bottom-left). */
+export function cutoutHoles(b: SbRect, cutouts: SbCutout[] | null | undefined): (SbHole & { c: SbCutout })[] {
+  return (Array.isArray(cutouts) ? cutouts : []).flatMap(c => {
+    const w = Number(c.w) || 0, h = c.kind === 'round' ? w : Number(c.h) || 0
+    if (w <= 0 || h <= 0) return []
+    const x0 = b.x0 + (Number(c.x) || 0), z0 = b.z0 + (Number(c.y) || 0)
+    return [{ x0, x1: x0 + w, z0, z1: z0 + h, round: c.kind === 'round', c }]
+  })
+}
+
+/** Every hole in a piece: wall openings (L2, grown by the reveal) + hand cut-outs. */
+export function sbAllHoles(sb: Pick<SplashbackInstance, 'cutouts' | 'opening_reveal_mm'>, b: SbRect, openings: SbRect[]): SbHole[] {
+  return [...openingHoles(b, openings, Number(sb.opening_reveal_mm) || 0), ...cutoutHoles(b, sb.cutouts)]
+}
+
+/** Slab joints as absolute elevation x, sorted, only those inside the piece. */
+export function jointXs(sb: Pick<SplashbackInstance, 'joints'>, b: SbRect): number[] {
+  const js = Array.isArray(sb.joints) ? sb.joints : []
+  return js.map(j => b.x0 + Number(j)).filter(x => x > b.x0 + MIN_SB / 2 && x < b.x1 - MIN_SB / 2).sort((a, c) => a - c)
+}
+
+/** Clip a closed polygon to x0 ≤ x ≤ x1 (Sutherland–Hodgman against two half-planes). */
+export function clipPolyX(pts: Pt[], x0: number, x1: number): Pt[] {
+  const clip = (poly: Pt[], inside: (p: Pt) => boolean, xc: number) => {
+    const out: Pt[] = []
+    for (let i = 0; i < poly.length; i++) {
+      const p = poly[i], q = poly[(i + 1) % poly.length]
+      const pi = inside(p), qi = inside(q)
+      if (pi) out.push(p)
+      if (pi !== qi) { const t = (xc - p.x) / (q.x - p.x); out.push({ x: xc, y: p.y + t * (q.y - p.y) }) }
+    }
+    return out
+  }
+  return clip(clip(pts, p => p.x >= x0, x0), p => p.x <= x1, x1)
+}
+
+/** Height range of the outline at an end (x), else the overall bounds. */
+function endZ(segs: BenchtopSegment[], b: SbRect, x: number): { z0: number; z1: number } {
+  const ys = outlinePoints(segs).filter(p => Math.abs(p.x - x) < 0.5).map(p => p.y)
+  return ys.length >= 2 ? { z0: Math.min(...ys), z1: Math.max(...ys) } : { z0: b.z0, z1: b.z1 }
+}
+
+/** A return's geometry in the piece's local plan frame: x along the wall (elevation x), y = off the
+ *  wall face (n). `poly` = the return piece; `wedge` = the corner block the main piece gains (back
+ *  returns run the main piece round to the outer corner); `strip` = what the elevation of the host
+ *  wall sees of it (edge-on). */
+export interface SbReturnGeo {
+  r: SbReturn
+  z0: number; z1: number
+  poly: Pt[]
+  wedge: Pt[] | null
+  strip: SbRect
+  /** Supply size: the return's height and its length along the corner (long point for a mitre). */
+  supplyLen: number
+}
+
+export function sbReturnGeos(sb: Pick<SplashbackInstance, 'segments' | 'returns' | 'offset_mm'>, b: SbRect, thick: number): SbReturnGeo[] {
+  const off = Number(sb.offset_mm) || 0, T = thick
+  const rs = Array.isArray(sb.returns) ? sb.returns : []
+  return rs.flatMap(r => {
+    const s = r.end === 'left' ? -1 : 1
+    const e = r.end === 'left' ? b.x0 : b.x1
+    const L = Math.max(Number(r.length_mm) || 0, T + 1)
+    const X = (dx: number) => e + s * dx
+    const P = (dx: number, n: number) => ({ x: X(dx), y: n })
+    const { z0, z1 } = endZ(sb.segments, b, e)
+    let poly: Pt[], wedge: Pt[] | null = null
+    if (r.dir === 'back') {
+      if (r.join === 'mitre') {
+        poly  = [P(0, off), P(T, off + T), P(T, off + T - L), P(0, off + T - L)]
+        wedge = [P(0, off), P(T, off + T), P(0, off + T)]
+      } else {
+        poly  = [P(0, off), P(T, off), P(T, off + T - L), P(0, off + T - L)]
+        wedge = [P(0, off), P(T, off), P(T, off + T), P(0, off + T)]
+      }
+    } else {
+      poly = r.join === 'mitre'
+        ? [P(0, off), P(0, off + L), P(-T, off + L), P(-T, off + T)]
+        : [P(0, off + T), P(0, off + L), P(-T, off + L), P(-T, off + T)]
+    }
+    const sx = r.dir === 'back' ? [X(0), X(T)] : [X(-T), X(0)]
+    return [{
+      r, z0, z1, poly, wedge,
+      strip: { x0: Math.min(...sx), x1: Math.max(...sx), z0, z1 },
+      supplyLen: Math.round(r.join === 'butt' ? L - T : L),
+    }]
+  })
+}
+
+/** Plan polygons of a piece: the band, plus each return (and its corner block), in plan coords. */
+export function sbPlanPolys(
+  sb: Pick<SplashbackInstance, 'segments' | 'returns' | 'offset_mm' | 'wall_side'>, wall: Wall, roomRef: Pt, thick: number,
+): Pt[][] {
+  const b = sbBounds(sb.segments)
+  if (!b) return []
+  const off = Number(sb.offset_mm) || 0
+  const f = sbFrame(wall, sb.wall_side, roomRef)
+  const at = (p: Pt) => ({ x: f.o.x + f.d.x * p.x + f.n.x * p.y, y: f.o.y + f.d.y * p.x + f.n.y * p.y })
+  const out = [sbPlanQuad(b, wall, sb.wall_side, roomRef, off, thick)]
+  for (const g of sbReturnGeos(sb, b, thick)) {
+    if (g.wedge) out.push(g.wedge.map(at))
+    out.push(g.poly.map(at))
+  }
+  return out
 }
 
 // ── Plan + 3D placement ──────────────────────────────────────────────────────

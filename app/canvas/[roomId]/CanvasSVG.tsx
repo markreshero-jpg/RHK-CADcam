@@ -293,11 +293,11 @@ export default function CanvasSVG({
         <line x1={0} y1={-30 / view.zoom} x2={0} y2={30 / view.zoom} stroke="#374151" strokeWidth={1 / lz} />
 
         {/* ── Splashbacks (z_splashback S2) ── thin bands on the wall face */}
-        {layers.show('splashbacks') && splashbackBands?.map(sb => {
+        {layers.show('splashbacks') && splashbackBands?.map((sb, bi) => {
           const isSel = sb.id === selectedSplashbackId
           const pts = sb.pts.map(p => `${p.x},${p.y}`).join(' ')
           return (
-            <g key={'sb_' + sb.id}>
+            <g key={'sb_' + sb.id + '_' + bi}>
             <polygon points={pts} data-sb-id={sb.id}
               fill={layers.lineDrawing ? 'none' : layers.color('splashbacks', '#38bdf8')} fillOpacity={0.35 * layers.op('splashbacks')}
               stroke={isSel ? '#f59e0b' : layers.color('splashbacks', '#38bdf8')} strokeWidth={layers.w('splashbacks', isSel ? 2 : 1) / lz}
