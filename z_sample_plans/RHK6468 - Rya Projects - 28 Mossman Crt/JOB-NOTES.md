@@ -203,7 +203,7 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 - [ ] North bays 934 / south bays 878: the 950s shrink by a different amount each side, so the bays (and the
   shoe racks the plan says to align) are ~137 out across the aisle. Align them instead?
 - [ ] Final board colour (PT Classic White Matt for now).
-- [ ] Shoe shelves drawn flat - 15 deg angle + lip detail to set up.
+- [x] Shoe shelves 15 deg + 50 rail (rev 3).
 - [ ] 32mm shelves / gables on the drawing: drawn as standard 16.5 (side-by-side gables = 33).
 
 ### WIR rev 1 (Mark 2026-11-15) - `_tmp-6468-wir-rev1.mjs`
@@ -220,4 +220,13 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 - TC-17 mirror frame in 33 (2 x 16.5): new board "PT Colour Matt 33mm" + "– Classic White Matt" (copied from the 16 rows,
   sheet 2415 x 1211 copied too) as TC-17's exposed / interior material. Gables 2543 x 32 x 33, top / bottom 1691 x 32 x 33,
   mirror 1691 x 2477. `_tmp-6468-wir-fillers.mjs`, `_tmp-6468-wir-frame33.mjs`.
-- [ ] Shoe shelves: Mark to sketch the detail.
+- [x] Shoe shelves: sketched + drawn (rev 3).
+
+### WIR rev 3 - shoe shelves (Mark's sketch, "Mark Ups for Ai" layer, 2026-11-15) - `_tmp-6468-wir-shoes.mjs`
+- TC-02 / TC-11: 8 levels, pitch 235 (front-bottom 16.5, 251.5 ... 1661.5). Each = a normal fixed shelf, full depth
+  533.5, tilted 15 deg front low (part_pos_overrides oax 15 about its back-bottom corner, y = front + 138) + a 50 front
+  rail (a 50-deep fixed shelf, oax -90, oz 50 = standing up at the front, 16.5 thick). Bottom level on the cab bottom;
+  upper levels sloped shelf + rail only. Top fixed shelf 2120 stays.
+- Known gaps: the room elevation draws the shelves flat at their unrotated height; the optimiser / CNC gable drilling
+  does not apply rotation overrides (only sizes), so the sloped shelves' gable holes would come out flat - see TBC.
+- [ ] Gable drilling for the sloped shoe shelves (CNC ignores the tilt).
