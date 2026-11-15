@@ -458,6 +458,13 @@ Built:
 - History: the print used DB order, so the RHK6478 Study desk top painted over the
   overheads (2026-11-05).
 
+### Kick names (`kick_labels`) ✅ built 2026-11-15 (pending Mark's check)
+Mark (RHK6581 J11 KICK PLAN): "we can't tell which kick is which". Joined kicks (is_kick_assembly)
+now take their name from their own item `kick_labels` (Labels group, plan, default on) instead of
+`cabinet_labels`, on the canvas plan and the Plan View print. The Kicks set turns it on with cabinet
+names still off; the Benchtops set (cabinet names off) turns it off to look as before. Shop drawings
+strip it with `cabinet_labels` (no names on their plan).
+
 ### Kick dims on the prints ✅ built 2026-11-05 (pending Mark's check)
 - Mark 2026-11-05: shop drawings on the Kicks set didn't show kick depths / lengths; put the
   kick height on the plan too ("normally the only sheet that gets printed off").

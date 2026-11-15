@@ -1523,12 +1523,12 @@ export default function CanvasSVG({
               )}
 
               {/* Label */}
-              {hitRect && layers.show('cabinet_labels') && (
+              {hitRect && layers.show(isKickAsm ? 'kick_labels' : 'cabinet_labels') && (
                 <LabelBox track={labelTrack}>
-                <text x={labelPt.x} y={labelPt.y - layers.w('cabinet_labels', cabLabelFs) * 0.7}
+                <text x={labelPt.x} y={labelPt.y - layers.w(isKickAsm ? 'kick_labels' : 'cabinet_labels', cabLabelFs) * 0.7}
                   textAnchor="middle" dominantBaseline="middle"
-                  fontSize={layers.w('cabinet_labels', cabLabelFs)} fontWeight="600"
-                  fill={isSel ? '#fff' : layers.color('cabinet_labels', '#93c5fd')} opacity={layers.op('cabinet_labels')}
+                  fontSize={layers.w(isKickAsm ? 'kick_labels' : 'cabinet_labels', cabLabelFs)} fontWeight="600"
+                  fill={isSel ? '#fff' : layers.color(isKickAsm ? 'kick_labels' : 'cabinet_labels', '#93c5fd')} opacity={layers.op(isKickAsm ? 'kick_labels' : 'cabinet_labels')}
                   style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {cab.label ?? '—'}
                 </text>

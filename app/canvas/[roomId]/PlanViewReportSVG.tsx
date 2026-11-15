@@ -400,13 +400,15 @@ export default function PlanViewReportSVG({
           const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
           return toPlanC(lx, lz)
         })() : null
-        const labelFs = layers.w('cabinet_labels', fontSize)
+        // Joined kicks follow their own layer (kick_labels) so the Kicks set can name them alone.
+        const labelItem = cab.is_kick_assembly ? 'kick_labels' : 'cabinet_labels'
+        const labelFs = layers.w(labelItem, fontSize)
         // Shop drawings: the name sits just inside the cabinet's front edge (Mark, 2026-10-21) —
         // name only, no size text — so it stays clear of sinks / hobs in the middle of the top.
         // Moved on the canvas (label_offsets.plan): centre + offset in the cabinet's frame.
         const lo = cab.label_offsets?.plan
         const labelAt = lo ? toPlanC(cab.dx / 2 + lo.x, cab.dz / 2 + lo.y) : labelPt ?? toPlanC(cab.dx / 2, Math.max(cab.dz / 2, cab.dz - labelFs * 0.9))
-        const hasLabel = layers.show('cabinet_labels') && !!cab.label
+        const hasLabel = layers.show(labelItem) && !!cab.label
         return (
           <g key={cab.id}>
             {outline && (
@@ -472,7 +474,7 @@ export default function PlanViewReportSVG({
               <text
                 x={labelAt.x} y={labelAt.y}
                 textAnchor="middle" dominantBaseline="central"
-                fontSize={labelFs} fill={INK} opacity={layers.op('cabinet_labels')}
+                fontSize={labelFs} fill={INK} opacity={layers.op(labelItem)}
                 fontFamily="Arial, Helvetica, sans-serif"
               >
                 {cab.label}
