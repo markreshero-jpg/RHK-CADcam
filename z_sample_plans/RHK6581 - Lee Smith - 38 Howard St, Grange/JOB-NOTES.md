@@ -313,3 +313,7 @@ _bak_rhk6581_wc02_20261106. Open: shelf height 350 + flue 200 x 250 are defaults
 - Small parts now cut at 80 (was 70) — fillers 22 / 30 / 40 / 50 cut at 80, hand cut to size.
 - Top hanging rails unlocked (TC-02 top, TC-05, TC-06) so they hang at the centre-support drop; TC-02 lower rail stays at 810.
 - Re-resolved 2026-11-15: 221 parts, nothing over 2400.
+- J11 drawer banks grain matched (Mark 2026-11-15, missed because the rooms predate the draw-plan rule): BC-02 GM1, BC-03 GM2,
+  BC-04 GM3, vertical — all on Elegant Oak sheet 1. Kitchen BC-04/05/06/17 were cut without it (too late).
+- Run **R25** = WIR J11 + Master Store J12 (R24 was taken): 221 parts, 38 sheets, 83.7% (Whiteboard 25, Elegant Oak 12, MDF 10 1 at 12%
+  — the short shadow strips, offcut candidate). 221 labels. Delivered to CNCFiles\RHK6581 …\J11 J12 WIR Master Store R25\.
