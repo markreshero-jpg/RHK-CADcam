@@ -28,6 +28,20 @@ C:\Users\mark\SynologyDrive\CNCFiles\<job folder>\<room or run folder>\<material
 - **Re cuts:** `<job folder>\Re cuts\<material>\`.
 - Never overwrite an existing run's files; if a folder for the run already exists, stop and ask.
 
+## Before every run: pre-nest check (always)
+
+`node z_plan_automation/prenest-check.cjs <job no> "<room>" ["<room>" …]` — read-only. Report every
+line to Mark before nesting; sort the FIX lines first (ask how where it's a choice), confirm the
+CHECK lines. It covers what rooms drawn before a rule miss (Mark 2026-11-15, RHK6581 J11 drawer
+fronts not grain matched):
+- woodgrain drawer banks (2+ fronts) with no grain-match group → one group per stack, vertical
+- parts longer than the sheet → kick seams (Kick split › manual), split, or No CNC
+- cabinets edited after their parts were resolved → re-resolve
+- custom panels / fillers taped all four edges → back / wall edge untaped
+- bulkheads without the +10 scribe (h_adjust), locked top hanging rails, No CNC parts to untick in Stage 2
+
+When Mark answers a new "check this before nesting" question, add it to the script.
+
 ## In the browser (Mark's layout, Stage 5 edits)
 
 App: `https://rhk-cadcam.vercel.app/projects/<projectId>/optimiser` (claude-in-chrome).
