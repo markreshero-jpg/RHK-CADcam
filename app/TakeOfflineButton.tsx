@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react'
 import type { Room } from '@/src/lib/types'
-import { listRoomSnapshots } from '@/src/lib/offline/roomCache'
+import { listRoomSnapshots, deleteRoomSnapshot } from '@/src/lib/offline/roomCache'
 
 const WARM_DONE = 'rhk-warm-done'   // = useRoomSnapshot's message
 const CHANGED = 'rhk-offline-rooms-changed'
@@ -40,6 +40,13 @@ function warmRoom(roomId: string): Promise<string | null> {
     window.addEventListener('message', onMsg)
     document.body.appendChild(frame)
   })
+}
+
+/** Takes room copies off this device. Only the copy: the live room is untouched, and any
+ *  changes still waiting to send stay in the queue. */
+export async function removeOfflineRooms(roomIds: string[]) {
+  await Promise.all(roomIds.map(id => deleteRoomSnapshot(id)))
+  window.dispatchEvent(new Event(CHANGED))
 }
 
 /** Rooms of this job kept on this device: room id -> when the copy was saved. */
@@ -106,6 +113,7 @@ export default function TakeOfflineButton({ rooms, saved }: { rooms: Room[]; sav
     : 'Keep a copy of every room on this device, so they open on site with no signal'
 
   return (
+    <>
     <button onClick={run} disabled={status.kind === 'running'} title={title} data-take-offline={status.kind}
       className={`flex-none flex items-center gap-1.5 text-xs px-2 py-1 rounded transition-colors hover:bg-surface-2 disabled:opacity-80 ${
         status.kind === 'error' || (status.kind === 'done' && status.ok < status.total) ? 'text-red-400'
@@ -116,5 +124,13 @@ export default function TakeOfflineButton({ rooms, saved }: { rooms: Room[]; sav
       </svg>
       <span className="whitespace-nowrap">{label}</span>
     </button>
+    {have && status.kind !== 'running' && (
+      <button data-take-offline-remove onClick={() => { setStatus({ kind: 'idle' }); void removeOfflineRooms(mine.map(r => r.id)) }}
+        title="Take this job’s rooms off this device (only the copies: the live rooms aren’t touched). A room you open is kept again."
+        className="flex-none -ml-1 text-ink-subtle hover:text-red-400 px-1 py-1 rounded hover:bg-surface-2 transition-colors text-xs leading-none">
+        ✕
+      </button>
+    )}
+    </>
   )
 }

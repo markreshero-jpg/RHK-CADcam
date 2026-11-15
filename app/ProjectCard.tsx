@@ -13,7 +13,7 @@ import { Project, ProjectStatus, Room, ROOM_STATUS_OPTIONS, type RoomStatus } fr
 import { supabase } from '@/src/lib/supabase'
 import { useIsAdmin } from '@/src/lib/useRole'
 import RoomPropertiesModal from './canvas/[roomId]/RoomPropertiesModal'
-import TakeOfflineButton, { useOfflineRooms } from './TakeOfflineButton'
+import TakeOfflineButton, { useOfflineRooms, removeOfflineRooms } from './TakeOfflineButton'
 import DeleteRoomModal from './DeleteRoomModal'
 import DeleteProjectModal from './DeleteProjectModal'
 
@@ -197,11 +197,13 @@ function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus
 
       {/* Kept on this device for no signal (z_offline step 2) */}
       {offlineAt !== undefined && (
-        <span data-room-offline={room.id} className="flex-none flex items-center gap-1 text-[11px] text-emerald-500"
-          title={`A copy is on this device (saved ${new Date(offlineAt).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}), so it opens with no signal`}>
+        <button data-room-offline={room.id} onClick={() => void removeOfflineRooms([room.id])}
+          className="group/off flex-none flex items-center gap-1 text-[11px] text-emerald-500 hover:text-red-400 px-1 rounded transition-colors"
+          title={`A copy is on this device (saved ${new Date(offlineAt).toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}), so it opens with no signal. Click to take it off this device (the live room isn’t touched).`}>
           <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" /></svg>
           Offline
-        </span>
+          <span className="opacity-0 group-hover/off:opacity-100">✕</span>
+        </button>
       )}
 
       {/* Dimensions summary (only when set) */}

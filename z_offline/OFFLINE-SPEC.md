@@ -148,7 +148,9 @@ How it works, and the decisions locked with it:
   - The button then shows **On this device: n rooms** and refreshes the offline pages.
   - After that the button reads **Offline: n of m rooms** (amber while some are missing) or
     **Offline: all n rooms**. In the job's room list, each room with a copy on this device has a
-    green **Offline** tag (hover shows when it was saved).
+    green **Offline** tag (hover shows when it was saved). Clicking the tag takes that room's copy off the device;
+    the ✕ next to the job button takes all of the job's copies off. Only the copies: the live
+    rooms and anything waiting in the queue are untouched, and a room you open is kept again.
 - **Lost-write warning** (`src/lib/offline/netWatch.ts`, the fetch passed to the browser
   Supabase client). Any write that fails for lack of signal and isn't in the queue (cabinets,
   walls, fixtures… which come in step 3) shows **✕ n not saved (needs signal)** in red next to
