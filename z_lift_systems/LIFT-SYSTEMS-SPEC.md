@@ -1,7 +1,7 @@
 # Lift systems (Blum Aventos) — Spec & Phase Tracker
 
 > **RESUME HERE** → 2026-11-15 **LS1 built**: table `hardware_lift_systems` (63 Blum rows, LS codes, cost 0),
-> **Lift systems** tab in Materials & Hardware, parts list ("Goes with it") + 3D model upload under each row.
+> **Lift systems** tab in Materials & Hardware, "Goes with (per front)" column (LS code + name + qty) + parts editor + 3D model upload under each row.
 > In-app check pending. Next: LS2 (pick per front by power factor). Still open: Q1 / Q3, HK-S front fixing code.
 
 ## Done
@@ -147,7 +147,7 @@ Migration `migration_ls1_lift_systems.sql` (applied).
   `model_url, model_format, model_scale`. Policies: read authenticated, write admin.
 - `companions` = `[{id, qty}]` per **mechanism row**; per front the hardware list takes
   `qty × qty_per_front`. HK-XS mechanisms are each (`qty_per_front` 2), each with 1 cabinet + 1 front fixing.
-  Seeded: HK top → E-dowel front bracket + white cover caps; HK-S → 2 front fixings (+ TIP-ON 50 on the T
+  Seeded: HK top → 2 E-dowel front brackets + 1 set white cover caps (Mark 2026-11-15); HK-S → 2 front fixings (+ TIP-ON 50 on the T
   versions); HK-XS → cabinet + front fixing; HF top → white cover caps (lever arm picked by height in LS2,
   arms mount on 177H3100 hinge plates from the Hinges tab).
 - Bucket `lift-models` (public read, admin write, own policies).

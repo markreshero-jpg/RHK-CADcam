@@ -9,7 +9,7 @@ import SlideDrillingEditor from './SlideDrillingEditor'
 import HingeDetailEditor from './HingeDetailEditor'
 import HandleModelEditor from './HandleModelEditor'
 import BoardColoursEditor from './BoardColoursEditor'
-import LiftSystemExtras from './LiftSystemExtras'
+import LiftSystemExtras, { parseCompanions } from './LiftSystemExtras'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -344,6 +344,17 @@ const TABS: TabConfig[] = [
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+// Lift systems "Goes with" column (z_lift_systems LS1): the companion LS lines
+// per front, e.g. "2 × 7102343 Aventos front bracket E-dowel".
+const GOES_WITH_W = 340
+function goesWithLines(row: Record<string, unknown>, all: Record<string, unknown>[]): string[] {
+  const per = Number(row.qty_per_front) > 0 ? Number(row.qty_per_front) : 1
+  return parseCompanions(row.companions).map(c => {
+    const r = all.find(x => x.id === c.id)
+    return `${c.qty * per} × ${r ? `${r.supplier_code ?? '—'} ${r.name}` : '(missing row)'}`
+  })
+}
 
 function mkForm(defaults: Record<string, unknown>): Record<string, FVal> {
   const out: Record<string, FVal> = {}
@@ -888,7 +899,12 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                   <span className="text-accent-ink">{sortDir === 'asc' ? '↑' : '↓'}</span>
                 )}
               </button>
-            ))}
+            )).flatMap((el, i) => activeTab === 'lifts' && tab.fields[i].key === 'name' ? [el, (
+              <div key="__goes_with" style={{ width: GOES_WITH_W }}
+                className="flex-none px-2 py-1.5 text-[9px] text-ink-subtle uppercase tracking-wide border-r border-edge-strong/50">
+                Goes with (per front)
+              </div>
+            )] : [el])}
           </div>
 
           {/* Records */}
@@ -941,7 +957,15 @@ export default function MaterialsClient({ initialData, embedded }: { initialData
                         </>
                       ) : fmtCell(row[f.key], f)}
                     </div>
-                  ))}
+                  )).flatMap((el, i) => activeTab === 'lifts' && tab.fields[i].key === 'name' ? [el, (() => {
+                    const lines = goesWithLines(row, rows)
+                    return (
+                      <div key="__goes_with" style={{ width: GOES_WITH_W }} title={lines.join('\n')}
+                        className="flex-none px-2 border-r border-edge/50 py-1.5 text-xs truncate text-ink-muted">
+                        {lines.length ? lines.join(' · ') : <span className="text-ink-subtle">—</span>}
+                      </div>
+                    )
+                  })()] : [el])}
                 </div>
               ))
             )}

@@ -166,3 +166,9 @@ end $$;
 
 -- LS1b: cost may be blank (unpriced), like the other hardware tables.
 alter table hardware_lift_systems alter column cost_per_unit drop not null;
+
+-- LS1c (2026-11-15, Mark): HK top = 2 front brackets + 1 set of cover caps per front.
+update hardware_lift_systems m set companions = jsonb_build_array(
+    jsonb_build_object('id', (select id from hardware_lift_systems where supplier_code = '7102343'), 'qty', 2),
+    jsonb_build_object('id', (select id from hardware_lift_systems where supplier_code = '7102379'), 'qty', 1))
+ where m.family = 'hk_top' and m.role = 'mechanism';
