@@ -1,4 +1,4 @@
-// RHK6547 Laundry (rev 3: dashed sink cut-out on plan, 18 wall filler): doors handle 'none' (handles TBC, Mark 2026-11-16) + CAD markup standard:
+// RHK6547 Laundry (rev 4: stone top by others + floating shelf; rev 3: dashed sink cut-out on plan, 18 wall filler): doors handle 'none' (handles TBC, Mark 2026-11-16) + CAD markup standard:
 // spec block, SITE NOTES, stack space + sink notes, TBC clouds, height dims. Redo removes only its own rows.
 import fs from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -37,9 +37,9 @@ const spec = `SPECIFICATIONS - {room}
 {job}
 
 BENCHTOP
-18mm Laminex Elegant Oak Absolute Grain
+20mm stone - by others
 
-FRONTS + PANELS
+FRONTS + PANELS + FLOATING SHELF
 Laminex Elegant Oak Absolute Grain
 
 HANDLES
@@ -54,12 +54,11 @@ const site = `SITE NOTES
 SUPPLY ONLY
 Room 2190 long (Georgie's email; sketch 2185) - check measure
 Ceiling 2400: 30 bulkhead over the stack, cut 10 past the ceiling
-Bench 900: 100 kick + 782 carcass + 18 Elegant Oak top (5 past the doors)
+Bench 900: 100 kick + 780 carcass + 20 stone top by others (drawn 620 deep, 20 past the doors)
 Washer / dryer stack opening 654 between the panels, stack kit by others
 18 wall filler at the right wall (BC-02 982)
-450 x 450 single bowl sink, centred on BC-02 - cut-out 420 x 420 shown dashed, cut on site (not machined)
-Top edged front + both ends
-Floating shelf: left off for now`
+450 x 450 single bowl sink, centred on BC-02 - cut-out 420 x 420 shown dashed, by others
+Floating shelf 1500 x 250 x 36 Elegant Oak, panel to wall, underside 1770 (in line with the overhead) - height TBC`
 const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
 const rows = [
   // Plan: right wall outer face 2190 + 90 = 2280 -> blocks at 2880.
@@ -68,11 +67,15 @@ const rows = [
   // Elevation Wall 2
   elev(G, 'text', inCab(18, 654, -1150), 'WASHER / DRYER\nSTACK SPACE\n654W x 1770H'),
   elev(G, 'text', inCab(18, 654, -700), 'STACK KIT\nBY OTHERS'),
-  elev(G, 'text', inCab(1190, 982, -700), '450 x 450 SINGLE BOWL SINK\nCUT-OUT ON SITE'),
-  elev(G, 'text', inCab(690, 900, -980), '18mm LX ELEGANT OAK TOP'),
+  elev(G, 'text', inCab(1190, 982, -700), '450 x 450 SINGLE BOWL SINK\nCUT-OUT BY OTHERS'),
+  elev(G, 'text', inCab(690, 900, -980), '20mm STONE TOP BY OTHERS'),
+  elev(G, 'text', inCab(690, 1000, -1990), 'FLOATING SHELF 36 LX ELEGANT OAK'),
+  // TBC: shelf height
+  elev(Q, 'cloud', { pts: pts(1700, -1960, 2150, -2090) }, null, cloud),
+  elev(Q, 'text', { at: { x: 1720, y: -2000 }, width: 21 }, 'SHELF HEIGHT TBC'),
   // Plan: sink cut-out shown only (fixture cut_benchtop false), centre 1681 / 320 off the wall
   plan(G, 'rect', { a: { x: 1471, y: 110 }, b: { x: 1891, y: 530 }, rot: 0 }, null, { dash: 'dashed', weight: 0.35, color: '#111111', src: 'markup-std' }),
-  plan(G, 'text', { at: { x: 1471, y: 660 }, width: 21 }, 'SINK CUT-OUT 420 x 420\nCUT ON SITE - NOT MACHINED'),
+  plan(G, 'text', { at: { x: 1471, y: 660 }, width: 21 }, 'SINK CUT-OUT 420 x 420\nBY OTHERS'),
   // TBC: handles
   elev(Q, 'cloud', { pts: pts(760, -560, 1120, -700) }, null, cloud),
   elev(Q, 'text', inCab(690, 500, -605), 'HANDLES TBC'),
@@ -81,6 +84,7 @@ const rows = [
   elev(Q, 'text', inCab(18, 654, -445), 'W/D MODELS TBC'),
   // Height dims
   elev(S, 'dim', { p1: { x: 2190, y: 0 }, p2: { x: 2190, y: -900 }, axis: 'y', offset: 300 }, null, DIM),
+  elev(S, 'dim', { p1: { x: 2190, y: -900 }, p2: { x: 2190, y: -1770 }, axis: 'y', offset: 300 }, null, DIM),
   elev(S, 'dim', { p1: { x: 0, y: 0 }, p2: { x: 0, y: -1770 }, axis: 'y', offset: -300 }, null, DIM),
   elev(S, 'dim', { p1: { x: 0, y: -1770 }, p2: { x: 0, y: -2370 }, axis: 'y', offset: -300 }, null, DIM),
   elev(S, 'dim', { p1: { x: 0, y: -2370 }, p2: { x: 0, y: -2400 }, axis: 'y', offset: -300 }, null, DIM),

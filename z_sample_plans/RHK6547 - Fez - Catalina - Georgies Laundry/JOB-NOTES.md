@@ -45,3 +45,13 @@ shelf; room 2190 long; urgent). Quote Issue 2 Rev A 14/10/2026 $2,227 ex: Elegan
 - Right wall filler 18 (BC-03, BFK side-on board), BC-02 1000 -> 982. Already-joined run, so BC-03 was added to
   KICK 1's run by hand (kick_run_id, has_toekick false, pos_z 100, dy 782) and re-resolved; kick still 1500 wall to wall.
   Sink + tap re-centred on BC-02 (1681). Filler TBC cloud removed. `_tmp-6547-filler*.mjs`. Resolver 0 issues (9 cabinets).
+
+## Rev 4 (Mark 2026-11-16): stone top by others again + floating shelf
+- 18 Oak WUP top (WC-03) removed; BC-01/02/03 back to 780 carcass (100 kick + 780 + 20 = 900). Stone top drawn as a
+  benchtop_instance "Laundry top" (20mm Stone, 20mm Reconstituted Stone - Colour TBC schedule), 1500 x 620 at 880,
+  panel to wall, BY OTHERS. Sink still cut_benchtop false; dashed 420 cut-out now reads "BY OTHERS".
+- Floating shelf FLSHLF (new WC-03) 1500 x 250, double build LX Elegant Oak = 36, panel to wall (no seen ends),
+  underside 1770 in line with the overhead (Georgie's render: full length of the wall). Height TBC cloud.
+  `_tmp-6547-rev4.mjs`, `_tmp-6547-cad.mjs`. Resolver 0 issues (9 cabinets).
+- Approval PDF saved to PDF\Drawings to be Approved (oak-top version moved to _Superseeded); reply draft to Georgie in
+  the QUOTE RHK6547 thread (PDF to attach by hand).
