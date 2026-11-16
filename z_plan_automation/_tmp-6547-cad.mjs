@@ -1,4 +1,4 @@
-// RHK6547 Laundry (rev 4: stone top by others + floating shelf; rev 3: dashed sink cut-out on plan, 18 wall filler): doors handle 'none' (handles TBC, Mark 2026-11-16) + CAD markup standard:
+// RHK6547 Laundry (rev 5: sink cuts the stone; rev 4: stone top by others + floating shelf; rev 3: dashed sink cut-out on plan, 18 wall filler): doors handle 'none' (handles TBC, Mark 2026-11-16) + CAD markup standard:
 // spec block, SITE NOTES, stack space + sink notes, TBC clouds, height dims. Redo removes only its own rows.
 import fs from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -57,7 +57,7 @@ Ceiling 2400: 30 bulkhead over the stack, cut 10 past the ceiling
 Bench 900: 100 kick + 780 carcass + 20 stone top by others (drawn 620 deep, 20 past the doors)
 Washer / dryer stack opening 654 between the panels, stack kit by others
 18 wall filler at the right wall (BC-02 982)
-450 x 450 single bowl sink, centred on BC-02 - cut-out 420 x 420 shown dashed, by others
+450 x 450 single bowl sink, centred on BC-02 - cut-out 420 x 420 in the stone top, by others
 Floating shelf 1500 x 250 x 36 Elegant Oak, panel to wall, underside 1770 (in line with the overhead) - height TBC`
 const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
 const rows = [
@@ -73,8 +73,7 @@ const rows = [
   // TBC: shelf height
   elev(Q, 'cloud', { pts: pts(1700, -1960, 2150, -2090) }, null, cloud),
   elev(Q, 'text', { at: { x: 1720, y: -2000 }, width: 21 }, 'SHELF HEIGHT TBC'),
-  // Plan: sink cut-out shown only (fixture cut_benchtop false), centre 1681 / 320 off the wall
-  plan(G, 'rect', { a: { x: 1471, y: 110 }, b: { x: 1891, y: 530 }, rot: 0 }, null, { dash: 'dashed', weight: 0.35, color: '#111111', src: 'markup-std' }),
+  // Plan: sink cut-out is cut in the stone top by the fixture (cut_benchtop true, rev 5) - note only
   plan(G, 'text', { at: { x: 1471, y: 660 }, width: 21 }, 'SINK CUT-OUT 420 x 420\nBY OTHERS'),
   // TBC: handles
   elev(Q, 'cloud', { pts: pts(760, -560, 1120, -700) }, null, cloud),

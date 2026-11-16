@@ -55,3 +55,8 @@ shelf; room 2190 long; urgent). Quote Issue 2 Rev A 14/10/2026 $2,227 ex: Elegan
   `_tmp-6547-rev4.mjs`, `_tmp-6547-cad.mjs`. Resolver 0 issues (9 cabinets).
 - Approval PDF saved to PDF\Drawings to be Approved (oak-top version moved to _Superseeded); reply draft to Georgie in
   the QUOTE RHK6547 thread (PDF to attach by hand).
+
+## Rev 5 (Mark 2026-11-16): sink cut-out in the stone top
+- Ohelu sink fixture cut_benchtop true -> 420 x 420 cut-out derived in the stone "Laundry top" (stone by others, not ours to
+  machine). Dashed CAD outline removed (the real cut shows); note "SINK CUT-OUT 420 x 420 BY OTHERS" kept. Tap hole not cut.
+  `_tmp-6547-cut.mjs`. Approval PDF re-saved (previous one to _Superseeded). Resolver 0 issues.
