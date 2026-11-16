@@ -1,0 +1,26 @@
+{
+  "_source": "Georgie's hand sketch (ARCHITECTURALS/Laundy Sketch.pdf) + render (ChatGPT Image Oct 6) + email 06.10.26 (room 2190, no benchtop, stone offcut by Georgie) + Mark's answers 2026-11-16: layout A = 18 TEPF on the left wall + 654 washer/dryer stack opening + 18 TEPF, then B1D 500 + B2D 1000 sink tight to the right wall (TBC). 100 kick, 30 BH to the 2400 ceiling (top line 2370). Overhead 600 high over the dryer. Bases 880 incl kick (900 bench with 20 top), 580 carcass = 600 OA. Adj shelves in all cupboards. Handles TBC. Floating shelf left off for now.",
+  "projectName": "RHK6547 - Fez - 1/18 Catalina Dr Mudjimba",
+  "roomName": "Laundry",
+  "roomHeight": 2400,
+  "roomRules": { "TOEH": 100 },
+  "wallCabinetTop": 2370,
+  "walls": [
+    { "x": 0, "y": 1420, "length": 1420, "angle": 270, "_": "left wall (stack end), S->N" },
+    { "x": 0, "y": 0, "length": 2190, "angle": 0, "_": "back wall, the run" },
+    { "x": 2190, "y": 0, "length": 1420, "angle": 90, "_": "right wall" }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 2, "offset": 0, "dx": 18, "dy": 2370, "dz": 580, "note": "Full height panel against the left wall" },
+    { "def": "TEPF", "wall": 2, "offset": 672, "dx": 18, "dy": 2370, "dz": 580, "note": "Full height panel between the stack and the bench run" },
+    { "def": "B1D", "wall": 2, "offset": 690, "dx": 500, "dy": 880, "dz": 580, "note": "1 adjustable shelf" },
+    { "def": "B2D", "wall": 2, "offset": 1190, "dx": 1000, "dy": 880, "dz": 580, "note": "Sink cupboard (450 x 450 drop-in sink by others). Tight to the wall, filler TBC", "rules": { "RAIL_ORIENT": "vertical" } },
+    { "def": "W2D", "wall": 2, "offset": 18, "dx": 654, "dy": 600, "dz": 580, "note": "Over the dryer, 1770-2370" },
+    { "def": "BH", "wall": 2, "offset": 0, "dx": 672, "dy": 30, "dz": 580,
+      "note": "30 bulkhead to the ceiling over the stack, +10 past the ceiling",
+      "set": { "bulkhead": { "front": "carcase", "auto_h": true, "h_adjust": 10, "cleat": true,
+        "left": { "on": false, "depth": 0, "joint": "mitre" },
+        "right": { "on": true, "depth": 580, "joint": "mitre" },
+        "bottom": { "on": false, "depth": 0, "joint": "mitre" } } } }
+  ]
+}
