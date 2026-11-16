@@ -1,4 +1,4 @@
-// RHK6547 Laundry: doors handle 'none' (handles TBC, Mark 2026-11-16) + CAD markup standard:
+// RHK6547 Laundry (rev 3: dashed sink cut-out on plan, 18 wall filler): doors handle 'none' (handles TBC, Mark 2026-11-16) + CAD markup standard:
 // spec block, SITE NOTES, stack space + sink notes, TBC clouds, height dims. Redo removes only its own rows.
 import fs from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -56,7 +56,8 @@ Room 2190 long (Georgie's email; sketch 2185) - check measure
 Ceiling 2400: 30 bulkhead over the stack, cut 10 past the ceiling
 Bench 900: 100 kick + 782 carcass + 18 Elegant Oak top (5 past the doors)
 Washer / dryer stack opening 654 between the panels, stack kit by others
-450 x 450 drop-in sink by others, centred on BC-02 - cut-out on site
+18 wall filler at the right wall (BC-02 982)
+450 x 450 single bowl sink, centred on BC-02 - cut-out 420 x 420 shown dashed, cut on site (not machined)
 Top edged front + both ends
 Floating shelf: left off for now`
 const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
@@ -67,14 +68,14 @@ const rows = [
   // Elevation Wall 2
   elev(G, 'text', inCab(18, 654, -1150), 'WASHER / DRYER\nSTACK SPACE\n654W x 1770H'),
   elev(G, 'text', inCab(18, 654, -700), 'STACK KIT\nBY OTHERS'),
-  elev(G, 'text', inCab(1190, 1000, -700), '450 x 450 DROP-IN SINK BY OTHERS\nCUT-OUT ON SITE'),
+  elev(G, 'text', inCab(1190, 982, -700), '450 x 450 SINGLE BOWL SINK\nCUT-OUT ON SITE'),
   elev(G, 'text', inCab(690, 900, -980), '18mm LX ELEGANT OAK TOP'),
+  // Plan: sink cut-out shown only (fixture cut_benchtop false), centre 1681 / 320 off the wall
+  plan(G, 'rect', { a: { x: 1471, y: 110 }, b: { x: 1891, y: 530 }, rot: 0 }, null, { dash: 'dashed', weight: 0.35, color: '#111111', src: 'markup-std' }),
+  plan(G, 'text', { at: { x: 1471, y: 660 }, width: 21 }, 'SINK CUT-OUT 420 x 420\nCUT ON SITE - NOT MACHINED'),
   // TBC: handles
   elev(Q, 'cloud', { pts: pts(760, -560, 1120, -700) }, null, cloud),
   elev(Q, 'text', inCab(690, 500, -605), 'HANDLES TBC'),
-  // TBC: right wall filler
-  elev(Q, 'cloud', { pts: pts(1640, -150, 2170, -300) }, null, cloud),
-  elev(Q, 'text', { at: { x: 1660, y: -200 }, width: 24 }, 'WALL FILLER TBC (TIGHT?)'),
   // TBC: washer / dryer models
   elev(Q, 'cloud', { pts: pts(60, -400, 630, -540) }, null, cloud),
   elev(Q, 'text', inCab(18, 654, -445), 'W/D MODELS TBC'),

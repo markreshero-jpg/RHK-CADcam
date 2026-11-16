@@ -21,7 +21,7 @@ shelf; room 2190 long; urgent). Quote Issue 2 Rev A 14/10/2026 $2,227 ex: Elegan
 
 ## Open / TBC
 - Handles (Georgie "I'll take care of that").
-- Right wall: tight or a filler.
+- ~~Right wall: tight or a filler.~~ 18 filler (rev 3).
 - Washer / dryer models (opening 654).
 - Sink: 450 x 450 drop-in by others, cut-out on site (answered).
 - Floating shelf size / height when it goes back in.
@@ -37,3 +37,11 @@ shelf; room 2190 long; urgent). Quote Issue 2 Rev A 14/10/2026 $2,227 ex: Elegan
 - Sink = new catalog row "Generic 450 x 450 drop-in sink" (no GLB), centre 1690 / 320 off the wall, rim on the top.
   Tap = Abey Lucia gooseneck as a stand-in. Both room fixtures cut_benchtop false: cut-out done on site. `_tmp-6547-sink.mjs`.
 - WC-03 top edged front + both ends (edge_top/left/right), back raw. CAD notes updated. Resolver 0 issues.
+
+## Rev 3 (Mark 2026-11-16): our sink + shown cut-out, 18 wall filler
+- Sink = our normal single bowl (Abi Ohelu, stretched to 450 x 450, cut-out 420 x 420); generic box sink removed.
+  Still cut_benchtop false (the top is a WUP part anyway): the cut-out shows as a dashed 420 x 420 CAD rect on the plan,
+  "SINK CUT-OUT 420 x 420 / CUT ON SITE - NOT MACHINED". `_tmp-6547-sink2.mjs`, `_tmp-6547-cad.mjs`.
+- Right wall filler 18 (BC-03, BFK side-on board), BC-02 1000 -> 982. Already-joined run, so BC-03 was added to
+  KICK 1's run by hand (kick_run_id, has_toekick false, pos_z 100, dy 782) and re-resolved; kick still 1500 wall to wall.
+  Sink + tap re-centred on BC-02 (1681). Filler TBC cloud removed. `_tmp-6547-filler*.mjs`. Resolver 0 issues (9 cabinets).
