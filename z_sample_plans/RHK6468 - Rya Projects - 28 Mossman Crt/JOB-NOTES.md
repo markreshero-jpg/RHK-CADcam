@@ -170,10 +170,20 @@ Overhead hinges [100, 610, 831] to clear the adj shelf holes.
   2854.5 -> 2849.5, KICK 1 2188 -> 2183. Top unchanged (to 2871). Tub + tap re-centred on BC-01.
 - Overheads WC-02 / WC-03 / WEP WC-04 left as they were (still to 2871).
 
+### Rev 4 (Mark 2026-11-16) - `_tmp-6468-laundry-wine.mjs`, `-wine-cad.mjs`, `-wine-cad2.mjs`
+- Vintec wine fridge 595W x 610D x 1850H against the left wall in a 650 space (WC-08 40 filler +
+  WC-01 610 cupboard over, underside 1900). Fridge sits ~12 proud of the 598.5 panel fronts.
+- Then TC-01 TEPF | stack space 650 with new WC-09 W2D over (1900-2573) | new TC-02 TEPF at 1316.5 |
+  BC-01 tub B2D + BC-02 B2D 758.25 each (Mark picked "shrink cupboards") | BEPF 2849.5 (5 overhang kept).
+- Overheads WC-02 / WC-03 760.75 each, WEP WC-04 at 2854.5. BH WC-05 0-1333 (580), WC-06 1333-2871.
+  Under panel WC-07 1521.5. KICK 1 1516.5. Top 1538 x 618.5 from 1333. Tub + mixer re-centred on BC-01.
+- No Vintec in the fixture library, so the wine fridge is a dashed space + note (markup standard).
+
 ### Open / TBC
 - [ ] Stone colour.
 - [ ] Handles (drawn without).
 - [ ] Laundry tap.
+- [ ] Vintec model no. + vent clearances (front-vented built-in?).
 
 ## Walk In Robe - drawn 2026-11-15, room `dfa682a3-020b-4704-8661-3dbbd6cdf224`
 
