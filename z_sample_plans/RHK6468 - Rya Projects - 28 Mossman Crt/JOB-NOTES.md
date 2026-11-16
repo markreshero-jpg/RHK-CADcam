@@ -324,3 +324,12 @@ Open / TBC:
 - [x] No joiner strips drawn (may not be done) - **keep the 3 gaps between boards for movement** (Mark). Cover strip front edge = edge_right (check tape side).
 - [ ] Blake to provide the panelling detail (Mark's note); CAD notes / spec block not done yet.
 - 2026-11-16 rev 1 (`_tmp-6468-wp-rev1.mjs`): whole room **rotated 90 deg left** (Mark) about the media corner (-3130, 2000) - walls, cabinets and Mark's plan CAD, so it reads like 2.01 (entry wall W->E along the bottom, lounge going up). Mark's elevation dim stays (wall frame). 0 errors.
+- 2026-11-16 walls from Mark's CAD markup ("wall here", `_tmp-6468-wp-walls2.mjs`): nib walls (centred rectangles, not
+  in the room outline) behind the panelling - Wall 4 lounge / media wall 111 (Mark's ruled rectangle), Wall 5 media wall
+  behind the 3400 entry panels from the slider end to the lounge wall (sketched freehand, drawn 110 - TBC), Wall 6
+  north return at the far end of the lounge wall, 459 long x 110 (as sketched - continues further?).
+- 2026-11-16 pre-nest (Mark): every Kitchen drawer bank grain matched (GM1-GM13 vertical, one per stack); Applied Panels
+  in all rooms back edge untaped (38, `_tmp-6468-prenest-fix.mjs`). Optimiser trial in the browser to Stage 5 (not
+  generated): veneer 17 / 33 on 2750 x 1205 + 2415 x 1205 sheets = 17 + 8 sheets, all veneer placed; 54 non-veneer parts
+  unplaced (WIR 2541-2661 parts on 2415 WB / PT Woodmatt, kicks 1511-2202 x 120 vertical grain, Laundry 2571 Satin
+  panels, Kitchen 2700 / 2755 under panels + bulkhead fascias) - waiting on Mark's sheet lengths.
