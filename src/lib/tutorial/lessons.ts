@@ -2220,6 +2220,23 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click 3D: this top shows its own slab, the others the room’s. The room spec block lists it by the top’s label (give the top a label such as Island).',
       target: 'view-3d', canvas: true, done: c => c.view === '3d' },
   ]},
+  // Appended 2026-11-16 (z_rangehood R12: slide-out rangehood, RHK6571 WC-03).
+  { id: 'rangehood_slideout', level: 'intermediate', topic: 'cabinets', title: 'Draw a slide-out rangehood cabinet',
+    blurb: 'A WRHSO overhead: no bottom, the hood body between the gables, doors stopping above the visor, the under panel notched for the body.',
+    keywords: 'rangehood range hood slide out slideout integrated visor fascia WRHSO WRH flue under panel notch overhead wall appliance', steps: [
+    { id: 'place', title: 'Place a WRHSO',
+      body: 'Place a cabinet (F3) and pick WRHSO from Wall › Appliances. It has no bottom (the hood screws between the gables), the doors stop 42 above the underside so the visor slides out under them (a 40 open row + the 2 reveal), a fixed shelf 300 up with the 200 × 250 flue notch, the same notch in the top and the flue box, as on a WRH.',
+      canvas: true, done: c => c.cabinets.some(cab => cab.rangehood?.mount === 'slideout') },
+    { id: 'size', title: 'Set the hood body',
+      body: 'Select it. In the Rangehood section, Type is Slide-out. Under Hood body, Depth is the hood’s depth from the front (300 to start). Width 0 means the full width between the gables. Set Shelf height just above the hood (the hood’s height plus a little). On any WRH you can switch Type between Undermount and Slide-out here; a slide-out needs Bottom Type none.',
+      canvas: true, done: c => c.cabinets.some(cab => cab.rangehood?.mount === 'slideout' && !!cab.rangehood?.hole?.d) },
+    { id: 'panel', title: 'Add the under panel',
+      body: 'Shift-click the overheads in the run, including the WRHSO, then right-click one › Add under panel. The panel gets a notch from its front edge, between the gables and as deep as the hood body, so the hood comes down to the underside. Move or resize the cabinet and the notch follows.',
+      canvas: true, done: c => c.cabinets.some(cab => !!cab.rule_overrides?.UNDER_PANEL) },
+    { id: 'check', title: 'Check it',
+      body: 'Look at the elevation: the doors stop above a 42 strip. Double-click the cabinet and check the 3D tab: no bottom, the shelf, the notched top and the flue box. To keep a version tuned for a particular hood, right-click › Save to library.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

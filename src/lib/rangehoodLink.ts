@@ -35,6 +35,14 @@ type FlatPart = { x: number; z: number; dx: number; dy: number; dz?: number }
  *  The rangehood's panel_skin leaves an onion skin (a pocket that deep short of through). */
 export function linkedHoleCutout(id: string, r: HoleRect, rh: RangehoodSettings, part: FlatPart): Cutout {
   const r2 = (v: number) => Math.round(v * 100) / 100
+  // Slide-out (WRHSO): the hood body comes down to the panel's underside — a notch
+  // from the panel's front edge back to the body's back, through (no skin).
+  if (rh.mount === 'slideout') return {
+    id: `rh_link_${id}`, kind: 'notch', shape: 'rect', source: 'linked', edge: 'front',
+    w: r2(r.x1 - r.x0), d: r2(part.z + part.dx - r.z0), radius: rh.hole.radius,
+    x: { from: 'left', off: r2(r.x0 - part.x) },
+    y: { from: 'front', off: 0 },
+  }
   const depth = rh.panel_skin > 0 && part.dz && part.dz > rh.panel_skin ? r2(part.dz - rh.panel_skin) : null
   return {
     id: `rh_link_${id}`, kind: 'hole', shape: 'rect', source: 'linked', depth,

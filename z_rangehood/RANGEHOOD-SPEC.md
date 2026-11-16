@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03); R10 2026-11-07 bottom skin (RHK6581 WC-02); R11 2026-11-08 drawer box bottoms + rounded notch corners (RHK6586 vanity plumbing U). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03); R10 2026-11-07 bottom skin (RHK6581 WC-02); R11 2026-11-08 drawer box bottoms + rounded notch corners (RHK6586 vanity plumbing U); R12 2026-11-16 slide-out rangehood `WRHSO` (RHK6571 WC-03, Westinghouse WRR626SB). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -360,6 +360,30 @@ wide … 90mm radius corners on the two corners closest to the front edge of the
   as the drawer opens. How the back clears the pipe (cut in two / boxed U) is Mark's call — not modelled.
 - Tutorial `drawer_plumbing_cutout`. Tests in `src/lib/__tests__/partCutouts.test.ts` (R11 block).
 
+## R12 as built (2026-11-16) — slide-out rangehood `WRHSO`
+
+Mark (RHK6571, Westinghouse WRR626SB): "build a generic rangehood for slideout models … reusable as they are all very similar".
+Locked answers 2026-11-16: **no bottom** (the hood body screws between the gables); **doors stop 42 above the underside**
+("40mm fascia + 2mm"); **visor front stainless as supplied** (nothing made for it); **above the hood same as WRH**
+(fixed shelf, 200 × 250 flue notch in shelf + top, flue box); the duct runs above the cabinet, by others.
+
+- `rangehood.mount: 'undermount' | 'slideout'` (default undermount; `normaliseRangehood`). Sidebar Rangehood section:
+  **Type** select (not on curved ends). Slide-out shows **Hood body** Width (0 = full width between the gables) / Depth
+  (from the front) / Back from front, and warns if Bottom Type isn't none; no bottom / panel skin rows.
+- `resolveRangehood` → `slideoutBody`: reports the body footprint as `rangehood_hole` (between the gables' inner faces, or
+  `hole.w` centred + offset; `hole.d` deep back from the gables' front edges − setback). A bottom → warning "set Bottom Type
+  to none", nothing cut. No depth → warning, no notch. Shelf / flue notch / flue box unchanged.
+- Under panel (`linkedHoleCutout`): a slide-out gives a **notch from the panel's front edge** (`edge: 'front'`, through,
+  `d` = panel front → body back), not a hole — the hood comes down to the panel's underside.
+- Library `WRHSO` (`migration_r12_wrhso_library.sql`, applied): copy of WRH with `bottom_type 'none'`, face rows **row 0 =
+  40 open (locked) + row 1 doors** (face rows count up from the bottom; the 2 reveal between rows puts the door bottom at
+  42), block `{ mount: 'slideout', hole: { w: null, d: 300, setback: 0 }, flue 200 × 250, shelf_h: 300 }`.
+- First use RHK6571 WC-03 (`z_plan_automation/_tmp-6571-wc03-so.mjs`): doors 678 from Y 42, shelf 300, under panel WC-13
+  notched 567 × 280 (panel 310 deep, 30 strip left at the back). Tutorial `rangehood_slideout`. Test
+  `src/lib/__tests__/rangehoodSlideout.test.ts`.
+- Not modelled: the hood itself (no fixture, as WRH); a hood cover panel on a slide-out (the tick is hidden on slide-outs —
+  it would stand in the body's way).
+
 ## Phases
 
 | # | What | Status |
@@ -373,6 +397,7 @@ wide … 90mm radius corners on the two corners closest to the front edge of the
 | R7 | **Library `WRH`** (wall, pair of doors, shelf at 350, rangehood defaults) — migration | [x] 2026-11-04 |
 | R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [x] 2026-11-04 |
 | R9 | Hood cover panel (hinge D notches) + under panel onion skin; first use RHK6592 WC-03 | [x] 2026-11-05 (in-app check pending) |
+| R12 | **Slide-out rangehood `WRHSO`** — `mount: 'slideout'`, no bottom, doors 42 up, under panel front notch; first use RHK6571 WC-03 | [x] 2026-11-16 (in-app check pending) |
 | R11 | **Drawer box bottoms** take cut-outs + notch inner-corner **radius**; first use RHK6586 vanity plumbing U | [x] 2026-11-08 (in-app check pending) |
 
 ## Open

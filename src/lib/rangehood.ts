@@ -11,6 +11,13 @@
 import type { CabinetInstance } from './types'
 
 export interface RangehoodSettings {
+  // 'undermount' (WRH): the hood hangs under a hole through the bottom + under panel.
+  // 'slideout' (WRHSO, Mark 2026-11-16): the hood body sits inside the cabinet with
+  // no bottom (Bottom Type none), screwed between the gables; the under panel gets a
+  // notch from its front edge, `hole.d` deep (the body depth), between the gables
+  // (or `hole.w` wide, centred + offset, when set). The doors stop above the visor
+  // (a 42 open face row on the library item).
+  mount: 'undermount' | 'slideout'
   // Rangehood hole through the bottom. w / d null = not set yet (the
   // appliance's cut-out size is still to come) — the cabinet warns, no hole.
   hole: { w: number | null; d: number | null; setback: number; offset: number; radius: number }
@@ -33,6 +40,7 @@ export interface RangehoodSettings {
 }
 
 export const DEFAULT_RANGEHOOD: RangehoodSettings = {
+  mount: 'undermount',
   hole: { w: null, d: null, setback: 50, offset: 0, radius: 0 },
   flue: { w: 200, d: 250, offset: 0 },
   shelf_h: 350,
@@ -43,6 +51,8 @@ export const DEFAULT_RANGEHOOD: RangehoodSettings = {
 
 export const DEFAULT_RANGEHOOD_COVER = { notch_w: 40, notch_h: 80, notch_r: 15 }
 
+export const isSlideout = (s: Pick<RangehoodSettings, 'mount'> | null | undefined): boolean => s?.mount === 'slideout'
+
 export const isRangehood = (c: Pick<CabinetInstance, 'rangehood'> | null | undefined): boolean => !!c?.rangehood
 
 const pos = (v: unknown, d: number) => typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : d
@@ -52,9 +62,10 @@ const size = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 
 // Tolerates partial / legacy stored values.
 export function normaliseRangehood(s: unknown): RangehoodSettings | null {
   if (!s || typeof s !== 'object') return null
-  const o = s as Partial<{ hole: Record<string, unknown>; flue: Record<string, unknown>; shelf_h: unknown; cover: Record<string, unknown> | null; panel_skin: unknown; bottom_skin: unknown }>
+  const o = s as Partial<{ mount: unknown; hole: Record<string, unknown>; flue: Record<string, unknown>; shelf_h: unknown; cover: Record<string, unknown> | null; panel_skin: unknown; bottom_skin: unknown }>
   const h = o.hole ?? {}, f = o.flue ?? {}, d = DEFAULT_RANGEHOOD
   return {
+    mount: o.mount === 'slideout' ? 'slideout' : 'undermount',
     hole: {
       w: size(h.w), d: size(h.d),
       setback: Math.max(0, num(h.setback, d.hole.setback)),

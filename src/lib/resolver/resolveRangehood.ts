@@ -74,6 +74,25 @@ export interface RangehoodResult {
   hole?:    { x0: number; x1: number; z0: number; z1: number }   // cabinet frame, for the under panel
 }
 
+/** Slide-out hood (WRHSO): the body sits in the bottom of the cabinet, screwed
+ *  between the gables — no carcass bottom (Bottom Type none). Reports the body's
+ *  footprint as the cabinet's `hole` (between the gables, or `hole.w` centred +
+ *  offset; `hole.d` deep, back from the gables' front edges by `setback`); the
+ *  under panel turns it into a front notch (rangehoodLink). */
+function slideoutBody(cab: CabinetInput, caseParts: ResolvedCasePart[], out: RangehoodResult, warn: (m: string) => void) {
+  const rh = cab.rangehood!, { hole } = rh
+  if (caseParts.some(p => p.part_key === 'bottom')) warn('a slide-out hood fills the bottom — set Bottom Type to none')
+  if (hole.d == null) { warn('the hood body depth isn’t set yet — no under panel notch (set it in the sidebar)'); return }
+  const L = caseParts.find(p => p.part_key === 'left_side'), R = caseParts.find(p => p.part_key === 'right_side')
+  const in0 = L ? L.X + L.DZ : 0, in1 = R ? R.X : cab.DX
+  const front = L ? L.Z + L.DX : cab.DZ
+  const x0 = hole.w == null ? in0 : (in0 + in1) / 2 + hole.offset - hole.w / 2
+  const x1 = hole.w == null ? in1 : x0 + hole.w
+  if (x0 < in0 - 0.5 || x1 > in1 + 0.5) warn(`the hood (${r2(x1 - x0)} wide) is wider than the inside between the gables (${r2(in1 - in0)})`)
+  const z1 = r2(front - hole.setback)
+  out.hole = { x0: r2(x0), x1: r2(x1), z0: r2(z1 - hole.d), z1 }
+}
+
 export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[], internalParts: ResolvedInternalPart[]): RangehoodResult {
   const out: RangehoodResult = { parts: [], seams: [], cutouts: {}, warnings: [] }
   const rh = cab.rangehood
@@ -90,7 +109,8 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
   // ── Hole through the bottom ────────────────────────────────────
   const bottom = caseParts.find(p => p.part_key === 'bottom')
   const { hole } = rh
-  if (hole.w == null || hole.d == null) warn('the hole size isn’t set yet — no hole cut (set it in the sidebar)')
+  if (rh.mount === 'slideout') slideoutBody(cab, caseParts, out, warn)
+  else if (hole.w == null || hole.d == null) warn('the hole size isn’t set yet — no hole cut (set it in the sidebar)')
   else {
     // Where it sits: centred on the bottom and back from its front edge — or,
     // with no bottom (Bottom Type none: the hole is only in the under panel),

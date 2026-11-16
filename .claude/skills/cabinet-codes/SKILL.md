@@ -57,6 +57,7 @@ as the first letter (`BEPF`, `WEP`, `TFK`…), see their section below.
 | `WOT-COMBI` | Wall oven tower with an integrated microwave / combi / steam oven (user code "for now", 2026-10-19): as `WOT` but a combi shelf (interior, 20 back) on the oven cleats and the combi on its own 450 cleats; W2D straight on top |
 | `TFR` | Fridge housing |
 | `WMIC` / `WRH` | Microwave / rangehood. `WRH` in the library 2026-11-04 (Wall › Appliances, z_rangehood): undermount rangehood — W2D carcass, pair of doors, hole through the bottom (+ the WUP under it), fixed shelf at 350 with a flue notch, notched top, flue box; hole size set per job in the Rangehood section |
+| `WRHSO` | Slide-out rangehood. In the library 2026-11-16 (Wall › Appliances, z_rangehood R12): WRH with no bottom (Bottom Type none, hood screws between the gables), doors stop 42 above the underside for the visor, under panel notched from the front for the body (300 deep, full width between the gables), shelf at 300 + flue notch + flue box as WRH. Rangehood section Type = Slide-out |
 | `BBIN` | Bin unit |
 | `TBR` | Broom unit |
 
