@@ -181,15 +181,23 @@ Overhead hinges [100, 610, 831] to clear the adj shelf holes.
 
 ### Open / TBC
 - [ ] Stone colour.
+- [ ] Confirm 2pac colour White Pointer Quarter (Ryan said "likely").
 - [ ] Handles (drawn without).
 - [ ] Laundry tap.
 - [ ] Vintec model no. + vent clearances (front-vented built-in?).
 
-### Ryan / Blake email "Mossman" (2026-11-16) - not applied yet
+### Rev 5 - 2pac (Mark 2026-11-16, from Ryan's email) - `_tmp-6468-laundry-2pac.mjs`
+- Room style 2 Pac Flat 18mm, colour **Dulux White Pointer Quarter** (new row in the 2pac schedule, Ryan: "likely" -
+  confirm). Exposed (panels, 40 filler, under panel, bulkheads) -> Satin Board 18 White. Carcass still WB 16.5.
+- Panels 16.5 -> 18 so the run re-spaced: wine 0-650 | TC-01 650 | stack 668-1318 (WC-09 over) | TC-02 1318 |
+  BC-01 / BC-02 756 each from 1336 | BEPF 2848 (top 5 past it) | overheads 758.5 x 2 | WEP 2853.
+  Top 1535 x 620 (580 + 18 + 2 + 20). Tub + mixer re-centred on BC-01. Spec block updated.
+
+### Ryan / Blake email "Mossman" (2026-11-16) - finish applied in rev 5
 - Files saved: `ARCHITECTURALS/28 Mossman Court - Cab - A3.pdf` (Blake, 11 sheets: grab rail detail,
   kitchen plan + elevations, lounge, entry wall, WIR) and `_FINAL FINISHES & APPLIANCE SCHEDULE/
   Noosa Reno Project Management - Purchased.pdf` (Ryan's consolidated appliance schedule).
-- Ryan: laundry finish will be **2pac, likely Quarter White Pointer** (drawn in PT Classic White Matt 16).
+- Ryan: laundry finish will be **2pac, likely Quarter White Pointer** - applied in rev 5.
 - Laundry appliances: washer Samsung WF90F19ADS 19.5kg, dryer Samsung DV90F17CDS 17kg heat pump.
   The schedule's only wine fridge is the Liebherr UWKES1752 (kitchen island) - no Vintec listed.
 
