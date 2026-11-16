@@ -23,7 +23,7 @@ shelf; room 2190 long; urgent). Quote Issue 2 Rev A 14/10/2026 $2,227 ex: Elegan
 - Handles (Georgie "I'll take care of that").
 - Right wall: tight or a filler.
 - Washer / dryer models (opening 654).
-- Sink 450 x 450 drop-in by others: cut-out size / who cuts it.
+- Sink: 450 x 450 drop-in by others, cut-out on site (answered).
 - Floating shelf size / height when it goes back in.
 
 ## Rev 1 (Mark 2026-11-16): 18 LX Elegant Oak benchtop
@@ -32,3 +32,8 @@ shelf; room 2190 long; urgent). Quote Issue 2 Rev A 14/10/2026 $2,227 ex: Elegan
 - Bases BC-01/02 carcass 780 -> 782 so the bench stays 900. Stone-by-others notes changed to the Elegant Oak top.
 - Sink: 450 x 450 drop-in by others; cut-out size TBC (cut on site or CNC once the sink spec is in).
 - Resolver 0 issues. Check pending.
+
+## Rev 2 (Mark 2026-11-16): sink for the visual only, top edging
+- Sink = new catalog row "Generic 450 x 450 drop-in sink" (no GLB), centre 1690 / 320 off the wall, rim on the top.
+  Tap = Abey Lucia gooseneck as a stand-in. Both room fixtures cut_benchtop false: cut-out done on site. `_tmp-6547-sink.mjs`.
+- WC-03 top edged front + both ends (edge_top/left/right), back raw. CAD notes updated. Resolver 0 issues.

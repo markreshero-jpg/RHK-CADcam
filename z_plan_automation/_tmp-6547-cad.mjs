@@ -56,7 +56,8 @@ Room 2190 long (Georgie's email; sketch 2185) - check measure
 Ceiling 2400: 30 bulkhead over the stack, cut 10 past the ceiling
 Bench 900: 100 kick + 782 carcass + 18 Elegant Oak top (5 past the doors)
 Washer / dryer stack opening 654 between the panels, stack kit by others
-450 x 450 drop-in sink by others, centred on BC-02 - cut-out size TBC
+450 x 450 drop-in sink by others, centred on BC-02 - cut-out on site
+Top edged front + both ends
 Floating shelf: left off for now`
 const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
 const rows = [
@@ -66,8 +67,8 @@ const rows = [
   // Elevation Wall 2
   elev(G, 'text', inCab(18, 654, -1150), 'WASHER / DRYER\nSTACK SPACE\n654W x 1770H'),
   elev(G, 'text', inCab(18, 654, -700), 'STACK KIT\nBY OTHERS'),
-  elev(G, 'text', inCab(1190, 1000, -830), '450 x 450 DROP-IN SINK\nBY OTHERS'),
-  elev(G, 'text', inCab(690, 1500, -980), '18mm LX ELEGANT OAK TOP'),
+  elev(G, 'text', inCab(1190, 1000, -700), '450 x 450 DROP-IN SINK BY OTHERS\nCUT-OUT ON SITE'),
+  elev(G, 'text', inCab(690, 900, -980), '18mm LX ELEGANT OAK TOP'),
   // TBC: handles
   elev(Q, 'cloud', { pts: pts(760, -560, 1120, -700) }, null, cloud),
   elev(Q, 'text', inCab(690, 500, -605), 'HANDLES TBC'),
