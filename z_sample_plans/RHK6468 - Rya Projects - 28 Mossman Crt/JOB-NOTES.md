@@ -128,6 +128,13 @@ How it's drawn:
   ceiling. Shows in plan (dashed, above), Wall 7 elevation (band) and 3D. Curve ends scaled off the plan (leaves
   the wall ~485 from the north end, back on it ~547 from the south end). Replaced the earlier CAD stand-in.
 
+### Rev 4 - 100 deep dividers (Mark 2026-11-16) - `_tmp-6468-kit-div100.mjs`
+- 33 veneer dividers between base cabinets cut to **100 deep at the front** (back not seen), front still flush:
+  BC-06 / 08 / 10 / 12 / 14 (run), BC-20 / 22 (island), BC-35 / 37 (butler's south), BC-42 (west), BC-47 / 49 (north).
+- Kept full depth: run / island end gables (BC-04, BC-16), void-corner gables (BC-39, 40, 44, 45), east-wall gable
+  BC-31, wine-fridge gable BC-18, all tall 33 gables (TC-*). DW cavities (BC-08 / 10 / 37) still have the carcass
+  sides of the units beside them behind the 100.
+
 ## Laundry - drawn 2026-11-14, room `874fed25-8e1b-4bbf-b1ff-3090361b5dad`
 
 Source: Mark's site-measure sketch on the Laundry plan (back wall 3721 o/a, CH 2603, door
