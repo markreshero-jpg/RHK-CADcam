@@ -238,7 +238,7 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 ### Open / TBC
 - [ ] North bays 934 / south bays 878: the 950s shrink by a different amount each side, so the bays (and the
   shoe racks the plan says to align) are ~137 out across the aisle. Align them instead?
-- [ ] Final board colour (PT Classic White Matt for now).
+- [ ] Final board colour: PT Woodmatt Blonde Oak 18 (rev 4) - to be approved by client.
 - [x] Shoe shelves 15 deg + 50 rail (rev 3).
 - [ ] 32mm shelves / gables on the drawing: drawn as standard 16.5 (side-by-side gables = 33).
 
@@ -266,6 +266,22 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 - 2026-11-15 (Mark): joints follow a rotated part - the optimiser drill sync now moves the holes a turned shelf bores
   into the gables with it (orientSlaveSeamDrills); the room + print elevations draw turned internals turned (front-most
   face, partRotateElev) and drop their "fix sh" labels.
+
+### WIR rev 4 - Blonde Oak 18 (Mark 2026-11-16) - `_tmp-6468-wir-blonde*.mjs`, `_tmp-6468-wir-mirrormat.mjs`
+- Latest plans checked: `Cab - A3.pdf` sheets 7.09-7.11 (Rev B 15/10/26) = the same WIR drawings as drawn (pixel diff
+  against `WIR - A3 MARKED UP.pdf`: only Mark's red markups differ). Nothing WIR in the appliance schedule.
+- Doors + panels **18mm Polytec Woodmatt Blonde Oak - to be approved by client**. New rows: board
+  `PT Woodmatt 18mm – Blonde Oak Woodmatt` (b7b521b4, copied from Bronzed Oak 18, 2415 x 1211), `PT Woodmatt 36mm`
+  + `– Blonde Oak Woodmatt` (d082468d, 2 x 18 for the mirror frame), door colour "Blonde Oak Woodmatt" (1cda84a7) in the
+  Flat Panel 18mm Polytec schedule. Room style -> Flat Panel 18mm Polytec, exposed -> Blonde Oak 18. Carcass stays 16.5 WB.
+- Fronts 16 -> 18: door carcasses / kicks / BHs 532 -> 530 so the faces stay on the 550 line (blind panels 588 + 40
+  fillers unchanged); WC-10 BH 530 + 938. TC-01 TEPF 18, dz 581 (601 = flush with the nib). BC-01 / WC-01 from 18, 870
+  wide. Seat / bench tops 18 (382-400, 1132-1150).
+- Open drawer banks BC-01/02/03/08: gables seen -> exposed interior (Blonde Oak 18); reveals 20 (gable + 2), top 43,
+  setback (FACINS) kept 16.
+- TC-17 frame 36 (was 33); mirror 1685 x 2471. The Mirror part was following the frame board -> pinned to Mirror 4mm
+  (material_override_id).
+- Spec block, colour TBC note, mirror note + kick / top notes updated. Resolver: 0 errors (TC-17 WIDE_CABINET only).
 
 ## Wall Panelling - drawn 2026-11-16, room `00e46b73-13de-4df3-9235-871505d4ee81`
 
