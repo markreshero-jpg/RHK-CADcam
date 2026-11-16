@@ -37,7 +37,7 @@ const spec = `SPECIFICATIONS - {room}
 {job}
 
 BENCHTOP
-20mm stone offcut - by others
+18mm Laminex Elegant Oak Absolute Grain
 
 FRONTS + PANELS
 Laminex Elegant Oak Absolute Grain
@@ -54,9 +54,9 @@ const site = `SITE NOTES
 SUPPLY ONLY
 Room 2190 long (Georgie's email; sketch 2185) - check measure
 Ceiling 2400: 30 bulkhead over the stack, cut 10 past the ceiling
-Bench 900: 100 kick + 780 carcass + 20 stone (by others)
+Bench 900: 100 kick + 782 carcass + 18 Elegant Oak top (5 past the doors)
 Washer / dryer stack opening 654 between the panels, stack kit by others
-450 x 450 drop-in sink by others, centred on BC-02
+450 x 450 drop-in sink by others, centred on BC-02 - cut-out size TBC
 Floating shelf: left off for now`
 const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
 const rows = [
@@ -66,8 +66,8 @@ const rows = [
   // Elevation Wall 2
   elev(G, 'text', inCab(18, 654, -1150), 'WASHER / DRYER\nSTACK SPACE\n654W x 1770H'),
   elev(G, 'text', inCab(18, 654, -700), 'STACK KIT\nBY OTHERS'),
-  elev(G, 'text', inCab(1190, 1000, -860), '450 x 450 DROP-IN SINK\nBY OTHERS'),
-  elev(G, 'text', inCab(690, 1500, -980), '20mm STONE TOP BY OTHERS'),
+  elev(G, 'text', inCab(1190, 1000, -830), '450 x 450 DROP-IN SINK\nBY OTHERS'),
+  elev(G, 'text', inCab(690, 1500, -980), '18mm LX ELEGANT OAK TOP'),
   // TBC: handles
   elev(Q, 'cloud', { pts: pts(760, -560, 1120, -700) }, null, cloud),
   elev(Q, 'text', inCab(690, 500, -605), 'HANDLES TBC'),
@@ -78,7 +78,7 @@ const rows = [
   elev(Q, 'cloud', { pts: pts(60, -400, 630, -540) }, null, cloud),
   elev(Q, 'text', inCab(18, 654, -445), 'W/D MODELS TBC'),
   // Height dims
-  elev(S, 'dim', { p1: { x: 2190, y: 0 }, p2: { x: 2190, y: -880 }, axis: 'y', offset: 300 }, null, DIM),
+  elev(S, 'dim', { p1: { x: 2190, y: 0 }, p2: { x: 2190, y: -900 }, axis: 'y', offset: 300 }, null, DIM),
   elev(S, 'dim', { p1: { x: 0, y: 0 }, p2: { x: 0, y: -1770 }, axis: 'y', offset: -300 }, null, DIM),
   elev(S, 'dim', { p1: { x: 0, y: -1770 }, p2: { x: 0, y: -2370 }, axis: 'y', offset: -300 }, null, DIM),
   elev(S, 'dim', { p1: { x: 0, y: -2370 }, p2: { x: 0, y: -2400 }, axis: 'y', offset: -300 }, null, DIM),

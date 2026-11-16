@@ -23,5 +23,12 @@ shelf; room 2190 long; urgent). Quote Issue 2 Rev A 14/10/2026 $2,227 ex: Elegan
 - Handles (Georgie "I'll take care of that").
 - Right wall: tight or a filler.
 - Washer / dryer models (opening 654).
-- Stone top thickness (assumed 20), sink 450 x 450 drop-in by others.
+- Sink 450 x 450 drop-in by others: cut-out size / who cuts it.
 - Floating shelf size / height when it goes back in.
+
+## Rev 1 (Mark 2026-11-16): 18 LX Elegant Oak benchtop
+- Top = WC-03 flat WUP (UNDER_PANEL) 1500 x 605 x 18 at 882-900, Elegant Oak (job exposed), 690 -> right wall,
+  5 past the doors, one edge taped (WUP default; check it's the front). `_tmp-6547-top.mjs`.
+- Bases BC-01/02 carcass 780 -> 782 so the bench stays 900. Stone-by-others notes changed to the Elegant Oak top.
+- Sink: 450 x 450 drop-in by others; cut-out size TBC (cut on site or CNC once the sink spec is in).
+- Resolver 0 issues. Check pending.
