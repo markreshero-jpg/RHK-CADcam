@@ -309,10 +309,11 @@ Built (each wall section = one TEPF carrier with literal custom parts, study-des
 - New board rows: `Veneer 9mm` + `Veneer 9mm – American Oak` (8d025cc1), 2700 x 1205 copied from the 17 (size TBC).
 
 Open / TBC:
-- [ ] 2690 panels vs 2704 ceiling on the 4550 part (14 gap) - longer sheet, or a gap / shadowline?
-- [ ] Garage door position in bay 4 (Blake: left edge on the 3rd joint) + is it panel-faced (Blake "flush hinged")?
-- [ ] Over-door + nib: Blake draws one L piece; drawn as 2 pieces (butt at 2345).
-- [ ] Slider leaf size / track, door edges (lipping?), jamb linings, alu frame by whom.
-- [ ] Corner detail at the media room external corner; lounge right nib's far end.
-- [ ] 3mm joiner strip board (not modelled); cover strip front edge = edge_right (check tape side).
+- [x] 2690 panels vs 2704 ceiling: fine, the floor is 20 thick (Mark).
+- [x] Garage door: flush hinged, **33 American Oak veneer**, face flush with the panels (Mark) - TC-01 part 919 x 2332 at 3415.5, 10 off the floor, 3 gaps. Position in bay 4 + hinges still TBC.
+- [x] Over-door + nib: 2 pieces butted at 2345 is fine (Mark).
+- [ ] Slider: **Mark will draw the slider door detail** (leaf size / track / edges / jambs).
+- [x] Corner detail as drawn is fine for now (Mark).
+- [x] No joiner strips drawn (may not be done) - **keep the 3 gaps between boards for movement** (Mark). Cover strip front edge = edge_right (check tape side).
 - [ ] Blake to provide the panelling detail (Mark's note); CAD notes / spec block not done yet.
+- 2026-11-16 rev 1 (`_tmp-6468-wp-rev1.mjs`): whole room **rotated 90 deg left** (Mark) about the media corner (-3130, 2000) - walls, cabinets and Mark's plan CAD, so it reads like 2.01 (entry wall W->E along the bottom, lounge going up). Mark's elevation dim stays (wall frame). 0 errors.
