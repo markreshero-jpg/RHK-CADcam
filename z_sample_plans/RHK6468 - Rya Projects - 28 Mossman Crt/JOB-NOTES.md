@@ -266,3 +266,37 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 - 2026-11-15 (Mark): joints follow a rotated part - the optimiser drill sync now moves the holes a turned shelf bores
   into the gables with it (orientSlaveSeamDrills); the room + print elevations draw turned internals turned (front-most
   face, partRotateElev) and drop their "fix sh" labels.
+
+## Wall Panelling - drawn 2026-11-16, room `00e46b73-13de-4df3-9235-871505d4ee81`
+
+Sources: Mark's site measure (CAD sketch in the room, plan view, rotated: entry wall drawn top to bottom) +
+`ARCHITECTURALS/28 Mossman Court - Cab - A3.pdf` 7.07 Lounge / 7.08 Entry wall (Blake Rev B 15/10/26) + 2.01 floor plan.
+"TV" on Blake's sheets = timber veneer (American Oak). Script `z_plan_automation/_tmp-6468-wp-build.mjs`.
+
+Site vs Blake: entry 4550 / 2220 frame / 3400 (Blake 4510 / 2090 / 3550); lounge 4910 (Blake 600 + 3795 + 600 = 4995);
+CH 2704 on the 4550 part, 2386 on the 3400 part, 2706 lounge. **Mark 2026-11-16:** use 3400; lounge 4910; lounge
+bulkhead 2386 to match the entry wall; middle 3795 (now 3710) stays plaster; the **media cavity slider is ours**: inset
+60, core = aluminium frame 19x38 RHS, both faces lined in 9mm veneer (56 thick). Cover strips 33 x 25 **on the face**
+over each joint, panels 3 apart at the joints, a 3mm joiner strip on the back of the cover strip locates in the gap.
+
+Built (each wall section = one TEPF carrier with literal custom parts, study-desk pattern):
+- Walls (island, detached, faces: W1 hall / W2 lounge): W1 entry 10170 (external corner of the media room = Mark's
+  sketched corner), W2 lounge **recess (plaster) face** 4910, 233 behind the nib substrate, W3 = slider back-face line.
+- TC-01 entry 4550: panels 1136 / 1134.5 / 1136 x **2690** (2700 sheet - 5 + 5 trim; ceiling 2704) + garage door bay
+  (925 x 2345 by others at 3412.5, panel over 345 + 211 nib panel). Strips at 0 / joints / door edge / 4550.
+- TC-02 slider 2220: 1110 opening left, panel over it (2345-2690), pocket panel 1107 x 2386 right; strips at the
+  centre + B/C joint.
+- TC-03 entry 3400: 3 panels x 2386 (joints 1133.5 / 2267 from 6770); last panel + end strip run 17 past the corner
+  over the lounge nib panel edge.
+- TC-04 / TC-05 lounge nibs 600 x 250: 17 front panel 567 + 33 gable on the recess side (front flush), 2386.
+- TC-06 slider leaf 1140 x 2335 (10 off the floor), 2 x 9 skins; face 60 behind the panel face.
+- New board rows: `Veneer 9mm` + `Veneer 9mm – American Oak` (8d025cc1), 2700 x 1205 copied from the 17 (size TBC).
+
+Open / TBC:
+- [ ] 2690 panels vs 2704 ceiling on the 4550 part (14 gap) - longer sheet, or a gap / shadowline?
+- [ ] Garage door position in bay 4 (Blake: left edge on the 3rd joint) + is it panel-faced (Blake "flush hinged")?
+- [ ] Over-door + nib: Blake draws one L piece; drawn as 2 pieces (butt at 2345).
+- [ ] Slider leaf size / track, door edges (lipping?), jamb linings, alu frame by whom.
+- [ ] Corner detail at the media room external corner; lounge right nib's far end.
+- [ ] 3mm joiner strip board (not modelled); cover strip front edge = edge_right (check tape side).
+- [ ] Blake to provide the panelling detail (Mark's note); CAD notes / spec block not done yet.
