@@ -317,7 +317,7 @@ Built (each wall section = one TEPF carrier with literal custom parts, study-des
 
 Open / TBC:
 - [x] 2690 panels vs 2704 ceiling: fine, the floor is 20 thick (Mark).
-- [x] Garage door: flush hinged, **33 American Oak veneer**, face flush with the panels (Mark) - TC-01 part 919 x 2332 at 3415.5, 10 off the floor, 3 gaps. Position in bay 4 + hinges still TBC.
+- [x] Garage door: flush hinged, **17 American Oak veneer** (was 33; Mark 2026-11-17 "same as other panels"), face flush with the panels - TC-01 part 919 x 2332 at 3415.5, 10 off the floor, 3 gaps. Position in bay 4 + hinges still TBC.
 - [x] Over-door + nib: 2 pieces butted at 2345 is fine (Mark).
 - [ ] Slider: **Mark will draw the slider door detail** (leaf size / track / edges / jambs).
 - [x] Corner detail as drawn is fine for now (Mark).
@@ -345,3 +345,5 @@ Open / TBC:
   Open: Mark's "300 wall" sketch at the entry wall's west end (300 long or thick?).
 - 2026-11-16 Wall 13 (`_tmp-6468-wp-walls5.mjs`): entry-end return wall, 300 into the hall past the entry wall face
   (Mark: 300 long), from the back of the garage wall, east face on the panel start; 150 thick TBC (sketched).
+- 2026-11-17 (`_tmp-6468-wp-garage17.mjs`): TC-01 garage door leaf 33 -> **17 American Oak veneer** (same board as the
+  panels), z 0..17 so the face stays flush. 0 issues.
