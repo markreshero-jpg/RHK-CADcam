@@ -63,4 +63,12 @@ describe('cutout holes in the G-code', () => {
     expect(placedHoles(part, { w: 1000, rotated: false }, true)[0][0]).toEqual({ x: 99, y: 198 })
     expect(placedHoles(part, { w: 1000, rotated: true }, false)[0][0]).toEqual({ x: 800, y: 100 })
   })
+  // RHK6586 WC-04: a left gable's blank is mirrored to match its drilling; its holes follow.
+  it('placedHoles: mirrored with a left gable blank (blank_mirror), like its outline', () => {
+    const rect = [{ x: 0, y: 0 }, { x: 600, y: 0 }, { x: 600, y: 1000 }, { x: 0, y: 1000 }]
+    const shape = (m: 'x' | 'y') => ({ op_polygon: rect, blank_mirror: m }) as never
+    const part = { w: 600, h: 1000, eb_w1: 0, eb_w2: 0, eb_h1: 0, eb_h2: 0, cut_holes: [[{ x: 100, y: 200 }]] }
+    expect(placedHoles({ ...part, shape: shape('x') }, { w: 600, rotated: false }, false)[0][0]).toEqual({ x: 500, y: 200 })
+    expect(placedHoles({ ...part, shape: shape('y') }, { w: 600, rotated: false }, false)[0][0]).toEqual({ x: 100, y: 800 })
+  })
 })

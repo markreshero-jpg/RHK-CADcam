@@ -264,8 +264,16 @@ export function placedOutline(part: BlankPart, pl: PlacedAs, deductEb: boolean):
  *  the cut blank, then turned with the placement. */
 export function placedHoles(part: BlankPart & { cut_holes?: ShapePt[][] }, pl: PlacedAs, deductEb: boolean): ShapePt[][] {
   if (!part.cut_holes?.length) return []
-  const { sx, sy } = cutBlank(part, deductEb)
-  return part.cut_holes.map(h => h.map(p => placeLocal({ x: p.x - sx, y: p.y - sy }, pl)))
+  const b = cutBlank(part, deductEb)
+  // A left gable's blank is mirrored (blank_mirror) to match its pre-mirrored
+  // drilling; its cut-outs turn with it, or they land at the wrong end
+  // (RHK6586 WC-04 left gable duct hole, Mark 2026-11-17).
+  const mirror = part.shape?.blank_mirror
+  const local = (p: ShapePt): ShapePt => {
+    const x = p.x - b.sx, y = p.y - b.sy
+    return mirror === 'x' ? { x: b.w - x, y } : mirror === 'y' ? { x, y: b.h - y } : { x, y }
+  }
+  return part.cut_holes.map(h => h.map(p => placeLocal(local(p), pl)))
 }
 
 /** Signed area (+ = CCW in a y-up frame). */
