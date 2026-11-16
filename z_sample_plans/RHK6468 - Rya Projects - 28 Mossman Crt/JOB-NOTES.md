@@ -340,3 +340,6 @@ Open / TBC:
 - 2026-11-16 walls rev 2 (Mark's markup, `_tmp-6468-wp-walls4.mjs`): Wall 11 garage wall 4550 x 99 solid behind the 4550
   entry panels ("make a 4550 solid wall here" - garage door opening not cut in the wall); Wall 12 garage / media wall
   121 x 1369 north off the slider's left jamb. Garage door opens INTO the garage, hinged on the nib (slider) side (TC-01 note).
+- 2026-11-16 TC-06 (Mark "split in middle", `_tmp-6468-wp-tc06.mjs`): slider now 2220 wide (resized in the app; its
+  custom parts had gone) = 2 leaves 1108.5 + 3 gap + 1108.5, 2335 high, 10 off the floor, 2 x 9 AO skins each. 0 errors.
+  Open: Mark's "300 wall" sketch at the entry wall's west end (300 long or thick?).
