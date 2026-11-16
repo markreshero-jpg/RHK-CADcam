@@ -52,12 +52,14 @@ Andy is off the job (Mark 14/11): RHK supplies + installs, Geraldine + Pete did 
 - Cooktop added on BC-02: Bosch PKE611BA2A 592 x 522, cut-out 560 x 495, 52.5 back / 52.5 front.
 - DW added in the 610 space: LG XD4B24PS freestanding 600 x 600 x 850 (880 under the top).
 - Appliance spec block now uses {ovens} {cooktops} {dishwashers}; rangehood line typed (no rangehood fixture, per the WRH convention). Cooktop + DW TBC clouds removed; sink cloud now "position TBC on site"; rangehood cloud "cut-out + duct TBC". SITE NOTES moved down to y 3700.
+- Mark 2026-11-16: duct runs ABOVE the rangehood cabinet (no duct work in it); oven opening 600 x 600 OK; mixer = our **standard gooseneck** (Abey Lucia library item), spec line "Standard gooseneck mixer" (`_tmp-6571-appl-tap.mjs`; one-off Linkware Elle library row set inactive).
+- Mark 2026-11-16: build a **generic slide-out rangehood** library item, reusable for all slide-out models -> WC-03 gets it once built.
 - NOT done: WC-03 rangehood hole (still null) - WRR626SB slide-out body 555 W x 280 D x 230 H (272 with visor), 600 x 40 front; Abey RHH6 = HORIZONTAL 150 duct out through a wall, so the WRH flue notch up through shelf + top may be wrong. Asked Mark.
 
 ## Open
 - Site measure (all sizes from the Bunnings plan). On site: undermount single bowl sink - model, position over BC-04.
 - Quote update: undermount sink cut-out + El A waterfall variation.
 - Beam positions / widths / ceiling (beams 210 deep only because the ceiling is drawn 2400).
-- Rangehood WRR626SB cut-out + horizontal duct route in WC-03 (asked Mark 2026-11-16).
+- WC-03 -> generic slide-out rangehood cabinet (to build) for the WRR626SB.
 - Check Benchtop 2 / 3 get the sink + cooktop cut-outs (fixtures linked to BC-04 / BC-02 2026-11-16).
 - Check WCNP WC-04 (new library item) + its L under panel WC-16 in 3D / cut list.
