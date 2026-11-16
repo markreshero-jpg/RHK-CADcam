@@ -343,3 +343,5 @@ Open / TBC:
 - 2026-11-16 TC-06 (Mark "split in middle", `_tmp-6468-wp-tc06.mjs`): slider now 2220 wide (resized in the app; its
   custom parts had gone) = 2 leaves 1108.5 + 3 gap + 1108.5, 2335 high, 10 off the floor, 2 x 9 AO skins each. 0 errors.
   Open: Mark's "300 wall" sketch at the entry wall's west end (300 long or thick?).
+- 2026-11-16 Wall 13 (`_tmp-6468-wp-walls5.mjs`): entry-end return wall, 300 into the hall past the entry wall face
+  (Mark: 300 long), from the back of the garage wall, east face on the panel start; 150 thick TBC (sketched).
