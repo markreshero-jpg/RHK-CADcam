@@ -483,6 +483,10 @@ strip it with `cabinet_labels` (no names on their plan).
   overall 1063 looked like it measured to the short point), and a **KICK SP** row just inside it
   gives the length at the back from the wall end (short point), 853 (`kickShortSegs`). Not shown
   when the kick runs past both ends (that's the wall length). Plan View print + canvas plan.
+- Same day: joined-kick names sit 150 behind the middle of the LONGEST face board, turned with it
+  (`kickLabelAnchor`; the first board could be a short return - KICK 2's name landed in the DW gap).
+  Island / back-side rows clear a cabinet standing off its wall (`cabWallGap`; KICK 3 is 180 off
+  the Pantry BH line and its KICK / WALL rows sat on the kick).
 - 0.1 mm everywhere (Mark 2026-11-05): kick row labels were whole mm (`Math.round` in
   `kickChain`); benchtop sizes / edge lengths (`BenchtopEdgeLabels`) too; a few elevation
   height-chain labels printed the raw value. All now `roundMm` like every other dim row.

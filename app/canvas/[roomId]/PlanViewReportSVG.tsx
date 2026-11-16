@@ -24,7 +24,7 @@ import { isSpecBlock } from '@/src/lib/annotations/blocks'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces, wallOutline, isDropWall, polygonCentroid,
-  cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabT,
+  cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabWallGap, cabT,
   cabinetToPlan, cabinetPlanFrame,
   planDrawOrder,
 } from '@/src/lib/geometry'
@@ -35,7 +35,7 @@ import type { LayerView } from '@/src/lib/displayLayers/resolve'
 import { casePartItem, kickPartItem, drawerBoxPartItem } from '@/src/lib/displayLayers/registry'
 import { customPartItem } from '@/src/lib/displayLayers/customPartKinds'
 import { planShowsCabinet } from '@/src/lib/displayLayers/cabinetShown'
-import { caseBox, casePlanCorners, isSide, tkPlanBox, tkPlanCorners } from '@/src/lib/jointDrilling'
+import { caseBox, casePlanCorners, isSide, tkPlanBox, tkPlanCorners, kickLabelAnchor } from '@/src/lib/jointDrilling'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 import { PRINT_INK, pen, atLeastMin } from '@/src/lib/shopDrawings/pens'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
@@ -398,12 +398,8 @@ export default function PlanViewReportSVG({
         const outline = !cab.is_kick_assembly && layers.show('carcass_outline')
         const carcP = lp('carcass_outline')
         // Kick assemblies label just behind their kick face, clear of member labels.
-        const kickFace = cab.is_kick_assembly ? rp?.toekick_parts.find(p => p.part_key === 'kick_front_face') : undefined
-        const labelPt = kickFace ? (() => {
-          const b = tkPlanBox(kickFace)
-          const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
-          return toPlanC(lx, lz)
-        })() : null
+        const kickAt = cab.is_kick_assembly ? kickLabelAnchor(rp?.toekick_parts ?? []) : null
+        const labelPt = kickAt ? toPlanC(kickAt.x, kickAt.z) : null
         // Joined kicks follow their own layer (kick_labels) so the Kicks set can name them alone.
         const labelItem = cab.is_kick_assembly ? 'kick_labels' : 'cabinet_labels'
         const labelFs = layers.w(labelItem, fontSize)
@@ -707,7 +703,9 @@ export default function PlanViewReportSVG({
         const out = { x: -inward.x, y: -inward.y }
         const allBase = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'base' || c.assembly_class === 'base_corner'))
         const allWall = chainCabs.filter(c => c.wall_id === w.id && (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner' || c.assembly_class === 'tall' || c.assembly_class === 'tall_corner'))
-        const sideDepth = (cabs: CabinetInstance[]) => cabs.length ? Math.max(...cabs.map(c => c.dz)) : 0
+        // Front of the side's furthest-out cabinet: depth + any gap it stands off the wall
+        // (RHK6586 KICK 3 stands 180 off the Pantry BH line; the rows sat on it).
+        const sideDepth = (cabs: CabinetInstance[]) => cabs.length ? Math.max(...cabs.map(c => c.dz + Math.max(0, cabWallGap(c, w, cx)))) : 0
 
         // One side's width chain (pushed out by depthOffset) + depth dims.
         const renderSide = (

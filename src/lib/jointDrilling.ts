@@ -56,6 +56,18 @@ export function tkPlanCorners(p: ResolvedToekickPart): { x: number; z: number }[
   })
 }
 
+/** Plan label anchor for a joined kick (cabinet frame): 150 behind the middle of its
+ *  LONGEST face board, turned with that board. The first face board could be a short
+ *  return (RHK6586 KICK 2: the 90 return at the DW put the name in the DW gap). */
+export function kickLabelAnchor(parts: ResolvedToekickPart[]): { x: number; z: number } | null {
+  const faces = parts.filter(p => p.part_key === 'kick_front_face')
+  if (!faces.length) return null
+  const f = faces.reduce((a, b) => (b.DY > a.DY ? b : a))
+  const b = tkBoxLocal(f)
+  const [rx, , rz] = f.AY ? rotEulerXYZ(0, f.AY, 0, b.w / 2, 0, -150) : [b.w / 2, 0, -150]
+  return { x: b.x + rx, z: Math.max(0, b.z + rz) }
+}
+
 /** Cut-list note for a mitred kick board, e.g. "mitre 22.5°"; '' when square. */
 export function tkBevelNote(p: { bevel_lo?: number | null; bevel_hi?: number | null }): string {
   return caseBevelNote(p).replace(/^bevel/, 'mitre')

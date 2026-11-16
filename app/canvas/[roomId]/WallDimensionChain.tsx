@@ -1,6 +1,6 @@
 'use client'
 import { Wall, CabinetInstance } from '@/src/lib/types'
-import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef, type WallSpan } from '@/src/lib/geometry'
+import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, cabWallGap, type RoomRef, type WallSpan } from '@/src/lib/geometry'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, kickShortSegs, type KickSpan } from '@/src/lib/kickDims'
@@ -240,8 +240,10 @@ export default function WallDimensionChain({
      c.assembly_class === 'tall' || c.assembly_class === 'tall_corner')
   )
 
+  // Front of the side's furthest-out cabinet: its depth plus any gap it stands off the
+  // wall by (RHK6586 KICK 3 stands 180 off the Pantry BH line; the rows sat on it).
   const sideDepth = (cabs: CabinetInstance[]) =>
-    cabs.length ? Math.max(...cabs.map(c => c.dz)) : 0
+    cabs.length ? Math.max(...cabs.map(c => c.dz + Math.max(0, cabWallGap(c, wall, rc)))) : 0
 
   // Render the 3-row width chain + perpendicular depth dims for one side of a wall.
   // `chainDir` is the outward perpendicular the width rows stack along; `depthDir`

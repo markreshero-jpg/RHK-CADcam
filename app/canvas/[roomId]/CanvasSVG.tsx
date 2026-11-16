@@ -42,7 +42,7 @@ import { roundMm } from '@/src/lib/format'
 import { SNAP_KIND_META, type SnapResult } from '@/src/lib/canvasSnap'
 import type { PlanGridPrefs } from '@/src/lib/userPrefs'
 import { getPalette } from '@/src/lib/partPalette'
-import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox, tkPlanCorners, tkBoxAABB, zoneBevelOutline, rotEulerXYZ } from '@/src/lib/jointDrilling'
+import { caseBox, caseBoxAABB, casePlanCorners, isSide, tkPlanBox, tkPlanCorners, tkBoxAABB, zoneBevelOutline, rotEulerXYZ, kickLabelAnchor } from '@/src/lib/jointDrilling'
 import { dbBox, slideBox } from '@/src/lib/drawerHardwareBoxes'
 import { binOutlines } from '@/src/lib/binGeometry'
 import { rotatedBoxPolygon } from './cabinetEditSvgHelpers'
@@ -1316,22 +1316,15 @@ export default function CanvasSVG({
           // Label anchor: footprint centre; kick assemblies label just behind their
           // kick face (front) so the text clears the member cabinets' labels and the
           // front stretch marker.
-          const kickFace = isKickAsm ? kickPartsR.find(p => p.part_key === 'kick_front_face') : undefined
+          const kickAt = isKickAsm ? kickLabelAnchor(kickPartsR) : null
           // Moved label (label_offsets.plan): centre + offset in the cabinet's frame.
           const labelOff = cabLabelMove.offOf(cab.id, cab.label_offsets?.plan)
-          const labelPt = labelOff ? toPlanC(displayCab.dx / 2 + labelOff.x, displayCab.dz / 2 + labelOff.y) : kickFace ? (() => {
-            const b = tkPlanBox(kickFace)
-            const lx = b.x + b.w / 2, lz = Math.max(0, b.z - 150)
-            return toPlanC(lx, lz)
-          })() : center
+          const labelPt = labelOff ? toPlanC(displayCab.dx / 2 + labelOff.x, displayCab.dz / 2 + labelOff.y) : kickAt ? toPlanC(kickAt.x, kickAt.z) : center
           // Moving this cabinet's name: screen px → mm → the cabinet's frame.
           const labelTrack = cab.id === cabLabelMoving ? (() => {
             const o = toPlanC(0, 0), ux = toPlanC(1, 0), vz = toPlanC(0, 1)
             const u = { x: ux.x - o.x, y: ux.y - o.y }, v = { x: vz.x - o.x, y: vz.y - o.y }
-            const from = labelOff ?? (kickFace ? (() => {
-              const b = tkPlanBox(kickFace)
-              return { x: b.x + b.w / 2 - displayCab.dx / 2, y: Math.max(0, b.z - 150) - displayCab.dz / 2 }
-            })() : { x: 0, y: 0 })
+            const from = labelOff ?? (kickAt ? { x: kickAt.x - displayCab.dx / 2, y: kickAt.z - displayCab.dz / 2 } : { x: 0, y: 0 })
             return cabLabelMove.track(cab.id, from, (dx, dy) => toFrame(dx / view.zoom, dy / view.zoom, u, v))
           })() : undefined
 
