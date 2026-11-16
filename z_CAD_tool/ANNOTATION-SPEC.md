@@ -439,6 +439,9 @@ A2 checked in-app by Mark 2026-10-18 ("looks good").
 - **Tools:** Leader (Q), Line (L), Arrow (A); their ribbon buttons are now live.
   - Line / Arrow: click points. Double-click, Enter or right-click finishes;
     Backspace steps back a point; Esc cancels. A rubber-band preview draws through
+    **Picking another tool** (panel button or shortcut key, e.g. back to Select)
+    also finishes it up to the last clicked point — same for a freehand cloud
+    (Mark, 2026-11-16, `pickTool`).
     `AnnotationLayer`. Arrow = a `line` row with `arrowEnd: 'closed'` (`ARROW_TOOL`).
   - Leader: click the tip, then click the landing. The text editor opens just past
     the landing (`leaderTextAt`), and the row is a `text` with `leader: [tip, landing]`.

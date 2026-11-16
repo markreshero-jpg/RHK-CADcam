@@ -768,6 +768,15 @@ export function useAnnotationTool({
     void insertRows([row])
   }, [zoom, frame.s, newRow, defaultsFor, captureSnapshot, setAnnotations, insertRows, dimRow])
 
+  /** Picking a tool (panel button / shortcut key) while a line, arrow or cloud is half
+   *  clicked out finishes it up to the last clicked point, like Enter (Mark 2026-11-16) —
+   *  e.g. click Select after drawing an arrow and the arrow is kept. */
+  const pickTool = useCallback((t: CadTool) => {
+    const d = drawingRef.current
+    if (d && t !== d.tool && (d.tool === 'line' || d.tool === 'arrow' || d.tool === 'cloud')) finishDrawing()
+    setTool(t)
+  }, [finishDrawing, setTool])
+
   /** Ribbon: point a leader from the selected text (next click = arrow tip). */
   const startAddLeader = useCallback(() => {
     const a = selected.length === 1 && selected[0].kind === 'text' ? selected[0] : null
@@ -1774,12 +1783,12 @@ export function useAnnotationTool({
       if (e.key === 'Enter' && selected.length === 1 && selected[0].kind === 'text') { take(); startEdit(selected[0]); return }
       if (!mod && !e.altKey) {
         const t = CAD_TOOL_KEYS[e.key.toLowerCase()]
-        if (t) { take(); setTool(t) }
+        if (t) { take(); pickTool(t) }
       }
     }
     window.addEventListener('keydown', onKey, true)
     return () => window.removeEventListener('keydown', onKey, true)
-  }, [active, liveSelected, selected, tool, deleteSelected, nudgeSelection, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen, dimMode, commitTyped, cancelRotate, commitRotate, previewRot])
+  }, [active, liveSelected, selected, tool, deleteSelected, nudgeSelection, paste, startEdit, exitCad, finishDrawing, clearTyped, setOffsetSrc, menuOpen, modPickOpen, chainOpen, dimMode, commitTyped, cancelRotate, commitRotate, previewRot, pickTool])
 
   // Ghosts for the canvas: marquee box / text box being dragged out (frame coords).
   // A shape being placed: by drag, or armed by a first click (B1).
@@ -1884,7 +1893,7 @@ export function useAnnotationTool({
   }, [editing])
 
   return {
-    tool, setTool, selected, withEditing, selectedIds: liveSelected, setSelectedIds,
+    tool, setTool: pickTool, selected, withEditing, selectedIds: liveSelected, setSelectedIds,
     editing, setEditText, commitEdit, cancelEdit,
     ribbonKind, ribbonStyle, ribbonByLayer, ribbonLayerId, ribbonRot, ribbonLeader, applyStyle, resetStyle, applyRotation,
     rotateSelection, startRotatePick, cancelRotate, rotOp,
