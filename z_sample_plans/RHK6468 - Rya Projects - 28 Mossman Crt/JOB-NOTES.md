@@ -185,6 +185,14 @@ Overhead hinges [100, 610, 831] to clear the adj shelf holes.
 - [ ] Laundry tap.
 - [ ] Vintec model no. + vent clearances (front-vented built-in?).
 
+### Ryan / Blake email "Mossman" (2026-11-16) - not applied yet
+- Files saved: `ARCHITECTURALS/28 Mossman Court - Cab - A3.pdf` (Blake, 11 sheets: grab rail detail,
+  kitchen plan + elevations, lounge, entry wall, WIR) and `_FINAL FINISHES & APPLIANCE SCHEDULE/
+  Noosa Reno Project Management - Purchased.pdf` (Ryan's consolidated appliance schedule).
+- Ryan: laundry finish will be **2pac, likely Quarter White Pointer** (drawn in PT Classic White Matt 16).
+- Laundry appliances: washer Samsung WF90F19ADS 19.5kg, dryer Samsung DV90F17CDS 17kg heat pump.
+  The schedule's only wine fridge is the Liebherr UWKES1752 (kitchen island) - no Vintec listed.
+
 ## Walk In Robe - drawn 2026-11-15, room `dfa682a3-020b-4704-8661-3dbbd6cdf224`
 
 Source: `ARCHITECTURALS/28 Mossman Court - WIR - A3 MARKED UP.pdf` (Blake Sheridan 7.07-7.09 Rev B)
