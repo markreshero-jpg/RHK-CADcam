@@ -337,3 +337,6 @@ Open / TBC:
   nib gables (y 1433 .. -2343); lounge nibs = hollow framed boxes - Walls 7 / 9 (90, behind the 33 gables) + Walls 8 / 10
   (90, behind the front panels); Wall 5 entry wall runs on to the corner (3400 = the whole 3400 panel run); far nib closes
   on Wall 6. 90 framing assumed (sketched freehand).
+- 2026-11-16 walls rev 2 (Mark's markup, `_tmp-6468-wp-walls4.mjs`): Wall 11 garage wall 4550 x 99 solid behind the 4550
+  entry panels ("make a 4550 solid wall here" - garage door opening not cut in the wall); Wall 12 garage / media wall
+  121 x 1369 north off the slider's left jamb. Garage door opens INTO the garage, hinged on the nib (slider) side (TC-01 note).
