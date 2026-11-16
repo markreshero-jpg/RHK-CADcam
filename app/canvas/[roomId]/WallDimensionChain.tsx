@@ -3,7 +3,7 @@ import { Wall, CabinetInstance } from '@/src/lib/types'
 import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, type RoomRef, type WallSpan } from '@/src/lib/geometry'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
-import { kickChain, type KickSpan } from '@/src/lib/kickDims'
+import { kickChain, kickShortSegs, type KickSpan } from '@/src/lib/kickDims'
 import type { BenchtopSpan } from '@/src/lib/benchtopDims'
 import { roundMm } from '@/src/lib/format'
 import { DimLabel, dimLabelFits, dimLabelSides, wallRowName } from './dimLabel'
@@ -80,7 +80,7 @@ function spanChain(spans: WallSpan[], len: number): Seg[] {
 }
 
 function DimLine({
-  wall, out, dist, segs, zoom, col, weight = 1, bg = '#030712', opacity = 1, name, nameClear = 0,
+  wall, out, dist, segs, zoom, col, weight = 1, bg = '#030712', opacity = 1, name, nameClear = 0, partial = false,
 }: {
   wall: Wall
   out: { x: number; y: number }
@@ -93,6 +93,7 @@ function DimLine({
   opacity?: number  // layer opacity multiplier
   name?: string     // row name (`dim_row_labels`), drawn just past the line's start
   nameClear?: number // model mm to clear at the start (return wall thickness)
+  partial?: boolean  // line under the segments only, not wall start to end (kick short points)
 }) {
   const z = zoom
   const wd = wallDir(wall)
@@ -107,8 +108,11 @@ function DimLine({
     y: wall.pos_y + t * wd.y + out.y * (thick + dist),
   })
 
-  const boundaries = Array.from(new Set([0, ...segs.flatMap(s => [s.from, s.to])]))
-  const p0 = pt(0), pL = pt(wall.length)
+  // The line runs past a wall end when a segment does (an angled kick leg past the corner).
+  const ends = segs.flatMap(s => [s.from, s.to])
+  const lo = partial ? Math.min(...ends) : Math.min(0, ...ends), hi = partial ? Math.max(...ends) : Math.max(wall.length, ...ends)
+  const boundaries = Array.from(new Set(partial ? ends : [0, ...ends]))
+  const p0 = pt(lo), pL = pt(hi)
   const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), fs)
 
   return (
@@ -137,7 +141,7 @@ function DimLine({
           start end, never the reading-left one: round a room each corner is exactly
           one wall's start, so names from neighbouring walls never share a corner. */}
       {name && (() => {
-        const p = pt(-(nameClear + fs * 0.6))
+        const p = pt(Math.min(-(nameClear + fs * 0.6), lo - fs * 0.6))
         const flipped = textAngle !== wall.angle
         return (
           <g transform={`rotate(${textAngle}, ${p.x}, ${p.y})`}>
@@ -266,6 +270,9 @@ export default function WallDimensionChain({
     // Kick row sits between the base row and the overall, which steps out past it.
     const showKicks = !!layerKick?.visible && kicks.length > 0
     const kickSegs = showKicks ? kickChain(kicks, wall.length) : []
+    // Angled kick past a wall end: its length at the back (short point) on a row just inside.
+    const kickShort = showKicks ? kickShortSegs(kicks, wall.length) : []
+    const nKs = kickShort.length ? 1 : 0
     const kickCol = layerKick?.color ?? col
     const kick0 = kicks[0], kickL = kicks[kicks.length - 1]
     // Bulkheads overlap the overheads below them, so they get their own row just
@@ -294,7 +301,7 @@ export default function WallDimensionChain({
     const oT = showTop ? (layerBenchtop?.offset ?? 0) : 0
     const rW = oW, rB = rW + oB, rT = rB + oT, rK = rT + oK, rD = rK + oD, rO = rD + oO
     // Row numbers: 1 wall cabs, 2 base, then benchtops / kicks / openings when shown, wall length last.
-    const nB = 2 + nBh, nT = 3 + nBh, nK = nT + nTop, nD = nK + (showKicks ? 1 : 0), nO = nD + (showOpen ? 1 : 0)
+    const nB = 2 + nBh, nT = 3 + nBh, nK = nT + nTop + nKs, nD = nK + (showKicks ? 1 : 0), nO = nD + (showOpen ? 1 : 0)
 
     return (
       <g key={key}>
@@ -310,6 +317,9 @@ export default function WallDimensionChain({
         )}
         {showTop && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nT + rT} segs={topSegs} zoom={z} col={layerBenchtop!.color ?? col} weight={layerBenchtop!.weight} opacity={layerBenchtop!.opacity} bg={labelBg} {...nm('BENCHTOP')} />
+        )}
+        {nKs > 0 && (
+          <DimLine wall={wall} out={chainDir} dist={depthOffset + step * (nK - 1) + rK} segs={kickShort} partial zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} {...nm('KICK SP')} />
         )}
         {showKicks && (
           <DimLine wall={wall} out={chainDir} dist={depthOffset + step * nK + rK} segs={kickSegs} zoom={z} col={kickCol} weight={layerKick!.weight} opacity={layerKick!.opacity} bg={labelBg} {...nm('KICK')} />

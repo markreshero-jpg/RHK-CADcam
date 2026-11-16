@@ -89,6 +89,22 @@ export function kickChain(spans: KickSpan[], wallLength: number): KickSeg[] {
   return segs
 }
 
+/** Short points (Mark 2026-11-17, RHK6586 KICK 2): a kick whose angled leg runs
+ *  past a wall end measures its overall length on the kick row (out past the wall
+ *  end); this is its length at the back, from the wall end (the short point) to its
+ *  other end. Empty when every kick stays within the wall. */
+export function kickShortSegs(spans: KickSpan[], wallLength: number): KickSeg[] {
+  const out: KickSeg[] = []
+  for (const s of kickChain(spans, wallLength)) {
+    if (s.from >= -0.5 && s.to <= wallLength + 0.5) continue
+    // Past both ends: the short point length is the wall length (WALL row already has it).
+    if (s.from < -0.5 && s.to > wallLength + 0.5) continue
+    const from = Math.max(0, s.from), to = Math.min(wallLength, s.to)
+    if (to - from > 0.5) out.push({ from, to, label: roundMm(to - from) })
+  }
+  return out
+}
+
 /** Elevation kick-height marks: one per kick, skipping a kick that carries on from
  *  the previous one at the same height — butting, or across a gap of up to
  *  SAME_RUN_GAP (an end panel standing to the floor between them). */

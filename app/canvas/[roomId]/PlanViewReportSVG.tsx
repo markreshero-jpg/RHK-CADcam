@@ -14,7 +14,7 @@ import type { Wall, CabinetInstance, RoomFixture, RoomAnnotation, BenchtopInstan
 import { btSegments, outlinePath, outlinePoints, effectiveProfileId, waterfallPlanLines, apronSetbackPlanLines } from '@/src/lib/benchtopGeometry'
 import BenchtopEdgeLabels from './BenchtopEdgeLabels'
 import { benchtopWallSpans, type BenchtopSpan } from '@/src/lib/benchtopDims'
-import { kickPlanSpans, kickChain, kickRuns, type KickSpan } from '@/src/lib/kickDims'
+import { kickPlanSpans, kickChain, kickRuns, kickShortSegs, type KickSpan } from '@/src/lib/kickDims'
 import { openingSpans, fixtureChainSpans, fixtureLayer, type FixtureChainSpan } from '@/src/lib/fixtureGeometry'
 import { OpeningSymbol, FixturesPlanPrint, fixturePrintBoxes } from './FixturesPlan'
 import AnnotationLayer from './AnnotationLayer'
@@ -215,7 +215,7 @@ export default function PlanViewReportSVG({
   const dimPts: { x: number; y: number }[] = []   // filled by dimLine / depthDim as the body builds
 
   // ── One dimension-chain line (main line + boundary ticks + segment labels) ─
-  function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string, name?: string) {
+  function dimLine(wall: Wall, out: { x: number; y: number }, rowDist: number, segs: Seg[], key: string, item: string, name?: string, partial = false) {
     const lineW = lw(item, dimSW), dash = lp(item).strokeDasharray
     const wd = wallDir(wall)
     const thick = wall.wall_type === 'island' ? 0 : wall.thickness
@@ -224,14 +224,18 @@ export default function PlanViewReportSVG({
       x: wall.pos_x + t * wd.x + out.x * (thick + rowDist),
       y: wall.pos_y + t * wd.y + out.y * (thick + rowDist),
     })
-    const boundaries = Array.from(new Set([0, ...segs.flatMap(s => [s.from, s.to])]))
-    const p0 = pt(0), pL = pt(wall.length)
+    // The line runs past a wall end when a segment does (an angled kick leg past the
+    // corner); `partial` = under the segments only (kick short points).
+    const ends = segs.flatMap(s => [s.from, s.to])
+    const lo = partial ? Math.min(...ends) : Math.min(0, ...ends), hi = partial ? Math.max(...ends) : Math.max(wall.length, ...ends)
+    const boundaries = Array.from(new Set(partial ? ends : [0, ...ends]))
+    const p0 = pt(lo), pL = pt(hi)
     const sides = dimLabelSides(segs.map(s => ({ label: s.label, span: s.to - s.from })), dimFS)
     // Fit: the row both sides of the line, past each end for a short end segment's
     // label, and back to the row name's far end.
     const nameReach = name && layers.show('dim_row_labels')
-      ? returnWallThickness(wall, walls, 'start') + dimFS * 0.6 + name.length * dimFS * 0.85 * 0.6 : 0
-    for (const t of [-Math.max(nameReach, dimFS * 2), wall.length + dimFS * 2]) {
+      ? Math.max(returnWallThickness(wall, walls, 'start'), -lo) + dimFS * 0.6 + name.length * dimFS * 0.85 * 0.6 : 0
+    for (const t of [Math.min(lo, 0) - Math.max(nameReach, dimFS * 2), hi + dimFS * 2]) {
       const p = pt(t)
       for (const s of [-1, 1]) dimPts.push({ x: p.x + out.x * labelReach * s, y: p.y + out.y * labelReach * s })
     }
@@ -260,7 +264,7 @@ export default function PlanViewReportSVG({
         })}
         {/* Row name (`dim_row_labels`) past the wall start — see WallDimensionChain. */}
         {name && layers.show('dim_row_labels') && (() => {
-          const p = pt(-(returnWallThickness(wall, walls, 'start') + dimFS * 0.6))
+          const p = pt(Math.min(-(returnWallThickness(wall, walls, 'start') + dimFS * 0.6), lo - dimFS * 0.6))
           const flipped = textAngle !== wall.angle
           return (
             <text x={p.x} y={p.y} transform={`rotate(${textAngle}, ${p.x}, ${p.y})`} textAnchor={flipped ? 'start' : 'end'}
@@ -749,7 +753,11 @@ export default function PlanViewReportSVG({
           // (in the base row's place when that row is hidden, as on the Kicks set).
           const baseShown = layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0)
           const kickSegs: Seg[] = kicks.length ? kickChain(kicks, w.length) : []
-          const kickDist = ROW_BASE + bh + (baseShown || ts ? ts + ROW_TOP_STEP : 0)
+          // Angled kick past a wall end: its length at the back (short point) on a row just
+          // inside the kick row, which steps out one (Mark 2026-11-17, RHK6586 KICK 2).
+          const kickShort: Seg[] = kicks.length ? kickShortSegs(kicks, w.length) : []
+          const kickShortDist = ROW_BASE + bh + (baseShown || ts ? ts + ROW_TOP_STEP : 0)
+          const kickDist = kickShortDist + (kickShort.length ? ROW_TOP_STEP : 0)
           const ks = kickSegs.length ? Math.max(0, kickDist + ROW_TOP_STEP - (ROW_OVERALL + bh + ts)) : 0
           const rowOverall = ROW_OVERALL + bh + ts + ks + (openSegs.length ? ROW_OPEN_STEP : 0)
           const baseSegs    = computeChain(baseCabs, w, baseFx)
@@ -764,6 +772,7 @@ export default function PlanViewReportSVG({
               {showBh && dimLine(w, chainDir, depthOffset + ROW_WALLCAB + ROW_BH_STEP, computeChain(bhCabs, w), `bh-${key}`, 'dim_wall_chain', 'BULKHEAD')}
               {layers.show('dim_base_chain') && (baseCabs.length > 0 || baseFx.length > 0) && dimLine(w, chainDir, depthOffset + ROW_BASE + bh, baseSegs, `bc-${key}`, 'dim_base_chain', 'BASE')}
               {topSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_BASE + bh + ROW_TOP_STEP, topSegs, `bt-${key}`, 'dim_benchtop', 'BENCHTOP')}
+              {kickShort.length > 0 && dimLine(w, chainDir, depthOffset + kickShortDist, kickShort, `ksp-${key}`, 'dim_kicks', 'KICK SP', true)}
               {kickSegs.length > 0 && dimLine(w, chainDir, depthOffset + kickDist, kickSegs, `kc-${key}`, 'dim_kicks', 'KICK')}
               {openSegs.length > 0 && dimLine(w, chainDir, depthOffset + ROW_OVERALL + bh + ts + ks, openSegs, `op-${key}`, 'dim_openings', 'OPENINGS')}
               {layers.show('dim_wall_overall') && dimLine(w, chainDir, depthOffset + rowOverall, overallSeg, `ov-${key}`, 'dim_wall_overall', 'WALL')}

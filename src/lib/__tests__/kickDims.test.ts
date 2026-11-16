@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { kickChain, kickHeightMarks, kickRuns, type KickSpan } from '../kickDims'
+import { kickChain, kickHeightMarks, kickRuns, kickShortSegs, type KickSpan } from '../kickDims'
 
 const span = (t0: number, t1: number, depth = 500, top = 100): KickSpan => ({ t0, t1, depth, top, side: 'face' })
 
@@ -60,5 +60,18 @@ describe('kickRuns', () => {
       { t0: 2000, t1: 2600, top: 100, depth: 560 },
     ])
     expect(kickRuns([span(0, 600), span(600, 1200, 500, 150)]).map(r => r.top)).toEqual([100, 150])
+  })
+})
+
+// RHK6586 KICK 2 (Mark 2026-11-17): the 45 leg runs 210 back past the wall start.
+describe('kickShortSegs', () => {
+  const sp = (t0: number, t1: number) => ({ t0, t1, depth: 588, top: 100, side: 'face' as const })
+  it('measures a kick past a wall end from the wall end (short point at the back)', () => {
+    expect(kickShortSegs([sp(-210, 853), sp(853, 1303)], 1935)).toEqual([{ from: 0, to: 853, label: 853 }])
+    expect(kickShortSegs([sp(1000, 2000)], 1935)).toEqual([{ from: 1000, to: 1935, label: 935 }])
+  })
+  it('nothing when the kicks stay on the wall', () => {
+    expect(kickShortSegs([sp(0, 853), sp(853, 1918.5)], 1935)).toEqual([])
+    expect(kickShortSegs([sp(-200, 572.6)], 427.1)).toEqual([])
   })
 })

@@ -478,6 +478,11 @@ strip it with `cabinet_labels` (no names on their plan).
   one height across a gap under 60 (an end panel to the floor) — canvas too.
 - Kicks layer set: elevation `dim_kicks` switched on (DB, 2026-11-05).
 - Canvas plan unchanged (no height labels on screen).
+- Angled kicks past a wall end (Mark 2026-11-17, RHK6586 KICK 2, 45 leg 210 back past the corner):
+  the KICK row's line now runs out to the kick's real end (it stopped at the wall end, so the
+  overall 1063 looked like it measured to the short point), and a **KICK SP** row just inside it
+  gives the length at the back from the wall end (short point), 853 (`kickShortSegs`). Not shown
+  when the kick runs past both ends (that's the wall length). Plan View print + canvas plan.
 - 0.1 mm everywhere (Mark 2026-11-05): kick row labels were whole mm (`Math.round` in
   `kickChain`); benchtop sizes / edge lengths (`BenchtopEdgeLabels`) too; a few elevation
   height-chain labels printed the raw value. All now `roundMm` like every other dim row.
