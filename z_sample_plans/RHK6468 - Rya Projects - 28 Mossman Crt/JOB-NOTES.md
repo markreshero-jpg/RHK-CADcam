@@ -333,3 +333,7 @@ Open / TBC:
   generated): veneer 17 / 33 on 2750 x 1205 + 2415 x 1205 sheets = 17 + 8 sheets, all veneer placed; 54 non-veneer parts
   unplaced (WIR 2541-2661 parts on 2415 WB / PT Woodmatt, kicks 1511-2202 x 120 vertical grain, Laundry 2571 Satin
   panels, Kitchen 2700 / 2755 under panels + bulkhead fascias) - waiting on Mark's sheet lengths.
+- 2026-11-16 walls rev (Mark's markup "no wall here", `_tmp-6468-wp-walls3.mjs`): Wall 4 lounge wall only between the
+  nib gables (y 1433 .. -2343); lounge nibs = hollow framed boxes - Walls 7 / 9 (90, behind the 33 gables) + Walls 8 / 10
+  (90, behind the front panels); Wall 5 entry wall runs on to the corner (3400 = the whole 3400 panel run); far nib closes
+  on Wall 6. 90 framing assumed (sketched freehand).
