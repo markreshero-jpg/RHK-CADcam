@@ -81,7 +81,10 @@ export default function AnnotTextEditor({ editing, frame, paper, zoom, toClient,
         transform: rot ? `rotate(${rot}deg)` : undefined, transformOrigin: '0 0',
         padding: 0, margin: 0, border: 'none',
         boxShadow: '0 0 0 1px #38bdf8, 0 0 0 3px rgba(56,189,248,0.25)',
-        background: s.bg === 'solid' ? s.bgColor : s.bg === 'mask' ? '#ffffff' : 'rgba(15,23,42,0.55)',
+        // No-background text: a see-through wash that contrasts with the text colour —
+        // dark text (white drawing) gets a light wash, light text a dark one.
+        background: s.bg === 'solid' ? s.bgColor : s.bg === 'mask' ? '#ffffff'
+          : isDarkColour(s.color) ? 'rgba(255,255,255,0.85)' : 'rgba(15,23,42,0.55)',
         color: s.color,
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: s.size * px,
@@ -95,4 +98,13 @@ export default function AnnotTextEditor({ editing, frame, paper, zoom, toClient,
       }}
     />
   )
+}
+
+/** True for a dark hex colour (#rgb / #rrggbb); anything else counts as light. */
+function isDarkColour(c: string | undefined): boolean {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec((c ?? '').trim())
+  if (!m) return false
+  const h = m[1].length === 3 ? m[1].split('').map(x => x + x).join('') : m[1]
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(h.slice(i, i + 2), 16))
+  return 0.299 * r + 0.587 * g + 0.114 * b < 140
 }
