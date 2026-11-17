@@ -380,3 +380,9 @@ and 3D on shop drawings) and page-per-room (Hardware Pick List / Takeoff). Apply
 report so it reads the new sets. Presets are shop-wide, stored in `shop_settings.print_presets` (jsonb, see
 migration_print_presets.sql, applied), and the migration seeds starter presets. Checked headless with
 z_plan_automation/verify-report-print.mjs.
+
+### Elevation dim rows above the ceiling (2026-11-18)
+Mark: the rows above the ceiling line overlapped. Rows are now 5 apart (openings -3, overheads -8,
+bulkheads / floating shelves -13, all x P) because a narrow span's label flips outward about 3.2 and
+printed over the next row. The title and top margin move up with the bulkhead row. Fixed spacing for now;
+dragging or editing row offsets per wall is a possible later step, not built.

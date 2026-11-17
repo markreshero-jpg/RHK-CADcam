@@ -245,8 +245,10 @@ export default function ElevationPrintSVG({
   const grainProps = { color: layers.color('grain', GRAIN_INK), strokeWidth: layers.w('grain', thinSW * 0.5), opacity: layers.op('grain') }
 
   // Chain / annotation positions
-  const overheadChainY = -7 * P
-  const bulkheadChainY = -9.5 * P
+  // Rows above the ceiling 5 apart: a narrow span's label flips outward ~3.2, so closer rows
+  // printed labels over the next line (Mark, 2026-11-18).
+  const overheadChainY = -8 * P
+  const bulkheadChainY = -13 * P
   const openingChainY  = -3 * P
   const floorChainY    = roomH + 6 * P
   // Kicks (dim_kicks): board lengths + height marks, from the resolved kicks.
@@ -261,7 +263,8 @@ export default function ElevationPrintSVG({
   const kickChainY     = floorShown ? roomH + 13 * P : floorChainY
   const overallY       = roomH + (elevKicks.length && floorShown ? 20 : 13) * P
   const heightChainX   = -13 * P
-  const titleY         = (wallCabs.some(c => !!c.bulkhead || !!c.float_shelf) ? -13.5 : -12) * P   // clear of the bulkhead row
+  const hasBhRow       = wallCabs.some(c => !!c.bulkhead || !!c.float_shelf)
+  const titleY         = (hasBhRow ? -17.5 : -13) * P   // clear of the bulkhead row
 
   // ── ViewBox padding ───────────────────────────────────────────────────────
   const benchDimStep = 8 * P   // bench / basin height lines, outside the height chain
@@ -271,7 +274,7 @@ export default function ElevationPrintSVG({
   const wallHeightX = heightChainX - (benchLanes ? benchLanes + 1 : layers.show('dim_elev_height') ? 1 : 0) * benchDimStep
   const padL = 20 * P + (benchLanes + (showWallH ? 1 : 0)) * benchDimStep
   const padR = 11 * P
-  const padT = 16 * P
+  const padT = (hasBhRow ? 20.5 : 16) * P
   const padB = (elevKicks.length && floorShown ? 25 : 18) * P
   // CAD notes on the side printed, in the canvas elevation frame.
   const notes = annotations.filter(a => ownedBy(a, elevationOwner(wall.id, side)) && layers.show(annotLayerItem(a.kind)))
