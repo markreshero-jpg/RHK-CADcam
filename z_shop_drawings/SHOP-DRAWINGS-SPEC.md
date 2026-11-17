@@ -382,7 +382,8 @@ migration_print_presets.sql, applied), and the migration seeds starter presets. 
 z_plan_automation/verify-report-print.mjs.
 
 ### Elevation dim rows above the ceiling (2026-11-18)
-Mark: the rows above the ceiling line overlapped. Rows are now 5 apart (openings -3, overheads -8,
-bulkheads / floating shelves -13, all x P) because a narrow span's label flips outward about 3.2 and
-printed over the next row. The title and top margin move up with the bulkhead row. Fixed spacing for now;
-dragging or editing row offsets per wall is a possible later step, not built.
+Mark: the rows above the ceiling were bunched; make them like the bottom rows. Top rows are now 7 apart, the
+same as floor / kick / overall below, on the canvas elevation (ElevationSVG) and the print (ElevationPrintSVG):
+overheads 7, bulkheads / floating shelves 14, doors / windows outermost (14, or 21 with a bulkhead row). The
+print's title and top margin follow the outermost row. The canvas also honours the Layer Manager Offset per
+dimension item; the print does not yet.

@@ -2475,7 +2475,7 @@ export default function ElevationSVG({
               return (
                 <g pointerEvents="none" opacity={chainOp} style={{ userSelect: 'none' }}>
                   {(overheadCabs.length > 0 || chainFxWall.length > 0) && row(computeElevChain(overheadCabs, wall, elevX, chainFxWall), chainY, 'oh')}
-                  {bulkheadCabs.length > 0 && row(computeElevChain(bulkheadCabs, wall, elevX), chainY - dm(2.5), 'bh')}
+                  {bulkheadCabs.length > 0 && row(computeElevChain(bulkheadCabs, wall, elevX), chainY - dm(7), 'bh')}
                 </g>
               )
             })()}
@@ -2565,7 +2565,10 @@ export default function ElevationSVG({
                 cur = Math.max(cur, o.t1)
               }
               if (cur < wall.length - 0.5) segs.push({ from: cur, to: wall.length })
-              const chainY = -dm(12) - layers.offset('dim_openings')   // outside the overhead + bulkhead rows
+              // Outside the overhead + bulkhead rows, 7 apart like the floor rows below (Mark, 2026-11-18).
+              const wallRows = layers.show('dim_elev_wall_chain')
+              const bhRow = wallRows && chainCabs.some(c => (c.assembly_class === 'wall' || c.assembly_class === 'wall_corner') && (!!c.bulkhead || !!c.float_shelf))
+              const chainY = -dm(bhRow ? 21 : 14) - (wallRows ? layers.offset('dim_elev_wall_chain') : 0) - layers.offset('dim_openings')
               const label = (x: number, y: number, v: number, vertical = false, side?: DimSide) => (
                 <g transform={vertical ? `rotate(-90,${x},${y})` : undefined}>
                   <DimLabel x={x} y={y} label={roundMm(v)} fs={fs} col={col} bg={bg}
