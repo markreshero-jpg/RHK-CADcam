@@ -345,7 +345,7 @@ export default function Stage5Edit() {
       <div className="flex-none w-56 border-r border-edge flex flex-col overflow-hidden">
         <div className="flex-none px-3 py-2 border-b border-edge flex items-center justify-between">
           <span className="text-[10px] font-semibold text-ink-subtle uppercase tracking-wider">Sheets ({nestResult.sheets.length})</span>
-          <AddSheetButton onAdd={addSheet} />
+          <AddSheetButton onAdd={addSheet} groupKey={openGroupKey || currentGroupKey} />
         </div>
         <div className="flex-1 overflow-y-auto py-1">
           {sheetGroups.map(g => {
@@ -1036,13 +1036,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 }
 
 
-function AddSheetButton({ onAdd }: { onAdd: (stock: { w: number; h: number; trimTop: number; trimBottom: number; trimLeft: number; trimRight: number; isOffcut: boolean; label: string | null }, materialId: string | null, thickness: number) => void }) {
-  // Adds a blank standard-ish sheet for the first selected material group.
+function AddSheetButton({ onAdd, groupKey }: { onAdd: (stock: { w: number; h: number; trimTop: number; trimBottom: number; trimLeft: number; trimRight: number; isOffcut: boolean; label: string | null }, materialId: string | null, thickness: number) => void; groupKey: string }) {
+  // Adds a blank standard sheet to the material group that is open in the
+  // list (else the current sheet's) - was always the first group, so a long
+  // sheet for a 2pac panel landed in Whiteboard (RHK6478 Laundry, 2026-11-17).
   const groups = useOptiStore(s => s.stock)
   function add() {
-    const firstKey = Object.keys(groups)[0]
-    const g = firstKey ? groups[firstKey] : null
-    const [matId, thick] = firstKey ? firstKey.split('__') : ['none', '18']
+    const key = groupKey && groupKey.includes('__') ? groupKey : Object.keys(groups)[0]
+    const g = key ? groups[key] : null
+    const [matId, thick] = key ? key.split('__') : ['none', '18']
     onAdd(g ? { ...g.standard, label: 'Blank' } : { w: 2400, h: 1200, trimTop: 0, trimBottom: 0, trimLeft: 0, trimRight: 0, isOffcut: false, label: 'Blank' },
       matId === 'none' ? null : matId, Number(thick))
   }
