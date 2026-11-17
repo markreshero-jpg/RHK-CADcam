@@ -63,3 +63,6 @@ Andy is off the job (Mark 14/11): RHK supplies + installs, Geraldine + Pete did 
 - Check WC-03 (WRHSO) in 3D + the WC-13 notch on the cut list.
 - Check Benchtop 2 / 3 get the sink + cooktop cut-outs (fixtures linked to BC-04 / BC-02 2026-11-16).
 - Check WCNP WC-04 (new library item) + its L under panel WC-16 in 3D / cut list.
+
+## Site questions (2026-11-18, `_tmp-6571-site-questions.mjs`)
+- SITE QUESTIONS box (14 items) on the plan, Questions for Client layer, under SITE NOTES (x 6330, y 4690) - for Mark's site visit 2026-11-18. Answers -> update the room in place.
