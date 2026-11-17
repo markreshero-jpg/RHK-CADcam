@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "build:viewer": "node scripts/build-share3d-viewer.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",

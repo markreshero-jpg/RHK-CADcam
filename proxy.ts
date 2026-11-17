@@ -79,6 +79,8 @@ export const config = {
   matcher: [
     // sw.js + the offline pages (z_offline) are static shells with no job data: no login
     // check, so the service worker can always keep them.
-    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline(?:/|$)|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb)$).*)',
+    // share/ + share3d/ (z_html_export H6) are public 3D share links + the viewer
+    // script: they only serve files uploaded under a random token, no job data.
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline(?:/|$)|share(?:/|$)|share3d/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb)$).*)',
   ],
 }

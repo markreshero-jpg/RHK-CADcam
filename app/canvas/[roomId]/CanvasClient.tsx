@@ -72,7 +72,7 @@ import { useCadLayerOps, CadLayerManagerModal } from './CadLayers'
 import TutorialHintsPlan from './TutorialHintsPlan'
 import AiChatPanel from './AiChatPanel'
 import { useTutorial } from '@/src/lib/tutorial/store'
-import { room3dScene, sceneToGlb, toBase64, buildViewerHtml, exportFileName, downloadText } from '@/src/lib/export3d/roomHtml'
+import { room3dScene, sceneToGlb, toBase64, buildViewerHtml, exportFileName, downloadText, downloadBlob, glbToUsdz, uploadShare } from '@/src/lib/export3d/roomHtml'
 import FixturePanel from './FixturePanel'
 import FixtureViewModal from './FixtureViewModal'
 import { withFixtureCutouts, benchtopAt, openingSpans, fixtureChainSpans, refitOpenings, slideClear, fixtureCorners, fixtureCenter, fixtureClearances, sitsOnCabinets, type StretchSide } from '@/src/lib/fixtureGeometry'
@@ -478,12 +478,17 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // z_html_export H1: download the room as a self-contained 3D HTML viewer.
   // The export is taken solid (the viewer has its own Wire button) with nothing
   // selected, then the view goes back to how it was.
+  // H5/H6: the button is a menu: HTML file (offline, any browser), Apple USDZ
+  // (Quick Look / AR on Mac + iPhone), or a share link (copied to the clipboard).
   const [exporting3D, setExporting3D] = useState(false)
-  async function exportRoom3DHtml() {
+  const [export3DMenu, setExport3DMenu] = useState(false)
+  async function exportRoom3D(kind: 'html' | 'usdz' | 'link') {
+    setExport3DMenu(false)
     if (exporting3D || !room3dScene.current) return
     setExporting3D(true)
     const wasWire = room3DStyle === 'wire'
     const prevSel = selected
+    let glb: Uint8Array
     try {
       if (wasWire) setRoom3DStyleState('solid')
       setSelected(null)
@@ -491,21 +496,51 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
       const scene = room3dScene.current
       if (!scene) throw new Error('3D view closed')
-      const glb = await sceneToGlb(scene)
-      const job = project?.name ?? 'Job'
-      const html = buildViewerHtml({
-        title: `${room.name} 3D`, heading: job, sub: room.name,
-        glbBase64: toBase64(glb), view: camera3DStateRef.current,
-      })
-      const file = exportFileName(job, room.name)
-      downloadText(file, html)
-      useTutorial.getState().emit('export_3d_html')
-      setToast(`Saved ${file} (${(html.length / 1048576).toFixed(1)} MB)`)
+      glb = await sceneToGlb(scene)
+    } catch (e) {
+      setToast(`3D export failed: ${e instanceof Error ? e.message : String(e)}`)
+      if (wasWire) setRoom3DStyleState('wire')
+      if (prevSel) setSelected(prevSel)
+      setExporting3D(false)
+      return
+    }
+    // The scene is captured: put the app's view back before the slower steps.
+    if (wasWire) setRoom3DStyleState('wire')
+    if (prevSel) setSelected(prevSel)
+    const job = project?.name ?? 'Job'
+    const mb = (n: number) => (n / 1048576).toFixed(1)
+    try {
+      if (kind === 'html') {
+        const html = await buildViewerHtml({
+          title: `${room.name} 3D`, heading: job, sub: room.name,
+          glbBase64: toBase64(glb), view: camera3DStateRef.current,
+        })
+        const file = exportFileName(job, room.name)
+        downloadText(file, html)
+        useTutorial.getState().emit('export_3d_html')
+        setToast(`Saved ${file} (${mb(html.length)} MB)`)
+      } else if (kind === 'usdz') {
+        const usdz = await glbToUsdz(glb)
+        const file = exportFileName(job, room.name, 'usdz')
+        downloadBlob(file, usdz as BlobPart, 'model/vnd.usdz+zip')
+        useTutorial.getState().emit('export_3d_usdz')
+        setToast(`Saved ${file} (${mb(usdz.byteLength)} MB): opens on a Mac / iPhone with a double-click`)
+      } else {
+        let usdz: Uint8Array | null = null
+        try { usdz = await glbToUsdz(glb) } catch (e) { console.warn('share link: USDZ skipped', e) }
+        const path = await uploadShare(supabase, room.id, glb, usdz, {
+          title: `${room.name} 3D`, heading: job, sub: room.name, view: camera3DStateRef.current,
+        })
+        const url = `${location.origin}${path}`
+        let copied = false
+        try { await navigator.clipboard.writeText(url); copied = true } catch { /* clipboard blocked */ }
+        useTutorial.getState().emit('export_3d_link')
+        setToast(copied ? `Share link copied: ${url}` : `Share link: ${url}`)
+        if (!copied) window.prompt('Share link (copy it):', url)
+      }
     } catch (e) {
       setToast(`3D export failed: ${e instanceof Error ? e.message : String(e)}`)
     } finally {
-      if (wasWire) setRoom3DStyleState('wire')
-      if (prevSel) setSelected(prevSel)
       setExporting3D(false)
     }
   }
@@ -3559,15 +3594,35 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             </button>
           )}
           {canvasView === '3d' && !phone && (
-            <button
-              data-tour="export-3d-html"
-              onClick={() => { void exportRoom3DHtml() }}
-              disabled={exporting3D}
-              title="Download this room as a 3D HTML file anyone can open in a browser (Wire, Doors, Reset view). It opens at the view you have now; Reset view shows the whole room."
-              className="ml-1 px-2 py-1 text-xs rounded transition-colors bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-500 disabled:opacity-50"
-            >
-              {exporting3D ? 'Exporting…' : '⬇ Export 3D'}
-            </button>
+            <div className="relative ml-1">
+              <button
+                data-tour="export-3d-html"
+                onClick={() => setExport3DMenu(m => !m)}
+                disabled={exporting3D}
+                title="Export this room's 3D model: HTML file, Apple USDZ, or a share link. It opens at the view you have now; Reset view shows the whole room."
+                className="px-2 py-1 text-xs rounded transition-colors bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-500 disabled:opacity-50"
+              >
+                {exporting3D ? 'Exporting…' : '⬇ Export 3D ▾'}
+              </button>
+              {export3DMenu && !exporting3D && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setExport3DMenu(false)} />
+                  <div className="absolute left-0 top-full mt-1 z-50 w-72 rounded border border-gray-500 bg-gray-800 shadow-lg text-xs text-gray-100 py-1">
+                    {([
+                      ['link', '🔗 Share link', 'Uploads the model and copies a web link. Opens in any browser, Mac, iPhone, Windows. Best for clients.', 'export-3d-link'],
+                      ['html', '⬇ HTML file', 'One file with Wire / Doors / Reset view. Works offline. Mac: open it in Safari, not the preview.', 'export-3d-file'],
+                      ['usdz', '⬇ Apple USDZ file', 'Double-click opens on a Mac or iPhone (Quick Look), AR on iPhone / iPad. No buttons.', 'export-3d-usdz'],
+                    ] as const).map(([k, label, hint, tour]) => (
+                      <button key={k} data-tour={tour} onClick={() => { void exportRoom3D(k) }}
+                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-700">
+                        <div className="font-medium">{label}</div>
+                        <div className="text-[10px] text-gray-400 leading-snug">{hint}</div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
           )}
         </div>
         <div className={`ml-auto flex items-center ${phone ? 'gap-1 min-w-0' : 'gap-2'}`}>

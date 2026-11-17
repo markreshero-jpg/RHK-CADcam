@@ -2165,7 +2165,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Click 3D. Set the layers and turn the view to how you want the client to see it first. The file opens at this view.',
       target: 'view-3d', canvas: true, done: c => c.view === '3d' },
     { id: 'export', title: 'Click Export 3D',
-      body: 'Click ⬇ Export 3D next to Reset view. The browser saves "<job> - <room> - 3D.html". Email it or put it on the drive. It needs internet to open.',
+      body: 'Click ⬇ Export 3D ▾ next to Reset view, then HTML file. The browser saves "<job> - <room> - 3D.html". Email it or put it on the drive. It works offline. On a Mac, a double-click in Mail only shows a preview: save it, then right-click › Open With › Safari. For clients, a Share link is easier (see "Send a client a 3D link").',
       target: 'export-3d-html', canvas: true, done: (c, s) => ev(c, 'export_3d_html') > ev(s, 'export_3d_html') },
     { id: 'open', title: 'What the file can do',
       body: 'Double-click the file. Drag to rotate, scroll or pinch to zoom, right-drag to pan. Wire shows every part see-through with its edges, Doors hides the doors and drawer fronts so you can see inside, and Reset view shows the whole room. It is a snapshot: change the room and export it again.',
@@ -2236,6 +2236,20 @@ export const LESSONS: TutorialLesson[] = [
     { id: 'check', title: 'Check it',
       body: 'Look at the elevation: the doors stop above a 42 strip. Double-click the cabinet and check the 3D tab: no bottom, the shelf, the notched top and the flue box. To keep a version tuned for a particular hood, right-click › Save to library.',
       canvas: true, done: c => c.cabEditorOpen },
+  ]},
+  // Appended 2026-11-18 (z_html_export H6: share link + Apple USDZ).
+  { id: 'export_3d_link', level: 'basics', topic: 'reports', title: 'Send a client a 3D link',
+    blurb: 'Copy a web link to the room in 3D. It opens on any Mac, iPhone or PC with no file to download. Apple users can also get a USDZ file.',
+    keywords: 'export 3d share link url send client builder mac iphone ipad apple usdz quick look ar augmented reality safari model', steps: [
+    { id: '3d', title: 'Open the 3D view',
+      body: 'Click 3D and turn the view to how you want the client to see it first. The link opens at this view.',
+      target: 'view-3d', canvas: true, done: c => c.view === '3d' },
+    { id: 'link', title: 'Copy a share link',
+      body: 'Click ⬇ Export 3D ▾ › Share link. The model is uploaded and the link is copied: paste it into the email or text. Anyone with the link can see this model (only this one, nothing else in the job), so send it to the client only. It is a snapshot: change the room and send a new link.',
+      target: 'export-3d-html', canvas: true, done: (c, s) => ev(c, 'export_3d_link') > ev(s, 'export_3d_link') },
+    { id: 'usdz', title: 'Apple USDZ file',
+      body: 'Export 3D ▾ › Apple USDZ file saves "<job> - <room> - 3D.usdz". A double-click opens it on a Mac or iPhone in Quick Look, and on an iPhone or iPad tap AR to stand the room in front of you life size. It has no Wire or Doors buttons. The share link page has an "Apple 3D / AR" button that does the same.',
+      target: 'export-3d-html', canvas: true, done: (c, s) => ev(c, 'export_3d_usdz') > ev(s, 'export_3d_usdz') },
   ]},
 ]
 
