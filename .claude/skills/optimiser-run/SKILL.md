@@ -57,6 +57,8 @@ App: `https://rhk-cadcam.vercel.app/projects/<projectId>/optimiser` (claude-in-c
    `Access-Control-Allow-Private-Network: true`, `POST /save?name=` writes the body) and replace
    `window.showDirectoryPicker` / `showSaveFilePicker` in the tab with fakes whose
    `createWritable().close()` POSTs the blob. Save to a scratch folder, check, then copy into CNCFiles.
+   Both are saved: `node z_plan_automation/cnc-receiver.mjs <scratch dir>` + paste
+   `z_plan_automation/cnc-picker-shim.js` into the tab (re-paste after a reload).
 5. Check before delivering: program headers `#1=` / `#2=` = the sheet size, cut sheets show the same
    file names, labels count = parts.
 
