@@ -1,8 +1,8 @@
 // ============================================================
 // Paint Shop Sheet (z_paint_shop). Pure rollup over the resolved cabinets.
 //
-// A painted part = one whose board is flagged materials.is_painted (or whose
-// board's parent is) — Satin Board today. Its colour:
+// A painted part = one on a Satin Board board or one of its colours (only
+// Satin Board goes to the paint shop). Its colour:
 //   fronts  → the Colour Ranges colour the front resolved to (face_zones
 //             .door_colour_id: zone > room class > job class > style default)
 //   others  → the cabinet's first painted front's colour (2pac over 2pac), else

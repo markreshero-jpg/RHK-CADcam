@@ -11,10 +11,9 @@
    paint colour: a colour box with the name big, plus brand, code and sheen.
    Under it, the parts: Part, Height × Width, Thick, Qty, m² (one face),
    Cabinets. Same part + size rows are merged with a qty.
-2. **What is painted**: parts whose board is ticked **Painted**
-   (`materials.is_painted`, Library → Materials → Board Stock). A colour row
-   counts when it or its board is ticked. Seeded: Satin Board 18 / 25 / 32 and
-   their colours.
+2. **What is painted**: **Satin Board only** (Mark 2026-11-18): parts on a
+   `Satin Board …` board or one of its colours, matched by name. No other board
+   goes on the sheet. (The `materials.is_painted` tick from P1 was dropped, P1b.)
 3. **Colour on each part**:
    - Fronts (doors, drawer fronts, false panels) carry their own colour. The
      resolver saves `face_zones.door_colour_id`, the Colour Ranges colour the
@@ -31,8 +30,8 @@
 
 ## Phases
 
-- [x] P1 — schema (`face_zones.door_colour_id`, `materials.is_painted`),
-  resolver threading, report + print, Painted tick, report search box.
+- [x] P1 — schema (`face_zones.door_colour_id`), resolver threading, report +
+  print, report search box. P1b: Satin Board only, Painted tick removed.
   Check pending.
 - [ ] P2 — per-part paint colour override on non-front parts (end panel / kick /
   panel picks their own colour).

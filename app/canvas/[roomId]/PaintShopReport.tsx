@@ -2,7 +2,7 @@
 
 // ============================================================
 // Reports → Paint Shop Sheet (z_paint_shop). Per room, per paint colour: every
-// painted part (Satin Board fronts, end panels, kicks, panels …) with its size,
+// Satin Board part (fronts, end panels, kicks, panels …) — no other board with its size,
 // qty and area, the colour name / code / sheen big at the top of each block.
 // Maths in src/lib/takeoff/paint.ts.
 // ============================================================
@@ -27,16 +27,16 @@ export function usePaintShop({ active, project, rooms, cabinets, resolved }: {
     let cancelled = false
     void (async () => {
       const [{ data: mats }, { data: cols }] = await Promise.all([
-        supabase.from('materials').select('id, parent_id, is_painted'),
+        supabase.from('materials').select('id, name, parent_id'),
         supabase.from('door_schedule_materials').select('id, colour_name, colour_code, brand, finish, schedule:schedule_id(name)'),
       ])
       if (cancelled) return
       const colours = new Map<string, PaintColour>()
       for (const c of (cols ?? []) as unknown as { id: string; colour_name: string; colour_code: string | null; brand: string | null; finish: string | null; schedule: { name: string } | null }[])
         colours.set(c.id, { id: c.id, name: c.colour_name, code: c.colour_code, brand: c.brand, finish: c.finish, range: c.schedule?.name ?? null })
-      // A colour row is painted when it or its board is ticked Painted.
-      const rows = (mats ?? []) as { id: string; parent_id: string | null; is_painted: boolean }[]
-      const boards = new Set(rows.filter(m => m.is_painted).map(m => m.id))
+      // Paint shop = Satin Board only (Mark 2026-11-18): the boards and their colours.
+      const rows = (mats ?? []) as { id: string; name: string; parent_id: string | null }[]
+      const boards = new Set(rows.filter(m => /^satin board/i.test(m.name ?? '')).map(m => m.id))
       setLib({ painted: new Set(rows.filter(m => boards.has(m.id) || (m.parent_id && boards.has(m.parent_id))).map(m => m.id)), colours })
     })()
     return () => { cancelled = true }
@@ -64,7 +64,7 @@ const colourSub = (g: PaintColourGroup) => g.colour
 
 export function PaintShopSheet({ data }: { data: PaintShopData | null }) {
   if (!data) return <div className="text-gray-500 text-center py-12 text-sm">Loading…</div>
-  if (!data.rooms.length) return <div className="text-gray-500 text-center py-12 text-sm">No painted parts in this scope. Painted = a board ticked “Painted” (Satin Board).</div>
+  if (!data.rooms.length) return <div className="text-gray-500 text-center py-12 text-sm">No Satin Board parts in this scope.</div>
   return (
     <div className="space-y-8">
       {data.rooms.map(r => (

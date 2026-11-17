@@ -65,7 +65,7 @@ const BUY_DEFAULTS = { supplier_id: null, supplier_code: null, maker_code: null,
 const TABS: TabConfig[] = [
   {
     id: 'board', label: 'Board Stock', table: 'materials', initKey: 'board',
-    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, is_painted: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, cnc_tool_id: null, feed_rate_pct: null, active: true },
+    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, cnc_tool_id: null, feed_rate_pct: null, active: true },
     fields: [
       { key: 'name',           label: 'Name',     type: 'text',    w: 230 },
       { key: 'brand',          label: 'Brand',    type: 'text',    w: 110, placeholder: 'Laminex' },
@@ -74,7 +74,6 @@ const TABS: TabConfig[] = [
       { key: 'sheet_dx',       label: 'L mm',     type: 'number',  w: 65 },
       { key: 'sheet_dy',       label: 'W mm',     type: 'number',  w: 65 },
       { key: 'has_grain',      label: 'Grain',    type: 'boolean', w: 48 },
-      { key: 'is_painted',     label: 'Painted',  type: 'boolean', w: 52 },   // z_paint_shop: on the Paint Shop Sheet
       { key: 'face_colour',    label: 'Face',     type: 'colour',  w: 90 },
       { key: 'back_colour',    label: 'Back',     type: 'colour',  w: 90 },
       { key: 'edge_colour',    label: 'Edge',     type: 'colour',  w: 90 },
