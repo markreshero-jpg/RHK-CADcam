@@ -58,7 +58,7 @@ const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'hardware_pick',      label: 'Hardware Pick List',  desc: 'Per room: hinges, runners, handles … qty + tick box' },
   { id: 'takeoff',            label: 'Takeoff',             desc: 'Per room: cabinets, sheets (nested), tape, hardware' },
   { id: 'glass_order',        label: 'Glass Order',         desc: 'Glass + mirror doors: sizes to order from the glazier' },
-  { id: 'paint_shop',         label: 'Paint Shop Sheet',    desc: 'Painted parts by colour: sizes, qty, m²' },
+  { id: 'paint_shop',         label: 'Paint Shop Sheet',    desc: 'Satin Board: job, room, paint colour, gloss, date' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'opening_schedule',   label: 'Door & Window Schedule', desc: 'Doors, windows, openings · size · sill · head' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
@@ -639,7 +639,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
       : selectedReport === 'hardware_pick' ? [hardwarePickPrintHtml(takeoff.data, pagePerRoom)]
       : selectedReport === 'takeoff' ? [takeoffPrintHtml(takeoff.data, pagePerRoom)]
       : selectedReport === 'glass_order' ? [glassOrderPrintHtml(glassOrder)]
-      : selectedReport === 'paint_shop' ? [paintShopPrintHtml(paintShop)]
+      : selectedReport === 'paint_shop' ? [paintShopPrintHtml(paintShop, project)]
       : selectedReport === 'appliance_schedule' ? [schedulePrintHtml(scheduleData)]
       : selectedReport === 'opening_schedule' ? [openingSchedulePrintHtml(openingData)] : reportData.flatMap(({ room: rm, materialGroups }) =>
       materialGroups.length === 0 ? [] : [`
@@ -1007,7 +1007,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
               ) : selectedReport === 'glass_order' ? (
                 <GlassOrderSheet data={glassOrder} />
               ) : selectedReport === 'paint_shop' ? (
-                <PaintShopSheet data={paintShop} />
+                <PaintShopSheet data={paintShop} project={project} />
               ) : selectedReport === 'takeoff' ? (
                 <TakeoffSheet data={takeoff.data} nesting={takeoff.nesting} />
               ) : selectedReport === 'edgeband_length' ? (

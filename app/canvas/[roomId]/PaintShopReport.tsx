@@ -1,10 +1,9 @@
 'use client'
 
 // ============================================================
-// Reports → Paint Shop Sheet (z_paint_shop). Per room, per paint colour: every
-// Satin Board part (fronts, end panels, kicks, panels …) — no other board with its size,
-// qty and area, the colour name / code / sheen big at the top of each block.
-// Maths in src/lib/takeoff/paint.ts.
+// Reports → Paint Shop Sheet (z_paint_shop). A simple form per room + paint
+// colour: Job, Room, Paint colour, Gloss level, Date. Satin Board parts only;
+// which colours a room uses comes from src/lib/takeoff/paint.ts.
 // ============================================================
 
 import { useEffect, useMemo, useState } from 'react'
@@ -54,46 +53,39 @@ export function usePaintShop({ active, project, rooms, cabinets, resolved }: {
   }, [lib, rooms, cabinets, resolved, project])
 }
 
-const TH = 'pb-1 pr-3 font-medium border-b border-gray-800'
-const rowCls = (i: number) => (i % 2 === 0 ? 'text-gray-300' : 'text-gray-400 bg-gray-800/30')
-const m2 = (n: number) => n.toFixed(2)
-const colourTitle = (g: PaintColourGroup) => g.colour?.name ?? 'COLOUR NOT CHOSEN'
-const colourSub = (g: PaintColourGroup) => g.colour
-  ? [g.colour.brand, g.colour.code, g.colour.finish && `Sheen: ${g.colour.finish}`].filter(Boolean).join(' · ')
-  : 'Pick the colour on the Doors tab (room / job) or on the front'
+// One simple form per room + paint colour (Mark 2026-11-18): Job, Room, Paint
+// colour, Gloss level, Date — nothing else.
+export interface PaintForm { job: string; room: string; colour: string; gloss: string; date: string; missing: boolean }
 
-export function PaintShopSheet({ data }: { data: PaintShopData | null }) {
+export function paintForms(data: PaintShopData | null, project: Project | null): PaintForm[] {
+  if (!data) return []
+  const job = [project?.job_number, project?.name].filter(Boolean).join(' – ') || '—'
+  const date = new Date().toLocaleDateString('en-AU')
+  return data.rooms.flatMap(r => r.groups.map(g => ({
+    job, room: r.room.name, date,
+    colour: g.colour ? [g.colour.brand && !g.colour.name.toLowerCase().startsWith(g.colour.brand.toLowerCase()) ? g.colour.brand : null, g.colour.name, g.colour.code].filter(Boolean).join(' ') : 'COLOUR NOT CHOSEN',
+    gloss: g.colour?.finish || 'TBC',
+    missing: !g.colour,
+  })))
+}
+
+const FIELDS: [keyof PaintForm, string][] = [['job', 'Job'], ['room', 'Room'], ['colour', 'Paint colour'], ['gloss', 'Gloss level'], ['date', 'Date']]
+
+export function PaintShopSheet({ data, project }: { data: PaintShopData | null; project: Project | null }) {
   if (!data) return <div className="text-gray-500 text-center py-12 text-sm">Loading…</div>
-  if (!data.rooms.length) return <div className="text-gray-500 text-center py-12 text-sm">No Satin Board parts in this scope.</div>
+  const forms = paintForms(data, project)
+  if (!forms.length) return <div className="text-gray-500 text-center py-12 text-sm">No Satin Board parts in this scope.</div>
   return (
-    <div className="space-y-8">
-      {data.rooms.map(r => (
-        <div key={r.room.id} className="space-y-5">
-          <div className="text-sm font-semibold text-white pb-1.5 border-b border-gray-700">{r.room.name}</div>
-          {r.groups.map(g => (
-            <div key={g.colourId ?? 'none'}>
-              <div className={`mb-2 px-3 py-2 rounded border ${g.colour ? 'border-gray-600 bg-gray-800/60' : 'border-red-700 bg-red-950/40'}`}>
-                <div className={`text-base font-bold ${g.colour ? 'text-white' : 'text-red-300'}`}>{colourTitle(g)}</div>
-                <div className="text-xs text-gray-400">{colourSub(g)} · {g.qty} part{g.qty === 1 ? '' : 's'} · {m2(g.m2)} m² (one face)</div>
-              </div>
-              <table className="w-full text-[11px] border-collapse">
-                <thead><tr className="text-gray-500 text-[10px]">
-                  {['Part', 'Height × Width', 'Thick', 'Qty', 'm²', 'Cabinets'].map((h, i) => <th key={h} className={`${TH} ${i >= 2 && i <= 4 ? 'text-right' : 'text-left'}`}>{h}</th>)}
-                </tr></thead>
-                <tbody>{g.lines.map((l, i) => (
-                  <tr key={`${l.part}|${l.height}|${l.width}|${l.thickness}`} className={rowCls(i)}>
-                    <td className="py-0.5 pr-3">{l.part}</td>
-                    <td className="py-0.5 pr-3 font-mono font-semibold text-white">{l.height} × {l.width}</td>
-                    <td className="py-0.5 pr-3 text-right font-mono">{l.thickness}</td>
-                    <td className="py-0.5 pr-3 text-right font-mono font-semibold text-white">{l.qty}</td>
-                    <td className="py-0.5 pr-3 text-right font-mono">{m2(l.m2)}</td>
-                    <td className="py-0.5 pr-3 font-mono text-gray-500">{l.cabinets.join(', ')}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-            </div>
-          ))}
-        </div>
+    <div className="space-y-6 max-w-xl">
+      {forms.map((f, i) => (
+        <table key={i} className="w-full text-sm border border-gray-600 border-collapse">
+          <tbody>{FIELDS.map(([k, label]) => (
+            <tr key={k} className="border-b border-gray-700">
+              <th className="w-36 text-left font-medium text-gray-400 px-3 py-2 bg-gray-800/60">{label}</th>
+              <td className={`px-3 py-2 font-semibold ${f.missing && (k === 'colour' || k === 'gloss') ? 'text-red-300' : 'text-white'}`}>{f[k] as string}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       ))}
     </div>
   )
@@ -101,15 +93,10 @@ export function PaintShopSheet({ data }: { data: PaintShopData | null }) {
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-/** Print HTML (inside ReportsModal's print shell). */
-export function paintShopPrintHtml(data: PaintShopData | null): string {
-  if (!data || !data.rooms.length) return ''
-  return data.rooms.map(r => `<h2>${esc(r.room.name)}</h2>` + r.groups.map(g => `
-    <div style="border:2px solid ${g.colour ? '#000' : '#c00'};padding:6px 10px;margin:10px 0 6px;break-inside:avoid">
-      <div style="font-size:18px;font-weight:700;${g.colour ? '' : 'color:#c00'}">${esc(colourTitle(g))}</div>
-      <div style="font-size:11px;color:#444">${esc(colourSub(g))} · ${g.qty} part${g.qty === 1 ? '' : 's'} · ${m2(g.m2)} m² (one face)</div>
-    </div>
-    <table><thead><tr><th>Part</th><th>Height × Width</th><th class="r">Thick</th><th class="r">Qty</th><th class="r">m²</th><th>Cabinets</th></tr></thead><tbody>
-    ${g.lines.map(l => `<tr><td>${esc(l.part)}</td><td><b>${l.height} × ${l.width}</b></td><td class="r">${l.thickness}</td><td class="r"><b>${l.qty}</b></td><td class="r">${m2(l.m2)}</td><td>${esc(l.cabinets.join(', '))}</td></tr>`).join('')}
-    </tbody></table>`).join('')).join('')
+/** Print HTML (inside ReportsModal's print shell): one form per page. */
+export function paintShopPrintHtml(data: PaintShopData | null, project: Project | null): string {
+  return paintForms(data, project).map((f, i) => `
+    <table style="width:100%;border-collapse:collapse;font-size:18px;margin-top:12px;${i ? 'page-break-before:always;' : ''}">
+      ${FIELDS.map(([k, label]) => `<tr><th style="width:30%;text-align:left;border:1.5px solid #000;padding:14px 12px;background:#eee">${label}</th><td style="border:1.5px solid #000;padding:14px 12px;font-weight:700;${f.missing && (k === 'colour' || k === 'gloss') ? 'color:#c00' : ''}">${esc(f[k] as string)}</td></tr>`).join('')}
+    </table>`).join('')
 }

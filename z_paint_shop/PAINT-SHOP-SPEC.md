@@ -7,10 +7,10 @@
 
 ## Locked decisions (2026-11-18)
 
-1. **Report**: Reports → Paint Shop Sheet (room or job scope). Per room, per
-   paint colour: a colour box with the name big, plus brand, code and sheen.
-   Under it, the parts: Part, Height × Width, Thick, Qty, m² (one face),
-   Cabinets. Same part + size rows are merged with a qty.
+1. **Report**: Reports → Paint Shop Sheet (room or job scope). **A simple
+   form** (Mark 2026-11-18), one per room + paint colour, one per printed page:
+   Job, Room, Paint colour, Gloss level (the colour's finish), Date. No parts
+   list. A colour with no gloss set shows TBC.
 2. **What is painted**: **Satin Board only** (Mark 2026-11-18): parts on a
    `Satin Board …` board or one of its colours, matched by name. No other board
    goes on the sheet. (The `materials.is_painted` tick from P1 was dropped, P1b.)
@@ -31,7 +31,8 @@
 ## Phases
 
 - [x] P1 — schema (`face_zones.door_colour_id`), resolver threading, report +
-  print, report search box. P1b: Satin Board only, Painted tick removed.
+  print, report search box. P1b: Satin Board only, Painted tick removed;
+  sheet cut down to the simple form.
   Check pending.
 - [ ] P2 — per-part paint colour override on non-front parts (end panel / kick /
   panel picks their own colour).
