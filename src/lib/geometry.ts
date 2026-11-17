@@ -622,6 +622,12 @@ export function cabWallGap(cab: CabinetInstance, wall: Wall, ref: RoomRef): numb
   return Math.abs(gap) < 0.05 ? 0 : gap
 }
 
+// Extra outset (real mm) of a wall's dimension rows, set per wall (Wall panel "Dim rows
+// out") — clears a neighbouring wall's rows at an angled corner (RHK6586 Kitchenette, 45°).
+export function wallDimOffset(wall: Wall): number {
+  return Math.max(0, Number(wall.dim_offset) || 0)
+}
+
 // Move a cabinet to along-wall distance `t`, keeping whatever it stands off the
 // wall by (back-side thickness offset, wall gap).
 export function slideAlongWall(cab: CabinetInstance, wall: Wall, t: number): Pt {

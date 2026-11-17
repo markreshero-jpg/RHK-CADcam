@@ -145,6 +145,15 @@ export default function WallPanel({ wall, roomHeight, onUpdate, onMoveBy, onDele
             onClear={() => onUpdate(wall.id, { soffit_height: null as unknown as number })}
             className={inp + ' text-right'} />
         </div>
+        <div data-tour="wall-dim-offset">
+          <label className={lbl}>Dim rows out (mm)</label>
+          <CalcInput value={(f('dim_offset') ?? null) as number | null} decimals={0}
+            placeholder="0 — standard"
+            onCommit={v => onUpdate(wall.id, { dim_offset: v > 0 ? v : null })}
+            onClear={() => onUpdate(wall.id, { dim_offset: null })}
+            className={inp + ' text-right'} />
+          <p className="text-[10px] text-gray-600 mt-0.5">Pushes this wall&apos;s dimension rows further off the wall, plan + print. Use where an angled corner runs the next wall&apos;s rows into these.</p>
+        </div>
         {wall.wall_type !== 'island' && (
           <div>
             <label className={lbl}>Raked top (along:height, …)</label>

@@ -172,6 +172,9 @@ export interface Wall {
    *  the length x thickness rectangle, e.g. a curved bulkhead. pos / angle / length stay as its
    *  reference line. Nib walls only; null = plain rectangle. */
   outline?: { x: number; y: number }[] | null
+  /** Extra outset (real mm) of this wall's dimension rows on the plan + print, e.g. to clear the
+   *  next wall's rows at an angled corner. Null / 0 = standard spacing. geometry.wallDimOffset. */
+  dim_offset?: number | null
   created_at: string
 }
 

@@ -1,6 +1,6 @@
 'use client'
 import { Wall, CabinetInstance } from '@/src/lib/types'
-import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, cabWallGap, type RoomRef, type WallSpan } from '@/src/lib/geometry'
+import { toRad, wallDir, wallInwardNormal, cabT, cabWallSide, cabWallGap, wallDimOffset, type RoomRef, type WallSpan } from '@/src/lib/geometry'
 import { returnWallThickness } from '@/src/lib/wallJoints'
 import type { ItemSetting as LayerConfig } from '@/src/lib/displayLayers/registry'
 import { kickChain, kickShortSegs, type KickSpan } from '@/src/lib/kickDims'
@@ -264,6 +264,8 @@ export default function WallDimensionChain({
     tops: BenchtopSpan[] = [],
   ) {
     const baseFx = fx.filter(s => s.row === 'floor'), wallFx = fx.filter(s => s.row === 'wall')
+    // Per-wall "Dim rows out" (angled corners where the next wall's rows cross these).
+    depthOffset += wallDimOffset(wall)
     const baseSegs = computeChain(baseCabs, wall, baseFx)
     // Benchtop row sits just outside the base row.
     const showTop = !!layerBenchtop?.visible && tops.length > 0

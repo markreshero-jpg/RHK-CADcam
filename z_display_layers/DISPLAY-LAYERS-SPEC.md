@@ -491,6 +491,16 @@ strip it with `cabinet_labels` (no names on their plan).
   `kickChain`); benchtop sizes / edge lengths (`BenchtopEdgeLabels`) too; a few elevation
   height-chain labels printed the raw value. All now `roundMm` like every other dim row.
 
+### Per-wall dim row outset ✅ built 2026-11-17 (pending Mark's check)
+- `walls.dim_offset` (real mm, `z_walls/migration_wall_dim_offset.sql`), Wall panel "Dim rows out".
+  Added to the side's row offset (`wallDimOffset`, geometry.ts) in `WallDimensionChain` (canvas) and
+  `PlanViewReportSVG` (print) — every width row of that wall moves out; wall-end depth dims don't.
+- Why: at an angled corner (RHK6586 Kitchenette, 45°) the next wall's rows run past its start (top
+  longer than the wall) straight across this wall's rows. Manual per wall, not automatic — Mark
+  sets it where it clashes. Kitchenette Wall 2 = 300.
+- Not a layer item: it is drawing data on the wall, like `soffit_height`; layer offsets (per row, every
+  wall) stay as they are.
+
 ### Later modules (must register their items)
 - Decorative items (plants, tables…) → `Decorative` group.
 - Appliances (bought-in) → `Appliances` group.

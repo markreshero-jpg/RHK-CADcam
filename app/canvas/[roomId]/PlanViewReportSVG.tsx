@@ -24,7 +24,7 @@ import { isSpecBlock } from '@/src/lib/annotations/blocks'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
 import {
   toRad, wallEnd, wallDir, wallInwardNormal, wallMitrePolygon, wallPieces, wallOutline, isDropWall, polygonCentroid,
-  cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabWallGap, cabT,
+  cabinetPolygon, cabinetCornerPts, centroid, cabWallPerp, cabWallSide, cabWallGap, cabT, wallDimOffset,
   cabinetToPlan, cabinetPlanFrame,
   planDrawOrder,
 } from '@/src/lib/geometry'
@@ -722,6 +722,8 @@ export default function PlanViewReportSVG({
           kicks: KickSpan[] = [],
         ) => {
           const baseFx = fx.filter(s => s.row === 'floor'), wallFx = fx.filter(s => s.row === 'wall')
+          // Per-wall "Dim rows out" (angled corners where the next wall's rows cross these).
+          depthOffset += wallDimOffset(w)
           // Doors / windows row (z_fixtures P5): wall start → jambs → wall end.
           const spans = withOpenings && layers.show('dim_openings') ? openingsByWall.get(w.id) ?? [] : []
           const openSegs: Seg[] = []
