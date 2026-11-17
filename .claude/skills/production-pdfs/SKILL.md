@@ -47,6 +47,14 @@ node z_plan_automation/export-shop-drawings.mjs <any roomId of the job> "$O" --o
 - The app names them `Shop_Drawings-<job>-<n>-rooms.pdf` / `Plan_View-<job>-<n>-rooms.pdf`; copy to the
   Production name.
 
+## Mark's handwriting never prints
+
+Mark's own CAD notes to Claude (site-measure strokes, "we need to…" notes) live on the job CAD layer
+**"Notes for Ai"**. Before exporting, make sure that layer doesn't print for the job
+(`job_cad_layers.print = false` for the job's "Notes for Ai" row; it stays visible on the canvas)
+(Mark, RHK6478 Laundry 2026-11-17). With the notes gone the plan can fit its spec block again, so the
+separate "Specifications" page may drop — that's expected.
+
 ## Check before copying
 
 Open with pymupdf (`python -I`): page count + first line per page (`<Room> Plan / Elevation Wall n / 3D`),
