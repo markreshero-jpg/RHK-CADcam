@@ -243,8 +243,7 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
   hinges in the gaps [53, 720, 1055, 1700, 2440].
 
 ### Open / TBC
-- [ ] North bays 934 / south bays 878: the 950s shrink by a different amount each side, so the bays (and the
-  shoe racks the plan says to align) are ~137 out across the aisle. Align them instead?
+- [x] North bays 934 / south bays 878 not aligned across the aisle - Mark 2026-11-17: leave as is.
 - [ ] Final board colour: PT Woodmatt Blonde Oak 18 (rev 4) - to be approved by client.
 - [x] Shoe shelves 15 deg + 50 rail (rev 3).
 - [ ] 32mm shelves / gables on the drawing: drawn as standard 16.5 (side-by-side gables = 33).
@@ -289,6 +288,9 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 - TC-17 frame 36 (was 33); mirror 1685 x 2471. The Mirror part was following the frame board -> pinned to Mirror 4mm
   (material_override_id).
 - Spec block, colour TBC note, mirror note + kick / top notes updated. Resolver: 0 errors (TC-17 WIDE_CABINET only).
+- Mark 2026-11-17: 36 mirror frame OK; Blonde Oak comes in 3100 sheets -> both Blonde Oak rows 3100 x 1211
+  (`overridden: [sheet_dx]` so they don't inherit the parent's 2415; width 1211 kept, TBC). North / south bay
+  alignment: leave as is. `_tmp-6468-wir-sheet.mjs`.
 
 ## Wall Panelling - drawn 2026-11-16, room `00e46b73-13de-4df3-9235-871505d4ee81`
 
