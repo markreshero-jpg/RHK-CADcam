@@ -259,6 +259,7 @@ export async function dbLoadResolvedParts(cabinetIds: string[], needsResolve?: S
         material_id: z.material_id,
         edge_band: { top: z.edge_band_top, bottom: z.edge_band_bottom, left: z.edge_band_left, right: z.edge_band_right, id: z.edge_band_id ?? undefined },
         door_style_id: z.door_style_id ?? null,
+        door_colour_id: z.door_colour_id ?? null,
         door_profile_id: z.door_profile_id ?? null,
         door_profile: z.door_profile ?? null,
         ...(z.facing ? { facing: z.facing } : {}),   // z_faced_doors

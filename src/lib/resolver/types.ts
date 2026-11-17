@@ -1290,6 +1290,9 @@ export interface ResolvedDoorStyleInput {
   // Linked board material id for the default colour, if the schedule colour
   // points at a materials row — used for face colour in rendering. Optional.
   colour_material_id?: string | null
+  // The Colour Ranges colour itself (door_schedule_materials id) — the paint
+  // colour on 2pac fronts, where every colour shares one board (z_paint_shop).
+  colour_id?: string | null
   // Edge tape for the default colour (edge_banding id), colour-matched. Falls
   // back to the carcass schedule's door_face edgeband when unset.
   edgeband_id?: string | null
@@ -1854,6 +1857,8 @@ export interface ResolvedFaceZone extends ResolvedPart {
   // DZ already carries the catalogue thickness. door_profile is the evaluated
   // routing geometry; null when the style is a flat door.
   door_style_id?:   string | null
+  // Colour Ranges colour this front resolved to (z_paint_shop) — paint colour.
+  door_colour_id?:  string | null
   door_profile_id?: string | null
   door_profile?:    ResolvedDoorProfile | null
   // Faced door (z_faced_doors): bought-in layer on the board's face, same W x H,

@@ -303,6 +303,7 @@ export function resolveFace(
 
       // Door style results (undefined/null on non-door or unstyled zones)
       door_style_id:   door?.style_id ?? null,
+      door_colour_id:  door?.colour_id ?? null,
       door_profile_id: door?.profile_id ?? null,
       door_profile:    doorProfile,
       ...(door?.facing ? { facing: door.facing } : {}),

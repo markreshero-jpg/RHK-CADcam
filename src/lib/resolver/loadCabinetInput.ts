@@ -144,6 +144,7 @@ async function resolveDoorStyles(
       profile_type:       (row.profile?.profile_type as ResolvedDoorStyleInput['profile_type']) ?? null,
       ops,
       colour_material_id: effColourId ? (colourMatById.get(effColourId) ?? null) : null,
+      colour_id:          effColourId ?? null,
       edgeband_id:        effColourId ? (colourEbById.get(effColourId) ?? null) : null,
       edge_band_sides:    edgeSides,
       // Bought-in facing stuck on the board's face (z_faced_doors), e.g. 4mm mirror.
@@ -157,7 +158,7 @@ async function resolveDoorStyles(
     if (!resolved) continue
     const colourId = zoneColour.get(zoneKey)
     out[zoneKey] = colourId
-      ? { ...resolved, colour_material_id: colourMatById.get(colourId) ?? null, edgeband_id: colourEbById.get(colourId) ?? null }
+      ? { ...resolved, colour_material_id: colourMatById.get(colourId) ?? null, colour_id: colourId, edgeband_id: colourEbById.get(colourId) ?? null }
       : resolved
   }
 
@@ -924,6 +925,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
   if (frontGridRank > doorColourRank) {
     for (const d of Object.values(resolvedDoors)) {
       d.colour_material_id = doorFace.id
+      d.colour_id = null   // a material-grid board, not a Colour Ranges colour
       d.edgeband_id = ebMap.get('door_face') ?? d.edgeband_id
     }
   } else {

@@ -39,6 +39,7 @@ import { EdgebandSheet, edgebandPrintHtml } from './EdgebandReport'
 import { useTakeoff, HardwarePickSheet, TakeoffSheet } from './TakeoffReport'
 import { hardwarePickPrintHtml, takeoffPrintHtml } from './TakeoffPrint'
 import { useGlassOrder, GlassOrderSheet, glassOrderPrintHtml } from './GlassOrderReport'
+import { usePaintShop, PaintShopSheet, paintShopPrintHtml } from './PaintShopReport'
 import { buildCutStickers } from '@/src/lib/takeoff/cutStickers'
 import CutStickersModal from './CutStickersModal'
 import { buildEdgebandReport, type EdgebandProduct, type EdgebandBoard } from '@/src/lib/optimiser/edgebandLength'
@@ -46,7 +47,7 @@ import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { OptiPart } from '@/src/lib/optimiser/types'
 
 export type ReportScope = 'job' | 'room'
-export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length' | 'benchtop_quote' | 'hardware_pick' | 'takeoff' | 'glass_order'
+export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length' | 'benchtop_quote' | 'hardware_pick' | 'takeoff' | 'glass_order' | 'paint_shop'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'shop_drawings',      label: 'Shop Drawings',       desc: 'One PDF per room: plan + elevations, one scale' },
@@ -57,6 +58,7 @@ const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'hardware_pick',      label: 'Hardware Pick List',  desc: 'Per room: hinges, runners, handles … qty + tick box' },
   { id: 'takeoff',            label: 'Takeoff',             desc: 'Per room: cabinets, sheets (nested), tape, hardware' },
   { id: 'glass_order',        label: 'Glass Order',         desc: 'Glass + mirror doors: sizes to order from the glazier' },
+  { id: 'paint_shop',         label: 'Paint Shop Sheet',    desc: 'Painted parts by colour: sizes, qty, m²' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'opening_schedule',   label: 'Door & Window Schedule', desc: 'Doors, windows, openings · size · sill · head' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
@@ -572,6 +574,13 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
     [scope, selectedReport, jobRooms, roomsOff, rooms])
   const takeoff = useTakeoff({ active: selectedReport === 'hardware_pick' || selectedReport === 'takeoff', project, rooms: pickRooms, cabinets: allCabinets, resolved: allResolved })
   const glassOrder = useGlassOrder({ active: selectedReport === 'glass_order', rooms, cabinets: allCabinets, resolved: allResolved })
+  const paintShop = usePaintShop({ active: selectedReport === 'paint_shop', project, rooms, cabinets: allCabinets, resolved: allResolved })
+  // Report picker search (label + description).
+  const [reportQuery, setReportQuery] = useState('')
+  const shownReports = useMemo(() => {
+    const q = reportQuery.trim().toLowerCase()
+    return q ? REPORTS.filter(r => `${r.label} ${r.desc}`.toLowerCase().includes(q)) : REPORTS
+  }, [reportQuery])
 
   const supplyTotalsAll = useMemo(() => supplyTotals(supplyData.flatMap(d => d.lines)), [supplyData])
 
@@ -630,6 +639,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
       : selectedReport === 'hardware_pick' ? [hardwarePickPrintHtml(takeoff.data, pagePerRoom)]
       : selectedReport === 'takeoff' ? [takeoffPrintHtml(takeoff.data, pagePerRoom)]
       : selectedReport === 'glass_order' ? [glassOrderPrintHtml(glassOrder)]
+      : selectedReport === 'paint_shop' ? [paintShopPrintHtml(paintShop)]
       : selectedReport === 'appliance_schedule' ? [schedulePrintHtml(scheduleData)]
       : selectedReport === 'opening_schedule' ? [openingSchedulePrintHtml(openingData)] : reportData.flatMap(({ room: rm, materialGroups }) =>
       materialGroups.length === 0 ? [] : [`
@@ -678,7 +688,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
         <h1>${reportTitle}</h1>
         <p>${scopeLabel} &nbsp;·&nbsp; Generated ${new Date().toLocaleDateString()}</p>
       </div>
-      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : selectedReport === 'edgeband_length' ? 'No edgebanded parts.' : selectedReport === 'hardware_pick' ? 'No hardware.' : selectedReport === 'takeoff' ? 'Nothing to take off yet.' : selectedReport === 'glass_order' ? 'No glass doors.' : selectedReport === 'appliance_schedule' ? 'No appliances placed.' : selectedReport === 'opening_schedule' ? 'No doors or windows placed.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
+      ${rows.join('') || `<p style="color:#888">${selectedReport === 'benchtop_supply' ? 'No benchtop supply items.' : selectedReport === 'edgeband_length' ? 'No edgebanded parts.' : selectedReport === 'hardware_pick' ? 'No hardware.' : selectedReport === 'takeoff' ? 'Nothing to take off yet.' : selectedReport === 'glass_order' ? 'No glass doors.' : selectedReport === 'paint_shop' ? 'No painted parts.' : selectedReport === 'appliance_schedule' ? 'No appliances placed.' : selectedReport === 'opening_schedule' ? 'No doors or windows placed.' : 'No resolved parts found. Open and resolve cabinets first.'}</p>`}
     </body></html>`)
     win.document.close()
     win.focus()
@@ -712,8 +722,12 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
 
           {/* Picker sidebar */}
           <div className="w-44 flex-none border-r border-gray-800 p-2 space-y-1 overflow-y-auto">
+            <input value={reportQuery} onChange={e => setReportQuery(e.target.value)} placeholder="Search reports…"
+              onKeyDown={e => { if (e.key === 'Enter' && shownReports[0]) setSelectedReport(shownReports[0].id); if (e.key === 'Escape') { e.stopPropagation(); setReportQuery('') } }}
+              className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500" />
             <div className="text-[10px] text-gray-600 uppercase tracking-wider px-2 py-1">Available</div>
-            {REPORTS.map(rep => (
+            {shownReports.length === 0 && <div className="px-2 py-1 text-[11px] text-gray-500">No match</div>}
+            {shownReports.map(rep => (
               <button key={rep.id} data-tour={`report-${rep.id}`} onClick={() => setSelectedReport(rep.id)}
                 className={`w-full text-left px-2 py-2 rounded text-xs transition-colors ${
                   selectedReport === rep.id
@@ -992,6 +1006,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                 <HardwarePickSheet data={takeoff.data} />
               ) : selectedReport === 'glass_order' ? (
                 <GlassOrderSheet data={glassOrder} />
+              ) : selectedReport === 'paint_shop' ? (
+                <PaintShopSheet data={paintShop} />
               ) : selectedReport === 'takeoff' ? (
                 <TakeoffSheet data={takeoff.data} nesting={takeoff.nesting} />
               ) : selectedReport === 'edgeband_length' ? (

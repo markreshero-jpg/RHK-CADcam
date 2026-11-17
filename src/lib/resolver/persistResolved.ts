@@ -167,6 +167,7 @@ export function buildPersistPayload(resolved: ResolvedCabinet) {
       output_to_cnc:     true,
       // Resolved door style output (for rendering / reports)
       door_style_id:     z.door_style_id ?? null,
+      door_colour_id:    z.door_colour_id ?? null,   // z_paint_shop
       door_profile_id:   z.door_profile_id ?? null,
       door_profile:      z.door_profile ?? null,
       facing:            z.facing ?? null,   // z_faced_doors
