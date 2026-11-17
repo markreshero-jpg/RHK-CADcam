@@ -1,0 +1,35 @@
+{
+  "_source": "_JOBS/RHK6300 - 6399/RHK6351 - Rya Projects - 1 Panorama Dve Doonan/SITE CHECK MEASURES/Bench Seat Site measue 2026-11-17.pdf + Mark 2026-11-18",
+  "_notes": [
+    "Alcove 2295 wall to wall, side walls 687 (left) / 690 (right), kick 120 (room TOEH 120).",
+    "Closed box, panel front: 450 H incl kick, 680 deep overall = 661.5 carcass + 16.5 front + 2.",
+    "16mm PT Woodmatt Tasmanian Oak (new board + Flat Grain - Polytec colour). Whole box in the board (exposed_interior), centre divider to carry the seat.",
+    "Box runs tight wall to wall - scribe / fillers TBC."
+  ],
+  "projectId": "617e2130-d7e4-4e3a-95ef-c7e738eb3b8e",
+  "roomId": "e1ef206e-138d-45cc-953d-a1a0c21f2a02",
+  "roomName": "Bench Seat",
+  "roomHeight": 2400,
+  "roomRules": { "TOEH": 120 },
+  "walls": [
+    { "x": 0, "y": 687, "length": 687, "angle": 270 },
+    { "x": 0, "y": 0, "length": 2295, "angle": 0 },
+    { "x": 2295, "y": 0, "length": 690, "angle": 90 }
+  ],
+  "cabinets": [
+    {
+      "def": "B1D", "wall": 2, "offset": 0, "dx": 2295, "dy": 450, "dz": 661.5,
+      "note": "BENCH SEAT - closed box, fixed panel front. Scribe / fillers to walls TBC",
+      "set": {
+        "top_type": "full_top", "exposed_interior": true,
+        "face_grid": {
+          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "rows": [ { "row_index": 0, "height_locked": false } ],
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "false_panel" } ] },
+        "internal_grid": { "tree": { "type": "vsplit", "children": [
+          { "divider": "single", "section": { "type": "open", "fittings": [] } },
+          { "section": { "type": "open", "fittings": [] } } ] } }
+      }
+    }
+  ]
+}
