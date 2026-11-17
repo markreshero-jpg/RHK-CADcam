@@ -292,6 +292,19 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
   (`overridden: [sheet_dx]` so they don't inherit the parent's 2415; width 1211 kept, TBC). North / south bay
   alignment: leave as is. `_tmp-6468-wir-sheet.mjs`.
 
+### Optimiser R1 - Kitchen, Laundry, WIR, Wall Panelling (Mark 2026-11-17)
+- Whiteboard left out (not optimised for now). Before nesting: WIR drawer banks BC-02 / 03 / 08 grain matched
+  (GM1-3), +10 scribe (h_adjust) on all 13 bulkheads (Kitchen / Laundry / WIR) - `_tmp-6468-prenest-fix2.mjs`.
+- WIR Blonde Oak kicks, grain up: standalone kick faces now split into equal pieces <= 1200 (resolver change,
+  same rule as joined runs); TC-16 mirror face rail = 2 x 878.5, joint + wall ends untaped, set back 2 so the 18
+  face is flush with the 32 frame (`_tmp-6468-wir-railsplit.mjs`).
+- Stock: 2415 sheets, long sheets only where a part needs them - Blonde Oak 18 11 x 2415 + 12 x 3100, Blonde Oak 36
+  1 x 3100, Veneer 17 14 x 2415 + 3 x 2750 (wall panels A1-A3), Veneer 33 6 x 2415 + 1 x 2750 (cover strips),
+  Veneer 9 4 x 2415, Satin 18 4 x 2415 + 2 x 3100 x 1200 (kitchen fascias / under panels, laundry panels).
+  Veneer 1205 wide, 2415 x 1211 for the rest. 58 sheets, 323 parts, nothing unplaced, 0 G-code errors.
+- Saved run RHK6468-R1; files in `CNCFiles/RHK6468 - Rya Projects - 28 Mossman Crt/Kitchen Laundry WIR Wall Panelling R1/`.
+- Not changed (pre-nest CHECK, confirm): fillers WIR TC-05 / TC-08, Laundry WC-08 and the wall panels taped all 4 edges.
+
 ## Wall Panelling - drawn 2026-11-16, room `00e46b73-13de-4df3-9235-871505d4ee81`
 
 Sources: Mark's site measure (CAD sketch in the room, plan view, rotated: entry wall drawn top to bottom) +

@@ -106,20 +106,25 @@ export function resolveToekickParts(
   const ret = kickReturns(r, TF)
   const grain = r.TOEGRAIN ?? 'vertical'
 
-  // Kick Front Face — full height TK, inset width W, face material
-  parts.push({
+  // Kick Front Face — full height TK, inset width W, face material.
+  // A grained face with vertical grain is no longer than the sheet width
+  // (kickFaceMaxLength, 1200 on a 1211 sheet): a longer one is cut in equal
+  // pieces, like a joined run (Mark 2026-11-17, RHK6468 WIR Blonde Oak kicks).
+  const faceMax = kickFaceMaxLength(cab.toekick_face_material, grain)
+  const nFace = faceMax && W > faceMax + 0.5 ? Math.ceil(W / faceMax) : 1
+  for (let i = 0; i < nFace; i++) parts.push({
     part_key: 'kick_front_face',
     sort_order: 0,
     DX: TK,
-    DY: W,
+    DY: W / nFace,
     DZ: TF,
-    X: x0, Y: 0, Z: kickFrontZ,
+    X: x0 + i * (W / nFace), Y: 0, Z: kickFrontZ,
     AX: 0, AY: 0, AZ: 0,
     material_id: fid,
     edge_band: edgeSidesToBanding(edging.kick_front_face, cab.toekick_face_edgeband_id),
-    is_detached: false,
+    is_detached: nFace > 1,
     grain_direction: grain,
-    ...ret.faceBevels(),
+    ...(nFace > 1 ? ret.faceBevels(i === 0, i === nFace - 1) : ret.faceBevels()),
   })
 
   // Kick Sub Front — sits behind front face, lifted TOEFC off the floor and

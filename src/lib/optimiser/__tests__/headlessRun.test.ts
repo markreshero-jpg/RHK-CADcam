@@ -33,7 +33,11 @@ vi.mock('@/src/lib/supabase', async () => {
   return { supabase }
 })
 
-interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean; nestOnly?: boolean; pairShapes?: boolean }
+interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean; nestOnly?: boolean; pairShapes?: boolean
+  // Stage 3 stock per material NAME: standard sheet size / qty + extra full sheets of another size (RHK6468 2026-11-17:
+  // 2415 sheets with a few 2750 / 3100 for the long parts). Extra sizes go in the offcut pool (opened first, only for a
+  // part that fits, qty = how many) but stay isOffcut false so their programs are named as full sheets.
+  stock?: Record<string, { w?: number; h?: number; qty?: number | null; extra?: { w: number; h: number; qty: number }[] }> }
 const CFG: RunCfg | null = process.env.OPTI_RUN ? JSON.parse(process.env.OPTI_RUN) : null
 
 describe.skipIf(!CFG)('headless optimiser run', () => {
@@ -135,7 +139,14 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     for (const p of nestableParts) {
       const grainLock = !!(p.material_id && matById.get(p.material_id)?.has_grain)
       const gk = materialGroupKey(p.material_id, p.thickness)
-      if (!stockForRun[gk]) stockForRun[gk] = { standard: seedStock(p.material_id), offcuts: [] }
+      if (!stockForRun[gk]) {
+        const base = seedStock(p.material_id)
+        const o = cfg.stock?.[matName(p.material_id) ?? '']
+        stockForRun[gk] = !o ? { standard: base, offcuts: [] } : {
+          standard: { ...base, ...(o.w ? { w: o.w } : {}), ...(o.h ? { h: o.h } : {}), ...(o.qty !== undefined ? { qty: o.qty } : {}) },
+          offcuts: (o.extra ?? []).map(e => ({ ...base, w: e.w, h: e.h, qty: e.qty, isOffcut: false, label: `Full sheet ${e.w} x ${e.h}` })),
+        }
+      }
       const dims = cutBlank(p, deductEb)
       const inst: NestPartInput = { uid: `${p.uid}#0`, baseUid: p.uid, label: p.label, w: dims.w, h: dims.h, thickness: p.thickness, materialId: p.material_id, grainLock, grainAcross: p.grain_across, priority: p.nest_priority }
       parts.push(inst); index[inst.uid] = inst

@@ -68,3 +68,12 @@ A tab reload loses the Stage 2–5 workspace (no persistence) — reopen a saved
 — filters match room / cabinet label / material NAME exactly. Point `out` at a scratch folder, then copy
 into `C:\Users\mark\SynologyDrive\CNCFiles\…` as above. `nestOnly: true` writes the nest input only (a
 quick look at the parts / sizes without making programs).
+
+**Two sheet sizes in one board** (RHK6468 R1, 2026-11-17: 2415 sheets plus a few 2750 / 3100 for the long parts):
+`"stock": {"<material NAME>": {"w": 3100, "h": 1211, "extra": [{"w": 2415, "h": 1211, "qty": 99}]}}`.
+Put the LONG size as the standard and the 2415 as `extra` with a big qty: extra sizes go in the offcut pool,
+which the nest opens first for any part that fits, so everything that fits a 2415 goes on 2415s and only the
+long parts open long sheets (the other way round, big grain-match blocks use up the long sheets first and the
+long parts come back unplaced). Extra sheets stay `isOffcut: false`, so their programs are named as full sheets;
+check the `#1=` / `#2=` headers to count each size. Material names have an en dash (`PT Woodmatt 18mm – Blonde
+Oak Woodmatt`) - write the JSON in a heredoc, don't sed it.
