@@ -25,3 +25,17 @@ describe('wall unit own height (WALLZ)', () => {
     expect(wallZOf(wc(1000, { WALLZ: '950' }))).toBeNull()
   })
 })
+
+// Base / tall units clash at their real elevation (RHK6563 Laundry BC-10, 1676
+// tall at 117, standing on plinth pieces BC-08 0–100.5 and BC-09 100.5–117).
+describe('base units at their elevation', () => {
+  const base = (dy: number, pos_z: number) => ({ assembly_class: 'base', dy, pos_z, rule_overrides: {} }) as unknown as CabinetInstance
+  it('a cabinet on the plinth does not clash with the plinth', () => {
+    expect(cabsBlock(base(1676, 117), base(100.5, 0), null, room)).toBe(false)
+    expect(cabsBlock(base(1676, 117), base(16.5, 100.5), null, room)).toBe(false)
+  })
+  it('two floor cabinets still clash', () => {
+    expect(cabsBlock(base(763, 117), base(763, 117), null, room)).toBe(true)
+    expect(cabsBlock(base(763, 0), base(100.5, 0), null, room)).toBe(true)
+  })
+})

@@ -102,8 +102,11 @@ export function cabsBlock(
     const a = mover.pos_z ?? 0, b = obstacle.pos_z ?? 0
     return a < b + obstacle.dy - eps && b < a + mover.dy - eps
   }
-  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead, null, wallZOf(mover))
-  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, obstacle.bulkhead, null, wallZOf(obstacle))
+  // Base / tall units at their real elevation (pos_z): a cabinet standing on a
+  // plinth or kick drawn as its own pieces sits above them, not in them
+  // (RHK6563 Laundry BC-10 on BC-08/09 — a typed move jumped clear of the plinth).
+  const [aB, aT] = cabVExtent(mover.assembly_class, mover.dy, wall, room, mover.bulkhead, mover.pos_z, wallZOf(mover))
+  const [bB, bT] = cabVExtent(obstacle.assembly_class, obstacle.dy, wall, room, obstacle.bulkhead, obstacle.pos_z, wallZOf(obstacle))
   return aB < bT - eps && bB < aT - eps
 }
 
