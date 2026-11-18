@@ -9,6 +9,15 @@ App project `cf31069b-1a56-49ee-91df-dade35f68fde`.
 
 ## Job set-up (Mark 2026-11-11)
 
+> **2026-11-18 (Mark): ALL VENEER -> Spotted Gum, Qld Variety, FSC sourced, every room.** Native colours:
+> `Veneer 17mm – Spotted Gum Qld Variety FSC` `a3e7e4b8` + `Veneer 33mm – Spotted Gum Qld Variety FSC`
+> `a83db345` (colour rows under the same boards), tapes `0.5mm Matching 22 / 40 – Spotted Gum Qld FSC`
+> (`d3f12706` / `fe61a9cb`), door colour "Spotted Gum Qld Variety FSC" in the Veneer 17mm range = job fronts
+> (base / wall / tall). Job exposed grid, cabinet overrides (J02 TC-01, J04 WC-03/04, J06/07 WC-01/02), the
+> fillers + WC-02 top custom parts and the spec block / CAD text all switched; every cabinet re-resolved.
+> Script `_tmp-6339-sg.mjs`. **Solid timber stays Blackbutt** (35 tops, J02 timber pulls) - not veneer, TBC.
+> The Blackbutt notes below are history.
+
 - Fronts + exposed: **Veneer 17mm – Blackbutt** (new board `Veneer 17mm`, 2700 x 1205 - was 2408, T102),
   tape **0.5mm Matching 22 – Blackbutt** (50m rolls). Door style `Veneer 17mm` (17 blank,
   colour range `Veneer 17mm`, colour Blackbutt, grain vertical).
