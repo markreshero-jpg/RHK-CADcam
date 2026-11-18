@@ -1,7 +1,7 @@
 {
   "_source": "Mark 2026-11-18 from site: shaving cabinet 740 H x 450 W, filler LH, panel RH, same depth as the Bathroom Vanity one (160 OA)",
   "_notes": [
-    "Assumed: 450 OA = WEP 30 (face filler, as the laundry uppers) | W1D 403.5 | WEP 16.5. Carcass 137.5 + 2 + mirror door = 160 OA, same as Bathroom Vanity WC-02.",
+    "Mark 2026-11-18: 450 OA incl filler + panel = WF-L 16.5 (L filler) | W1D 417 | WEP 16.5. WF-L converted from WEP after placement (_tmp-6563-mens-wfl.mjs), dz 160 to the door face. Carcass 137.5 + 2 + mirror door = 160 OA, same as Bathroom Vanity WC-02.",
     "Assumed: 1100-1840 AFF (same bottom as the bathroom one), wall 1000 + 300 left return, ceiling 2400 - all TBC."
   ],
   "projectId": "416bf6cf-9681-4462-b93d-6ecac19e015b",
@@ -14,8 +14,8 @@
     { "x": 0, "y": 0, "length": 1000, "angle": 0, "_": "2 back wall, shaving cabinet" }
   ],
   "cabinets": [
-    { "def": "WEP", "wall": 2, "offset": 0, "dx": 30, "dy": 740, "dz": 137.5, "note": "30 face filler at the left wall, 1100-1840" },
-    { "def": "W1D", "wall": 2, "offset": 30, "dx": 403.5, "dy": 740, "dz": 137.5, "rules": { "SCRBT": 16.5, "ADJ_HOLE_SB": 25 }, "set": { "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }], "rows": [{ "row_index": 0, "height_locked": false }], "zones": [{ "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left", "handle_id": "none" }] } }, "note": "Master ensuite shaving cabinet, mirror door hinged left (filler side, TBC), 160 OA deep, 1100-1840" },
+    { "def": "WEP", "wall": 2, "offset": 0, "dx": 16.5, "dy": 740, "dz": 137.5, "note": "16.5 WF-L L filler at the left wall, 1100-1840 (converted to WF-L after placement)" },
+    { "def": "W1D", "wall": 2, "offset": 16.5, "dx": 417, "dy": 740, "dz": 137.5, "rules": { "SCRBT": 16.5, "ADJ_HOLE_SB": 25 }, "set": { "face_grid": { "cols": [{ "col_index": 0, "width_locked": false }], "rows": [{ "row_index": 0, "height_locked": false }], "zones": [{ "col_index": 0, "row_index": 0, "face_type": "door", "hinge_side": "left", "handle_id": "none" }] } }, "note": "Master ensuite shaving cabinet, mirror door hinged left (filler side, TBC), 160 OA deep, 1100-1840" },
     { "def": "WEP", "wall": 2, "offset": 433.5, "dx": 16.5, "dy": 740, "dz": 137.5, "note": "Shaving cabinet seen end panel, right hand side, 1100-1840" }
   ]
 }
