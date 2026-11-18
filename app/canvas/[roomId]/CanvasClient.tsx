@@ -2209,6 +2209,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           await handleJoinKicks(cab.id)
           return { joined: cab.label }
         },
+        // Right-click → Detach kick: one cabinet's kick as its own kick assembly.
+        async detachKick(ref: string) {
+          const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
+          if (!cab) throw new Error(`Cabinet not found: ${ref}`)
+          await handleDetachKickSingle(cab.id)
+          return { detached: cab.label }
+        },
         // Right-click a joined kick → Kick split… (opens the modal for its run).
         kickSplit(ref: string) {
           const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
