@@ -18,7 +18,7 @@
 import type { SourceTable } from './types'
 import { isShapedPanelKey } from '@/src/lib/cabinetShape/partKeys'
 
-export type SizeOv = { sw?: number | null; sh?: number | null; sd?: number | null }
+export type SizeOv = { sw?: number | null; sh?: number | null; sd?: number | null; /** board swap (material id), applied in normalize */ mat?: string | null }
 /** cabinet_instance_id → stable part id → override record */
 export type SizeOvByCab = Map<string, Record<string, SizeOv>>
 

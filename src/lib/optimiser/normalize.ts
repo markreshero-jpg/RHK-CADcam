@@ -268,8 +268,12 @@ export function normalizeProject(
   // effective size. Returns the original row's footprint when changed, for the
   // "base → effective" display.
   const sized = (table: SourceTable, r: Row, partKey: string): { r: Row; base?: { w: number; h: number; thickness: number } } => {
-    const { row, overridden } = applySizeOverride(table, r, partKey, sizeOvByCab)
-    if (!overridden) return { r }
+    const { row: sizedRow, overridden } = applySizeOverride(table, r, partKey, sizeOvByCab)
+    // Board swap for the nest (part_pos_overrides[partKey].mat): e.g. one board of a
+    // glued-up pair re-machined as the 33 laminate. Snapshot only, like the sizes.
+    const mat = table === 'custom_parts' || table === 'benchtop_parts' ? null : sizeOvByCab.get(r.cabinet_instance_id as string)?.[partKey]?.mat
+    const row = mat ? { ...sizedRow, material_id: mat } : sizedRow
+    if (!overridden) return { r: row }
     const base = table === 'toekick_parts'
       ? canonicalPanelDims(Number(r.dx), Number(r.dy), Number(r.dz))
       : { w: Number(r.dx), h: Number(r.dy), thickness: Number(r.dz) }
