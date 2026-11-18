@@ -65,23 +65,41 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
   const inp = 'w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-blue-500'
   const lbl = 'text-[10px] text-gray-500 uppercase tracking-wider mb-0.5 block'
 
+  // Cabinets that can block this one: same side of the wall and overlapping in
+  // height — a wall unit ignores the base units under it, and a cabinet on the
+  // wall's other face ignores this side. Typed moves and the readouts both use it
+  // (before, a typed move counted every cabinet on the wall and jumped clear of them).
+  const blockers = wall ? wallCabinets
+    .filter(c => c.id !== cabinet.id && cabWallSide(c, wall) === cabWallSide(cabinet, wall) && (room ? cabsBlock(cabinet, c, wall, room) : true))
+    .map(c => ({ t: cabT(c, wall), dx: c.dx })) : []
+  // A back-side cabinet faces the other way: its own left (looking at its front)
+  // is the wall's far end, so "From left end" / "Clear left" read from there.
+  const flip = !!wall && cabWallSide(cabinet, wall) === 'back'
+
   const meas = wall ? (() => {
     const t = cabT(cabinet, wall)
-    // Only cabinets that actually overlap this one vertically count as left/right
-    // neighbours — a wall unit's clearances ignore base units below it, and vice versa.
-    const others = wallCabinets
-      .filter(c => c.id !== cabinet.id && (room ? cabsBlock(cabinet, c, wall, room) : true))
-      .map(c => ({ t: cabT(c, wall), dx: c.dx }))
-    const leftN  = others.filter(o => o.t + o.dx <= t + 1).sort((a, b) => b.t - a.t)[0]
-    const rightN = others.filter(o => o.t >= t + cabinet.dx - 1).sort((a, b) => a.t - b.t)[0]
+    const lo = blockers.filter(o => o.t + o.dx <= t + 1).sort((a, b) => b.t - a.t)[0]
+    const hi = blockers.filter(o => o.t >= t + cabinet.dx - 1).sort((a, b) => a.t - b.t)[0]
+    const toStart = t, toEnd = wall.length - (t + cabinet.dx)
+    const gapStart = lo ? t - (lo.t + lo.dx) : t
+    const gapEnd   = hi ? hi.t - (t + cabinet.dx) : toEnd
     return {
-      posLeft:    Math.round(t),
-      posRight:   Math.round(wall.length - (t + cabinet.dx)),
-      clearLeft:  Math.round(leftN  ? t - (leftN.t + leftN.dx)  : t),
-      clearRight: Math.round(rightN ? rightN.t - (t + cabinet.dx) : wall.length - (t + cabinet.dx)),
-      leftN, rightN,
+      posLeft:    Math.round(flip ? toEnd : toStart),
+      posRight:   Math.round(flip ? toStart : toEnd),
+      clearLeft:  Math.round(flip ? gapEnd : gapStart),
+      clearRight: Math.round(flip ? gapStart : gapEnd),
     }
   })() : null
+
+  // Move to wall-start distance `t` (nearest free slot among the blockers).
+  const moveToT = (t: number) => {
+    if (!wall) return
+    const p = slideAlongWall(cabinet, wall, findFreeSlot(t, cabinet.dx, wall.length, blockers))
+    void onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
+  }
+  // The cabinet's own left side (looking at its front) to its wall end = v.
+  const setFromLeft  = (v: number) => wall && moveToT(flip ? wall.length - v - cabinet.dx : v)
+  const setFromRight = (v: number) => wall && moveToT(flip ? v : wall.length - v - cabinet.dx)
 
   const elevFromFloor = room ? Math.round(cabBottomZ(cabinet, room, wall)) : cabinet.pos_z
 
@@ -133,7 +151,8 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
         {meas && wall && !hideWallPosition && (
           <div>
             <p className={lbl}>Wall position</p>
-            {/* Left / centre / right X, all from the wall's left end — type one to move the cabinet there. */}
+            {/* Left / centre / right X, all from the wall's start — type one to move the cabinet there.
+                From / Clear left + right are the cabinet's own sides, looking at its front. */}
             <div className="grid grid-cols-3 gap-1 mb-1">
               {([['Left X', 0], ['Centre X', 0.5], ['Right X', 1]] as const).map(([name, k]) => (
                 <div key={name}>
@@ -141,12 +160,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                   <CalcInput
                     value={Math.round((meas.posLeft + cabinet.dx * k) * 10) / 10}
                     decimals={1}
-                    onCommit={v => {
-                      const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                      const t = findFreeSlot(v - cabinet.dx * k, cabinet.dx, wall.length, occ)
-                      const p = slideAlongWall(cabinet, wall, t)
-                      onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
-                    }}
+                    onCommit={v => moveToT(v - cabinet.dx * k)}
                     className={inp + ' text-right'} />
                 </div>
               ))}
@@ -157,12 +171,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <CalcInput
                   value={meas.posLeft}
                   decimals={1}
-                  onCommit={v => {
-                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                    const t = findFreeSlot(v, cabinet.dx, wall.length, occ)
-                    const p = slideAlongWall(cabinet, wall, t)
-                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
-                  }}
+                  onCommit={setFromLeft}
                   className={inp + ' text-right'} />
               </div>
               <div>
@@ -170,13 +179,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <CalcInput
                   value={meas.posRight}
                   decimals={1}
-                  onCommit={v => {
-                    const newT = wall.length - v - cabinet.dx
-                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                    const t = findFreeSlot(newT, cabinet.dx, wall.length, occ)
-                    const p = slideAlongWall(cabinet, wall, t)
-                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
-                  }}
+                  onCommit={setFromRight}
                   className={inp + ' text-right'} />
               </div>
               <div>
@@ -184,14 +187,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <CalcInput
                   value={meas.clearLeft}
                   decimals={1}
-                  onCommit={v => {
-                    const lN = meas.leftN
-                    const desiredT = lN ? lN.t + lN.dx + v : v
-                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                    const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
-                    const p = slideAlongWall(cabinet, wall, t)
-                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
-                  }}
+                  onCommit={v => moveToT(cabT(cabinet, wall) + (flip ? -1 : 1) * (v - meas.clearLeft))}
                   className={`${inp} text-right ${meas.clearLeft < 0 ? 'text-red-400' : ''}`} />
               </div>
               <div>
@@ -199,14 +195,7 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
                 <CalcInput
                   value={meas.clearRight}
                   decimals={1}
-                  onCommit={v => {
-                    const rN = meas.rightN
-                    const desiredT = rN ? rN.t - v - cabinet.dx : wall.length - v - cabinet.dx
-                    const occ = wallCabinets.filter(c => c.id !== cabinet.id).map(c => ({ t: cabT(c, wall), dx: c.dx }))
-                    const t = findFreeSlot(desiredT, cabinet.dx, wall.length, occ)
-                    const p = slideAlongWall(cabinet, wall, t)
-                    onUpdate(cabinet.id, { pos_x: p.x, pos_y: p.y })
-                  }}
+                  onCommit={v => moveToT(cabT(cabinet, wall) - (flip ? -1 : 1) * (v - meas.clearRight))}
                   className={`${inp} text-right ${meas.clearRight < 0 ? 'text-red-400' : ''}`} />
               </div>
               {roomRef && (
