@@ -2251,6 +2251,20 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Export 3D ▾ › Apple USDZ file saves "<job> - <room> - 3D.usdz". A double-click opens it on a Mac or iPhone in Quick Look, and on an iPhone or iPad tap AR to stand the room in front of you life size. It has no Wire or Doors buttons. The share link page has an "Apple 3D / AR" button that does the same.',
       target: 'export-3d-html', canvas: true, done: (c, s) => ev(c, 'export_3d_usdz') > ev(s, 'export_3d_usdz') },
   ]},
+  // Appended 2026-11-18 (z_rangehood R13: duct out the back wall).
+  { id: 'rangehood_duct_back', level: 'intermediate', topic: 'cabinets', title: 'Rangehood duct out the back wall',
+    blurb: 'When the duct goes straight out the wall above the hood: a round hole in the cabinet back instead of the flue notch and box.',
+    keywords: 'rangehood range hood duct out wall back hole round 150 200 flue box notch WRH WRHSO slide out brick line', steps: [
+    { id: 'duct', title: 'Set Duct to Out the back',
+      body: 'Select the rangehood cabinet (WRH or WRHSO). In the Rangehood section set Duct to "Out the back". The flue notch in the shelf and top and the flue box go, and a round hole is cut in the back.',
+      canvas: true, done: c => c.cabinets.some(cab => cab.rangehood?.duct?.out === 'back') },
+    { id: 'size', title: 'Size and place the hole',
+      body: 'Diameter is the hole size (200 for a 150 duct with room to fit). Centre height is from the cabinet underside to the centre of the hole: keep it between the top of the hood and the shelf, and under any brick line on site. Raise Shelf height so the shelf sits above the hole; the cabinet warns if the hole runs into it.',
+      canvas: true, done: c => c.cabinets.some(cab => cab.rangehood?.duct?.out === 'back' && !!cab.rangehood?.duct?.h) },
+    { id: 'check', title: 'Check it',
+      body: 'Double-click the cabinet and look at the back in the 3D tab: the round hole sits above the hood. The back is cut with the hole on the machine like any other cut-out.',
+      canvas: true, done: c => c.cabEditorOpen },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

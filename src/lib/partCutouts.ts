@@ -11,7 +11,8 @@
 //   notch  a rectangle open to an edge, cut into the part's outline (R2).
 //
 // So far: the carcass's horizontal parts (bottom, top, rails), shelves, gables +
-// shaped uprights + the flue box (holes only on gables, duct runs),
+// shaped uprights + the flue box (holes only on gables, duct runs), the back
+// (holes only — a duct out the wall, RHK6571 WC-03),
 // flat custom parts (their own `cabinet_custom_parts.part_cutouts`, R3) and
 // drawer box bottoms (`db_<r>_<c>_db_bottom`, R11 — plumbing U cut-outs).
 // Positions are in the horizontal shape frame — x across from the part's left
@@ -293,9 +294,13 @@ export function roundCorner(pts: OutlinePt[], cx: number, cy: number, rad: numbe
  *  (BHCRVFIXP) bottom former — same frame (kit x across, d back from the front). */
 export const CUTOUT_CASE_KEYS = new Set(['bottom', 'full_top', 'front_rail', 'back_rail', 'crv:bottom', 'crv:top'])
 /** Case parts that take cut-outs: the set above + a curved end's ribs (C9 rangehood). */
-export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+(_[lr])?$/.test(k) || isGableKey(k) || /^(side:|rh:flue_)/.test(k)
+export const isCutoutCaseKey = (k: string) => CUTOUT_CASE_KEYS.has(k) || /^crv:rib_\d+(_[lr])?$/.test(k) || isGableKey(k) || k === 'back' || /^(side:|rh:flue_)/.test(k)
 /** Carcass gables take holes too (duct runs, RHK6586). Their outlines + cut-outs are
  *  stored in the gable frame (x depth from the back, y down from the top). */
+/** The back takes holes as well (RHK6571 WC-03 duct out the wall). Its frame is the
+ *  face frame as seen from the front: x across from the left (0..DY), y DOWN from the
+ *  top (0..DX) — so a cut-out's 'front' anchor = the top, 'back' = the bottom. */
+export const isBackKey = (k: string) => k === 'back'
 export const isGableKey = (k: string) => k === 'left_side' || k === 'right_side'
 export const CUTOUT_INTERNAL_TYPES = new Set(['fixed_shelf', 'adj_shelf'])
 /** Drawer box parts that take cut-outs (R11): the bottom. */
@@ -304,7 +309,7 @@ export const CUTOUT_DB_TYPES = new Set(['db_bottom'])
 type CutPart = { DX: number; DY: number; DZ: number; outline?: OutlinePt[]; cutouts?: { pts: OutlinePt[]; skin: number }[] }
 /** `at` = the part's min corner in cabinet space (horizontal box: x across, y
  *  up its thickness, z = its back edge) — set, a notch's gap is reported as a void. */
-export type CutTarget = { id: string; part: CutPart; holes: boolean; at?: { X: number; Y: number; Z: number }; gable?: boolean }
+export type CutTarget = { id: string; part: CutPart; holes: boolean; at?: { X: number; Y: number; Z: number }; gable?: boolean; holesOnly?: boolean }
 /** Board a notch took away, in cabinet space (z_rangehood R5): joint holes that
  *  run into it are dropped (jointDrilling seamDrillsFor). */
 export type CutoutVoid = { x0: number; x1: number; y0: number; y1: number; z0: number; z1: number }
@@ -320,7 +325,7 @@ export function cutoutTargets(
   drawerStacks: (StackRef & { box_parts: (CutPart & { part_type: string })[] })[] = [],
 ): CutTarget[] {
   return [
-    ...caseParts.filter(p => isCutoutCaseKey(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p), ...(isGableKey(p.part_key) ? { gable: true } : {}) })),
+    ...caseParts.filter(p => isCutoutCaseKey(p.part_key)).map(p => ({ id: `case_${p.part_key}`, part: p, holes: true, at: atOf(p), ...(isGableKey(p.part_key) ? { gable: true } : isBackKey(p.part_key) ? { holesOnly: true } : {}) })),
     ...internalParts.filter(p => CUTOUT_INTERNAL_TYPES.has(p.part_type)).map(p => ({ id: `int_${p.part_type}_${p.sort_order}`, part: p, holes: false, at: atOf(p) })),
     // Drawer box bottoms (R11): DX = depth front → back, DY = width — the carcass
     // bottom's frame. Their drawer stack id moves with the drawer, so the cut-out does.
@@ -362,7 +367,7 @@ export function applyPartCutouts(targets: CutTarget[], cutouts: PartCutouts | nu
     // Notches first: they change the outline the holes sit in. Each butts
     // against its edge (whatever its anchor says that way) and runs 1 past it.
     const OVER = 1
-    const notchList = list.filter(c => c.kind === 'notch' && (!t.gable || (warn(c, 'gables take holes only'), false)))
+    const notchList = list.filter(c => c.kind === 'notch' && (!(t.gable || t.holesOnly) || (warn(c, t.gable ? 'gables take holes only' : 'the back takes holes only'), false)))
     const notches: Rect[] = []
     const notchEdges: NonNullable<Cutout['edge']>[] = []
     const notchRadii: number[] = []

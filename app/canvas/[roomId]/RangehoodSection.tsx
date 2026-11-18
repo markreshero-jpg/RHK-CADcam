@@ -62,10 +62,26 @@ export default function RangehoodSection({ cabinet, onUpdate, inp, lbl }: {
       {row('Off centre', '+ moves the hole right, − left', s.hole.offset, v => hole('offset', v))}
       {row('Corner radius', '0 = square corners', s.hole.radius, v => { if (v >= 0) hole('radius', v) })}
 
+      {!crv && (
+        <div className="grid grid-cols-[1fr_7rem] gap-1 items-center" title="Up: the duct goes up through a notch in the shelf + top, inside the flue box. Out the back: straight out the wall above the hood — a round hole in the back, no notch or box">
+          <label className="text-xs text-gray-300">Duct</label>
+          <select value={s.duct.out} onChange={e => put({ duct: { ...s.duct, out: e.target.value === 'back' ? 'back' : 'up' } })} className={inp}>
+            <option value="up">Up (flue box)</option>
+            <option value="back">Out the back</option>
+          </select>
+        </div>
+      )}
+      {!crv && s.duct.out === 'back' ? <>
+        <p className={lbl}>Duct hole (back)</p>
+        {row('Diameter', 'Round hole through the back for the duct', s.duct.dia, v => { if (v > 0) put({ duct: { ...s.duct, dia: v } }) })}
+        {row('Centre height', 'Cabinet underside (incl. under panel) to the centre of the hole — keep it between the top of the hood and the shelf', s.duct.h, v => { if (v > 0) put({ duct: { ...s.duct, h: v } }) })}
+        {row('Off centre', '+ moves the hole right, − left', s.flue.offset, v => flue('offset', v))}
+      </> : <>
       <p className={lbl}>Flue (shelf + top notch)</p>
       {row('Width', 'Notch width between the flue box sides', s.flue.w, v => { if (v > 0) flue('w', v) })}
       {row('Depth', 'Notch depth from the shelf’s back edge — the box sides run this deep', s.flue.d, v => { if (v > 0) flue('d', v) })}
       {row('Off centre', '+ moves the flue right, − left', s.flue.offset, v => flue('offset', v))}
+      </>}
 
       {row('Shelf height', crv ? 'Cabinet underside to the underside of the rib the flue goes through (support ribs under it are split round the hole)' : 'Cabinet underside (incl. under panel) to the underside of the first fixed shelf', s.shelf_h, v => { if (v > 0) put({ shelf_h: v }) })}
       {!so && row('Bottom skin', 'Onion skin left in the hole through the bottom (e.g. 0.5) — holds the cut-out in so a thin strip beside it doesn’t snap; broken out after the sheet is cut. 0 = cut through', s.bottom_skin, v => { if (v >= 0) put({ bottom_skin: v }) })}

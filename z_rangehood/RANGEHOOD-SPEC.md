@@ -10,7 +10,7 @@
 > rails; notches on those + fixed / adj shelves); R3 2026-11-02 (flat custom
 > parts, e.g. the WUP Under Panel); R4 2026-11-02 Cut-outs box in Cabinet Edit
 > (in-app check pending); R5 2026-11-02 rangehood block + flue box + Rangehood sidebar
-> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03); R10 2026-11-07 bottom skin (RHK6581 WC-02); R11 2026-11-08 drawer box bottoms + rounded notch corners (RHK6586 vanity plumbing U); R12 2026-11-16 slide-out rangehood `WRHSO` (RHK6571 WC-03, Westinghouse WRR626SB). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
+> section (no cabinet has the block until R7); R6 2026-11-04 WUP takes the hole; R7 2026-11-04 WRH in the library (Wall › Appliances); R8 2026-11-04 tutorial + RHK6586 WC-04 set up (hole size still TBC); R9 2026-11-05 hood cover panel with hinge D notches + under panel onion skin (RHK6592 WC-03); R10 2026-11-07 bottom skin (RHK6581 WC-02); R11 2026-11-08 drawer box bottoms + rounded notch corners (RHK6586 vanity plumbing U); R12 2026-11-16 slide-out rangehood `WRHSO` (RHK6571 WC-03, Westinghouse WRR626SB). R13 2026-11-18 duct out the back wall (round hole in the back, RHK6571 WC-03). All phases built; in-app checks pending. First real job: RHK6586 WC-04, Sirius SM927EL520
 > (TBC-LIST #17 — Mark getting the cut-out specs).
 
 ---
@@ -384,6 +384,27 @@ Locked answers 2026-11-16: **no bottom** (the hood body screws between the gable
 - Not modelled: the hood itself (no fixture, as WRH); a hood cover panel on a slide-out (the tick is hidden on slide-outs —
   it would stand in the body's way).
 
+## R13 as built (2026-11-18) — duct out the back wall + holes in the back
+
+Mark (RHK6571 site measure): "no duct above, it goes out the wall. make a 200mm dia hole at the back above the
+rangehood" — El C has a brick line at 2000 AFF and the duct must exit below it.
+
+- `rangehood.duct: { out: 'up' | 'back', dia, h }` (default `{ out: 'up', dia: 200, h: 400 }`, `normaliseRangehood`).
+  `'up'` = as before (flue notch in the shelf + top, flue box). `'back'` = **no flue notch, no flue box**; a round
+  `dia` hole (source `rangehood`, id `rh_duct`) in `case_back`, centred between the gables (+ `flue.offset`), its
+  centre `h` above the cabinet's underside (same datum as `shelf_h`). Warns if the hole runs into a fixed shelf or off
+  the back; no back → warning. Curved ends (C9) ignore it (always up).
+- Sidebar: **Duct** select (Up (flue box) / Out the back); out the back shows Diameter / Centre height / Off centre in
+  place of the flue rows.
+- `partCutouts`: the **back** (`case_back`) takes **holes only** (notches warn "the back takes holes only"). Frame =
+  the face frame seen from the front: x across from the back's left edge (0..DY), y **down from its top** (0..DX) —
+  a cut-out's `front` anchor = the top, `back` = the bottom. Matches `partSolids` face kind + the optimiser's face
+  frame (`shapeFrameFor` back → swap), so 3D / nest / G-code read it unchanged.
+- First use RHK6571 WC-03 (`_tmp-6571-rev3.mjs`): WRHSO 710 high, duct out the back 200 dia, centre 385 up (hole
+  1755–1955 AFF, hood top ~1743, brick line 2000), shelf_h 500. Tutorial `rangehood_duct_back`. Tests in
+  `rangehoodSlideout.test.ts` + `partCutouts.test.ts`.
+- Check pending: back hole in 3D + on the nested back (orientation on the sheet).
+
 ## Phases
 
 | # | What | Status |
@@ -398,6 +419,7 @@ Locked answers 2026-11-16: **no bottom** (the hood body screws between the gable
 | R8 | Tutorial (Cut-outs + Rangehood cabinet); first use RHK6586 WC-04 | [x] 2026-11-04 |
 | R9 | Hood cover panel (hinge D notches) + under panel onion skin; first use RHK6592 WC-03 | [x] 2026-11-05 (in-app check pending) |
 | R12 | **Slide-out rangehood `WRHSO`** — `mount: 'slideout'`, no bottom, doors 42 up, under panel front notch; first use RHK6571 WC-03 | [x] 2026-11-16 (in-app check pending) |
+| R13 | **Duct out the back wall** — `duct.out 'back'`: round hole in the back, no flue notch / box; backs take holes; first use RHK6571 WC-03 | [x] 2026-11-18 (in-app check pending) |
 | R11 | **Drawer box bottoms** take cut-outs + notch inner-corner **radius**; first use RHK6586 vanity plumbing U | [x] 2026-11-08 (in-app check pending) |
 
 ## Open

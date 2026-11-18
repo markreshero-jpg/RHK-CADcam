@@ -66,3 +66,13 @@ Andy is off the job (Mark 14/11): RHK supplies + installs, Geraldine + Pete did 
 
 ## Site questions (2026-11-18, `_tmp-6571-site-questions.mjs`)
 - SITE QUESTIONS box (14 items) on the plan, Questions for Client layer, under SITE NOTES (x 6330, y 4690) - for Mark's site visit 2026-11-18. Answers -> update the room in place.
+
+## Rev 3 - site measure 2026-11-18 (Mark's pen markups in the room + his answers) - `_tmp-6571-rev3.mjs` + `_tmp-6571-rev3-cad.mjs`
+Backup of every touched row before the run: session scratchpad `rhk6571-rev3-backup.json` (not kept).
+- **El A** 3977 wall to stairs - cabinets as drawn (Mark: "this run is good").
+- **El B** 2448 o/a (to the outside of the waterfall): BC-07 450 drawers deleted; BC-04 blind corner 1300 -> **1785**, now blind 633.5 | door | door (hinges outside); BC-05 end panel at 1785, **D/W 610 at 1801.5-2411.5**, BC-06 end panel at 2411.5 = the panel the waterfall end glues to (Mark asked for one - BC-06 is it). Benchtop 2 north end 1631 -> 1596. Overheads WC-05 / WC-06 900 -> 917.5, WC-07 at 2435, under panel WC-14 1835 (end line 3.5 past the WF, as before). BC-04 warns WIDE_CABINET (1785 > 1200) - one carcass as a blind-corner sink cabinet; adj shelf spans 1750.
+- **Sink** -> Fienza Kuro **68613** double bowl U/M, Matte Black, 762 x 457 x 220, bowls 341 + 30 + 341 x 406 (cut-out 712 x 406 R15), new library row (Abi Zalo double bowl 3D stand-in); centred on the BC-04 door pair (offset 1209.25, room y centre 2834.75), 80 off the wall; inside the carcass 828-1590 from the corner (clear of the blind). Sink clouds removed (position confirmed). Spec sheet saved to APPLIANCES (jpg). Geraldine also ordered the **Coriander sink mixer, brushed nickel** (NCP 16/11) - spec block still says standard gooseneck (Mark 2026-11-16) - to confirm.
+- **Overheads 710 high, tops 2180** (room wall_cabinet_top 2180; underside stays 1470); 2190 dims -> 2180. Beams / ceiling as drawn.
+- **BC-09 inner cutlery drawer**: top drawer main box Dragon Pro 450x178 Silk White, inner drawer 450x95 Silk White at y_position 579 (box 593 up, 23 over the main box).
+- **WC-03 duct out the back wall** (El C brick line 2000 AFF, duct below it): new rangehood `duct: { out: 'back', dia: 200, h: 385 }` (z_rangehood R13) - 200 hole in the back, centre 1855 AFF (1755-1955), no flue notch / box; shelf_h 300 -> 500 (above the hole). Doors 668. Spec block: "Duct out the back wall (200 hole in the cabinet back) - by others".
+- SITE NOTES rewritten; SITE QUESTIONS box marked answered (mixer still open). Mark's pen markups left in place.

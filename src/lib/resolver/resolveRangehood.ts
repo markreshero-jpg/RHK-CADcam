@@ -93,6 +93,28 @@ function slideoutBody(cab: CabinetInput, caseParts: ResolvedCasePart[], out: Ran
   out.hole = { x0: r2(x0), x1: r2(x1), z0: r2(z1 - hole.d), z1 }
 }
 
+/** Duct out the back (RHK6571 WC-03, Mark 2026-11-18): a `duct.dia` round hole in
+ *  the back, centred between the gables (+ flue.offset), its centre `duct.h` above
+ *  the cabinet's underside. The back's cut-out frame is the face frame: x across
+ *  from its left edge, y down from its top edge (partCutouts isBackKey). */
+function ductOutBack(cab: CabinetInput, caseParts: ResolvedCasePart[], internalParts: ResolvedInternalPart[], out: RangehoodResult,
+  warn: (m: string) => void, add: (id: string, c: Cutout) => void) {
+  const rh = cab.rangehood!, { dia, h } = rh.duct
+  const back = caseParts.find(p => p.part_key === 'back')
+  if (!back) { warn('the duct goes out the back, but the cabinet has no back — no duct hole'); return }
+  const L = caseParts.find(p => p.part_key === 'left_side'), R = caseParts.find(p => p.part_key === 'right_side')
+  const cx = r2((L && R ? (L.X + L.DZ + R.X) / 2 : cab.DX / 2) + rh.flue.offset)
+  const backTop = back.Y + back.DZ + back.DX   // caseBox: the back spans Y + DZ .. + DX
+  const x0 = r2(cx - dia / 2 - back.X), y0 = r2(backTop - h - dia / 2)
+  if (x0 < -0.5 || x0 + dia > back.DY + 0.5 || y0 < -0.5 || y0 + dia > back.DX + 0.5) { warn(`the ${dia} duct hole runs off the back`); return }
+  const shelf = internalParts.filter(p => p.part_type === 'fixed_shelf').find(p => p.Y < h + dia / 2 && p.Y + p.DZ > h - dia / 2)
+  if (shelf) warn(`the ${dia} duct hole (centre ${h} up) runs into the fixed shelf at ${r2(shelf.Y)} — move the shelf or the hole`)
+  add('case_back', {
+    id: 'rh_duct', kind: 'hole', shape: 'circle', w: dia, d: dia, depth: null, source: 'rangehood',
+    x: { from: 'left', off: x0 }, y: { from: 'front', off: y0 },
+  })
+}
+
 export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[], internalParts: ResolvedInternalPart[]): RangehoodResult {
   const out: RangehoodResult = { parts: [], seams: [], cutouts: {}, warnings: [] }
   const rh = cab.rangehood
@@ -125,6 +147,10 @@ export function resolveRangehood(cab: CabinetInput, caseParts: ResolvedCasePart[
       x: { from: 'centre', off: hole.offset }, y: { from: 'front', off: hole.setback },
     })
   }
+
+  // ── Duct straight out the wall (duct.out 'back'): a round hole in the back,
+  // no flue notch / box. The shelf still sits at shelf_h (Mark, RHK6571 WC-03).
+  if (rh.duct.out === 'back') { ductOutBack(cab, caseParts, internalParts, out, warn, add); return out }
 
   // ── Flue: the first fixed shelf + the top ──────────────────────
   const shelves = internalParts.filter(p => p.part_type === 'fixed_shelf')

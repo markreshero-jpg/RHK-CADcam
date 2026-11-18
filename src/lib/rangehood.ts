@@ -24,6 +24,12 @@ export interface RangehoodSettings {
   // Flue path: notch in the shelf + top, from their back edge; the box sides
   // stand on its edges, the front piece across them. offset + = to the right.
   flue: { w: number; d: number; offset: number }
+  // Where the duct goes (RHK6571 WC-03, Mark 2026-11-18): 'up' = through the flue
+  // notch in the shelf + top, inside the flue box (the default); 'back' = straight
+  // out the wall above the hood — a round hole `dia` across in the back, centred
+  // across (+ flue.offset), its centre `h` above the cabinet's underside (the same
+  // datum as shelf_h); no flue notch, no flue box.
+  duct: { out: 'up' | 'back'; dia: number; h: number }
   shelf_h: number   // cabinet underside (incl. under panel) → first fixed shelf underside
   // Hood cover (RHK6592 WC-03): a carcass-board panel standing between the gables,
   // flush with their front edges, from the bottom of the inside up to the underside
@@ -43,6 +49,7 @@ export const DEFAULT_RANGEHOOD: RangehoodSettings = {
   mount: 'undermount',
   hole: { w: null, d: null, setback: 50, offset: 0, radius: 0 },
   flue: { w: 200, d: 250, offset: 0 },
+  duct: { out: 'up', dia: 200, h: 400 },
   shelf_h: 350,
   cover: null,
   panel_skin: 0,
@@ -62,8 +69,8 @@ const size = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v > 
 // Tolerates partial / legacy stored values.
 export function normaliseRangehood(s: unknown): RangehoodSettings | null {
   if (!s || typeof s !== 'object') return null
-  const o = s as Partial<{ mount: unknown; hole: Record<string, unknown>; flue: Record<string, unknown>; shelf_h: unknown; cover: Record<string, unknown> | null; panel_skin: unknown; bottom_skin: unknown }>
-  const h = o.hole ?? {}, f = o.flue ?? {}, d = DEFAULT_RANGEHOOD
+  const o = s as Partial<{ mount: unknown; hole: Record<string, unknown>; flue: Record<string, unknown>; duct: Record<string, unknown>; shelf_h: unknown; cover: Record<string, unknown> | null; panel_skin: unknown; bottom_skin: unknown }>
+  const h = o.hole ?? {}, f = o.flue ?? {}, du = o.duct ?? {}, d = DEFAULT_RANGEHOOD
   return {
     mount: o.mount === 'slideout' ? 'slideout' : 'undermount',
     hole: {
@@ -73,6 +80,7 @@ export function normaliseRangehood(s: unknown): RangehoodSettings | null {
       radius:  Math.max(0, num(h.radius, d.hole.radius)),
     },
     flue: { w: pos(f.w, d.flue.w), d: pos(f.d, d.flue.d), offset: num(f.offset, d.flue.offset) },
+    duct: { out: du.out === 'back' ? 'back' : 'up', dia: pos(du.dia, d.duct.dia), h: pos(du.h, d.duct.h) },
     shelf_h: pos(o.shelf_h, d.shelf_h),
     cover: o.cover && typeof o.cover === 'object' ? {
       notch_w: pos(o.cover.notch_w, DEFAULT_RANGEHOOD_COVER.notch_w),

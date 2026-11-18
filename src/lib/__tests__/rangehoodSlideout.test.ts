@@ -57,3 +57,28 @@ describe('slide-out rangehood (R12)', () => {
     expect(xs).toContain(316.5); expect(xs).toContain(883.5); expect(ys).toContain(280)
   })
 })
+
+// Duct straight out the wall (RHK6571 WC-03, Mark 2026-11-18): a round hole in the back, no flue notch / box.
+describe('duct out the back', () => {
+  it('defaults to up (flue box)', () => {
+    expect(normaliseRangehood({})!.duct).toEqual({ out: 'up', dia: 200, h: 400 })
+  })
+  it('cuts a 200 hole in the back at the centre height, no flue notch or box', () => {
+    const rp = resolveCabinet(so({ mount: 'slideout', hole: { d: 300 }, shelf_h: 500, duct: { out: 'back', dia: 200, h: 385 } }))
+    expect(rp.case_parts.filter(p => p.part_key.startsWith('rh:flue'))).toHaveLength(0)
+    expect(rp.case_parts.find(p => p.part_key === 'full_top')!.outline).toBeUndefined()
+    const back = rp.case_parts.find(p => p.part_key === 'back')!
+    const pts = back.cutouts![0].pts
+    // Face frame: x across from the back's left edge, y down from its top. Centre 385 above the underside.
+    const top = back.Y + back.DZ + back.DX
+    const L = rp.case_parts.find(p => p.part_key === 'left_side')!, R = rp.case_parts.find(p => p.part_key === 'right_side')!
+    const cx = (L.X + L.DZ + R.X) / 2 - back.X
+    expect(pts[0].x).toBeCloseTo(cx - 100, 1); expect(pts[1].x).toBeCloseTo(cx + 100, 1)
+    expect(pts[0].y).toBeCloseTo(top - 385, 1)
+    expect(rp.warnings.filter(w => w.code === 'RANGEHOOD')).toEqual([])
+  })
+  it('warns when the hole runs into the shelf', () => {
+    const rp = resolveCabinet(so({ mount: 'slideout', hole: { d: 300 }, shelf_h: 300, duct: { out: 'back', dia: 200, h: 385 } }))
+    expect(rp.warnings.some(w => /runs into the fixed shelf/.test(w.message))).toBe(true)
+  })
+})

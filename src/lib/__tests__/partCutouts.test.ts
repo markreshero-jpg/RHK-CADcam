@@ -79,14 +79,14 @@ describe('part cut-outs (R1 holes)', () => {
   it('warns instead of cutting what it cannot', () => {
     const rp = resolveCabinet(cab({
       case_bottom: [hole({ id: 'big', w: 900 }), hole({ id: 'bad', w: 'nope.x' }), hole({ id: 'n', kind: 'notch' })],
-      case_back: [hole({ id: 'g' })],
+      case_nope: [hole({ id: 'g' })],
     }))
     const msgs = rp.warnings.filter(w => w.code === 'CUTOUT_SKIPPED').map(w => w.message)
     expect(msgs).toHaveLength(4)
     expect(msgs.some(m => /n on case_bottom: pick the edge/.test(m))).toBe(true)
     expect(msgs.some(m => /big on case_bottom: runs off/.test(m))).toBe(true)
     expect(msgs.some(m => /bad on case_bottom: width/.test(m))).toBe(true)
-    expect(msgs.some(m => /g on case_back: .*not supported/.test(m))).toBe(true)
+    expect(msgs.some(m => /g on case_nope: .*not supported/.test(m))).toBe(true)
     expect(rp.case_parts.find(p => p.part_key === 'bottom')!.cutouts).toBeUndefined()
   })
 })
@@ -236,7 +236,10 @@ describe('cut-outs editor helpers (R4)', () => {
     expect(cutoutPartInfo(rp, 'custom_up')).toEqual({ W: 1200, D: 330, DZ: 18, holes: true })
     // Side customs take them too (WF-L): W = its height (dy), D = its depth (dx).
     expect(cutoutPartInfo(rp, 'custom_ep')).toEqual({ W: 700, D: 330, DZ: 18, holes: true })
-    expect(cutoutPartInfo(rp, 'case_back')).toBeNull()
+    // The back takes holes (RHK6571 duct): W = its width (DY), D = its height (DX).
+    const back = rp.case_parts.find(p => p.part_key === 'back')!
+    expect(cutoutPartInfo(rp, 'case_back')).toEqual({ W: back.DY, D: back.DX, DZ: back.DZ, holes: true })
+    expect(cutoutPartInfo(rp, 'case_nope')).toBeNull()
   })
 
   it('previews like the resolve cuts', () => {
@@ -345,5 +348,24 @@ describe('holes in gables', () => {
     const b = bbox(p.cutouts![0].pts)
     expect((b.x0 + b.x1) / 2).toBeCloseTo(110, 1)   // centre 110 off the back
     expect(p.outline).toHaveLength(4)
+  })
+})
+
+// Duct hole in the back (RHK6571 WC-03: rangehood duct out the wall, 200 dia).
+describe('holes in the back', () => {
+  it('stores the hole in the face frame: across from the left, down from the top', () => {
+    const c: Cutout = { id: 'duct', kind: 'hole', shape: 'circle', w: 200, d: 200, x: { from: 'centre', off: 0 }, y: { from: 'front', off: 50 }, depth: null, source: 'user' }
+    const back = resolveCabinet(cab({ case_back: [c] })).case_parts.find(x => x.part_key === 'back')!
+    // A circle is two bulged points across its middle: centre 100 + 50 down from the top.
+    const pts = back.cutouts![0].pts
+    expect(pts.map(q => q.x)).toEqual([back.DY / 2 - 100, back.DY / 2 + 100].map(v => Math.round(v * 100) / 100))
+    expect(pts.every(q => Math.abs(q.y - 150) < 0.01)).toBe(true)
+    expect(back.outline).toHaveLength(4)
+    expect(shapeFrameFor('case_parts', 'back', 'case_back').swap).toBe(true)
+  })
+  it('refuses a notch on the back', () => {
+    const n: Cutout = { id: 'n', kind: 'notch', shape: 'rect', w: 100, d: 50, edge: 'front', x: { from: 'left', off: 0 }, y: { from: 'front', off: 0 }, source: 'user' }
+    const rp = resolveCabinet(cab({ case_back: [n] }))
+    expect(rp.warnings.some(w => w.code === 'CUTOUT_SKIPPED' && /back takes holes only/.test(w.message))).toBe(true)
   })
 })
