@@ -834,6 +834,21 @@ async function runSeamDrillSync(cabinetId: string, resolved?: ResolvedCabinet): 
   if (hasSlots && slots.skipped) console.warn(`[seamDrillSync] ${slots.skipped} floating shelf slot pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
   if (hasBends && bends.skipped) console.warn(`[seamDrillSync] ${bends.skipped} curved end bend pocket(s) skipped — no active ${NOTCH_TOOL_DIA}mm router bit`)
 
+  // A generated op switched off CNC by hand (output_to_cnc false) stays off across
+  // the regenerate, matched on part + operation_key (RHK6586 2026-11-19: the
+  // floating shelf cleat slot on a board already cut and glued up kept coming back).
+  const { data: offRows } = await supabase.from('part_operations')
+    .select('source_part_key,operation_key,operation_type')
+    .eq('source_cabinet_id', cabinetId)
+    .eq('output_to_cnc', false)
+    .not('operation_key', 'is', null)
+    .contains('parameters', { generated: GENERATED_MARK })
+  if (offRows?.length) {
+    const off = new Set(offRows.map(o => `${o.source_part_key}|${o.operation_type}|${o.operation_key}`))
+    for (const r of [...rows, ...notch.rows] as { source_part_key?: string | null; operation_type?: string; operation_key?: string | null; output_to_cnc?: boolean }[])
+      if (r.operation_key && off.has(`${r.source_part_key}|${r.operation_type}|${r.operation_key}`)) r.output_to_cnc = false
+  }
+
   // Replace this cabinet's generated drill + route rows wholesale. Hand-added rows
   // (no parameters.generated marker) are left untouched. One delete, then the
   // two inserts side by side (their column sets differ, so they stay separate) —
