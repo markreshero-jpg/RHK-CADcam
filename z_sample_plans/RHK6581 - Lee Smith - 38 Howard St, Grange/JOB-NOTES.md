@@ -93,7 +93,7 @@ Plans: `38 Howard Street-605_(A) - JOINERY.pdf`, `38 Howard SM - Markup 260927.p
   Integrated DW: generic dishwasher fixture behind BC-18 (600 x 580 x 820, linked to BC-18), label "Integrated Dishwasher Model TBC".
   Still not placed: fridge / wine fridge fixtures (spaces + CAD notes only).
   2026-10-26: TC-07 bottom two sections locked 385.25 each so its 2nd fixed shelf top = 920 AFFL, level with the BC-16 bench; upper 3 shelves re-spaced evenly (1307.5 / 1695 / 2082.5 tops). TC-08 matched the same day.
-- **Hanging rails** (Bed 1/2/3, Entry, WIR): Finista oval 15 x 30 white 3.6m (Lincoln Sentry 7104006) from the new Library → Accessories tab — LS marks it discontinued / clearance, confirm before ordering.
+- **Hanging rails** (Bed 1/2/3, Entry, WIR): Finista oval 15 x 30 white 3.6m (Lincoln Sentry 7104006) from the new Library → Accessories tab — LS marks it discontinued / clearance, confirm before ordering. **Mark 2026-11-19: using excess stock already in the shop — no order needed.**
 - **Storage J10** `b10e1ba1-5f02-485c-a5e6-b631bde5de20` — drawn 2026-10-25 (layout `rhk6581-lee-smith-storage-j10.json`): 1868 to the wall, CH 2770, 600 OA (carcass 580).
   TEPF 18 seen end | T2D 950 5 adj | VOID 500 = 482 LAM01 false front to the floor (TEPF assembly with custom parts) + 3 full-height L fixing brackets (2 x 100 white strips each) | TEPF 18 side panel | 400 open bay: low cabinet 397 false front to floor, no kick + 18 LAM01 top at 415.
   2400 incl 100 kick; BH 370 flush with carcass from the seen end to the wall, left return 580. Spec block.
