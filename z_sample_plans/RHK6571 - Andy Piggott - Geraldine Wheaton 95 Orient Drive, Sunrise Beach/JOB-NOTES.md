@@ -81,4 +81,11 @@ Backup of every touched row before the run: session scratchpad `rhk6571-rev3-bac
 - Mark 2026-11-18: overheads **600 clear over the bench**: underside 1500 (bench 900), tops 2180 -> 680 high incl the 16.5 under panel; under panels pos_z 1500 (`_tmp-6571-oh680.mjs`). WC-03 duct hole centre 380 up (1780-1980 AFF, hood top ~1773, brick line 2000), doors 638.
 - WC-03 `rangehood` was re-saved from an app tab on pre-R13 code mid-session: duct setting dropped and **shelf_h 170** (was 500). Duct put back (`_tmp-6571-duct-fix.mjs`); shelf left at 170 - asked Mark (it sits inside the 273 hood height).
 - 2026-11-18 approval drawings: Line Drawing Print, plan at **1:25** (1:20 cut the El C dim rows), plan blocks re-spaced for it (`_tmp-6571-sq-move.mjs`: appliances y 2050, SITE NOTES 4150/1600, SITE QUESTIONS 4230/2450 width 76). Mark's 11 un-layered pen strokes -> new job layer "Notes for Ai" (print off); the rest are on Site measure (print off). Saved `PDF\Drawings to be Approved\RHK6571 - Geraldine Wheaton - 95 Orient Dr, Sunrise Beach - Shop Drawings Rev 3.pdf` (6 pages); the 11/11 draft moved to `_Superseeded` (dated). Reply draft to Gerry in Outlook (Mark attaches the PDF).
+## SIGNED 2026-11-19 - Rev 3 approved
+- Gerry signed Rev 3 (signed + dated sheets 1 and 6, no markups/changes) + the Issue 1 quote. Saved `PDF\Approved Plans\RHK6571 - Geraldine Wheaton - Kitchen Shop Drawings Rev 3 - SIGNED 20261119.pdf`.
+- Stone: Axxon PO RH15448, template booked 01.12.26.
+- **Bin**: Gerry wants one -> Mark 2026-11-19: **2 x 15 L pull-out bin behind a door** in BC-04 (sink cupboard). Hardware model TBC; add to quote/ordering.
+- **Rangehood** WRR626SB dropped at the workshop 2026-11-19 -> measure the real unit, then tweak WC-03 (hood size, WC-13 notch, shelf_h still 170, duct hole, doors 638) BEFORE nesting.
+- Before the machine: pre-release checks (WC-04/WC-16, BC-04 wide carcass, BC-08..10 450 drawers re-resolve, BC-09 inner drawer, KICK 3), then production run.
+
 - Mark 2026-11-18: no site notes / questions on the PDF, specs only: job layers Site notes + Questions for Client print off; beam labels, the 2180 dims and the El B sink note moved to General so they still print. Rev 3 PDF re-saved (same name).
