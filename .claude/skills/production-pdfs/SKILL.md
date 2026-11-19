@@ -60,3 +60,10 @@ separate "Specifications" page may drop — that's expected.
 Open with pymupdf (`python -I`): page count + first line per page (`<Room> Plan / Elevation Wall n / 3D`),
 render a page or two to PNG and look — black line drawing with the title block (shop drawings); kick
 lengths, depths and `KICK H` on the kick plan. Tell Mark the two full paths when done.
+
+## Hardware pick list (when Mark asks)
+
+`node z_plan_automation/export-pick-list.mjs <roomId> <out.pdf>` — Job Reports › Hardware Pick List, catches the
+Print / PDF popup and prints it to A4 (`--report takeoff` for the Takeoff). Every room of the job is on it. Save as
+`<shop drawings name> HARDWARE PICK LIST.pdf` in the same Production folder (RHK6571, 2026-11-19).
+

@@ -94,3 +94,9 @@ Backup of every touched row before the run: session scratchpad `rhk6571-rev3-bac
 - Before the machine: pre-release checks (WC-04/WC-16, BC-04 wide carcass, BC-08..10 450 drawers re-resolve, BC-09 inner drawer, KICK 3), then production run.
 
 - Mark 2026-11-18: no site notes / questions on the PDF, specs only: job layers Site notes + Questions for Client print off; beam labels, the 2180 dims and the El B sink note moved to General so they still print. Rev 3 PDF re-saved (same name).
+
+## Production R1 - 2026-11-19
+- Optimiser run **RHK6571-R1** (Kitchen, all 173 parts, Best): Whiteboard 16.5 11 sheets (88%), PT Colour Matt 16 Classic White Matt 5 sheets (83%), all 2415 x 1211, nothing unplaced. Mark checked Stage 5. 7 panels / filler taped all 4 edges - Mark: leave as is.
+- CNC: `CNCFiles/RHK6571 - Geraldine Wheaton - 95 Orient Dr, Sunrise Beach/Kitchen R1/16mm Whiteboard` + `/16mm PT Classic White Matt` (programs, cut sheets, labels 173, .rhkrun).
+- PDFs in `_JOBS\...\PDF\Production`: `RHK6571 - Geraldine Wheaton - Kitchen.pdf` (shop drawings 1:25, 6 pages), `... Kitchen KICK PLAN.pdf`, `... Kitchen HARDWARE PICK LIST.pdf`.
+- Bin: Mark buying a 2 x 15 L pull-out from Bunnings (not on the pick list).
