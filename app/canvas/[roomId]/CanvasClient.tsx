@@ -36,6 +36,7 @@ import PhoneDrawerTab from './PhoneDrawerTab'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { floatShelfThickness } from '@/src/lib/floatShelf'
 import { withLabelOff, type LabelOff, type LabelView } from '@/src/lib/labelOffsets'
+import { declutterPlanLabels } from '@/src/lib/labelDeclutter'
 import { filterHiddenMap } from '@/src/lib/resolver/filterHidden'
 import { invalidateResolverCaches } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { useCanvasHistory } from './useCanvasHistory'
@@ -2277,6 +2278,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         // Same path as the Fixture panel's fields (x / y / rotation re-link to the cabinet under it).
         async updateFixture(id: string, patch: Partial<Pick<RoomFixture, 'x' | 'y' | 'rotation' | 'z' | 'width' | 'depth' | 'height'>>) {
           await fx.update(id, patch)
+        },
+        // Plan names printed on top of each other (e.g. WUP under panel over a WC):
+        // the non-under-panel name steps back toward the wall, inside its cabinet.
+        // Saved as label_offsets.plan — same as dragging it. Hand-moved names are left.
+        declutterPlanLabels(opts?: { scale?: number; dryRun?: boolean }) {
+          const moves = declutterPlanLabels(cabinets, walls, { scale: opts?.scale })
+          if (!opts?.dryRun) for (const m of moves) saveCabLabel(m.id, 'plan', m.off)
+          return moves
         },
       }
       ;(window as unknown as { __canvasApi?: typeof api }).__canvasApi = api

@@ -47,6 +47,12 @@ through the real placement/resolve pipeline — you only produce a layout JSON.
    To re-check an existing room later without redrawing:
    `node z_plan_automation/resolver-report.mjs <roomId>` (exit 0 clean /
    2 warnings / 3 errors).
+7. **Pull overlapping plan names apart**: `node z_plan_automation/declutter-plan-labels.mjs <roomId>`
+   (`--dry` to preview, `--scale 25` for a 1:25 plan; default 1:20). Where two names
+   print on top of each other (a WUP / BUP under panel over the WC / BC above it), the
+   non-under-panel name moves back toward the wall, inside its own cabinet. It's saved as
+   `label_offsets.plan` (same as dragging the name, right-click resets it); hand-moved
+   names are left alone. Run it again after any re-layout (Mark 2026-11-20).
 
 ## Walls — MUST be drawn clockwise (user's explicit rule)
 
