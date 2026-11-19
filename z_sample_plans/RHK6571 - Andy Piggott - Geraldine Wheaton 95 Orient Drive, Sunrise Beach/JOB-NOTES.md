@@ -86,6 +86,10 @@ Backup of every touched row before the run: session scratchpad `rhk6571-rev3-bac
 - Stone: Axxon PO RH15448, template booked 01.12.26.
 - **Bin**: Gerry wants one -> Mark 2026-11-19: **2 x 15 L pull-out bin behind a door** in BC-04 (sink cupboard). Hardware model TBC; add to quote/ordering.
 - **Rangehood** WRR626SB dropped at the workshop 2026-11-19 -> measure the real unit, then tweak WC-03 (hood size, WC-13 notch, shelf_h still 170, duct hole, doors 638) BEFORE nesting.
+- **WC-03 rangehood fit** (Mark 2026-11-19, spec: 555 x 230 body on a 600 x 42 base; `_tmp-6571-wc03-cover.mjs`, `-wc03-hinge`, `-wc13-short`): gables start **42 up** (SCRBT 42) so the 600 base fits under them; shelf on top of the hood **shelf_h 275**, U notch 200 x 213.5 from the back, centred (Mark's sheet CAD); **duct cover** = custom parts, 2 sides 16.5 at x 183.5-200 / 400-416.5 x 213.5 deep + front 233.5 at z 230-246.5 (front edged both long edges), shelf top 291.5 -> top 663.5; lower hinges 250 -> 300 (cleared the shelf). Duct hole stays 200 dia centre 380 - its "runs into the fixed shelf" warning is a false alarm (the hole sits in the shelf notch). Backup of the row: session scratchpad `wc03-backup.json`.
+- **WC-13 under panel 750 -> 150**: stops under WC-02, nothing under the rangehood (Mark); WC-16 carries on under WC-04.
+- **BC-09 inner drawer** front 581-694 ran 4 into the top drawer's finger rail (690): Lock Y 579 -> 570 (front 572-685, 5 clear). New error INNER_DRAWER_RAIL_CLASH flags this (z_handles).
+- **KICK 1** (El C) stopped at 2803.5, 58.5 short of KICK 3's face (2745) at the corner: TOESCR -58.5 -> 848.5 long, butts KICK 3's face (KICK 3 runs through to the wall under the blind).
 - Before the machine: pre-release checks (WC-04/WC-16, BC-04 wide carcass, BC-08..10 450 drawers re-resolve, BC-09 inner drawer, KICK 3), then production run.
 
 - Mark 2026-11-18: no site notes / questions on the PDF, specs only: job layers Site notes + Questions for Client print off; beam labels, the 2180 dims and the El B sink note moved to General so they still print. Rev 3 PDF re-saved (same name).

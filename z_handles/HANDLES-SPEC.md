@@ -758,3 +758,10 @@ short ends and two long ends edged."
 - Exact sizes only (862 doesn't pair with 863). An odd one left over stays single and cuts at 70 under the
   small-part rule. Timber pulls (D19) are never paired. The model / Parts tab keep each strip's true size.
 - First use RHK6581 kitchen: 22 strips → 10 pairs + 3 singles (BC-05 863, BC-10 448, TC-02 2370).
+
+## Inner drawer ↔ finger rail clearance (2026-11-19)
+Mark (RHK6571 BC-09): an inner drawer's front rose 4 into the top drawer's D24 rail. Now an **error**
+`INNER_DRAWER_RAIL_CLASH` (cabinet errors panel) when an inner drawer front comes within **3** of a finger rail
+(rail Y bottom..top, its zone from the rail's back face — behind any set back pocket — to the carcass front).
+`src/lib/resolver/innerDrawerRailClash.ts`, test `innerDrawerRailClash.test.ts`. Fix in Cabinet Edit › Interior ›
+the inner drawer › Lock Y.

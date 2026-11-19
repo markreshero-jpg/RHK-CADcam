@@ -18,6 +18,7 @@ import { resolveJoints }         from './resolveJoints'
 import { enumerateHandFixJoints, handFixPartName } from './shapedSeams'
 import { resolveHinges }         from './resolveHinges'
 import { checkHingeFixedShelfClash, checkHingeInnerDrawerClash, checkHingeRailClash, checkHingeShelfHoleClash } from './hingeClash'
+import { checkInnerDrawerRailClash } from './innerDrawerRailClash'
 import { shapeCaseParts, shapeShelves } from './resolveShapedCase'
 import { resolveShapedFaces } from './resolveShapedFace'
 import { shapedHardwareCtx, drawerOpening, drawerClashes } from './resolveShapedHardware'
@@ -216,6 +217,8 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
   allErrors.push(...checkHingeShelfHoleClash(hingeInstances, caseParts, internalParts, seamJoints))
   allErrors.push(...checkHingeFixedShelfClash(hingeInstances, internalParts))
   allErrors.push(...checkHingeRailClash(hingeInstances, caseParts))
+  // Inner drawer front into a finger rail — the drawer can't open (Mark, RHK6571 BC-09).
+  allErrors.push(...checkInnerDrawerRailClash(backingRails, internalParts))
 
   // ── 6e. Part cut-outs (z_rangehood R1 / R2) ───────────────────
   // Notches + holes cut in the finished parts — formulas see the parts as resolved.
