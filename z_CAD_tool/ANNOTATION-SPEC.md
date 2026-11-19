@@ -443,6 +443,9 @@ A2 checked in-app by Mark 2026-10-18 ("looks good").
     **Picking another tool** (panel button or shortcut key, e.g. back to Select)
     also finishes it up to the last clicked point — same for a freehand cloud
     (Mark, 2026-11-16, `pickTool`).
+    **Line never starts with arrowheads, Arrow always has one** (Mark, 2026-11-20):
+    heads added to a selected line no longer leak into the Line tool's saved
+    defaults (`defaultsFor`).
     `AnnotationLayer`. Arrow = a `line` row with `arrowEnd: 'closed'` (`ARROW_TOOL`).
   - Leader: click the tip, then click the landing. The text editor opens just past
     the landing (`leaderTextAt`), and the row is a `text` with `leader: [tip, landing]`.

@@ -371,7 +371,15 @@ export function useAnnotationTool({
   const defaultsFor = useCallback((key: StyleKey): AnnotationStyle => {
     void prefsTick
     const saved = getUserPrefs().annotStyleDefaults[key] ?? {}
-    return key === 'arrow' ? { ...ARROW_TOOL, ...saved } : saved
+    // Line never draws arrowheads and Arrow always has one (Mark 2026-11-20): adding a
+    // head to a selected line used to save it into the Line tool's defaults, so every
+    // new line came out an arrow. Ignore any such saved heads (also heals old prefs).
+    if (key === 'line') { const { arrowStart: _s, arrowEnd: _e, ...rest } = saved; return rest }
+    if (key === 'arrow') {
+      const st = { ...ARROW_TOOL, ...saved }
+      return (st.arrowStart ?? 'none') === 'none' && (st.arrowEnd ?? 'none') === 'none' ? { ...st, arrowEnd: ARROW_TOOL.arrowEnd } : st
+    }
+    return saved
   }, [prefsTick])
 
   /** The style the ribbon shows: the edit in progress, else the first selected item,
