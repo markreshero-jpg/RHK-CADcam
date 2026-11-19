@@ -2265,6 +2265,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Double-click the cabinet and look at the back in the 3D tab: the round hole sits above the hood. The back is cut with the hole on the machine like any other cut-out.',
       canvas: true, done: c => c.cabEditorOpen },
   ]},
+  // Appended 2026-11-19 (z_CAD_tool SK3: Sketch Straight mode + Straighten).
+  { id: 'cad_sketch_straight', level: 'basics', topic: 'cad', title: 'Straighten a hand-drawn site sketch',
+    blurb: 'Draw walls by hand and let Sketch turn them into straight, square lines.',
+    keywords: 'cad sketch straight straighten tidy square hand drawn freehand site sketch walls room outline pen p', steps: [
+    { id: 'mode', title: 'Pick Sketch, Straight',
+      body: 'In CAD mode pick Sketch (press P), then Straight in the Sketch group of the CAD tools. Your pick is remembered on this computer.',
+      canvas: true, done: c => c.mode === 'cad' },
+    { id: 'draw', title: 'Draw the walls',
+      body: 'Draw a run of walls in one stroke, turning at each corner, and let go. Each leg comes out straight; legs close to level, plumb or 45 degrees are squared up exactly, other angles are kept. Bring the end back to where you started and the outline closes. Start or finish on a snap (a line end, a wall, a cabinet corner) and it joins on there.',
+      canvas: true, done: (c, s) => c.annotations.filter(a => a.kind === 'line' && !(a.geom as { freehand?: boolean }).freehand).length
+        > s.annotations.filter(a => a.kind === 'line' && !(a.geom as { freehand?: boolean }).freehand).length },
+    { id: 'edit', title: 'Fix it up and dimension it',
+      body: 'The result is an ordinary line: drag its corner grips, type exact points in the CAD panel, and dimension it with Dim (D). Undo (Ctrl+Z) takes off the last stroke. A sketch drawn earlier with As drawn or Tidy can be straightened too: select it and click Straighten in the CAD panel.',
+      canvas: true, done: c => c.mode === 'cad' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

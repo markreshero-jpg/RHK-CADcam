@@ -17,7 +17,7 @@ import {
   angleSnap, dedupePts, leaderTextAt, type ArcGeom, type CircleGeom,
   offsetDistanceFor, offsetGeom, moveEdge, edgeDistanceFor, OFFSETTABLE, type OffsetKind,
   filletAt, chamferAt, allCorners, joinPolys, cornerJoin, boxToPoly, nearestSegIndex, type Poly,
-  bulgeArc, isSpecialDim, chainedDim, type SpecialDim, simplifyPath,
+  bulgeArc, isSpecialDim, chainedDim, type SpecialDim, simplifyPath, straightenStroke,
   arcFrom3, arcFromCentre, arcFromEndsRadius, arcPoint, angOf, arcStart, arcMid, arcEnd, sweepOf, setBoxCorner, rectPts, dimOffsetFor, dimLineAndTextFor, dimAxisFor, type DimGeom,
 } from '@/src/lib/annotations/geometry'
 import { resolveStyle, styleKeyOf, ARROW_TOOL, type AnnotationStyle, type ResolvedStyle, type StyleKey } from '@/src/lib/annotations/style'
@@ -31,7 +31,8 @@ import type { AnnotationEditProps, AnnotGrip } from './AnnotationLayer'
 import type { LiveMeasure } from './CadMeasureOverlay'
 
 /** SK2: Sketch keeps the stroke as drawn ('raw', for handwriting) or thins it ('tidy'). */
-export type SketchMode = 'raw' | 'tidy'
+/** SK2 raw / tidy; SK3 straight = each stroke becomes straight legs (site sketches). */
+export type SketchMode = 'raw' | 'tidy' | 'straight'
 export type CadTool = 'select' | 'text' | 'textbox' | 'leader' | 'line' | 'sketch' | 'arrow' | 'rect' | 'ellipse' | 'cloud' | 'dim' | 'arc' | 'circle' | 'offset' | 'fillet' | 'chamfer' | 'join' | 'erase'
 
 /** How the Arc tool draws (B3): start / through / end, centre / start / end, or two ends + radius. */
@@ -298,7 +299,7 @@ export function useAnnotationTool({
   // SK2: Sketch keeps the stroke as drawn (handwriting) or tidies it (thins near-straight
   // runs). Remembered per browser; a ref so the drag handlers read the live value.
   const [sketchMode, setSketchModeState] = useState<SketchMode>(() => {
-    try { return localStorage.getItem('cad.sketchMode') === 'tidy' ? 'tidy' : 'raw' } catch { return 'raw' }
+    try { const m = localStorage.getItem('cad.sketchMode'); return m === 'tidy' || m === 'straight' ? m : 'raw' } catch { return 'raw' }
   })
   const sketchModeRef = useRef(sketchMode)
   const setSketchMode = useCallback((m: SketchMode) => {
@@ -721,6 +722,18 @@ export function useAnnotationTool({
     setAnnotations(xs => xs.map(x => x.id === id ? { ...x, geom } : x))
     void storeRef.current.update(id, { geom })
   }, [captureSnapshot, setAnnotations])
+
+  /** SK3: a freehand sketch (selected) -> straight legs at the current zoom, as a plain
+   *  line. One undo step. False when it isn't a freehand line. */
+  const straightenLine = useCallback((id: string) => {
+    const a = annRef.current.find(x => x.id === id)
+    const g = a?.geom as LineGeom | undefined
+    if (!a || a.kind !== 'line' || !g?.freehand || (g.pts?.length ?? 0) < 2) return false
+    const st = straightenStroke(g.pts, 1 / (zoom * frame.s))
+    if (st.pts.length < 2) return false
+    patchGeom(id, st.closed ? { pts: st.pts, closed: true } : { pts: st.pts })
+    return true
+  }, [zoom, frame.s, patchGeom])
 
   const cancelEdit = useCallback(() => setEditing(null), [])
   const setEditText = useCallback((text: string) => setEditing(ed => ed && { ...ed, text }), [])
@@ -1233,7 +1246,7 @@ export function useAnnotationTool({
         // SK2: every sample the pen / mouse sent since the last frame (the browser batches
         // them to ~60 a second, which turned quick handwriting into straight chords).
         const evs = (typeof ev.getCoalescedEvents === 'function' ? ev.getCoalescedEvents() : []) as PointerEvent[]
-        const gap = sketchModeRef.current === 'tidy' ? 1.5 : 0.5   // screen px between kept points
+        const gap = sketchModeRef.current === 'raw' ? 0.5 : 1.5   // screen px between kept points
         const pts = [...cur.pts]
         for (const e of evs.length ? evs : [ev]) {
           const p = toFrame(e, false), last = pts[pts.length - 1]
@@ -1403,7 +1416,16 @@ export function useAnnotationTool({
         if (pts.length < 2 || pts.reduce((s, p, i) => i ? s + segLength(pts[i - 1], p) : 0, 0) < 3 * px) return   // a click, not a stroke
         const { arrowStart: _s, arrowEnd: _e, ...style } = defaultsFor('line')
         void _s; void _e
-        const row = newRow('line', { pts, freehand: true }, null, style)
+        let geom: LineGeom = { pts, freehand: true }
+        if (sketchModeRef.current === 'straight') {
+          // SK3: straight legs, squared to 45 / 90 deg; an end on a snap (wall end, line
+          // end, cabinet corner) joins it. Saved as a plain line: grips, dims, Join work.
+          const hit = (q: Pt) => { const r = snap(q, null, NO_IDS); return r.kind ? r.pt : null }
+          const st = straightenStroke(raw, px, { start: hit(raw[0]), end: hit(raw[raw.length - 1]) })
+          if (st.pts.length < 2) return
+          geom = st.closed ? { pts: st.pts, closed: true } : { pts: st.pts }
+        }
+        const row = newRow('line', geom, null, style)
         captureSnapshot()
         setAnnotations(xs => [...xs, row])
         void insertRows([row])
@@ -1461,7 +1483,7 @@ export function useAnnotationTool({
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
-  }, [captureSnapshot, toFrame, setAnnotations, k, finishPlace, cloudMode, eraseStep, finishErase, frame, toWorld])
+  }, [captureSnapshot, toFrame, setAnnotations, k, finishPlace, cloudMode, eraseStep, finishErase, frame, toWorld, snap])
 
   /** Empty canvas under CAD mode: place text / click out lines / start a marquee. */
   const onCaptureDown = useCallback((e: React.PointerEvent) => {
@@ -1904,7 +1926,7 @@ export function useAnnotationTool({
     drawing, drawPreview, finishDrawing, startAddLeader, removeLeader,
     dimMode, setDimMode, applyDimText, chain, arcMode, setArcMode, offsetSrc: offsetSrcA,
     filletR, setFilletR, chamfer, setChamfer, modPick, modMsg, cornerOp, setLineClosed, convertToLines,
-    startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, insertItems, cloudMode, setCloudMode, sketchMode, setSketchMode, pending,
+    startJoinFrom, startOffsetFrom, menu, closeMenu: () => setMenu(null), paste, insertItems, cloudMode, setCloudMode, sketchMode, setSketchMode, straightenLine, pending,
     /** Last object snap under the cursor (frame mm) — the canvas draws its marker. */
     snapHit: active ? snapHit : null,
     /** LW1: true = printed line weights on screen; hairline = the cap to pass AnnotationLayer. */

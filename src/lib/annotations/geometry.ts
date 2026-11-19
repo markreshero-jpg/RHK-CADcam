@@ -1034,3 +1034,99 @@ export function simplifyPath(pts: Pt[], tol: number): Pt[] {
   }
   return pts.filter((_, i) => keep[i])
 }
+
+/** SK3: straighten a hand-drawn stroke into a clean polyline (site sketches, walls).
+ *  `px` = drawing units per screen pixel, so the tolerances follow the zoom the stroke
+ *  was drawn at. Steps: find the corners (RDP 6 px), drop legs shorter than 12-30 px
+ *  (a rounded corner), merge legs within 12 deg of each other, square each leg to the
+ *  nearest 45 deg when it is within 10 deg, then rebuild the corners where neighbouring
+ *  legs meet. An end that comes back within ~24 px of the start closes the outline.
+ *  `anchors` pins an open stroke's start / end to a snapped point (a wall end, another
+ *  line's end); the first / last leg keeps its squared direction and slides onto it. */
+export function straightenStroke(raw: Pt[], px: number, anchors: { start?: Pt | null; end?: Pt | null } = {}): { pts: Pt[]; closed: boolean } {
+  if (raw.length < 2) return { pts: raw.slice(), closed: false }
+  const d = (a: Pt, b: Pt) => Math.hypot(b.x - a.x, b.y - a.y)
+  let v = simplifyPath(raw, 6 * px)
+  // Short legs (a rounded corner, a flick at the end): fold them away. 12 px, up to
+  // 30 px on a big stroke (6 % of its length).
+  const len0 = v.reduce((s, p, i) => i ? s + d(v[i - 1], p) : 0, 0)
+  const minLeg = Math.max(12 * px, Math.min(30 * px, 0.06 * len0))
+  for (let again = true; again && v.length > 2;) {
+    again = false
+    for (let i = 0; i < v.length - 1; i++) {
+      if (d(v[i], v[i + 1]) >= minLeg) continue
+      if (i === 0) v.splice(1, 1)
+      else if (i + 1 === v.length - 1) v.splice(i, 1)
+      else v.splice(i, 2, { x: (v[i].x + v[i + 1].x) / 2, y: (v[i].y + v[i + 1].y) / 2 })
+      again = true; break
+    }
+  }
+  const turn = (a: Pt, b: Pt, c: Pt) => {
+    const t = Math.abs(Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(b.y - a.y, b.x - a.x)) % (2 * Math.PI)
+    return Math.min(t, 2 * Math.PI - t)
+  }
+  const MERGE = 12 * Math.PI / 180
+  for (let again = true; again && v.length > 2;) {
+    again = false
+    for (let i = 1; i < v.length - 1; i++) if (turn(v[i - 1], v[i], v[i + 1]) < MERGE) { v.splice(i, 1); again = true; break }
+  }
+  if (v.length === 2 && d(v[0], v[1]) < 1e-9) return { pts: v, closed: false }
+  // Closed outline: the end came back near the start.
+  const perim = v.reduce((s, p, i) => i ? s + d(v[i - 1], p) : 0, 0)
+  const closed = v.length >= 4 && d(v[0], v[v.length - 1]) <= Math.max(24 * px, 0.08 * perim)
+  if (closed) {
+    v = v.slice(0, -1)
+    // the closing leg may run straight on from the first or last leg
+    while (v.length > 3 && turn(v[v.length - 1], v[0], v[1]) < MERGE) v.shift()
+    while (v.length > 3 && turn(v[v.length - 2], v[v.length - 1], v[0]) < MERGE) v.pop()
+  }
+  const n = closed ? v.length : v.length - 1   // legs
+  const SNAP = 10 * Math.PI / 180, STEP = Math.PI / 4
+  type Leg = { p: Pt; dx: number; dy: number }
+  const legs: Leg[] = []
+  for (let i = 0; i < n; i++) {
+    const a = v[i], b = v[(i + 1) % v.length], L = d(a, b) || 1
+    let dx = (b.x - a.x) / L, dy = (b.y - a.y) / L
+    const th = Math.atan2(dy, dx), k = Math.round(th / STEP) * STEP
+    if (Math.abs(th - k) <= SNAP) {
+      dx = Math.cos(k); dy = Math.sin(k)
+      if (Math.abs(dx) < 1e-12) dx = 0
+      if (Math.abs(dy) < 1e-12) dy = 0
+    }
+    legs.push({ p: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, dx, dy })
+  }
+  const proj = (q: Pt, l: Leg): Pt => { const t = (q.x - l.p.x) * l.dx + (q.y - l.p.y) * l.dy; return { x: l.p.x + t * l.dx, y: l.p.y + t * l.dy } }
+  const meet = (l1: Leg, l2: Leg): Pt | null => {
+    const cr = l1.dx * l2.dy - l1.dy * l2.dx
+    if (Math.abs(cr) < Math.sin(5 * Math.PI / 180)) return null
+    const t = ((l2.p.x - l1.p.x) * l2.dy - (l2.p.y - l1.p.y) * l2.dx) / cr
+    return { x: l1.p.x + t * l1.dx, y: l1.p.y + t * l1.dy }
+  }
+  if (!closed) {
+    const s = anchors.start ?? null, e = anchors.end ?? null
+    if (n === 1 && s && e) return { pts: [s, e], closed: false }
+    if (s) legs[0].p = s
+    if (e) legs[n - 1].p = e
+  }
+  /** Corner between two legs (the hand's corner `orig`). Parallel legs (a step) get a
+   *  square step; a meeting point far off (a shallow angle) keeps the hand's corner. */
+  const corner = (l1: Leg, l2: Leg, orig: Pt, reach: number): Pt[] => {
+    const m = meet(l1, l2)
+    if (m && d(m, orig) <= reach) return [m]
+    if (!m) { const a = proj(orig, l1), b = proj(orig, l2); return d(a, b) < 1e-9 ? [a] : [a, b] }
+    return [orig]
+  }
+  const reachAt = (prev: Pt, o: Pt, next: Pt) => Math.max(24 * px, 0.5 * Math.min(d(prev, o), d(o, next)))
+  const out: Pt[] = []
+  if (closed) {
+    for (let j = 0; j < n; j++) {
+      const pj = (j - 1 + n) % n
+      out.push(...corner(legs[pj], legs[j], v[j], reachAt(v[pj], v[j], v[(j + 1) % n])))
+    }
+  } else {
+    out.push(anchors.start ?? proj(v[0], legs[0]))
+    for (let j = 1; j < n; j++) out.push(...corner(legs[j - 1], legs[j], v[j], reachAt(v[j - 1], v[j], v[j + 1])))
+    out.push(anchors.end ?? proj(v[v.length - 1], legs[n - 1]))
+  }
+  return { pts: out, closed }
+}

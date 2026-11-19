@@ -412,7 +412,12 @@ function SelectedInfo({ a, cad, k }: { a: RoomAnnotation; cad: AnnotationTool; k
       const g = a.geom as LineGeom, pts = g.pts ?? [], closed = (a.kind === 'cloud' && !(a.geom as { open?: boolean }).open) || !!g.closed
       return <>
         {g.freehand
-          ? <div className="text-[11px] text-gray-500">Freehand sketch ({pts.length} points). Drag to move; colour, weight and dash in the CAD tools.</div>
+          ? <>
+              <div className="text-[11px] text-gray-500">Freehand sketch ({pts.length} points). Drag to move; colour, weight and dash in the CAD tools.</div>
+              <button onClick={() => cad.straightenLine(a.id)}
+                title="Turn this sketch into straight lines squared to 45 / 90 deg (corners found for you; a shape drawn back to its start closes). Ctrl+Z undoes it."
+                className="mt-2 text-xs px-2 py-1 rounded bg-gray-800 border border-gray-700 text-gray-200 hover:bg-gray-700">Straighten</button>
+            </>
           : <PointTable pts={pts} closed={closed} bulges={g.bulges} onPoint={(i, p) => set({ ...g, pts: pts.map((q, j) => j === i ? p : q) })} />}
         {closed && pts.length >= 3 && (() => {
           const c = { x: pts.reduce((s, p) => s + p.x, 0) / pts.length, y: pts.reduce((s, p) => s + p.y, 0) / pts.length }
