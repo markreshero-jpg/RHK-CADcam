@@ -21,7 +21,7 @@ export function planShowsCabinet(cab: CabinetInstance, layers: Layers, rp: Resol
   if (rp?.drawer_stacks.some(ds => ds.box_parts.some(p => layers.show(drawerBoxPartItem(p.part_type))))) return true
   if (layers.show('drawer_runners') && rp?.drawer_stacks.some(ds => ds.slides.length)) return true
   if (shownCustom(layers, rp)) return true
-  if (cab.has_face && layers.any('doors', 'drawer_fronts')) return true
+  if (cab.has_face && layers.any('doors', 'drawer_fronts', 'false_panels')) return true
   return !!cab.has_internal && layers.show('internal_outline')
 }
 

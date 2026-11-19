@@ -111,7 +111,8 @@ export const LAYER_ITEMS: LayerItemDef[] = [
   // Fronts
   { id: 'doors',          group: 'fronts', label: 'Doors',          views: ALL, default: ON },
   { id: 'drawer_fronts',  group: 'fronts', label: 'Drawer fronts',  views: ALL, default: ON },
-  { id: 'false_panels',   group: 'fronts', label: 'False panels',   views: ['elevation', '3d'], default: ON },
+  // Plan draws false panels too (CanvasSVG face zones) — listed there so a set can turn them off (Mark 2026-11-20, Kicks set).
+  { id: 'false_panels',   group: 'fronts', label: 'False panels',   views: ALL, default: ON },
   { id: 'door_swings',    group: 'fronts', label: 'Door swings',    views: ['plan'], default: ON },
   { id: 'drawer_lines',   group: 'fronts', label: 'Drawer lines',   views: ['plan'], default: ON },
   { id: 'door_chevrons',  group: 'fronts', label: 'Door chevrons',  views: ['elevation'], default: ON },
