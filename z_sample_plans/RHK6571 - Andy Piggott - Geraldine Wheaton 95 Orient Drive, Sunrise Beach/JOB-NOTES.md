@@ -90,6 +90,7 @@ Backup of every touched row before the run: session scratchpad `rhk6571-rev3-bac
 - **WC-13 under panel 750 -> 150**: stops under WC-02, nothing under the rangehood (Mark); WC-16 carries on under WC-04.
 - **BC-09 inner drawer** front 581-694 ran 4 into the top drawer's finger rail (690): Lock Y 579 -> 570 (front 572-685, 5 clear). New error INNER_DRAWER_RAIL_CLASH flags this (z_handles).
 - **KICK 1** (El C) stopped at 2803.5, 58.5 short of KICK 3's face (2745) at the corner: TOESCR -58.5 -> 848.5 long, butts KICK 3's face (KICK 3 runs through to the wall under the blind).
+- **Overheads 330 -> 300 deep carcasses** (Mark 2026-11-19, `_tmp-6571-oh300.mjs`, backup session scratchpad `oh330-backup.json`): WC-01..03, 05..12 dz 300 (end panels too); WC-04 WCNP legs leg_back / leg_side 300 (doors now 277.5 + 311); under panels WC-13/14/15 dz 280 (set back 20), WC-16 L outline on 280; WC-03 hood body depth 283.5 (inside the back), shelf 283.5 deep, duct cover unchanged (front face 246.5 from the back, 53.5 behind the doors). Hood is 300 overall incl. its visor -> visor front about flush with the door faces; check on the unit.
 - Before the machine: pre-release checks (WC-04/WC-16, BC-04 wide carcass, BC-08..10 450 drawers re-resolve, BC-09 inner drawer, KICK 3), then production run.
 
 - Mark 2026-11-18: no site notes / questions on the PDF, specs only: job layers Site notes + Questions for Client print off; beam labels, the 2180 dims and the El B sink note moved to General so they still print. Rev 3 PDF re-saved (same name).
