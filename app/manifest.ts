@@ -12,6 +12,10 @@ export default function manifest(): MetadataRoute.Manifest {
     display: 'standalone',
     background_color: '#0a0a0a',
     theme_color: '#0a0a0a',
-    icons: [{ src: '/favicon.ico', sizes: 'any', type: 'image/x-icon' }],
+    // Drawn in public/app-icon.svg; the iPhone icon is app/apple-icon.png (same picture, 180).
+    icons: [
+      { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
+      { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },
+    ],
   }
 }
