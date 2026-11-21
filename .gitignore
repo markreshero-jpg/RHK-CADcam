@@ -52,3 +52,6 @@ Error_Pics/
 
 # Headless optimiser runs (G-code + sheet PDFs) — local output only
 z_nc_output/
+
+# database password for the nightly backup (never commit)
+.db-password.txt
