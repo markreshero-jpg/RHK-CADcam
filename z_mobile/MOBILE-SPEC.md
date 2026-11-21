@@ -66,8 +66,11 @@ cabinet editors stay desktop-first.
    `useIsPhone`, so the desktop layout is untouched:
    - header fits one line: no tagline, Settings is the cog only, "New Project" reads "New"
    - status tiles are one row that slides sideways (not a 2 × 4 block)
-   - "Recently worked on" sits above the job list, Library below it (`aside` is
-     `contents` below `lg`, children ordered)
+   - "Recently worked on" is one row of job cards that slides sideways above the job
+     list (2 latest rooms each, "+N more" searches the job), and is hidden while
+     searching so results start straight under the tiles (Mark 2026-11-21: the full
+     list pushed searched jobs off screen). Library sits below the job list (`aside`
+     is `contents` below `lg`, children ordered)
    - job card: name / client / address full width, then a row of rooms ▸, Take offline,
      archive, delete; created date and room dimensions hidden; tapping the name opens
      the rooms (all devices)

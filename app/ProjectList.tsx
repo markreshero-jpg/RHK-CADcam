@@ -421,33 +421,44 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
 
         {/* ── Side panel ── phones: Recently worked on sits above the job list, Library below it */}
         <aside className="contents lg:block lg:space-y-4">
-          <div className="order-first lg:order-none min-w-0 bg-surface border border-edge rounded-lg">
+          {/* Below lg: one row of job cards that slides sideways, and out of the way while
+              searching, so the job list / search results start straight under the tiles. */}
+          <div className={`order-first lg:order-none min-w-0 -mx-4 lg:mx-0 lg:bg-surface lg:border lg:border-edge lg:rounded-lg ${searching ? 'hidden lg:block' : ''}`}>
             <h3 className="px-4 pt-3 pb-2 text-xs font-semibold text-ink-subtle uppercase tracking-wider">
               Recently worked on
             </h3>
             {recent.length === 0 && <p className="px-4 pb-3 text-xs text-ink-subtle italic">Nothing yet</p>}
-            <ul className="pb-2">
+            <ul className="flex gap-2 overflow-x-auto px-4 pb-1 lg:block lg:px-0 lg:pb-2">
               {recent.map(({ p, t }) => (
-                <li key={p.id} className="px-4 py-2 border-t border-edge/60 first:border-t-0">
+                <li key={p.id} className="shrink-0 w-60 lg:w-auto rounded-lg border border-edge bg-surface px-3 py-2 lg:rounded-none lg:border-0 lg:border-t lg:border-edge/60 lg:bg-transparent lg:px-4 lg:first:border-t-0">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-medium text-ink truncate" title={p.name}>{p.name}</span>
                     <span className="text-[10px] text-ink-subtle shrink-0">{timeAgo(t)}</span>
                   </div>
                   {p.rooms.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
-                      {roomsByActivity(p.rooms).slice(0, 6).map(r => (
+                      {/* cards (below lg) show the 2 latest rooms, the side panel 6 */}
+                      {roomsByActivity(p.rooms).slice(0, 6).map((r, i) => (
                         <Link
                           key={r.id}
                           href={`/canvas/${r.id}`}
-                          className="text-xs sm:text-[11px] text-ink-muted hover:text-white hover:bg-accent bg-surface-2 rounded px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 transition-colors"
+                          className={`${i >= 2 ? 'hidden lg:inline-block' : ''} max-w-full truncate text-xs lg:text-[11px] text-ink-muted hover:text-white hover:bg-accent bg-surface-2 rounded px-2.5 py-1.5 lg:px-1.5 lg:py-0.5 transition-colors`}
                         >
                           {r.name}
                         </Link>
                       ))}
+                      {p.rooms.length > 2 && (
+                        <button
+                          onClick={() => setQuery(p.job_number || p.name)}
+                          className="lg:hidden text-xs text-ink-subtle hover:text-ink px-1 py-1.5"
+                        >
+                          +{p.rooms.length - 2} more
+                        </button>
+                      )}
                       {p.rooms.length > 6 && (
                         <button
                           onClick={() => setQuery(p.job_number || p.name)}
-                          className="text-xs sm:text-[11px] text-ink-subtle hover:text-ink px-1 py-1.5 sm:py-0.5"
+                          className="hidden lg:inline text-[11px] text-ink-subtle hover:text-ink px-1 py-0.5"
                         >
                           +{p.rooms.length - 6} more
                         </button>
