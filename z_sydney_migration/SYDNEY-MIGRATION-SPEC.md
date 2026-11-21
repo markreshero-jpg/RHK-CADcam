@@ -25,6 +25,18 @@ problem; Adelaide → Sydney is a few tens of ms.
 | App config | only `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (all code reads env — no hardcoded ref in `src/`/`app/`) |
 | Vercel | functions ran in the default `iad1` (Washington DC) until 2026-11-21 (confirmed: auth log caller IPs were AWS us-east; main menu 3.3–4.2 s to first byte). **Interim: `vercel.json` `regions: ["sin1"]`** — next to the Singapore database. Change to `syd1` at the switch (step 8). |
 
+**Re-check 2026-11-22** (Mark asked what's needed to start): database 69 MB, 125 public
+tables, 8 auth users, storage now **232 files / 149 MB in 7 buckets** — `benchtop-textures`
+178, `share-3d` 33, `slide-models` 6, `ai-uploads` 5, `accessory-models` 4,
+`fixture-models` 3, `hinge-models` 3 — so step 6 is a scripted copy, not by hand, and
+the stored-URL count below must be redone (stone photos, share links).
+**Free plan** (Mark): 2 running projects max, so the Resident Hero CRM project is paused
+for the hour (paused projects don't count; one-click restore for 90 days). No
+"restore to a new project" on free → dump + restore (step 3 before the day is moot).
+Phones: offline queues must be sent before the freeze; Take offline copies re-saved after.
+Shared 3D links (`share-3d`) carry the old address → check whether they can be kept.
+Do the SynologyDrive backup first (same tools + password; its test restore is a rehearsal).
+
 ### Gotcha: stored URLs carry the old project ref
 
 21 rows store FULL public storage URLs
