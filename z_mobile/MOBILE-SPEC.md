@@ -62,6 +62,19 @@ cabinet editors stay desktop-first.
    "Delete …" button at the panel foot (`PanelDeleteButton`). Del key and the
    right-click / long-press menus still delete. New properties panels follow this.
 
+7. **Main menu on phones (2026-11-21)** — plain Tailwind breakpoints (below `sm`), no
+   `useIsPhone`, so the desktop layout is untouched:
+   - header fits one line: no tagline, Settings is the cog only, "New Project" reads "New"
+   - status tiles are one row that slides sideways (not a 2 × 4 block)
+   - "Recently worked on" sits above the job list, Library below it (`aside` is
+     `contents` below `lg`, children ordered)
+   - job card: name / client / address full width, then a row of rooms ▸, Take offline,
+     archive, delete; created date and room dimensions hidden; tapping the name opens
+     the rooms (all devices)
+   - bigger tap targets on room names, room chips and icon buttons; search box text is
+     16px so iOS doesn't zoom the page on focus
+   - home-screen app: `app/manifest.ts` (`start_url: '/'`) + `app/apple-icon.png`
+
 ## Phases
 
 - [x] **M1** — detection, viewport, finer lines, phone gestures, phone layout.

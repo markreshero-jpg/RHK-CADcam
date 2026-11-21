@@ -86,36 +86,37 @@ export default async function HomePage({ searchParams }: {
     <div className="min-h-screen bg-canvas text-ink">
 
       {/* Header */}
-      <header className="border-b border-edge px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-accent-ink">
+      <header className="border-b border-edge px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          <span className="text-accent-ink shrink-0">
             <LogoIcon />
           </span>
           <div>
-            <h1 className="text-sm font-bold text-ink tracking-tight leading-none">RHK CADcam</h1>
-            <p className="text-[10px] text-ink-subtle mt-0.5">Cabinet Design & Manufacturing</p>
+            <h1 className="text-sm font-bold text-ink tracking-tight leading-none whitespace-nowrap">RHK CADcam</h1>
+            <p className="hidden sm:block text-[10px] text-ink-subtle mt-0.5">Cabinet Design & Manufacturing</p>
           </div>
           <ThemeToggle className="ml-1" />
         </div>
 
-        <nav className="flex items-center gap-1">
+        <nav className="flex items-center gap-1 shrink-0">
           {isAdmin && (
             <>
               <Link
                 href="/settings"
-                className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors"
+                aria-label="Settings"
+                className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm px-2.5 sm:px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors"
               >
                 <SettingsIcon />
-                Settings
+                <span className="hidden sm:inline">Settings</span>
               </Link>
-              <div className="w-px h-5 bg-edge mx-1" />
+              <div className="hidden sm:block w-px h-5 bg-edge mx-1" />
               <Link
                 data-tour="new-project"
                 href="/projects/new"
-                className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                className="flex items-center gap-2 bg-accent hover:bg-accent-hover text-white text-sm font-semibold px-3 sm:px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
               >
                 <PlusIcon />
-                New Project
+                <span>New<span className="hidden sm:inline"> Project</span></span>
               </Link>
             </>
           )}
@@ -124,7 +125,7 @@ export default async function HomePage({ searchParams }: {
       </header>
 
       {/* Content */}
-      <main className="px-6 py-6 max-w-7xl mx-auto">
+      <main className="px-4 sm:px-6 py-4 sm:py-6 max-w-7xl mx-auto">
         {projects.length === 0 ? (
           <>
             <div className="flex items-center justify-between mb-4">

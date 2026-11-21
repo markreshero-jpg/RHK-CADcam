@@ -190,7 +190,7 @@ function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus
       {/* Room name — navigates to canvas */}
       <Link
         href={`/canvas/${room.id}`}
-        className="flex-1 min-w-0 text-sm font-medium text-ink hover:text-accent-ink truncate transition-colors"
+        className="flex-1 min-w-0 text-[15px] sm:text-sm py-1.5 sm:py-0 font-medium text-ink hover:text-accent-ink truncate transition-colors"
       >
         {room.name}
       </Link>
@@ -207,7 +207,7 @@ function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus
       )}
 
       {/* Dimensions summary (only when set) */}
-      {dim && <span className="text-xs shrink-0 text-ink-muted">{dim}</span>}
+      {dim && <span className="hidden sm:inline text-xs shrink-0 text-ink-muted">{dim}</span>}
 
       {/* Drawing status */}
       <RoomStatusSelect status={room.status ?? 'draft'} onChange={onStatus} />
@@ -215,7 +215,7 @@ function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus
       {/* Edit */}
       <button
         onClick={onEdit}
-        className="flex-none text-ink-subtle hover:text-ink p-1.5 rounded hover:bg-surface-2 transition-colors"
+        className="flex-none text-ink-subtle hover:text-ink p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
         title="Edit room properties"
       >
         <PencilIcon />
@@ -224,7 +224,7 @@ function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus
       {/* Delete */}
       <button
         onClick={onDelete}
-        className="flex-none text-ink-subtle hover:text-red-400 p-1.5 rounded hover:bg-surface-2 transition-colors"
+        className="flex-none text-ink-subtle hover:text-red-400 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
         title="Delete room"
       >
         <TrashIcon />
@@ -529,14 +529,14 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
       <div className={`absolute left-0 top-0 bottom-0 w-0.5 ${cfg.bar}`} />
 
       {/* ── Card header ── */}
-      <div className="flex items-center gap-4 px-5 py-3.5 pl-6">
+      <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1.5 px-4 sm:px-5 py-3 sm:py-3.5 pl-5 sm:pl-6">
 
-        <span className="flex-none text-ink-subtle group-hover:text-ink-muted transition-colors">
+        <span className="hidden sm:inline flex-none text-ink-subtle group-hover:text-ink-muted transition-colors">
           <FolderIcon />
         </span>
 
-        {/* Main info */}
-        <div className="flex-1 min-w-0">
+        {/* Main info — tap / click opens the rooms */}
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpanded(e => !e)}>
           <div className="flex items-center gap-2.5 flex-wrap">
             {project.job_number && !project.name.includes(project.job_number) && (
               <span className="text-xs font-mono text-ink-subtle">{project.job_number}</span>
@@ -555,7 +555,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
               </span>
             )}
             {project.client_address && (
-              <span className="flex items-center gap-1 text-xs text-ink-subtle">
+              <span className="flex items-center gap-1 text-xs text-ink-subtle min-w-0">
                 <LocationIcon />
                 {project.client_address}
               </span>
@@ -564,8 +564,8 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
         </div>
 
         {/* Right side: date + room count + chevron */}
-        <div className="flex items-center gap-5 shrink-0">
-          <span className="flex items-center gap-1.5 text-[11px] text-ink-subtle">
+        <div className="flex items-center gap-1 sm:gap-5 w-full sm:w-auto min-w-0 sm:shrink-0 -ml-2 sm:ml-0">
+          <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-ink-subtle">
             <CalendarIcon />
             {new Date(project.created_at).toLocaleDateString('en-AU', {
               day: 'numeric', month: 'short', year: 'numeric',
@@ -574,19 +574,20 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
 
           <button
             onClick={() => setExpanded(e => !e)}
-            className="flex items-center gap-2 text-xs font-medium text-ink-muted hover:text-ink px-2 py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
+            className="flex-none flex items-center gap-2 text-sm sm:text-xs font-medium text-ink-muted hover:text-ink px-2 py-2 sm:py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
             aria-expanded={expanded}
           >
             <span>{liveRooms.length} {liveRooms.length === 1 ? 'room' : 'rooms'}</span>
             <ChevronIcon expanded={expanded} />
           </button>
+          <span className="flex-1 sm:hidden" />
 
           {liveRooms.length > 0 && <TakeOfflineButton rooms={liveRooms} saved={offlineRooms} />}
 
           <button
             onClick={toggleArchive}
             disabled={archiving}
-            className="flex-none text-ink-subtle hover:text-ink disabled:opacity-40 p-1.5 rounded hover:bg-surface-2 transition-colors"
+            className="flex-none text-ink-subtle hover:text-ink disabled:opacity-40 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
             title={project.status === 'archived' ? 'Unarchive project' : 'Archive project'}
           >
             {project.status === 'archived' ? <UnarchiveIcon /> : <ArchiveIcon />}
@@ -595,7 +596,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
           {(
             <button
               onClick={openDeleteProject}
-              className="flex-none text-ink-subtle hover:text-red-400 p-1.5 rounded hover:bg-surface-2 transition-colors"
+              className="flex-none text-ink-subtle hover:text-red-400 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
               title="Delete project"
             >
               <TrashIcon />
@@ -606,7 +607,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
 
       {/* ── Expanded room list ── */}
       {expanded && (
-        <div className="border-t border-edge bg-surface-2/40 px-3 py-2">
+        <div className="border-t border-edge bg-surface-2/40 px-1.5 sm:px-3 py-2">
           {rooms.length === 0 && !adding && (
             <p className="text-xs text-ink-subtle italic px-3 py-3">No rooms in this project yet</p>
           )}

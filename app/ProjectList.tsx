@@ -244,7 +244,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
 
       {/* ── Search ── */}
       <div className="relative">
@@ -261,7 +261,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
           onChange={e => setQuery(e.target.value)}
           onKeyDown={onSearchKey}
           placeholder="Search jobs — job number, name, client, address or room…"
-          className="w-full bg-surface border border-edge-strong rounded-xl pl-11 pr-24 py-3 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
+          className="w-full bg-surface border border-edge-strong rounded-xl pl-11 pr-16 sm:pr-24 py-3 text-base sm:text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 transition-colors"
         />
         <span className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2">
           {query ? (
@@ -272,20 +272,20 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
               Clear
             </button>
           ) : (
-            <kbd className="text-[10px] text-ink-subtle border border-edge rounded px-1.5 py-0.5 font-mono">/</kbd>
+            <kbd className="hidden sm:inline text-[10px] text-ink-subtle border border-edge rounded px-1.5 py-0.5 font-mono">/</kbd>
           )}
         </span>
       </div>
 
-      {/* ── Status tiles ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+      {/* ── Status tiles ── phones: one row that slides sideways, so the jobs start higher up */}
+      <div className="flex overflow-x-auto -mx-4 px-4 pb-1 sm:mx-0 sm:px-0 sm:pb-0 sm:grid sm:grid-cols-4 lg:grid-cols-8 gap-2">
         {STATUS_TILES.map(s => {
           const on = filter === s.key
           return (
             <button
               key={s.key}
               onClick={() => setFilter(on && s.key !== 'active' ? 'active' : s.key)}
-              className={`text-left rounded-lg border px-3 py-2.5 transition-colors ${
+              className={`shrink-0 w-[7.25rem] sm:w-auto text-left rounded-lg border px-3 py-2.5 transition-colors ${
                 on ? 'border-accent bg-accent/10' : 'border-edge bg-surface hover:border-edge-strong'
               }`}
               aria-pressed={on}
@@ -300,10 +300,10 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-6 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_280px] gap-4 sm:gap-6 items-start">
 
         {/* ── Job list ── */}
-        <section>
+        <section className="min-w-0">
           <div className="flex items-center justify-between mb-3 gap-3">
             <h2 className="text-xs font-semibold text-ink-subtle uppercase tracking-wider">
               {searching ? 'Search results' : filterLabel}
@@ -392,8 +392,8 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
               {showDeleted && (
                 <ul className="space-y-1">
                   {deletedJobs.map(j => (
-                    <li key={j.id} className="flex items-center gap-3 px-4 py-2 rounded-lg border border-edge bg-surface">
-                      <span className="flex-1 min-w-0 truncate text-sm text-ink-subtle line-through">
+                    <li key={j.id} className="flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 px-4 py-2 rounded-lg border border-edge bg-surface">
+                      <span className="basis-full sm:basis-0 flex-1 min-w-0 truncate text-sm text-ink-subtle line-through">
                         {j.job_number && !j.name.includes(j.job_number) ? `${j.job_number} ` : ''}{j.name}
                       </span>
                       {j.client_name && <span className="text-xs text-ink-subtle truncate max-w-[160px]">{j.client_name}</span>}
@@ -419,9 +419,9 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
           )}
         </section>
 
-        {/* ── Side panel ── */}
-        <aside className="space-y-4">
-          <div className="bg-surface border border-edge rounded-lg">
+        {/* ── Side panel ── phones: Recently worked on sits above the job list, Library below it */}
+        <aside className="contents lg:block lg:space-y-4">
+          <div className="order-first lg:order-none min-w-0 bg-surface border border-edge rounded-lg">
             <h3 className="px-4 pt-3 pb-2 text-xs font-semibold text-ink-subtle uppercase tracking-wider">
               Recently worked on
             </h3>
@@ -439,7 +439,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                         <Link
                           key={r.id}
                           href={`/canvas/${r.id}`}
-                          className="text-[11px] text-ink-muted hover:text-white hover:bg-accent bg-surface-2 rounded px-1.5 py-0.5 transition-colors"
+                          className="text-xs sm:text-[11px] text-ink-muted hover:text-white hover:bg-accent bg-surface-2 rounded px-2.5 py-1.5 sm:px-1.5 sm:py-0.5 transition-colors"
                         >
                           {r.name}
                         </Link>
@@ -447,7 +447,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                       {p.rooms.length > 6 && (
                         <button
                           onClick={() => setQuery(p.job_number || p.name)}
-                          className="text-[11px] text-ink-subtle hover:text-ink px-1 py-0.5"
+                          className="text-xs sm:text-[11px] text-ink-subtle hover:text-ink px-1 py-1.5 sm:py-0.5"
                         >
                           +{p.rooms.length - 6} more
                         </button>
@@ -460,14 +460,14 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
           </div>
 
           {isAdmin && (
-            <div className="bg-surface border border-edge rounded-lg pb-2">
+            <div className="min-w-0 bg-surface border border-edge rounded-lg pb-2">
               <h3 className="px-4 pt-3 pb-2 text-xs font-semibold text-ink-subtle uppercase tracking-wider">Library</h3>
               <ul className="grid grid-cols-2 gap-x-2 px-2">
                 {LIBRARY_LINKS.map(l => (
                   <li key={l.href}>
                     <Link
                       href={l.href}
-                      className="block text-xs text-ink-muted hover:text-ink hover:bg-surface-2 rounded px-2 py-1.5 transition-colors"
+                      className="block text-sm sm:text-xs text-ink-muted hover:text-ink hover:bg-surface-2 rounded px-2 py-2 sm:py-1.5 transition-colors"
                     >
                       {l.label}
                     </Link>
