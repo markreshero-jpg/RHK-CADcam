@@ -23,7 +23,7 @@ problem; Adelaide → Sydney is a few tens of ms.
 | Edge functions | none |
 | Extensions | plpgsql, pg_stat_statements, uuid-ossp, pgcrypto, supabase_vault |
 | App config | only `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` (all code reads env — no hardcoded ref in `src/`/`app/`) |
-| Vercel | no `vercel.json` → functions probably run in the default `iad1` (Washington DC) — check |
+| Vercel | functions ran in the default `iad1` (Washington DC) until 2026-11-21 (confirmed: auth log caller IPs were AWS us-east; main menu 3.3–4.2 s to first byte). **Interim: `vercel.json` `regions: ["sin1"]`** — next to the Singapore database. Change to `syd1` at the switch (step 8). |
 
 ### Gotcha: stored URLs carry the old project ref
 
@@ -94,8 +94,8 @@ required: store bucket paths, build the URL from env.)
    it (see `access-control` notes — roles admin/tester, no anon), policies present,
    RPCs present (`persist_resolved_cabinet` etc.).
 8. **Switch**: update `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY` in
-   `.env.local` (Claude) and Vercel env vars (Mark), set Vercel → Settings → Functions
-   → Region = `syd1`, redeploy.
+   `.env.local` (Claude) and Vercel env vars (Mark), change `vercel.json` `regions` from
+   `sin1` to `syd1` (Claude), redeploy.
 9. **Smoke test**: log in (Mark + automation account), open RHK6581 Lee Smith, open a
    cabinet editor + save, room 3D (fixture / hinge models load), optimiser
    nest + drilling + G-code. Re-measure a call (target: tens of ms vs 240 ms).

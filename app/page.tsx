@@ -79,8 +79,12 @@ export default async function HomePage({ searchParams }: {
   searchParams: Promise<{ expand?: string }>
 }) {
   const { expand } = await searchParams
-  const projects = await getProjectsWithRooms()
-  const isAdmin = (await fetchRole(await createServerClient())) === 'admin'
+  // Side by side, not one after the other: each database call is a round trip.
+  const [projects, role] = await Promise.all([
+    getProjectsWithRooms(),
+    createServerClient().then(fetchRole),
+  ])
+  const isAdmin = role === 'admin'
 
   return (
     <div className="min-h-screen bg-canvas text-ink">
