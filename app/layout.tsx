@@ -40,6 +40,16 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('theme');document.documentElement.classList.add(t==='light'?'light':'dark');}catch(e){document.documentElement.classList.add('dark');}})();`,
           }}
         />
+        {/* Home-screen app: a fresh launch always starts on the main menu. An icon added
+            from a job page (or before app/manifest.ts existed) keeps that job's address,
+            so the phone reopened the same old job after the app was quit. First page of a
+            new session + opened from the home screen + not arrived from a link = a launch.
+            Skipped with no signal (the offline pages take over) and on login / share pages. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=sessionStorage;if(s.getItem('rhk.launched'))return;s.setItem('rhk.launched','1');var app=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;var p=location.pathname;if(app&&!document.referrer&&navigator.onLine!==false&&p!=='/'&&!/^\\/(login|offline|share)/.test(p))location.replace('/');}catch(e){}})();`,
+          }}
+        />
       </head>
       <body className="min-h-full flex flex-col">{children}<TutorialHost /><PresenceTracker /><ServiceWorkerSetup /></body>
     </html>
