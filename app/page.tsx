@@ -108,7 +108,7 @@ export default async function HomePage({ searchParams }: {
               <Link
                 href="/settings"
                 aria-label="Settings"
-                className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm px-2.5 sm:px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors"
+                className="flex items-center gap-2 text-ink-muted hover:text-ink text-sm px-2.5 sm:px-3 py-2 rounded-lg hover:bg-surface-2 transition-colors max-sm:[&_svg]:size-5"
               >
                 <SettingsIcon />
                 <span className="hidden sm:inline">Settings</span>

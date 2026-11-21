@@ -267,7 +267,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
           {query ? (
             <button
               onClick={() => { setQuery(''); searchRef.current?.focus() }}
-              className="text-xs text-ink-subtle hover:text-ink px-1.5 py-0.5 rounded hover:bg-surface-2"
+              className="text-xs max-sm:text-sm max-sm:text-ink-muted text-ink-subtle hover:text-ink px-1.5 py-0.5 rounded hover:bg-surface-2"
             >
               Clear
             </button>
@@ -285,13 +285,13 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
             <button
               key={s.key}
               onClick={() => setFilter(on && s.key !== 'active' ? 'active' : s.key)}
-              className={`shrink-0 w-[7.25rem] sm:w-auto text-left rounded-lg border px-3 py-2.5 transition-colors ${
+              className={`shrink-0 max-sm:min-w-[6.75rem] text-left rounded-lg border px-3 py-2.5 transition-colors ${
                 on ? 'border-accent bg-accent/10' : 'border-edge bg-surface hover:border-edge-strong'
               }`}
               aria-pressed={on}
             >
               <div className="text-xl font-semibold text-ink tabular-nums leading-none">{counts[s.key] ?? 0}</div>
-              <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-ink-muted">
+              <div className="flex items-center gap-1.5 mt-1.5 text-[11px] max-sm:text-[13px] text-ink-muted">
                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
                 <span className="truncate" title={`${s.label} (${s.unit})`}>{s.label}</span>
               </div>
@@ -311,12 +311,12 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                 {shown.length} {shown.length === 1 ? 'job' : 'jobs'}
               </span>
             </h2>
-            <label className="flex items-center gap-2 text-xs text-ink-subtle">
+            <label className="flex items-center gap-2 text-xs max-sm:text-sm text-ink-subtle max-sm:text-ink-muted">
               Sort
               <select
                 value={sort}
                 onChange={e => setSort(e.target.value as SortKey)}
-                className="bg-surface border border-edge rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent"
+                className="bg-surface border border-edge rounded px-2 py-1 max-sm:py-1.5 text-xs max-sm:text-sm text-ink focus:outline-none focus:border-accent"
               >
                 <option value="newest">Newest</option>
                 <option value="updated">Recently updated</option>
@@ -401,12 +401,12 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                         deleted {new Date(j.deleted_at).toLocaleDateString('en-AU', { day: 'numeric', month: 'short' })}
                       </span>
                       <button onClick={() => restoreJob(j.id)}
-                        className="text-[11px] font-medium text-accent-ink hover:text-accent-hover px-2 py-1 rounded hover:bg-surface-2 transition-colors">
+                        className="text-[11px] max-sm:text-sm font-medium text-accent-ink hover:text-accent-hover px-2 py-1 max-sm:py-1.5 rounded hover:bg-surface-2 transition-colors">
                         Restore
                       </button>
                       {isAdmin && (
                         <button onClick={() => purgeJob(j.id)} onBlur={() => setPurgeArm(null)}
-                          className={`text-[11px] font-medium px-2 py-1 rounded transition-colors ${purgeArm === j.id ? 'text-white bg-red-600 hover:bg-red-500' : 'text-ink-subtle hover:text-red-400 hover:bg-surface-2'}`}
+                          className={`text-[11px] max-sm:text-sm font-medium px-2 py-1 max-sm:py-1.5 rounded transition-colors ${purgeArm === j.id ? 'text-white bg-red-600 hover:bg-red-500' : 'text-ink-subtle hover:text-red-400 hover:bg-surface-2'}`}
                           title="Admin only — erases the job, its rooms and everything in them">
                           {purgeArm === j.id ? 'Click again to erase' : 'Delete permanently'}
                         </button>
@@ -433,7 +433,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                 <li key={p.id} className="shrink-0 w-60 lg:w-auto rounded-lg border border-edge bg-surface px-3 py-2 lg:rounded-none lg:border-0 lg:border-t lg:border-edge/60 lg:bg-transparent lg:px-4 lg:first:border-t-0">
                   <div className="flex items-baseline justify-between gap-2">
                     <span className="text-sm font-medium text-ink truncate" title={p.name}>{p.name}</span>
-                    <span className="text-[10px] text-ink-subtle shrink-0">{timeAgo(t)}</span>
+                    <span className="text-[10px] max-lg:text-xs text-ink-subtle max-lg:text-ink-muted shrink-0">{timeAgo(t)}</span>
                   </div>
                   {p.rooms.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
@@ -442,7 +442,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                         <Link
                           key={r.id}
                           href={`/canvas/${r.id}`}
-                          className={`${i >= 2 ? 'hidden lg:inline-block' : ''} max-w-full truncate text-xs lg:text-[11px] text-ink-muted hover:text-white hover:bg-accent bg-surface-2 rounded px-2.5 py-1.5 lg:px-1.5 lg:py-0.5 transition-colors`}
+                          className={`${i >= 2 ? 'hidden lg:inline-block' : ''} max-w-full truncate text-sm lg:text-[11px] text-ink lg:text-ink-muted hover:text-white hover:bg-accent bg-surface-2 rounded px-2.5 py-1.5 lg:px-1.5 lg:py-0.5 transition-colors`}
                         >
                           {r.name}
                         </Link>
@@ -450,7 +450,7 @@ export default function ProjectList({ initialProjects, expand, isAdmin = false }
                       {p.rooms.length > 2 && (
                         <button
                           onClick={() => setQuery(p.job_number || p.name)}
-                          className="lg:hidden text-xs text-ink-subtle hover:text-ink px-1 py-1.5"
+                          className="lg:hidden text-sm text-ink-muted hover:text-ink px-1 py-1.5"
                         >
                           +{p.rooms.length - 2} more
                         </button>

@@ -134,7 +134,7 @@ function dimSummary(r: Room): string | null {
 function RoomStatusSelect({ status, onChange }: { status: RoomStatus; onChange: (s: RoomStatus) => void }) {
   const opt = ROOM_STATUS_OPTIONS.find(o => o.value === status) ?? ROOM_STATUS_OPTIONS[0]
   return (
-    <span className="relative flex-none inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded-md border border-edge bg-surface-2/60 hover:border-edge-strong transition-colors" title="Drawing status">
+    <span className="relative flex-none inline-flex items-center gap-1.5 text-[11px] max-sm:text-sm font-medium px-2 py-1 max-sm:px-2.5 max-sm:py-1.5 rounded-md border border-edge max-sm:border-edge-strong bg-surface-2/60 hover:border-edge-strong transition-colors" title="Drawing status">
       <span className={`w-1.5 h-1.5 rounded-full ${opt.dot}`} />
       <span className={opt.text}>{opt.label}</span>
       <select
@@ -215,7 +215,7 @@ function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus
       {/* Edit */}
       <button
         onClick={onEdit}
-        className="flex-none text-ink-subtle hover:text-ink p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
+        className="flex-none text-ink-subtle max-sm:text-ink-muted hover:text-ink p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors max-sm:[&_svg]:size-[18px]"
         title="Edit room properties"
       >
         <PencilIcon />
@@ -224,7 +224,7 @@ function SortableRoomRow({ room, removing, offlineAt, onEdit, onDelete, onStatus
       {/* Delete */}
       <button
         onClick={onDelete}
-        className="flex-none text-ink-subtle hover:text-red-400 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
+        className="flex-none text-ink-subtle max-sm:text-ink-muted hover:text-red-400 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors max-sm:[&_svg]:size-[18px]"
         title="Delete room"
       >
         <TrashIcon />
@@ -541,21 +541,21 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             {project.job_number && !project.name.includes(project.job_number) && (
               <span className="text-xs font-mono text-ink-subtle">{project.job_number}</span>
             )}
-            <span className="font-semibold text-ink text-sm">{project.name}</span>
-            <span className={`inline-flex items-center gap-1.5 text-[10px] px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
+            <span className="font-semibold text-ink text-sm max-sm:text-base">{project.name}</span>
+            <span className={`inline-flex items-center gap-1.5 text-[10px] max-sm:text-xs px-2 py-0.5 rounded-full font-medium ${cfg.badge}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
               {project.status.replace('_', ' ')}
             </span>
           </div>
           <div className="flex items-center gap-3 mt-0.5 flex-wrap">
             {project.client_name && (
-              <span className="flex items-center gap-1 text-xs text-ink-muted">
+              <span className="flex items-center gap-1 text-xs max-sm:text-sm text-ink-muted">
                 <ClientIcon />
                 {project.client_name}
               </span>
             )}
             {project.client_address && (
-              <span className="flex items-center gap-1 text-xs text-ink-subtle min-w-0">
+              <span className="flex items-center gap-1 text-xs max-sm:text-sm text-ink-subtle max-sm:text-ink-muted min-w-0 max-sm:[&_svg]:shrink-0">
                 <LocationIcon />
                 {project.client_address}
               </span>
@@ -574,7 +574,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
 
           <button
             onClick={() => setExpanded(e => !e)}
-            className="flex-none flex items-center gap-2 text-sm sm:text-xs font-medium text-ink-muted hover:text-ink px-2 py-2 sm:py-1.5 rounded-lg hover:bg-surface-2 transition-colors"
+            className="flex-none flex items-center gap-2 text-[15px] sm:text-xs font-medium text-ink sm:text-ink-muted hover:text-ink px-3 sm:px-2 py-2 sm:py-1.5 max-sm:ml-2 rounded-lg max-sm:border max-sm:border-edge-strong max-sm:bg-surface-2/60 hover:bg-surface-2 transition-colors"
             aria-expanded={expanded}
           >
             <span>{liveRooms.length} {liveRooms.length === 1 ? 'room' : 'rooms'}</span>
@@ -587,7 +587,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
           <button
             onClick={toggleArchive}
             disabled={archiving}
-            className="flex-none text-ink-subtle hover:text-ink disabled:opacity-40 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
+            className="flex-none text-ink-subtle max-sm:text-ink-muted hover:text-ink disabled:opacity-40 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors max-sm:[&_svg]:size-[18px]"
             title={project.status === 'archived' ? 'Unarchive project' : 'Archive project'}
           >
             {project.status === 'archived' ? <UnarchiveIcon /> : <ArchiveIcon />}
@@ -596,7 +596,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
           {(
             <button
               onClick={openDeleteProject}
-              className="flex-none text-ink-subtle hover:text-red-400 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors"
+              className="flex-none text-ink-subtle max-sm:text-ink-muted hover:text-red-400 p-2.5 sm:p-1.5 rounded hover:bg-surface-2 transition-colors max-sm:[&_svg]:size-[18px]"
               title="Delete project"
             >
               <TrashIcon />
@@ -697,7 +697,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             <div className="mt-1.5 pt-1.5 border-t border-edge/60">
               <Link
                 href={`/projects/${project.id}/optimiser`}
-                className="flex items-center gap-1.5 text-xs font-medium text-accent-ink hover:text-accent-hover px-2 py-2 rounded-md transition-colors"
+                className="flex items-center gap-1.5 max-sm:gap-2 text-xs max-sm:text-[15px] font-medium text-accent-ink hover:text-accent-hover px-2 py-2 max-sm:py-2.5 rounded-md transition-colors max-sm:[&_svg]:size-4"
               >
                 <CncIcon />
                 Optimise / CNC
@@ -747,7 +747,7 @@ export default function ProjectCard({ project, initialRooms, defaultExpanded = f
             ) : (
               <button
                 onClick={() => setAdding(true)}
-                className="flex items-center gap-1.5 text-xs font-medium text-accent-ink hover:text-accent-hover px-2 py-2 rounded-md transition-colors"
+                className="flex items-center gap-1.5 max-sm:gap-2 text-xs max-sm:text-[15px] font-medium text-accent-ink hover:text-accent-hover px-2 py-2 max-sm:py-2.5 rounded-md transition-colors max-sm:[&_svg]:size-4"
               >
                 <PlusIcon />
                 Add Room

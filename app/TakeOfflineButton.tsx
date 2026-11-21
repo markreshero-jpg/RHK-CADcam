@@ -115,10 +115,10 @@ export default function TakeOfflineButton({ rooms, saved }: { rooms: Room[]; sav
   return (
     <>
     <button onClick={run} disabled={status.kind === 'running'} title={title} data-take-offline={status.kind}
-      className={`min-w-0 flex items-center gap-1.5 text-xs px-2 py-2 sm:py-1 rounded transition-colors hover:bg-surface-2 disabled:opacity-80 ${
+      className={`min-w-0 flex items-center gap-1.5 text-xs max-sm:text-sm px-2 py-2 sm:py-1 rounded max-sm:[&_svg]:size-4 transition-colors hover:bg-surface-2 disabled:opacity-80 ${
         status.kind === 'error' || (status.kind === 'done' && status.ok < status.total) ? 'text-red-400'
         : have && have.n < rooms.length && status.kind !== 'running' ? 'text-amber-500'
-        : have || status.kind === 'done' ? 'text-emerald-500' : 'text-ink-subtle hover:text-ink'}`}>
+        : have || status.kind === 'done' ? 'text-emerald-500' : 'text-ink-subtle max-sm:text-ink-muted hover:text-ink'}`}>
       <svg className="flex-none" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
         <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M3 13h10" />
       </svg>
