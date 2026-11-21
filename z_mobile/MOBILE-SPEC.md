@@ -47,7 +47,12 @@ cabinet editors stay desktop-first.
      carry `.touch-no-select` (globals.css, `(pointer: coarse)` only — inputs
      stay selectable, desktop mouse unaffected); both hooks also cancel
      `selectstart` while a finger is down and clear any selection when the menu fires.
-5. **Layout (phone)** — compact menubar (one "Menu ▾" listing all groups),
+5. **Tab bar (phone, 2026-11-21)** — only ☰ Tools, the four view tabs, (3D: ⟲ + measure),
+   ✨ and a **⋯ menu** sit in the bar. Layers (sets + Manage layers…), Show hidden parts,
+   3D Solid / Wire and the light / dark switch live in the ⋯ menu (Mark: the bar's
+   buttons overlapped at 390 wide). New phone bar controls go in the ⋯ menu, not the bar.
+   An empty `[data-canvas-theme]` span stays mounted for the light-mode CSS hook.
+   **Layout (phone)** — compact menubar (one "Menu ▾" listing all groups),
    view tabs with short labels + ☰ button, sidebar as an overlay drawer
    (closes when a tool/library item is picked), right-hand panels stacked in a
    right-side drawer over the canvas (`min(18rem, 82vw)` wide) with an edge tab

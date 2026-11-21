@@ -394,6 +394,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // Room 3D solid / wire (3D tab dropdown), remembered per user.
   const [room3DStyle, setRoom3DStyleState] = useState<ViewStyle>(() => getUserPrefs().room3DStyle)
   const [view3DMenuOpen, setView3DMenuOpen] = useState(false)
+  // Phone tab bar: the ⋯ menu holding Layers / Show hidden parts / 3D style / light-dark.
+  const [phoneMore, setPhoneMore] = useState(false)
   function setRoom3DStyle(v: ViewStyle) {
     setRoom3DStyleState(v)
     setUserPrefs({ room3DStyle: v })
@@ -3565,7 +3567,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         <div className={phone ? 'flex items-center gap-0.5 min-w-0' : 'absolute left-1/2 -translate-x-1/2 flex items-center gap-1'}>
           {(['plan', 'elevation', 'section', '3d'] as CanvasView[]).map(v => (
             <button key={v} data-tour={`view-${v}`} onClick={() => switchView(v)}
-              className={`${phone ? 'px-2 py-1.5' : 'px-3 py-1'} text-xs rounded transition-colors ${
+              className={`${phone ? 'px-2.5 py-1.5 text-sm' : 'px-3 py-1 text-xs'} rounded transition-colors ${
                 canvasView === v
                   ? 'bg-blue-600 text-white'
                   : 'text-gray-400 hover:text-gray-200 hover:bg-gray-800'
@@ -3573,8 +3575,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               {v === 'plan' ? 'Plan' : v === 'elevation' ? (phone ? 'Elev' : 'Elevation') : v === 'section' ? (phone ? 'Sect' : 'Section') : room3DStyle === 'wire' ? (phone ? 'Wire' : '3D · Wire') : '3D'}
             </button>
           ))}
-          {/* 3D style dropdown: solid / wire (see-through parts) */}
-          <div className="relative -ml-1" onPointerDown={e => e.stopPropagation()}>
+          {/* 3D style dropdown: solid / wire (see-through parts). Phones: in the ⋯ menu. */}
+          {!phone && <div className="relative -ml-1" onPointerDown={e => e.stopPropagation()}>
             <button
               onClick={() => setView3DMenuOpen(o => !o)}
               title="3D view style"
@@ -3599,7 +3601,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
                 ))}
               </div>
             )}
-          </div>
+          </div>}
           {canvasView === '3d' && !phone && (
             <button
               onClick={() => setReset3DSignal(s => s + 1)}
@@ -3681,8 +3683,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               Section Cut
             </button>
           )}
-          {canvasView !== 'section' && (<>
-            {!phone && <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Layers</span>}
+          {!phone && canvasView !== 'section' && (<>
+            <span className="text-[10px] text-gray-600 uppercase tracking-wider select-none">Layers</span>
             <select
               title="Layers"
               value={activeLayerSet?.id ?? ''}
@@ -3716,9 +3718,58 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             {phone ? '✨' : '✨ Ask AI'}
           </button>
           {/* Light / dark menus (globals.css "Job canvas light mode"); the drawing follows the layer set. */}
-          <span data-canvas-theme className="flex items-center" title="Light / dark menus — pick an inverted layer set (e.g. Line drawing white) for a white drawing">
+          {!phone && <span data-canvas-theme className="flex items-center" title="Light / dark menus — pick an inverted layer set (e.g. Line drawing white) for a white drawing">
             <ThemeToggle />
-          </span>
+          </span>}
+          {/* Phone: everything that isn't a view tab lives in one ⋯ menu, so the bar never
+              overlaps (z_mobile/MOBILE-SPEC.md 5). The empty span keeps the light-mode CSS
+              hook ([data-canvas-theme]) in the page while the menu is shut. */}
+          {phone && (
+            <div className="relative flex-none" onPointerDown={e => e.stopPropagation()}>
+              <span data-canvas-theme hidden />
+              <button onClick={() => setPhoneMore(o => !o)} title="Layers and view options" aria-label="Layers and view options" aria-expanded={phoneMore}
+                className={`w-9 h-8 rounded-lg flex items-center justify-center border transition-colors ${phoneMore ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800/50 border-gray-700 text-gray-300 active:bg-gray-800'}`}>
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.7" /><circle cx="10" cy="10" r="1.7" /><circle cx="16" cy="10" r="1.7" /></svg>
+              </button>
+              {phoneMore && (<>
+                <div className="fixed inset-0 z-40" onClick={() => setPhoneMore(false)} />
+                <div className="absolute right-0 top-full mt-1.5 z-50 w-64 max-h-[70dvh] overflow-y-auto rounded-lg border border-gray-600 bg-gray-800 shadow-xl py-1 text-[15px] text-gray-100">
+                  {canvasView !== 'section' && (<>
+                    <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Layers</div>
+                    {!activeLayerSet && <div className="px-3 py-2 text-gray-400">{layerSetsApi.loading ? 'Loading…' : 'Default'}</div>}
+                    {layerSetsApi.sets.map(s => (
+                      <button key={s.id} onClick={() => { chooseLayerSet(s.id); setPhoneMore(false) }}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-left active:bg-gray-700">
+                        <span className="w-4 flex-none text-blue-400">{activeLayerSet?.id === s.id ? '✓' : ''}</span>
+                        <span className="truncate">{s.name}</span>
+                      </button>
+                    ))}
+                    <button onClick={() => { setShowLayerManager(true); setPhoneMore(false) }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-gray-300 active:bg-gray-700">
+                      <span className="w-4 flex-none" />Manage layers…
+                    </button>
+                    <label className="flex items-center gap-2 px-3 py-2.5 border-t border-gray-700 active:bg-gray-700">
+                      <input type="checkbox" checked={showHiddenParts} onChange={e => toggleShowHiddenParts(e.target.checked)}
+                        className="accent-orange-500 w-4 h-4 flex-none" />
+                      <span className={showHiddenParts ? 'text-orange-300' : ''}>Show hidden parts</span>
+                    </label>
+                  </>)}
+                  <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400 border-t border-gray-700">3D view</div>
+                  {([['solid', 'Solid view'], ['wire', 'Wire view']] as const).map(([v, label]) => (
+                    <button key={v} onClick={() => { setRoom3DStyle(v); setPhoneMore(false); if (canvasView !== '3d') switchView('3d') }}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left active:bg-gray-700">
+                      <span className="w-4 flex-none text-blue-400">{room3DStyle === v ? '✓' : ''}</span>
+                      {label}
+                    </button>
+                  ))}
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5 border-t border-gray-700">
+                    <span>Light / dark menus</span>
+                    <ThemeToggle />
+                  </div>
+                </div>
+              </>)}
+            </div>
+          )}
         </div>
       </div>
 
