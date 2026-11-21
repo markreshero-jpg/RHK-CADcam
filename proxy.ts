@@ -81,6 +81,7 @@ export const config = {
     // check, so the service worker can always keep them.
     // share/ + share3d/ (z_html_export H6) are public 3D share links + the viewer
     // script: they only serve files uploaded under a random token, no job data.
-    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|offline(?:/|$)|share(?:/|$)|share3d/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb)$).*)',
+    // manifest.webmanifest (home-screen app details) is fetched by the phone without the login cookie.
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|offline(?:/|$)|share(?:/|$)|share3d/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|glb)$).*)',
   ],
 }
