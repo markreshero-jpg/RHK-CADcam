@@ -5,7 +5,7 @@ import { internalSeamPartKey } from '@/src/lib/jointDrilling'
 import { useRoomPosOverrides } from './useRoomPosOverrides'
 import { rectEdgeSegs, coverOf, anyExposed, EXPOSED_BOARD_ITEMS } from '@/src/lib/exposedEdges'
 import { useState, useReducer, useRef, useEffect, useMemo } from 'react'
-import { useLineScale } from '@/src/lib/usePhone'
+import { useIsPhone, useLineScale } from '@/src/lib/usePhone'
 import { frontViewHardwareMap } from '@/src/lib/drawerHardwareBoxes'
 import { Room, Wall, CabinetInstance, BenchtopInstance, BenchtopEdgeProfile, type RoomAnnotation, type SplashbackInstance, type BenchtopSegment } from '@/src/lib/types'
 import { cabT, wallDir, wallEnd, dist, findFreeSlot, slideToFreeSlot, fitFreeSlot, cabsBlock, cabWallSide, centroid, wallAnchorPoint, nibsOnWall, dropWallsOnWall, wallBaseZ, SNAP_PX, wallCabTop, cabBottomZ, type Pt } from '@/src/lib/geometry'
@@ -332,6 +332,7 @@ export default function ElevationSVG({
   const resolvedParts = useMemo(() => frontViewHardwareMap(resolvedPartsRaw), [resolvedPartsRaw])
   const svgRef = useRef<SVGSVGElement>(null)
   const lineScale = useLineScale()
+  const phone = useIsPhone()
   const [view, dispatchView] = useReducer(viewReducer, { panX: 80, panY: 60, zoom: 1 })
   useEffect(() => { onViewChange?.(view) }, [view, onViewChange])
   const panRef = useRef<{ startX: number; startY: number; panX: number; panY: number } | null>(null)
@@ -1031,7 +1032,8 @@ export default function ElevationSVG({
     <div className="flex-1 flex flex-col bg-gray-950 overflow-hidden relative" style={{ background: layers.background }}>
 
       {/* Wall picker + side toggle + equalize strip */}
-      <div className="flex-none flex items-center gap-1 px-3 py-1.5 bg-gray-900 border-b border-gray-800 overflow-x-auto shrink-0">
+      {/* Phones: bigger text + taller buttons; the strip slides sideways (z_mobile/MOBILE-SPEC.md). */}
+      <div className={`flex-none flex items-center gap-1 px-3 py-1.5 bg-gray-900 border-b border-gray-800 overflow-x-auto shrink-0 ${phone ? '[&_button]:text-sm [&_button]:py-1.5 [&_span]:text-xs' : ''}`}>
         <span className="text-[10px] text-gray-500 mr-2 whitespace-nowrap select-none">Wall:</span>
         {walls.length === 0
           ? <span className="text-[10px] text-gray-600">No walls — draw them in Plan view first</span>
@@ -2925,8 +2927,9 @@ export default function ElevationSVG({
       </svg>
 
       {/* Floating snap-settings toolbar (top-right of the elevation pane) — not in the
-          narrow cross-section column. */}
-      {crossCutX == null && <SnapToolbar
+          narrow cross-section column, and not on phones (as in plan: it sat over the
+          wall strip's Side buttons, and phones don't drag things onto snaps). */}
+      {crossCutX == null && !phone && <SnapToolbar
         settings={elevSnapSettings}
         onChange={onElevSnapSettingsChange}
         kinds={ELEV_SNAP_KINDS}

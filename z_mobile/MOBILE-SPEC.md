@@ -52,6 +52,12 @@ cabinet editors stay desktop-first.
    3D Solid / Wire and the light / dark switch live in the ⋯ menu (Mark: the bar's
    buttons overlapped at 390 wide). New phone bar controls go in the ⋯ menu, not the bar.
    An empty `[data-canvas-theme]` span stays mounted for the light-mode CSS hook.
+   **Elevation wall strip (phone)**: bigger text / taller buttons, slides sideways; the
+   floating snap button is hidden (as in plan) — it sat over the Side buttons.
+   **Opening fit**: plan re-fits once the phone layout is on (the mount-time fit ran
+   against the desktop layout); 3D default distance fits the horizontal FOV on a portrait
+   screen, and the first 3D open on a device no longer starts zoomed into a floor corner
+   (CameraPersistence was saving R3F's throwaway camera — all devices).
    **Layout (phone)** — compact menubar (one "Menu ▾" listing all groups),
    view tabs with short labels + ☰ button, sidebar as an overlay drawer
    (closes when a tool/library item is picked), right-hand panels stacked in a

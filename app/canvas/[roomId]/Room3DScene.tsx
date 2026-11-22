@@ -4,6 +4,7 @@ import { Suspense, useMemo, useEffect, useRef, useState } from 'react'
 import { useLongPressMenu } from './useLongPressMenu'
 import { room3dScene, sceneToGlb, toBase64 } from '@/src/lib/export3d/roomHtml'
 import { Canvas, useThree } from '@react-three/fiber'
+import { useIsPhone } from '@/src/lib/usePhone'
 import { OrbitControls, PerspectiveCamera, Edges, Text } from '@react-three/drei'
 import { Shape, ExtrudeGeometry, Vector3, Matrix4 } from 'three'
 import type { Wall, CabinetInstance, Room, BenchtopInstance, BenchtopEdgeProfile } from '@/src/lib/types'
@@ -687,6 +688,11 @@ function CameraPersistence({ controlsRef, stateRef, roomId }: {
     // Saving that and "restoring" it onto the real camera pulled the view right in
     // to minDistance on every first open — so only touch the camera being driven.
     if (!ctrl || ctrl.object !== camera) return
+    // …and OrbitControls can itself still be holding the throwaway camera, which passed
+    // the check above: its position was saved, then "restored" onto the real camera, so
+    // a room opened in 3D for the first time on a device (no stored view) started zoomed
+    // right into a floor corner until Reset view. Ours is the one with our FOV.
+    if ((camera as { fov?: number }).fov !== FOV) return
 
     // Restore the saved view (returning from elevation/plan, else the last view
     // stored for this room before a refresh).
@@ -851,8 +857,13 @@ export function RoomScene({ walls, cabinets, room, selectedId, onSelectCabinet, 
   const span    = Math.max(spanX, spanZ, roomH)
   // Default view fits the room's bounding sphere in the vertical FOV with ~15%
   // margin. camPosition's offset vector below has length ≈1.2 × camDist.
+  // On a portrait screen (phone) the narrow side is the width, so fit to the horizontal
+  // FOV there; landscape is unchanged.
+  const aspect  = useThree(s => s.size.width / Math.max(1, s.size.height))
+  const halfV   = (FOV / 2) * Math.PI / 180
+  const halfFit = aspect < 1 ? Math.atan(Math.tan(halfV) * aspect) : halfV
   const radius  = Math.hypot(spanX, spanZ, roomH) / 2
-  const camDist = (radius / Math.sin((FOV / 2) * Math.PI / 180)) * 1.15 / 1.2
+  const camDist = (radius / Math.sin(halfFit)) * 1.15 / 1.2
   const midX    = (bounds.minX + bounds.maxX) / 2
   const midZ    = (bounds.minZ + bounds.maxZ) / 2
 
@@ -1033,6 +1044,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
   /** Wire view (3D tab dropdown): see-through parts with edges; walls + tops ghosted. */
   wire?: boolean
 }) {
+  const phone = useIsPhone()
   const [menu, setMenu]               = useState<MenuState | null>(null)
   const [wallMenu, setWallMenu]       = useState<WallMenuState | null>(null)
   // Hidden walls are remembered per room (localStorage) so leaving the 3D view
@@ -1161,6 +1173,7 @@ export default function Room3DScene({ walls, cabinets, room, selectedId, onSelec
       <div className="absolute bottom-2 left-3 text-[10px] text-gray-700 pointer-events-none select-none">
         {measuring
           ? 'Measure: hover a face · click it · click a second face · right-click clear · drag still orbits · Esc exit'
+          : phone ? 'Drag to rotate · pinch to zoom · two fingers to pan · hold for options'
           : 'Left-drag rotate · scroll/pinch zoom · right-drag pan · right-click for options'}
       </div>
 
