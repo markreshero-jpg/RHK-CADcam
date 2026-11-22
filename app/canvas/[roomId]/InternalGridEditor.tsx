@@ -1000,6 +1000,15 @@ export default function InternalGridEditor({
   })
   const [selected, setSelected] = useState<Selection>(null)
   const [menu, setMenu]         = useState<Menu>(null)
+  // Toolbar tool: with no bay selected, an Add button arms and every bay clicked
+  // gets that element until Esc (or the button again).
+  const [armed, setArmed]       = useState<AddKind | 'divider' | null>(null)
+  useEffect(() => {
+    if (!armed) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setArmed(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [armed])
   const [dragLive, setDragLive] = useState<DragLive>(null)
   const [fittingDragLive, setFittingDragLive] = useState<FittingDragLive>(null)
   // Undo / redo history of interior edits. Each entry snapshots the whole tree +
@@ -1278,11 +1287,6 @@ export default function InternalGridEditor({
   const selLeafSection = selLeaf ? getSection(tree, selLeaf.path) : null
   const selLeafOpen = selLeafSection?.type === 'open' ? selLeafSection : null
 
-  // Target compartment for toolbar actions: the selected compartment, else the
-  // root if it's open.
-  const targetPath: Path | null =
-    selected?.kind === 'leaf' ? selected.path
-    : (tree.type === 'open' ? [] : null)
 
   // Selected fitting (a placed component inside an open compartment).
   const selFittingPath  = selected?.kind === 'fitting' ? selected.path : null
@@ -1302,7 +1306,6 @@ export default function InternalGridEditor({
   })()
 
   // ── Mutations ────────────────────────────────────────────────────────────────
-  function addShelf(path: Path | null)   { if (path) { save(addSeparator(tree, path, 'hsplit')); setMenu(null) } }
   function addDivider(path: Path | null) { if (path) { save(addSeparator(tree, path, 'vsplit')); setMenu(null) } }
   function bumpAdj(path: Path | null, delta: number) {
     if (!path) return
@@ -1536,6 +1539,17 @@ export default function InternalGridEditor({
     else                             handleAddFitting(path, kind)   // accessory
   }
 
+  // Toolbar: put a tool's element into a bay.
+  function applyTool(path: Path, tool: AddKind | 'divider') {
+    if (tool === 'divider') addDivider(path); else runAdd(path, tool)
+  }
+  // Toolbar button: adds to the selected bay (or the single open interior), else arms.
+  function pickTool(tool: AddKind | 'divider') {
+    if (selected?.kind === 'leaf') { setArmed(null); applyTool(selected.path, tool) }
+    else if (tree.type === 'open') { setArmed(null); applyTool([], tool) }
+    else setArmed(cur => cur === tool ? null : tool)
+  }
+
   function handleRemoveFitting(path: Path, idx: number) {
     setSelected({ kind: 'leaf', path })
     save(removeFittingAt(tree, path, idx))
@@ -1635,22 +1649,26 @@ export default function InternalGridEditor({
 
       {/* Toolbar */}
       <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[13px]">
-        <span className="text-gray-500">
-          {selected?.kind === 'leaf' ? 'Selected compartment:'
-            : selected?.kind === 'fitting' ? 'Selected fitting:'
-            : tree.type === 'open' ? 'Interior:' : 'Select a compartment:'}
+<span className={armed ? 'text-amber-400' : 'text-gray-500'}>
+          {armed ? 'Click a bay to add it · Esc to finish'
+            : selected?.kind === 'leaf' ? 'Add to selected bay'
+            : tree.type === 'open' ? 'Add'
+            : 'Pick one, then click a bay'}
         </span>
-        <button className={addBtn} disabled={!targetPath}
-          onClick={() => addShelf(targetPath)}
-          title="Add a fixed shelf — splits the opening into bays you can lock or equalise."
-        >+ Fixed shelf</button>
-        <button className={addBtn} disabled={!targetPath}
-          onClick={() => addDivider(targetPath)}
-          title="Split the opening into side-by-side columns."
-        >Split → columns</button>
-        <button className={addBtn} disabled={!targetPath}
-          onClick={() => targetPath && runAdd(targetPath, 'adj_shelf')}
-          title="Add an adjustable shelf — splits the opening into a top and bottom compartment.">+ Adj shelf</button>
+        {([
+          { tool: 'fixed_shelf',  label: 'Fixed shelf',   title: 'A fixed shelf: splits the bay into two bays you can lock or equalise.' },
+          { tool: 'adj_shelf',    label: 'Adj shelf',     title: 'An adjustable shelf: splits the bay into a top and bottom.' },
+          { tool: 'divider',      label: 'Divider',       title: 'An upright divider: splits the bay into side-by-side columns.' },
+          { tool: 'inner_drawer', label: 'Inner drawer',  title: 'An inner drawer on slides.' },
+          { tool: 'pull_out',     label: 'Rollout shelf', title: 'A pull-out / rollout shelf on slides.' },
+          { tool: 'hanging_rail', label: 'Hanging rail',  title: 'A 30 x 15 oval robe rail, wall to wall, 60 below the top of the bay.' },
+          { tool: 'accessory',    label: 'Accessory',     title: 'An accessory (wine rack, etc.).' },
+        ] as { tool: AddKind | 'divider'; label: string; title: string }[]).map(t => (
+          <button key={t.tool}
+            className={addBtn + (armed === t.tool ? ' bg-blue-700 hover:bg-blue-600 text-white ring-1 ring-blue-400' : '')}
+            onClick={() => pickTool(t.tool)} title={t.title}
+          >+ {t.label}</button>
+        ))}
         <div className="ml-1 flex items-center gap-1">
           <span className="text-gray-500">Gap:</span>
           <input
@@ -1703,7 +1721,7 @@ export default function InternalGridEditor({
           className="flex-1 overflow-hidden relative"
           onClick={() => { setSelected(null); setMenu(null) }}
           onContextMenu={e => e.preventDefault()}
-          style={(dragLive || fittingDragLive) ? { cursor: 'grabbing' } : undefined}
+          style={(dragLive || fittingDragLive) ? { cursor: 'grabbing' } : armed ? { cursor: 'crosshair' } : undefined}
         >
           {dimEdit && dimPos && (
             <div className="absolute z-20 flex items-center gap-1 -translate-x-1/2 -translate-y-1/2"
@@ -1775,6 +1793,7 @@ export default function InternalGridEditor({
                     style={{ cursor: 'pointer' }}
                     onClick={e => {
                       e.stopPropagation(); setMenu(null)
+                      if (armed) { applyTool(leaf.path, armed); return }
                       setSelected(isSel ? null : { kind: 'leaf', path: leaf.path })
                     }}
                     onContextMenu={e => {
@@ -1821,6 +1840,7 @@ export default function InternalGridEditor({
                           e.stopPropagation()
                           if (wasDragging.current) { wasDragging.current = false; return }
                           setMenu(null)
+                          if (armed) { applyTool(leaf.path, armed); return }
                           setSelected({ kind: 'fitting', path: leaf.path, fittingIndex: adj.fittingIdx })
                         }}
                         style={{ cursor: adj.yLocked ? 'not-allowed' : (isDragA ? 'grabbing' : 'grab') }}
@@ -1859,6 +1879,7 @@ export default function InternalGridEditor({
                           e.stopPropagation()
                           if (wasDragging.current) { wasDragging.current = false; return }
                           setMenu(null)
+                          if (armed) { applyTool(leaf.path, armed); return }
                           setSelected({ kind: 'fitting', path: leaf.path, fittingIndex: f.idx })
                         }}
                         style={{ cursor: f.yLocked ? 'not-allowed' : (isDragF ? 'grabbing' : 'grab') }}

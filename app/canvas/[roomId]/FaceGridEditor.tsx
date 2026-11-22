@@ -194,6 +194,15 @@ export default function FaceGridEditor({
   const [runners, setRunners] = useState<{ id: string; name: string }[]>([])
   const [dividerNote, setDividerNote] = useState<string | null>(null)
   const [showChevrons, setShowChevrons] = useState(true)
+  // Toolbar type tool: with no front selected, a type button arms and every front
+  // clicked becomes that type until Esc (or the button again).
+  const [armedType, setArmedType] = useState<FaceZoneInput['face_type'] | null>(null)
+  useEffect(() => {
+    if (!armedType) return
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setArmedType(null) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [armedType])
 
   useEffect(() => {
     let cancelled = false
@@ -289,6 +298,32 @@ export default function FaceGridEditor({
       zones: grid.zones.map(z =>
         z.row_index === rowIdx && z.col_index === colIdx ? { ...z, face_type: next } : z
       ),
+    })
+  }
+
+  function setZoneType(rowIdx: number, colIdx: number, type: FaceZoneInput['face_type']) {
+    const zone = grid.zones.find(z => z.row_index === rowIdx && z.col_index === colIdx)
+    if (!zone || zone.face_type === type) return
+    save({
+      ...grid,
+      zones: grid.zones.map(z =>
+        z.row_index === rowIdx && z.col_index === colIdx ? { ...z, face_type: type } : z
+      ),
+    })
+  }
+
+  // Toolbar type button: applies to the selected front, else arms the tool.
+  function pickType(type: FaceZoneInput['face_type']) {
+    if (selectedZone) { setArmedType(null); setZoneType(selectedZone.row, selectedZone.col, type) }
+    else setArmedType(cur => cur === type ? null : type)
+  }
+
+  // Every row and column back to an equal share (all locks off).
+  function equaliseGrid() {
+    save({
+      ...grid,
+      rows: grid.rows.map(r => ({ ...r, height: undefined, height_locked: false })),
+      cols: grid.cols.map(c => ({ ...c, width: undefined, width_locked: false })),
     })
   }
 
@@ -752,24 +787,80 @@ export default function FaceGridEditor({
 
       {/* Top bar: structural controls */}
       <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[13px]">
-        <div className="flex items-center gap-1">
-          <span className="text-gray-500">Row:</span>
-          <button className={addBtn} onClick={() => addRow('top')}>+ Top</button>
-          <button className={addBtn} onClick={() => addRow('bottom')}>+ Bottom</button>
-        </div>
-        <div className="flex items-center gap-1">
-          <span className="text-gray-500">Col:</span>
-          <button className={addBtn} onClick={() => addCol('left')}>+ Left</button>
-          <button className={addBtn} onClick={() => addCol('right')}>+ Right</button>
-        </div>
-        <span className="text-gray-600 hidden sm:inline">·</span>
-        <button
-          className={`${addBtn} ${showChevrons ? 'ring-1 ring-blue-500/60 text-blue-300' : ''}`}
-          onClick={() => setShowChevrons(v => !v)}
-          title="Show / hide door-swing chevrons"
-        >Swings {showChevrons ? 'on' : 'off'}</button>
-        <span className="text-gray-600 hidden sm:inline">·</span>
-        <span className="text-gray-600 text-[13px] hidden sm:inline">click a size to type it · click zone to select · double-click to cycle type · click hinge bar to cycle edge</span>
+{(() => {
+          const selGz = selectedZone
+            ? grid.zones.find(z => z.row_index === selectedZone.row && z.col_index === selectedZone.col) ?? null
+            : null
+          const on = 'bg-blue-700 hover:bg-blue-600 text-white ring-1 ring-blue-400'
+          const grp = 'flex items-center gap-1 pl-2 border-l border-gray-700'
+          const TYPES: { type: FaceZoneInput['face_type']; label: string }[] = [
+            { type: 'door', label: 'Door' }, { type: 'drawer_face', label: 'Drawer' },
+            { type: 'false_panel', label: 'False panel' }, { type: 'open', label: 'Open' },
+          ]
+          const HINGES: { side: NonNullable<FaceZoneInput['hinge_side']>; label: string }[] = [
+            { side: 'left', label: 'Left' }, { side: 'right', label: 'Right' },
+            { side: 'top', label: 'Top' }, { side: 'bottom', label: 'Bottom' },
+          ]
+          return (
+            <>
+              <div className="flex items-center gap-1">
+                <span className="text-gray-500">Add row</span>
+                <button className={addBtn} onClick={() => addRow('top')} title="Add a row of fronts at the top">Top</button>
+                <button className={addBtn} onClick={() => addRow('bottom')} title="Add a row of fronts at the bottom">Bottom</button>
+              </div>
+              <div className={grp}>
+                <span className="text-gray-500">Add column</span>
+                <button className={addBtn} onClick={() => addCol('left')} title="Add a column of fronts on the left">Left</button>
+                <button className={addBtn} onClick={() => addCol('right')} title="Add a column of fronts on the right">Right</button>
+              </div>
+              <div className={grp}>
+                <span className="text-gray-500">{selGz ? 'Make it' : 'Set fronts to'}</span>
+                {TYPES.map(t => (
+                  <button key={t.type}
+                    className={`${addBtn} ${(selGz ? selGz.face_type === t.type : armedType === t.type) ? on : ''}`}
+                    onClick={() => pickType(t.type)}
+                    title={selGz ? `Make the selected front: ${t.label}` : `Then click each front to make it: ${t.label}`}
+                  >{t.label}</button>
+                ))}
+              </div>
+              {selGz?.face_type === 'door' && (
+                <div className={grp}>
+                  <span className="text-gray-500">Hinge</span>
+                  {HINGES.map(h => (
+                    <button key={h.side}
+                      className={`${addBtn} ${(selGz.hinge_side ?? 'left') === h.side ? on : ''}`}
+                      onClick={() => setHinge(selGz.row_index, selGz.col_index, h.side)}
+                      title={`Hinge the selected door on the ${h.label.toLowerCase()}`}
+                    >{h.label}</button>
+                  ))}
+                </div>
+              )}
+              {selGz && (
+                <div className={grp}>
+                  <span className="text-gray-500">Remove</span>
+                  <button className={addBtn + ' disabled:opacity-40 disabled:cursor-not-allowed'} disabled={grid.rows.length <= 1}
+                    onClick={() => { setSelectedZone(null); removeRow(selGz.row_index) }}
+                    title="Remove the selected front's whole row">Row</button>
+                  <button className={addBtn + ' disabled:opacity-40 disabled:cursor-not-allowed'} disabled={grid.cols.length <= 1}
+                    onClick={() => { setSelectedZone(null); removeCol(selGz.col_index) }}
+                    title="Remove the selected front's whole column">Column</button>
+                </div>
+              )}
+              <div className={grp}>
+                <button className={addBtn} onClick={equaliseGrid}
+                  title="Unlock every row height and column width so they share the space equally">= Equalise</button>
+                <button
+                  className={`${addBtn} ${showChevrons ? 'ring-1 ring-blue-500/60 text-blue-300' : ''}`}
+                  onClick={() => setShowChevrons(v => !v)}
+                  title="Show / hide door-swing chevrons"
+                >Swings {showChevrons ? 'on' : 'off'}</button>
+              </div>
+              {armedType
+                ? <span className="text-amber-400">Click each front to make it {TYPES.find(t => t.type === armedType)?.label} · Esc to finish</span>
+                : !selGz && <span className="text-gray-500 hidden lg:inline">Click a front to select it · click a size to type it</span>}
+            </>
+          )
+        })()}
         {errors.length > 0 && (
           <span className="ml-auto text-[13px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
         )}
@@ -931,7 +1022,7 @@ export default function FaceGridEditor({
               return (
                 <g
                   key={`${gz.row_index}-${gz.col_index}`}
-                  onClick={() => selectZone(gz.row_index, gz.col_index)}
+                  onClick={() => armedType ? setZoneType(gz.row_index, gz.col_index, armedType) : selectZone(gz.row_index, gz.col_index)}
                   onDoubleClick={() => cycleZone(gz.row_index, gz.col_index)}
                   style={{ cursor: 'pointer' }}
                 >
