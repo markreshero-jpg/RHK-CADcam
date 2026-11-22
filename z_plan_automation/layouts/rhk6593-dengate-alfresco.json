@@ -13,7 +13,7 @@
     { "def": "BEPF", "wall": 1, "offset": 500,  "dx": 18,  "dy": 880, "dz": 675, "note": "Seen end, to the floor" },
     { "def": "BSK",  "wall": 1, "offset": 518,  "dx": 550, "dy": 880, "dz": 675, "rules": { "RAIL_ORIENT": "vertical" }, "note": "Sink cabinet" },
     { "def": "BBIN", "wall": 1, "offset": 1068, "dx": 300, "dy": 880, "dz": 675, "note": "Bin 300" },
-    { "def": "B2D",  "wall": 1, "offset": 1368, "dx": 846, "dy": 880, "dz": 675, "note": "Cupboard under 900 BBQ (BBQ specs TBC, GLB to come)" },
+    { "def": "B2D",  "wall": 1, "offset": 1368, "dx": 846, "dy": 880, "dz": 675, "note": "Gas bottle cupboard (9 kg max) under the portable Weber Baby Q, no shelf (2026-11-23, _tmp-6593-babyq.mjs)" },
     { "def": "B1D",  "wall": 1, "offset": 2214, "dx": 300, "dy": 880, "dz": 675 },
     { "def": "BEPF", "wall": 1, "offset": 2514, "dx": 18,  "dy": 880, "dz": 675, "note": "Panel beside wine fridge space" },
     { "def": "BEPF", "wall": 1, "offset": 3082, "dx": 18,  "dy": 880, "dz": 675, "note": "Seen end beside wine fridge space, to the floor. Wine fridge space 550 between panels." }

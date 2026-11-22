@@ -376,6 +376,14 @@ Esc cancels; one undo step.
     spout. Taps group sort 60, **benchtop**, 46 × 146 × 204, Ø35 hole, cutout_off_y −50. Under-bench
     unit not modelled. Swapped onto the RHK6468 Kitchen placeholder (was the Abey Lucia
     stand-in), moved so the tap hole stays put. Not checked in-app.
+  - 2026-11-23 (user, RHK6593): **Weber Baby Q Premium Q1200N LPG, Charcoal Grey** — no supplier
+    model. `z_fixtures/make-weber-babyq-glb.mjs` re-colours the QX2800N+ GLB (lid / cookbox
+    #141414 → #4B4E52) → `Weber_BabyQ_Q1200N_CharcoalGrey.glb` (public + `BBQ/`); the row sizes it
+    to the Baby Q box 1050 (side tables out) × 440 × 380 lid closed (Weber spec sheet v2), shapes
+    copied from the QX2800N+ row (normalised, same geometry). BBQs group sort 25, **benchtop**,
+    drop 0, **no benchtop cut on the library row** — it is a portable unit, the manual forbids
+    building it in. A gas hose hole is per install: a round cut-out on the placed fixture
+    (RHK6593: Ø60, off +330 / −100). Not checked in-app.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`

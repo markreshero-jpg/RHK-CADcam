@@ -30,10 +30,20 @@ Source: Mark's spec text 2026-10-27 (no plan). Alfresco kitchen, flatpack.
   construction". Sits on the stone top, so no BBQ cut-out. 1050 W (side tables out) x 440 D x 380 H lid
   closed; lid open 640 H x 560 D; 11 kg. Manual: 610 clear of combustibles all round, no combustible cover
   overhead, bottle max 9 kg, 1 m hose, no spare bottle under the BBQ.
-- Not redrawn yet: waiting on Mark for bottle position (hose hole in the top?) and whether the 846 / 550 /
-  550 widths stay now there is no 900 BBQ.
+- Mark 2026-11-23: gas bottle in the cupboard under the BBQ with a hole in the top; take width out of BC-05
+  if needed (not needed, widths unchanged); the wall above the bench is block.
+- Drawn 2026-11-23 (`z_plan_automation/_tmp-6593-babyq.mjs`): Baby Q fixture (new library item, model =
+  the Weber Q shape in Charcoal Grey sized to the Baby Q) centred on BC-04, back 130 off the wall so the lid
+  opens, linked to BC-04. Hose hole 60 dia in the top = a round cut-out on the placed BBQ, 330 right of the
+  BBQ centre (2121 along the wall, under the right side table, inside BC-04), 250 off the wall. BC-04 shelf
+  removed for the bottle. Elevation notes: old BBQ note reworded in place + "9KG GAS BOTTLE / NO SHELF -
+  VENTS TBC" in BC-04. 0 errors / 0 warnings.
 
 ## Open
-- BBQ: swap the "BBQ 900 OVER" note for a Baby Q fixture on the top (no model in the library yet); sink
-  cut-out; colours.
+- Gas bottle cupboard: vents (door / kick / back?) and gasfitter OK for a bottle under the BBQ — the Weber
+  manual puts the bottle on the ground behind the BBQ and says no spare bottle under it. Hose hole size
+  (60 drawn; the regulator end may need more) and position to confirm.
+- The room has NO sink or tap fixture (found 2026-11-23; these notes say an Abi Ohelu 380 + mixer were
+  placed on BC-02). Sink model + cut-out still to do. Colours.
+- Benchtop: press Resolve once so the hose hole reaches the top's parts.
 - Wine fridge: model/height not given; no ventilation detail drawn.
