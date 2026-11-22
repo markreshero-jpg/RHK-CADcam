@@ -1194,6 +1194,24 @@ export default function InternalGridEditor({
   const { svgRef, viewBox } = useSvgZoom(vw, vh)
   const svgY = (cabY: number) => oy + (cabDY - cabY)
 
+  // -- Bay sizes on the drawing: click a bay's size badge, type, Enter --
+  // Typing a size locks the bay; clearing it lets the bay fill the space again.
+  const dimFs = Math.max(12, Math.max(cabDX, cabDY) / 55)
+  const fmtDim = (v: number) => String(Math.round(v * 10) / 10)
+  const [dimEdit, setDimEdit] = useState<{ path: Path; value: number; locked: boolean } | null>(null)
+  const [dimPos, setDimPos] = useState<{ left: number; top: number } | null>(null)
+  const dimWrapRef = useRef<HTMLDivElement>(null)
+  const dimDoneRef = useRef(false)
+  const dimEditKey = dimEdit ? `bay-${dimEdit.path.join('.')}` : null
+  function commitBayDim(raw: string) {
+    if (!dimEdit || dimDoneRef.current) return
+    dimDoneRef.current = true
+    const t = raw.trim()
+    // Unchanged auto size: leave it auto rather than locking it by accident.
+    if (!dimEdit.locked && (t === '' || t === fmtDim(dimEdit.value))) return
+    setLeafLockSize(dimEdit.path, t)
+  }
+
   // Floating (z_floating): the floor is the bottom panel's top, or the carcass bottom.
   const floatBot = isFloating(cabinet) ? rp?.case_parts.find(p => p.part_key === 'bottom') : undefined
   const intY0 = isFloating(cabinet) ? (floatBot ? floatBot.Y + floatBot.DZ : 0)
@@ -1681,11 +1699,37 @@ export default function InternalGridEditor({
 
         {/* SVG preview */}
         <div
+          ref={dimWrapRef}
           className="flex-1 overflow-hidden relative"
           onClick={() => { setSelected(null); setMenu(null) }}
           onContextMenu={e => e.preventDefault()}
           style={(dragLive || fittingDragLive) ? { cursor: 'grabbing' } : undefined}
         >
+          {dimEdit && dimPos && (
+            <div className="absolute z-20 flex items-center gap-1 -translate-x-1/2 -translate-y-1/2"
+              style={{ left: Math.max(70, dimPos.left), top: Math.max(20, dimPos.top) }}
+              onClick={e => e.stopPropagation()}>
+              <input
+                key={dimEditKey}
+                autoFocus type="number" step="any"
+                defaultValue={fmtDim(dimEdit.value)}
+                onFocus={e => e.target.select()}
+                onBlur={e => { commitBayDim(e.target.value); setDimEdit(null) }}
+                onKeyDown={e => {
+                  e.stopPropagation()
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                  else if (e.key === 'Escape') { dimDoneRef.current = true; setDimEdit(null) }
+                }}
+                className="w-24 bg-gray-900 border-2 border-blue-500 rounded px-2 py-1.5 text-base text-white text-right focus:outline-none shadow-xl"
+              />
+              {dimEdit.locked && (
+                <button
+                  onMouseDown={e => { e.preventDefault(); commitBayDim(''); setDimEdit(null) }}
+                  title="Unlock: the bay fills the remaining space again"
+                  className="px-2.5 py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-200 shadow-xl">Auto</button>
+              )}
+            </div>
+          )}
           <svg ref={svgRef} viewBox={viewBox} width="100%" height="100%">
 
             {/* Width dimension */}
@@ -1891,6 +1935,52 @@ export default function InternalGridEditor({
                       fontFamily="system-ui,sans-serif" style={{ pointerEvents: 'none', userSelect: 'none' }}
                     >{sep.equalised ? `${baseLabel} =` : sep.locked ? `${baseLabel} ⚲` : baseLabel}</text>
                   )}
+                </g>
+              )
+            })}
+
+            {/* Bay size badges: width along the top of a column, height down the left of
+                a bay. Amber + padlock = locked, grey = fills, "=" = equalised (set by its
+                group), plain = sized by its drawer. Click one to type a size. */}
+            {!dragLive && !fittingDragLive && leaves.map(leaf => {
+              const axis  = getParentSplitAxis(layoutTree, leaf.path)
+              const child = getLeafChild(layoutTree, leaf.path)
+              if (!axis || !child) return null
+              const v = axis === 'v' ? leaf.box.w : leaf.box.h
+              const locked = child.size !== undefined && !child.equalise_group
+              const equalised = child.equalise_group !== undefined
+              const readOnly = equalised || !!child.auto_height
+              const bw = dimFs * 3.8, bh = dimFs * 1.5
+              if (leaf.box.w < bw + 8 || leaf.box.h < bh + 6) return null
+              const key = `bay-${leaf.path.join('.')}`
+              const col = locked ? '#fbbf24' : equalised ? groupColor(child.equalise_group!) : '#cbd5e1'
+              const top = svgY(leaf.box.y + leaf.box.h)
+              const cx = axis === 'v' ? ox + leaf.box.x + leaf.box.w / 2 : ox + leaf.box.x + bw / 2 + 6
+              const cy = axis === 'v' ? top + bh / 2 + 5 : top + leaf.box.h / 2
+              const label = `${axis === 'v' ? '\u2194' : '\u2195'} ${fmtDim(v)}${locked ? ' \u{1F512}' : equalised ? ' =' : ''}`
+              return (
+                <g key={`dim-${key}`} data-dim={key} style={{ cursor: readOnly ? 'pointer' : 'text' }}
+                  onClick={e => {
+                    e.stopPropagation(); setMenu(null)
+                    setSelected({ kind: 'leaf', path: leaf.path })
+                    if (readOnly) return
+                    const wrap = dimWrapRef.current
+                    if (!wrap) return
+                    const r = e.currentTarget.getBoundingClientRect(), w = wrap.getBoundingClientRect()
+                    dimDoneRef.current = false
+                    setDimPos({ left: r.left + r.width / 2 - w.left, top: r.top + r.height / 2 - w.top })
+                    setDimEdit({ path: leaf.path, value: v, locked })
+                  }}>
+                  <title>{child.auto_height ? 'Sized by its drawer: change the drawer height or slide'
+                    : equalised ? 'Equalised: untick Equalise in the panel to type a size'
+                    : locked ? 'Locked size: click to change, or clear it to unlock'
+                    : (axis === 'v' ? 'Bay width' : 'Bay height') + ': click and type to lock it'}</title>
+                  <rect x={cx - bw / 2} y={cy - bh / 2} width={bw} height={bh} rx={dimFs * 0.25}
+                    fill={dimEditKey === key ? '#1d4ed8' : '#111827'} fillOpacity={0.92}
+                    stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+                    fontSize={dimFs} fill={col} fontFamily="system-ui,sans-serif"
+                    style={{ userSelect: 'none' }}>{label}</text>
                 </g>
               )
             })}

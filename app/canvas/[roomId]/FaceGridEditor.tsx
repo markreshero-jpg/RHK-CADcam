@@ -675,7 +675,9 @@ export default function FaceGridEditor({
 
   const cabDX = cabinet.dx
   const cabDY = cabinet.dy
-  const PL = 12, PT = 28, PR = 12, PB = 12
+  // Dimension text scales with the cabinet so it reads the same on a 720 base and a 2400 tall.
+  const dimFs = Math.max(14, Math.max(cabDX, cabDY) / 40)
+  const PL = dimFs * 5.2, PT = dimFs * 2, PR = 12, PB = dimFs * 2.8
   const vw = cabDX + PL + PR
   const vh = cabDY + PT + PB
   const ox = PL, oy = PT
@@ -683,6 +685,44 @@ export default function FaceGridEditor({
 
   // Cabinet Y (bottom=0) → SVG Y (top=0)
   function svgY(cabY: number) { return oy + (cabDY - cabY) }
+
+  // -- Sizes on the drawing: click a row height / column width, type, Enter --
+  // Typing a size locks it; clearing it hands the row / column back to auto.
+  type DimKey = { kind: 'row' | 'col'; index: number }
+  const [dimEdit, setDimEdit] = useState<DimKey | null>(null)
+  const [dimPos, setDimPos] = useState<{ left: number; top: number } | null>(null)
+  const dimWrapRef = useRef<HTMLDivElement>(null)
+  const dimDoneRef = useRef(false)
+  const fmtDim = (v: number) => String(Math.round(v * 10) / 10)
+  // Tab order: rows top to bottom, then columns left to right.
+  const dimOrder: DimKey[] = [
+    ...[...grid.rows].sort((a, b) => b.row_index - a.row_index).map(r => ({ kind: 'row' as const, index: r.row_index })),
+    ...[...grid.cols].sort((a, b) => a.col_index - b.col_index).map(c => ({ kind: 'col' as const, index: c.col_index })),
+  ]
+  const dimLocked = (k: DimKey) => k.kind === 'row'
+    ? !!grid.rows.find(r => r.row_index === k.index)?.height_locked
+    : !!grid.cols.find(c => c.col_index === k.index)?.width_locked
+  const dimValue = (k: DimKey) => (k.kind === 'row' ? d.rowHeights[k.index] : d.colWidths[k.index]) ?? 0
+  // Where the size box goes: over the clicked badge, measured when it opens.
+  function openDim(k: DimKey) {
+    const el = svgRef.current?.querySelector(`[data-dim="${k.kind}-${k.index}"]`)
+    const wrap = dimWrapRef.current
+    if (!el || !wrap) return
+    const r = el.getBoundingClientRect(), w = wrap.getBoundingClientRect()
+    dimDoneRef.current = false
+    setDimPos({ left: r.left + r.width / 2 - w.left, top: r.top + r.height / 2 - w.top })
+    setDimEdit(k)
+  }
+  function commitDim(k: DimKey, raw: string) {
+    if (dimDoneRef.current) return
+    dimDoneRef.current = true
+    const t = raw.trim()
+    // Unchanged auto size: leave it auto rather than locking it by accident.
+    if (t !== '' && !dimLocked(k) && t === fmtDim(dimValue(k))) return
+    if (t === '' && !dimLocked(k)) return
+    if (k.kind === 'row') commitRowHeight(k.index, t); else commitColWidth(k.index, t)
+  }
+  const dimEditKey = dimEdit ? `${dimEdit.kind}-${dimEdit.index}` : null
 
   const errors  = rp?.errors  ?? []
   const warnings = rp?.warnings ?? []
@@ -729,7 +769,7 @@ export default function FaceGridEditor({
           title="Show / hide door-swing chevrons"
         >Swings {showChevrons ? 'on' : 'off'}</button>
         <span className="text-gray-600 hidden sm:inline">·</span>
-        <span className="text-gray-600 text-[13px] hidden sm:inline">click zone to select · double-click to cycle type · click hinge bar to cycle edge</span>
+        <span className="text-gray-600 text-[13px] hidden sm:inline">click a size to type it · click zone to select · double-click to cycle type · click hinge bar to cycle edge</span>
         {errors.length > 0 && (
           <span className="ml-auto text-[13px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
         )}
@@ -742,7 +782,39 @@ export default function FaceGridEditor({
       <div className="flex-1 flex overflow-hidden min-h-0">
 
         {/* SVG */}
-        <div className="flex-1 overflow-hidden relative">
+        <div ref={dimWrapRef} className="flex-1 overflow-hidden relative">
+          {dimEdit && dimPos && (
+            <div className="absolute z-20 flex items-center gap-1 -translate-x-1/2 -translate-y-1/2"
+              style={{ left: Math.max(70, dimPos.left), top: Math.max(20, dimPos.top) }}>
+              <input
+                key={dimEditKey}
+                autoFocus type="number" step="any"
+                defaultValue={fmtDim(dimValue(dimEdit))}
+                onFocus={e => e.target.select()}
+                onBlur={e => { commitDim(dimEdit, e.target.value); setDimEdit(null) }}
+                onKeyDown={e => {
+                  const el = e.target as HTMLInputElement
+                  if (e.key === 'Enter') { el.blur() }
+                  else if (e.key === 'Escape') { dimDoneRef.current = true; setDimEdit(null) }
+                  else if (e.key === 'Tab') {
+                    e.preventDefault()
+                    commitDim(dimEdit, el.value)
+                    const i = dimOrder.findIndex(k => k.kind === dimEdit.kind && k.index === dimEdit.index)
+                    const next = dimOrder[(i + (e.shiftKey ? dimOrder.length - 1 : 1)) % dimOrder.length]
+                    // Let the old box unmount (its blur is ignored) before the next opens.
+                    setDimEdit(null); setTimeout(() => openDim(next), 0)
+                  }
+                }}
+                className="w-24 bg-gray-900 border-2 border-blue-500 rounded px-2 py-1.5 text-base text-white text-right focus:outline-none shadow-xl"
+              />
+              {dimLocked(dimEdit) && (
+                <button
+                  onMouseDown={e => { e.preventDefault(); commitDim(dimEdit, ''); setDimEdit(null) }}
+                  title="Unlock: the size goes back to an equal share"
+                  className="px-2.5 py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-200 shadow-xl">Auto</button>
+              )}
+            </div>
+          )}
           <svg
             ref={svgRef}
             viewBox={viewBox}
@@ -751,7 +823,7 @@ export default function FaceGridEditor({
             {/* Width dim above */}
             <text x={ox + cabDX / 2} y={PT / 2}
               textAnchor="middle" dominantBaseline="central"
-              fontSize={14} fill="#ffffff" fontFamily="system-ui,sans-serif"
+              fontSize={dimFs} fill="#ffffff" fontFamily="system-ui,sans-serif"
             >{cabDX}mm</text>
 
             {/* Cabinet bg */}
@@ -957,6 +1029,54 @@ export default function FaceGridEditor({
             {/* Cabinet outline */}
             <rect x={ox} y={oy} width={cabDX} height={cabDY}
               fill="none" stroke="#6b7280" strokeWidth={1.5} />
+
+            {/* Row heights down the left, column widths along the bottom: click to type.
+                Amber + padlock = locked size; grey = auto (equal share). */}
+            {dimOrder.map(k => {
+              const v = dimValue(k)
+              if (!v) return null
+              const locked = dimLocked(k)
+              const key = `${k.kind}-${k.index}`
+              const editing = dimEditKey === key
+              const col = locked ? '#fbbf24' : '#cbd5e1'
+              const tick = dimFs * 0.3
+              const label = `${fmtDim(v)}${locked ? ' \u{1F512}' : ''}`
+              const bw = dimFs * 3.6, bh = dimFs * 1.5
+              let cx: number, cy: number, line: React.ReactNode
+              if (k.kind === 'row') {
+                const yTop = svgY(d.rowYOffsets[k.index] + v), yBot = svgY(d.rowYOffsets[k.index])
+                const lx = ox - dimFs * 0.7
+                cx = lx - tick - bw / 2 - dimFs * 0.2; cy = (yTop + yBot) / 2
+                line = <>
+                  <line x1={lx} y1={yTop} x2={lx} y2={yBot} stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <line x1={lx - tick} y1={yTop} x2={lx + tick} y2={yTop} stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <line x1={lx - tick} y1={yBot} x2={lx + tick} y2={yBot} stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                </>
+              } else {
+                const xL = ox + d.colXOffsets[k.index], xR = xL + v
+                const ly = oy + cabDY + dimFs * 0.7
+                cx = (xL + xR) / 2; cy = ly + tick + bh / 2 + dimFs * 0.2
+                line = <>
+                  <line x1={xL} y1={ly} x2={xR} y2={ly} stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <line x1={xL} y1={ly - tick} x2={xL} y2={ly + tick} stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <line x1={xR} y1={ly - tick} x2={xR} y2={ly + tick} stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                </>
+              }
+              return (
+                <g key={`dim-${key}`}>
+                  {line}
+                  <g data-dim={key} style={{ cursor: 'text' }}
+                    onClick={e => { e.stopPropagation(); openDim(k) }}>
+                    <title>{locked ? 'Locked size: click to change, or clear it to unlock' : 'Auto size: click and type to lock it'}</title>
+                    <rect x={cx - bw / 2} y={cy - bh / 2} width={bw} height={bh} rx={dimFs * 0.25}
+                      fill={editing ? '#1d4ed8' : '#111827'} stroke={col} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                    <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
+                      fontSize={dimFs} fill={col} fontFamily="system-ui,sans-serif"
+                      style={{ userSelect: 'none' }}>{label}</text>
+                  </g>
+                </g>
+              )
+            })}
           </svg>
         </div>
 
