@@ -37,6 +37,28 @@ Phones: offline queues must be sent before the freeze; Take offline copies re-sa
 Shared 3D links (`share-3d`) carry the old address → check whether they can be kept.
 Do the SynologyDrive backup first (same tools + password; its test restore is a rehearsal).
 
+**Prep done 2026-11-22:**
+- Tools: EDB's PostgreSQL installer / zip downloads return 403 from this PC, so `pg_dump` /
+  `pg_restore` / `psql` **18.6** come from pgAdmin 4 (winget `PostgreSQL.pgAdmin`):
+  `%LOCALAPPDATA%\Programs\pgAdmin 4\runtime\`. No Docker / Supabase CLI — use these directly.
+- Connection (free plan = no IPv4 direct host): **session pooler**
+  `aws-1-ap-southeast-1.pooler.supabase.com:5432`, user `postgres.xivrjteialwqmleahkfq`,
+  `sslmode=require` (`aws-0-…` answers "tenant not found"). Password: `.db-password.txt`
+  in the repo root (git-ignored, Mark reset it 2026-11-22) → `PGPASSWORD`, never echoed.
+- **First full backup** in `C:\Users\mark\SynologyDrive\RHK-CADcam Backups\2026-11-22\`:
+  `rhk-cadcam-full.dump` (`pg_dump -Fc --no-owner`, 8.5 MB, 125 public + 27 auth + 10 storage
+  tables of data, 201 policies, 29 functions), `roles.sql`, `storage\<bucket>\…` (all 232
+  files, 148.7 MB, sizes checked against `storage.objects`), `storage-objects.tsv`.
+- Old ref inside the data (rows per table, from the dump): `cabinet_instances` **492**,
+  `internal_parts` **134** (inside jsonb), `room_fixtures` 16, `hardware_slides` 6,
+  `ai_batches` 5, `hardware_accessories` 4, `fixture_catalog` 3, `hardware_hinges` 1,
+  `hardware_hinge_plates` 1 — so step 5 is a sweep of every text / jsonb column, not the
+  short table below.
+- Shared 3D links are safe: `/share/3d/<room>/<token>` is on the app's own domain and builds
+  the file address from `NEXT_PUBLIC_SUPABASE_URL`, so they work once `share-3d` is
+  re-uploaded at the same paths.
+- Still to do after the move: nightly scheduled backup + retention (connection changes).
+
 ### Gotcha: stored URLs carry the old project ref
 
 21 rows store FULL public storage URLs
