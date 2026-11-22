@@ -156,3 +156,13 @@ project after the switch would be lost — so decide within the first hour.
 - **Gotchas hit:** (1) a 49 MB plain dump written straight into the SynologyDrive folder came out with blocks of NUL bytes — dump to a local folder, verify, then copy. (2) `pg_dump -t` makes `-n` a no-op — schema and single-table dumps must be separate runs. (3) Vercel: a "Secret" env var named `NEXT_PUBLIC_*` can't be switched to Config — delete and re-add. (4) The anon key shown in chat was masked on Mark's screen, so dots were pasted into Vercel — hand keys over in a file (`vercel-values.txt`) or have him copy from the Supabase dashboard.
 - `sanding` schema (9 tables, Mark's old sanding project, unused) was copied across; nothing else reads this database.
 - Old settings for rollback: `.env.local.singapore`.
+
+## Nightly backup (built 2026-11-22)
+
+- Script `scripts/backup/nightly-backup.ps1` (+ `storage-sync.cjs`): full `pg_dump -Fc` of Sydney to `C:Toolshk-backupwork`, read end to end with `pg_restore`, copied to `SynologyDriveRHK-CADcam Backups
+ightlyhk-cadcam-YYYY-MM-DD.dump` (hash checked), stored files mirrored to `…storage` (adds + updates only, md5 against the eTag). Keeps 30 nightly + the first dump of each month.
+- Windows scheduled task **RHK-CADcam nightly backup**: daily 7:00 pm as Mark, catches up at next logon if the PC was off. Needs `.db-password-sydney.txt`, `.env.local` (automation login) and pgAdmin's runtime.
+- Result line per run in `…RHK-CADcam Backupsackup-log.txt`; a failed run leaves `BACKUP FAILED <date>.txt` in that folder until the next good run.
+- Timing: ~1 minute (first run 3 min with all 232 files). `pg_dump` reads one consistent snapshot, so it is safe while people are drawing.
+- Old Singapore project paused by Mark 2026-11-22 (delete after ~1 week). CRM to be resumed by Mark.
+- Still owed: a restore drill from a nightly file into a scratch project (needs a free project slot).
