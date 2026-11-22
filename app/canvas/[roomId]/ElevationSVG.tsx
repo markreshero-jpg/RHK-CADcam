@@ -1519,6 +1519,9 @@ export default function ElevationSVG({
                   onPointerLeave={() => setHoveredCabId(null)}
                   onClick={e => {
                     e.stopPropagation()
+                    // Measuring: the click picks a point (svg pointerup), it doesn't select —
+                    // on a phone selecting opened the properties drawer over the drawing.
+                    if (mode === 'measure') return
                     if (elevResizeFollowing) { void confirmResize(); return }
                     if (justConfirmedRef.current) return
                     if (elevCabFollowing) { dropFollowingCab(); return }

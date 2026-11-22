@@ -3744,12 +3744,24 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             <div className="relative flex-none" onPointerDown={e => e.stopPropagation()}>
               <span data-canvas-theme hidden />
               <button onClick={() => setPhoneMore(o => !o)} title="Layers and view options" aria-label="Layers and view options" aria-expanded={phoneMore}
-                className={`w-9 h-8 rounded-lg flex items-center justify-center border transition-colors ${phoneMore ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800/50 border-gray-700 text-gray-300 active:bg-gray-800'}`}>
+                className={`w-9 h-8 rounded-lg flex items-center justify-center border transition-colors ${phoneMore ? 'bg-blue-600 border-blue-500 text-white' : mode === 'measure' && canvasView !== '3d' ? 'bg-amber-500 border-amber-400 text-white' : 'bg-gray-800/50 border-gray-700 text-gray-300 active:bg-gray-800'}`}>
                 <svg width="18" height="18" viewBox="0 0 20 20" fill="currentColor"><circle cx="4" cy="10" r="1.7" /><circle cx="10" cy="10" r="1.7" /><circle cx="16" cy="10" r="1.7" /></svg>
               </button>
               {phoneMore && (<>
                 <div className="fixed inset-0 z-40" onClick={() => setPhoneMore(false)} />
                 <div className="absolute right-0 top-full mt-1.5 z-50 w-64 max-h-[70dvh] overflow-y-auto rounded-lg border border-gray-600 bg-gray-800 shadow-xl py-1 text-[15px] text-gray-100">
+                  {/* Measure in plan / elevation: tap a point, tap a second point; tap again for a
+                      new one. Same item (or Stop measuring) turns it off. 3D keeps its bar button. */}
+                  {(canvasView === 'plan' || canvasView === 'elevation') && (
+                    <button onClick={() => { onSelectMode('measure'); setPhoneMore(false) }} aria-pressed={mode === 'measure'}
+                      className={`w-full flex items-center gap-2 px-3 py-2.5 text-left border-b border-gray-700 active:bg-gray-700 ${mode === 'measure' ? 'text-amber-300' : ''}`}>
+                      <svg className="w-4 h-4 flex-none" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2.5" y="6.5" width="15" height="7" rx="1.2" />
+                        <path d="M5.5 6.5v2.5M8.5 6.5v3.5M11.5 6.5v2.5M14.5 6.5v3.5" />
+                      </svg>
+                      {mode === 'measure' ? 'Stop measuring' : 'Measure'}
+                    </button>
+                  )}
                   {canvasView !== 'section' && (<>
                     <div className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-400">Layers</div>
                     {!activeLayerSet && <div className="px-3 py-2 text-gray-400">{layerSetsApi.loading ? 'Loading…' : 'Default'}</div>}
