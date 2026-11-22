@@ -32,6 +32,7 @@ if (!job) { console.log('usage: node z_plan_automation/prenest-check.cjs <job no
   const { data: mats } = await sb.from('materials').select('id,name,has_grain,sheet_dx,sheet_dy')
   const mat = new Map(mats.map(m => [m.id, m]))
   const sheetMax = id => { const m = mat.get(id); const l = Math.max(Number(m?.sheet_dx) || 0, Number(m?.sheet_dy) || 0); return l || 2415 }
+  const sheetMin = id => { const m = mat.get(id); const w = Math.min(Number(m?.sheet_dx) || 0, Number(m?.sheet_dy) || 0); return w || 1211 }
   const q = async (t, cols) => (await sb.from(t).select(cols).in('cabinet_instance_id', ids)).data ?? []
   const [cp, tk, fz, cu] = await Promise.all([
     q('case_parts', 'cabinet_instance_id,part_key,dx,dy,material_id,material_override_id,output_to_cnc,created_at'),
@@ -52,6 +53,9 @@ if (!job) { console.log('usage: node z_plan_automation/prenest-check.cjs <job no
     const c = cab.get(p.cabinet_instance_id), L = Math.max(Number(p.dx), Number(p.dy))
     if (p.output_to_cnc === false || c.no_cnc || (c.part_no_cnc ?? []).includes(`${pre}${p.part_key}`)) continue
     if (L > sheetMax(p.material_override_id ?? p.material_id) - 10) add('FIX', `${where(c)}: ${p.part_key} ${L} long — over the sheet (seam / split / No CNC)`)
+    // Short side wider than the sheet (RHK6478 Buffet WC-02 back 1439 x 1213, Mark 2026-11-22 nest: unplaced).
+    const W = Math.min(Number(p.dx), Number(p.dy))
+    if (W > sheetMin(p.material_override_id ?? p.material_id) - 10) add('FIX', `${where(c)}: ${p.part_key} ${Math.max(p.dx, p.dy)} x ${W} — wider than the sheet (split / bigger sheet / No CNC)`)
   }
   for (const p of cu) if (!p.no_cnc && Math.max(Number(p.dx), Number(p.dy)) > 2405) add('FIX', `${where(cab.get(p.cabinet_instance_id))}: ${p.name} ${Math.max(p.dx, p.dy)} long — over the sheet`)
 
