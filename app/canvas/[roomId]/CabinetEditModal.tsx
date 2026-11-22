@@ -216,7 +216,9 @@ export default function CabinetEditModal({
   // Phones (z_mobile/MOBILE-SPEC.md): full screen, properties panel is a narrow
   // drawer over the views with an edge tab to hide / show it.
   const phone = useIsPhone()
-  const [panelHidden, setPanelHidden] = useState(false)
+  // Phones: the properties drawer starts shut so the cabinet has the whole screen (the
+  // edge tab opens it; picking a part opens it too).
+  const [panelHidden, setPanelHidden] = useState(phone)
   // The phone drawer starts below the header + tabs so it never covers the close ✕.
   const contentRef = useRef<HTMLDivElement>(null)
   const [drawerTop, setDrawerTop] = useState(0)
@@ -879,10 +881,10 @@ export default function CabinetEditModal({
             Phone: a drawer sliding via `right` (not a transform — that would trap
             the fixed menus rendered inside), with an edge tab. */}
         <div className={phone ? 'absolute bottom-0 z-20 flex items-start transition-[right] duration-200' : 'contents'}
-          style={phone ? { top: drawerTop, right: panelHidden ? 'calc(-1 * min(15rem, 70vw))' : 0 } : undefined}>
+          style={phone ? { top: drawerTop, right: panelHidden ? 'calc(-1 * min(20rem, 86vw))' : 0 } : undefined}>
         {phone && <PhoneDrawerTab hidden={panelHidden} onToggle={() => setPanelHidden(h => !h)} />}
         <div className={phone
-          ? 'h-full w-[min(15rem,70vw)] bg-gray-900 border-l border-gray-700 shadow-2xl relative [&_.w-72]:w-full! [&_.w-72]:border-l-0'
+          ? 'h-full w-[min(20rem,86vw)] bg-gray-900 border-l border-gray-700 shadow-2xl relative [&_.w-72]:w-full! [&_.w-72]:border-l-0'
           : 'flex-none w-72 border-l border-gray-800 relative'}>
           {mcad.panel && <div className="absolute inset-0 z-20 flex [&>*]:w-full! [&>*]:border-l-0">{mcad.panel}</div>}
           <div className={dockedPanelOpen ? 'hidden' : 'h-full overflow-y-auto'}>

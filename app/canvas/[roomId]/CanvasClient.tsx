@@ -3577,7 +3577,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             </svg>
           </button>
         )}
-        <div className={phone ? 'flex items-center gap-0.5 min-w-0' : 'absolute left-1/2 -translate-x-1/2 flex items-center gap-1'}>
+        {/* Desktop: tabs centred between two equal flex sides (not absolute), so a long
+            right-hand group pushes them left instead of sitting on top of them. */}
+        {!phone && <div className="flex-1 min-w-0" />}
+        <div className={phone ? 'flex items-center gap-0.5 min-w-0' : 'flex-none flex items-center gap-1 whitespace-nowrap'}>
           {(['plan', 'elevation', 'section', '3d'] as CanvasView[]).map(v => (
             <button key={v} data-tour={`view-${v}`} onClick={() => switchView(v)}
               className={`${phone ? 'px-2.5 py-1.5 text-sm' : 'px-3 py-1 text-xs'} rounded transition-colors ${
@@ -3656,7 +3659,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             </div>
           )}
         </div>
-        <div className={`ml-auto flex items-center ${phone ? 'gap-1 min-w-0' : 'gap-2'}`}>
+        <div className={`flex items-center ${phone ? 'ml-auto gap-1 min-w-0' : 'flex-1 justify-end gap-2 whitespace-nowrap pl-2'}`}>
           {canvasView === '3d' && phone && (
             <button onClick={() => setReset3DSignal(s => s + 1)} title="Reset 3D view"
               className="px-2 py-1 text-xs rounded bg-gray-700 text-gray-100 border border-gray-500">⟲</button>

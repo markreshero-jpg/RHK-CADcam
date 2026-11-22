@@ -98,7 +98,8 @@ cabinet editors stay desktop-first.
       elsewhere), and a "Move" item on the cabinet context menu.
 - [~] **M3** — phone-friendly modals. **Cabinet edit modal done (2026-10-16):**
       full screen (`h-dvh`, no padding/rounding), view tabs scroll sideways,
-      properties panel is a `min(15rem, 70vw)` drawer over the views with the
+      properties panel is a `min(20rem, 86vw)` drawer (was 15rem / 70vw: drop-downs were cut
+      off), **shut when the editor opens** (2026-11-22, the cabinet gets the screen), over the views with the
       shared `PhoneDrawerTab` ◀/▶; selecting a part re-opens a hidden drawer.
       The drawer starts below the header + tabs (measured `offsetTop` of the
       content area) so it never covers the close button, which is a 36px
