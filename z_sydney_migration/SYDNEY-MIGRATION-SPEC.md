@@ -1,6 +1,6 @@
 # Move Supabase to Sydney — spec
 
-**Status:** planned, not started (written 2026-10-26). Mark: "we'll do it later".
+**Status:** MOVED 2026-11-22. Live site + this PC use the Sydney project `peqhxkesukmizvtsvweo` (`ap-southeast-2`), Vercel functions `syd1`. Old Singapore project `xivrjteialwqmleahkfq` kept as the fallback, to be paused, then deleted after ~1 week. See "Move log" at the end.
 
 ## Why
 
@@ -147,3 +147,12 @@ project after the switch would be lost — so decide within the first hour.
 - [ ] Before-the-day checks (tools, plan, dashboard settings, other clients)
 - [ ] Migration day (steps 1–11)
 - [ ] Old project deleted
+
+## Move log (2026-11-22)
+
+- Free plan: CRM paused by Mark; Sydney project created via MCP ($0). Its DB password is in `.db-password-sydney.txt` (git-ignored); pooler `aws-0-ap-southeast-2.pooler.supabase.com:5432`, user `postgres.peqhxkesukmizvtsvweo`.
+- How it was copied (scripts + logs in `C:Toolshk-move`, dumps also in the SynologyDrive backup `2026-11-22move`): `pg_dump --schema-only --no-owner -n public -n sanding -n supabase_migrations` → psql (13 expected errors: schema public exists, supabase_admin default privileges); data: `auth.users`, `auth.identities`, `storage.buckets` + the three schemas, `--data-only`, loaded with `session_replication_role = replica` in one transaction; the 24 `storage.objects` + 2 `realtime.messages` policies and `supabase_realtime` ← `public.ai_batches` re-created by hand (they live outside the dumped schemas); `storage.objects` rows NOT copied — the 232 files were downloaded from old and uploaded to new through the API as the automation admin (md5 checked against the eTag).
+- Checked before the switch: 138 tables, identical counts and md5 of every row (`compare.sh`); policies / functions / triggers / indexes / grants identical; old ref rewritten in 9 columns (662 rows, generic sweep of text + json columns, `rewrite-urls.sh`), none left; API as automation returns the same counts; one call 57 ms vs 197 ms.
+- **Gotchas hit:** (1) a 49 MB plain dump written straight into the SynologyDrive folder came out with blocks of NUL bytes — dump to a local folder, verify, then copy. (2) `pg_dump -t` makes `-n` a no-op — schema and single-table dumps must be separate runs. (3) Vercel: a "Secret" env var named `NEXT_PUBLIC_*` can't be switched to Config — delete and re-add. (4) The anon key shown in chat was masked on Mark's screen, so dots were pasted into Vercel — hand keys over in a file (`vercel-values.txt`) or have him copy from the Supabase dashboard.
+- `sanding` schema (9 tables, Mark's old sanding project, unused) was copied across; nothing else reads this database.
+- Old settings for rollback: `.env.local.singapore`.
