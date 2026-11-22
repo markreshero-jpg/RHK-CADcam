@@ -4,7 +4,7 @@
     "Alcove 2295 wall to wall, side walls 687 (left) / 690 (right), kick 120 (room TOEH 120).",
     "Closed box, panel front: 450 H incl kick, 680 deep overall = 661.5 carcass + 16.5 front + 2.",
     "16mm PT Woodmatt Tasmanian Oak (new board + Flat Grain - Polytec colour). Whole box in the board (exposed_interior), centre divider to carry the seat.",
-    "Box runs tight wall to wall - scribe / fillers TBC."
+    "Rev 2 (Mark 2026-11-23): cabinet scribe 5 L + R, front in 2 pieces 5 oversize overall to scribe on site, 2 divisions."
   ],
   "projectId": "617e2130-d7e4-4e3a-95ef-c7e738eb3b8e",
   "roomId": "e1ef206e-138d-45cc-953d-a1a0c21f2a02",
@@ -19,14 +19,16 @@
   "cabinets": [
     {
       "def": "B1D", "wall": 2, "offset": 0, "dx": 2295, "dy": 450, "dz": 661.5,
-      "note": "BENCH SEAT - closed box, fixed panel front. Scribe / fillers to walls TBC",
+      "note": "BENCH SEAT - closed box, fixed panel front in 2 pieces (5 oversize to scribe on site). Cabinet scribe 5 L + R",
+      "rules": { "SCRL": 5, "SCRR": 5, "REVSL": -2.5, "REVSR": -2.5, "GAPC": 0 },
       "set": {
         "top_type": "full_top", "exposed_interior": true,
         "face_grid": {
-          "cols": [ { "col_index": 0, "width_locked": false } ],
+          "cols": [ { "col_index": 0, "width_locked": false }, { "col_index": 1, "width_locked": false } ],
           "rows": [ { "row_index": 0, "height_locked": false } ],
-          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "false_panel" } ] },
+          "zones": [ { "col_index": 0, "row_index": 0, "face_type": "false_panel" }, { "col_index": 1, "row_index": 0, "face_type": "false_panel" } ] },
         "internal_grid": { "tree": { "type": "vsplit", "children": [
+          { "divider": "single", "section": { "type": "open", "fittings": [] } },
           { "divider": "single", "section": { "type": "open", "fittings": [] } },
           { "section": { "type": "open", "fittings": [] } } ] } }
       }
