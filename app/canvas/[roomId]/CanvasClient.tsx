@@ -4802,6 +4802,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             wallCabinets={wall ? cabinets.filter(c => c.wall_id === wall.id) : []}
             resolvedCabinet={resolvedParts.get(cab.id)}
             initialView={editCabInitialView}
+            planLayers={planLayers} elevLayers={elevLayers}
             cadCtx={{
               room, walls, annotations, setAnnotations, captureSnapshot,
               history: { undo: () => void handleUndo(), redo: () => void handleRedo(), canUndo: !!canUndo, canRedo: !!canRedo },

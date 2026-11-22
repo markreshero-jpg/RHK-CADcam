@@ -42,6 +42,7 @@ import PartEditor from './PartEditor'
 import { buildReferenceOutlines } from './partEditor/referenceOutlines'
 import { getUserPrefs } from '@/src/lib/userPrefs'
 import { useCabinetCad, type ModalCadContext } from './CabinetCad'
+import { INVERT_FILTER, type LayerView } from '@/src/lib/displayLayers/resolve'
 import PartCutoutsPanel from './PartCutoutsPanel'
 import { cutoutPartInfo, normaliseCutoutList, normalisePartCutouts, type Cutout } from '@/src/lib/partCutouts'
 
@@ -177,8 +178,12 @@ function PartPosOverridePanel({ part, cabinetId, customParts, partOverrides, onO
 
 export default function CabinetEditModal({
   cabinet, wall, wallCabinets, resolvedCabinet, initialView, onUpdate, onDelete, onClose, materialColours, ebByMatId, onHiddenChange, onCustomPartsChange, onEdgeChange,
-  fixtures, onFixtureSwap, onFixtureRemove, onFixtureSelectOnCanvas, cadCtx,
+  fixtures, onFixtureSwap, onFixtureRemove, onFixtureSelectOnCanvas, cadCtx, planLayers, elevLayers,
 }: {
+  /** The canvas layer set (z_display_layers): Top follows its plan view, Front / Side
+   *  its elevation view — background + Invert colours for now. */
+  planLayers?: LayerView
+  elevLayers?: LayerView
   cabinet: CabinetInstance
   wall: Wall | null
   wallCabinets: CabinetInstance[]
@@ -282,6 +287,9 @@ export default function CabinetEditModal({
 
 
   const isOrthoView = activeView !== '3d' && activeView !== 'parts' && activeView !== 'face' && activeView !== 'interior' && activeView !== 'joints' && activeView !== 'overrides' && activeView !== 'routes' && activeView !== 'errors'
+  // Top / Front / Side drawings sit on the layer set's background, like the canvas views.
+  const isDrawingView = activeView === 'top' || activeView === 'elevation' || activeView === 'side'
+  const drawingLayers = activeView === 'top' ? planLayers : elevLayers
   const dockedPanelOpen = (isOrthoView && !!selectedSVGPart) || (activeView === '3d' && panel3DVisible)
   // Picking a part re-opens a hidden phone drawer so its details show.
   const [prevDocked, setPrevDocked] = useState(dockedPanelOpen)
@@ -736,10 +744,17 @@ export default function CabinetEditModal({
               : activeView === 'overrides' ? 'bg-gray-900'
               : activeView === 'routes'  ? 'bg-gray-900'
               : activeView === 'errors'  ? 'bg-gray-900'
+              : isDrawingView            ? ''
               : 'flex items-center justify-center bg-gray-950 p-6'
             }`}
             onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null); setSelFixtureId(null) } : undefined}
           >
+            {/* Drawing surface: keeps the layer set's colours in light mode (.canvas-keep-dark),
+                background + Invert colours from the set — same rule as the plan / elevation. */}
+            {isDrawingView && <div
+              className="w-full h-full flex items-center justify-center bg-gray-950 p-6 canvas-keep-dark"
+              style={{ background: drawingLayers?.background, filter: drawingLayers?.invert ? INVERT_FILTER : undefined }}
+            >
             {activeView === 'top' && (
               visibleRp ? <ResolvedTop cad={mcadTop.host} cab={cabinet} rp={visibleRp} wireMode={wireMode} showInternals={showInternals} showDrilling={showDrilling} measureMode={measureMode}
                 selectedPartId={selectedSVGPart?.id ?? null} onPartsAtPoint={handlePartsAtPoint}
@@ -770,6 +785,7 @@ export default function CabinetEditModal({
                 fixtures={fixtures} selectedFixtureId={selFixtureId} onFixtureSelect={setSelFixtureId} />
               : <SideView cab={cabinet} />
             )}
+            </div>}
             {activeView === 'face'     && <FacetFaceGridEditor cabinet={cabinet} rp={visibleRp} showInternals={showInternals} onUpdate={onUpdate} ebByMatId={ebByMatId} />}
             {activeView === 'interior' && <InternalGridEditor cabinet={cabinet} rp={visibleRp} onUpdate={onUpdate} />}
             {activeView === '3d'     && visibleRp && <Cabinet3DView cab={cabinet} rp={visibleRp} materialColours={materialColours} ebByMatId={ebByMatId} partComments={partComments} onCommentChange={savePartComment} customParts={customParts} partOverrides={partOverrides} shapeOverrides={shapeOverrides} wire={wireMode} showDrilling={showDrilling} onUpdate={onUpdate} onDeletePart={deletePartById} setCustomParts={setCustomParts} onOverridesChange={setPartOverrides} onEditPart={(m, openShape) => { setEditShapeOnOpen(!!openShape); setEditingPart(m) }} panelHost={panelHost} onEdgeSaved={(partId, edge) => onEdgeChange?.(cabinet.id, partId, edge)} onPanelVisibleChange={setPanel3DVisible} partPanelExtra={cutoutsPanelFor} compactInfo={phone}

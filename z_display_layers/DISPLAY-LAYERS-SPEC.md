@@ -44,6 +44,12 @@ in the plan report (not passed to it), and 3D wall labels ignore wall opacity.
 **Queued (Mark 2026-10-25):** the cabinet edit modal's Top / Elevation / Side views should move onto
 layers (colour, line weight, visibility per part type). Interim: their line colours come from the
 Settings part palette via `paletteRC()` (cabinetEditSvgHelpers); fills + line weights still hard-coded.
+**Stage 1 built 2026-11-22 (check pending):** the modal's Top view takes the active set's plan
+`background` + `invert`, Front / Side take the elevation ones (`planLayers` / `elevLayers` props on
+`CabinetEditModal`; the drawing wrapper carries `.canvas-keep-dark` + `INVERT_FILTER`). So an inverted
+set (Line drawing white) gives a white modal drawing, same rule as the canvas. **Stage 2 (not built):**
+per-item colour + line weight through `layers.color()` / `layers.w()`; visibility — open question
+(a Kicks-only set would hide most of the cabinet in its own editor).
 
 **Environment notes:**
 - Supabase MCP disconnected mid-session. DB reads / writes to `drawing_layer_sets` work
