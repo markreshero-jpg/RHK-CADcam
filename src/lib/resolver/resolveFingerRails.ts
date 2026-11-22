@@ -88,11 +88,14 @@ export function fingerRails(
   if (cab.footprint || r.FPRAIL === false) return { rails: [], warnings }
   const left = caseParts.find(p => p.part_key === 'left_side')
   const right = caseParts.find(p => p.part_key === 'right_side')
-  if (!left || !right) return { rails: [], warnings }
+  // Appliance front (D28): no carcass, so no sides — a free rail across the full
+  // width, front flush with the cabinet depth, clamped to the cabinet height.
+  const free = !cab.has_carcass
+  if (!free && (!left || !right)) return { rails: [], warnings }
 
-  const frontZ = Math.min(left.Z + left.DX, right.Z + right.DX)
-  const carcTop = Math.max(left.Y + left.DY, right.Y + right.DY)
-  const carcBot = Math.min(left.Y, right.Y)
+  const frontZ = free ? cab.DZ : Math.min(left!.Z + left!.DX, right!.Z + right!.DX)
+  const carcTop = free ? cab.DY : Math.max(left!.Y + left!.DY, right!.Y + right!.DY)
+  const carcBot = free ? 0 : Math.min(left!.Y, right!.Y)
   // Behind the bevelled front: fixed (20), whatever the gap. RAILH is the rail's
   // height at the standard gap (DEFAULT_RULES.FPGAP), so a wider gap — the
   // FPGAP rule or a front's own (D14) — makes a taller rail.
@@ -199,7 +202,8 @@ export function fingerRailParts(_cab: CabinetInput, r: ConstructionRules, rails:
       grain_direction: r.RAILGRAIN ?? 'horizontal',
       fprail: {
         cut: r.RAILCUT, blockSetback: r.RAILBLK, blockDia: r.RAILBLKD, blockDepth: r.RAILBLKZ,
-        ...(rl === fixedByFront ? { noBlocks: true as const } : {}),
+        // No sides to take knock-in blocks on an appliance front's free rail (D28).
+        ...(rl === fixedByFront || !_cab.has_carcass ? { noBlocks: true as const } : {}),
         ...(rl.setback ? { setback: rl.setback, base: onBase } : {}),
       },
       part_key: rl.key,

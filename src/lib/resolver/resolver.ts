@@ -141,6 +141,14 @@ export function resolveCabinet(cabIn: CabinetInput): ResolvedCabinet {
     pushFrontRailBack(caseParts, rails, r.RAILSBFR)
     caseParts.push(...fingerRailParts(cab, r, rails, caseParts))
     allWarnings.push(...railWarnings)
+  } else if (!cab.has_carcass && cab.has_face && !cab.footprint) {
+    // Appliance front with a finger gap (integrated D/W panel): its own backing
+    // rail across the full width, nothing to notch, no blocks. The optimiser
+    // joins it end to end with the neighbour's rail (D19) — z_handles D28.
+    const { rails, warnings: railWarnings } = fingerRails(cab, r, zones, caseParts, [])
+    backingRails = rails
+    caseParts.push(...fingerRailParts(cab, r, rails, caseParts))
+    allWarnings.push(...railWarnings)
   }
 
   // ── 5. Drawer Stacks ──────────────────────────────────────────

@@ -759,6 +759,18 @@ short ends and two long ends edged."
   small-part rule. Timber pulls (D19) are never paired. The model / Parts tab keep each strip's true size.
 - First use RHK6581 kitchen: 22 strips → 10 pairs + 3 singles (BC-05 863, BC-10 448, TC-02 2370).
 
+**D28. Appliance fronts get a backing rail (Mark, 2026-11-22 — RHK6478 WIP BC-07 integrated D/W).**
+"DW needs finger pull rails across it. Make it part of the sink cabinet rail."
+- A cabinet with **no carcass** and a face (integrated D/W / appliance panel) whose front has a finger gap gets
+  its own `fprail:<n>` across the full width (x 0..DX), front face flush with the cabinet depth (DZ), clamped to
+  the cabinet height — same height maths as a carcass rail (RAILUP / 20 behind the front).
+- Nothing to notch and no knock-in blocks (`fprail.noBlocks`) — it is fixed to the neighbouring cabinet's rail /
+  panel on site.
+- The optimiser's D19 join runs it on from the neighbour's rail at the same height / depth / board, so the sink
+  rail + D/W rail cut as one piece (WIP: 770 + 600 = 1370).
+- `resolver.ts` (no-carcass branch) + `fingerRails` `free` mode in `resolveFingerRails.ts`; test
+  `applianceFrontRail.test.ts`. No tutorial step yet (lessons.ts had another session's edits).
+
 ## Inner drawer ↔ finger rail clearance (2026-11-19)
 Mark (RHK6571 BC-09): an inner drawer's front rose 4 into the top drawer's D24 rail. Now an **error**
 `INNER_DRAWER_RAIL_CLASH` (cabinet errors panel) when an inner drawer front comes within **3** of a finger rail
