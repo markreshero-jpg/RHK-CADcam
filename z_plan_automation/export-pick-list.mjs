@@ -1,5 +1,5 @@
 // Job Reports › Hardware Pick List → PDF (headless). Catches the Print / PDF popup and prints it to a file.
-// node z_plan_automation/export-pick-list.mjs <roomId> <out.pdf> [--report hardware_pick|takeoff]
+// node z_plan_automation/export-pick-list.mjs <roomId> <out.pdf> [--report hardware_pick|takeoff] [--only "<Room>" ...]
 import fs from 'node:fs'
 import puppeteer from 'puppeteer-core'
 const [ROOM, OUT] = process.argv.slice(2)
@@ -17,6 +17,14 @@ try {
   }
   await clickText('Reports'); await clickText('Room Reports…'); await clickText('Job Reports', 'button')
   await page.click(`[data-tour="report-${REPORT}"]`); await sleep(15000)   // takeoff loads + resolves every room
+  // --only "<Room>" (repeatable): the pick list's own room ticks — None, then tick each room (Mark 2026-11-23:
+  // pick list for just the rooms optimised).
+  const ONLY = process.argv.flatMap((a, i) => a === '--only' ? [process.argv[i + 1]] : [])
+  if (ONLY.length) {
+    await clickText('None', 'button')
+    for (const n of ONLY) await clickText(`☐ ${n}`, 'button')
+    await sleep(5000)
+  }
   const popup = new Promise(res => browser.once('targetcreated', async t => res(await t.page())))
   await page.evaluate(() => { const b = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Print / PDF'); if (!b) throw new Error('no Print / PDF'); b.click() })
   const pop = await popup
