@@ -3362,6 +3362,19 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     }
   }
 
+  // Phones: the mount-time fit above runs before the phone layout is known (the first
+  // render is the desktop layout, sidebar and all, so the plan area is a narrow strip) and
+  // left the room tiny and off to one side. Fit again once the phone layout is in place.
+  const phoneFitDone = useRef(false)
+  useEffect(() => {
+    if (!phone || phoneFitDone.current) return
+    let id = requestAnimationFrame(() => {
+      id = requestAnimationFrame(() => { phoneFitDone.current = true; if (canvasView === 'plan') fitToWalls() })
+    })
+    return () => cancelAnimationFrame(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the phone layout switches on
+  }, [phone])
+
   // Room → Centre Room (CV's "Center Room"): fit the plan to everything drawn —
   // walls at full thickness, cabinets, benchtops and fixtures — and centre it.
   function centreRoom() {
