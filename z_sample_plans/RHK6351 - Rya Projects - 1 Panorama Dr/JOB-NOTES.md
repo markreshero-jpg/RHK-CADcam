@@ -12,11 +12,14 @@ Source: `_JOBS/.../SITE CHECK MEASURES/Bench Seat Site measue 2026-11-17.pdf` + 
   Flat Grain — Polytec range; room style/colour set at room level (job defaults were copied from RHK6595).
 - Layout: `z_plan_automation/layouts/rhk6351-rya-bench-seat.json`.
 
-### Rev 2 (Mark 2026-11-23)
-- Cabinet scribe 5 left + right (`SCRL` / `SCRR` 5): box 2285 in the 2295 alcove. Scribe size 5 was my pick - Mark to confirm.
-- Front panel in 2 pieces, grain vertical, butt join at the centre (`GAPC` 0): 2 x 1150 x 326 = 2300,
+### Rev 2 - 4 (Mark 2026-11-23) - current state
+- BC-01 box: 2295 x 433.5 H (120 kick + 313.5) x 661.5. Cabinet scribe 16.5 left + right (`SCRL` / `SCRR`): box 2262.
+- Internals Whiteboard 16.5 (`exposed_interior` off). No full top: front + back rails 120 wide, flat
+  (`top_type` double_rail, `RD` 120). 2 divisions (3 bays).
+- Front panel Tas Oak in 2 pieces, grain vertical, butt join at the centre (`GAPC` 0): 2 x 1150 x 309.5 = 2300,
   5 oversize overall (`REVSL` / `REVSR` -2.5) so the fitters scribe it to the walls on site.
-- 2 divisions under the seat top (3 bays). "Only one for now" - one seat top.
+- WC-01 seat top: separate top on the box, wall to wall - `WUP` (UNDER_PANEL, pos_z 433.5) 2295 x 680 x 16.5 Tas Oak,
+  grain along the length, front edge taped. Seat stays 450 overall. Not oversized (only the front was asked).
 - Kick left as is: face split 2 x 1147.5 (Mark: split is good), kick frame still 2295 tight.
 
 ### Open

@@ -4,7 +4,7 @@
     "Alcove 2295 wall to wall, side walls 687 (left) / 690 (right), kick 120 (room TOEH 120).",
     "Closed box, panel front: 450 H incl kick, 680 deep overall = 661.5 carcass + 16.5 front + 2.",
     "16mm PT Woodmatt Tasmanian Oak (new board + Flat Grain - Polytec colour). Whole box in the board (exposed_interior), centre divider to carry the seat.",
-    "Rev 2 (Mark 2026-11-23): cabinet scribe 5 L + R, front in 2 pieces 5 oversize overall to scribe on site, 2 divisions."
+    "Rev 2-4 (Mark 2026-11-23): cabinet scribe 16.5 L + R, Whiteboard internals, 120 front + back rails (no full top), 2 divisions, front in 2 pieces 5 oversize overall to scribe on site, separate WUP seat top wall to wall (box 433.5 + 16.5 = 450)."
   ],
   "projectId": "617e2130-d7e4-4e3a-95ef-c7e738eb3b8e",
   "roomId": "e1ef206e-138d-45cc-953d-a1a0c21f2a02",
@@ -18,11 +18,11 @@
   ],
   "cabinets": [
     {
-      "def": "B1D", "wall": 2, "offset": 0, "dx": 2295, "dy": 450, "dz": 661.5,
-      "note": "BENCH SEAT - closed box, fixed panel front in 2 pieces (5 oversize to scribe on site). Cabinet scribe 5 L + R",
-      "rules": { "SCRL": 5, "SCRR": 5, "REVSL": -2.5, "REVSR": -2.5, "GAPC": 0 },
+      "def": "B1D", "wall": 2, "offset": 0, "dx": 2295, "dy": 433.5, "dz": 661.5,
+      "note": "BENCH SEAT - closed box, fixed panel front in 2 pieces (5 oversize to scribe on site). Cabinet scribe 16.5 L + R. Whiteboard internals, 120 front + back rails",
+      "rules": { "SCRL": 16.5, "SCRR": 16.5, "REVSL": -2.5, "REVSR": -2.5, "GAPC": 0, "RD": 120, "RAIL_ORIENT": "horizontal", "BACK_RAIL_ORIENT": "horizontal" },
       "set": {
-        "top_type": "full_top", "exposed_interior": true,
+        "top_type": "double_rail", "exposed_interior": false,
         "face_grid": {
           "cols": [ { "col_index": 0, "width_locked": false }, { "col_index": 1, "width_locked": false } ],
           "rows": [ { "row_index": 0, "height_locked": false } ],
@@ -32,6 +32,12 @@
           { "divider": "single", "section": { "type": "open", "fittings": [] } },
           { "section": { "type": "open", "fittings": [] } } ] } }
       }
+    },
+    {
+      "def": "WUP", "wall": 2, "offset": 0, "dx": 2295, "dy": 16.5, "dz": 680,
+      "note": "SEAT TOP - separate top on the box, wall to wall",
+      "rules": { "UNDER_PANEL": true },
+      "set": { "pos_z": 433.5 }
     }
   ]
 }
