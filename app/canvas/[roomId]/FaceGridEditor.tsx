@@ -690,8 +690,8 @@ export default function FaceGridEditor({
   const sortedRows = [...grid.rows].sort((a, b) => b.row_index - a.row_index) // visual top first
   const sortedCols = [...grid.cols].sort((a, b) => a.col_index - b.col_index)
 
-  const inp = 'bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full text-right'
-  const addBtn = 'px-2 py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors'
+  const inp = 'bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full text-right'
+  const addBtn = 'px-2.5 py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors'
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden bg-gray-950 relative">
@@ -711,7 +711,7 @@ export default function FaceGridEditor({
       )}
 
       {/* Top bar: structural controls */}
-      <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[11px]">
+      <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[13px]">
         <div className="flex items-center gap-1">
           <span className="text-gray-500">Row:</span>
           <button className={addBtn} onClick={() => addRow('top')}>+ Top</button>
@@ -729,12 +729,12 @@ export default function FaceGridEditor({
           title="Show / hide door-swing chevrons"
         >Swings {showChevrons ? 'on' : 'off'}</button>
         <span className="text-gray-600 hidden sm:inline">·</span>
-        <span className="text-gray-600 text-[10px] hidden sm:inline">click zone to select · double-click to cycle type · click hinge bar to cycle edge</span>
+        <span className="text-gray-600 text-[13px] hidden sm:inline">click zone to select · double-click to cycle type · click hinge bar to cycle edge</span>
         {errors.length > 0 && (
-          <span className="ml-auto text-[10px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
+          <span className="ml-auto text-[13px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
         )}
         {errors.length === 0 && warnings.length > 0 && (
-          <span className="ml-auto text-[10px] text-amber-400">{warnings.length} warning{warnings.length !== 1 ? 's' : ''}</span>
+          <span className="ml-auto text-[13px] text-amber-400">{warnings.length} warning{warnings.length !== 1 ? 's' : ''}</span>
         )}
       </div>
 
@@ -961,7 +961,7 @@ export default function FaceGridEditor({
         </div>
 
         {/* Controls panel */}
-        <div className="flex-none w-44 border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-4 text-[10px]">
+        <div className="flex-none w-80 border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-4 text-[13px]">
 
           {/* Rows */}
           <div>
@@ -969,10 +969,10 @@ export default function FaceGridEditor({
             <div className="flex flex-col gap-1">
               {sortedRows.map(row => {
                 const approx = Math.round(d.rowHeights[row.row_index] ?? 0)
-                const rowLabel = `R${row.row_index}${row.row_index === grid.rows.length - 1 ? ' (top)' : row.row_index === 0 ? ' (bot)' : ''}`
+                const rowLabel = `R${row.row_index}${row.row_index === grid.rows.length - 1 ? ' (top)' : row.row_index === 0 ? ' (bottom)' : ''}`
                 return (
                   <div key={`r-${row.row_index}-${row.height ?? 'a'}`} className="flex items-center gap-1">
-                    <span className="text-gray-600 shrink-0 w-12">{rowLabel}</span>
+                    <span className="text-gray-400 shrink-0 w-20">{rowLabel}</span>
                     <input
                       type="number"
                       defaultValue={row.height_locked && row.height != null ? row.height : ''}
@@ -984,7 +984,7 @@ export default function FaceGridEditor({
                     <button
                       onClick={() => removeRow(row.row_index)}
                       disabled={grid.rows.length <= 1}
-                      className="text-gray-600 hover:text-red-400 disabled:opacity-20 shrink-0"
+                      className="text-gray-400 hover:text-red-400 disabled:opacity-20 shrink-0 text-lg leading-none px-1.5"
                       title="Remove row"
                     >×</button>
                   </div>
@@ -1001,7 +1001,7 @@ export default function FaceGridEditor({
                 const approx = Math.round(d.colWidths[col.col_index] ?? 0)
                 return (
                   <div key={`c-${col.col_index}-${col.width ?? 'a'}`} className="flex items-center gap-1">
-                    <span className="text-gray-600 shrink-0 w-12">C{col.col_index}</span>
+                    <span className="text-gray-400 shrink-0 w-20">C{col.col_index}</span>
                     <input
                       type="number"
                       defaultValue={col.width_locked && col.width != null ? col.width : ''}
@@ -1013,7 +1013,7 @@ export default function FaceGridEditor({
                     <button
                       onClick={() => removeCol(col.col_index)}
                       disabled={grid.cols.length <= 1}
-                      className="text-gray-600 hover:text-red-400 disabled:opacity-20 shrink-0"
+                      className="text-gray-400 hover:text-red-400 disabled:opacity-20 shrink-0 text-lg leading-none px-1.5"
                       title="Remove column"
                     >×</button>
                   </div>
@@ -1042,12 +1042,12 @@ export default function FaceGridEditor({
             if (!selectedZone) return null
             const gz = grid.zones.find(z => z.row_index === selectedZone.row && z.col_index === selectedZone.col)
             if (!gz) return null
-            const selBtnBase = 'flex-1 py-0.5 rounded text-[10px] transition-colors border'
+            const selBtnBase = 'flex-1 py-1.5 rounded text-[13px] transition-colors border'
             return (
               <div className="rounded bg-gray-800/60 border border-gray-700 p-2 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-gray-400 font-medium">R{gz.row_index} C{gz.col_index}</p>
-                  <button onClick={() => setSelectedZone(null)} className="text-gray-600 hover:text-white text-[11px] leading-none">✕</button>
+                  <button onClick={() => setSelectedZone(null)} className="text-gray-600 hover:text-white text-[13px] leading-none">✕</button>
                 </div>
 
                 {/* Cycle type button */}
@@ -1055,7 +1055,7 @@ export default function FaceGridEditor({
                   <p className="text-gray-600 mb-1">Type</p>
                   <button
                     onClick={() => cycleZone(gz.row_index, gz.col_index)}
-                    className="w-full py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors border border-gray-600"
+                    className="w-full py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors border border-gray-600"
                   >
                     {ZONE_STYLE[gz.face_type]?.label ?? gz.face_type} → cycle
                   </button>
@@ -1072,7 +1072,7 @@ export default function FaceGridEditor({
                         <button
                           onClick={() => setHinge(gz.row_index, gz.col_index, side)}
                           title={`Hinge ${side}`}
-                          className={`${pos} w-7 h-6 rounded text-[12px] leading-none transition-colors border ${
+                          className={`${pos} w-9 h-8 rounded text-sm leading-none transition-colors border ${
                             cur === side
                               ? 'bg-blue-700 border-blue-500 text-white'
                               : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'
@@ -1097,9 +1097,9 @@ export default function FaceGridEditor({
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-gray-600">Hinges · {Array.isArray(gz.hinges) ? 'manual' : 'auto'}</p>
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => addHinge(gz)} className="text-blue-400 hover:text-blue-300 text-[11px]">+ add</button>
+                        <button onClick={() => addHinge(gz)} className="text-blue-400 hover:text-blue-300 text-[13px]">+ add</button>
                         {Array.isArray(gz.hinges) && (
-                          <button onClick={() => setZoneHinges(gz.row_index, gz.col_index, null)} className="text-gray-500 hover:text-gray-300 text-[10px]">auto</button>
+                          <button onClick={() => setZoneHinges(gz.row_index, gz.col_index, null)} className="text-gray-500 hover:text-gray-300 text-[13px]">auto</button>
                         )}
                       </div>
                     </div>
@@ -1107,22 +1107,22 @@ export default function FaceGridEditor({
                       <div className="flex flex-col gap-1">
                         {zoneHingeYs(gz).map((y, i) => (
                           <div key={`hy-${i}-${y}`} className="flex items-center gap-1">
-                            <span className="text-gray-600 shrink-0 w-3 text-[9px]">{i + 1}</span>
+                            <span className="text-gray-600 shrink-0 w-3 text-xs">{i + 1}</span>
                             <input
                               type="number" step={5} defaultValue={y}
                               onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
                               onBlur={e => { const v = parseFloat(e.target.value); if (!isNaN(v)) moveHinge(gz, i, Math.round(v)) }}
                               className={inp}
                             />
-                            <span className="text-gray-600 text-[9px] shrink-0">mm</span>
-                            <button onClick={() => removeHinge(gz, i)} className="text-gray-600 hover:text-red-400 shrink-0" title="Remove hinge">×</button>
+                            <span className="text-gray-600 text-xs shrink-0">mm</span>
+                            <button onClick={() => removeHinge(gz, i)} className="text-gray-400 hover:text-red-400 shrink-0 text-lg leading-none px-1.5" title="Remove hinge">×</button>
                           </div>
                         ))}
-                        {zoneHingeYs(gz).length === 0 && <p className="text-gray-600 text-[10px] italic">No hinges</p>}
-                        <p className="text-gray-600 mt-0.5 text-[9px]">mm from door bottom</p>
+                        {zoneHingeYs(gz).length === 0 && <p className="text-gray-600 text-[13px] italic">No hinges</p>}
+                        <p className="text-gray-600 mt-0.5 text-xs">mm from door bottom</p>
                       </div>
                     ) : (
-                      <p className="text-gray-600 text-[10px] italic">Position editing is for left/right hinged doors.</p>
+                      <p className="text-gray-600 text-[13px] italic">Position editing is for left/right hinged doors.</p>
                     )}
                   </div>
                 ))(gz.hinge_side ?? 'left')}
@@ -1134,7 +1134,7 @@ export default function FaceGridEditor({
                     <select
                       value={gz.door_style_id ?? ''}
                       onChange={e => setZoneDoorStyle(gz.row_index, gz.col_index, e.target.value || null)}
-                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                      className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
                     >
                       <option value="">— inherit (room / job) —</option>
                       {doorStyles.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -1148,7 +1148,7 @@ export default function FaceGridEditor({
                           <select
                             value={gz.door_colour_id ?? ''}
                             onChange={e => setZoneDoorColour(gz.row_index, gz.col_index, e.target.value || null)}
-                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
                           >
                             <option value="">— the style’s default —</option>
                             {opts.map(c => <option key={c.id} value={c.id}>{c.colour_name}{c.finish ? ` (${c.finish})` : ''}</option>)}
@@ -1167,16 +1167,16 @@ export default function FaceGridEditor({
                     <select
                       value={gz.door_profile_id ?? ''}
                       onChange={e => setZoneDoorProfile(gz.row_index, gz.col_index, e.target.value || null)}
-                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                      className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
                     >
                       <option value="">— the door style’s —</option>
                       {doorProfiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                     </select>
                     {grid.zones.filter(z => z.face_type === 'door').length > 1 && (
                       <button onClick={() => setZoneDoorProfile(gz.row_index, gz.col_index, gz.door_profile_id ?? null, true)}
-                        className="mt-1 text-[10px] text-blue-400 hover:text-blue-300">Same on every door of this cabinet</button>
+                        className="mt-1 text-[13px] text-blue-400 hover:text-blue-300">Same on every door of this cabinet</button>
                     )}
-                    <p className="text-gray-600 mt-0.5 text-[9px]">e.g. Glass: keeps this door’s material, colour and tape.</p>
+                    <p className="text-gray-600 mt-0.5 text-xs">e.g. Glass: keeps this door’s material, colour and tape.</p>
                   </div>
                 )}
 
@@ -1194,14 +1194,14 @@ export default function FaceGridEditor({
                     Blank = inherit; placeholders show what the front resolves to now. */}
                 {(gz.face_type === 'door' || gz.face_type === 'drawer_face') && (() => {
                   const rh = rp?.face_zones.find(z => z.row_index === gz.row_index && z.col_index === gz.col_index)?.handle ?? null
-                  const sel = 'bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full'
+                  const sel = 'bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full'
                   const sideInset = gz.face_type === 'door' && (gz.hinge_side ?? 'left') !== 'top' && gz.hinge_side !== 'bottom'
                   // Linear strip (D17): no bar position — its length + where a shorter one sits.
                   const linear = rh?.grip_kind === 'linear'
                   const positioned = rh ? rh.x != null && !linear : true
                   const num = (key: 'handle_offset' | 'handle_inset' | 'finger_gap' | 'handle_length', label: string, placeholder: string) => (
                     <div className="flex items-center gap-1">
-                      <span className="text-gray-500 text-[10px] w-20 shrink-0">{label}</span>
+                      <span className="text-gray-500 text-[13px] w-28 shrink-0">{label}</span>
                       <input
                         key={`${key}-${gz.row_index}-${gz.col_index}-${gz[key] ?? ''}`}
                         type="number" step={1} defaultValue={gz[key] ?? ''} placeholder={placeholder}
@@ -1214,11 +1214,11 @@ export default function FaceGridEditor({
                         }}
                         className={`${inp}${gz[key] != null ? ' !border-amber-500 !text-amber-300' : ''}`}
                       />
-                      <span className="text-gray-600 text-[9px] shrink-0">mm</span>
+                      <span className="text-gray-600 text-xs shrink-0">mm</span>
                       {gz[key] != null && (
                         <button type="button" title="Clear the override"
                           onClick={() => setZoneGrip(gz.row_index, gz.col_index, key, null)}
-                          className="text-amber-400 hover:text-amber-200 text-[10px] shrink-0">↺</button>
+                          className="text-amber-400 hover:text-amber-200 text-[13px] shrink-0">↺</button>
                       )}
                     </div>
                   )
@@ -1237,7 +1237,7 @@ export default function FaceGridEditor({
                         {handles.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
                       </select>
                       <div className="flex items-center gap-1">
-                        <span className="text-gray-500 text-[10px] w-20 shrink-0">Grip edge</span>
+                        <span className="text-gray-500 text-[13px] w-28 shrink-0">Grip edge</span>
                         <select
                           value={gz.grip_edge ?? ''}
                           onChange={e => setZoneGrip(gz.row_index, gz.col_index, 'grip_edge', (e.target.value || null) as FaceZoneInput['grip_edge'] | null)}
@@ -1266,7 +1266,7 @@ export default function FaceGridEditor({
                     <select
                       value={gz.handle_drill === true ? 'on' : gz.handle_drill === false ? 'off' : ''}
                       onChange={e => setZoneHandleDrill(gz.row_index, gz.col_index, e.target.value === '' ? null : e.target.value === 'on')}
-                      className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                      className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
                     >
                       <option value="">— inherit (cabinet / room / job) —</option>
                       <option value="on">Drill</option>
@@ -1315,7 +1315,7 @@ export default function FaceGridEditor({
                           <select
                             value={forced}
                             onChange={e => setBinProduct(gz.row_index, gz.col_index, e.target.value || null)}
-                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full"
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-violet-500 w-full"
                           >
                             <option value="">Auto{!forced && pickedName ? ` (${pickedName})` : ''}</option>
                             {bins.map(b => (
@@ -1330,7 +1330,7 @@ export default function FaceGridEditor({
                             return fix ? (
                               <button
                                 onClick={() => { void addBinDivisions(cabinet, fix, onUpdate) }}
-                                className="mt-1 w-full text-[10px] font-medium text-emerald-300 bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-800/60 rounded px-1.5 py-0.5"
+                                className="mt-1 w-full text-[13px] font-medium text-emerald-300 bg-emerald-900/40 hover:bg-emerald-900/60 border border-emerald-800/60 rounded px-2 py-1.5"
                               >
                                 No bin fits — add divisions for the {fix.bin}
                               </button>
@@ -1352,7 +1352,7 @@ export default function FaceGridEditor({
                             const v = parseFloat(e.target.value)
                             setHeightAdjustment(gz.row_index, gz.col_index, isNaN(v) ? null : v)
                           }}
-                          className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
+                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
                         />
                       </div>
                     )}
@@ -1376,15 +1376,15 @@ export default function FaceGridEditor({
                               const v = parseFloat(e.target.value)
                               setTopClearance(gz.row_index, gz.col_index, isNaN(v) ? null : v)
                             }}
-                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
                           />
                           {stack ? (
-                            <p className="text-gray-600 mt-1 text-[9px] leading-snug">
+                            <p className="text-gray-600 mt-1 text-xs leading-snug">
                               Opening {opening}mm → tallest box that fits{' '}
                               <span className="text-violet-300">{Math.round(stack.box_height)}mm</span>
                             </p>
                           ) : (
-                            <p className="text-red-400 mt-1 text-[9px] leading-snug">
+                            <p className="text-red-400 mt-1 text-xs leading-snug">
                               No slide fits this opening — see the Errors tab.
                             </p>
                           )}
@@ -1406,7 +1406,7 @@ export default function FaceGridEditor({
                           <select
                             value={forced}
                             onChange={e => setRunnerProduct(gz.row_index, gz.col_index, e.target.value || null)}
-                            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full"
+                            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-violet-500 w-full"
                           >
                             <option value="">Auto{!forced && pickedName ? ` (${pickedName})` : ' (slide schedule)'}</option>
                             {runners.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -1429,7 +1429,7 @@ export default function FaceGridEditor({
                             const v = parseFloat(e.target.value)
                             setBoxRaise(gz.row_index, gz.col_index, isNaN(v) ? null : v)
                           }}
-                          className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
+                          className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-violet-500 w-full text-right"
                         />
                       </div>
                     )}

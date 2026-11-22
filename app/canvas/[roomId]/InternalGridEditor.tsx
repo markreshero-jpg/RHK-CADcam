@@ -1429,7 +1429,7 @@ export default function InternalGridEditor({
         <div className="mt-3 border-t border-gray-800 pt-2">
           <p className="uppercase tracking-wider text-gray-500 mb-1.5">Opening size</p>
           <p className="text-gray-400">Height {Math.round(curExtent)} mm</p>
-          <p className="text-[9px] text-gray-600 mt-0.5">Auto — matches the drawer’s height. Change it on the drawer (height / slide).</p>
+          <p className="text-xs text-gray-600 mt-0.5">Auto — matches the drawer’s height. Change it on the drawer (height / slide).</p>
         </div>
       )
     }
@@ -1490,7 +1490,7 @@ export default function InternalGridEditor({
         )}
 
         {!locked && !equalised && (
-          <p className="text-[9px] text-gray-600">Fills the remaining space, shared equally with other unlocked bays.</p>
+          <p className="text-xs text-gray-600">Fills the remaining space, shared equally with other unlocked bays.</p>
         )}
       </div>
     )
@@ -1608,15 +1608,15 @@ export default function InternalGridEditor({
   const warnings = rp?.warnings ?? []
   const isEmpty  = tree.type === 'open' && tree.fittings.length === 0
 
-  const inp     = 'bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-full text-right'
-  const addBtn  = 'px-2 py-0.5 rounded text-[10px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-700'
+  const inp     = 'bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full text-right'
+  const addBtn  = 'px-2.5 py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-gray-700'
   const menuBtn = 'w-full text-left px-3 py-1.5 hover:bg-gray-700 text-gray-300 transition-colors'
 
   return (
     <div className="w-full h-full flex flex-col overflow-hidden bg-gray-950">
 
       {/* Toolbar */}
-      <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[11px]">
+      <div className="flex-none flex items-center gap-2 px-3 py-1.5 bg-gray-800/50 border-b border-gray-700 flex-wrap text-[13px]">
         <span className="text-gray-500">
           {selected?.kind === 'leaf' ? 'Selected compartment:'
             : selected?.kind === 'fitting' ? 'Selected fitting:'
@@ -1647,7 +1647,7 @@ export default function InternalGridEditor({
               if (Number.isFinite(n) && n >= 0 && n !== stackGap) saveStackGap(n)
             }}
             onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
-            className="bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-[10px] text-gray-300 focus:outline-none focus:border-blue-500 w-12 text-right"
+            className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-16 text-right"
             title="Vertical gap (mm) between stacked drawers / pull-outs inside a compartment. Empty resets to default (3mm)."
           />
           <span className="text-gray-500">mm</span>
@@ -1658,7 +1658,7 @@ export default function InternalGridEditor({
           <button className={addBtn} disabled={redoStack.length === 0} onClick={redo}
             title="Redo (Ctrl/Cmd+Shift+Z)">↷ Redo</button>
           <button
-            className={'px-2 py-0.5 rounded text-[10px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ' +
+            className={'px-2.5 py-1.5 rounded text-[13px] transition-colors disabled:opacity-40 disabled:cursor-not-allowed ' +
               (selected ? 'bg-red-900/50 hover:bg-red-900/70 text-red-300' : 'bg-gray-700 text-gray-300')}
             disabled={!selected}
             onClick={deleteSelected}
@@ -1669,10 +1669,10 @@ export default function InternalGridEditor({
           <button className={addBtn} onClick={resetAll}>Reset</button>
         </div>
         {errors.length > 0 && (
-          <span className="ml-auto text-[10px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
+          <span className="ml-auto text-[13px] text-red-400">{errors.length} error{errors.length !== 1 ? 's' : ''}</span>
         )}
         {errors.length === 0 && warnings.length > 0 && (
-          <span className="ml-auto text-[10px] text-amber-400">{warnings.length} warning{warnings.length !== 1 ? 's' : ''}</span>
+          <span className="ml-auto text-[13px] text-amber-400">{warnings.length} warning{warnings.length !== 1 ? 's' : ''}</span>
         )}
       </div>
 
@@ -1927,7 +1927,7 @@ export default function InternalGridEditor({
         </div>
 
         {/* Controls panel */}
-        <div className="flex-none w-48 border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-4 text-[10px]">
+        <div className="flex-none w-80 border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-4 text-[13px]">
 
           {isEmpty && (
             <div className="text-gray-600 text-center py-6 space-y-1">
@@ -1992,13 +1992,13 @@ export default function InternalGridEditor({
                       const isSelF = selected?.kind === 'fitting' && selected.fittingIndex === i
                       return (
                         <div key={`flist-${i}`}
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer ${isSelF ? 'bg-blue-900/40 text-blue-200' : 'bg-gray-800/60 text-gray-300 hover:bg-gray-800'}`}
+                          className={`flex items-center gap-1 px-2 py-1.5 rounded cursor-pointer ${isSelF ? 'bg-blue-900/40 text-blue-200' : 'bg-gray-800/60 text-gray-300 hover:bg-gray-800'}`}
                           onClick={() => setSelected({ kind: 'fitting', path: selLeaf.path, fittingIndex: i })}
                         >
                           <span className="flex-1 truncate">{FITTING_LABEL[f.type]}</span>
                           <button className={addBtn} title="Move up"   onClick={e => { e.stopPropagation(); handleMoveFitting(selLeaf.path, i, -1) }}>↑</button>
                           <button className={addBtn} title="Move down" onClick={e => { e.stopPropagation(); handleMoveFitting(selLeaf.path, i, +1) }}>↓</button>
-                          <button className="px-1.5 py-0.5 rounded text-[10px] bg-red-900/40 hover:bg-red-900/60 text-red-300"
+                          <button className="px-2 py-1.5 rounded text-[13px] bg-red-900/40 hover:bg-red-900/60 text-red-300"
                             title="Remove"
                             onClick={e => { e.stopPropagation(); handleRemoveFitting(selLeaf.path, i) }}
                           >✕</button>
@@ -2099,7 +2099,7 @@ export default function InternalGridEditor({
 
               {selFittingData.type === 'adj_shelf' && (
                 <div className="flex flex-col gap-2">
-                  <p className="text-gray-500 text-[10px]">
+                  <p className="text-gray-500 text-[13px]">
                     Drag the shelf or use ↑/↓ to lock at a specific Y. Uncheck Lock Y to re-equalise.
                   </p>
                   <YLockRow
@@ -2183,7 +2183,7 @@ export default function InternalGridEditor({
               <div className="flex items-center gap-1 mt-3 pt-2 border-t border-gray-800">
                 <button className={addBtn} onClick={() => handleMoveFitting(selFittingPath, selFittingIndex, -1)}>↑ Up</button>
                 <button className={addBtn} onClick={() => handleMoveFitting(selFittingPath, selFittingIndex, +1)}>↓ Down</button>
-                <button className="ml-auto px-2 py-0.5 rounded text-[10px] bg-red-900/40 hover:bg-red-900/60 text-red-300"
+                <button className="ml-auto px-2.5 py-1.5 rounded text-[13px] bg-red-900/40 hover:bg-red-900/60 text-red-300"
                   onClick={() => handleRemoveFitting(selFittingPath, selFittingIndex)}
                 >Remove</button>
               </div>
@@ -2217,14 +2217,14 @@ export default function InternalGridEditor({
                       return (
                         <button key={label}
                           onClick={() => save(setChildDivider(tree, selSep.path, selSep.index, v))}
-                          className={`px-2 py-0.5 rounded text-[10px] border transition-colors ${active
+                          className={`px-2.5 py-1.5 rounded text-[13px] border transition-colors ${active
                             ? 'bg-blue-700 border-blue-500 text-white'
                             : 'bg-gray-700 border-gray-600 text-gray-400 hover:bg-gray-600'}`}
                         >{label}</button>
                       )
                     })}
                   </div>
-                  <p className="text-gray-600 text-[9px] mt-1">
+                  <p className="text-gray-600 text-xs mt-1">
                     {selSep.double ? 'Two panels back to back' : 'One panel'}{selSep.divider ? '' : ' (automatic)'}
                   </p>
                 </div>
@@ -2239,13 +2239,13 @@ export default function InternalGridEditor({
                     title="Dividers run full height and fixed shelves full width, notched where they cross (shelves from the back, dividers from the front, +0.2 wide, 5 over-cut). No joint drilling — fix through the top, bottom and gables.">
                     <input type="checkbox" checked={on} className="mt-0.5"
                       onChange={e => save(setHalfCheck(tree, host, e.target.checked))} />
-                    <span className="text-gray-400">Half-check crossings<span className="block text-gray-600 text-[9px]">Egg-crate grid, no drilling</span></span>
+                    <span className="text-gray-400">Half-check crossings<span className="block text-gray-600 text-xs">Egg-crate grid, no drilling</span></span>
                   </label>
                 )
               })()}
               <div className="flex flex-col gap-1 mt-2">
                 <button className={addBtn + ' text-left'} onClick={() => equaliseThis(selSep.path)}>= Equalise this split</button>
-                <button className="px-2 py-0.5 rounded text-[10px] bg-red-900/40 hover:bg-red-900/60 text-red-300 text-left transition-colors"
+                <button className="px-2.5 py-1.5 rounded text-[13px] bg-red-900/40 hover:bg-red-900/60 text-red-300 text-left transition-colors"
                   onClick={() => removeSep(selSep.path, selSep.index)}>Delete (merge bays)</button>
               </div>
             </div>
@@ -2281,7 +2281,7 @@ export default function InternalGridEditor({
                   <span className="text-gray-500">Rollout</span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-1 pt-1 border-t border-gray-800/60">
-                  <div className="w-3 h-3 rounded-full shrink-0 flex items-center justify-center text-[8px] font-bold"
+                  <div className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[9px] font-bold"
                     style={{ background: '#1f2937', border: '1px solid #fbbf24', color: '#fbbf24' }}>⚲</div>
                   <span className="text-gray-500">Locked bay (fixed size)</span>
                 </div>
@@ -2297,7 +2297,7 @@ export default function InternalGridEditor({
           <div className="text-gray-700 space-y-0.5 mt-auto pt-2 border-t border-gray-800">
             <p>W {Math.round(intW)}mm (approx)</p>
             <p>H {Math.round(intH)}mm</p>
-            <p className="text-[9px] text-gray-800">Click a bay → Lock or Equalise it in the Size panel</p>
+            <p className="text-xs text-gray-800">Click a bay → Lock or Equalise it in the Size panel</p>
           </div>
         </div>
       </div>
@@ -2309,13 +2309,13 @@ export default function InternalGridEditor({
             onClick={() => setMenu(null)}
             onContextMenu={e => { e.preventDefault(); setMenu(null) }}
           />
-          <div className="fixed z-[101] bg-gray-800 border border-gray-700 rounded shadow-xl py-1 min-w-[180px] text-[11px]"
+          <div className="fixed z-[101] bg-gray-800 border border-gray-700 rounded shadow-xl py-1 min-w-[180px] text-[13px]"
             style={{ left: menu.clientX, top: menu.clientY }}
             onClick={e => e.stopPropagation()}
           >
             {menu.kind === 'leaf' ? (
               <>
-                <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">Add element</div>
+                <div className="px-3 py-1 text-[13px] uppercase tracking-wider text-gray-500">Add element</div>
                 {ADD_ELEMENTS.map(el => (
                   <button key={el.kind} className={menuBtn} title={el.title}
                     onClick={() => runAdd(menu.path, el.kind)}>+ {el.label}</button>
@@ -2332,7 +2332,7 @@ export default function InternalGridEditor({
                   const myGroup = getLeafChild(tree, menu.path)?.equalise_group
                   return (
                     <div className="border-t border-gray-700 mt-1 pt-1">
-                      <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-gray-500">{label}</div>
+                      <div className="px-3 py-1 text-[13px] uppercase tracking-wider text-gray-500">{label}</div>
                       {[...groups.entries()].map(([id, g]) => {
                         const isMine = id === myGroup
                         return (
