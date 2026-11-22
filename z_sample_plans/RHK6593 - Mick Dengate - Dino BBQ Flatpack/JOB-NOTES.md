@@ -23,6 +23,17 @@ Source: Mark's spec text 2026-10-27 (no plan). Alfresco kitchen, flatpack.
   CAD: wine fridge space, BBQ note, spec block. 0 errors / 0 warnings.
 - Sink: Abi Ohelu Single Bowl 380 U/M (Mark 2026-10-27: single bowl; BSK default double 855 was too wide) + Abi pull-out mixer, both centred on BC-02. Actual sink model TBC.
 
+## BBQ (Mark 2026-11-23)
+- **Weber Baby Q Premium Q1200N, LPG, Charcoal Grey.** Spec sheet, owner's manual and quick guide saved in
+  `_JOBS\RHK6500 - 6599\RHK6593 - Dengate - Dino Alfresco\APPLIANCES`.
+- Portable benchtop unit, NOT a built-in: manual says "do not build this model in any built-in or slide-in
+  construction". Sits on the stone top, so no BBQ cut-out. 1050 W (side tables out) x 440 D x 380 H lid
+  closed; lid open 640 H x 560 D; 11 kg. Manual: 610 clear of combustibles all round, no combustible cover
+  overhead, bottle max 9 kg, 1 m hose, no spare bottle under the BBQ.
+- Not redrawn yet: waiting on Mark for bottle position (hose hole in the top?) and whether the 846 / 550 /
+  550 widths stay now there is no 900 BBQ.
+
 ## Open
-- BBQ specs + GLB (drawn as a note over the 846 cupboard for now); sink + BBQ cut-outs; colours.
+- BBQ: swap the "BBQ 900 OVER" note for a Baby Q fixture on the top (no model in the library yet); sink
+  cut-out; colours.
 - Wine fridge: model/height not given; no ventilation detail drawn.
