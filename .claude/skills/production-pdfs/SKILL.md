@@ -61,9 +61,15 @@ Open with pymupdf (`python -I`): page count + first line per page (`<Room> Plan 
 render a page or two to PNG and look — black line drawing with the title block (shop drawings); kick
 lengths, depths and `KICK H` on the kick plan. Tell Mark the two full paths when done.
 
-## Hardware pick list (when Mark asks)
+## Hardware pick list (with the shop drawings when Mark asks for a hardware list)
 
-`node z_plan_automation/export-pick-list.mjs <roomId> <out.pdf>` — Job Reports › Hardware Pick List, catches the
-Print / PDF popup and prints it to A4 (`--report takeoff` for the Takeoff). Every room of the job is on it. Save as
-`<shop drawings name> HARDWARE PICK LIST.pdf` in the same Production folder (RHK6571, 2026-11-19).
-
+`node z_plan_automation/export-pick-list.mjs <roomId> <out.pdf> --only "<Room>" --only "<Room>"` — Job Reports ›
+Hardware Pick List, catches the Print / PDF popup and prints it to A4 (`--report takeoff` for the Takeoff).
+**Always pass `--only` with exactly the rooms in the run** (Mark 2026-11-23, RHK6478 R3: "filter hardware list to only
+the rooms we have optimised") — it uses the report's own room ticks (None, then tick each). Without it every room of
+the job is on it, which is wrong for a production run. Check with pymupdf: one section per run room + "Job totals
+· <n> rooms". Hardware of parts held back from the nest (e.g. Teak doors left for a later run) is still listed for
+that room — say so to Mark.
+Save as `<shop drawings name> HARDWARE PICK LIST.pdf` in the same Production folder (RHK6571, 2026-11-19).
+If a file can't be moved to `_Superseeded` ("Device or resource busy" = open in Mark's PDF viewer / syncing),
+save the new one beside it with a suffix and ask Mark to close it — don't force.

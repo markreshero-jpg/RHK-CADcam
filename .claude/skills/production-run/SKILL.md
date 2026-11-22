@@ -20,7 +20,10 @@ folder (`ls -d /c/Users/mark/SynologyDrive/CNCFiles/RHK<no>*`) and the _JOBS fol
 (`ls -d /c/Users/mark/SynologyDrive/_JOBS/*/RHK<no>*`). If a run folder or PDF name already exists, stop
 and ask — never overwrite.
 
-## 1. Pre-nest check
+## 1. Held-back parts + pre-nest check
+
+First read JOB-NOTES "Still to cut - held back from a nest" and offer to add those parts to this run
+(optimiser-run skill › held-back parts). Then:
 
 `node z_plan_automation/prenest-check.cjs <job no> "<room>" …` — report every line, FIX lines first.
 Don't nest until the FIX lines are sorted or Mark says go.
@@ -29,6 +32,12 @@ Don't nest until the FIX lines are sorted or Mark says go.
 
 claude-in-chrome, new tab: `https://rhk-cadcam.vercel.app/projects/<projectId>/optimiser`.
 Stage 1 rooms → Stage 2 parts (untick No CNC) → Stage 3 stock / offcuts → Stage 4 nest (Best) → Stage 5.
+
+Look at Stage 4 before stopping: unplaced parts (the banner names them — find the part in the DB and say
+why: too long OR too wide for the sheet), and any material with only 1–2 poorly used sheets (e.g. RHK6478 R3:
+Teak 33 at 53 % / 44 %, Teak 16 at 60 % / 4 %). Point those out with a suggestion — Mark held the Teak back
+for a later run with more Teak rooms (2026-11-22): untick that material in Stage 2 (material chip → Deselect
+shown), re-nest, and note "still to cut" in JOB-NOTES.
 
 ## 3. ⛔ STOP — Mark checks Stage 5
 
@@ -55,6 +64,8 @@ Dev server on localhost:3001 (else ask Mark to `! npm run dev`). "Notes for Ai" 
 Shop drawings (Line Drawing Print) + KICK PLAN (plan_view_v2, Kicks set) via
 `z_plan_automation/export-shop-drawings.mjs`, all the run's rooms in one PDF each, checked with pymupdf,
 copied to `…\_JOBS\<range>\<job folder>\PDF\Production\` under the folder's naming.
+Hardware pick list too when Mark asks for it: `export-pick-list.mjs … --only "<Room>"` for **only the run's rooms**
+(production-pdfs › Hardware pick list) → `<name> HARDWARE PICK LIST.pdf`.
 
 ## 6. Report
 

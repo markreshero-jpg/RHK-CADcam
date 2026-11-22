@@ -28,6 +28,14 @@ C:\Users\mark\SynologyDrive\CNCFiles\<job folder>\<room or run folder>\<material
 - **Re cuts:** `<job folder>\Re cuts\<material>\`.
 - Never overwrite an existing run's files; if a folder for the run already exists, stop and ask.
 
+## Before every run: held-back parts (always)
+
+Read the job's JOB-NOTES.md section **"Still to cut - held back from a nest"** (top of the file). Tell Mark what is
+waiting (room, board, parts) and ask whether to add it to this nest — it's usually what makes a poor-yield board
+worth cutting (RHK6478 R3: Buffet Teak 33 + 16 held for the next Teak rooms). When held parts are cut, strike their
+row with the run number. When Mark holds a material back, add a row there AND a red boxed "NOT NESTED YET" text on
+the room plan on the job's non-printing **Notes for Ai** CAD layer (so it shows on the canvas, never on prints).
+
 ## Before every run: pre-nest check (always)
 
 `node z_plan_automation/prenest-check.cjs <job no> "<room>" ["<room>" …]` — read-only. Report every
@@ -40,7 +48,19 @@ fronts not grain matched):
 - custom panels / fillers taped all four edges → back / wall edge untaped
 - bulkheads without the +10 scribe (h_adjust), locked top hanging rails, No CNC parts to untick in Stage 2
 
+- parts wider than the sheet (short side over sheet width − trim, e.g. RHK6478 Buffet WC-02 mirror back
+  1439 x 1213 on a 1211 sheet → split across the width with `split.back_x`, z_cabinet_split S6)
+
 When Mark answers a new "check this before nesting" question, add it to the script.
+
+## After the nest (Stage 4), before stopping for Mark
+
+- Unplaced parts: identify each (cabinet / part / size) and why — too long or too wide for the sheet.
+- Poor-yield materials (1–2 sheets well under ~70 %, often Teak / veneer): suggest holding them for a later
+  run with more rooms in that board (Mark 2026-11-22). To drop a material: Stage 2 material chip → Deselect
+  shown → chip "All" → re-nest. Note held parts as "still to cut" in JOB-NOTES.
+- Mention Stage 4 warnings (e.g. kick parts with tape but no tape thickness = nest undeducted).
+- Hardware list for the run = only the run's rooms (`export-pick-list.mjs --only`, production-pdfs skill).
 
 ## In the browser (Mark's layout, Stage 5 edits)
 

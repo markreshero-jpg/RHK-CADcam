@@ -2,6 +2,16 @@
 
 Project `fa0884a2-abd1-4370-adfa-a30044e88ef2` (defaults cloned from RHK6590: 2 Pac Flat 18mm). 2pac colour = **Dulux White Beach Quarter (25W)** (Darby 2026-11-11): new row `747d491f` on the 2 Pac Satin 18mm range, finish Satin 30% (range default), swapped from "2 Pac - Colour TBC" on the project, Laundry / Buffet / WIP / Kitchen rooms and the Laundry WC-07 / WC-08 per-front colours (`_tmp-6478-25w.mjs`). The TBC row stays (RHK6563 Costello uses it).
 
+## ⚠ Still to cut - held back from a nest (check before EVERY nest on this job)
+
+| Room | Board | Parts | Held since | Why |
+|---|---|---|---|---|
+| Buffet | LX Board 33mm – Sublime Teak | WC-02 open unit: Left Gable, Right Gable (368 x 1468), Top Panel (368 x 1213), Fixed Shelf 1-3 (351.5 x 1213) = 6 | R3 2026-11-22 | Mark: 2 sheets at 53 / 44 % - nest with the next Teak rooms |
+| Buffet | LX Colour 16mm – Sublime Teak | WC-03 Left + Right Door (512.5 x 1467), WC-01 + WC-04 Filler (69 x 1472), WC-05 Shadowline (59 x 2343) = 5 | R3 2026-11-22 | Mark: 2 sheets at 60 / 4 % - nest with the next Teak rooms |
+
+When they're cut, strike the row and note the run number. In Stage 2 tick the Buffet room's Teak parts
+(Buffet + material chip) alongside the next rooms' Teak.
+
 ## Sources
 - Client markups 26.10.26: `G:/My Drive/6. Resident Hero Work/3. JOBS/Res hero - Biggie/RHK6478 - Dune - 10 Wavecrest Dr, Castaways Beach/Mark ups with Cleint 26.10.26/` (4 scans, 32 pages + DS TV Unit)
 - Site measure 22.10.26: `C:/Users/mark/SynologyDrive/_JOBS/RHK6400 - 6499/RHK6478 - Dune - 10 Wavecrest DVe Castaways/SITE CHECK MEASURES/Site measure 22.10.26.pdf`
