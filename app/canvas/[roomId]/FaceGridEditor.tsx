@@ -1174,6 +1174,9 @@ export default function FaceGridEditor({
         {/* Controls panel */}
         <div className="flex-none w-80 border-l border-gray-800 overflow-y-auto p-3 flex flex-col gap-4 text-[13px]">
 
+          {!selectedZone && (<>
+          <p className="text-gray-400">Click a front to see its hinges, style, handle and drawer settings here.</p>
+
           {/* Rows */}
           <div>
             <p className="uppercase tracking-wider text-gray-500 mb-1.5">Rows</p>
@@ -1248,6 +1251,8 @@ export default function FaceGridEditor({
             </div>
           </div>
 
+          </>)}
+
           {/* Selected zone config */}
           {(() => {
             if (!selectedZone) return null
@@ -1255,23 +1260,22 @@ export default function FaceGridEditor({
             if (!gz) return null
             const selBtnBase = 'flex-1 py-1.5 rounded text-[13px] transition-colors border'
             return (
-              <div className="rounded bg-gray-800/60 border border-gray-700 p-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-gray-400 font-medium">R{gz.row_index} C{gz.col_index}</p>
-                  <button onClick={() => setSelectedZone(null)} className="text-gray-600 hover:text-white text-[13px] leading-none">✕</button>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-base text-white font-medium">{ZONE_STYLE[gz.face_type]?.label ?? gz.face_type}</p>
+                    <p className="text-gray-500">Row {gz.row_index + 1} from the bottom · column {gz.col_index + 1}</p>
+                  </div>
+                  <button onClick={() => setSelectedZone(null)} title="Back to the row / column sizes"
+                    className="px-2.5 py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-200">Done</button>
                 </div>
+                {gz.face_type === 'open' && (
+                  <p className="text-gray-500">An open front has nothing to set. Use Door / Drawer / False panel in the toolbar to change it.</p>
+                )}
 
-                {/* Cycle type button */}
-                <div>
-                  <p className="text-gray-600 mb-1">Type</p>
-                  <button
-                    onClick={() => cycleZone(gz.row_index, gz.col_index)}
-                    className="w-full py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-300 transition-colors border border-gray-600"
-                  >
-                    {ZONE_STYLE[gz.face_type]?.label ?? gz.face_type} → cycle
-                  </button>
-                </div>
-
+                {gz.face_type === 'door' && (<details open className="rounded border border-gray-700 bg-gray-900/40">
+                  <summary className="cursor-pointer select-none px-2 py-1.5 text-gray-200 font-medium">Hinges</summary>
+                  <div className="px-2 pb-2 space-y-2">
                 {/* Hinge edge — only for door zones; buttons laid out as a cross
                     so each sits on the edge it represents */}
                 {gz.face_type === 'door' && (
@@ -1338,8 +1342,14 @@ export default function FaceGridEditor({
                   </div>
                 ))(gz.hinge_side ?? 'left')}
 
+                  </div>
+                </details>)}
+
+                {gz.face_type !== 'open' && (<details open className="rounded border border-gray-700 bg-gray-900/40">
+                  <summary className="cursor-pointer select-none px-2 py-1.5 text-gray-200 font-medium">Style and colour</summary>
+                  <div className="px-2 pb-2 space-y-2">
                 {/* Door style + colour — any front (door, drawer front, false panel) */}
-                {gz.face_type !== 'open' && (
+                {(
                   <div>
                     <p className="text-gray-600 mb-1">Door style</p>
                     <select
@@ -1401,6 +1411,12 @@ export default function FaceGridEditor({
                   </div>
                 )}
 
+                  </div>
+                </details>)}
+
+                {(gz.face_type === 'door' || gz.face_type === 'drawer_face') && (<details open className="rounded border border-gray-700 bg-gray-900/40">
+                  <summary className="cursor-pointer select-none px-2 py-1.5 text-gray-200 font-medium">Handle</summary>
+                  <div className="px-2 pb-2 space-y-2">
                 {/* Handle — per-front overrides, doors + drawer fronts (z_handles D14).
                     Blank = inherit; placeholders show what the front resolves to now. */}
                 {(gz.face_type === 'door' || gz.face_type === 'drawer_face') && (() => {
@@ -1486,6 +1502,12 @@ export default function FaceGridEditor({
                   </div>
                 )}
 
+                  </div>
+                </details>)}
+
+                {gz.face_type === 'drawer_face' && (<details open className="rounded border border-gray-700 bg-gray-900/40">
+                  <summary className="cursor-pointer select-none px-2 py-1.5 text-gray-200 font-medium">Drawer box and runners</summary>
+                  <div className="px-2 pb-2 space-y-2">
                 {/* Drawer type selector — only for drawer_face zones */}
                 {gz.face_type === 'drawer_face' && (
                   <div>
@@ -1646,6 +1668,9 @@ export default function FaceGridEditor({
                     )}
                   </div>
                 )}
+                  </div>
+                </details>)}
+
               </div>
             )
           })()}

@@ -2050,8 +2050,15 @@ export default function InternalGridEditor({
           {/* Selected compartment */}
           {selLeaf && selLeafOpen && (
             <div>
-              <p className="uppercase tracking-wider text-blue-400 mb-2">Compartment</p>
-              <p className="text-gray-500 mb-2">{Math.round(selLeaf.box.w)} × {Math.round(selLeaf.box.h)} mm</p>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div>
+                  <p className="text-base text-white font-medium">Bay</p>
+                  <p className="text-gray-500">{Math.round(selLeaf.box.w)} wide × {Math.round(selLeaf.box.h)} high</p>
+                </div>
+                <button onClick={() => setSelected(null)} title="Deselect"
+                  className="px-2.5 py-1.5 rounded text-[13px] bg-gray-700 hover:bg-gray-600 text-gray-200">Done</button>
+              </div>
+              <p className="text-gray-500 mb-2">Add shelves, dividers and drawers from the toolbar above.</p>
 
               {/* Offer the structural conversion here too when this compartment is
                   divided only by fixed shelves. */}
@@ -2064,22 +2071,8 @@ export default function InternalGridEditor({
                 </div>
               )}
 
-              <button className={addBtn + ' text-left w-full'} onClick={() => addDivider(selLeaf.path)}
-                title="Split this opening into side-by-side columns.">Split into columns ⇆</button>
-
               {/* Lock / Equalise this opening within its parent split */}
               {renderSizeControls(selLeaf.path, selLeaf.box)}
-
-              {/* Add element — one menu for every horizontal element. Fixed shelf
-                  splits the opening into bays; the rest are fittings placed here.
-                  (Also available by right-clicking the opening.) */}
-              <p className="uppercase tracking-wider text-gray-500 mt-3 mb-1">Add element</p>
-              <div className="grid grid-cols-2 gap-1">
-                {ADD_ELEMENTS.map(el => (
-                  <button key={el.kind} className={addBtn + ' text-left'} title={el.title}
-                    onClick={() => runAdd(selLeaf.path, el.kind)}>+ {el.label}</button>
-                ))}
-              </div>
 
               {/* Adjustable-shelf count — only when some exist, for quick +/- */}
               {adjOf(selLeafOpen.fittings).length > 0 && (
@@ -2363,11 +2356,11 @@ export default function InternalGridEditor({
           )}
 
           {!isEmpty && !selLeaf && !selSep && !selFittingData && (
-            <p className="text-gray-600">Click a compartment to add elements or lock/equalise it, or click a shelf/divider/fitting to edit it.</p>
+            <p className="text-gray-400">Click a bay, shelf, divider or drawer to see its settings here. Click a size badge on the drawing to type a size.</p>
           )}
 
-          {/* Legend */}
-          {!isEmpty && (
+          {/* Legend — only while nothing is selected */}
+          {!isEmpty && !selLeaf && !selSep && !selFittingData && (
             <div>
               <p className="uppercase tracking-wider text-gray-600 mb-1.5">Legend</p>
               <div className="flex flex-col gap-1">
@@ -2405,10 +2398,8 @@ export default function InternalGridEditor({
           )}
 
           {/* Interior dims */}
-          <div className="text-gray-700 space-y-0.5 mt-auto pt-2 border-t border-gray-800">
-            <p>W {Math.round(intW)}mm (approx)</p>
-            <p>H {Math.round(intH)}mm</p>
-            <p className="text-xs text-gray-800">Click a bay → Lock or Equalise it in the Size panel</p>
+          <div className="text-gray-500 mt-auto pt-2 border-t border-gray-800">
+            <p>Inside: {Math.round(intW)} wide (approx) × {Math.round(intH)} high</p>
           </div>
         </div>
       </div>
