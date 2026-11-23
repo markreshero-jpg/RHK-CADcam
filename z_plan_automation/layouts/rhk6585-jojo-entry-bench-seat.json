@@ -1,0 +1,130 @@
+{
+ "_source": "Mark's site measure 29/10/2026 (SITE CHECK MEASURES/2026-11-23 - Jojo Site measure.pdf) + client sketches (ARCHITECTURALS/2026-10-29 1.pdf) + Mark Q&A 2026-11-23",
+ "_notes": [
+  "Walls already in the room (inserted 2026-11-23): 1 left return 600, 2 back wall 1700, 3 right return 600. ASSUMED the seat fits wall to wall (1700 F/P) - if an end is open it needs a BEPF and the run shortens. CH 2400 placeholder (check at site measure).",
+  "500 high overall (Mark) = 100 kick + 367 carcass + 33 top. 400 deep (Mark) OA -> carcass 381.5, top 400.",
+  "2 x B1D 850 with flap-down doors (hinge bottom), 20 finger gap, PT Oasis Smooth (room colour). Door count TBC (client drew shoe drawers in 2 rows).",
+  "Ply bench top: no ply board in the library yet - drawn as a 33 FLSHLF (double exposed board) placeholder; set the ply material + thickness once confirmed.",
+  "VJ panelling on the wall above (supplied by us, painted by others) and hat hooks (client sketch) - CAD notes to add."
+ ],
+ "projectName": "Jojo Jackson",
+ "roomId": "e08d668d-d8b5-406a-bb2f-72671848b0a3",
+ "roomName": "Entry Bench Seat",
+ "roomHeight": 2400,
+ "walls": [
+  {
+   "x": 0,
+   "y": 600,
+   "length": 600,
+   "angle": 270,
+   "_": "1 left return (assumed)"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 1700,
+   "angle": 0,
+   "_": "2 back wall 1700"
+  },
+  {
+   "x": 1700,
+   "y": 0,
+   "length": 600,
+   "angle": 90,
+   "_": "3 right return (assumed)"
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 0,
+   "dx": 850,
+   "dy": 467,
+   "dz": 381.5,
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "bottom",
+       "finger_gap": 20
+      }
+     ]
+    }
+   },
+   "note": "Bench seat flap-down door, 20mm finger gap, PT Oasis Smooth"
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 850,
+   "dx": 850,
+   "dy": 467,
+   "dz": 381.5,
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "bottom",
+       "finger_gap": 20
+      }
+     ]
+    }
+   },
+   "note": "Bench seat flap-down door, 20mm finger gap, PT Oasis Smooth"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 0,
+   "dx": 1700,
+   "dz": 400,
+   "set": {
+    "pos_z": 467,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": false,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": false,
+     "seen_right": false,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Bench seat top 1700 x 400, thick ply (material + thickness TBC - drawn as 33 placeholder), top at 500"
+  }
+ ]
+}

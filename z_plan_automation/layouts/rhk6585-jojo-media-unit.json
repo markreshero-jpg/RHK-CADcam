@@ -1,0 +1,269 @@
+{
+ "_source": "Mark's site measure 29/10/2026 (SITE CHECK MEASURES/2026-11-23 - Jojo Site measure.pdf) + client sketches (ARCHITECTURALS/2026-10-29 1.pdf) + Mark Q&A 2026-11-23",
+ "_notes": [
+  "Walls already in the room (inserted 2026-11-23): Wall 1 left side wall (length not measured, 2000 placeholder), Wall 2 back wall 3963, Wall 3 right wall (2000 placeholder). CH 2561. Bulkhead 2305 FFL at the left end - not modelled, keep the top shelf under it.",
+  "Unit 3300 OA hard against the right wall -> starts at 663. 600 high overall = 100 kick + 467 carcass + 33 top. 400 deep (Mark: base cabinet depth) taken as OA to the door face -> carcass 381.5; the 33 top is 400 deep, flush with the doors.",
+  "BEPF 16.5 at the seen left end + 4 x B2D (821/821/821/820.5). Right end tight to the wall, no filler drawn (TBC: 30 or board?).",
+  "TV zone 1364-2594 measured from the RIGHT (Mark): left shelves 706 long (unit 0-706), TV 706-1936, right shelves 1364 long to the right wall.",
+  "Shelves 33 timber grain (double 16.5 Woodmatt, colour TBC), 300 deep (Mark). Heights NOT given - drawn at undersides 1000 / 1400 / 1800 (client sketch ~400 apart) and the full-length top shelf at 2200 (top 2233, under the 2305 bulkhead). Left shelves hang from a metal rod to the ceiling at their free left end (client); right shelves anchored to the right wall.",
+  "Still to do in the app: joinKicks on the base run; set the 33 Woodmatt colour once chosen; option on ply with clear lacquer."
+ ],
+ "projectName": "Jojo Jackson",
+ "roomId": "e0e96be3-7615-413c-b4f8-2a07c728ec39",
+ "roomName": "Media Unit",
+ "roomHeight": 2561,
+ "walls": [
+  {
+   "x": 0,
+   "y": 2000,
+   "length": 2000,
+   "angle": 270,
+   "_": "left side wall (placeholder length) - already in the room"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 3963,
+   "angle": 0,
+   "_": "back (TV) wall 3963"
+  },
+  {
+   "x": 3963,
+   "y": 0,
+   "length": 2000,
+   "angle": 90,
+   "_": "right wall (placeholder length)"
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "BEPF",
+   "wall": 2,
+   "offset": 663,
+   "dx": 16.5,
+   "dy": 567,
+   "dz": 381.5,
+   "note": "Media unit seen left end panel, to the floor"
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 679.5,
+   "dx": 821,
+   "dy": 567,
+   "dz": 381.5,
+   "note": "Media unit base 1 of 4, flat panel doors PT Classic White Matt, finger pull"
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 1500.5,
+   "dx": 821,
+   "dy": 567,
+   "dz": 381.5,
+   "note": "Media unit base 2 of 4, flat panel doors PT Classic White Matt, finger pull"
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 2321.5,
+   "dx": 821,
+   "dy": 567,
+   "dz": 381.5,
+   "note": "Media unit base 3 of 4, flat panel doors PT Classic White Matt, finger pull"
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 3142.5,
+   "dx": 820.5,
+   "dy": 567,
+   "dz": 381.5,
+   "note": "Media unit base 4 of 4, flat panel doors PT Classic White Matt, finger pull"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 663,
+   "dx": 3300,
+   "dz": 400,
+   "set": {
+    "pos_z": 567,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": false,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": false,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit top 3300 x 400 x 33 timber grain (Woodmatt, colour TBC; option ply + clear lacquer), on the bases, top at 600"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 663,
+   "dx": 706,
+   "dz": 300,
+   "set": {
+    "pos_z": 1000,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": true,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": true,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit left floating shelf 706 x 300 x 33 timber grain, underside 1000 (height TBC). Free left end hangs from the metal rod to the ceiling"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 2599,
+   "dx": 1364,
+   "dz": 300,
+   "set": {
+    "pos_z": 1000,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": true,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": false,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit right floating shelf 1364 x 300 x 33 timber grain, underside 1000 (height TBC), anchored to the right wall"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 663,
+   "dx": 706,
+   "dz": 300,
+   "set": {
+    "pos_z": 1400,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": true,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": true,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit left floating shelf 706 x 300 x 33 timber grain, underside 1400 (height TBC). Free left end hangs from the metal rod to the ceiling"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 2599,
+   "dx": 1364,
+   "dz": 300,
+   "set": {
+    "pos_z": 1400,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": true,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": false,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit right floating shelf 1364 x 300 x 33 timber grain, underside 1400 (height TBC), anchored to the right wall"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 663,
+   "dx": 706,
+   "dz": 300,
+   "set": {
+    "pos_z": 1800,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": true,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": true,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit left floating shelf 706 x 300 x 33 timber grain, underside 1800 (height TBC). Free left end hangs from the metal rod to the ceiling"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 2599,
+   "dx": 1364,
+   "dz": 300,
+   "set": {
+    "pos_z": 1800,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": true,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": false,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit right floating shelf 1364 x 300 x 33 timber grain, underside 1800 (height TBC), anchored to the right wall"
+  },
+  {
+   "def": "FLSHLF",
+   "wall": 2,
+   "offset": 663,
+   "dx": 3300,
+   "dz": 300,
+   "set": {
+    "pos_z": 2200,
+    "float_shelf": {
+     "stop": 30,
+     "build": "double",
+     "cleat": true,
+     "strip_w": 90,
+     "tape_id": null,
+     "rebate_h": 10,
+     "seen_left": true,
+     "seen_right": false,
+     "rebate_depth": 30,
+     "strip_spacing": 600
+    }
+   },
+   "note": "Media unit top shelf 3300 x 300 x 33 timber grain, underside 2200 (height TBC; must stay under the 2305 bulkhead at the left)"
+  }
+ ]
+}
