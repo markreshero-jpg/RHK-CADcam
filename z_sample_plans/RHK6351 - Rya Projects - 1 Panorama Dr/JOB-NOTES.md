@@ -22,5 +22,11 @@ Source: `_JOBS/.../SITE CHECK MEASURES/Bench Seat Site measue 2026-11-17.pdf` + 
   grain along the length, front edge taped. Seat stays 450 overall. Not oversized (only the front was asked).
 - Kick left as is: face split 2 x 1147.5 (Mark: split is good), kick frame still 2295 tight.
 
+### Production run RHK6351-R2 (2026-11-23)
+- 27 parts, 4 sheets 2415 x 1211: Whiteboard 16.5 x 2 (92 % / 67 %), Tas Oak Woodmatt 16 x 2 (54 % seat top / 34 % fronts + kick faces).
+- CNC files: `CNCFiles/RHK6351 - Rya Projects/Bench Seat/` (programs per material folder, cut sheets, labels, .rhkrun).
+- PDFs: `_JOBS/.../PDF/Production/RHK6351 - Rya Projects - 1 Pano - Bench Seat - Shop Drawings.pdf` + `... KICK PLAN.pdf`.
+- RHK6351-R1 "Bench Seat" (saved 10:10 the same morning, 4 sheets / 27 parts) was not made by this session and was not saved to CNCFiles.
+
 ### Open
 - [ ] Mark to check the drawing.
