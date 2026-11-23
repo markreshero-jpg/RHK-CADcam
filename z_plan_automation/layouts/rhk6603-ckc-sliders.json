@@ -1,0 +1,18 @@
+{
+ "_notes": ["RHK6603 WIR: 6 sliding doors, 16 PT Designer White Matt, on a double track (Mark's markup 2026-11-23), floor to underside of the overheads. Loose panels on TEPF carriers until the track system is chosen: 842 x 2000 each (opening 4929, 25 overlaps, 33 off for the track - TBC)."],
+ "projectId": "71c0f3d4-94cf-4faf-9004-c1ae74d20037",
+ "roomName": "Sliders",
+ "roomHeight": 2570,
+ "walls": [
+  { "x": 0, "y": 1500, "length": 1500, "angle": 270 },
+  { "x": 0, "y": 0, "length": 6000, "angle": 0 }
+ ],
+ "cabinets": [
+  { "def": "TEPF", "wall": 2, "offset": 0, "dx": 17, "dy": 2000, "dz": 600, "note": "SLIDER 1 of 6 - 842 x 2000, 16 PT Designer White Matt" },
+  { "def": "TEPF", "wall": 2, "offset": 1000, "dx": 17, "dy": 2000, "dz": 600, "note": "SLIDER 2 of 6 - 842 x 2000, 16 PT Designer White Matt" },
+  { "def": "TEPF", "wall": 2, "offset": 2000, "dx": 17, "dy": 2000, "dz": 600, "note": "SLIDER 3 of 6 - 842 x 2000, 16 PT Designer White Matt" },
+  { "def": "TEPF", "wall": 2, "offset": 3000, "dx": 17, "dy": 2000, "dz": 600, "note": "SLIDER 4 of 6 - 842 x 2000, 16 PT Designer White Matt" },
+  { "def": "TEPF", "wall": 2, "offset": 4000, "dx": 17, "dy": 2000, "dz": 600, "note": "SLIDER 5 of 6 - 842 x 2000, 16 PT Designer White Matt" },
+  { "def": "TEPF", "wall": 2, "offset": 5000, "dx": 17, "dy": 2000, "dz": 600, "note": "SLIDER 6 of 6 - 842 x 2000, 16 PT Designer White Matt" }
+ ]
+}

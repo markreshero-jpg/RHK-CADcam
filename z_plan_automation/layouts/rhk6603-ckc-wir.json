@@ -1,0 +1,728 @@
+{
+ "_source": "SynologyDrive/_JOBS/RHK6600 - 6699/RHK6603 - CKC - WIR - CURRIMUNDI/ARCHITECTURALS/Shop Drawings - 1 of 38 Westaway, Currimundi.pdf (Liam G 10/11/2026) + Mark's markup photos + answers 2026-11-23",
+ "_notes": [
+  "Mark 2026-11-23: fronts 16 PT Designer White Matt; internals Whiteboard; robe 520 OA incl fronts; 6 sliders (16 Designer White) on a double track, floor to u/s overheads; 16.5 backs; robe drawer fronts Whiteboard; 33 Bottochino top (3600 sheet) + 33 floating shelf; ignore the page 6 boxes; 320 = false panel; bay 6 open.",
+  "Ceiling 2570: top line 2540 + 30 BH. Robe units 100 kick + 1933 = 2033, 460 carcass (60 left for the double track + 16 doors, system TBC). Overheads 2033-2540, 502 carcass + 2 + 16 = 520.",
+  "Sliders are loose panels in the room 'Sliders' until the track system is chosen."
+ ],
+ "projectId": "71c0f3d4-94cf-4faf-9004-c1ae74d20037",
+ "roomName": "WIR",
+ "roomHeight": 2570,
+ "wallCabinetTop": 2540,
+ "roomRules": {
+  "TOEH": 100
+ },
+ "walls": [
+  {
+   "x": 0,
+   "y": 3410,
+   "length": 3410,
+   "angle": 270,
+   "_": "1 window wall, S->N"
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 5530,
+   "angle": 0,
+   "_": "2 robe wall, W->E"
+  },
+  {
+   "x": 5530,
+   "y": 0,
+   "length": 540,
+   "angle": 90,
+   "_": "3 east nib"
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "BFKW",
+   "wall": 1,
+   "offset": 0,
+   "dx": 368,
+   "dy": 867,
+   "dz": 560,
+   "note": "False panel at the south wall (drawn 320; 368 now the robe is 520 OA, was 568)"
+  },
+  {
+   "def": "D2-LL",
+   "wall": 1,
+   "offset": 368,
+   "dx": 674,
+   "dy": 867,
+   "dz": 560,
+   "note": "2 drawer base 674"
+  },
+  {
+   "def": "D2-LL",
+   "wall": 1,
+   "offset": 1042,
+   "dx": 674,
+   "dy": 867,
+   "dz": 560,
+   "note": "2 drawer base 674"
+  },
+  {
+   "def": "D2-LL",
+   "wall": 1,
+   "offset": 1716,
+   "dx": 674,
+   "dy": 867,
+   "dz": 560,
+   "note": "2 drawer base 674"
+  },
+  {
+   "def": "D2-LL",
+   "wall": 1,
+   "offset": 2390,
+   "dx": 500,
+   "dy": 867,
+   "dz": 560,
+   "note": "2 drawer base 500"
+  },
+  {
+   "def": "WUP",
+   "wall": 1,
+   "offset": 0,
+   "dx": 3410,
+   "dy": 33,
+   "dz": 601,
+   "note": "BENCHTOP 33 PT Bottochino, 3410 x 601, wall to wall (runs under the corner cupboard), 900 AFF",
+   "set": {
+    "pos_z": 867,
+    "material_overrides": {
+     "exposed": "644615f7-b207-473c-bf5b-ba1b2b06de33"
+    }
+   }
+  },
+  {
+   "def": "WUP",
+   "wall": 1,
+   "offset": 1025,
+   "dx": 1810,
+   "dy": 33,
+   "dz": 200,
+   "note": "FLOATING SHELF 33 PT Bottochino under the window, 1810 x 200 (depth + height TBC), top 1580 AFF",
+   "set": {
+    "pos_z": 1547,
+    "material_overrides": {
+     "exposed": "644615f7-b207-473c-bf5b-ba1b2b06de33"
+    }
+   }
+  },
+  {
+   "def": "W1D",
+   "wall": 2,
+   "offset": 0,
+   "dx": 601,
+   "dy": 1640,
+   "dz": 502,
+   "note": "Corner cupboard on the benchtop, 2 doors hinged left, fixed shelf at the door split, 520 OA",
+   "rules": {
+    "WALLZ": 900,
+    "REVB": 3,
+    "SCRBT": 0
+   },
+   "set": {
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height": 680,
+       "height_locked": true
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "left"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "door",
+       "hinge_side": "left"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 655,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 601,
+   "dx": 1637,
+   "dy": 1933,
+   "dz": 460,
+   "note": "Robe unit 1, Whiteboard, behind the sliders. 2 bays: 3 inner drawers + fixed shelf + 3 adj each",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "vsplit",
+      "children": [
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "size": 800,
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 16.5
+             },
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 283
+             },
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 549.5
+             }
+            ]
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             }
+            ]
+           }
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "size": 800,
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 16.5
+             },
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 283
+             },
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 549.5
+             }
+            ]
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             }
+            ]
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 2238,
+   "dx": 1638,
+   "dy": 1933,
+   "dz": 460,
+   "note": "Robe unit 2, Whiteboard, behind the sliders. bay 3: 3 inner drawers + fixed shelf + hanging rail; bay 4: hanging rail",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "vsplit",
+      "children": [
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "size": 800,
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 16.5
+             },
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 283
+             },
+             {
+              "type": "inner_drawer",
+              "height": 178,
+              "y_locked": true,
+              "y_position": 549.5
+             }
+            ]
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "accessory",
+              "key": "HANGING_RAIL_OVAL",
+              "y_locked": false
+             }
+            ]
+           }
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "accessory",
+              "key": "HANGING_RAIL_OVAL",
+              "y_locked": false
+             }
+            ]
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 3876,
+   "dx": 1637,
+   "dy": 1933,
+   "dz": 460,
+   "note": "Robe unit 3, Whiteboard, behind the sliders. bay 5: fixed shelf + 3 adj under + 3 adj over; bay 6 open",
+   "set": {
+    "pos_z": 100,
+    "has_toekick": false,
+    "has_face": false,
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "open"
+      }
+     ]
+    },
+    "internal_grid": {
+     "tree": {
+      "type": "vsplit",
+      "children": [
+       {
+        "divider": "single",
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "size": 942,
+           "separator": "fixed_shelf",
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             }
+            ]
+           }
+          },
+          {
+           "section": {
+            "type": "open",
+            "fittings": [
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             },
+             {
+              "type": "adj_shelf",
+              "y_locked": false
+             }
+            ]
+           }
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "hsplit",
+         "children": [
+          {
+           "section": {
+            "type": "open",
+            "fittings": []
+           }
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   }
+  },
+  {
+   "def": "TFK",
+   "wall": 2,
+   "offset": 5513,
+   "dx": 17,
+   "dy": 2033,
+   "dz": 442,
+   "note": "16.5 filler strip at the east wall"
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 601,
+   "dx": 1637,
+   "dy": 100,
+   "dz": 460,
+   "note": "Robe kick 100, Whiteboard, flush with the carcass front (behind the sliders)",
+   "rules": {
+    "TOESCF": 0,
+    "TOESCB": 0,
+    "TOEH": 100
+   },
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 2238,
+   "dx": 1638,
+   "dy": 100,
+   "dz": 460,
+   "note": "Robe kick 100, Whiteboard, flush with the carcass front (behind the sliders)",
+   "rules": {
+    "TOESCF": 0,
+    "TOESCB": 0,
+    "TOEH": 100
+   },
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 3876,
+   "dx": 1637,
+   "dy": 100,
+   "dz": 460,
+   "note": "Robe kick 100, Whiteboard, flush with the carcass front (behind the sliders)",
+   "rules": {
+    "TOESCF": 0,
+    "TOESCB": 0,
+    "TOEH": 100
+   },
+   "set": {
+    "has_carcass": false,
+    "has_face": false,
+    "has_internal": false,
+    "has_toekick": true
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 601,
+   "dx": 982,
+   "dy": 507,
+   "dz": 502,
+   "note": "Overhead on the robe units, 2033-2540, 520 OA",
+   "rules": {
+    "SCRBT": 0
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 1583,
+   "dx": 983,
+   "dy": 507,
+   "dz": 502,
+   "note": "Overhead on the robe units, 2033-2540, 520 OA",
+   "rules": {
+    "SCRBT": 0
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 2566,
+   "dx": 982,
+   "dy": 507,
+   "dz": 502,
+   "note": "Overhead on the robe units, 2033-2540, 520 OA",
+   "rules": {
+    "SCRBT": 0
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 3548,
+   "dx": 983,
+   "dy": 507,
+   "dz": 502,
+   "note": "Overhead on the robe units, 2033-2540, 520 OA",
+   "rules": {
+    "SCRBT": 0
+   }
+  },
+  {
+   "def": "W2D",
+   "wall": 2,
+   "offset": 4531,
+   "dx": 982,
+   "dy": 507,
+   "dz": 502,
+   "note": "Overhead on the robe units, 2033-2540, 520 OA",
+   "rules": {
+    "SCRBT": 0
+   }
+  },
+  {
+   "def": "WF",
+   "wall": 2,
+   "offset": 5513,
+   "dx": 17,
+   "dy": 507,
+   "dz": 502,
+   "note": "16.5 overhead filler strip at the east wall"
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 0,
+   "dx": 5530,
+   "dy": 30,
+   "dz": 502,
+   "note": "30 BH to the ceiling (2570), wall to wall, flush with the carcass",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  }
+ ]
+}
