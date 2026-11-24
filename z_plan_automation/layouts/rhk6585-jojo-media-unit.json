@@ -7,7 +7,8 @@
   "BEPF at the seen left end + 4 x B2D (821/821/821/820.5). Right end tight to the wall, no filler drawn - TBC cloud (board-thickness BFK or 30?).",
   "TV zone 1364-2594: the datum is still open, but it barely matters - from the right wall the TV sits at unit 706-1936, from the left wall at 701-1931 (5 apart). Drawn from the right: left shelves 706 long, right shelves 1364 long to the right wall.",
   "Shelves 33 timber grain (double 16.5 Woodmatt, colour TBC), 300 deep. Heights NOT given - drawn at undersides 1000 / 1400 / 1800 and the full-length top shelf at 2200 (top 2233, under the 2305 bulkhead). Left shelves hang from a metal rod to the ceiling at their free left end (client); right shelves anchored to the right wall.",
-  "Follow-ups in the app: joinKicks on the base run; set the 33 Woodmatt colour once chosen; option on ply with clear lacquer; spec block + markup."
+  "Follow-ups in the app: joinKicks on the base run; set the 33 Woodmatt colour once chosen; option on ply with clear lacquer; spec block + markup.",
+  "REV 1 (Mark 2026-11-24): height 600, depth (top 400 / carcass 377), shelf heights all fine. BFK 16.5 at the RH wall, bases re-spaced 817 / 817 / 817 / 816 inside the same 3300. Woodmatt colour stays TBC, ply option dropped from the drawing. Handles = set back finger pull (same as the pantry). Shelf lengths dimensioned on plan + elevation (_tmp-6585-media-rev1.mjs)."
  ],
  "projectName": "Jojo Jackson",
  "roomId": "e0e96be3-7615-413c-b4f8-2a07c728ec39",
@@ -50,7 +51,7 @@
    "def": "B2D",
    "wall": 2,
    "offset": 679.5,
-   "dx": 821,
+   "dx": 817,
    "dy": 567,
    "dz": 377,
    "note": "Media unit base 1 of 4, flat panel doors PT Classic White Matt"
@@ -58,8 +59,8 @@
   {
    "def": "B2D",
    "wall": 2,
-   "offset": 1500.5,
-   "dx": 821,
+   "offset": 1496.5,
+   "dx": 817,
    "dy": 567,
    "dz": 377,
    "note": "Media unit base 2 of 4, flat panel doors PT Classic White Matt"
@@ -67,8 +68,8 @@
   {
    "def": "B2D",
    "wall": 2,
-   "offset": 2321.5,
-   "dx": 821,
+   "offset": 2313.5,
+   "dx": 817,
    "dy": 567,
    "dz": 377,
    "note": "Media unit base 3 of 4, flat panel doors PT Classic White Matt"
@@ -76,11 +77,20 @@
   {
    "def": "B2D",
    "wall": 2,
-   "offset": 3142.5,
-   "dx": 820.5,
+   "offset": 3130.5,
+   "dx": 816,
    "dy": 567,
    "dz": 377,
    "note": "Media unit base 4 of 4, flat panel doors PT Classic White Matt"
+  },
+  {
+   "def": "BFK",
+   "wall": 2,
+   "offset": 3946.5,
+   "dx": 16.5,
+   "dy": 567,
+   "dz": 377,
+   "note": "Media unit board-thickness filler at the RH wall"
   },
   {
    "def": "FLSHLF",
