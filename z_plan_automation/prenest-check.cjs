@@ -37,7 +37,7 @@ if (!job) { console.log('usage: node z_plan_automation/prenest-check.cjs <job no
   const [cp, tk, fz, cu] = await Promise.all([
     q('case_parts', 'cabinet_instance_id,part_key,dx,dy,material_id,material_override_id,output_to_cnc,created_at'),
     q('toekick_parts', 'cabinet_instance_id,part_key,dx,dy,material_id,output_to_cnc,created_at'),
-    q('face_zones', 'cabinet_instance_id,face_type,material_id'),
+    q('face_zones', 'cabinet_instance_id,face_type,material_id,material_override_id,dx,dy,output_to_cnc'),
     q('cabinet_custom_parts', 'cabinet_instance_id,name,orientation,dx,dy,edge_top,edge_bottom,edge_left,edge_right,no_cnc'),
   ])
   const out = { FIX: [], CHECK: [] }
@@ -56,6 +56,12 @@ if (!job) { console.log('usage: node z_plan_automation/prenest-check.cjs <job no
     // Short side wider than the sheet (RHK6478 Buffet WC-02 back 1439 x 1213, Mark 2026-11-22 nest: unplaced).
     const W = Math.min(Number(p.dx), Number(p.dy))
     if (W > sheetMin(p.material_override_id ?? p.material_id) - 10) add('FIX', `${where(c)}: ${p.part_key} ${Math.max(p.dx, p.dy)} x ${W} — wider than the sheet (split / bigger sheet / No CNC)`)
+  }
+  // Fronts too (RHK6478 US Hallway Linen doors 2574 high, Mark 2026-11-25) - a door can't be split: long sheet.
+  for (const z of fz) {
+    const c = cab.get(z.cabinet_instance_id), L = Math.max(Number(z.dx), Number(z.dy)), m = z.material_override_id ?? z.material_id
+    if (z.output_to_cnc === false || c.no_cnc || !L) continue
+    if (L > sheetMax(m) - 10) add('FIX', `${where(c)}: ${z.face_type} ${Math.max(z.dx, z.dy)} x ${Math.min(z.dx, z.dy)} - over the sheet (long sheet in Stage 3)`)
   }
   for (const p of cu) if (!p.no_cnc && Math.max(Number(p.dx), Number(p.dy)) > 2405) add('FIX', `${where(cab.get(p.cabinet_instance_id))}: ${p.name} ${Math.max(p.dx, p.dy)} long — over the sheet`)
 
