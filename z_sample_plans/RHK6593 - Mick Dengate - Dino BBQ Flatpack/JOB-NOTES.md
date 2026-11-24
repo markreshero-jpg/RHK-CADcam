@@ -39,11 +39,32 @@ Source: Mark's spec text 2026-10-27 (no plan). Alfresco kitchen, flatpack.
   removed for the bottle. Elevation notes: old BBQ note reworded in place + "9KG GAS BOTTLE / NO SHELF -
   VENTS TBC" in BC-04. 0 errors / 0 warnings.
 
+## BBQ set-down well (Mark 2026-11-25) — replaces "sits on the top"
+- Client wants the Baby Q set DOWN so the top of the grill plate is flush with the benchtop, in an all-stone
+  recess (stone sides + stone bottom). Mark: open at the front, side tables come off, set it down to roughly
+  what I think and he'll check it later.
+- **Set-down 215 is a PLACEHOLDER.** Weber publishes no feet-to-top-of-grill figure (old Q1200 page lists
+  "cooking height 15 cm", reference not stated). Measure the real BBQ before stone is cut.
+- Drawn (`z_plan_automation/_tmp-6593-setdown.mjs`):
+  - Benchtop 1 notched over BC-04, open at the front: well 806 wide x 590 front to back inside the stone,
+    110 of top left behind it. The three notch edges carry a new edge profile **Mitred Apron 215 (set-down
+    well side)** (code MA215) = 20 stone sides + back down to the well bottom.
+  - New top **BBQ well bottom** 846 x 610 (x 1368–2214, y 90–700), top face 685 off the floor, on BC-04.
+  - BC-04 lowered: carcass 525 high (top at 665), doors follow. Still the gas bottle cupboard, no shelf.
+    About 490 clear inside — a 9 kg bottle (~480–500 tall) is very tight, a 4 kg fits.
+  - BBQ fixture: 660 body (side tables off, `..._NoTables.glb`), centred on BC-04, feet on the well bottom
+    (z 685), front 20 back from the top's front edge, 130 behind it for the lid. 73 clear each side.
+  - Hose hole 60 dia through the well bottom behind the BBQ on the right (2041 along the wall, 175 off it).
+  - Elevation notes reworded in place. 0 errors / 0 warnings.
+- Not drawn / to sort: backing behind the stone back piece (90 gap to the wall), a drain / vent path so gas
+  can't pool in the well (LPG is heavier than air), Weber's manual says don't build this model in.
+
 ## Open
 - Gas bottle cupboard: vents (door / kick / back?) and gasfitter OK for a bottle under the BBQ — the Weber
   manual puts the bottle on the ground behind the BBQ and says no spare bottle under it. Hose hole size
   (60 drawn; the regulator end may need more) and position to confirm.
 - The room has NO sink or tap fixture (found 2026-11-23; these notes say an Abi Ohelu 380 + mixer were
   placed on BC-02). Sink model + cut-out still to do. Colours.
-- Benchtop: press Resolve once so the hose hole reaches the top's parts.
+- Benchtop: press Resolve on both tops (Benchtop 1 + BBQ well bottom) so the parts match the well.
+- Set-down 215, well size 806 x 590, 9 kg vs 4 kg bottle, hose hole position: all to confirm with Mark.
 - Wine fridge: model/height not given; no ventilation detail drawn.

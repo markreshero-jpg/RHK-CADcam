@@ -26,3 +26,15 @@ head.writeUInt32LE(0x46546c67, 0); head.writeUInt32LE(2, 4); head.writeUInt32LE(
 head.writeUInt32LE(js.length, 12); head.writeUInt32LE(0x4e4f534a, 16)
 const glb = Buffer.concat([head, js, rest])
 for (const o of OUTS) { fs.writeFileSync(o, glb); console.log('wrote', o, glb.length, 'bytes') }
+
+// Same model with the two side tables left off (RHK6593 2026-11-25: Baby Q set down in a stone well,
+// tables removed). The table nodes just drop out of the scene; the BIN chunk is unchanged.
+const root = json.nodes[json.scenes[0].nodes[0]]
+root.children = root.children.filter(i => !/^side_table/.test(json.nodes[i].name ?? ''))
+json.scenes[0].extras.note = 'QX2800N+ geometry, side tables off, sized by the fixture row'
+let js2 = Buffer.from(JSON.stringify(json))
+js2 = Buffer.concat([js2, Buffer.alloc((4 - (js2.length % 4)) % 4, 0x20)])
+const head2 = Buffer.from(head)
+head2.writeUInt32LE(20 + js2.length + rest.length, 8); head2.writeUInt32LE(js2.length, 12)
+const glb2 = Buffer.concat([head2, js2, rest])
+for (const o of OUTS.map(o => o.replace('.glb', '_NoTables.glb'))) { fs.writeFileSync(o, glb2); console.log('wrote', o, glb2.length, 'bytes') }

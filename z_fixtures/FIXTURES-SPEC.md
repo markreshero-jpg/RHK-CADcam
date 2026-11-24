@@ -384,6 +384,12 @@ Esc cancels; one undo step.
     drop 0, **no benchtop cut on the library row** — it is a portable unit, the manual forbids
     building it in. A gas hose hole is per install: a round cut-out on the placed fixture
     (RHK6593: Ø60, off +330 / −100). Not checked in-app.
+  - 2026-11-25 (user, RHK6593): Baby Q now **set down in a stone well** (grill flush with the top),
+    side tables off. The make script also writes `..._NoTables.glb` (side-table nodes dropped). On
+    the PLACED fixture only: width 660, that model, plan / elevation shapes cropped to the body
+    (x 0.2–0.8). No new fixture feature: the well is a notch in the main top with an apron edge
+    profile for the stone sides (MA215) + a second, lower top for the bottom; the BBQ sits on that
+    lower top (z follows it) and its round cut-out lands in it. Library row unchanged.
 
 - 2026-10-18 (user): **P11 resizable models** — "Resizable" tick on the library item (model
   section). Columns `resizable` + `stretch` (jsonb) on `fixture_catalog` and `room_fixtures`
