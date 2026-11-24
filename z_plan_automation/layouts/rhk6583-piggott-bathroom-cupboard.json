@@ -1,0 +1,31 @@
+{
+  "_source": "C:\\Users\\mark\\SynologyDrive\\_JOBS\\RHK6500 - 6599\\RHK6583 - Andy Piggott - U2 Hasting st Beach Houses - Broom Cabinet\\ARCHITECTURALS\\HBH#2 Bathroom Cupboard Final Drawing.pdf (client hand sketch, received 2026-11-24) + QUOTE RHK6583 ISS 1",
+  "_notes": [
+    "Supply only, freestanding gloss white 2 pac bathroom cupboard x 1. 670 W x 2420 H x 490 D overall, on 5mm plastic feet (no kick), 5 clear of the ceiling.",
+    "Drawn as TEPF 18 | T2D 634 | TEPF 18 = 670. Carcass 470 deep (490 incl 18 door + 2). Whiteboard internals.",
+    "Inside (sketch, top down): 420 space, fixed shelf (top at 2000), hanging rail 100 under the shelf, 1600 hanging, 300 inner drawer zone at the bottom (Dragon Pro 400x178 inner, behind the doors).",
+    "2 doors full height with a mirror inset in each face (60 in from the sides, 100 up from the bottom; sketch says 275 wide, which does not fit a 335 door - TBC). Handles at the meeting edges, mid height.",
+    "The wall is only there to hold the cupboard on the canvas - supply only, no site."
+  ],
+  "projectId": "52ebcec4-f8c0-4047-a9ce-13c027fef9b9",
+  "roomId": "33e64c8a-ebf9-498f-86d1-9879b1ccba0d",
+  "roomName": "Bathroom",
+  "roomHeight": 2430,
+  "wallCabinetTop": 2420,
+  "walls": [
+    { "x": 0, "y": 800, "length": 800, "angle": 270, "_": "1 side wall (canvas only)" },
+    { "x": 0, "y": 0, "length": 1270, "angle": 0, "_": "2 back wall, W->E = elevation" }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 2, "offset": 300, "dx": 18, "dy": 2420, "dz": 470, "note": "LH end panel, 2 pac gloss white, full height on 5mm feet" },
+    { "def": "T2D", "wall": 2, "offset": 318, "dx": 634, "dy": 2420, "dz": 470,
+      "note": "Bathroom cupboard: no kick, 5mm plastic feet. Fixed shelf 420 down, hanging rail 100 under it, 1 inner drawer (Dragon Pro) at the bottom. Doors: 2 pac gloss white with a mirror inset in each face.",
+      "set": { "has_toekick": false,
+        "internal_grid": { "tree": { "type": "hsplit", "children": [
+          { "size": 1967, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 30.5, "slide_product_id": "fc2663e4-dc57-4d9a-bfb8-7961ca08cfa9" },
+            { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 1868.5 } ] } },
+          { "section": { "type": "open", "fittings": [] } } ] } } } },
+    { "def": "TEPF", "wall": 2, "offset": 952, "dx": 18, "dy": 2420, "dz": 470, "note": "RH end panel, 2 pac gloss white, full height on 5mm feet" }
+  ]
+}
