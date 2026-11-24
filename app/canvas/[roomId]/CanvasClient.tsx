@@ -484,15 +484,27 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   // H5/H6: the button is a menu: HTML file (offline, any browser), Apple USDZ
   // (Quick Look / AR on Mac + iPhone), or a share link (copied to the clipboard).
   const [exporting3D, setExporting3D] = useState(false)
-  const [export3DMenu, setExport3DMenu] = useState(false)
+  // 2026-11-24: lives under Menu › Room › Export 3D… (a dialog, so phones get it too).
+  // From plan / elevation it opens the 3D view first. A share link is shown in the
+  // dialog with Copy / Share buttons: after the upload the tap that started it is too
+  // old for iOS to allow a clipboard write.
+  const [export3DOpen, setExport3DOpen] = useState(false)
+  const [export3DLink, setExport3DLink] = useState<{ url: string; copied: boolean } | null>(null)
   async function exportRoom3D(kind: 'html' | 'usdz' | 'link') {
-    setExport3DMenu(false)
-    if (exporting3D || !room3dScene.current) return
+    if (exporting3D) return
     setExporting3D(true)
     const wasWire = room3DStyle === 'wire'
     const prevSel = selected
     let glb: Uint8Array
     try {
+      if (!room3dScene.current) {
+        switchView('3d')
+        const t0 = Date.now()
+        while (!room3dScene.current && Date.now() - t0 < 15000) await new Promise(r => setTimeout(r, 100))
+        if (!room3dScene.current) throw new Error('the 3D view did not open')
+        // A fresh scene: give slab photos and fixture models time to load.
+        await new Promise(r => setTimeout(r, 2000))
+      }
       if (wasWire) setRoom3DStyleState('solid')
       setSelected(null)
       await new Promise(r => setTimeout(r, 400))
@@ -522,12 +534,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         downloadText(file, html)
         useTutorial.getState().emit('export_3d_html')
         setToast(`Saved ${file} (${mb(html.length)} MB)`)
+        setExport3DOpen(false)
       } else if (kind === 'usdz') {
         const usdz = await glbToUsdz(glb)
         const file = exportFileName(job, room.name, 'usdz')
         downloadBlob(file, usdz as BlobPart, 'model/vnd.usdz+zip')
         useTutorial.getState().emit('export_3d_usdz')
         setToast(`Saved ${file} (${mb(usdz.byteLength)} MB): opens on a Mac / iPhone with a double-click`)
+        setExport3DOpen(false)
       } else {
         let usdz: Uint8Array | null = null
         try { usdz = await glbToUsdz(glb) } catch (e) { console.warn('share link: USDZ skipped', e) }
@@ -538,8 +552,9 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         let copied = false
         try { await navigator.clipboard.writeText(url); copied = true } catch { /* clipboard blocked */ }
         useTutorial.getState().emit('export_3d_link')
-        setToast(copied ? `Share link copied: ${url}` : `Share link: ${url}`)
-        if (!copied) window.prompt('Share link (copy it):', url)
+        if (copied) setToast('Share link copied')
+        setExport3DLink({ url, copied })
+        setExport3DOpen(true)
       }
     } catch (e) {
       setToast(`3D export failed: ${e instanceof Error ? e.message : String(e)}`)
@@ -3545,6 +3560,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     openObjectTree: () => setShowObjectTree(true),
     openRoomSwitcher: () => roomSwitcherRef.current?.openSwitcher(),
     openAddRoom: () => roomSwitcherRef.current?.openAdd(),
+    openExport3D: () => { setExport3DLink(null); setExport3DOpen(true) },
     projectId: project?.id ?? null,
     tutorialOn,
     setTutorialOn: on => useTutorial.getState().setEnabled(on),
@@ -3564,6 +3580,68 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         menus={menus}
         compact={phone}
       />
+
+      {/* Room › Export 3D… (z_html_export): share link / HTML file / Apple USDZ. */}
+      {export3DOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 p-3"
+          onPointerDown={e => e.stopPropagation()}
+          onClick={() => { if (!exporting3D) setExport3DOpen(false) }}>
+          <div data-tour="export-3d-html" onClick={e => e.stopPropagation()}
+            className="w-[min(24rem,100%)] rounded-lg border border-gray-600 bg-gray-800 shadow-2xl text-gray-100">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-700">
+              <div className="text-sm font-semibold">Export 3D · {room.name}</div>
+              <button onClick={() => setExport3DOpen(false)} disabled={exporting3D} aria-label="Close"
+                className="w-8 h-8 -mr-2 rounded text-gray-400 hover:text-white hover:bg-gray-700 disabled:opacity-40">✕</button>
+            </div>
+            {exporting3D ? (
+              <div className="px-4 py-8 text-center text-sm text-gray-300">Exporting the 3D model…</div>
+            ) : export3DLink ? (
+              <div className="p-4 space-y-3">
+                <div className="text-xs text-gray-300">
+                  {export3DLink.copied ? 'Share link copied. Paste it into an email or text.' : 'Share link ready. Copy it or share it.'}
+                  {' '}Anyone with the link can see this model only.
+                </div>
+                <input readOnly value={export3DLink.url} onFocus={e => e.currentTarget.select()}
+                  className="w-full rounded border border-gray-600 bg-gray-900 px-2 py-2 text-base sm:text-xs text-gray-100" />
+                <div className="flex gap-2">
+                  <button data-tour="export-3d-copy"
+                    onClick={() => {
+                      const url = export3DLink.url
+                      navigator.clipboard.writeText(url)
+                        .then(() => { setExport3DLink({ url, copied: true }); setToast('Share link copied') })
+                        .catch(() => setToast('Could not copy: press and hold the link to copy it'))
+                    }}
+                    className="flex-1 rounded bg-blue-600 hover:bg-blue-500 px-3 py-2 text-sm font-medium">Copy link</button>
+                  {typeof navigator !== 'undefined' && typeof navigator.share === 'function' && (
+                    <button
+                      onClick={() => { void navigator.share({ title: `${room.name} 3D`, url: export3DLink.url }).catch(() => { /* cancelled */ }) }}
+                      className="flex-1 rounded bg-gray-700 hover:bg-gray-600 border border-gray-500 px-3 py-2 text-sm font-medium">Share…</button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="py-1">
+                {([
+                  ['link', '🔗 Share link', 'Uploads the model and gives you a web link. Opens in any browser, Mac, iPhone, Windows. Best for clients.', 'export-3d-link'],
+                  ['html', '⬇ HTML file', 'One file with Wire / Doors / Reset view. Works offline. Mac: open it in Safari, not the preview.', 'export-3d-file'],
+                  ['usdz', '⬇ Apple USDZ file', 'Opens on a Mac or iPhone (Quick Look), AR on iPhone / iPad. No buttons.', 'export-3d-usdz'],
+                ] as const).map(([k, label, hint, tour]) => (
+                  <button key={k} data-tour={tour} onClick={() => { void exportRoom3D(k) }}
+                    className="block w-full text-left px-4 py-2.5 hover:bg-gray-700 active:bg-gray-700">
+                    <div className="text-sm font-medium">{label}</div>
+                    <div className="text-xs text-gray-400 leading-snug">{hint}</div>
+                  </button>
+                ))}
+                <div className="px-4 pt-2 pb-3 text-[11px] text-gray-500 leading-snug border-t border-gray-700 mt-1">
+                  {canvasView === '3d'
+                    ? 'Exports what the 3D view shows now, and opens at this view.'
+                    : 'The 3D view opens first, then the export is taken from it.'}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* View tab bar */}
       <div className={phone
@@ -3626,37 +3704,6 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             >
               ⟲ Reset view
             </button>
-          )}
-          {canvasView === '3d' && !phone && (
-            <div className="relative ml-1">
-              <button
-                data-tour="export-3d-html"
-                onClick={() => setExport3DMenu(m => !m)}
-                disabled={exporting3D}
-                title="Export this room's 3D model: HTML file, Apple USDZ, or a share link. It opens at the view you have now; Reset view shows the whole room."
-                className="px-2 py-1 text-xs rounded transition-colors bg-gray-700 text-gray-100 hover:bg-gray-600 border border-gray-500 disabled:opacity-50"
-              >
-                {exporting3D ? 'Exporting…' : '⬇ Export 3D ▾'}
-              </button>
-              {export3DMenu && !exporting3D && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setExport3DMenu(false)} />
-                  <div className="absolute left-0 top-full mt-1 z-50 w-72 rounded border border-gray-500 bg-gray-800 shadow-lg text-xs text-gray-100 py-1">
-                    {([
-                      ['link', '🔗 Share link', 'Uploads the model and copies a web link. Opens in any browser, Mac, iPhone, Windows. Best for clients.', 'export-3d-link'],
-                      ['html', '⬇ HTML file', 'One file with Wire / Doors / Reset view. Works offline. Mac: open it in Safari, not the preview.', 'export-3d-file'],
-                      ['usdz', '⬇ Apple USDZ file', 'Double-click opens on a Mac or iPhone (Quick Look), AR on iPhone / iPad. No buttons.', 'export-3d-usdz'],
-                    ] as const).map(([k, label, hint, tour]) => (
-                      <button key={k} data-tour={tour} onClick={() => { void exportRoom3D(k) }}
-                        className="block w-full text-left px-3 py-1.5 hover:bg-gray-700">
-                        <div className="font-medium">{label}</div>
-                        <div className="text-[10px] text-gray-400 leading-snug">{hint}</div>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
           )}
         </div>
         <div className={`flex items-center ${phone ? 'ml-auto gap-1 min-w-0' : 'flex-1 justify-end gap-2 whitespace-nowrap pl-2'}`}>

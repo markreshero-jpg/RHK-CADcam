@@ -57,6 +57,9 @@ cabinet editors stay desktop-first.
    on desktop); tap again starts a new one; the button is amber while on, tap it to exit.
    Supersedes "plan / elevation measure stay desktop" in 4. In elevation a measuring click no
    longer selects the cabinet (all devices). Tutorial owed.
+   **Export 3D (phone, 2026-11-24)**: Menu ▾ › Room › Export 3D… (same dialog as desktop, see
+   `z_html_export/HTML-EXPORT-SPEC.md` decision 9). Share link has Copy link + Share… buttons.
+   File downloads on a real iPhone are unchecked.
    **Elevation wall strip (phone)**: bigger text / taller buttons, slides sideways; the
    floating snap button is hidden (as in plan) — it sat over the Side buttons.
    **Opening fit**: plan re-fits once the phone layout is on (the mount-time fit ran

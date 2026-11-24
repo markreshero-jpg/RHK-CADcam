@@ -1,6 +1,6 @@
 # 3D HTML export
 
-Status: **H1 built 2026-11-12, H5 + H6 built 2026-11-18, checks pending.** H2–H4 not started.
+Status: **H1 built 2026-11-12, H5 + H6 built 2026-11-18, moved to Room › Export 3D… + phones 2026-11-24, checks pending.** H2–H4 not started.
 
 A room (later a whole job) saved as one `.html` file anyone can open in a
 browser: the room's 3D model embedded as a GLB (base64), three.js viewer.
@@ -30,7 +30,13 @@ For sending to clients, builders and the workshop.
    HTML file there stays on "Loading". The file's loading text says to save it and
    open it in Safari / Chrome. For clients use the share link; Apple users can also
    get a USDZ.
-9. **Export 3D is a menu**: Share link (default for clients), HTML file, Apple USDZ file.
+9. **Export 3D is Menu › Room › Export 3D…** (2026-11-24, Mark: moved off the 3D toolbar so
+   phones get it too; on a phone it is Menu ▾, under Room). It opens a dialog: Share link
+   (default for clients), HTML file, Apple USDZ file. From plan / elevation / section the 3D
+   view opens first and the export is taken from it (the view stays on 3D).
+   A share link is shown in the dialog with **Copy link** and, where the browser has it,
+   **Share…** (the phone share sheet): after the upload the tap is too old for iOS to allow
+   a clipboard write, so the copy needs its own tap.
 10. **USDZ** is made from the GLB (re-loaded so every material is MeshStandardMaterial),
     scaled mm → metres so AR is life size, sat on the floor at the origin,
     `quickLookCompatible`. No Wire / Doors. Double-sided materials export single-sided
@@ -46,7 +52,7 @@ For sending to clients, builders and the workshop.
 
 | Phase | What | Status |
 |---|---|---|
-| H1 | Room 3D view toolbar **⬇ Export 3D** (desktop): Wire, Doors (hide), Reset view | Built 2026-11-12, check pending |
+| H1 | **Export 3D** (first on the 3D toolbar, now Room › Export 3D…, desktop + phone): Wire, Doors (hide), Reset view | Built 2026-11-12, moved 2026-11-24, check pending |
 | H2 | Doors swing open, drawers slide out (hinge / slide data in GLB extras) | — |
 | H3 | Hide by group (overheads, benchtops, kicks, walls) via display layers; click a cabinet for its code + size | — |
 | H4 | Export all rooms in a job, one file with a room picker (compressed GLBs) | — |
@@ -58,8 +64,12 @@ For sending to clients, builders and the workshop.
 - `src/lib/export3d/roomHtml.ts`: scene holder, GLB export, viewer template, download.
 - `app/canvas/[roomId]/Room3DScene.tsx`: `SceneExportBridge` hands the live scene to
   `room3dScene` (dev also gets `window.__room3d.exportGLB()`).
-- `app/canvas/[roomId]/CanvasClient.tsx`: `exportRoom3DHtml()` + toolbar button
-  (`data-tour="export-3d-html"`, tutorial event `export_3d_html`).
+- `app/canvas/[roomId]/CanvasClient.tsx`: `exportRoom3D()` + the Export 3D dialog
+  (`data-tour="export-3d-html"` on the dialog, `export-3d-link` / `-file` / `-usdz` on its
+  buttons; tutorial events `export_3d_html` / `_link` / `_usdz`). Menu item in
+  `canvasMenuConfig.ts` (`openExport3D`).
+- Test: `z_plan_automation/_tmp-export3d-menu.mjs <roomId> <outDir>` opens the dialog from the
+  menu on desktop and a 390-wide phone, from the plan view, and saves the HTML file.
 - `src/lib/export3d/viewer/main.ts` + `scripts/build-share3d-viewer.mjs` → `public/share3d/viewer.js`.
 - `app/share/3d/[roomId]/[token]/route.ts`: hosted share page.
 - `z_html_export/migration_h6_share_3d.sql`: bucket + policies (applied 2026-11-18).

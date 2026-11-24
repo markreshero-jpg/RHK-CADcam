@@ -48,6 +48,8 @@ export interface MenuActions {
   openObjectTree:    () => void
   openRoomSwitcher:  () => void
   openAddRoom:       () => void
+  /** Room → Export 3D…: share link / HTML file / Apple USDZ (z_html_export). */
+  openExport3D:      () => void
   // Current project (for the Panel Optimiser entry point)
   projectId:         string | null
   // Tutorial mode (z_tutorial)
@@ -121,6 +123,7 @@ export function buildMenus(a: MenuActions): MenuGroup[] {
       { label: 'Add New Room', action: () => a.openAddRoom() },
       null,
       { label: 'Centre Room',  action: () => a.centreRoom() },
+      { label: 'Export 3D…',   action: () => a.openExport3D() },
       null,
       { label: 'Construction', action: () => a.setRoomModalTab('construction') },
       { label: 'Hardware',     action: () => a.setRoomModalTab('hardware') },
