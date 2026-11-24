@@ -3,7 +3,7 @@
   "_notes": [
     "Supply only, freestanding gloss white 2 pac bathroom cupboard x 1. 670 W x 2420 H x 490 D overall, on 5mm plastic feet (no kick), 5 clear of the ceiling.",
     "Drawn as TEPF 18 | T2D 634 | TEPF 18 = 670. Carcass 470 deep (490 incl 18 door + 2). Whiteboard internals.",
-    "Inside (sketch, top down): 420 space, fixed shelf (top at 2000), hanging rail 100 under the shelf (Mark: keep 100), hanging down to a fixed shelf with its top at 300, 178 inner drawer under it with the front 30 below the shelf for fingers (Mark 2026-11-24). Hinges [2314, 1808, 1302, 796, 360] are set after placement.",
+    "Inside (sketch, top down): 420 space, fixed shelf (top at 2000), hanging rail 100 under the shelf (Mark: keep 100), hanging down to a fixed shelf with its top at 300, 178 inner drawer under it with the front 2 up from the base (Mark 2026-11-24). Hinges [2314, 1808, 1302, 796, 360] are set after placement.",
     "2 doors full height with a mirror inset in each, routed from the back (size OK'd by Mark). A mirror door style is to be built in another conversation. Handles TBC.",
     "The wall is only there to hold the cupboard on the canvas - supply only, no site."
   ],
@@ -23,7 +23,7 @@
       "set": { "has_toekick": false,
         "internal_grid": { "tree": { "type": "hsplit", "children": [
           { "size": 267, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
-            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 55.5, "slide_product_id": "fc2663e4-dc57-4d9a-bfb8-7961ca08cfa9" } ] } },
+            { "type": "inner_drawer", "height": 178, "y_locked": true, "y_position": 16.5, "slide_product_id": "fc2663e4-dc57-4d9a-bfb8-7961ca08cfa9" } ] } },
           { "size": 1683.5, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [
             { "type": "accessory", "key": "HANGING_RAIL_OVAL", "y_locked": true, "y_position": 1868.5 } ] } },
           { "section": { "type": "open", "fittings": [] } } ] } } } },

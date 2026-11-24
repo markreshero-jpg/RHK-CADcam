@@ -54,7 +54,7 @@ End panels both sides, 2 pac`
 const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
 // Wall 2 elevation: LH panel 300-318, cupboard 318-952 (doors meet at 635), RH panel 952-970.
 // Mirrors drawn 60 in from each door edge, 100 up, top at 2000 (size OK'd by Mark 2026-11-24; mirror door style to come).
-// Fixed shelf top at 300, inner drawer 178 (front 57.5-253.5, 30 under the shelf for fingers).
+// Fixed shelf top at 300, inner drawer 178 (front 18.5-214.5, 2 up from the base).
 const rows = [
   plan(G, 'text', { at: { x: 1960, y: -400 }, width: 75 }, spec, { ...box, block: 'Spec block', src: 'markup-std' }),
   plan(S, 'text', { at: { x: 1960, y: 1100 }, width: 75 }, site, { ...box, src: 'markup-std' }),
@@ -67,7 +67,7 @@ const rows = [
   elev(Q, 'text', note(1850, 961, 1800), 'GLOSS WHITE - COLOUR TBC', LD),
   elev(Q, 'cloud', { pts: pts(1430, -1310, 2080, -1220) }, null, cloud),
   elev(Q, 'text', note(1300, 650, 1210), 'HANDLES TBC - 2 OFF', LD),
-  elev(G, 'text', note(900, 800, 200), 'INNER DRAWER 178 DRAGON PRO, FRONT 30 DOWN FROM THE SHELF FOR FINGERS', LD),
+  elev(G, 'text', note(900, 800, 120), 'INNER DRAWER 178 DRAGON PRO, FRONT 2 UP FROM THE BASE', LD),
   elev(S, 'text', note(330, 940, 0), '5mm PLASTIC FEET, NO KICK', LD),
   elev(S, 'text', { at: { x: 470, y: -1848 } }, 'HANGING RAIL', { size: 2.5, src: 'markup-std' }),
   elev(S, 'dim', { p1: { x: 300, y: -2000 }, p2: { x: 300, y: -2420 }, axis: 'y', offset: -200 }, null, DIM),

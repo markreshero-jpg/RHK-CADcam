@@ -19,7 +19,7 @@ handle schedule CabinetWare Square 128 as a stand-in.
 | Overall | 670 W x 2420 H x 490 D (depth incl doors) |
 | Build | TC-01 TEPF 18 + TC-02 T2D 634 + TC-03 TEPF 18, carcass 470 deep, no kick |
 | Feet | 5mm plastic feet under, not drawn (note only). Room height 2430 = 5 feet + 2420 + 5 clear |
-| Inside | Fixed shelf top at 2000 (420 above it), oval hanging rail 100 under it (locked Y 1868.5), hanging to a fixed shelf with its top at 300, inner drawer Dragon Pro 400x178 under it (box Y 55.5, front 57.5-253.5 = 30 below the shelf for fingers) |
+| Inside | Fixed shelf top at 2000 (420 above it), oval hanging rail 100 under it (locked Y 1868.5), hanging to a fixed shelf with its top at 300, inner drawer Dragon Pro 400x178 under it (box Y 16.5, front 18.5-214.5 = 2 up from the base) |
 | Doors | 2 full height, 5 hinges each [2314, 1808, 1302, 796, 360] (bottom hinge 60 above the 300 shelf) |
 | Mirrors | Inset in each door, routed from the back. CAD outline only for now: 60 in from each edge, 100 up, top at 2000 |
 
@@ -32,7 +32,7 @@ The wall in the room is only there to hold the cupboard on the canvas.
 3. Mirror is routed in from the back of the door. Mark will sketch it for the door style; we'll do these often.
 4. Finish: "Gloss white, colour TBC".
 5. End panels both sides: OK.
-6. 178 inner drawer under a fixed shelf at 300 high, drawer front 30 down from the shelf for fingers. Done.
+6. 178 inner drawer under a fixed shelf at 300 high. First drawn with the front 30 down from the shelf, then Mark: drawer down, front only 2 up from the base. Done.
 7. Handles TBC (still on the drawing as a TBC cloud).
 8. Cut the 2420 parts from longer sheets.
 9. Hanging depth is tight but it will have to do.
