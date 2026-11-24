@@ -47,7 +47,9 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_A
 // ── Sanity-check the wall loop is head-to-tail clockwise ─────────────────────
 // Shop rule: walls drawn head-to-tail in a clockwise rotation. Detached walls
 // (islands, separate runs) and nib walls (z_nib_wall) are exempt from the continuity check.
-{
+// Skipped with `roomId`: those walls are already in the room and are not drawn here
+// (e.g. a box-out / void corner, which has to turn left once).
+if (!layout.roomId) {
   const rad = a => (a * Math.PI) / 180
   for (let i = 0; i < layout.walls.length - 1; i++) {
     const w = layout.walls[i], n = layout.walls[i + 1]
@@ -100,10 +102,14 @@ if (!projectId) die('no project — set projectId, or projectName (+ createProje
 // fixed up by hand). Cabinets' `wall` numbers then match the walls' names.
 let room, roomErr
 if (layout.roomId) {
-  ({ data: room, error: roomErr } = await sb.from('rooms').update({
+  const roomPatch = {
     ...(layout.roomRules ? { rule_overrides: layout.roomRules } : {}),
     ...(layout.wallCabinetTop != null ? { wall_cabinet_top: layout.wallCabinetTop } : {}),
-  }).eq('id', layout.roomId).select().single())
+  }
+  // An empty update returns no row ("Cannot coerce the result…") — just read the room then.
+  ;({ data: room, error: roomErr } = Object.keys(roomPatch).length
+    ? await sb.from('rooms').update(roomPatch).eq('id', layout.roomId).select().single()
+    : await sb.from('rooms').select().eq('id', layout.roomId).single())
   if (roomErr) die(`room load failed: ${roomErr.message}`)
   console.log('existing room', room.name, room.id)
 } else {
@@ -250,12 +256,12 @@ for (const c of layout.cabinets) {
 // ── Verify from the DB ────────────────────────────────────────────────────────
 let fail = 0
 const { data: cabs } = await sb.from('cabinet_instances')
-  .select('id,label,assembly_class,rotation,dx,dy,dz').eq('room_id', room.id).order('label')
+  .select('id,label,assembly_class,rotation,dx,dy,dz,float_shelf').eq('room_id', room.id).order('label')
 for (const c of cabs) {
   const { count: cp } = await sb.from('case_parts').select('*', { count: 'exact', head: true }).eq('cabinet_instance_id', c.id)
   const { count: fz } = await sb.from('face_zones').select('*', { count: 'exact', head: true }).eq('cabinet_instance_id', c.id)
   const { count: cu } = await sb.from('cabinet_custom_parts').select('*', { count: 'exact', head: true }).eq('cabinet_instance_id', c.id)
-  const ok = (cp > 0 && fz > 0) || cu > 0   // panels have only custom parts
+  const ok = (cp > 0 && fz > 0) || cu > 0 || (cp > 0 && !!c.float_shelf)   // panels have only custom parts; floating shelves have no faces
   if (!ok) fail++
   console.log(`${ok ? 'OK  ' : 'FAIL'} ${c.label} ${c.assembly_class} rot ${c.rotation} dims ${c.dx}x${c.dy}x${c.dz} parts:${cp} faces:${fz} custom:${cu}`)
 }

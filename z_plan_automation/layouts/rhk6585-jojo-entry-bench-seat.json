@@ -1,11 +1,12 @@
 {
  "_source": "Mark's site measure 29/10/2026 (SITE CHECK MEASURES/2026-11-23 - Jojo Site measure.pdf) + client sketches (ARCHITECTURALS/2026-10-29 1.pdf) + Mark Q&A 2026-11-23",
  "_notes": [
-  "Walls already in the room (inserted 2026-11-23): 1 left return 600, 2 back wall 1700, 3 right return 600. ASSUMED the seat fits wall to wall (1700 F/P) - if an end is open it needs a BEPF and the run shortens. CH 2400 placeholder (check at site measure).",
-  "500 high overall (Mark) = 100 kick + 367 carcass + 33 top. 400 deep (Mark) OA -> carcass 381.5, top 400.",
+  "Walls already in the room (inserted 2026-11-23): 1 left return 600, 2 back wall 1700, 3 right return 600. The site sketch shows a wall each end (1700 F/P), so the seat fits wall to wall. CH 2400 placeholder (check on site).",
+  "500 high overall (Mark) = 100 kick + 367 carcass + 33 top. \"400\" = overall depth -> top 400, 5 past the door faces: carcass 377 (was 381.5, top flush).",
+  "CHANGED 2026-11-24: a 1700 box cannot go into a 1700 alcove - cabinet scribe 16.5 at each wall end (SCRL on the left cupboard, SCRR on the right), as on the RHK6351 Rya bench seat.",
   "2 x B1D 850 with flap-down doors (hinge bottom), 20 finger gap, PT Oasis Smooth (room colour). Door count TBC (client drew shoe drawers in 2 rows).",
-  "Ply bench top: no ply board in the library yet - drawn as a 33 FLSHLF (double exposed board) placeholder; set the ply material + thickness once confirmed.",
-  "VJ panelling on the wall above (supplied by us, painted by others) and hat hooks (client sketch) - CAD notes to add."
+  "Ply bench top: no ply board in the library yet - drawn as a 33 FLSHLF (double exposed board) placeholder wall to wall; set the ply material + thickness once confirmed.",
+  "VJ panelling on the wall above (supplied by us, painted by others) and hat hooks (client sketch) - CAD notes. Follow-ups: joinKicks; spec block + markup."
  ],
  "projectName": "Jojo Jackson",
  "roomId": "e08d668d-d8b5-406a-bb2f-72671848b0a3",
@@ -41,7 +42,10 @@
    "offset": 0,
    "dx": 850,
    "dy": 467,
-   "dz": 381.5,
+   "dz": 377,
+   "rules": {
+    "SCRL": 16.5
+   },
    "set": {
     "face_grid": {
      "cols": [
@@ -67,7 +71,7 @@
      ]
     }
    },
-   "note": "Bench seat flap-down door, 20mm finger gap, PT Oasis Smooth"
+   "note": "Bench seat flap-down door, 20mm finger gap, PT Oasis Smooth. Cabinet scribe 16.5 at the wall end"
   },
   {
    "def": "B1D",
@@ -75,7 +79,10 @@
    "offset": 850,
    "dx": 850,
    "dy": 467,
-   "dz": 381.5,
+   "dz": 377,
+   "rules": {
+    "SCRR": 16.5
+   },
    "set": {
     "face_grid": {
      "cols": [
@@ -101,7 +108,7 @@
      ]
     }
    },
-   "note": "Bench seat flap-down door, 20mm finger gap, PT Oasis Smooth"
+   "note": "Bench seat flap-down door, 20mm finger gap, PT Oasis Smooth. Cabinet scribe 16.5 at the wall end"
   },
   {
    "def": "FLSHLF",

@@ -2,13 +2,13 @@
  "_source": "Mark's site measure 29/10/2026 (SITE CHECK MEASURES/2026-11-23 - Jojo Site measure.pdf) + client sketches (ARCHITECTURALS/2026-10-29 1.pdf) + Mark Q&A 2026-11-23",
  "_notes": [
   "Walls already in the room (inserted 2026-11-23), clockwise: 1 Wall A 1184 (S->N, from the open end up to the void), 2 void front 479, 3 void side 480, 4 Wall B 1577 (void -> right wall), 5 right wall 768. Overall 2056 (Mark wrote 2055). CH 2583.",
-  "ASSUMED (asked, not answered): Wall A 1184 is measured from the void, so the A run is 1184 long; the B base run starts at 600 (behind the A run's front) and runs 1456 to the right wall, leaving a 121 x 480 dead pocket behind the bench next to the void.",
-  "Bench 900 (client) = 100 kick + 780 carcass + 20 top (top material TBC). 600 bench: carcass 560 (job standard).",
-  "Wall A (elev L->R = open end -> void): BEPF 16.5 seen end | B1D 250 skinny chopping-board cupboard | D3-SLL 917.5 (3 drawers, top shallow for spices, Nikpol Dragon Pro). Drawers on A per the client sketch; quote says 3 drawers total.",
-  "Wall B: 2 x B2D 728 white, plumbing opening noted (client sketch shows an opening for plumbing, not a sink) - U cut-out / shelf notch TBC.",
-  "Overheads on B: 2 x W2D 758.5 x 710 x 330 (350 OA), PT Black Matt (room colour), no handles (overhead rule). Bottom at 1600 = 900 bench + 700 splashback -> room wall_cabinet_top 2310 (set). 30 gaps each end for wall fillers (overheads boxed in by walls) - add the fillers in the app.",
-  "Floating shelves on Wall A: 3 x FLSHLF 1184 x 480 x 33 timber grain Woodmatt (480 read as the depth), undersides 1400 / 1700 / 2050 from the client's 500 / 300 / 350 spacing above the bench. Open end seen, void end not.",
-  "Still to do in the app: joinKicks per run; addUnderPanel under the overheads (20 set back) + LED routes; overhead wall fillers; green tile splashback by others."
+  "Bench 900 (client) = 100 kick + 780 carcass + 20 top (top material TBC - no top in the quote). 600 bench on a finger-pull job -> carcass 575 (intake checklist; RHK6571 the same). Was 560.",
+  "CHANGED 2026-11-24 - the corner did not work as first laid out: the A drawers ran to the void (y 480) and the B cupboards started at x 600, so the last ~100 of the drawer fronts faced the side of the B cupboard and could not open. Now a VOID CORNER with a 40 face filler (BFKW) on each run, 40 x 40 from the fronts (intake checklist default): fronts at 593, so the A run ends 633 from Wall B and the B run starts 633 from Wall A. The corner under the bench (round the plasterboard void) is empty.",
+  "Wall A (elev L->R = open end -> void): BEPF seen end | B1D 250 skinny chopping-board cupboard | D3-SLL 764.5 (3 drawers, top shallow for spices, Nikpol Dragon Pro) | BFKW 40 | 113 void corner. Skinny cupboard at the open end as on the client elevation.",
+  "Wall B (elev L->R = void -> right wall): 114 void corner | BFKW 40 | B2D 712 | B2D 711 (plumbing opening at the RIGHT end per the client elevation - was noted on the left cupboard). Right end tight to the wall, TBC cloud.",
+  "Overheads on B: WF-L 16.5 | 2 x W2D 772 x 710 x 332 (350 OA with the 16 door) | WF-L 16.5 (overheads boxed in by walls -> board-thickness wall filler each side; was 30 gaps). PT Black Matt, no handles (overhead rule). Bottom at 1600 = 900 bench + 700 splashback -> wall_cabinet_top 2310. 710 = overall incl the under panel.",
+  "Floating shelves on Wall A: 3 x FLSHLF 1184 x 480 x 33 timber grain Woodmatt (480 = depth, lines up with the void front), undersides 1400 / 1700 / 2050 from the client 500 / 300 / 350 spacing above the bench. Open end seen, void end not.",
+  "Follow-ups in the app: joinKicks per run; addUnderPanel under the overheads (20 set back) + LED route; green tile splashback by others; spec block + markup."
  ],
  "projectName": "Jojo Jackson",
  "roomId": "7b416272-2861-4bf8-a60f-94f5632aa439",
@@ -59,7 +59,7 @@
    "offset": 0,
    "dx": 16.5,
    "dy": 880,
-   "dz": 560,
+   "dz": 575,
    "note": "Pantry Wall A seen end panel at the open end, to the floor"
   },
   {
@@ -68,7 +68,7 @@
    "offset": 16.5,
    "dx": 250,
    "dy": 880,
-   "dz": 560,
+   "dz": 575,
    "set": {
     "face_grid": {
      "cols": [
@@ -93,42 +93,69 @@
      ]
     }
    },
-   "note": "Pantry skinny cupboard for chopping boards (no shelf TBC)"
+   "note": "Pantry skinny cupboard for chopping boards (shelf or no shelf TBC)"
   },
   {
    "def": "D3-SLL",
    "wall": 1,
    "offset": 266.5,
-   "dx": 917.5,
+   "dx": 764.5,
    "dy": 880,
-   "dz": 560,
+   "dz": 575,
    "note": "Pantry 3 drawers, top one shallow for spices. Nikpol Dragon Pro"
   },
   {
-   "def": "B2D",
-   "wall": 4,
-   "offset": 121,
-   "dx": 728,
+   "def": "BFKW",
+   "wall": 1,
+   "offset": 1031,
+   "dx": 40,
    "dy": 880,
-   "dz": 560,
-   "note": "Pantry Wall B cupboard - opening for existing plumbing (client sketch), cut-out TBC"
+   "dz": 575,
+   "note": "Pantry corner filler, Wall A run (void corner beyond)"
+  },
+  {
+   "def": "BFKW",
+   "wall": 4,
+   "offset": 114,
+   "dx": 40,
+   "dy": 880,
+   "dz": 575,
+   "note": "Pantry corner filler, Wall B run (void corner behind)"
   },
   {
    "def": "B2D",
    "wall": 4,
-   "offset": 849,
-   "dx": 728,
+   "offset": 154,
+   "dx": 712,
    "dy": 880,
-   "dz": 560,
+   "dz": 575,
    "note": "Pantry Wall B cupboard"
+  },
+  {
+   "def": "B2D",
+   "wall": 4,
+   "offset": 866,
+   "dx": 711,
+   "dy": 880,
+   "dz": 575,
+   "note": "Pantry Wall B cupboard - opening for existing plumbing at this end (client sketch), cut-out TBC"
+  },
+  {
+   "def": "WF-L",
+   "wall": 4,
+   "offset": 0,
+   "dx": 16.5,
+   "dy": 710,
+   "dz": 332,
+   "note": "Pantry overhead wall filler at the void side, PT Black Matt"
   },
   {
    "def": "W2D",
    "wall": 4,
-   "offset": 30,
-   "dx": 758.5,
+   "offset": 16.5,
+   "dx": 772,
    "dy": 710,
-   "dz": 330,
+   "dz": 332,
    "set": {
     "face_grid": {
      "cols": [
@@ -165,15 +192,15 @@
      ]
     }
    },
-   "note": "Pantry overhead PT Black Matt, 710 high, no handles (grip under a 20 set-back under panel). LED strip under. 30 wall filler at the void side TBC"
+   "note": "Pantry overhead PT Black Matt, 710 high overall incl under panel, no handles (grip under the 20 set-back under panel). LED strip under"
   },
   {
    "def": "W2D",
    "wall": 4,
    "offset": 788.5,
-   "dx": 758.5,
+   "dx": 772,
    "dy": 710,
-   "dz": 330,
+   "dz": 332,
    "set": {
     "face_grid": {
      "cols": [
@@ -210,7 +237,16 @@
      ]
     }
    },
-   "note": "Pantry overhead PT Black Matt, 710 high, no handles. LED strip under. 30 wall filler at the right wall TBC"
+   "note": "Pantry overhead PT Black Matt, 710 high overall incl under panel, no handles. LED strip under"
+  },
+  {
+   "def": "WF-L",
+   "wall": 4,
+   "offset": 1560.5,
+   "dx": 16.5,
+   "dy": 710,
+   "dz": 332,
+   "note": "Pantry overhead wall filler at the right wall, PT Black Matt"
   },
   {
    "def": "FLSHLF",

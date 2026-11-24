@@ -2,11 +2,12 @@
  "_source": "Mark's site measure 29/10/2026 (SITE CHECK MEASURES/2026-11-23 - Jojo Site measure.pdf) + client sketches (ARCHITECTURALS/2026-10-29 1.pdf) + Mark Q&A 2026-11-23",
  "_notes": [
   "Walls already in the room (inserted 2026-11-23): Wall 1 left side wall (length not measured, 2000 placeholder), Wall 2 back wall 3963, Wall 3 right wall (2000 placeholder). CH 2561. Bulkhead 2305 FFL at the left end - not modelled, keep the top shelf under it.",
-  "Unit 3300 OA hard against the right wall -> starts at 663. 600 high overall = 100 kick + 467 carcass + 33 top. 400 deep (Mark: base cabinet depth) taken as OA to the door face -> carcass 381.5; the 33 top is 400 deep, flush with the doors.",
-  "BEPF 16.5 at the seen left end + 4 x B2D (821/821/821/820.5). Right end tight to the wall, no filler drawn (TBC: 30 or board?).",
-  "TV zone 1364-2594 measured from the RIGHT (Mark): left shelves 706 long (unit 0-706), TV 706-1936, right shelves 1364 long to the right wall.",
-  "Shelves 33 timber grain (double 16.5 Woodmatt, colour TBC), 300 deep (Mark). Heights NOT given - drawn at undersides 1000 / 1400 / 1800 (client sketch ~400 apart) and the full-length top shelf at 2200 (top 2233, under the 2305 bulkhead). Left shelves hang from a metal rod to the ceiling at their free left end (client); right shelves anchored to the right wall.",
-  "Still to do in the app: joinKicks on the base run; set the 33 Woodmatt colour once chosen; option on ply with clear lacquer."
+  "Unit 3300 OA hard against the right wall -> starts at 663 (client sketch: shelves anchored on the right-hand wall). 600 high overall = 100 kick + 467 carcass + 33 top (height NOT measured - TBC).",
+  "CHECKED 2026-11-24 against the intake checklist / site-sketch rules: \"400\" at the end of the run = the overall bench depth (site-sketch rule), finger-pull job -> top 5 past the door faces: carcass 377 + 16 door + 2 = 395, top 400. Was 381.5 (top flush with the doors).",
+  "BEPF at the seen left end + 4 x B2D (821/821/821/820.5). Right end tight to the wall, no filler drawn - TBC cloud (board-thickness BFK or 30?).",
+  "TV zone 1364-2594: the datum is still open, but it barely matters - from the right wall the TV sits at unit 706-1936, from the left wall at 701-1931 (5 apart). Drawn from the right: left shelves 706 long, right shelves 1364 long to the right wall.",
+  "Shelves 33 timber grain (double 16.5 Woodmatt, colour TBC), 300 deep. Heights NOT given - drawn at undersides 1000 / 1400 / 1800 and the full-length top shelf at 2200 (top 2233, under the 2305 bulkhead). Left shelves hang from a metal rod to the ceiling at their free left end (client); right shelves anchored to the right wall.",
+  "Follow-ups in the app: joinKicks on the base run; set the 33 Woodmatt colour once chosen; option on ply with clear lacquer; spec block + markup."
  ],
  "projectName": "Jojo Jackson",
  "roomId": "e0e96be3-7615-413c-b4f8-2a07c728ec39",
@@ -42,7 +43,7 @@
    "offset": 663,
    "dx": 16.5,
    "dy": 567,
-   "dz": 381.5,
+   "dz": 377,
    "note": "Media unit seen left end panel, to the floor"
   },
   {
@@ -51,8 +52,8 @@
    "offset": 679.5,
    "dx": 821,
    "dy": 567,
-   "dz": 381.5,
-   "note": "Media unit base 1 of 4, flat panel doors PT Classic White Matt, finger pull"
+   "dz": 377,
+   "note": "Media unit base 1 of 4, flat panel doors PT Classic White Matt"
   },
   {
    "def": "B2D",
@@ -60,8 +61,8 @@
    "offset": 1500.5,
    "dx": 821,
    "dy": 567,
-   "dz": 381.5,
-   "note": "Media unit base 2 of 4, flat panel doors PT Classic White Matt, finger pull"
+   "dz": 377,
+   "note": "Media unit base 2 of 4, flat panel doors PT Classic White Matt"
   },
   {
    "def": "B2D",
@@ -69,8 +70,8 @@
    "offset": 2321.5,
    "dx": 821,
    "dy": 567,
-   "dz": 381.5,
-   "note": "Media unit base 3 of 4, flat panel doors PT Classic White Matt, finger pull"
+   "dz": 377,
+   "note": "Media unit base 3 of 4, flat panel doors PT Classic White Matt"
   },
   {
    "def": "B2D",
@@ -78,8 +79,8 @@
    "offset": 3142.5,
    "dx": 820.5,
    "dy": 567,
-   "dz": 381.5,
-   "note": "Media unit base 4 of 4, flat panel doors PT Classic White Matt, finger pull"
+   "dz": 377,
+   "note": "Media unit base 4 of 4, flat panel doors PT Classic White Matt"
   },
   {
    "def": "FLSHLF",
