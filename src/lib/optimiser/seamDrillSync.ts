@@ -139,7 +139,7 @@ export function collectDrillRows(rp: ResolvedCabinet, cabinetId: string, posOver
 
   const caseByKey = new Map(rp.case_parts.map(p => [p.part_key, p]))
   // Cut sides / back (z_cabinet_split) — holes are worked on the whole part, then moved to their piece.
-  const cutPieces = rp.split_at?.length || rp.split_back_x?.length ? splitCaseParts(rp.case_parts, rp.split_at, rp.split_back_x) : null
+  const cutPieces = rp.split_at?.length || rp.split_back_x?.length ? splitCaseParts(rp.case_parts, rp.split_at, rp.split_back_x, rp.split_tape_cut) : null
   const zoneByKey = new Map(rp.face_zones.map(z => [zoneKey(z), z]))
   const intByKey = new Map(rp.internal_parts.map(p => [`${p.part_type}_${p.sort_order}`, p]))
 

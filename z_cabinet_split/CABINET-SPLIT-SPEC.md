@@ -97,6 +97,12 @@
   - Tests: `cabinetSplit.test.ts` "back width cut". Still to do: right-click / sidebar control, check in app.
   - Also on RHK6563 Study WC-05 (Tas Oak 18 back 304 x 1493, Mark 2026-11-03): `back_x [779.5]`, 2 x 746.5,
     nests clean grain-up.
+- [~] **S7** (2026-11-25, Mark RHK6478 US Broom TC-02: "there is no fixed shelf here so just have it up top middle of
+  adjustable shelf. mark the edges on the split to be edged so there's a nice join") **Tape the cut edges.**
+  `split.tape_cut: true` (height cuts only) tapes both cut ends of every cut side / back piece; off = untaped as before.
+  Sidebar tick "Tape the cut edges" under the cut heights. Resolved as `split_tape_cut`, passed to `splitCaseParts`
+  by the persist payload and the drill rows. Use it when the cut sits mid-bay (no fixed shelf lip to hide it).
+  Tests: `cabinetSplit.test.ts` "tape the cut edges". Check in app pending; tutorial owed.
 - 2026-11-05 (RHK6478 US Hallway Linen TC-03, Mark): the canvas loads case parts from the DB, so a split
   cabinet arrives as its pieces (`split:left_side:1` …). The view helpers keyed on the bare part key, so the
   upper side piece drew lying flat in elevation (1676 long, out past the cabinet; out the front on the side

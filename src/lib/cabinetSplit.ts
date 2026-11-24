@@ -21,7 +21,10 @@ import type { ResolvedCasePart, ResolvedInternalPart } from './resolver/types'
 // (cabinet frame x from the cabinet's left) — a back too wide for one grained
 // sheet with the grain up it is made in pieces and joined (Mark, RHK6542 WC-04,
 // 2026-11-03). A width-cut back is not also cut in height.
-export interface CabinetSplit { at: number[]; back_x?: number[] }
+// tape_cut: tape the height-cut ends of the sides / back, so the join is a clean
+// taped line where the pieces meet (Mark, RHK6478 US Broom TC-02 2026-11-25: no
+// fixed shelf to hide the cut, so it sits mid-bay between adjustable shelves).
+export interface CabinetSplit { at: number[]; back_x?: number[]; tape_cut?: boolean }
 
 /** Default cut: this far below the top of a fixed shelf (Mark, 2026-10-24). */
 export const SPLIT_LIP = 3
@@ -39,7 +42,7 @@ export function normaliseSplit(s: Partial<CabinetSplit> | null | undefined): Cab
   if (!s) return null
   const at = cleanCuts(s.at), back_x = cleanCuts(s.back_x)
   if (!at.length && !back_x.length) return null
-  return back_x.length ? { at, back_x } : { at }
+  return { at, ...(back_x.length ? { back_x } : {}), ...(s.tape_cut && at.length ? { tape_cut: true } : {}) }
 }
 
 /** Width cuts that fall inside the plain back (it runs along DY from X). */
@@ -87,9 +90,10 @@ function cutsIn(p: ResolvedCasePart, at: number[]): number[] {
  * The case parts as they are made: each side / back cut at every height in
  * `at` into stacked pieces. Cut ends carry no tape (the sides' `top` / `bottom`
  * flags are the ends of DY; the back's run along DX, which is never taped at a
- * cut either). Parts with no cut through them are returned unchanged.
+ * cut either) — unless `tapeCut`, when every height-cut end is taped.
+ * Parts with no cut through them are returned unchanged.
  */
-export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | undefined, backX?: number[] | null): ResolvedCasePart[] {
+export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | undefined, backX?: number[] | null, tapeCut?: boolean): ResolvedCasePart[] {
   if (!at?.length && !backX?.length) return parts
   const out: ResolvedCasePart[] = []
   for (const p of parts) {
@@ -119,7 +123,7 @@ export function splitCaseParts(parts: ResolvedCasePart[], at: number[] | null | 
         part_key: splitPieceKey(p.part_key, i) as ResolvedCasePart['part_key'],
         // A back piece keeps the back's frame (stored one board below where it sits).
         ...(p.part_key === 'back' ? { Y: lo - p.DZ, DX: h } : isShapedUpright(p.part_key) ? { Y: lo, DX: h } : { Y: lo, DY: h }),
-        edge_band: { ...p.edge_band, ...(last ? {} : { top: false }), ...(first ? {} : { bottom: false }) },
+        edge_band: { ...p.edge_band, ...(last ? {} : { top: !!tapeCut }), ...(first ? {} : { bottom: !!tapeCut }) },
         // Shapes / notches are drawn on the whole part; a cut piece is a plain rectangle.
         outline: undefined,
       })

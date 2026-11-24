@@ -1598,6 +1598,8 @@ export interface ResolvedCabinet {
   split_at?:     number[]
   // Width cuts through the back (CabinetSplit.back_x), cut in the same places.
   split_back_x?: number[]
+  // Height-cut ends taped (CabinetSplit.tape_cut).
+  split_tape_cut?: boolean
   toekick_parts: ResolvedToekickPart[]
   internal_parts: ResolvedInternalPart[]
   // Slide rails emitted by inner-drawer / pull-out fittings — rendered like the

@@ -82,6 +82,11 @@ export default function CabinetSplitSection({ cabinet, wall, room, onUpdate, inp
         )}
         <button onClick={() => put(null)} className="text-[10px] text-red-400 hover:text-red-300">Remove split</button>
       </div>
+      <label className="flex items-center gap-2 text-xs text-gray-300" title="Tape the cut ends of the sides and back, so the join is a clean taped line where the pieces meet (use when there is no fixed shelf to hide the cut)">
+        <input type="checkbox" checked={!!split.tape_cut}
+          onChange={e => void onUpdate(cabinet.id, { split: normaliseSplit({ ...split, tape_cut: e.target.checked }) })} />
+        Tape the cut edges
+      </label>
       <p className="text-[10px] text-gray-600">Cuts the sides and back; heights from the cabinet&apos;s bottom. The fixed shelf stays with the lower section and stands {SPLIT_LIP} proud — the upper sides drop over it. Doors stay full height.</p>
     </div>
   )

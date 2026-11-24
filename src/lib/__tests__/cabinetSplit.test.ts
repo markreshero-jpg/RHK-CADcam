@@ -236,3 +236,24 @@ describe('back width cut drilling', () => {
     expect(rows.length).toBeLessThanOrEqual(whole.length)
   })
 })
+
+describe('tape the cut edges (split.tape_cut, RHK6478 US Broom TC-02)', () => {
+  // No fixed shelf to hide the cut: Mark wants both cut ends taped so the pieces meet on a clean line.
+  it('normaliseSplit keeps tape_cut only with a height cut', () => {
+    expect(normaliseSplit({ at: [1200], tape_cut: true })).toEqual({ at: [1200], tape_cut: true })
+    expect(normaliseSplit({ at: [1200], tape_cut: false })).toEqual({ at: [1200] })
+    expect(normaliseSplit({ at: [], back_x: [400], tape_cut: true })).toEqual({ at: [], back_x: [400] })
+  })
+  it('resolve → persist: every height-cut end of the sides and back is taped', () => {
+    const rp = resolveCabinet({ ...tall(), split: { at: [1500], tape_cut: true } })
+    expect(rp.split_tape_cut).toBe(true)
+    const rows = buildPersistPayload(rp).case_parts
+    for (const k of ['left_side', 'right_side', 'back']) {
+      expect(rows.find(r => r.part_key === k)!.edge_band_top).toBe(true)
+      expect(rows.find(r => r.part_key === `split:${k}:1`)!.edge_band_bottom).toBe(true)
+    }
+    // untouched without it
+    const plain = buildPersistPayload(resolveCabinet(tall([1500]))).case_parts
+    expect(plain.find(r => r.part_key === 'left_side')!.edge_band_top).toBe(false)
+  })
+})
