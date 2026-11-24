@@ -28,10 +28,10 @@ const spec = `SPECIFICATIONS - {room}
 {job}
 
 FRONTS + PANELS
-2 Pac Gloss White - colour TBC
+Gloss White - colour TBC
 
 MIRRORS
-Mirror inset in the face of both doors
+Mirror inset in both doors, routed from the back
 
 HANDLES
 TBC
@@ -53,7 +53,8 @@ No kick. Sits on 5mm plastic feet.
 End panels both sides, 2 pac`
 const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
 // Wall 2 elevation: LH panel 300-318, cupboard 318-952 (doors meet at 635), RH panel 952-970.
-// Mirrors drawn 60 in from each door edge, 100 up, top assumed 2000 (TBC).
+// Mirrors drawn 60 in from each door edge, 100 up, top at 2000 (size OK'd by Mark 2026-11-24; mirror door style to come).
+// Fixed shelf top at 300, inner drawer 178 (front 57.5-253.5, 30 under the shelf for fingers).
 const rows = [
   plan(G, 'text', { at: { x: 1960, y: -400 }, width: 75 }, spec, { ...box, block: 'Spec block', src: 'markup-std' }),
   plan(S, 'text', { at: { x: 1960, y: 1100 }, width: 75 }, site, { ...box, src: 'markup-std' }),
@@ -61,15 +62,17 @@ const rows = [
   elev(G, 'rect', { a: { x: 695, y: -100 }, b: { x: 890, y: -2000 } }, null, dash),
   elev(G, 'text', { at: { x: 385, y: -1500 }, width: 9 }, 'MIRROR INSET'),
   elev(G, 'text', { at: { x: 700, y: -1500 }, width: 9 }, 'MIRROR INSET'),
-  elev(Q, 'cloud', { pts: pts(350, -2030, 920, -2230) }, null, cloud),
-  elev(Q, 'text', note(2250, 920, 2130), 'MIRROR SIZE TBC - 275 WIDE DOES NOT FIT 60 BORDERS ON A 315 DOOR (195). HEIGHT / TOP BORDER?', LD),
-  elev(Q, 'text', note(1850, 961, 1800), '2 PAC GLOSS WHITE - COLOUR TBC (QUOTE SAYS SATIN)', LD),
+  elev(G, 'text', note(2250, 890, 2000), 'MIRROR INSET, ROUTED FROM THE BACK OF THE DOOR', LD),
+  elev(Q, 'cloud', { pts: pts(1420, -1875, 2090, -1690) }, null, cloud),
+  elev(Q, 'text', note(1850, 961, 1800), 'GLOSS WHITE - COLOUR TBC', LD),
+  elev(Q, 'cloud', { pts: pts(1430, -1310, 2080, -1220) }, null, cloud),
   elev(Q, 'text', note(1300, 650, 1210), 'HANDLES TBC - 2 OFF', LD),
-  elev(Q, 'text', note(900, 800, 130), 'INNER DRAWER BEHIND THE DOORS - 178 DRAGON PRO (196 FRONT) OR A 300 FRONT? TBC', LD),
+  elev(G, 'text', note(900, 800, 200), 'INNER DRAWER 178 DRAGON PRO, FRONT 30 DOWN FROM THE SHELF FOR FINGERS', LD),
   elev(S, 'text', note(330, 940, 0), '5mm PLASTIC FEET, NO KICK', LD),
   elev(S, 'text', { at: { x: 470, y: -1848 } }, 'HANGING RAIL', { size: 2.5, src: 'markup-std' }),
   elev(S, 'dim', { p1: { x: 300, y: -2000 }, p2: { x: 300, y: -2420 }, axis: 'y', offset: -200 }, null, DIM),
-  elev(S, 'dim', { p1: { x: 300, y: 0 }, p2: { x: 300, y: -2000 }, axis: 'y', offset: -200 }, null, DIM),
+  elev(S, 'dim', { p1: { x: 300, y: -300 }, p2: { x: 300, y: -2000 }, axis: 'y', offset: -200 }, null, DIM),
+  elev(S, 'dim', { p1: { x: 300, y: 0 }, p2: { x: 300, y: -300 }, axis: 'y', offset: -200 }, null, DIM),
 ]
 chk('ins', await sb.from('room_annotations').insert(rows.map((r, i) => ({ ...r, sort_order: i + 1 }))))
 console.log('inserted', rows.length)
