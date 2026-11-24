@@ -1,4 +1,4 @@
-import type { Viewport } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/src/lib/supabase-server'
 import { Project, Room, Wall, CabinetInstance, BenchtopInstance, RoomFixture, RoomAnnotation, SplashbackInstance } from '@/src/lib/types'
@@ -15,6 +15,17 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: 'cover',
+}
+
+// Browser tab name = the job, then the room, so several open jobs can be told apart.
+export async function generateMetadata({ params }: { params: Promise<{ roomId: string }> }): Promise<Metadata> {
+  const { roomId } = await params
+  const supabase = await createServerClient()
+  const { data: room } = await supabase.from('rooms').select('name,project_id').eq('id', roomId).single()
+  if (!room) return {}
+  const { data: project } = await supabase.from('projects').select('name,job_number').eq('id', room.project_id).single()
+  const job = [project?.job_number, project?.name].filter(Boolean).join(' ')
+  return { title: [job, room.name].filter(Boolean).join(' · ') }
 }
 
 export default async function CanvasPage({

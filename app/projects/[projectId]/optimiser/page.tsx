@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { createServerClient } from '@/src/lib/supabase-server'
 import type { OptiSnapshot, OptiMaterial, OptiMachine, OptiProfile, PartKeyMap } from '@/src/lib/optimiser/types'
@@ -12,6 +13,16 @@ import { attachWallRects } from '@/src/lib/optimiser/grainBlocks'
 import OptimiserClient from './OptimiserClient'
 
 export const dynamic = 'force-dynamic'
+
+// Browser tab name = the job, so several open jobs can be told apart.
+export async function generateMetadata({ params }: { params: Promise<{ projectId: string }> }): Promise<Metadata> {
+  const { projectId } = await params
+  const supabase = await createServerClient()
+  const { data } = await supabase.from('projects').select('name,job_number').eq('id', projectId).single()
+  if (!data) return {}
+  const job = [data.job_number, data.name].filter(Boolean).join(' ')
+  return { title: `${job} · Optimiser` }
+}
 
 export default async function OptimiserPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params
