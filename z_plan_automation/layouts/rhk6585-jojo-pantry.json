@@ -9,7 +9,8 @@
   "Overheads on B: WF-L 16.5 | 2 x W2D 772 x 710 x 332 (350 OA with the 16 door) | WF-L 16.5 (overheads boxed in by walls -> board-thickness wall filler each side; was 30 gaps). PT Black Matt, no handles (overhead rule). Bottom at 1600 = 900 bench + 700 splashback -> wall_cabinet_top 2310. 710 = overall incl the under panel.",
   "Floating shelves on Wall A: 3 x FLSHLF 1184 x 480 x 33 timber grain Woodmatt (480 = depth, lines up with the void front), undersides 1400 / 1700 / 2050 from the client 500 / 300 / 350 spacing above the bench. Open end seen, void end not.",
   "Follow-ups in the app: joinKicks per run; addUnderPanel under the overheads (20 set back) + LED route; green tile splashback by others; spec block + markup.",
-  "REV 1 (Mark 2026-11-24): Wall A bases only 480 deep -> carcass 455 (480 overall, in line with the void front + shelves). A fronts now sit behind the void face, so the Wall B run starts at the void wall: BFKW 35 | B2D 771 | B2D 771. Wall A still stops 153 short of the void (40 filler) so the drawers clear the B cupboard. 20 stone tops drawn in the app (colour TBC, schedule \"20mm Reconstituted Stone - Colour TBC\"): Benchtop 1 Wall A 480 deep, Benchtop 2 Wall B 600 deep through the corner, butt joint (_tmp-6585-pantry-tops.mjs)."
+  "REV 1 (Mark 2026-11-24): Wall A bases only 480 deep -> carcass 455 (480 overall, in line with the void front + shelves). A fronts now sit behind the void face, so the Wall B run starts at the void wall: BFKW 35 | B2D 771 | B2D 771. Wall A still stops 153 short of the void (40 filler) so the drawers clear the B cupboard. 20 stone tops drawn in the app (colour TBC, schedule \"20mm Reconstituted Stone - Colour TBC\"): Benchtop 1 Wall A 480 deep, Benchtop 2 Wall B 600 deep through the corner, butt joint (_tmp-6585-pantry-tops.mjs).",
+  "REV 2 (Mark 2026-11-24): L wall fillers 350 deep, flush with the overhead door faces. Return wall (Wall 6) off the open end of Wall A, out to the RH wall line, so the room squares off; the opening is between it and the end of the 768 RH wall. Wall A end panel -> BFK 16.5 at the new wall (kick stretched under it), floating shelves no longer seen at that end, Benchtop 1 end now a wall edge."
  ],
  "projectName": "Jojo Jackson",
  "roomId": "7b416272-2861-4bf8-a60f-94f5632aa439",
@@ -51,17 +52,24 @@
    "length": 768,
    "angle": 90,
    "_": "5 right wall"
+  },
+  {
+   "x": 2056,
+   "y": 1664,
+   "length": 2056,
+   "angle": 180,
+   "_": "6 return wall (rev 2) - inserted directly"
   }
  ],
  "cabinets": [
   {
-   "def": "BEPF",
+   "def": "BFK",
    "wall": 1,
    "offset": 0,
    "dx": 16.5,
    "dy": 880,
    "dz": 455,
-   "note": "Pantry Wall A seen end panel at the open end, to the floor"
+   "note": "Pantry board-thickness filler at the return wall, open end of Wall A"
   },
   {
    "def": "B1D",
@@ -147,7 +155,7 @@
    "offset": 0,
    "dx": 16.5,
    "dy": 710,
-   "dz": 332,
+   "dz": 350,
    "note": "Pantry overhead wall filler at the void side, PT Black Matt"
   },
   {
@@ -246,7 +254,7 @@
    "offset": 1560.5,
    "dx": 16.5,
    "dy": 710,
-   "dz": 332,
+   "dz": 350,
    "note": "Pantry overhead wall filler at the right wall, PT Black Matt"
   },
   {
@@ -264,7 +272,7 @@
      "strip_w": 90,
      "tape_id": null,
      "rebate_h": 10,
-     "seen_left": true,
+     "seen_left": false,
      "seen_right": false,
      "rebate_depth": 30,
      "strip_spacing": 600
@@ -287,7 +295,7 @@
      "strip_w": 90,
      "tape_id": null,
      "rebate_h": 10,
-     "seen_left": true,
+     "seen_left": false,
      "seen_right": false,
      "rebate_depth": 30,
      "strip_spacing": 600
@@ -310,7 +318,7 @@
      "strip_w": 90,
      "tape_id": null,
      "rebate_h": 10,
-     "seen_left": true,
+     "seen_left": false,
      "seen_right": false,
      "rebate_depth": 30,
      "strip_spacing": 600
