@@ -43,6 +43,7 @@ import type { RoomAnnotation } from '@/src/lib/types'
 import type { ItemCadView } from '@/src/lib/annotations/itemCad'
 import { bifoldTracks, trackProfile } from '@/src/lib/resolver/resolveBifold'
 import AnnotationLayer from './AnnotationLayer'
+import { hingeEdgeLine } from '@/src/lib/doorChevron'
 
 export interface CabinetSheetLayers {
   internals: boolean; dims: boolean; threeD: boolean; cad?: boolean
@@ -372,8 +373,9 @@ export default function CabinetSheetSVG({
         const sp = special(zonePartId(z))
         els.push(sp ? shapeEl(`f${i}`, sp, 'front', FM, { fill: FACE_FILL, stroke: INK, strokeWidth: PART })
           : <rect key={`f${i}`} {...rc} fill={FACE_FILL} stroke={INK} strokeWidth={PART} />)
-        if (z.hinge_side === 'left') els.push(<line key={`fh${i}`} x1={rc.x} y1={rc.y} x2={rc.x} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
-        if (z.hinge_side === 'right') els.push(<line key={`fh${i}`} x1={rc.x + rc.width} y1={rc.y} x2={rc.x + rc.width} y2={rc.y + rc.height} stroke={INK} strokeWidth={OUT} />)
+        // Hinge edge drawn heavier - any side, so flap-down / lift-up doors show theirs too.
+        if (z.hinge_side === 'left' || z.hinge_side === 'right' || z.hinge_side === 'top' || z.hinge_side === 'bottom')
+          els.push(<line key={`fh${i}`} {...hingeEdgeLine(z.hinge_side, { x: rc.x, y: rc.y, w: rc.width, h: rc.height })} stroke={INK} strokeWidth={OUT} />)
         const fp = !sp?.shaped && doorProfileSvg(z, { x: rc.x, y: rc.y, w: rc.width, h: rc.height }, INK, THIN, 0.9)
         if (fp) els.push(<g key={`fp${i}`}>{fp}</g>)
         // Finished front size, W × H (detail dims).

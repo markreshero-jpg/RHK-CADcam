@@ -1708,6 +1708,9 @@ export default function CanvasSVG({
             const seenDoor = new Set<number>()
             for (const z of zones) {
               if (z.face_type !== 'door' || seenDoor.has(z.col_index)) continue
+              // Top / bottom hinged doors (flap-down, lift-up) don't swing sideways: no plan arc
+              // (they fell through to a right-hand swing - RHK6585 bench seat, 2026-11-24).
+              if (z.hinge_side === 'top' || z.hinge_side === 'bottom') continue
               seenDoor.add(z.col_index)
               const { col, hinge } = { col: z.col_index, hinge: (z.hinge_side ?? 'left') as 'left' | 'right' }
               const colLeft  = { x: frontLeft.x + col * colW * wd.x, y: frontLeft.y + col * colW * wd.y }

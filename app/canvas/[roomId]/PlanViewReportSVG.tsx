@@ -583,6 +583,8 @@ export default function PlanViewReportSVG({
           const seenDoor = new Set<number>()
           for (const z of zones) {
             if (z.face_type !== 'door' || seenDoor.has(z.col_index)) continue
+            // Top / bottom hinged doors (flap-down, lift-up) don't swing sideways: no plan arc.
+            if (z.hinge_side === 'top' || z.hinge_side === 'bottom') continue
             seenDoor.add(z.col_index)
             const col = z.col_index
             const hinge = (z.hinge_side ?? 'left') as 'left' | 'right'

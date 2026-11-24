@@ -45,6 +45,7 @@ import { binOutlines } from '@/src/lib/binGeometry'
 import { roundMm } from '@/src/lib/format'
 import { normaliseSplit } from '@/src/lib/cabinetSplit'
 import { PartHideTicks } from '@/src/components/PartHideTicks'
+import { hingeEdgeLine } from '@/src/lib/doorChevron'
 
 // Hinge cup/plate drill marker colour (distinct from amber slide drills).
 const HINGE_DRILL_COL = '#a855f7'   // violet-500
@@ -800,8 +801,8 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
               stroke={stroke(meta.id, col.stroke)} strokeWidth={sw(meta.id, wireMode ? 0.75 : 1)}
               fillOpacity={wireMode ? 1 : 0.85}
               pathD={trueD(meta.id)} dataPartId={meta.id} style={cp} />
-            {z.hinge_side === 'left'  && <line x1={r.x}     y1={r.y} x2={r.x}     y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
-            {z.hinge_side === 'right' && <line x1={r.x+r.w} y1={r.y} x2={r.x+r.w} y2={r.y+r.h} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
+            {(z.hinge_side === 'left' || z.hinge_side === 'right' || z.hinge_side === 'top' || z.hinge_side === 'bottom') &&
+              <line {...hingeEdgeLine(z.hinge_side, { x: r.x, y: r.y, w: r.w, h: r.h })} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
             {doorProfileSvg(z, { x: r.x, y: r.y, w: r.w, h: r.h }, col.stroke, 1, 0.85, true)}
             {(() => { const ec = ebColor(ebByMatId, z.material_id); return ec && !trueD(meta.id) && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} /> })()}
           </g>
