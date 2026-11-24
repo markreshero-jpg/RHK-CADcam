@@ -58,6 +58,9 @@ const G = L('General'), S = L('Site notes'), Q = L('Questions for Client')
 const rows = [
   plan(G, 'text', { at: { x: 1960, y: -400 }, width: 75 }, spec, { ...box, block: 'Spec block', src: 'markup-std' }),
   plan(S, 'text', { at: { x: 1960, y: 1100 }, width: 75 }, site, { ...box, src: 'markup-std' }),
+  // Overall depth: back wall face (y 0) to the door faces (470 carcass + 18 door + 2 = 490).
+  plan(G, 'dim', { p1: { x: 970, y: 0 }, p2: { x: 970, y: 490 }, axis: 'y', offset: 120 }, null, DIM),
+  plan(G, 'text', { at: { x: 1110, y: 560 }, width: 16 }, '490 OVERALL DEPTH INCL DOORS', { size: 2.5, src: 'markup-std' }),
   elev(G, 'rect', { a: { x: 380, y: -100 }, b: { x: 575, y: -2000 } }, null, dash),
   elev(G, 'rect', { a: { x: 695, y: -100 }, b: { x: 890, y: -2000 } }, null, dash),
   elev(G, 'text', { at: { x: 385, y: -1500 }, width: 9 }, 'MIRROR INSET'),
