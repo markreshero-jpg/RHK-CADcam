@@ -43,3 +43,8 @@ The wall in the room is only there to hold the cupboard on the canvas.
 - Handles.
 - Exact white.
 - Mirror door style (the doors are plain 2 Pac in the app until it exists).
+
+## Approval 2026-11-24
+
+- Approval PDF saved to `PDF\Drawings to be Approved\RHK6583 - Andy Piggott - U2 Hastings St Beach Houses - Bathroom Cupboard Shop Drawings for Approval - 24.11.26.pdf`.
+- Reply draft to Andy in the QUOTE RHK6583 thread (cc Charlene), asking for the gloss white colour + handles. PDF attached by hand.
