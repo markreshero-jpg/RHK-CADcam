@@ -21,7 +21,7 @@ Source: Mark's spec text 2026-10-27 (no plan). Alfresco kitchen, flatpack.
   `z_plan_automation/layouts/rhk6593-dengate-alfresco.json`. Placeholder 3600 x 3000 room, run on Wall 1 from 500
   so both ends are open. KICK 1 joined 518–2514. Benchtop 1 2600 x 700 at 880 (20mm Stone schedule).
   CAD: wine fridge space, BBQ note, spec block. 0 errors / 0 warnings.
-- Sink: Abi Ohelu Single Bowl 380 U/M (Mark 2026-10-27: single bowl; BSK default double 855 was too wide) + Abi pull-out mixer, both centred on BC-02. Actual sink model TBC.
+- Sink: none (Mark 2026-11-25). The earlier Abi Ohelu note was wrong for this job.
 
 ## BBQ (Mark 2026-11-23)
 - **Weber Baby Q Premium Q1200N, LPG, Charcoal Grey.** Spec sheet, owner's manual and quick guide saved in
@@ -63,8 +63,9 @@ Source: Mark's spec text 2026-10-27 (no plan). Alfresco kitchen, flatpack.
 - Gas bottle cupboard: vents (door / kick / back?) and gasfitter OK for a bottle under the BBQ — the Weber
   manual puts the bottle on the ground behind the BBQ and says no spare bottle under it. Hose hole size
   (60 drawn; the regulator end may need more) and position to confirm.
-- The room has NO sink or tap fixture (found 2026-11-23; these notes say an Abi Ohelu 380 + mixer were
-  placed on BC-02). Sink model + cut-out still to do. Colours.
+- **No sink in this job (Mark 2026-11-25).** No sink / tap fixture and no sink cut-out. BC-02 is still the
+  BSK sink cabinet def (rails on edge) from the first spec; left as is unless Mark wants it changed. Colours.
+- Waiting on Mick to approve the set-down well (Mark 2026-11-25).
 - Benchtop: press Resolve on both tops (Benchtop 1 + BBQ well bottom) so the parts match the well.
 - Set-down 215, well size 806 x 590, 9 kg vs 4 kg bottle, hose hole position: all to confirm with Mark.
 - Wine fridge: model/height not given; no ventilation detail drawn.
