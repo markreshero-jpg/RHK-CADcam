@@ -24,7 +24,9 @@ export async function generateMetadata({ params }: { params: Promise<{ roomId: s
   const { data: room } = await supabase.from('rooms').select('name,project_id').eq('id', roomId).single()
   if (!room) return {}
   const { data: project } = await supabase.from('projects').select('name,job_number').eq('id', room.project_id).single()
-  const job = [project?.job_number, project?.name].filter(Boolean).join(' ')
+  const name = project?.name ?? ''
+  // Job names usually start with the job number already — don't say it twice.
+  const job = project?.job_number && !name.toLowerCase().includes(project.job_number.toLowerCase()) ? `${project.job_number} ${name}`.trim() : name
   return { title: [job, room.name].filter(Boolean).join(' · ') }
 }
 
