@@ -21,6 +21,7 @@ export interface GlassSet {
   name: string
   thickness: number
   clearance: number | null
+  type?: string | null           // pane type (cnc_tool_sets.glass_type, e.g. '4mm Mirror'); null = 'Glass'
   // Ring (rebate) step offsets — negative grows the rebate outward from the opening.
   ring: { top: number | null; bottom: number | null; left: number | null; right: number | null } | null
 }
@@ -84,7 +85,7 @@ export function buildGlassPanes(
         door: `Door r${z.row_index + 1} c${z.col_index + 1}`,
         doorW: r1(z.DX), doorH: r1(z.DY), openW: r1(openW), openH: r1(openH),
         glassW: r1(rebW - 2 * c), glassH: r1(rebH - 2 * c),
-        thickness: set.thickness, setName: set.name, type: 'Glass',
+        thickness: set.thickness, setName: set.name, type: set.type || 'Glass',
       })
     }
   }

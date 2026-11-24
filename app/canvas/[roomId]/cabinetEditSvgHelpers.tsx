@@ -14,7 +14,7 @@ import type {
   ResolvedSlideDrill,
 } from '@/src/lib/resolver/types'
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
-import { doorProfilePrimitives } from '@/src/lib/doorProfile'
+import { doorProfilePrimitives, doorPaneRects } from '@/src/lib/doorProfile'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { splitBaseKey } from '@/src/lib/cabinetSplit'
@@ -178,6 +178,16 @@ export function doorProfileSvg(
         <line key={`pgl${i}`} x1={mapX(gl.x1)} y1={mapY(gl.y1)} x2={mapX(gl.x2)} y2={mapY(gl.y2)}
           stroke={stroke} strokeWidth={sw} strokeOpacity={opacity} vectorEffect={ve} />
       ))}
+      {/* Mirror pane (z_faced_doors F6): three short diagonal strokes, the drafting mark
+          for a mirror, centred in the opening. Glass panes show just the opening. */}
+      {doorPaneRects(z.door_profile, { w: W, h: H }).filter(p => p.mirror).map((p, i) => {
+        const s = Math.min(p.w, p.h) * 0.18, cx = p.x + p.w / 2, cy = p.y + p.h / 2
+        return [-1, 0, 1].map(k => {
+          const o = k * s * 0.45
+          return <line key={`pm${i}_${k}`} x1={mapX(cx - s / 2 + o)} y1={mapY(cy - s / 2 - o)} x2={mapX(cx + s / 2 + o)} y2={mapY(cy + s / 2 - o)}
+            stroke={stroke} strokeWidth={sw} strokeOpacity={opacity} vectorEffect={ve} />
+        })
+      })}
     </g>
   )
 }

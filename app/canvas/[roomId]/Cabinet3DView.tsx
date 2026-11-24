@@ -30,7 +30,7 @@ import { isSide, caseBox, internalBox, internalSeamPartKey, seamDrillsFor, orien
 import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
-import { doorProfilePrimitives } from '@/src/lib/doorProfile'
+import { doorProfilePrimitives, doorPaneRects } from '@/src/lib/doorProfile'
 import { panelProfileTargets, seenFacePoint, type PanelProfileTarget } from '@/src/lib/panelProfile'
 import type { ResolvedDoorProfile, DoorFacing } from '@/src/lib/resolver/types'
 import { isKickSidePart } from '@/src/lib/resolver/types'
@@ -632,6 +632,16 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDr
         <PartAlpha a={panelAlpha}>
           <Part b={localB} {...partProps} subtractions={localPockets} />
           {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
+          {/* Glass / mirror pane in the opening (glass-recipe tool set; z_faced_doors F6
+              mirror inset). The board is drawn solid, so the pane sits a hair proud. */}
+          {doorProfile && doorPaneRects(doorProfile, { w: b.w, h: b.h }).map((p, i) => (
+            <mesh key={`pane${i}`} position={[localB.x + p.x + p.w / 2, p.y + p.h / 2, b.d + 0.2]}>
+              <planeGeometry args={[p.w, p.h]} />
+              {p.mirror
+                ? <meshStandardMaterial color="#cfd8dc" metalness={0.85} roughness={0.08} transparent={panelAlpha < 1} opacity={panelAlpha} />
+                : <meshStandardMaterial color="#bfe3ec" metalness={0.1} roughness={0.05} transparent opacity={0.45 * panelAlpha} />}
+            </mesh>
+          ))}
           {facing?.thickness_mm ? (
             <mesh position={[localB.x + b.w / 2, b.h / 2, b.d + facing.thickness_mm / 2]}>
               <boxGeometry args={[b.w, b.h, facing.thickness_mm]} />

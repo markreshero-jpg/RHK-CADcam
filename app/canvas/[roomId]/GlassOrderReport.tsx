@@ -28,7 +28,7 @@ export function useGlassOrder({ active, rooms, cabinets, resolved }: {
     if (!active || sets) return
     let cancelled = false
     void (async () => {
-      const { data: setRows } = await supabase.from('cnc_tool_sets').select('id,name,glass_thickness_mm,glass_clearance_mm').not('glass_thickness_mm', 'is', null)
+      const { data: setRows } = await supabase.from('cnc_tool_sets').select('id,name,glass_thickness_mm,glass_clearance_mm,glass_type').not('glass_thickness_mm', 'is', null)
       const ids = (setRows ?? []).map(s => s.id as string)
       const { data: stepRows } = ids.length
         ? await supabase.from('cnc_tool_set_operations').select('tool_set_id,ring_width_mm,offset_top_mm,offset_bottom_mm,offset_left_mm,offset_right_mm').in('tool_set_id', ids)
@@ -41,6 +41,7 @@ export function useGlassOrder({ active, rooms, cabinets, resolved }: {
         m.set(s.id as string, {
           id: s.id as string, name: s.name as string,
           thickness: Number(s.glass_thickness_mm), clearance: n(s.glass_clearance_mm),
+          type: (s.glass_type as string | null) ?? null,
           ring: ring ? { top: n(ring.offset_top_mm), bottom: n(ring.offset_bottom_mm), left: n(ring.offset_left_mm), right: n(ring.offset_right_mm) } : null,
         })
       }

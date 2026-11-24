@@ -2280,6 +2280,20 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The result is an ordinary line: drag its corner grips, type exact points in the CAD panel, and dimension it with Dim (D). Undo (Ctrl+Z) takes off the last stroke. A sketch drawn earlier with As drawn or Tidy can be straightened too: select it and click Straighten in the CAD panel.',
       canvas: true, done: c => c.mode === 'cad' },
   ]},
+  // Appended 2026-11-25 (z_faced_doors F6 — inset mirror door, routed from the back).
+  { id: 'mirror_inset', level: 'intermediate', topic: 'cabinets', title: 'Inset mirror doors (routed from the back)',
+    blurb: 'A 2pac frame door with a 4mm mirror siliconed into a rebate routed from the back.',
+    keywords: 'mirror inset door routed back rebate frame bathroom glass order tool set profile', steps: [
+    { id: 'set', title: 'The Mirror Door tool set',
+      body: 'Go to Settings → CNC Tool Sets and open “Mirror Door”. Its steps cut everything from the back: the rebate band (15.9 wide x 6.35 deep), the squared corners, then the opening right through. Glass thickness 4, clearance 1.5 and Pane type “4mm Mirror” say what the glazier cuts. Every number is yours to change here.',
+      done: c => c.path.startsWith('/settings') },
+    { id: 'profile', title: 'The frame: Mirror inset profile',
+      body: 'Library → Doors → Profiles → “Mirror inset” sets the frame: 60 in from every edge. Give one edge its own number (e.g. bottom 100, or a big top on a tall door) with the per-edge offsets. Copy it to a new profile for a one-off frame.',
+      done: c => c.path.startsWith('/library/doors') },
+    { id: 'use', title: 'Put it on a door',
+      body: 'Set a room class style to “Mirror inset — 2pac”, or on one door: Cabinet Edit → Face Grid → the door → Profile → Mirror inset (keeps that door’s own colour). The mirror shows in the opening in 3D, elevations mark it with three diagonal strokes, and Reports → Glass Order lists each mirror (opening + rebate − clearance) under 4mm Mirror.',
+      canvas: true, done: c => !!c.report?.includes('glass') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

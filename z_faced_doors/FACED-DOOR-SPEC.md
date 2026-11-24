@@ -1,6 +1,7 @@
 # Faced doors (mirror doors) — spec
 
 Status: **F1–F4 built 2026-11-01** (RHK6478 Bath Linen), in-app check pending.
+**F6 inset mirror door built 2026-11-25** (RHK6583), in-app check pending.
 
 ## What it is
 
@@ -54,4 +55,41 @@ stuck on the face of it").
 - F2 resolver + persist + t.door — built
 - F3 3D mirror slab — built
 - F4 optimiser comment + Glass Order lines — built
-- F5 elevation mirror hatch, label picture — later
+- F5 elevation mirror hatch, label picture — later (the inset mirror's mark is in F6)
+- F6 inset mirror door (routed from the back) — built 2026-11-25, in-app check pending
+
+## F6 — Inset mirror door (Mark 2026-11-25, RHK6583 Piggott)
+
+A 2pac frame door with a mirror set into a rebate **routed from the back**, the
+opening cut through so the mirror shows from the front. Mark: "we'll do these often",
+and it must live in the door library (native, editable), not as CAD outlines.
+
+Locked decisions
+1. **Same machining as the glass door** (z_cnc_tools T2/T3): rebate band, squared
+   corners, opening cut through, all from the back. It is a glass recipe whose pane
+   is a mirror, not a faced blank (F1–F4 is a mirror stuck on the face).
+2. **Fixing = silicone only.** Nothing else is cut or ordered.
+3. **Everything is library data, nothing hard coded.** Mark's question: "are these
+   numbers editable?" Yes:
+   - rebate width / depth, squared corners, through cut: Settings → CNC Tool Sets →
+     **Mirror Door** steps (started as a copy of Glass Door: 15.9 x 6.35)
+   - pane thickness (4), clearance (1.5), **Pane type** (`4mm Mirror`): the same set
+   - frame (60 all round, per-edge offsets): Library → Doors → Profiles → **Mirror inset**
+   - style **Mirror inset — 2pac** = Glass — 2pac's blank + colour range with that profile.
+     One door can take the profile on any style (Face Grid → Profile).
+4. `cnc_tool_sets.glass_type` = the pane type (null = Glass). It names the Glass
+   Order line and makes 3D / elevation draw a mirror.
+
+Code
+- Migration `z_faced_doors/migration_f6_mirror_inset.sql` (applied 2026-11-25):
+  column + seeded set, profile, style.
+- Loader joins the op's tool set → `RawProfileOp.pane {type, thickness_mm}` →
+  `ResolvedProfileOp.pane` (persisted in `face_zones.door_profile`).
+- `doorPaneRects` (`src/lib/doorProfile.ts`): opening = door − the op's frame offsets.
+- 3D: the pane is drawn in the opening (mirror = metal, glass = clear blue).
+  Elevations / shop drawings: three diagonal strokes in a mirror opening
+  (`doorProfileSvg`).
+- Glass Order Type = the set's pane type. Test `src/lib/takeoff/__tests__/mirrorInset.test.ts`.
+- Tutorial `mirror_inset`.
+- Fronts resolved before F6 have no `pane` until they are re-resolved (open + save the
+  cabinet). The Glass Order reads the tool set, so it is right straight away.

@@ -1280,7 +1280,11 @@ export interface RawProfileOp {
   offset_bottom_mm?:   number | null
   offset_left_mm?:     number | null
   offset_right_mm?:    number | null
+  // Glass / mirror pane the op's tool set holds (cnc_tool_sets.glass_thickness_mm
+  // set): the opening is cut through and this pane sits in its rebate.
+  pane?:               DoorPane | null
 }
+export interface DoorPane { type: string; thickness_mm: number }
 export interface ResolvedDoorStyleInput {
   style_id:            string
   profile_id:          string | null
@@ -1828,6 +1832,7 @@ export interface ResolvedProfileOp {
   offset_bottom_mm?:   number | null
   offset_left_mm?:     number | null
   offset_right_mm?:    number | null
+  pane?:               DoorPane | null   // glass / mirror in the opening (see RawProfileOp)
 }
 export interface ResolvedDoorProfile {
   profile_type: 'perimeter_route' | 'vj_lines' | 'panel_raise' | 'bead' | 'custom'

@@ -89,7 +89,8 @@ async function resolveDoorStyles(
       profile:door_profiles (
         id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
-          router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm )
+          router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm,
+          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_type ) )
       )
     `)
     .in('id', distinctIds))
@@ -175,7 +176,8 @@ async function resolveDoorStyles(
       .from('door_profiles')
       .select(`id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
-          router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm )`)
+          router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm,
+          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_type ) )`)
       .in('id', pids))
     const byId = new Map(((profs ?? []) as unknown as { id: string; profile_type: string; ops: Record<string, unknown>[] }[]).map(p => [p.id, p]))
     for (const [k, pid] of profOverride) {
@@ -1550,5 +1552,10 @@ function toRawProfileOp(o: Record<string, unknown>): RawProfileOp {
     offset_bottom_mm:    n(o.offset_bottom_mm),
     offset_left_mm:      n(o.offset_left_mm),
     offset_right_mm:     n(o.offset_right_mm),
+    // Glass recipe tool set → the pane in the opening (z_faced_doors F6: mirror inset).
+    pane: (() => {
+      const ts = o.tool_set as { glass_thickness_mm: number | null; glass_type: string | null } | null | undefined
+      return ts?.glass_thickness_mm ? { type: ts.glass_type || 'Glass', thickness_mm: Number(ts.glass_thickness_mm) } : null
+    })(),
   }
 }

@@ -27,6 +27,7 @@ interface ToolSet {
   is_active: boolean; sort_order: number
   glass_thickness_mm: number | null   // set = glass door recipe (Reports → Glass Order)
   glass_clearance_mm: number | null
+  glass_type?: string | null           // pane type: null = Glass, '4mm Mirror' = mirror door (z_faced_doors F6)
 }
 interface ToolSetOp {
   id: string; tool_set_id: string; sort_order: number; operation_type: string
@@ -191,6 +192,13 @@ export default function CncToolSetsClient() {
               {selected.glass_thickness_mm != null && (
                 <Num label="Glass clearance each side (blank = 1.5)" value={selected.glass_clearance_mm}
                   onSave={v => patchSet(selected.id, { glass_clearance_mm: v != null && v >= 0 ? v : null })} />
+              )}
+              {selected.glass_thickness_mm != null && (
+                <div>
+                  <label className={lbl}>Pane type (blank = Glass)</label>
+                  <input className={inp} defaultValue={selected.glass_type ?? ''} key={selected.glass_type ?? ''} placeholder="Glass  /  4mm Mirror"
+                    onBlur={e => { const v = e.target.value.trim() || null; if (v !== (selected.glass_type ?? null)) patchSet(selected.id, { glass_type: v }) }} />
+                </div>
               )}
               {selected.glass_thickness_mm != null && (
                 <p className="col-span-2 text-[10px] text-ink-subtle -mt-2">

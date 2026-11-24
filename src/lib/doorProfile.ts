@@ -113,7 +113,24 @@ export function evaluateProfileOps(raw: RawProfileOp[], panel: DoorPanelDims): R
       offset_bottom_mm:    ev(op, 'offset_bottom_mm', op.offset_bottom_mm ?? null),
       offset_left_mm:      ev(op, 'offset_left_mm', op.offset_left_mm ?? null),
       offset_right_mm:     ev(op, 'offset_right_mm', op.offset_right_mm ?? null),
+      ...(op.pane ? { pane: op.pane } : {}),
     }))
+}
+
+/** Glass / mirror panes in a door's openings (face-local front view, origin
+ *  bottom-left): the opening = the door − the op's frame offsets. */
+export interface DoorPaneRect { x: number; y: number; w: number; h: number; type: string; thickness_mm: number; mirror: boolean }
+export function doorPaneRects(profile: ResolvedDoorProfile, panel: { w: number; h: number }): DoorPaneRect[] {
+  const out: DoorPaneRect[] = []
+  for (const op of profile.ops) {
+    if (!op.pane) continue
+    const e = op.offset_from_edge_mm ?? 0
+    const l = op.offset_left_mm ?? e, r = op.offset_right_mm ?? e
+    const b = op.offset_bottom_mm ?? e, t = op.offset_top_mm ?? e
+    const w = panel.w - l - r, h = panel.h - b - t
+    if (w > 0 && h > 0) out.push({ x: l, y: b, w, h, type: op.pane.type, thickness_mm: op.pane.thickness_mm, mirror: /mirror/i.test(op.pane.type) })
+  }
+  return out
 }
 
 // ── Cuts — the ONE geometry every view and the CNC use ──────────────────────
