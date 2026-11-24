@@ -8,7 +8,8 @@
   "Wall B (elev L->R = void -> right wall): 114 void corner | BFKW 40 | B2D 712 | B2D 711 (plumbing opening at the RIGHT end per the client elevation - was noted on the left cupboard). Right end tight to the wall, TBC cloud.",
   "Overheads on B: WF-L 16.5 | 2 x W2D 772 x 710 x 332 (350 OA with the 16 door) | WF-L 16.5 (overheads boxed in by walls -> board-thickness wall filler each side; was 30 gaps). PT Black Matt, no handles (overhead rule). Bottom at 1600 = 900 bench + 700 splashback -> wall_cabinet_top 2310. 710 = overall incl the under panel.",
   "Floating shelves on Wall A: 3 x FLSHLF 1184 x 480 x 33 timber grain Woodmatt (480 = depth, lines up with the void front), undersides 1400 / 1700 / 2050 from the client 500 / 300 / 350 spacing above the bench. Open end seen, void end not.",
-  "Follow-ups in the app: joinKicks per run; addUnderPanel under the overheads (20 set back) + LED route; green tile splashback by others; spec block + markup."
+  "Follow-ups in the app: joinKicks per run; addUnderPanel under the overheads (20 set back) + LED route; green tile splashback by others; spec block + markup.",
+  "REV 1 (Mark 2026-11-24): Wall A bases only 480 deep -> carcass 455 (480 overall, in line with the void front + shelves). A fronts now sit behind the void face, so the Wall B run starts at the void wall: BFKW 35 | B2D 771 | B2D 771. Wall A still stops 153 short of the void (40 filler) so the drawers clear the B cupboard. 20 stone tops drawn in the app (colour TBC, schedule \"20mm Reconstituted Stone - Colour TBC\"): Benchtop 1 Wall A 480 deep, Benchtop 2 Wall B 600 deep through the corner, butt joint (_tmp-6585-pantry-tops.mjs)."
  ],
  "projectName": "Jojo Jackson",
  "roomId": "7b416272-2861-4bf8-a60f-94f5632aa439",
@@ -59,7 +60,7 @@
    "offset": 0,
    "dx": 16.5,
    "dy": 880,
-   "dz": 575,
+   "dz": 455,
    "note": "Pantry Wall A seen end panel at the open end, to the floor"
   },
   {
@@ -68,7 +69,7 @@
    "offset": 16.5,
    "dx": 250,
    "dy": 880,
-   "dz": 575,
+   "dz": 455,
    "set": {
     "face_grid": {
      "cols": [
@@ -101,7 +102,7 @@
    "offset": 266.5,
    "dx": 764.5,
    "dy": 880,
-   "dz": 575,
+   "dz": 455,
    "note": "Pantry 3 drawers, top one shallow for spices. Nikpol Dragon Pro"
   },
   {
@@ -110,14 +111,14 @@
    "offset": 1031,
    "dx": 40,
    "dy": 880,
-   "dz": 575,
+   "dz": 455,
    "note": "Pantry corner filler, Wall A run (void corner beyond)"
   },
   {
    "def": "BFKW",
    "wall": 4,
-   "offset": 114,
-   "dx": 40,
+   "offset": 0,
+   "dx": 35,
    "dy": 880,
    "dz": 575,
    "note": "Pantry corner filler, Wall B run (void corner behind)"
@@ -125,8 +126,8 @@
   {
    "def": "B2D",
    "wall": 4,
-   "offset": 154,
-   "dx": 712,
+   "offset": 35,
+   "dx": 771,
    "dy": 880,
    "dz": 575,
    "note": "Pantry Wall B cupboard"
@@ -134,8 +135,8 @@
   {
    "def": "B2D",
    "wall": 4,
-   "offset": 866,
-   "dx": 711,
+   "offset": 806,
+   "dx": 771,
    "dy": 880,
    "dz": 575,
    "note": "Pantry Wall B cupboard - opening for existing plumbing at this end (client sketch), cut-out TBC"
