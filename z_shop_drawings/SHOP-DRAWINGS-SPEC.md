@@ -180,7 +180,7 @@ The view title + scale at top-left of each sheet ("Kitchen Plan 1 : 20", "Kitche
   was using the Elevations set's 3D settings, and several saved sets hide fronts / tops in 3D (Schematic,
   Kicks, No tops) or ghost the carcase (Face elevation). The 3D views now have their own picker
   (`shop-3d-layer-set`), defaulting to the canvas's active set. Changing it re-captures.
-| S4 | **Multi-view sheets:** lay out several views on one page at one scale (island front + back); fall back to one per page | [ ] |
+| S4 | **Multi-view sheets:** lay out several views on one page at one scale (island front + back); fall back to one per page | [~] whole-room shared sheet built 2026-11-26 (see "Plan + elevations on one sheet"), in-app check pending; pairing just an island's two faces in a bigger room still open |
 | S5 | **CAD carry-over check.** Plan CAD already prints (Plan View). Elevation CAD needs z_CAD_tool **A6** first. Confirm text boxes with borders (the spec block) print right | [ ] (blocked on A6 for elevations) |
 | S6 | **Cabinet numbering:** #n tags under each cabinet on elevations, same as on the plan, from `cab.label` as it is (no renumbering) | [ ] |
 | S7 | **Interior elevation (doors off):** drawing mode with fronts hidden, shelves shown and labelled (ADJ SH / FIX SH) and dimensioned | [ ] |
@@ -337,6 +337,26 @@ check now includes position, so a drawing dragged past the drawing area counts a
 localStorage per room (`shop-drawings-scales`, `shop-drawings-offsets`) like the sheet ticks, so they're per
 computer and headless exports start centred at the package scale. Checked headless on RHK6592 Main Bathroom:
 plan at 1:50 and dragged, elevation at 1:20, PDF headings and title blocks right.
+
+## Plan + elevations on one sheet (Mark, 2026-11-26)
+
+Mark: "if the room is small enough can we have plan and elevation views on one sheet." Changes decision 1's
+"one view per sheet" habit for small rooms; scales are untouched (nothing is rescaled to make it fit).
+
+- **All or nothing:** when every ticked plan / elevation view fits in the drawing area together, each at its
+  own scale, they print on one sheet ("<room> Plan + Elevations"). If they don't all fit, every view keeps its
+  own sheet as before. `packViews()` (src/lib/shopDrawings/sheetPack.ts, test `sheetPack.test.ts`): rows in
+  sheet order, 8mm between views, rows centred across and the block centred down.
+- Each view has a 5mm caption above it, name + scale ("Plan 1 : 20"). The sheet heading and title block show
+  the scale when the views share one, else "As shown".
+- Views drag on the shared sheet as on their own (offsets kept apart under `combo:<key>`); a view dragged
+  off the drawing area is a misfit as usual.
+- **Sheets row tick "One sheet if it fits"**, on by default, remembered per computer (localStorage
+  `shop-drawings-combine`), so headless exports combine too.
+- The Specifications sheet (when the plan only fits a page without its spec blocks) and the 3D sheets are
+  unchanged. A plan-only export (KICK PLAN) has one view, so it is unchanged.
+- Checked headless on RHK6612 Bathroom (1:20 A3, Line Drawing Print): plan + Wall 1 on sheet 1, 3D on sheet 2.
+- Tutorial `shop_one_sheet`.
 
 ## Cabinet sheets: detail layers (Mark 2026-11-11)
 

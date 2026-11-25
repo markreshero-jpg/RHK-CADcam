@@ -2306,6 +2306,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Left blank, it uses the same joint as the back to the bottom, so the top gets the same holes as the bottom. Top sitting over the back: the holes go through the top, down into the back’s top edge. Top butting into the back: they go through the back into the top’s back edge. A back that stops short of the top (BKTOP) gets none. To change or turn it off for one cabinet, select the back or the top in the cabinet edit modal and use its → Top / → Back row.',
       done: c => c.path.startsWith('/library/construction-methods') },
   ]},
+
+  // Appended 2026-11-26 (z_shop_drawings S4: plan + elevations on one sheet).
+  { id: 'shop_one_sheet', level: 'intermediate', topic: 'reports', title: 'Small room on one sheet',
+    blurb: 'A small room prints its plan and elevations together on one shop drawing sheet.',
+    keywords: 'shop drawings one sheet single page combine plan elevation together small room vanity pdf', steps: [
+    { id: 'open', title: 'Production → Shop Drawings…',
+      body: 'Click Production in the menu bar and choose Shop Drawings…. When the ticked plan and elevations all fit on the page together at their scales, they share one sheet, each with its name and scale above it. A bigger room keeps one view per sheet.',
+      target: 'menu-Production', canvas: true, done: c => c.report === 'shop_drawings' },
+    { id: 'adjust', title: 'Arrange it, or switch it off',
+      body: 'Drag a view to move it on the sheet (double-click puts it back). To help a room fit, untick a wall, pick a larger scale number for a view, or choose bigger paper. Untick "One sheet if it fits" in the Sheets row to go back to one view per sheet.',
+      canvas: true, done: c => c.report === 'shop_drawings' },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

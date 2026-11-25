@@ -20,7 +20,8 @@ import PlanViewReportSVG, { type PlanViewPageOptions } from './PlanViewReportSVG
 import ElevationPrintSVG, { type ElevationPageOptions } from './ElevationPrintSVG'
 import { useReturnSectionData, returnCabinetsOfWalls } from './ReturnSectionSVG'
 import { useReportLayerSet, ReportLayerSetSelect } from './ReportLayerSetPicker'
-import ShopTitleBlock, { SheetHeading, HEADING_H, sheetTitle, pageLayout, titleBlockHeight } from './ShopTitleBlock'
+import ShopTitleBlock, { SheetHeading, HEADING_H, sheetTitle, pageLayout, titleBlockHeight, scaleText } from './ShopTitleBlock'
+import { packViews } from '@/src/lib/shopDrawings/sheetPack'
 import { useBatchDownload } from './useBatchDownload'
 import Room3DCapture, { Shot3DSVG, type Bt3DPrint } from './Room3DCapture'
 import { autoShots, shotsPerSheet, type Shot3D } from '@/src/lib/shopDrawings/shots3d'
@@ -78,7 +79,29 @@ function readPage<T extends object>(key: string, defaults: T): T {
   return defaults
 }
 
-type Sheet = { key: string; title: string; wall?: Wall; side?: ElevSide; shots?: Shot3D[] }
+type Sheet = { key: string; title: string; wall?: Wall; side?: ElevSide; shots?: Shot3D[]
+  /** Its caption on a shared sheet ("Plan", "Elevation W1"). */
+  short?: string
+  /** A shared sheet: the plan + elevations drawn on it. */
+  views?: Sheet[] }
+/** Plan + elevations on one sheet when they all fit (S4; Mark, 2026-11-26). On unless switched off. */
+const KEY_COMBO = 'combo'
+const LS_COMBINE = 'shop-drawings-combine'
+const VIEW_GAP = 8     // mm between views on a shared sheet
+const CAPTION_H = 5    // mm above each view for its name + scale
+
+/** "Plan  1 : 20" above a view on a shared sheet (paper mm). */
+function ViewCaption({ title, scale, width }: { title: string; scale: number; width: number }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox={`0 0 ${width} ${CAPTION_H}`}
+      width={`${width}mm`} height={`${CAPTION_H}mm`} style={{ width: '100%', height: 'auto', display: 'block' }}
+      fontFamily="Arial, Helvetica, sans-serif" fill="#000">
+      <text x={0} y={CAPTION_H * 0.5} dominantBaseline="central" fontSize={3}>
+        <tspan fontWeight="bold">{title}</tspan><tspan dx={3}>{scaleText(scale)}</tspan>
+      </text>
+    </svg>
+  )
+}
 /** The 3D views (S8) — not to scale; one tick for all of them, laid out over as many sheets as they need. */
 const KEY_3D = '3d'
 const LS_3D_OFF = 'shop-drawings-3d-off'
@@ -191,8 +214,8 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   // Sheets: the plan, then each wall in wall order, back sides + islands too (the 3D views follow, below).
   const elevViews = useMemo(() => elevationViews(walls, cabinets), [walls, cabinets])
   const baseSheets: Sheet[] = useMemo(() => [
-    { key: 'plan', title: `${room.name} Plan` },
-    ...elevViews.map(v => ({ key: v.key, title: `${room.name} Elevation ${v.name}`, wall: v.wall, side: v.side })),
+    { key: 'plan', title: `${room.name} Plan`, short: 'Plan' },
+    ...elevViews.map(v => ({ key: v.key, title: `${room.name} Elevation ${v.name}`, short: `Elevation ${v.name}`, wall: v.wall, side: v.side })),
   ], [elevViews, room.name])
   // Return cabinet sections (z_section_view R1): part overrides for every wall sheet, loaded once.
   const retCabs = useMemo(() => returnCabinetsOfWalls(walls.filter(w => w.wall_type === 'standard'), walls, cabinets), [walls, cabinets])
@@ -254,6 +277,13 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     key === KEY_SPECS || key === 'plan:full' ? scaleOf('plan') : (scaleOv[key] ?? scale)
   // Where each drawing was dragged to: paper-mm offset from its centred spot.
   const [offsets, setOffset] = useRoomMap<{ x: number; y: number }>(LS_OFFSETS, room.id)
+  // Plan + elevations on one sheet when they fit (per computer, all rooms).
+  const [combine, setCombine] = useState(() => {
+    try { return localStorage.getItem(LS_COMBINE) !== '0' } catch { return true }
+  })
+  useEffect(() => {
+    try { localStorage.setItem(LS_COMBINE, combine ? '1' : '0') } catch { /* storage unavailable */ }
+  }, [combine])
 
   // Drawing sizes (paper mm) come from each SVG's data-vb-* once it has rendered
   // ('plan:full' = the plan with its spec blocks, whether or not they're on it).
@@ -270,16 +300,32 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     threeDPages.push({ key: `${KEY_3D}:${i / perSheet}`, title: `${room.name} 3D`, shots: shots.slice(i, i + perSheet) })
   }
   const specSheet: Sheet[] = moveSpecs ? [{ key: KEY_SPECS, title: `${room.name} Specifications` }] : []
-  const sheets = [...specSheet, ...baseSheets, ...threeDPages]
+  // Small room: every ticked plan / elevation view on one sheet, each at its own
+  // scale, when they all fit in the drawing area together. Otherwise one per sheet.
+  const members = baseSheets.filter(s => ticked.has(s.key))
+  const comboPos = combine && members.length > 1 && members.every(s => sizes[s.key])
+    ? packViews(members.map(s => ({ key: s.key, ...sizes[s.key] })), layout.usableW, layout.usableH, VIEW_GAP, CAPTION_H)
+    : null
+  const comboSheet: Sheet[] = comboPos ? [{
+    key: KEY_COMBO, views: members,
+    title: `${room.name} ${members[0].key === 'plan' ? `Plan + Elevation${members.length > 2 ? 's' : ''}` : 'Elevations'}`,
+  }] : []
+  // On a shared sheet the views leave their own pages (unticked ones stay mounted, hidden, to be measured).
+  const sheets = [...specSheet, ...comboSheet, ...baseSheets.filter(s => !comboPos || !ticked.has(s.key)), ...threeDPages]
   // The specs sheet goes with the plan's tick.
-  const printed = sheets.filter(s => (s.shots ? ticked.has(KEY_3D) : ticked.has(s.key === KEY_SPECS ? 'plan' : s.key)))
+  const printed = sheets.filter(s => (s.shots ? ticked.has(KEY_3D) : s.views ? true : ticked.has(s.key === KEY_SPECS ? 'plan' : s.key)))
+  /** The to-scale drawings on a sheet. */
+  const viewsOf = (s: Sheet): Sheet[] => s.views ?? (s.shots ? [] : [s])
+  /** A view's dragged offset is kept apart for the shared sheet. */
+  const offKey = (key: string) => (comboPos?.[key] ? `${KEY_COMBO}:${key}` : key)
 
   const drawRefs = useRef<Map<string, SVGSVGElement>>(new Map())
   const pageRefs = useRef<Map<string, HTMLDivElement>>(new Map())
   const planRef = useRef<SVGSVGElement>(null)
   useEffect(() => {
     const id = requestAnimationFrame(() => {
-      const next: Record<string, { w: number; h: number }> = {}
+      // Keep the last size of a drawing that's between pages (moving onto / off the shared sheet).
+      const next: Record<string, { w: number; h: number }> = { ...sizes }
       const read = (key: string, el: SVGSVGElement | null | undefined, attr = 'vb') => {
         const w = Number(el?.getAttribute(`data-${attr}-w`)), h = Number(el?.getAttribute(`data-${attr}-h`))
         if (w > 0 && h > 0) next[key] = { w: w / scaleOf(key), h: h / scaleOf(key) }
@@ -303,9 +349,11 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
     // NTS spec sheet: enlarged to fill the band (the PDF scales the vector with the box).
     const z = key === KEY_SPECS ? specZoom(s0.w, s0.h, layout.usableW, layout.usableH) : 1
     const s = { w: s0.w * z, h: s0.h * z }
-    const o = offsets[key] ?? { x: 0, y: 0 }
-    const x = MARGIN + Math.max(0, (layout.usableW - s.w) / 2) + o.x
-    const y = layout.top + Math.max(0, (layout.usableH - s.h) / 2) + o.y
+    const o = offsets[offKey(key)] ?? { x: 0, y: 0 }
+    // On the shared sheet: its packed spot, under its caption.
+    const cp = comboPos?.[key]
+    const x = MARGIN + (cp ? cp.x : Math.max(0, (layout.usableW - s.w) / 2)) + o.x
+    const y = layout.top + (cp ? cp.y + CAPTION_H : Math.max(0, (layout.usableH - s.h) / 2)) + o.y
     return {
       x, y, w: s.w, h: s.h,
       // Inside the drawing area where it's been dragged to, not just small enough.
@@ -313,7 +361,7 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
         && y >= layout.top - 0.01 && y + s.h <= layout.top + layout.usableH + 0.01,
     }
   }
-  const misfits = printed.filter(s => { const p = place(s.key); return p && !p.fits })
+  const misfits = printed.flatMap(viewsOf).filter(s => { const p = place(s.key); return p && !p.fits })
 
   const [busy, setBusy] = useState(false)
   const safeName = (s: string) => s.replace(/[^\w-]+/g, '_')
@@ -331,9 +379,12 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
       for (let i = 0; i < printed.length; i++) {
         const sheet = printed[i]
         const page = pageRefs.current.get(sheet.key)
-        const drawing = page?.querySelector<SVGSVGElement>('[data-role="drawing"] svg')
-        const box = place(sheet.key)
-        if (!page || !box || (!drawing && !sheet.shots)) continue
+        // Each to-scale drawing on the page with its paper-mm box (several on a shared sheet).
+        const drawings = [...(page?.querySelectorAll<HTMLElement>('[data-role="drawing"]') ?? [])].flatMap(el => {
+          const svg = el.querySelector<SVGSVGElement>('svg'), box = place(el.dataset.view ?? '')
+          return svg && box ? [{ svg, box }] : []
+        })
+        if (!page || (drawings.length === 0 && !sheet.shots)) continue
         if (i > 0) doc.addPage([paper.w, paper.h], orientation)
 
         const heading = page.querySelector<SVGSVGElement>('[data-role="heading"] svg')
@@ -346,13 +397,20 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
             const d = cell.dataset
             if (svg) await svg2pdf(svg, doc, { x: Number(d.x), y: Number(d.y), width: Number(d.w), height: Number(d.h) })
           }
-        } else if (drawing) {
-          // True scale: the model-mm viewBox renders into vbW/(sheet scale) paper mm.
-          const clone = drawing.cloneNode(true) as SVGSVGElement
-          clone.setAttribute('width', `${box.w}mm`)
-          clone.setAttribute('height', `${box.h}mm`)
-          clone.setAttribute('preserveAspectRatio', 'xMinYMin meet')
-          await svg2pdf(clone, doc, { x: box.x, y: box.y, width: box.w, height: box.h })
+        } else {
+          for (const cap of page.querySelectorAll<HTMLElement>('[data-role="caption"]')) {
+            const svg = cap.querySelector('svg')
+            const d = cap.dataset
+            if (svg) await svg2pdf(svg, doc, { x: Number(d.x), y: Number(d.y), width: Number(d.w), height: Number(d.h) })
+          }
+          for (const { svg, box } of drawings) {
+            // True scale: the model-mm viewBox renders into vbW/(sheet scale) paper mm.
+            const clone = svg.cloneNode(true) as SVGSVGElement
+            clone.setAttribute('width', `${box.w}mm`)
+            clone.setAttribute('height', `${box.h}mm`)
+            clone.setAttribute('preserveAspectRatio', 'xMinYMin meet')
+            await svg2pdf(clone, doc, { x: box.x, y: box.y, width: box.w, height: box.h })
+          }
         }
 
         const tb = page.querySelector<SVGSVGElement>('[data-role="title-block"] svg')
@@ -365,30 +423,30 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
   }
 
   // Ready once every printed drawing has measured and the 3D views are rendered.
-  const batchReady = printed.length === 0 || (printed.every(s => s.shots || sizes[s.key])
+  const batchReady = printed.length === 0 || (printed.every(s => viewsOf(s).every(v => sizes[v.key]))
     && (!ticked.has(KEY_3D) || captured || shots.length === 0))
   useBatchDownload(batch, batchReady, handleDownload)
 
   const pct = (mm: number, of: number) => `${(mm / of) * 100}%`
-  const printedScales = new Set(printed.filter(s => !s.shots && s.key !== KEY_SPECS).map(s => scaleOf(s.key)))
+  const printedScales = new Set(printed.flatMap(viewsOf).filter(s => s.key !== KEY_SPECS).map(s => scaleOf(s.key)))
   const scaleLabel = printedScales.size > 1 ? 'mixed scales' : `1:${printedScales.size ? [...printedScales][0] : scale}`
 
   // Drag a drawing on its page preview; the pointer delta converts to paper mm by
   // the page's on-screen width. Double-click puts it back in the middle.
   const [drag, setDrag] = useState<{ key: string; px: number; py: number; ox: number; oy: number; k: number } | null>(null)
-  const startDrag = (key: string, e: React.PointerEvent<HTMLDivElement>) => {
+  const startDrag = (key: string, pageKey: string, e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return
-    const page = pageRefs.current.get(key)
+    const page = pageRefs.current.get(pageKey)
     if (!page) return
     e.currentTarget.setPointerCapture(e.pointerId)
-    const o = offsets[key] ?? { x: 0, y: 0 }
+    const o = offsets[offKey(key)] ?? { x: 0, y: 0 }
     setDrag({ key, px: e.clientX, py: e.clientY, ox: o.x, oy: o.y, k: paper.w / page.clientWidth })
   }
   const moveDrag = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drag) return
     const x = Math.round((drag.ox + (e.clientX - drag.px) * drag.k) * 2) / 2
     const y = Math.round((drag.oy + (e.clientY - drag.py) * drag.k) * 2) / 2
-    setOffset(drag.key, x || y ? { x, y } : undefined)
+    setOffset(offKey(drag.key), x || y ? { x, y } : undefined)
   }
 
   return (
@@ -441,6 +499,13 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
           )}
           </span>
         ))}
+        <button onClick={() => setCombine(v => !v)} data-shop-combine
+          title="Plan and elevations share one sheet when they all fit on the page at their scales (small rooms). Otherwise one view per sheet."
+          className={`px-2 py-0.5 rounded text-xs border transition-colors ${
+            combine ? 'bg-blue-600/25 border-blue-600/50 text-blue-300' : 'bg-transparent border-gray-700 text-gray-500 hover:border-gray-500'
+          }`}>
+          {combine ? '☑' : '☐'} One sheet if it fits
+        </button>
         <span className="text-[10px] text-gray-600 self-center ml-1">Drag a drawing to move it · double-click to re-centre</span>
       </div>
 
@@ -483,8 +548,9 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
           stay mounted (hidden) so their sizes are known when they're ticked. */}
       {sheets.map(sheet => {
         const n = printed.indexOf(sheet)
-        const box = place(sheet.key)
-        const sheetScale = sheet.shots || sheet.key === KEY_SPECS ? 'NTS' : scaleOf(sheet.key)
+        const viewScales = new Set((sheet.views ?? []).map(v => scaleOf(v.key)))
+        const sheetScale = sheet.shots || sheet.key === KEY_SPECS ? 'NTS'
+          : sheet.views ? (viewScales.size === 1 ? [...viewScales][0] : 'As shown') : scaleOf(sheet.key)
         const cells = sheet.shots ? shotCells(sheet.shots.length, MARGIN, layout.top, layout.usableW, layout.usableH) : []
         return (
           <div key={sheet.key} ref={el => { if (el) pageRefs.current.set(sheet.key, el); else pageRefs.current.delete(sheet.key) }}
@@ -503,27 +569,38 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                 </div>
               )
             })}
-            {!sheet.shots && <div data-role="drawing"
-              className={`absolute touch-none ${drag?.key === sheet.key ? 'cursor-grabbing outline outline-1 outline-blue-400' : 'cursor-grab'} ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
+            {viewsOf(sheet).map(view => {
+              const box = place(view.key)
+              // Caption on a shared sheet: above the view, moves with it.
+              const cap = sheet.views && box ? { x: box.x, y: box.y - CAPTION_H, w: Math.max(box.w, 45), h: CAPTION_H } : null
+              return [
+            cap && (
+              <div key={`${view.key}:caption`} data-role="caption" data-x={cap.x} data-y={cap.y} data-w={cap.w} data-h={cap.h}
+                className="absolute pointer-events-none" style={{ left: pct(cap.x, paper.w), top: pct(cap.y, paper.h), width: pct(cap.w, paper.w) }}>
+                <ViewCaption title={view.short ?? view.title} scale={scaleOf(view.key)} width={cap.w} />
+              </div>
+            ),
+            <div key={view.key} data-role="drawing" data-view={view.key}
+              className={`absolute touch-none ${drag?.key === view.key ? 'cursor-grabbing outline outline-1 outline-blue-400' : 'cursor-grab'} ${box && !box.fits ? 'outline outline-2 outline-amber-500' : ''}`}
               title="Drag to move on the page · double-click to re-centre"
-              onPointerDown={e => startDrag(sheet.key, e)} onPointerMove={moveDrag}
+              onPointerDown={e => startDrag(view.key, sheet.key, e)} onPointerMove={moveDrag}
               onPointerUp={() => setDrag(null)} onPointerCancel={() => setDrag(null)}
-              onDoubleClick={() => setOffset(sheet.key, undefined)}
+              onDoubleClick={() => setOffset(offKey(view.key), undefined)}
               style={box
                 ? { left: pct(box.x, paper.w), top: pct(box.y, paper.h), width: pct(box.w, paper.w) }
                 : { left: pct(MARGIN, paper.w), top: pct(layout.top, paper.h), width: pct(layout.usableW, paper.w), visibility: 'hidden' }}>
-              {sheet.key === KEY_SPECS ? (
+              {view.key === KEY_SPECS ? (
                 <SpecSheetSVG annotations={specAnnots} scale={scaleOf(KEY_SPECS)} maxW={layout.usableW} maxH={layout.usableH} layers={planLayers}
                   printColours={planShow.annotColours}
-                  svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }} />
-              ) : sheet.wall ? (
+                  svgRef={el => { if (el) drawRefs.current.set(view.key, el); else drawRefs.current.delete(view.key) }} />
+              ) : view.wall ? (
                 <ElevationPrintSVG
-                  wall={sheet.wall} side={sheet.side} walls={walls} room={room}
+                  wall={view.wall} side={view.side} walls={walls} room={room}
                   cabinets={cabinets} fixtures={fixtures} annotations={annotations} resolvedParts={elevResolved}
                   benchtops={benchtops} btInfo={bt3d?.info} btProfiles={bt3d?.profiles} sb={sb}
-                  benchHeights={benchTopZ ? benchDimHeights(sheet.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category, f.kind)))) : []}
-                  svgRef={el => { if (el) drawRefs.current.set(sheet.key, el); else drawRefs.current.delete(sheet.key) }}
-                  scale={scaleOf(sheet.key)} layers={elevLayers} show={elevShow} returnSec={returnSec}
+                  benchHeights={benchTopZ ? benchDimHeights(view.wall.id, benchtops, benchTopZ, fixtures.filter(f => elevLayers.show(fixtureLayer(f.category, f.kind)))) : []}
+                  svgRef={el => { if (el) drawRefs.current.set(view.key, el); else drawRefs.current.delete(view.key) }}
+                  scale={scaleOf(view.key)} layers={elevLayers} show={elevShow} returnSec={returnSec}
                 />
               ) : (
                 <PlanViewReportSVG
@@ -535,7 +612,9 @@ export default function ShopDrawingsReport({ project, room, walls, cabinets, pla
                   scale={scaleOf('plan')} layers={planLayers} show={planShow}
                 />
               )}
-            </div>}
+            </div>,
+              ]
+            })}
             {layout.tb && (
               <div data-role="title-block" className="absolute" style={{ left: pct(layout.tb.x, paper.w), top: pct(layout.tb.y, paper.h), width: pct(layout.tb.w, paper.w) }}>
                 <ShopTitleBlock company={company} sheet={sheetTitle(project, room, sheetScale, Math.max(1, n + 1), printed.length)} width={layout.tb.w} />
