@@ -24,6 +24,9 @@ export function toGenericSeamKey(key: string): string {
   if (div) return `divider:${div[1]}`
   // Bottom rails (BOTTOM_TYPE 'rails') fall back to the bottom panel's joints.
   if (key === 'back:bottom_back_rail') return 'back:bottom'
+  // Back ↔ full top: the back fixes to the top as it does to the bottom unless
+  // the method sets a joint of its own.
+  if (key === 'back:full_top') return 'back:bottom'
   const bRail = key.match(/^bottom_(?:front|back)_rail:(.+)$/)
   if (bRail) return `bottom:${bRail[1]}`
   return key.replace(/^(front_rail|full_top|back_rail):/, 'top:')
@@ -123,6 +126,12 @@ export function carcaseSeamParts(topType: string): SeamPart[] {
         { edgeLabel: 'Right edge', seamKey: `${topPartKey}:right_side`, joinsLabel: 'Right Gable' },
       ],
     })
+  }
+
+  // A full top fixes to the back panel along its back edge.
+  if (topType === 'full_top') {
+    parts.find(p => p.partKey === 'back')!.edges.push({ edgeLabel: 'Top edge', seamKey: 'back:full_top', joinsLabel: topLabel })
+    parts.find(p => p.partKey === 'full_top')!.edges.push({ edgeLabel: 'Back edge', seamKey: 'back:full_top', joinsLabel: 'Back Panel' })
   }
 
   // A back top rail fixes to the back panel along its back edge. Listed for a
@@ -314,6 +323,9 @@ export function computeElevSeams(rp: ResolvedCabinet): ElevSeam[] {
   const br = byKey['back_rail']
   if (back && br)
     seams.push({ key: 'back:back_rail', label: 'Back → Back Rail', ex: br.X + br.DY * 0.5, ey: br.Y, isBack: true })
+  const ft = byKey['full_top']
+  if (back && ft && back.Y + back.DZ + back.DX >= ft.Y - 0.5)
+    seams.push({ key: 'back:full_top', label: 'Back → Top', ex: ft.X + ft.DY * 0.5, ey: ft.Y, isBack: true })
 
   return seams
 }

@@ -151,6 +151,30 @@ export function enumerateShapedSeams(
     }
   }
 
+  // ── Per-edge backs on the full top (the legacy back:full_top seam, turned) ──
+  const top = caseParts.find(p => p.part_key === 'full_top')
+  if (shaped && top) {
+    const Tp = plans.get('full_top')!
+    for (const p of caseParts) {
+      if (!p.part_key.startsWith('back:')) continue
+      const P = plans.get(p.part_key)!
+      if (P.y + P.h < Tp.y - 0.5) continue   // the back stops short of the top (BKTOP)
+      const t0 = panelTurn(P)
+      if (t0 == null) continue
+      for (const turn of [t0 + 90, t0 - 90]) {
+        const bP = turnedBox(P, turn), bTp = turnedBox(Tp, turn)
+        if (bTp.z + bTp.d / 2 <= bP.z + bP.d / 2) continue
+        if (overlap(bP.x, bP.x + bP.w, bTp.x, bTp.x + bTp.w) < MIN_OVERLAP) break
+        if (bTp.z > bP.z + bP.d + TOUCH || bTp.z + bTp.d < bP.z - TOUCH) break
+        out.push({
+          seam_key: `${p.part_key}|full_top`, part_a_key: p.part_key, part_b_key: 'full_top',
+          generic_key: 'back:full_top', shaped: { turn: ((turn % 360) + 360) % 360, kind: 'back_top', side: 'left' },
+        })
+        break
+      }
+    }
+  }
+
   // ── Shelves on per-edge side panels, and on the backs of a multi-back
   // cabinet (L corner) — a shelf that long needs pins along its back edges
   // too (Mark, 2026-10-15). Back pins inherit the shelf's side joint.

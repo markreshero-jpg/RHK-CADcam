@@ -1,6 +1,7 @@
 import { CabinetInput, DeclaredSeam, JointTypeOp, ResolvedCasePart, ResolvedInternalPart, ResolvedSeamJoint, seamAssignJoint, seamAssignRows } from './types'
 import { toGenericSeamKey, topSeamPartKeys, topSeamSibling } from '../cabinetSeams'
 import { enumerateShapedSeams, partsTouch } from './shapedSeams'
+import { backMeetsTop } from '../jointDrilling'
 
 // ── Internal seams (shelves & dividers ↔ their supports) ─────────────────────
 // Enumerated geometrically from the resolved parts: a shelf's supports are
@@ -190,6 +191,9 @@ export function resolveJoints(
   if (byKey['back']   && byKey['bottom'])     seamKeys.push('back:bottom')
   if (byKey['back']   && byKey['bottom_back_rail']) seamKeys.push('back:bottom_back_rail')
   if (byKey['back']   && byKey['back_rail'])  seamKeys.push('back:back_rail')
+  // Full top ↔ back (wall / tall cabinets) — inherits the back:bottom joint
+  // unless the method / cabinet sets its own. Not when the back stops short (BKTOP).
+  if (byKey['back']   && byKey['full_top'] && backMeetsTop(byKey['back'], byKey['full_top'])) seamKeys.push('back:full_top')
 
   const result: ResolvedSeamJoint[] = []
 

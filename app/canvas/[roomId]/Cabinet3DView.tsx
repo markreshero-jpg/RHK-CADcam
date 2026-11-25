@@ -937,6 +937,9 @@ function computeJointRefPlane(seamKey: string, boxA: Box, boxB?: Box): JointRefP
   if (partBKey === 'bottom') {
     return { kind: 'xz', y: boxA.y, xMin: boxA.x, xMax: boxA.x + boxA.w, zMin: boxA.z, zMax: boxA.z + boxA.d }
   }
+  if (partBKey === 'full_top') {   // back ↔ top: the back's top edge
+    return { kind: 'xz', y: boxA.y + boxA.h, xMin: boxA.x, xMax: boxA.x + boxA.w, zMin: boxA.z, zMax: boxA.z + boxA.d }
+  }
   return null
 }
 

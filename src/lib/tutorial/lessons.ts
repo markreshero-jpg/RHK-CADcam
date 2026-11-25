@@ -2294,6 +2294,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Set a room class style to “Mirror inset — 2pac”, or on one door: Cabinet Edit → Face Grid → the door → Profile → Mirror inset (keeps that door’s own colour). The mirror shows in the opening in 3D, elevations mark it with three diagonal strokes, and Reports → Glass Order lists each mirror (opening + rebate − clearance) under 4mm Mirror.',
       canvas: true, done: c => !!c.report?.includes('glass') },
   ]},
+
+  // Appended 2026-11-25 (back ↔ full top construction holes, z_joints/BACK-TOP-JOINT-SPEC.md).
+  { id: 'back_top_joint', level: 'advanced', topic: 'production', title: 'Top holes into the back',
+    blurb: 'Overheads and talls with a full top now get construction holes between the top and the back.',
+    keywords: 'top back construction holes screws full top overhead wall tall cabinet joint drilling dynamic construction method', steps: [
+    { id: 'open', title: 'Open the construction method',
+      body: 'Go to Library → Construction Methods, pick a method and open its Joints section on the Wall or Tall tab. The Back Panel now has a Top edge row (and the Top Panel a Back edge row) when the top type is a full top.',
+      done: c => c.path.startsWith('/library/construction-methods') },
+    { id: 'joint', title: 'Pick the joint (or leave it)',
+      body: 'Left blank, it uses the same joint as the back to the bottom, so the top gets the same holes as the bottom. Top sitting over the back: the holes go through the top, down into the back’s top edge. Top butting into the back: they go through the back into the top’s back edge. A back that stops short of the top (BKTOP) gets none. To change or turn it off for one cabinet, select the back or the top in the cabinet edit modal and use its → Top / → Back row.',
+      done: c => c.path.startsWith('/library/construction-methods') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

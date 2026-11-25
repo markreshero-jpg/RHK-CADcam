@@ -683,9 +683,10 @@ export interface ResolvedSeamJoint {
   // Shaped cabinets (z_cabinet_shape L3): a seam on a turned / per-edge panel.
   // Drilled in a frame turned `turn`° about Y (multiple of 90) where the
   // receiving panel faces ±X (kind 'side', part A on the `side` of it) or the
-  // back panel lies along X with the bottom in front (kind 'back_bottom'); the
-  // holes are turned back to cabinet coords. Key `${part_a}|${part_b}`.
-  shaped?: { turn: number; kind: 'side' | 'back_bottom'; side: 'left' | 'right' }
+  // back panel lies along X with the bottom / full top in front (kind
+  // 'back_bottom' / 'back_top'); the holes are turned back to cabinet coords.
+  // Key `${part_a}|${part_b}`.
+  shaped?: { turn: number; kind: 'side' | 'back_bottom' | 'back_top'; side: 'left' | 'right' }
   // Generator-declared seam (z_curved_end C3): the generator knows exactly
   // where its parts meet, so it states the joint line instead of the resolver
   // finding it. Drilled by declaredSeamDrillOps. Key `${part_a}|${part_b}`.

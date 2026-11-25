@@ -526,6 +526,38 @@ function backRailDrillOps(boxBack: Box, boxRail: Box, ops: JointTypeOp[]): Drill
   return result
 }
 
+// back:full_top seam — the back panel meets the full top along the cabinet
+// width (wall / tall cabinets). The mode is read off the geometry:
+//  · top sits over the back (TOP_BACK_JOIN 'sits_over_back'): the back:bottom
+//    joint upside down — the back's top edge is the edge part (A), the top the
+//    face part (B), so part_b holes bore up through the top over the back.
+//  · top butts into the back: as a back top rail — the top's back edge is the
+//    edge part, part_b holes bore through the back where the top lands.
+// [] when the back stops short of the top (BKTOP).
+export function backTopDrillOps(boxBack: Box, boxTop: Box, ops: JointTypeOp[]): DrillOpPos[] {
+  const backTopY = boxBack.y + boxBack.h
+  if (backTopY < boxTop.y - 0.5) return []
+  if (boxTop.y < backTopY - 0.5) {
+    return backRailDrillOps(boxBack, boxTop, ops)
+      .map(d => d.targetPartKey === 'back_rail' ? { ...d, targetPartKey: 'full_top' } : d)
+  }
+  const flipBox  = (b: Box): Box => ({ ...b, y: -(b.y + b.h) })
+  const flipAxis = (a: DrillAxis): DrillAxis => a === 'y+' ? 'y-' : a === 'y-' ? 'y+' : a
+  return backBottomDrillOps(flipBox(boxBack), flipBox(boxTop), ops, 'back_on_bottom').map(d => ({
+    ...d,
+    y: -d.y,
+    axis: flipAxis(d.axis),
+    targetPartKey: d.targetPartKey === 'bottom' ? 'full_top' : d.targetPartKey,
+    ...(d.fitting ? { fitting: { ...d.fitting, toward: flipAxis(d.fitting.toward) } } : {}),
+  }))
+}
+
+/** Does the back reach the full top (so there is a back:full_top joint)? */
+export function backMeetsTop(back: ResolvedCasePart, top: ResolvedCasePart): boolean {
+  const b = caseBox(back)
+  return b.y + b.h >= top.Y - 0.5
+}
+
 export function seamDrillOps(
   seamKey: string, boxA: Box, boxB: Box, ops: JointTypeOp[],
   opts?: {
@@ -555,6 +587,7 @@ export function seamDrillOps(
       .map(d => d.targetPartKey === 'bottom' ? { ...d, targetPartKey: 'bottom_back_rail' } : d)
   }
   if (seamKey === 'back:back_rail') return backRailDrillOps(boxA, boxB, ops)
+  if (seamKey === 'back:full_top') return backTopDrillOps(boxA, boxB, ops)
   if (!opts?.side && !isSide(partBKey)) return []
 
   const frame = buildSeamFrame(partAKey, isLeft, boxA, boxB)
@@ -942,6 +975,8 @@ export function shapedSeamDrillOps(
   }
   const raw = sh.kind === 'back_bottom'
     ? backBottomDrillOps(bA, bB, sj.ops, sj.bottom_back_join ?? 'back_on_bottom').map(d => ({ ...d, targetPartKey: d.targetPartKey === 'back' ? sj.part_a_key : d.targetPartKey }))
+    : sh.kind === 'back_top'
+    ? backTopDrillOps(bA, bB, sj.ops).map(d => ({ ...d, targetPartKey: d.targetPartKey === 'back' ? sj.part_a_key : d.targetPartKey }))
     : sj.internal_edge
       ? seamJointDrillOps({ ...sj, internal_edge: sh.side }, bA, bB)
       : seamDrillOps(sj.seam_key, bA, bB, sj.ops, { side: sh.side, partAKey: sj.part_a_key, partBKey: sj.part_b_key })
