@@ -11,7 +11,7 @@ import {
 import { mergeRules, rulesForClass } from './mergeRules'
 import { cachedCascade } from './cascadeCache'
 import { mergeVjLayout } from '../doorProfile'
-import type { VjLayout, PanelProfileSpec } from './types'
+import type { VjLayout, PanelProfileSpec, DoorPane } from './types'
 import { normaliseBulkhead } from '../bulkhead'
 import { normaliseSplit } from '../cabinetSplit'
 import { normaliseFloatShelf } from '../floatShelf'
@@ -90,7 +90,8 @@ async function resolveDoorStyles(
         id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
           router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm,
-          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_clearance_mm, glass_type, steps:cnc_tool_set_operations ( ring_width_mm, depth_mm, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm ) ) )
+          insert:door_inserts ( id, name, kind, thickness_mm, clearance_mm ),
+          tool_set:cnc_tool_sets ( steps:cnc_tool_set_operations ( ring_width_mm, depth_mm, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm ) ) )
       )
     `)
     .in('id', distinctIds))
@@ -177,13 +178,33 @@ async function resolveDoorStyles(
       .select(`id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
           router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm,
-          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_clearance_mm, glass_type, steps:cnc_tool_set_operations ( ring_width_mm, depth_mm, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm ) ) )`)
+          insert:door_inserts ( id, name, kind, thickness_mm, clearance_mm ),
+          tool_set:cnc_tool_sets ( steps:cnc_tool_set_operations ( ring_width_mm, depth_mm, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm ) ) )`)
       .in('id', pids))
     const byId = new Map(((profs ?? []) as unknown as { id: string; profile_type: string; ops: Record<string, unknown>[] }[]).map(p => [p.id, p]))
     for (const [k, pid] of profOverride) {
       const p = byId.get(pid)
       if (!p) continue
       out[k] = { ...out[k], profile_id: p.id, profile_type: p.profile_type as ResolvedDoorStyleInput['profile_type'], ops: (p.ops ?? []).map(toRawProfileOp) }
+    }
+  }
+  // Per-front insert overrides (z_faced_doors F9): the door keeps its profile's opening
+  // and rebate and takes another insert (e.g. one door frosted). Only where the
+  // profile has an insert to swap.
+  const insOverride = new Map<string, string>()
+  for (const z of grid.zones) {
+    const k = `${z.row_index}_${z.col_index}`
+    if (z.door_insert_id && out[k]?.ops.some(o => o.pane)) insOverride.set(k, z.door_insert_id)
+  }
+  if (insOverride.size) {
+    const iids = [...new Set(insOverride.values())].sort()
+    const { data: rows } = await cachedCascade(`inserts:${iids.join(',')}`, async () => await supabase
+      .from('door_inserts').select('id, name, kind, thickness_mm, clearance_mm').in('id', iids))
+    const byId = new Map(((rows ?? []) as InsertRow[]).map(r => [r.id, r]))
+    for (const [k, iid] of insOverride) {
+      const ins = byId.get(iid)
+      if (!ins) continue
+      out[k] = { ...out[k], ops: out[k].ops.map(o => o.pane ? { ...o, pane: { ...o.pane, ...insertPane(ins) } } : o) }
     }
   }
   return out
@@ -1532,6 +1553,16 @@ async function loadHingeInputs(
   return { hinge_hardware, hinge_plate, hinge_count_rules, existing_hinges, angled_hinges, pie_hinges }
 }
 
+// A door_inserts row → the pane fields it sets (the rebate comes from the op's tool set).
+type InsertRow = { id: string; name: string; kind: string | null; thickness_mm: number; clearance_mm: number | null }
+function insertPane(ins: InsertRow): Pick<DoorPane, 'type' | 'thickness_mm' | 'clearance_mm' | 'insert_id' | 'kind'> {
+  return {
+    type: ins.name, thickness_mm: Number(ins.thickness_mm),
+    clearance_mm: ins.clearance_mm != null ? Number(ins.clearance_mm) : 1.5,
+    insert_id: ins.id, kind: ins.kind === 'mirror' || ins.kind === 'other' ? ins.kind : 'glass',
+  }
+}
+
 // A door_profile_operations row → the resolver's RawProfileOp (numbers coerced).
 function toRawProfileOp(o: Record<string, unknown>): RawProfileOp {
   const n = (v: unknown) => (v != null ? Number(v) : null)
@@ -1552,16 +1583,16 @@ function toRawProfileOp(o: Record<string, unknown>): RawProfileOp {
     offset_bottom_mm:    n(o.offset_bottom_mm),
     offset_left_mm:      n(o.offset_left_mm),
     offset_right_mm:     n(o.offset_right_mm),
-    // Glass recipe tool set → the pane in the opening (z_faced_doors F6: mirror inset).
+    // The insert in the opening (z_faced_doors F9: door_inserts row on the op). Its
+    // rebate = the tool set's ring step: negative offsets run outward from the opening line.
     pane: (() => {
-      const ts = o.tool_set as { glass_thickness_mm: number | null; glass_clearance_mm?: number | null; glass_type: string | null; steps?: Record<string, unknown>[] | null } | null | undefined
-      if (!ts?.glass_thickness_mm) return null
-      // The rebate = the set's ring step: negative offsets run outward from the opening line.
-      const ring = (ts.steps ?? []).find(r => r.ring_width_mm != null)
+      const ins = o.insert as { id: string; name: string; kind: string | null; thickness_mm: number; clearance_mm: number | null } | null | undefined
+      if (!ins) return null
+      const ts = o.tool_set as { steps?: Record<string, unknown>[] | null } | null | undefined
+      const ring = (ts?.steps ?? []).find(r => r.ring_width_mm != null)
       const out = (v: unknown) => (v != null && Number(v) < 0 ? -Number(v) : 0)
       return {
-        type: ts.glass_type || 'Glass', thickness_mm: Number(ts.glass_thickness_mm),
-        clearance_mm: ts.glass_clearance_mm != null ? Number(ts.glass_clearance_mm) : 1.5,
+        ...insertPane(ins),
         rebate: ring ? { top: out(ring.offset_top_mm), bottom: out(ring.offset_bottom_mm), left: out(ring.offset_left_mm), right: out(ring.offset_right_mm), depth: Number(ring.depth_mm ?? 0) } : null,
       }
     })(),

@@ -188,24 +188,11 @@ export default function CncToolSetsClient() {
                 <input className={inp} defaultValue={selected.description ?? ''} key={selected.description ?? ''}
                   onBlur={e => patchSet(selected.id, { description: e.target.value.trim() || null })} />
               </div>
-              <Num label="Glass thickness (blank = not glass)" value={selected.glass_thickness_mm}
-                onSave={v => patchSet(selected.id, { glass_thickness_mm: v != null && v > 0 ? v : null })} />
-              {selected.glass_thickness_mm != null && (
-                <Num label="Glass clearance each side (blank = 1.5)" value={selected.glass_clearance_mm}
-                  onSave={v => patchSet(selected.id, { glass_clearance_mm: v != null && v >= 0 ? v : null })} />
-              )}
-              {selected.glass_thickness_mm != null && (
-                <div>
-                  <label className={lbl}>Pane type (blank = Glass)</label>
-                  <input className={inp} defaultValue={selected.glass_type ?? ''} key={selected.glass_type ?? ''} placeholder="Glass  /  4mm Mirror"
-                    onBlur={e => { const v = e.target.value.trim() || null; if (v !== (selected.glass_type ?? null)) patchSet(selected.id, { glass_type: v }) }} />
-                </div>
-              )}
-              {selected.glass_thickness_mm != null && (
-                <p className="col-span-2 text-[10px] text-ink-subtle -mt-2">
-                  Doors whose profile uses this set go on Reports → Glass Order. Glass = opening + the ring step’s outward offsets − 2 × clearance.
-                </p>
-              )}
+              <p className="col-span-2 text-[10px] text-ink-subtle -mt-2">
+                Glass / mirror doors: this set only cuts the rebate (the ring step) and the opening. What goes in the
+                opening, with its thickness and clearance, is the Insert picked on the door profile
+                (Library → Doors → Inserts / Profiles).
+              </p>
             </div>
             <button onClick={() => patchSet(selected.id, { is_active: !selected.is_active })}
               className={`mt-5 px-2.5 py-1 rounded border text-[10px] transition-colors ${

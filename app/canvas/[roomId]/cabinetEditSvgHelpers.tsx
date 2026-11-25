@@ -10,11 +10,12 @@ import type { PartPosOverrides } from './canvasDB'
 import { isKickSidePart } from '@/src/lib/resolver/types'
 import type {
   ResolvedCasePart, ResolvedToekickPart, ResolvedInternalPart,
-  ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack,
+  ResolvedCabinet, ResolvedFaceZone, ResolvedDrawerBoxPart, ResolvedDrawerSlide, ResolvedDrawerStack,
   ResolvedSlideDrill,
 } from '@/src/lib/resolver/types'
 import { slideSilhouettePath, slideSilhouetteOutline, type SlidePlacement } from '@/src/lib/slideSilhouette'
 import { doorProfilePrimitives, doorPaneRects } from '@/src/lib/doorProfile'
+import { frontInserts, insertDetail, type FrontInsert } from '@/src/lib/frontInserts'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { splitBaseKey } from '@/src/lib/cabinetSplit'
@@ -202,42 +203,109 @@ export function doorProfileSvg(
   )
 }
 // Glass / mirror door cut through its thickness, for the cabinet edit Top and Side
-// views (z_faced_doors F8): the opening (cut right through) and the rebate floor
-// dashed, and the pane itself sitting on the rebate floor. `pos` = the front's
-// drawn X/Y/Z (position overrides applied); the door's back face is at Z.
-export function DoorPaneSectionSvg({ z, pos, view, project }: {
+// views (z_faced_doors F8/F9): the opening (cut right through) and the rebate step
+// dashed, and each insert (the pane on the rebate floor, a facing on the face) as a
+// clickable part. `pos` = the front's drawn X/Y/Z (position overrides applied); the
+// door's back face is at Z.
+export function DoorPaneSectionSvg({ z, pos, view, project, selectedId }: {
   z: ResolvedFaceZone
   pos: { X: number; Y: number; Z: number }
   view: 'top' | 'side'
   project: (x: number, y: number, z: number) => { x: number; y: number }
+  selectedId?: string | null
 }): React.ReactNode {
-  if (z.face_type === 'open' || !z.door_profile || z.AY || z.facet) return null
-  const panes = doorPaneRects(z.door_profile, { w: z.DX, h: z.DY }).filter(p => p.rebate && p.glass)
-  if (!panes.length) return null
+  if (z.face_type === 'open' || z.AY || z.facet) return null
+  const inserts = frontInserts(z)
+  if (!inserts.length) return null
+  const panes = z.door_profile ? doorPaneRects(z.door_profile, { w: z.DX, h: z.DY }).filter(p => p.rebate) : []
   // (a along the door: x in the top view, y in the side view; d = depth from the back face)
   const pt = (a: number, d: number) => view === 'top' ? project(pos.X + a, 0, pos.Z + d) : project(0, pos.Y + a, pos.Z + d)
   const line = (k: string, a1: number, d1: number, a2: number, d2: number) => {
     const p = pt(a1, d1), q = pt(a2, d2)
     return <line key={k} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="#e5e7eb" strokeWidth={0.75} strokeOpacity={0.8}
-      strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+      strokeDasharray="4 3" vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
   }
+  const along = (r: { x: number; y: number; w: number; h: number }) => view === 'top' ? [r.x, r.x + r.w] : [r.y, r.y + r.h]
   return (
-    <g style={{ pointerEvents: 'none' }}>
+    <g>
       {panes.map((p, i) => {
-        const along = (r: { x: number; y: number; w: number; h: number }) => view === 'top' ? [r.x, r.x + r.w] : [r.y, r.y + r.h]
-        const [o0, o1] = along(p), [r0, r1] = along(p.rebate!), [g0, g1] = along(p.glass!)
+        const [o0, o1] = along(p), [r0, r1] = along(p.rebate!)
         const dep = Math.min(p.rebate!.depth, z.DZ)
-        const a = pt(g0, Math.max(dep - p.thickness_mm, 0)), b = pt(g1, dep)
-        return <g key={i}>
+        return <g key={`pr${i}`}>
           {line('o0', o0, 0, o0, z.DZ)}{line('o1', o1, 0, o1, z.DZ)}
           {line('r0', r0, 0, r0, dep)}{line('r1', r1, 0, r1, dep)}
           {line('rf0', r0, dep, o0, dep)}{line('rf1', o1, dep, r1, dep)}
-          <rect x={Math.min(a.x, b.x)} y={Math.min(a.y, b.y)} width={Math.abs(b.x - a.x)} height={Math.abs(b.y - a.y)}
-            fill={p.mirror ? '#cfd8dc' : '#bfe3ec'} fillOpacity={0.9} stroke="#0f172a" strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+        </g>
+      })}
+      {inserts.map(ins => {
+        const [a0, a1] = view === 'top' ? [ins.lx, ins.lx + ins.w] : [ins.ly, ins.ly + ins.h]
+        const a = pt(a0, ins.lz), b = pt(a1, ins.lz + ins.thickness)
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y), w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y)
+        const sel = selectedId === ins.id
+        return <g key={ins.id}>
+          <rect x={x} y={y} width={w} height={h} fill={insertFill(ins.kind)} fillOpacity={0.9}
+            stroke={sel ? SEL_STROKE : '#0f172a'} strokeWidth={sel ? 2 : 0.5} vectorEffect="non-scaling-stroke"
+            data-part-id={ins.id} style={{ cursor: 'pointer' }} />
+          {/* a few px of invisible stroke so a 4mm pane can be clicked without zooming right in */}
+          <rect x={x} y={y} width={w} height={h} fill="none" stroke="transparent" strokeWidth={8} vectorEffect="non-scaling-stroke"
+            data-part-id={ins.id} style={{ cursor: 'pointer', pointerEvents: 'stroke' }} />
         </g>
       })}
     </g>
   )
+}
+
+const SEL_STROKE = '#f59e0b'   // selected part outline (same as ResolvedViews)
+export function insertFill(kind: FrontInsert['kind']): string {
+  return kind === 'mirror' ? '#cfd8dc' : kind === 'glass' ? '#bfe3ec' : '#d6c7a1'
+}
+
+// Elevation: the insert in a door's opening as a clickable area over the opening
+// (the frame around it still picks the door). A facing covers the whole door, so
+// it is picked from the Top / Side / 3D views instead.
+export function DoorInsertElevSvg({ z, rect, selectedId }: {
+  z: ResolvedFaceZone
+  rect: { x: number; y: number; w: number; h: number }
+  selectedId?: string | null
+}): React.ReactNode {
+  if (z.AY || z.facet || z.DX <= 0 || z.DY <= 0 || !z.door_profile) return null
+  const inserts = frontInserts(z).filter(i => i.source === 'profile')
+  if (!inserts.length) return null
+  const panes = doorPaneRects(z.door_profile, { w: z.DX, h: z.DY })
+  const mapX = (lx: number) => rect.x + (lx / z.DX) * rect.w
+  const mapY = (ly: number) => rect.y + rect.h - (ly / z.DY) * rect.h
+  return <g>
+    {inserts.map((ins, i) => {
+      const p = panes[i]; if (!p) return null
+      const sel = selectedId === ins.id
+      const x0 = mapX(p.x), x1 = mapX(p.x + p.w), y0 = mapY(p.y + p.h), y1 = mapY(p.y)
+      return <rect key={ins.id} x={Math.min(x0, x1)} y={Math.min(y0, y1)} width={Math.abs(x1 - x0)} height={Math.abs(y1 - y0)}
+        fill={insertFill(ins.kind)} fillOpacity={sel ? 0.35 : 0.12} stroke={sel ? SEL_STROKE : 'none'} strokeWidth={2}
+        vectorEffect="non-scaling-stroke" data-part-id={ins.id} style={{ cursor: 'pointer' }} />
+    })}
+  </g>
+}
+
+// Click-to-select info for a front insert (bought in: no material / edging / editor).
+export function svgInsertMeta(ins: FrontInsert, z: ResolvedFaceZone, pos?: { X: number; Y: number; Z: number }): PartMeta {
+  const o = pos ?? z
+  return {
+    id: ins.id, hardware: true,
+    label: `${ins.name} — bought in`,
+    w: ins.w, h: ins.h, d: ins.thickness, thickness: ins.thickness,
+    edge: { top: false, bottom: false, left: false, right: false }, panelKind: 'face', dxIsWidth: true,
+    detail: `${FACE_LABELS_MAP[z.face_type] ?? z.face_type} R${z.row_index + 1}C${z.col_index + 1} · ${insertDetail(ins)}`,
+    x: o.X + ins.lx, y: o.Y + ins.ly, z: o.Z + ins.lz,
+  }
+}
+/** Every insert on the cabinet's fronts → partMap entries (position overrides follow the door). */
+export function addInsertMetas(rp: ResolvedCabinet, partMap: Map<string, PartMeta>, partOverrides?: Record<string, { ox: number; oy: number; oz: number }> | null) {
+  for (const z of rp.face_zones) {
+    if (z.face_type === 'open') continue
+    const ov = partOverrides?.[zonePartId(z)]
+    const pos = ov ? { X: z.X + ov.ox, Y: z.Y + ov.oy, Z: z.Z + ov.oz } : undefined
+    for (const ins of frontInserts(z)) partMap.set(ins.id, svgInsertMeta(ins, z, pos))
+  }
 }
 export function shelfElevRect(p: ResolvedInternalPart) { return { ex: p.X, ey: p.Y + p.DZ, ew: p.DY, eh: p.DZ } }
 export function intElevRect(p: ResolvedInternalPart) {

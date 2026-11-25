@@ -930,15 +930,18 @@ export default function CabinetEditModal({
                     eb={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId] : undefined}
                     comment={{ value: partComments[selectedSVGPart.id] ?? selectedSVGPart.comment ?? '', onChange: v => savePartComment(selectedSVGPart.id, v) }}
                   />
-                  <PartPosOverridePanel
-                    className="relative w-full"
-                    part={selectedSVGPart}
-                    cabinetId={cabinet.id}
-                    customParts={customParts}
-                    partOverrides={partOverrides}
-                    onOverridesChange={setPartOverrides}
-                    setCustomParts={setCustomParts}
-                  />
+                  {/* A bought-in insert follows its door: no offset of its own (z_faced_doors F9). */}
+                  {!selectedSVGPart.id.startsWith('hw_insert_') && (
+                    <PartPosOverridePanel
+                      className="relative w-full"
+                      part={selectedSVGPart}
+                      cabinetId={cabinet.id}
+                      customParts={customParts}
+                      partOverrides={partOverrides}
+                      onOverridesChange={setPartOverrides}
+                      setCustomParts={setCustomParts}
+                    />
+                  )}
                   {cutoutsPanelFor(selectedSVGPart.id)}
                 </>
               )}

@@ -1,5 +1,5 @@
-// RHK6583 Piggott TC-02: re-resolve so the doors' panes carry the tool set rebate (F8),
-// then screenshot the cabinet edit modal.
+// RHK6583 Piggott TC-02: re-resolve so the doors carry the insert (z_faced_doors F9),
+// then screenshot the cabinet edit modal views and click the mirror in each.
 import fs from 'node:fs'
 import puppeteer from 'puppeteer-core'
 import { createClient } from '@supabase/supabase-js'
@@ -13,19 +13,23 @@ const c = (await sb.from('cabinet_instances').select('id,dy').eq('room_id', R).e
 const browser = await puppeteer.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: 'new', args: ['--no-first-run', '--window-size=1900,1200'], defaultViewport: { width: 1900, height: 1200 }, protocolTimeout: 900000 })
 try {
   const page = await browser.newPage(); await page.setExtraHTTPHeaders({ 'x-dev-automation': '1' })
-  page.on('pageerror', e => console.log('pageerror', e.message))
-  await page.goto(`http://localhost:3001/canvas/${R}`, { waitUntil: 'networkidle2', timeout: 180000 })
-  await page.waitForFunction(() => window.__canvasApi, { timeout: 240000 }); await sleep(4000)
-  
+  page.on('pageerror', e => console.log('pageerror', e.message.slice(0, 300)))
+  page.on('console', m => { if (m.type() === 'error') console.log('console.error', m.text().slice(0, 300)) })
+  await page.goto(`http://localhost:3001/canvas/${R}`, { waitUntil: 'networkidle2', timeout: 300000 })
+  await page.waitForFunction(() => window.__canvasApi, { timeout: 300000 }); await sleep(4000)
+  await page.evaluate((dy) => window.__canvasApi.updateCabinet('TC-02', { dy }), c.dy); await sleep(6000)
   await page.evaluate(() => window.__canvasApi.openCabinet('TC-02')); await sleep(6000)
-  const click = async t => { await page.evaluate(t => { const b = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === t).pop(); b?.click() }, t); await sleep(2500) }
-  for (const v of ['Top', 'Side', 'Tree']) { await click(v); await page.screenshot({ path: `${OUT}/modal-${v}.png` }) }
-  // enlarged crops: find the door's pane rects (light fill) in Top / Side
-  for (const v of ['Top', 'Side']) {
-    await click(v)
-    const box = await page.evaluate(() => { const r = [...document.querySelectorAll('svg rect[fill="#cfd8dc"]')].map(e => e.getBoundingClientRect()); return r.map(b => ({ x: b.x, y: b.y, w: b.width, h: b.height })) })
-    console.log(v, JSON.stringify(box))
-  }
+  const click = async t => { await page.evaluate(t => { const b = [...document.querySelectorAll('button')].filter(b => b.textContent.trim() === t).pop(); b?.click() }, t); await sleep(3000) }
+  // Elevation: click the mirror, pick it from the list -> info panel
+  await click('Elevation')
+  const el = await page.evaluate(() => { const b = document.querySelector('[data-part-id^="hw_insert"]').getBoundingClientRect(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 } })
+  await page.mouse.click(el.x, el.y); await sleep(1200)
+  await page.evaluate(() => { const r = [...document.querySelectorAll('button, div')].filter(e => e.children.length <= 3 && /4mm Mirror — bought in/.test(e.textContent)).pop(); r?.click() }); await sleep(1500)
+  await page.screenshot({ path: `${OUT}/pick-Elevation.png` })
+  // 3D: right-click the left mirror -> info panel
+  await click('3D'); await sleep(5000)
+  await page.mouse.click(718, 700, { button: 'right' }); await sleep(2000)
+  await page.screenshot({ path: `${OUT}/pick-3D.png` })
 } finally { await browser.close() }
 const zs = (await sb.from('face_zones').select('col_index,door_profile').eq('cabinet_instance_id', c.id)).data
 for (const z of zs) console.log(z.col_index, JSON.stringify(z.door_profile?.ops?.map(o => o.pane)))

@@ -1287,8 +1287,12 @@ export interface RawProfileOp {
 // `rebate` = how far the tool set's rebate band runs OUT from the opening line on
 // each edge + its depth from the back; `clearance_mm` = pane gap each side. Both
 // absent on fronts resolved before F8 (the views then show the opening only).
+// F9: the pane is a door INSERT (door_inserts row picked on the profile operation,
+// or the door's own Face Grid override): `type` = its name, `kind` drives the look.
 export interface DoorPane {
   type: string; thickness_mm: number
+  insert_id?: string | null
+  kind?: 'mirror' | 'glass' | 'other'
   clearance_mm?: number
   rebate?: { top: number; bottom: number; left: number; right: number; depth: number } | null
 }
@@ -1354,6 +1358,10 @@ export interface FaceZoneInput {
   // the front keeps its style's blank, colour range, colour and tape, and takes
   // this profile's machining instead. null/undefined = the style's own profile.
   door_profile_id?: string | null
+  // Per-front INSERT override (door_inserts id, z_faced_doors F9): what sits in this
+  // door's opening instead of the profile's own insert (e.g. one door frosted).
+  // Only applies where the profile has an insert. null/undefined = the profile's.
+  door_insert_id?: string | null
   // Manual hinge positions for a door (mm from the door BOTTOM, along the hinged
   // edge). When set, the resolver uses these exact positions instead of the shop
   // hinge_count_rules — letting the user add/move/remove hinges per door.

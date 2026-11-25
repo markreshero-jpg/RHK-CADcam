@@ -9,7 +9,8 @@ import { createPortal } from 'react-dom'
 import * as THREE from 'three'
 import { useFrame } from '@react-three/fiber'
 import { Edges } from '@react-three/drei'
-import { saveSVGEdge } from './cabinetEditSvgHelpers'
+import { saveSVGEdge, svgInsertMeta } from './cabinetEditSvgHelpers'
+import { frontInserts } from '@/src/lib/frontInserts'
 import { useTutorial } from '@/src/lib/tutorial/store'
 import type { CabinetInstance } from '@/src/lib/types'
 import { dbUpdateCustomPart, dbSavePartPosOverride, type CabinetCustomPart, type PartPosOverrides, type ShapeOverrides } from './canvasDB'
@@ -30,7 +31,7 @@ import { isSide, caseBox, internalBox, internalSeamPartKey, seamDrillsFor, orien
 import { edgeMitreNote } from '@/src/lib/bulkhead'
 import { DB_PART_LABELS } from '@/src/lib/partDisplayNames'
 import { isShapedPanelKey, shapedPartLabel, zonePartId, zoneKey, dbPartId, stackKey } from '@/src/lib/cabinetShape/partKeys'
-import { doorProfilePrimitives, doorPaneRects } from '@/src/lib/doorProfile'
+import { doorProfilePrimitives } from '@/src/lib/doorProfile'
 import { panelProfileTargets, seenFacePoint, type PanelProfileTarget } from '@/src/lib/panelProfile'
 import type { ResolvedDoorProfile, DoorFacing } from '@/src/lib/resolver/types'
 import { isKickSidePart } from '@/src/lib/resolver/types'
@@ -419,6 +420,50 @@ function buildZoneInfo(z: ResolvedFaceZone, b: Box): PartMeta {
   }
 }
 
+// ── Bought-in front inserts (z_faced_doors F9) ────────────────────────────────
+// The mirror / glass in a door's opening and a faced door's facing, as clickable
+// hardware. The board is drawn solid (the opening isn't cut out of the 3D box), so
+// an opening insert shows as a sheet on the front over the opening and its true
+// size on the back; a facing is its real box on the face. (ox, oy, oz) = the
+// front's bottom-left-back corner in the caller's frame, d = the board thickness.
+function Inserts3D({ z, ox, oy, oz, d, alpha = 1, selectedId, onSelect, dragRef }: {
+  z: ResolvedFaceZone; ox: number; oy: number; oz: number; d: number; alpha?: number
+  selectedId: string | null
+  onSelect: (meta: PartMeta | null) => void
+  dragRef:  React.MutableRefObject<boolean>
+}) {
+  const list = useMemo(() => frontInserts(z), [z])
+  if (!list.length) return null
+  return <>{list.map(ins => {
+    const meta = svgInsertMeta(ins, z)
+    const mat = () => ins.kind === 'glass'
+      ? <meshStandardMaterial color="#bfe3ec" metalness={0.1} roughness={0.05} transparent opacity={0.45 * alpha} />
+      : ins.kind === 'mirror'
+        ? <meshStandardMaterial color="#cfd8dc" metalness={0.85} roughness={0.08} transparent={alpha < 1} opacity={alpha} />
+        : <meshStandardMaterial color="#d6c7a1" roughness={0.7} transparent={alpha < 1} opacity={alpha} />
+    const op = ins.opening
+    return (
+      <PickableHardware key={ins.id} meta={meta} selected={selectedId === ins.id} onSelect={onSelect} dragRef={dragRef}>
+        {ins.source === 'facing' || !op ? (
+          <mesh position={[ox + ins.lx + ins.w / 2, oy + ins.ly + ins.h / 2, oz + ins.lz + ins.thickness / 2]}>
+            <boxGeometry args={[ins.w, ins.h, ins.thickness]} />
+            {mat()}
+          </mesh>
+        ) : (<>
+          <mesh position={[ox + op.x + op.w / 2, oy + op.y + op.h / 2, oz + d + 0.2]}>
+            <planeGeometry args={[op.w, op.h]} />
+            {mat()}
+          </mesh>
+          <mesh position={[ox + ins.lx + ins.w / 2, oy + ins.ly + ins.h / 2, oz - 0.2]} rotation={[0, Math.PI, 0]}>
+            <planeGeometry args={[ins.w, ins.h]} />
+            {mat()}
+          </mesh>
+        </>)}
+      </PickableHardware>
+    )
+  })}</>
+}
+
 // ── Door panel with animated hinge ────────────────────────────────────────────
 // Wraps Part in a group whose Y rotation is lerped each frame toward the open/closed target.
 // hingeX is the cabinet-space X of the hinge edge; the Part is offset so that edge aligns
@@ -566,7 +611,7 @@ function HingeArmFold({ url, pivot, openAngle, doorsOpen, mirror, scale, color, 
  *  side by side at the hinge gable). */
 interface BifoldOpen { role: 'outer' | 'leading'; span: number; maxAngle: number }
 
-function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, bifold, pockets, ...partProps }: PartProps & {
+function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, zone, hinges, cupDrills, showDrilling, showPanel = true, panelAlpha = 1, hingeAlpha = 1, handle, handleMeta, handleAlpha = 1, handleParts, selectedId, bifold, pockets, ...partProps }: PartProps & {
   pockets?:   { center: [number, number, number]; size: [number, number, number] }[]   // cabinet coords; cut into the door
   handle?:    HandleShape | null   // z_handles H2 — swings with the door
   handleMeta?: PartMeta            // click-to-select info for the handle
@@ -580,7 +625,7 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDr
   panelAlpha?: number   // layer-set material alpha (ghost / opacity) — door, hinges
   hingeAlpha?: number
   doorProfile?: ResolvedDoorProfile | null
-  facing?:    DoorFacing | null      // z_faced_doors — bought-in mirror on the face, swings with the door
+  zone?:      ResolvedFaceZone       // the front — its bought-in inserts (z_faced_doors F9) swing with the door
   hinges?:    ResolvedHingeInstance[]
   cupDrills?: ResolvedHingeDrill[]   // world coords; converted to local below
   showDrilling?: boolean
@@ -632,22 +677,10 @@ function DoorPanel({ b, hingeSide, doorsOpen, doorProfile, facing, hinges, cupDr
         <PartAlpha a={panelAlpha}>
           <Part b={localB} {...partProps} subtractions={localPockets} />
           {doorProfile && <DoorProfile3D profile={doorProfile} b={localB} />}
-          {/* Glass / mirror pane in the opening (glass-recipe tool set; z_faced_doors F6
-              mirror inset). The board is drawn solid, so the pane sits a hair proud. */}
-          {doorProfile && doorPaneRects(doorProfile, { w: b.w, h: b.h }).map((p, i) => (
-            <mesh key={`pane${i}`} position={[localB.x + p.x + p.w / 2, p.y + p.h / 2, b.d + 0.2]}>
-              <planeGeometry args={[p.w, p.h]} />
-              {p.mirror
-                ? <meshStandardMaterial color="#cfd8dc" metalness={0.85} roughness={0.08} transparent={panelAlpha < 1} opacity={panelAlpha} />
-                : <meshStandardMaterial color="#bfe3ec" metalness={0.1} roughness={0.05} transparent opacity={0.45 * panelAlpha} />}
-            </mesh>
-          ))}
-          {facing?.thickness_mm ? (
-            <mesh position={[localB.x + b.w / 2, b.h / 2, b.d + facing.thickness_mm / 2]}>
-              <boxGeometry args={[b.w, b.h, facing.thickness_mm]} />
-              <meshStandardMaterial color="#cfd8dc" metalness={0.85} roughness={0.08} transparent={panelAlpha < 1} opacity={panelAlpha} />
-            </mesh>
-          ) : null}
+          {/* Bought-in inserts (mirror / glass in the opening, a facing on the face —
+              z_faced_doors F9): clickable parts that swing with the door. */}
+          {zone && <Inserts3D z={zone} ox={localB.x} oy={0} oz={0} d={b.d} alpha={panelAlpha}
+            selectedId={selectedId ?? null} onSelect={partProps.onSelect} dragRef={partProps.dragRef} />}
         </PartAlpha>
       )}
       {handle && (() => {
@@ -1893,7 +1926,7 @@ export function CabinetScene({
                 hingeSide={z.hinge_side}
                 doorsOpen={doorsOpen}
                 doorProfile={z.door_profile}
-                facing={z.facing}
+                zone={z}
                 showPanel={showFaceZone}
                 panelAlpha={alpha(faceItem ?? 'doors')}
                 hingeAlpha={alpha('hinges')}
@@ -1974,7 +2007,8 @@ export function CabinetScene({
           return (
             <group key={`f${i}`}>
               <PartAlpha a={alpha(faceItem ?? 'doors')}><Part b={b} rotation={getRotOv(id, partOverrides)} shape={shapes3D.get(id)} {...partProps} />
-              <DoorProfile3D profile={z.door_profile} b={b} /></PartAlpha>
+              <DoorProfile3D profile={z.door_profile} b={b} />
+              {!z.AY && <Inserts3D z={z} ox={b.x} oy={b.y} oz={b.z} d={b.d} alpha={alpha(faceItem ?? 'doors')} selectedId={selected?.id ?? null} onSelect={onSelect} dragRef={dragRef} />}</PartAlpha>
               {staticHandle}
             </group>
           )

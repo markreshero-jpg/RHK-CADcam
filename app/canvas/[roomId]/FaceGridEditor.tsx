@@ -189,6 +189,7 @@ export default function FaceGridEditor({
   const [doorStyles, setDoorStyles] = useState<DoorStyleOpt[]>([])
   const [doorColours, setDoorColours] = useState<DoorColourOpt[]>([])
   const [doorProfiles, setDoorProfiles] = useState<{ id: string; name: string }[]>([])
+  const [doorInserts, setDoorInserts] = useState<{ id: string; name: string }[]>([])
   const [handles, setHandles] = useState<HandleOpt[]>([])
   const [bins, setBins] = useState<{ id: string; name: string; box_height: number | null; inside_width_min: number | null; inside_width_max: number | null }[]>([])
   const [runners, setRunners] = useState<{ id: string; name: string }[]>([])
@@ -212,6 +213,8 @@ export default function FaceGridEditor({
       .then(({ data }) => { if (!cancelled) setDoorColours((data ?? []) as DoorColourOpt[]) })
     supabase.from('door_profiles').select('id, name').order('name')
       .then(({ data }) => { if (!cancelled) setDoorProfiles((data ?? []) as { id: string; name: string }[]) })
+    supabase.from('door_inserts').select('id, name').eq('is_active', true).order('sort_order').order('name')
+      .then(({ data }) => { if (!cancelled) setDoorInserts((data ?? []) as { id: string; name: string }[]) })
     supabase.from('hardware_handles').select('id, name, grip_kind').eq('active', true).order('name')
       .then(({ data }) => { if (!cancelled) setHandles((data ?? []) as HandleOpt[]) })
     supabase.from('hardware_slides').select('id, name, box_height, inside_width_min, inside_width_max')
@@ -434,6 +437,17 @@ export default function FaceGridEditor({
       ...grid,
       zones: grid.zones.map(z =>
         (all ? z.face_type === 'door' : z.row_index === rowIdx && z.col_index === colIdx) ? { ...z, door_profile_id: profileId } : z
+      ),
+    })
+  }
+
+  // Per-front insert override (z_faced_doors F9): another mirror / glass in this door's
+  // opening. `all` = every door on this cabinet. null = the profile's own insert.
+  function setZoneDoorInsert(rowIdx: number, colIdx: number, insertId: string | null, all = false) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z =>
+        (all ? z.face_type === 'door' : z.row_index === rowIdx && z.col_index === colIdx) ? { ...z, door_insert_id: insertId } : z
       ),
     })
   }
@@ -1400,6 +1414,30 @@ export default function FaceGridEditor({
                     <p className="text-gray-600 mt-0.5 text-xs">e.g. Glass: keeps this door’s material, colour and tape.</p>
                   </div>
                 )}
+
+                {/* Insert override — only on a door whose profile has an insert (mirror / glass). */}
+                {gz.face_type === 'door' && (() => {
+                  const pane = rp?.face_zones.find(z => z.row_index === gz.row_index && z.col_index === gz.col_index)?.door_profile?.ops.find(o => o.pane)?.pane
+                  if (!pane && !gz.door_insert_id) return null
+                  return (
+                    <div data-tour="door-insert-override">
+                      <p className="text-gray-600 mb-1">Insert</p>
+                      <select
+                        value={gz.door_insert_id ?? ''}
+                        onChange={e => setZoneDoorInsert(gz.row_index, gz.col_index, e.target.value || null)}
+                        className="bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-[13px] text-gray-300 focus:outline-none focus:border-blue-500 w-full"
+                      >
+                        <option value="">— the profile’s{pane && !gz.door_insert_id ? ` (${pane.type})` : ''} —</option>
+                        {doorInserts.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                      </select>
+                      {grid.zones.filter(z => z.face_type === 'door').length > 1 && (
+                        <button onClick={() => setZoneDoorInsert(gz.row_index, gz.col_index, gz.door_insert_id ?? null, true)}
+                          className="mt-1 text-[13px] text-blue-400 hover:text-blue-300">Same on every door of this cabinet</button>
+                      )}
+                      <p className="text-gray-600 mt-0.5 text-xs">What sits in this door’s opening. Bought in, on the Glass Order.</p>
+                    </div>
+                  )
+                })()}
 
                 {/* VJ lines — per-front layout, only on fronts with a VJ profile.
                     Blank = inherit (job → room → cabinet). */}

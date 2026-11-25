@@ -1,5 +1,6 @@
 'use client'
 
+import { frontInserts } from '@/src/lib/frontInserts'
 import { isKickJoinPiece, withJoinComment } from '@/src/lib/resolver/resolveKickRun'
 import { useState, useEffect, useMemo, useContext, type Dispatch, type SetStateAction } from 'react'
 import { supabase } from '@/src/lib/supabase'
@@ -114,7 +115,7 @@ const TYPE_COLOR: Record<string, string> = {
   override:  '#f97316',
 }
 
-const TYPE_ORDER = ['carcass', 'toekick', 'internal', 'face', 'drawerbox', 'slide', 'hinge', 'hinge_plate', 'custom', 'override']
+const TYPE_ORDER = ['carcass', 'toekick', 'internal', 'face', 'insert', 'drawerbox', 'slide', 'hinge', 'hinge_plate', 'custom', 'override']
 
 // ── Column definitions ────────────────────────────────────────────────────────
 
@@ -655,6 +656,21 @@ export default function PartsView({
         comment: partComments?.[id] ?? '',
         isCustom: false, isOverride: false,
       })
+    }
+
+    // Bought-in inserts (mirror / glass in a door's opening, a facing): the size to
+    // order, not a cut part (z_faced_doors F9).
+    for (const z of rp.face_zones) {
+      for (const ins of frontInserts(z)) {
+        result.push({
+          id: ins.id, typeKey: 'insert', typeLabel: 'Insert',
+          name: partLabels?.[ins.id] ?? `${ins.name} ${zoneRef(z)}`,
+          material: ins.sized ? 'bought in' : 'save the cabinet for the size', materialColor: null,
+          dy: ins.h, dx: ins.w, dz: ins.thickness, eb: null,
+          comment: partComments?.[ins.id] ?? '',
+          isCustom: false, isOverride: false,
+        })
+      }
     }
 
     for (const stack of (rp.drawer_stacks ?? [])) {

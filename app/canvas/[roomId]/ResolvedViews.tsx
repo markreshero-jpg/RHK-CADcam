@@ -25,7 +25,7 @@ import {
   svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta, svgInternalSlideMeta,
   svgHitParts, partIdColor, DrillOverlay, SlideDrillOverlay,
   PartShape, SlideShape, paletteRC, EdgeTapeSVG, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
-  doorProfileSvg, DoorPaneSectionSvg,
+  doorProfileSvg, DoorPaneSectionSvg, DoorInsertElevSvg, addInsertMetas,
 } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
 import { useViewBoxPinch } from './usePinchZoom'
@@ -611,6 +611,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
   ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); partMap.set(m.id, m) })
+  addInsertMetas(rp, partMap, partOverrides)   // bought-in inserts (mirror / glass), z_faced_doors F9
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
   if (partLabels)   for (const [id, lbl]  of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
   if (partComments) for (const [id, cmt]  of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
@@ -804,6 +805,7 @@ export function ResolvedElevation({ cab, rp, wireMode, showInternals, showDrilli
             {(z.hinge_side === 'left' || z.hinge_side === 'right' || z.hinge_side === 'top' || z.hinge_side === 'bottom') &&
               <line {...hingeEdgeLine(z.hinge_side, { x: r.x, y: r.y, w: r.w, h: r.h })} stroke={stroke(meta.id, col.stroke)} strokeWidth={2} vectorEffect="non-scaling-stroke" data-part-id={meta.id} style={cp} />}
             {doorProfileSvg(z, { x: r.x, y: r.y, w: r.w, h: r.h }, col.stroke, 1, 0.85, true)}
+            <DoorInsertElevSvg z={z} rect={{ x: r.x, y: r.y, w: r.w, h: r.h }} selectedId={selectedPartId} />
             {(() => { const ec = ebColor(ebByMatId, z.material_id); return ec && !trueD(meta.id) && <EdgeTapeSVG box={zoneBox3(z)} edge={meta.edge} kind={meta.panelKind} eb={ec} viewAxis="z" wire={wireMode} project={proj} ov={partOverrides?.[meta.id]} /> })()}
           </g>
         )
@@ -941,6 +943,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
   ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); partMap.set(m.id, m) })
+  addInsertMetas(rp, partMap, partOverrides)   // bought-in inserts (mirror / glass), z_faced_doors F9
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
   if (partLabels)   for (const [id, lbl] of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
   if (partComments) for (const [id, cmt] of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
@@ -1102,7 +1105,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
             return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#fbbf24" strokeWidth={1}
               strokeDasharray={l.hidden ? '6 4' : undefined} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
           })()}
-          {!trueD(meta.id) && <DoorPaneSectionSvg z={z} pos={pp} view="top" project={proj} />}
+          {!trueD(meta.id) && <DoorPaneSectionSvg z={z} pos={pp} view="top" project={proj} selectedId={selectedPartId} />}
         </g>
       })}
 
@@ -1227,6 +1230,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
     stack.slides.forEach(s => { const m = svgSlideMeta(s, stack); partMap.set(m.id, m) })
   })
   ;(rp.internal_slides ?? []).forEach(s => { const m = svgInternalSlideMeta(s); partMap.set(m.id, m) })
+  addInsertMetas(rp, partMap, partOverrides)   // bought-in inserts (mirror / glass), z_faced_doors F9
   ;(customParts ?? []).filter(p => p.visible).forEach(p => { const m = svgCustomMeta(p); partMap.set(m.id, m) })
   if (partLabels)   for (const [id, lbl] of Object.entries(partLabels))   { const m = partMap.get(id); if (m) partMap.set(id, { ...m, label: lbl }) }
   if (partComments) for (const [id, cmt] of Object.entries(partComments)) { const m = partMap.get(id); if (m) partMap.set(id, { ...m, comment: cmt }) }
@@ -1394,7 +1398,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
             return <polygon points={pts} fill={wireMode ? 'transparent' : ec.color} stroke={wireMode ? ec.color : '#1a1a1a'}
               strokeWidth={0.75} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
           })()}
-          {!trueD(meta.id) && !sn && <DoorPaneSectionSvg z={z} pos={pp} view="side" project={proj} />}
+          {!trueD(meta.id) && !sn && <DoorPaneSectionSvg z={z} pos={pp} view="side" project={proj} selectedId={selectedPartId} />}
         </g>
       })}
 

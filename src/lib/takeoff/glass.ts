@@ -1,8 +1,10 @@
 // ============================================================
 // Glass order (z_cnc_tools T3). Pure rollup over the resolved cabinets.
 //
-// A glass door = a front whose door profile has an op using a GLASS tool set
-// (cnc_tool_sets.glass_thickness_mm set — e.g. "Glass Door"). Its sizes:
+// A glass / mirror door = a front whose door profile op carries an INSERT
+// (z_faced_doors F9: door_inserts, picked on the profile op or the door). The
+// sizes come from src/lib/frontInserts. Fronts resolved before F9 fall back to
+// the old rule — an op using a GLASS tool set (cnc_tool_sets.glass_thickness_mm):
 //   opening = door − the op's frame offsets (per edge, else the edge offset)
 //   rebate  = opening + the ring step's OUTWARD offsets (negative = outward)
 //   glass   = rebate − 2 × clearance (per side, default 1.5)
@@ -15,6 +17,7 @@
 
 import type { ResolvedCabinet } from '../resolver/types'
 import { filterRemovedParts } from '../resolver/filterHidden'
+import { frontInserts } from '../frontInserts'
 
 export interface GlassSet {
   id: string
@@ -65,6 +68,18 @@ export function buildGlassPanes(
           door: `Door r${z.row_index + 1} c${z.col_index + 1}`,
           doorW: w, doorH: h, openW: w, openH: h, glassW: w, glassH: h,
           thickness: z.facing.thickness_mm, setName: z.facing.name, type: z.facing.name,
+        })
+        continue
+      }
+      // F9: the front's own inserts carry the order size (insert + rebate on the
+      // resolved profile). Fronts resolved before that fall through to the tool set.
+      const sized = frontInserts(z).filter(n => n.source === 'profile' && n.sized)
+      if (sized.length) {
+        for (const n of sized) out.push({
+          cabinetId: cab.id, cabinetLabel: cab.label ?? '—', roomId: cab.room_id,
+          door: `Door r${z.row_index + 1} c${z.col_index + 1}`,
+          doorW: r1(z.DX), doorH: r1(z.DY), openW: n.opening?.w ?? n.w, openH: n.opening?.h ?? n.h,
+          glassW: n.w, glassH: n.h, thickness: n.thickness, setName: n.name, type: n.name,
         })
         continue
       }

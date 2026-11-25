@@ -133,3 +133,39 @@ Views
 
 Status: built 2026-11-25. Front view checked by screenshot (RHK6583 TC-02); Top / Side /
 Tree not yet seen in the app (dev server wedged) — in-app check pending.
+
+## F9 — Inserts: the mirror / glass is a clickable part, set on the door profile (Mark 2026-11-25)
+
+Mark: "Can the mirror be an added part so it can be clicked on inside the cabinet edit
+modal? ... eventually we might want to put other stuff in there like glass inserts".
+Answers: insert on the door profile, picked from an Inserts list = yes; per-door override = yes.
+
+Locked decisions
+1. **Inserts list** — Library → Doors → **Inserts** (`door_inserts`: name, kind
+   mirror / glass / other, thickness, clearance each side). A new kind of insert = one row.
+2. **Picked on the door profile operation** ("Insert in the opening", `door_profile_operations.insert_id`).
+   The CNC tool set keeps only what the machine cuts: the rebate (ring step) and the opening.
+   Its old glass thickness / clearance / pane type boxes are gone from Settings → CNC Tool Sets
+   (the columns stay, only as the Glass Order fallback for fronts not saved since F9).
+3. **Per-door override** — Face Grid → door → **Insert** (`door_insert_id` on the face-grid
+   zone, "Same on every door of this cabinet"). Shown only where the door's profile has an
+   insert; it swaps the insert, the opening and rebate stay the profile's.
+4. **A real part, bought in.** `src/lib/frontInserts.ts` lists each front's inserts (the
+   opening insert + a faced door's facing, F1): id `hw_insert_<zone>_<n>`, order size,
+   position on the rebate floor. Hardware id: no Part Editor, no delete, no offset, never
+   to the optimiser.
+   - Clickable in cabinet edit Top / Elevation / Side and 3D (right-click); the part panel
+     shows order size, opening and rebate.
+   - Listed in the Parts tab (type Insert) and the Tree.
+   - Reports → Glass Order reads the same list (one set of numbers).
+5. Order size = opening + rebate − 2 × the insert's clearance (no rebate cut: the opening
+   less the clearance).
+
+Code: migration `migration_f9_door_inserts.sql` (applied 2026-11-25: table + policies,
+`insert_id`, seeded "4mm Mirror" and "6mm Clear Glass" from the tool sets, both mirror
+profiles + Glass linked). Loader `toRawProfileOp` / insert override in `resolveDoorStyles`;
+`DoorPane` carries `insert_id`, `kind`. Tests in `takeoff/__tests__/mirrorInset.test.ts`.
+
+Status: built 2026-11-25. Seen working in the app on RHK6583 TC-02: click in Elevation, Top
+and 3D, part panel, Parts tab, library Inserts tab. Not yet seen: Side view click, the Face
+Grid override, a glass (not mirror) door, the Glass Order report. Tutorial owed.

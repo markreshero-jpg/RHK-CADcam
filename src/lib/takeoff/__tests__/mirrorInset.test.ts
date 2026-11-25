@@ -3,6 +3,7 @@
 import { describe, it, expect } from 'vitest'
 import { doorPaneRects } from '../../doorProfile'
 import { buildGlassPanes, type GlassSet } from '../glass'
+import { frontInserts } from '../../frontInserts'
 import type { ResolvedCabinet, ResolvedDoorProfile } from '../../resolver/types'
 
 const profile: ResolvedDoorProfile = {
@@ -26,6 +27,24 @@ describe('mirror inset door', () => {
     expect(p).toMatchObject({ x: 60, y: 100, w: 194.5, h: 1900 })
     expect(p.rebate).toEqual({ x: 52, y: 92, w: 210.5, h: 1916, depth: 6 })
     expect(p.glass).toEqual({ x: 53.5, y: 93.5, w: 207.5, h: 1913 })
+  })
+
+  it('the insert is a part on the front: order size, sits on the rebate floor, feeds the Glass Order (F9)', () => {
+    const op = { ...profile.ops[0], offset_top_mm: 420, pane: { type: '4mm Mirror', kind: 'mirror' as const, insert_id: 'ins', thickness_mm: 4, clearance_mm: 1, rebate: { top: 8, bottom: 8, left: 8, right: 8, depth: 6 } } }
+    const zone = { row_index: 0, col_index: 1, face_type: 'door', X: 317, Y: 0, Z: 470, DX: 314.5, DY: 2420, DZ: 18, door_profile: { ...profile, ops: [op] } } as unknown as ResolvedCabinet['face_zones'][number]
+    const [ins] = frontInserts(zone)
+    expect(ins).toMatchObject({ id: 'hw_insert_0_1_0', name: '4mm Mirror', kind: 'mirror', source: 'profile', sized: true, w: 208.5, h: 1914, thickness: 4, lx: 53, ly: 93, lz: 2 })
+    expect(ins.rebate).toEqual({ w: 210.5, h: 1916, depth: 6 })
+    // Glass Order reads the insert itself — no tool set needed.
+    const cab = { face_zones: [zone] } as unknown as ResolvedCabinet
+    const panes = buildGlassPanes([{ id: 'c', room_id: 'r', label: 'TC-02' }], new Map([['c', cab]]), new Map())
+    expect(panes).toHaveLength(1)
+    expect(panes[0]).toMatchObject({ type: '4mm Mirror', openW: 194.5, openH: 1900, glassW: 208.5, glassH: 1914, thickness: 4 })
+  })
+
+  it('a faced door lists its facing as an insert the size of the door', () => {
+    const zone = { row_index: 0, col_index: 0, face_type: 'door', X: 0, Y: 0, Z: 470, DX: 400, DY: 700, DZ: 16.5, door_profile: null, facing: { name: '4mm Mirror', thickness_mm: 4 } } as unknown as ResolvedCabinet['face_zones'][number]
+    expect(frontInserts(zone)).toMatchObject([{ id: 'hw_insert_0_0_f', source: 'facing', w: 400, h: 700, thickness: 4, lz: 16.5, sized: true }])
   })
 
   it('no pane on a profile without a glass recipe', () => {

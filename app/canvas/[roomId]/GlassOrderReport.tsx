@@ -65,18 +65,18 @@ export function useGlassOrder({ active, rooms, cabinets, resolved }: {
 const TH = 'pb-1 pr-3 font-medium border-b border-gray-800'
 const rowCls = (i: number) => (i % 2 === 0 ? 'text-gray-300' : 'text-gray-400 bg-gray-800/30')
 const sz = (w: number, h: number) => `${w} × ${h}`
-const setNote = (s: GlassSet) => `${s.name}: ${s.thickness}mm glass, ${s.clearance ?? 1.5}mm clearance each side`
+const SIZE_NOTE = 'size to order = the rebate less the insert’s clearance each side'
 
 export function GlassOrderSheet({ data }: { data: GlassOrderData | null }) {
   if (!data) return <div className="text-gray-500 text-center py-12 text-sm">Loading…</div>
-  if (!data.sets.length && !data.totals.length) return <div className="text-gray-500 text-center py-12 text-sm">No glass tool set. Set a glass thickness on one in Settings → CNC Tool Sets.</div>
+  if (!data.sets.length && !data.totals.length) return <div className="text-gray-500 text-center py-12 text-sm">No glass or mirror doors. Pick an insert on a door profile (Library → Doors → Profiles).</div>
   if (!data.totals.length) return <div className="text-gray-500 text-center py-12 text-sm">No glass or mirror doors in this scope.</div>
   return (
     <div className="space-y-8">
       <div>
         <div className="flex items-baseline gap-3 mb-3 pb-1.5 border-b border-gray-700">
           <span className="text-sm font-semibold text-white">Glass to order</span>
-          <span className="text-xs text-gray-500">width × height, mm · {data.sets.map(setNote).join(' · ')}</span>
+          <span className="text-xs text-gray-500">width × height, mm · {SIZE_NOTE}</span>
         </div>
         <table className="w-full text-[11px] border-collapse">
           <thead><tr className="text-gray-500 text-[10px]">
@@ -127,7 +127,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 export function glassOrderPrintHtml(data: GlassOrderData | null): string {
   if (!data || !data.totals.length) return ''
   const totals = `<h2>Glass to order</h2>
-    <p style="font-size:10px;color:#555;margin:0 0 6px">Width × height, mm · ${esc(data.sets.map(setNote).join(' · '))}</p>
+    <p style="font-size:10px;color:#555;margin:0 0 6px">Width × height, mm · ${esc(SIZE_NOTE)}</p>
     <table><thead><tr><th>Type</th><th>Glass W × H</th><th class="r">Thick</th><th class="r">Qty</th><th>Cabinets</th></tr></thead><tbody>
     ${data.totals.map(l => `<tr><td>${esc(l.type)}</td><td><b>${sz(l.glassW, l.glassH)}</b></td><td class="r">${l.thickness}</td><td class="r"><b>${l.qty}</b></td><td>${esc(l.cabinets.join(', '))}</td></tr>`).join('')}
     </tbody></table>`

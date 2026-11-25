@@ -82,9 +82,14 @@ interface ProfileOp {
   // Three-column tool pattern (drill_block_3_tool_assignment_refactor)
   router_tool_id: string | null; drill_id: string | null; auto_tool: boolean
   tool_set_id: string | null
+  insert_id: string | null   // door_inserts — what sits in this op's opening (z_faced_doors F9)
   offset_top_mm: number | null; offset_bottom_mm: number | null
   offset_left_mm: number | null; offset_right_mm: number | null
   fill_strategy: string | null; raster_angle_deg: number | null; raster_stepover_pct: number | null
+}
+interface Insert {
+  id: string; name: string; kind: 'mirror' | 'glass' | 'other'
+  thickness_mm: number; clearance_mm: number; is_active: boolean; sort_order: number
 }
 interface CncToolItem { id: string; name: string; tool_number: string | null; diameter: number | null }
 interface CncDrillItem { id: string; name: string; diameter: number | null }
@@ -104,6 +109,7 @@ const TABS = [
   { key: 'catalogue', label: 'Door Blanks' },
   { key: 'schedules', label: 'Colour Ranges' },
   { key: 'profiles',  label: 'Profiles' },
+  { key: 'inserts',   label: 'Inserts' },
 ] as const
 type TabKey = typeof TABS[number]['key']
 
@@ -132,6 +138,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   const [schedMats, setSchedMats]   = useState<SchedMaterial[]>([])
   const [profiles, setProfiles]     = useState<Profile[]>([])
   const [ops, setOps]               = useState<ProfileOp[]>([])
+  const [inserts, setInserts]       = useState<Insert[]>([])
   const [styles, setStyles]         = useState<Style[]>([])
   const [materials, setMaterials]   = useState<MatItem[]>([])
   const [edgeBands, setEdgeBands]   = useState<EdgeBand[]>([])
@@ -144,7 +151,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   useEffect(() => {
     let cancelled = false
     async function load() {
-      const [catR, schR, smR, prR, opR, stR, matR, ebR, toolR, drillR, tsR, tssR] = await Promise.all([
+      const [catR, schR, smR, prR, opR, stR, matR, ebR, toolR, drillR, tsR, tssR, insR] = await Promise.all([
         supabase.from('door_catalogue').select('*').order('sort_order').order('name'),
         supabase.from('door_material_schedules').select('*').order('sort_order').order('name'),
         supabase.from('door_schedule_materials').select('*').order('sort_order').order('colour_name'),
@@ -157,6 +164,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
         supabase.from('cnc_drills').select('id,name,diameter').eq('is_active', true).order('diameter'),
         supabase.from('cnc_tool_sets').select('id,name').eq('is_active', true).order('sort_order').order('name'),
         supabase.from('cnc_tool_set_operations').select('tool_set_id,sort_order,operation_type,tool_id,depth_mm').order('sort_order'),
+        supabase.from('door_inserts').select('*').order('sort_order').order('name'),
       ])
       if (cancelled) return
       setCatalogue((catR.data ?? []) as Catalogue[])
@@ -164,6 +172,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
       setSchedMats((smR.data ?? []) as SchedMaterial[])
       setProfiles((prR.data ?? []) as Profile[])
       setOps((opR.data ?? []) as ProfileOp[])
+      setInserts((insR.data ?? []) as Insert[])
       setStyles((stR.data ?? []) as Style[])
       setMaterials((matR.data ?? []) as MatItem[])
       setEdgeBands((ebR.data ?? []) as EdgeBand[])
@@ -191,6 +200,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
       case 'catalogue': return catalogue
       case 'schedules': return schedules
       case 'profiles':  return profiles
+      case 'inserts':   return inserts
       case 'styles':    return styles
     }
   }
@@ -208,6 +218,8 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
       table = 'door_material_schedules'; payload = { name }
     } else if (activeTab === 'profiles') {
       table = 'door_profiles'; payload = { name, profile_type: 'perimeter_route' }
+    } else if (activeTab === 'inserts') {
+      table = 'door_inserts'; payload = { name, kind: /mirror/i.test(name) ? 'mirror' : 'glass', thickness_mm: 6, clearance_mm: 1.5 }
     } else if (activeTab === 'styles') {
       // Styles need a catalogue FK (NOT NULL) — default to first door blank.
       if (catalogue.length === 0) { setCreating(false); setCreateError('Create a door blank first'); return }
@@ -220,6 +232,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
     if (activeTab === 'catalogue') setCatalogue(p => [...p, data as Catalogue])
     if (activeTab === 'schedules') setSchedules(p => [...p, data as Schedule])
     if (activeTab === 'profiles')  setProfiles(p => [...p, data as Profile])
+    if (activeTab === 'inserts')   setInserts(p => [...p, data as Insert])
     if (activeTab === 'styles')    setStyles(p => [...p, data as Style])
     setNewName('')
     setSelectedId((data as { id: string }).id)
@@ -229,13 +242,14 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
     if (!(await confirmDelete({ title: 'Delete Item', message: 'Delete this item?' }))) return
     const table = activeTab === 'catalogue' ? 'door_catalogue'
       : activeTab === 'schedules' ? 'door_material_schedules'
-      : activeTab === 'profiles' ? 'door_profiles' : 'door_styles'
+      : activeTab === 'profiles' ? 'door_profiles' : activeTab === 'inserts' ? 'door_inserts' : 'door_styles'
     const { error } = await supabase.from(table).delete().eq('id', id)
     if (error) { alert(`Delete failed: ${error.message}`); return }
     if (activeTab === 'catalogue') setCatalogue(p => p.filter(x => x.id !== id))
     if (activeTab === 'schedules') { setSchedules(p => p.filter(x => x.id !== id)); setSchedMats(p => p.filter(m => m.schedule_id !== id)) }
     if (activeTab === 'profiles')  { setProfiles(p => p.filter(x => x.id !== id)); setOps(p => p.filter(o => o.profile_id !== id)) }
     if (activeTab === 'styles')    setStyles(p => p.filter(x => x.id !== id))
+    if (activeTab === 'inserts')   { setInserts(p => p.filter(x => x.id !== id)); setOps(p => p.map(o => o.insert_id === id ? { ...o, insert_id: null } : o)) }
     if (selectedId === id) setSelectedId(null)
   }
 
@@ -476,6 +490,53 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   }
 
   // ════════════════════════════════════════════════════════════════════════════════
+  // INSERT editor — what goes in a door's opening (z_faced_doors F9)
+  // ════════════════════════════════════════════════════════════════════════════════
+  function renderInsert(n: Insert) {
+    const usedBy = profiles.filter(p => ops.some(o => o.profile_id === p.id && o.insert_id === n.id))
+    const num = (v: string) => { const x = parseFloat(v); return Number.isFinite(x) && x >= 0 ? x : null }
+    return (
+      <div className="space-y-5 max-w-xl">
+        <div className="grid grid-cols-2 gap-3">
+          <div className="col-span-2">
+            <label className={lbl}>Name (shown on the Glass Order)</label>
+            <input className={inp} defaultValue={n.name}
+              onBlur={e => { const v = e.target.value.trim(); if (v && v !== n.name) patch<Insert>('door_inserts', n.id, { name: v }, setInserts) }} />
+          </div>
+          <div>
+            <label className={lbl}>Kind</label>
+            <select className={sel} value={n.kind} onChange={e => patch<Insert>('door_inserts', n.id, { kind: e.target.value as Insert['kind'] }, setInserts)}>
+              <option value="mirror">Mirror</option>
+              <option value="glass">Glass</option>
+              <option value="other">Other (panel, cane, mesh …)</option>
+            </select>
+          </div>
+          <div />
+          <div>
+            <label className={lbl}>Thickness (mm)</label>
+            <input className={inp} type="number" step="0.1" defaultValue={n.thickness_mm}
+              onBlur={e => { const v = num(e.target.value); if (v != null && v > 0 && v !== n.thickness_mm) patch<Insert>('door_inserts', n.id, { thickness_mm: v }, setInserts) }} />
+          </div>
+          <div>
+            <label className={lbl}>Clearance each side (mm)</label>
+            <input className={inp} type="number" step="0.1" defaultValue={n.clearance_mm}
+              onBlur={e => { const v = num(e.target.value); if (v != null && v !== n.clearance_mm) patch<Insert>('door_inserts', n.id, { clearance_mm: v }, setInserts) }} />
+          </div>
+        </div>
+        <p className="text-[10px] text-ink-subtle">
+          A bought-in piece that sits in the rebate routed from the back of the door. Size to order = the opening + the
+          tool set’s rebate − 2 × clearance. Pick it on a profile operation (Profiles tab), or on one door in the Face Grid.
+          Cabinets already drawn pick up a change when they are next saved.
+        </p>
+        <div>
+          <label className={lbl}>Used by profiles</label>
+          <p className="text-xs text-ink-muted">{usedBy.length ? usedBy.map(p => p.name).join(' · ') : 'None yet'}</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════════
   // PROFILE editor (+ operations)
   // ════════════════════════════════════════════════════════════════════════════════
   function renderProfile(p: Profile) {
@@ -599,6 +660,25 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
                         </div>
                       )}
                     </div>
+                    {/* What sits in the opening this operation cuts (z_faced_doors F9): a
+                        bought-in mirror / glass …, in the tool set's rebate. */}
+                    {(AREA_OPS as readonly string[]).includes(o.operation_type) && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className={lbl}>Insert in the opening</label>
+                          <select className={sInp} value={o.insert_id ?? ''} onChange={e => patchOp(o.id, { insert_id: e.target.value || null })}>
+                            <option value="">— none —</option>
+                            {inserts.filter(n => n.is_active || n.id === o.insert_id).map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+                          </select>
+                        </div>
+                        {o.insert_id && (() => {
+                          const n = inserts.find(x => x.id === o.insert_id)
+                          return <p className="text-[10px] text-ink-muted self-end pb-1">
+                            {n ? `${n.thickness_mm}mm, ${n.clearance_mm} clearance each side.` : ''} {o.tool_set_id ? 'Sits in the tool set’s rebate.' : 'No tool set: no rebate, ordered at the opening less the clearance.'}
+                          </p>
+                        })()}
+                      </div>
+                    )}
                     {/* What the tool set will actually run on this operation. Each step's
                         own depth wins; the operation's depth only fills in for a step with none. */}
                     {o.tool_set_id && (
@@ -779,6 +859,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
     if (activeTab === 'schedules') { const s = schedules.find(x => x.id === id); if (s) patch<Schedule>('door_material_schedules', id, { is_active: !s.is_active }, setSchedules) }
     if (activeTab === 'profiles')  { const p = profiles.find(x => x.id === id); if (p) patch<Profile>('door_profiles', id, { is_active: !p.is_active }, setProfiles) }
     if (activeTab === 'styles')    { const s = styles.find(x => x.id === id); if (s) patch<Style>('door_styles', id, { is_active: !s.is_active }, setStyles) }
+    if (activeTab === 'inserts')   { const n = inserts.find(x => x.id === id); if (n) patch<Insert>('door_inserts', id, { is_active: !n.is_active }, setInserts) }
   }
 
   function renderEditor() {
@@ -808,6 +889,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
           {activeTab === 'schedules' && renderSchedule(item as unknown as Schedule)}
           {activeTab === 'profiles'  && renderProfile(item as unknown as Profile)}
           {activeTab === 'styles'    && renderStyle(item as unknown as Style)}
+          {activeTab === 'inserts'   && renderInsert(item as unknown as Insert)}
         </div>
       </div>
     )
@@ -825,7 +907,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
   const list = activeList()
   const newPlaceholder = activeTab === 'catalogue' ? 'New blank…'
     : activeTab === 'schedules' ? 'New range…'
-    : activeTab === 'profiles' ? 'New profile…' : 'New style…'
+    : activeTab === 'profiles' ? 'New profile…' : activeTab === 'inserts' ? 'New insert…' : 'New style…'
 
   return (
     <div className={embedded ? 'flex-1 flex flex-col overflow-hidden' : 'h-screen bg-canvas text-ink flex flex-col overflow-hidden'}>
@@ -835,7 +917,7 @@ export default function DoorSystemClient({ embedded }: { embedded?: boolean }) {
           <Link href="/" className="text-ink-subtle hover:text-ink-muted text-sm transition-colors">← Projects</Link>
           <span className="text-ink-subtle">|</span>
           <span className="text-sm font-semibold text-ink">Doors</span>
-          <span className="text-xs text-ink-subtle ml-1">· Styles, door blanks, colour ranges & profiles</span>
+          <span className="text-xs text-ink-subtle ml-1">· Styles, door blanks, colour ranges, profiles & inserts</span>
         </div>
       )}
 

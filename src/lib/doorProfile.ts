@@ -125,6 +125,7 @@ export function evaluateProfileOps(raw: RawProfileOp[], panel: DoorPanelDims): R
  *  tool set's rebate (F8; fronts resolved earlier have the opening only). */
 export interface DoorPaneRect {
   x: number; y: number; w: number; h: number; type: string; thickness_mm: number; mirror: boolean
+  kind: 'mirror' | 'glass' | 'other'
   rebate?: { x: number; y: number; w: number; h: number; depth: number }
   glass?:  { x: number; y: number; w: number; h: number }
 }
@@ -137,12 +138,14 @@ export function doorPaneRects(profile: ResolvedDoorProfile, panel: { w: number; 
     const b = op.offset_bottom_mm ?? e, t = op.offset_top_mm ?? e
     const w = panel.w - l - r, h = panel.h - b - t
     if (!(w > 0 && h > 0)) continue
-    const rect: DoorPaneRect = { x: l, y: b, w, h, type: op.pane.type, thickness_mm: op.pane.thickness_mm, mirror: /mirror/i.test(op.pane.type) }
+    const kind = op.pane.kind ?? (/mirror/i.test(op.pane.type) ? 'mirror' : 'glass')
+    const rect: DoorPaneRect = { x: l, y: b, w, h, type: op.pane.type, thickness_mm: op.pane.thickness_mm, mirror: kind === 'mirror', kind }
     const rb = op.pane.rebate
-    if (rb) {
-      const c = op.pane.clearance_mm ?? 1.5
-      rect.rebate = { x: l - rb.left, y: b - rb.bottom, w: w + rb.left + rb.right, h: h + rb.bottom + rb.top, depth: rb.depth }
-      rect.glass = { x: rect.rebate.x + c, y: rect.rebate.y + c, w: rect.rebate.w - 2 * c, h: rect.rebate.h - 2 * c }
+    if (rb) rect.rebate = { x: l - rb.left, y: b - rb.bottom, w: w + rb.left + rb.right, h: h + rb.bottom + rb.top, depth: rb.depth }
+    // Order size: the rebate (or, with no rebate cut, the opening) less the clearance each side.
+    if (rb || op.pane.clearance_mm != null) {
+      const c = op.pane.clearance_mm ?? 1.5, r = rect.rebate ?? rect
+      rect.glass = { x: r.x + c, y: r.y + c, w: r.w - 2 * c, h: r.h - 2 * c }
     }
     out.push(rect)
   }
