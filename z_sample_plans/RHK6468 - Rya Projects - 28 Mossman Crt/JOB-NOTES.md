@@ -305,6 +305,12 @@ How it's drawn (550 OA = 532 carcass + 16 door + 2; talls 120-2663 on separate k
 - Saved run RHK6468-R1; files in `CNCFiles/RHK6468 - Rya Projects - 28 Mossman Crt/Kitchen Laundry WIR Wall Panelling R1/`.
 - Not changed (pre-nest CHECK, confirm): fillers WIR TC-05 / TC-08, Laundry WC-08 and the wall panels taped all 4 edges.
 
+### WIR - drawer bank backs Whiteboard (Mark 2026-11-25) - `_tmp-6468-wir-wbbacks.mjs`
+- BC-01 / 02 / 03 / 08 backs -> Whiteboard 16.5 (`material_overrides.back`); gables / top / bottom stay exposed Blonde Oak 18.
+- Sheet count only (Stage 5 in the browser, nothing generated): WIR Blonde Oak 18 = 11 x 2415 + 11 x 3100 (nested as
+  2715 x 1211, machine limit 2700), Blonde Oak 36 = 1 x 3100. Before the back change: 14 x 2415 + 10 x 3100.
+  The 4 Whiteboard backs are not nested yet (go with the Whiteboard run).
+
 ## Wall Panelling - drawn 2026-11-16, room `00e46b73-13de-4df3-9235-871505d4ee81`
 
 Sources: Mark's site measure (CAD sketch in the room, plan view, rotated: entry wall drawn top to bottom) +
