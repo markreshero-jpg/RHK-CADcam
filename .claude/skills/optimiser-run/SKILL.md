@@ -46,6 +46,9 @@ fronts not grain matched):
 - parts longer than the sheet → kick seams (Kick split › manual), split, or No CNC
 - cabinets edited after their parts were resolved → re-resolve
 - custom panels / fillers taped all four edges → back / wall edge untaped
+- applied end panels (BEPF / BEPK / TEPF / TEPK / WEP) backing onto a wall with the back edge taped → untape it
+  (`edge_left` on the side-on Applied Panel; Mark 2026-11-26). Only an island / open end keeps it. New placements
+  come in untaped from the library; rooms drawn before 2026-11-26 still have it ticked.
 - bulkheads without the +10 scribe (h_adjust), locked top hanging rails, No CNC parts to untick in Stage 2
 
 - parts wider than the sheet (short side over sheet width − trim, e.g. RHK6478 Buffet WC-02 mirror back

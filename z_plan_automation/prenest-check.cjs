@@ -71,8 +71,14 @@ if (!job) { console.log('usage: node z_plan_automation/prenest-check.cjs <job no
   for (const c of cabs) { const n = newest.get(c.id); if (n && Date.parse(c.updated_at) - n > 60000) add('FIX', `${where(c)}: edited after its parts were resolved — re-resolve (OPTI_RUN reresolve)`) }
 
   // 4. Custom panels / fillers taped on all four edges (Mark 2026-11-15: back edge untaped).
-  for (const p of cu) if (/panel|filler/i.test(p.name) && p.edge_top && p.edge_bottom && p.edge_left && p.edge_right)
-    add('CHECK', `${where(cab.get(p.cabinet_instance_id))}: ${p.name} taped all 4 edges — back / wall edge normally untaped`)
+  // Applied end panels backing onto a wall: back edge untaped (Mark 2026-11-26, RHK6612 TC-01). Side-on parts run
+  // dx back -> front, so edge_left is the back edge. Library BEPF / BEPK / TEPF / TEPK / WEP default to it since then.
+  for (const p of cu) {
+    if (p.orientation === 'side' && /applied panel/i.test(p.name) && p.edge_left)
+      add('FIX', `${where(cab.get(p.cabinet_instance_id))}: ${p.name} back edge taped — untape it (edge_left) unless it's an island / open end`)
+    else if (/panel|filler/i.test(p.name) && p.edge_top && p.edge_bottom && p.edge_left && p.edge_right)
+      add('CHECK', `${where(cab.get(p.cabinet_instance_id))}: ${p.name} taped all 4 edges — back / wall edge normally untaped`)
+  }
 
   // 5. Bulkheads without the +10 scribe (h_adjust).
   for (const c of cabs) if (c.bulkhead && c.bulkhead.kind !== 'shadowline' && !c.bulkhead.h_adjust) add('CHECK', `${where(c)}: bulkhead has no +10 scribe (h_adjust)`)
