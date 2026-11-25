@@ -362,3 +362,8 @@ Open / TBC:
   (Mark: 300 long), from the back of the garage wall, east face on the panel start; 150 thick TBC (sketched).
 - 2026-11-17 (`_tmp-6468-wp-garage17.mjs`): TC-01 garage door leaf 33 -> **17 American Oak veneer** (same board as the
   panels), z 0..17 so the face stays flush. 0 issues.
+- 2026-11-25 veneer order takeoff (Mark, `_tmp-6468-wp-strips-2x17.mjs`): the five 2690 cover strips on TC-01 are now
+  **2 x 17 American Oak laminated** (34 on the face, was 33) so no long 33 sheet is needed - each strip = two 17 layers,
+  centred where the 33 strip was (A0 flush at 0). TC-02 / TC-03 strips (2386) stay 33. Scratch nest, all rooms, veneer
+  only (no run saved): Veneer 17 14 x 2415 + 4 x 2750 (3 = panels A1-A3, 1 = the ten strip layers), Veneer 33 7 x 2415,
+  Veneer 9 4 x 2415; all 1205 wide, nothing unplaced.
