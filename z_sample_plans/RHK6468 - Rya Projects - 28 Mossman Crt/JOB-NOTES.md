@@ -367,3 +367,18 @@ Open / TBC:
   centred where the 33 strip was (A0 flush at 0). TC-02 / TC-03 strips (2386) stay 33. Scratch nest, all rooms, veneer
   only (no run saved): Veneer 17 14 x 2415 + 4 x 2750 (3 = panels A1-A3, 1 = the ten strip layers), Veneer 33 7 x 2415,
   Veneer 9 4 x 2415; all 1205 wide, nothing unplaced.
+- 2026-11-25 **no 33 veneer on the job - every 33 part = 2 x 17 American Oak laminated (34)** (Mark, `_tmp-6468-33-to-2x17.mjs`).
+  Where a full gable sits against a cabinet / fridge / wall / void the hidden layer is only a **100 build-up strip at the
+  front** (119 with the door + 2):
+  - Kitchen full 17 + 100 strip: BC-04 / BC-16 run ends (full = seen outside), BC-18 (full = wine fridge side), BC-31 (full =
+    wall side), TC-01 (full = window side, strip on the fridge side), TC-03 (full = fridge side), TC-05, TC-07 (full = bench
+    side), BC-39 (full = DW side), BC-40 / 44 / 45 (full = void side).
+  - Two full layers: TC-08 (seen both sides - the bench side shows between the top and the overheads).
+  - 2 x 17 strips: the 12 x 100 deep dividers, the 4 island mouldings BC-27..30 (now 34 x 33).
+  - Wall Panelling: TC-03 cover strips 2 x 17; lounge nib gables TC-04 / TC-05 = seen 17 layer + 100 strip, nib front
+    panels 567 -> 566.
+  - Scratch nest (all rooms, veneer only, no run saved): **Veneer 17 22 x 2415 + 4 x 2750, Veneer 9 4 x 2415, no 33** -
+    181 parts, nothing unplaced; the last 2415 sheet is only 8 % used.
+  - [ ] **OPEN: each gable is now 34, not 33.** The carriers were left 33 wide where they are, so the second layer runs 1
+    into the next unit: kitchen run 7, island 3, south wall 8, west 3, north 4. Which unit in each run gives up the mm?
+  - [ ] Front edges: the drawing still tapes each 17 layer on its own (22 tape) - tape after laminating with the 40.
