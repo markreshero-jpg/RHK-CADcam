@@ -72,7 +72,8 @@ Locked decisions
 3. **Everything is library data, nothing hard coded.** Mark's question: "are these
    numbers editable?" Yes:
    - rebate width / depth, squared corners, through cut: Settings → CNC Tool Sets →
-     **Mirror Door** steps (started as a copy of Glass Door: 15.9 x 6.35)
+     **Mirror Door** steps (started as a copy of Glass Door: 15.9 x 6.35; **8 x 6 with
+     the 8mm Downshear T110 since F7**)
    - pane thickness (4), clearance (1.5), **Pane type** (`4mm Mirror`): the same set
    - frame (60 all round, per-edge offsets): Library → Doors → Profiles → **Mirror inset**
    - style **Mirror inset — 2pac** = Glass — 2pac's blank + colour range with that profile.
@@ -91,5 +92,17 @@ Code
   (`doorProfileSvg`).
 - Glass Order Type = the set's pane type. Test `src/lib/takeoff/__tests__/mirrorInset.test.ts`.
 - Tutorial `mirror_inset`.
+## F7 — Rebate 8 x 6, 8mm Downshear (Mark 2026-11-25)
+
+Glass Door + Mirror Door tool sets, data only (`migration_f7_rebate_8x6.sql`, applied
+2026-11-25), machine check pending:
+1. rebate band **8 wide x 6 deep**, T110 8mm Downshear, one lap, outward from the opening line
+2. corners squared with the 6mm (R4 to R3)
+3. opening cut **right through** with the 10mm compression (the middle drops out)
+
+The profile row (Library → Doors → Profiles) only places the opening line (frame
+offsets); its "pocket" type and depth cut nothing once a tool set is picked. The tool
+set's steps are what the machine runs. Pane = opening + 16 − 2 × clearance.
+
 - Fronts resolved before F6 have no `pane` until they are re-resolved (open + save the
   cabinet). The Glass Order reads the tool set, so it is right straight away.
