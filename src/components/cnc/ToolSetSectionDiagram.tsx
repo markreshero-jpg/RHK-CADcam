@@ -165,7 +165,7 @@ export default function ToolSetSectionDiagram({ steps, tools, thickness, activeI
         <rect x={0} y={CW - 14} width={CW} height={14} fill={WOOD} fillOpacity={0.45} />
         {radii.map(({ r, i }) => {
           const rr = Math.min(r, CV - 1)
-          return <path key={`r${i}`} d={`M${cX(0)},${cY(CV)} L${cX(0)},${cY(rr)} A${rr * cs},${rr * cs} 0 0 1 ${cX(rr)},${cY(0)} L${cX(CV)},${cY(0)}`}
+          return <path key={`r${i}`} d={`M${cX(0)},${cY(CV)} L${cX(0)},${cY(rr)} A${rr * cs},${rr * cs} 0 0 0 ${cX(rr)},${cY(0)} L${cX(CV)},${cY(0)}`}
             fill="none" stroke={stepColor(i)} strokeWidth={activeId && drawn[i]?.st.id === activeId ? 2.2 : 1.4} />
         })}
         {radii.map(({ r, i, line }, k) => (
