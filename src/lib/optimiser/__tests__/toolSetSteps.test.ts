@@ -88,6 +88,17 @@ describe('through cut', () => {
     expect(ls.some(l => /^G1 Z-18\.20* /.test(l))).toBe(true)
     expect(ls.some(l => /Z-99/.test(l))).toBe(false)
   })
+  it('follows the machine onion skin: a lap to thickness − skin, then a lap through', () => {
+    const ls = generateSheetGcode({ sheet, thickness: 18, profile: { ...profile, onion_skin_z: 1.3 }, drills: [],
+      routes: [area({ toolNumber: 102, toolDiameter: 10, depth: 99, maxDepthPerPass: 20 })], toolNumber: 101, toolDiameter: 10 }).split(/\r?\n/)
+    const plunges = ls.filter(l => /^G1 Z-/.test(l)).map(l => num(l, 'Z'))
+    expect(plunges).toEqual([-16.7, -18.2])
+  })
+  it('a blind outline ignores the onion skin', () => {
+    const ls = generateSheetGcode({ sheet, thickness: 18, profile: { ...profile, onion_skin_z: 1.3 }, drills: [],
+      routes: [area({ depth: 5 })], toolNumber: 101, toolDiameter: 10 }).split(/\r?\n/)
+    expect(ls.filter(l => /^G1 Z-/.test(l)).map(l => num(l, 'Z'))).toEqual([-5])
+  })
 })
 
 describe('each tool cuts at its own feed and rpm', () => {

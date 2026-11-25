@@ -1115,8 +1115,19 @@ function emitRoutes(
       const stepover = Math.max(0.5, r.toolDiameter * (r.stepoverPct > 0 ? r.stepoverPct : 70) / 100)
       const pts = r.clear ? clearPath(r.fillStrategy, x0, y0, x1, y1, stepover, r.rasterAngleDeg) : outlinePath(x0, y0, x1, y1)
       if (pts.length < 2) continue
-      for (let i = 1; i <= passes; i++) {
-        const z = -Math.min(depth, i * step)
+      // A THROUGH outline (glass / mirror door opening) follows the machine's onion
+      // skin like the part perimeters: step down to thickness − skin, then one more
+      // lap through — never the whole board plus break-through in a single lap.
+      const skinZ = !r.clear && r.depth >= thickness - 0.01 && p.onion_skin_z > 0 && p.onion_skin_z < thickness ? thickness - p.onion_skin_z : null
+      const zs: number[] = []
+      if (skinZ != null) {
+        const n = Math.max(1, Math.ceil(skinZ / Math.max(0.5, step)))
+        for (let i = 1; i <= n; i++) zs.push(-Math.min(skinZ, i * step))
+        zs.push(-depth)
+        c(`Through cut-out in ${r.label} - leave ${f(p.onion_skin_z)} onion skin, then cut through`)
+      } else for (let i = 1; i <= passes; i++) zs.push(-Math.min(depth, i * step))
+      for (let i = 1; i <= zs.length; i++) {
+        const z = zs[i - 1]
         if (r.clear) {
           // Enter at the path start by the machine profile's strategy (never a
           // full-depth link move through solid board), then run the path.

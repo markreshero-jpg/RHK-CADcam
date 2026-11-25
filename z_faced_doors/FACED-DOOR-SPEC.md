@@ -98,7 +98,9 @@ Glass Door + Mirror Door tool sets, data only (`migration_f7_rebate_8x6.sql`, ap
 2026-11-25), machine check pending:
 1. rebate band **8 wide x 6 deep**, T110 8mm Downshear, one lap, outward from the opening line
 2. corners squared with the 6mm (R4 to R3)
-3. opening cut **right through** with the 10mm compression (the middle drops out)
+3. opening cut **right through** with the 10mm compression (the middle drops out).
+   It follows the machine profile's **Onion skin** like the part perimeters: a lap to
+   thickness − skin, then a lap through (`emitRoutes`, any through outline step).
 
 The profile row (Library → Doors → Profiles) only places the opening line (frame
 offsets); its "pocket" type and depth cut nothing once a tool set is picked. The tool
