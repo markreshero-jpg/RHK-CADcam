@@ -44,7 +44,8 @@ interface ToolSetOp {
 }
 interface ToolItem { id: string; name: string; tool_number: string | null; diameter: number | null; tool_type: string | null; cutting_length: number | null; shape_profile: ToolShape | null; base_feed_rate: number | null; base_spindle_speed: number | null }
 
-const inp = 'bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent w-full'
+const inpBase = 'bg-surface-2 border border-edge-strong rounded px-2 py-1 text-xs text-ink focus:outline-none focus:border-accent'
+const inp = `${inpBase} w-full`
 const lbl = 'text-[10px] text-ink-subtle uppercase tracking-wide mb-1 block'
 
 export default function CncToolSetsClient() {
@@ -256,16 +257,16 @@ export default function CncToolSetsClient() {
                   {/* Summary row */}
                   <div className="flex items-center gap-2 px-3 py-2 bg-surface">
                     <button onClick={() => setExpandedOp(isOpen ? null : op.id)} className="text-ink-subtle w-4 text-center">{isOpen ? '▾' : '▸'}</button>
-                    <input type="number" title="Sort order" className={`${inp} w-14 text-center`} defaultValue={op.sort_order} key={`so-${op.sort_order}`}
+                    <input type="number" title="Sort order" className={`${inpBase} w-14 shrink-0 text-center`} defaultValue={op.sort_order} key={`so-${op.sort_order}`}
                       onBlur={e => patchOp(op.id, { sort_order: parseInt(e.target.value) || 0 })} />
-                    <select className={`${inp} w-28`} value={op.operation_type} onChange={e => patchOp(op.id, { operation_type: e.target.value })}>
+                    <select className={`${inpBase} w-28 shrink-0`} value={op.operation_type} onChange={e => patchOp(op.id, { operation_type: e.target.value })}>
                       {OP_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
-                    <select className={`${inp} flex-1`} value={op.tool_id ?? ''} onChange={e => patchOp(op.id, { tool_id: e.target.value || null })}>
+                    <select className={`${inpBase} flex-1 min-w-0`} value={op.tool_id ?? ''} onChange={e => patchOp(op.id, { tool_id: e.target.value || null })}>
                       <option value="">— no tool —</option>
                       {tools.map(t => <option key={t.id} value={t.id}>{t.tool_number ? `${t.tool_number} · ` : ''}{t.name}</option>)}
                     </select>
-                    <input className={`${inp} flex-1`} placeholder="step label" defaultValue={op.description ?? ''} key={`d-${op.description ?? ''}`}
+                    <input className={`${inpBase} flex-1 min-w-0`} placeholder="step label" defaultValue={op.description ?? ''} key={`d-${op.description ?? ''}`}
                       onBlur={e => patchOp(op.id, { description: e.target.value.trim() || null })} />
                     <span role="button" onClick={() => deleteOp(op.id)}
                       className="text-ink-subtle hover:text-red-400 cursor-pointer text-base leading-none px-1">×</span>
