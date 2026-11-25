@@ -151,7 +151,7 @@ export function resolveFace(
 
   // ── Resolve column widths ─────────────────────────────────────
   // Total width available after gaps between columns
-  const totalColGaps  = (nCols - 1) * (r.GAPC / 2)   // GAPC is total gap, shared between adjacent zones
+  const totalColGaps  = (nCols - 1) * r.GAPC   // GAPC is the full gap between two columns (like GAPR for rows)
   const availableW    = faceW - totalColGaps
 
   const lockedW = grid.cols
@@ -194,7 +194,7 @@ export function resolveFace(
   let xOffset = revL
   for (const col of resolvedCols) {
     colOffsets.push(xOffset)
-    xOffset += col.width + r.GAPC / 2
+    xOffset += col.width + r.GAPC
   }
 
   // ── Resolve zones ─────────────────────────────────────────────

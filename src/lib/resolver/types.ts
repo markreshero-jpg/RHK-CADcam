@@ -228,7 +228,7 @@ export interface ConstructionRules {
   REVR:     number   // reveal right (adjacent cabinet)
   REVENDL:  number   // reveal left (end panel / wall)
   REVENDR:  number   // reveal right (end panel / wall)
-  GAPC:     number   // centre gap between face zones (horizontal)
+  GAPC:     number   // full gap between two face columns (doors side by side); half of it per door end at a shaped-front corner
   GAPR:     number   // gap between face rows (vertical)
   FPGAP:    number   // finger gap at a finger-pull grip edge (z_handles D4) — replaces REVT / REVB / GAPR there
   RAILH:    number   // finger-pull backing rail height (z_handles D11)

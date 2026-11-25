@@ -132,7 +132,7 @@ function computeDisplay(
   // Col widths — equalise unlocked cols
   const lockedW  = grid.cols.reduce((s, c) => s + (c.width_locked && c.width != null ? c.width : 0), 0)
   const unlockC  = grid.cols.filter(c => !c.width_locked || c.width == null).length
-  const equalW   = unlockC > 0 ? (faceW - (nCols - 1) * (GAPC / 2) - lockedW) / unlockC : 0
+  const equalW   = unlockC > 0 ? (faceW - (nCols - 1) * GAPC - lockedW) / unlockC : 0
   const colWidths = grid.cols.map(c =>
     c.width_locked && c.width != null ? c.width : Math.max(0, equalW))
 
@@ -144,7 +144,7 @@ function computeDisplay(
   // Col X offsets — col 0 is at the left
   const colXOffsets: number[] = []
   let x = faceX0
-  for (let i = 0; i < nCols; i++) { colXOffsets.push(x); x += colWidths[i] + GAPC / 2 }
+  for (let i = 0; i < nCols; i++) { colXOffsets.push(x); x += colWidths[i] + GAPC }
 
   return { rowHeights, colWidths, rowYOffsets, colXOffsets }
 }

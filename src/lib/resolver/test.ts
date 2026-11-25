@@ -377,13 +377,13 @@ test('2 door face generates 2 zones', () => {
   expect(result.errors).toHaveLength(0)
 })
 
-test('door width = half face opening less half centre gap', () => {
+test('door width = half of face opening less the centre gap', () => {
   const result = resolveCabinet(make2DoorBase())
   const leftDoor = result.face_zones.find(z => z.col_index === 0)!
   // faceW = 600 - 1 - 1 = 598mm (REVL=1, REVR=1)
-  // col gap = GAPC/2 = 1mm (gap between cols)
-  // equalColW = (598 - 1) / 2 = 298.5mm
-  expect(leftDoor.DX).toBeCloseTo(298.5)  // face zones: DX = width
+  // col gap = GAPC = 2mm (the full gap between cols)
+  // equalColW = (598 - 2) / 2 = 298mm
+  expect(leftDoor.DX).toBeCloseTo(298)  // face zones: DX = width
 })
 
 test('door height = face opening height', () => {

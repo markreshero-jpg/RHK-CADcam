@@ -474,6 +474,12 @@ create trigger set_updated_at before update on door_styles
 a **cabinet**; REVENDL / REVENDR side reveal next to an **end panel, wall or nothing**;
 GAPC between doors side by side; GAPR between rows; FPGAP at a finger-pull grip edge.
 
+**GAPC is the full gap (2026-11-25).** Until then the resolver put only half of GAPC
+between columns (and a quarter per door end at a shaped-front corner), so 2 gave a 1 mm
+gap. Now GAPC 2 = 2 mm between doors, like GAPR. Rooms that were **Sent to machine** on
+that day were pinned as built: room `rule_overrides.BY_CLASS` GAPC 1 for base / wall /
+tall (backup table `_bak_gapc_fix_20261125`). All other rooms were re-resolved.
+
 **Cascade** (later wins): code `DEFAULT_RULES` → cabinet builder schedule class row
 (base / wall / tall) → construction method (only when a cabinet names one) → job
 `rule_overrides` (BY_CLASS per class) → room (same) → cabinet `rule_overrides`.

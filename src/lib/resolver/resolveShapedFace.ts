@@ -128,7 +128,7 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
   // out from the carcass corner), so each end is 2 clear of the other door's
   // face (Mark, 2026-10-15). Inset doors sit behind the facet lines and keep
   // the plain gap.
-  const concaveRev = () => backOff < 0 ? r.GAPC / 4 : backOff + ft + PIE_CORNER_GAP
+  const concaveRev = () => backOff < 0 ? r.GAPC / 2 : backOff + ft + PIE_CORNER_GAP
 
   segs.forEach((s, i) => {
     if (!isDoorFront(s)) return
@@ -147,10 +147,10 @@ export function resolveShapedFaces(cab: CabinetInput, r: ConstructionRules): Fac
       // corner line, less the gap — the doors' regions split on that line, so
       // they can't touch; the corner shows a small open triangle.
       if (isDoorFront(nb) && convexCross > 1e-9 && getJoin(cab.footprint, s.edge.id, nb.edge.id) === 'reveal')
-        return { rev: r.GAPC / 4 - Math.tan(phi() / 2) * backOff, bevel: 0 }
+        return { rev: r.GAPC / 2 - Math.tan(phi() / 2) * backOff, bevel: 0 }
       if (isDoorFront(nb) && convexCross > 1e-9) {
         const p = phi()
-        return { rev: r.GAPC / 4 - Math.tan(p / 2) * midOff, bevel: (p / 2) * 180 / Math.PI }
+        return { rev: r.GAPC / 2 - Math.tan(p / 2) * midOff, bevel: (p / 2) * 180 / Math.PI }
       }
       // Two face fillers at an inside corner (z_angled_filler): a tight mitre.
       // The mid-thickness lines meet short of the vertex; negative bevel = the
