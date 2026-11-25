@@ -178,6 +178,16 @@ export function doorProfileSvg(
         <line key={`pgl${i}`} x1={mapX(gl.x1)} y1={mapY(gl.y1)} x2={mapX(gl.x2)} y2={mapY(gl.y2)}
           stroke={stroke} strokeWidth={sw} strokeOpacity={opacity} vectorEffect={ve} />
       ))}
+      {/* Rebate routed from the back (F8): hidden from the front, so dashed. The pane
+          sits in it, lapping the frame between the dashed line and the opening. */}
+      {doorPaneRects(z.door_profile, { w: W, h: H }).map((p, i) => {
+        if (!p.rebate) return null
+        const x0 = mapX(p.rebate.x), x1 = mapX(p.rebate.x + p.rebate.w)
+        const y0 = mapY(p.rebate.y + p.rebate.h), y1 = mapY(p.rebate.y)
+        return <rect key={`prb${i}`} x={Math.min(x0, x1)} y={Math.min(y0, y1)} width={Math.abs(x1 - x0)} height={Math.abs(y1 - y0)}
+          fill="none" stroke={stroke} strokeWidth={sw} strokeOpacity={opacity} vectorEffect={ve}
+          strokeDasharray={nonScaling ? '5 3' : `${sw * 5} ${sw * 3}`} />
+      })}
       {/* Mirror pane (z_faced_doors F6): three short diagonal strokes, the drafting mark
           for a mirror, centred in the opening. Glass panes show just the opening. */}
       {doorPaneRects(z.door_profile, { w: W, h: H }).filter(p => p.mirror).map((p, i) => {
@@ -187,6 +197,44 @@ export function doorProfileSvg(
           return <line key={`pm${i}_${k}`} x1={mapX(cx - s / 2 + o)} y1={mapY(cy - s / 2 - o)} x2={mapX(cx + s / 2 + o)} y2={mapY(cy + s / 2 - o)}
             stroke={stroke} strokeWidth={sw} strokeOpacity={opacity} vectorEffect={ve} />
         })
+      })}
+    </g>
+  )
+}
+// Glass / mirror door cut through its thickness, for the cabinet edit Top and Side
+// views (z_faced_doors F8): the opening (cut right through) and the rebate floor
+// dashed, and the pane itself sitting on the rebate floor. `pos` = the front's
+// drawn X/Y/Z (position overrides applied); the door's back face is at Z.
+export function DoorPaneSectionSvg({ z, pos, view, project }: {
+  z: ResolvedFaceZone
+  pos: { X: number; Y: number; Z: number }
+  view: 'top' | 'side'
+  project: (x: number, y: number, z: number) => { x: number; y: number }
+}): React.ReactNode {
+  if (z.face_type === 'open' || !z.door_profile || z.AY || z.facet) return null
+  const panes = doorPaneRects(z.door_profile, { w: z.DX, h: z.DY }).filter(p => p.rebate && p.glass)
+  if (!panes.length) return null
+  // (a along the door: x in the top view, y in the side view; d = depth from the back face)
+  const pt = (a: number, d: number) => view === 'top' ? project(pos.X + a, 0, pos.Z + d) : project(0, pos.Y + a, pos.Z + d)
+  const line = (k: string, a1: number, d1: number, a2: number, d2: number) => {
+    const p = pt(a1, d1), q = pt(a2, d2)
+    return <line key={k} x1={p.x} y1={p.y} x2={q.x} y2={q.y} stroke="#e5e7eb" strokeWidth={0.75} strokeOpacity={0.8}
+      strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+  }
+  return (
+    <g style={{ pointerEvents: 'none' }}>
+      {panes.map((p, i) => {
+        const along = (r: { x: number; y: number; w: number; h: number }) => view === 'top' ? [r.x, r.x + r.w] : [r.y, r.y + r.h]
+        const [o0, o1] = along(p), [r0, r1] = along(p.rebate!), [g0, g1] = along(p.glass!)
+        const dep = Math.min(p.rebate!.depth, z.DZ)
+        const a = pt(g0, Math.max(dep - p.thickness_mm, 0)), b = pt(g1, dep)
+        return <g key={i}>
+          {line('o0', o0, 0, o0, z.DZ)}{line('o1', o1, 0, o1, z.DZ)}
+          {line('r0', r0, 0, r0, dep)}{line('r1', r1, 0, r1, dep)}
+          {line('rf0', r0, dep, o0, dep)}{line('rf1', o1, dep, r1, dep)}
+          <rect x={Math.min(a.x, b.x)} y={Math.min(a.y, b.y)} width={Math.abs(b.x - a.x)} height={Math.abs(b.y - a.y)}
+            fill={p.mirror ? '#cfd8dc' : '#bfe3ec'} fillOpacity={0.9} stroke="#0f172a" strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
+        </g>
       })}
     </g>
   )

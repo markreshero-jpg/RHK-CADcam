@@ -119,7 +119,15 @@ export function evaluateProfileOps(raw: RawProfileOp[], panel: DoorPanelDims): R
 
 /** Glass / mirror panes in a door's openings (face-local front view, origin
  *  bottom-left): the opening = the door − the op's frame offsets. */
-export interface DoorPaneRect { x: number; y: number; w: number; h: number; type: string; thickness_mm: number; mirror: boolean }
+/** x/y/w/h = the opening cut through. `rebate` = the pocket routed from the back
+ *  (opening + the tool set's rebate band, `depth` deep); `glass` = the pane to
+ *  order (rebate − clearance each side). Both only when the pane carries its
+ *  tool set's rebate (F8; fronts resolved earlier have the opening only). */
+export interface DoorPaneRect {
+  x: number; y: number; w: number; h: number; type: string; thickness_mm: number; mirror: boolean
+  rebate?: { x: number; y: number; w: number; h: number; depth: number }
+  glass?:  { x: number; y: number; w: number; h: number }
+}
 export function doorPaneRects(profile: ResolvedDoorProfile, panel: { w: number; h: number }): DoorPaneRect[] {
   const out: DoorPaneRect[] = []
   for (const op of profile.ops) {
@@ -128,7 +136,15 @@ export function doorPaneRects(profile: ResolvedDoorProfile, panel: { w: number; 
     const l = op.offset_left_mm ?? e, r = op.offset_right_mm ?? e
     const b = op.offset_bottom_mm ?? e, t = op.offset_top_mm ?? e
     const w = panel.w - l - r, h = panel.h - b - t
-    if (w > 0 && h > 0) out.push({ x: l, y: b, w, h, type: op.pane.type, thickness_mm: op.pane.thickness_mm, mirror: /mirror/i.test(op.pane.type) })
+    if (!(w > 0 && h > 0)) continue
+    const rect: DoorPaneRect = { x: l, y: b, w, h, type: op.pane.type, thickness_mm: op.pane.thickness_mm, mirror: /mirror/i.test(op.pane.type) }
+    const rb = op.pane.rebate
+    if (rb) {
+      const c = op.pane.clearance_mm ?? 1.5
+      rect.rebate = { x: l - rb.left, y: b - rb.bottom, w: w + rb.left + rb.right, h: h + rb.bottom + rb.top, depth: rb.depth }
+      rect.glass = { x: rect.rebate.x + c, y: rect.rebate.y + c, w: rect.rebate.w - 2 * c, h: rect.rebate.h - 2 * c }
+    }
+    out.push(rect)
   }
   return out
 }

@@ -20,6 +20,14 @@ describe('mirror inset door', () => {
     expect(p).toMatchObject({ x: 60, y: 100, w: 210, h: 2240, mirror: true, thickness_mm: 4 })
   })
 
+  it('rebate + order size from the tool set rebate (F8, RHK6583 TC-02 door)', () => {
+    const op = { ...profile.ops[0], offset_top_mm: 420, pane: { type: '4mm Mirror', thickness_mm: 4, clearance_mm: 1.5, rebate: { top: 8, bottom: 8, left: 8, right: 8, depth: 6 } } }
+    const [p] = doorPaneRects({ ...profile, ops: [op] }, { w: 314.5, h: 2420 })
+    expect(p).toMatchObject({ x: 60, y: 100, w: 194.5, h: 1900 })
+    expect(p.rebate).toEqual({ x: 52, y: 92, w: 210.5, h: 1916, depth: 6 })
+    expect(p.glass).toEqual({ x: 53.5, y: 93.5, w: 207.5, h: 1913 })
+  })
+
   it('no pane on a profile without a glass recipe', () => {
     const plain = { ...profile, ops: [{ ...profile.ops[0], pane: null }] }
     expect(doorPaneRects(plain, { w: 330, h: 2400 })).toEqual([])

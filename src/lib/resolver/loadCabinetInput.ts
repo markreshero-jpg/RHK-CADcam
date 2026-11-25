@@ -90,7 +90,7 @@ async function resolveDoorStyles(
         id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
           router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm,
-          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_type ) )
+          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_clearance_mm, glass_type, steps:cnc_tool_set_operations ( ring_width_mm, depth_mm, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm ) ) )
       )
     `)
     .in('id', distinctIds))
@@ -177,7 +177,7 @@ async function resolveDoorStyles(
       .select(`id, profile_type,
         ops:door_profile_operations ( operation_type, depth_mm, width_mm, offset_from_edge_mm, repeat_axis, spacing_mm, tool_diameter_mm, face, expressions, sort_order,
           router_tool_id, tool_set_id, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm,
-          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_type ) )`)
+          tool_set:cnc_tool_sets ( glass_thickness_mm, glass_clearance_mm, glass_type, steps:cnc_tool_set_operations ( ring_width_mm, depth_mm, offset_top_mm, offset_bottom_mm, offset_left_mm, offset_right_mm ) ) )`)
       .in('id', pids))
     const byId = new Map(((profs ?? []) as unknown as { id: string; profile_type: string; ops: Record<string, unknown>[] }[]).map(p => [p.id, p]))
     for (const [k, pid] of profOverride) {
@@ -1554,8 +1554,16 @@ function toRawProfileOp(o: Record<string, unknown>): RawProfileOp {
     offset_right_mm:     n(o.offset_right_mm),
     // Glass recipe tool set → the pane in the opening (z_faced_doors F6: mirror inset).
     pane: (() => {
-      const ts = o.tool_set as { glass_thickness_mm: number | null; glass_type: string | null } | null | undefined
-      return ts?.glass_thickness_mm ? { type: ts.glass_type || 'Glass', thickness_mm: Number(ts.glass_thickness_mm) } : null
+      const ts = o.tool_set as { glass_thickness_mm: number | null; glass_clearance_mm?: number | null; glass_type: string | null; steps?: Record<string, unknown>[] | null } | null | undefined
+      if (!ts?.glass_thickness_mm) return null
+      // The rebate = the set's ring step: negative offsets run outward from the opening line.
+      const ring = (ts.steps ?? []).find(r => r.ring_width_mm != null)
+      const out = (v: unknown) => (v != null && Number(v) < 0 ? -Number(v) : 0)
+      return {
+        type: ts.glass_type || 'Glass', thickness_mm: Number(ts.glass_thickness_mm),
+        clearance_mm: ts.glass_clearance_mm != null ? Number(ts.glass_clearance_mm) : 1.5,
+        rebate: ring ? { top: out(ring.offset_top_mm), bottom: out(ring.offset_bottom_mm), left: out(ring.offset_left_mm), right: out(ring.offset_right_mm), depth: Number(ring.depth_mm ?? 0) } : null,
+      }
     })(),
   }
 }

@@ -108,3 +108,28 @@ set's steps are what the machine runs. Pane = opening + 16 − 2 × clearance.
 
 - Fronts resolved before F6 have no `pane` until they are re-resolved (open + save the
   cabinet). The Glass Order reads the tool set, so it is right straight away.
+
+## F8 — See the rebate + mirror in the cabinet views, mirror in the parts tree (Mark 2026-11-25)
+
+Mark: "i can only see one rectangle and I'm not sure what it represents", and the mirror
+"doesn't seem to be on the parts list inside the cabinet".
+
+Locked decisions
+1. **The feature stays where it is**: opening = door profile, rebate + pane = the tool set,
+   the door schedule (style) only picks the profile. No new place to set it up.
+2. **The mirror / glass is a bought-in piece, not a cut part.** It is listed under its door
+   in the cabinet edit **Tree** (order size, opening, rebate) and ordered from Reports →
+   Glass Order. It never goes to the optimiser.
+3. The pane on the resolved profile op now carries its tool set's rebate (per-edge, depth)
+   and clearance (`DoorPane.rebate / clearance_mm`, loader joins the set's ring step), so
+   every view draws from `doorPaneRects` (opening + `rebate` + `glass` = order size).
+
+Views
+- Front (cabinet edit, elevations, shop drawings, cabinet sheets — `doorProfileSvg`):
+  opening solid, **rebate dashed** (hidden, it is on the back), mirror strokes as before.
+- Cabinet edit **Top** and **Side** (`DoorPaneSectionSvg`): the door cut through its
+  thickness — opening and rebate step dashed, the pane drawn on the rebate floor.
+- Fronts resolved before F8 show the opening only until the cabinet is saved again.
+
+Status: built 2026-11-25. Front view checked by screenshot (RHK6583 TC-02); Top / Side /
+Tree not yet seen in the app (dev server wedged) — in-app check pending.

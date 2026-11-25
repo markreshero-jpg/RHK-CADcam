@@ -25,7 +25,7 @@ import {
   svgCaseMeta, svgTkMeta, svgIntMeta, svgZoneMeta, svgDbMeta, svgSlideMeta, svgInternalSlideMeta,
   svgHitParts, partIdColor, DrillOverlay, SlideDrillOverlay,
   PartShape, SlideShape, paletteRC, EdgeTapeSVG, caseBox, tkBox3, intBox3, zoneBox3, dbBox3, slideBox3,
-  doorProfileSvg,
+  doorProfileSvg, DoorPaneSectionSvg,
 } from './cabinetEditSvgHelpers'
 import type { EbByMatId } from './useMaterialColours'
 import { useViewBoxPinch } from './usePinchZoom'
@@ -1102,6 +1102,7 @@ export function ResolvedTop({ cab, rp, wireMode, showInternals, showDrilling, me
             return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke="#fbbf24" strokeWidth={1}
               strokeDasharray={l.hidden ? '6 4' : undefined} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
           })()}
+          {!trueD(meta.id) && <DoorPaneSectionSvg z={z} pos={pp} view="top" project={proj} />}
         </g>
       })}
 
@@ -1393,6 +1394,7 @@ export function ResolvedSide({ cab, rp, wireMode, showInternals, showDrilling, m
             return <polygon points={pts} fill={wireMode ? 'transparent' : ec.color} stroke={wireMode ? ec.color : '#1a1a1a'}
               strokeWidth={0.75} vectorEffect="non-scaling-stroke" style={{ pointerEvents: 'none' }} />
           })()}
+          {!trueD(meta.id) && !sn && <DoorPaneSectionSvg z={z} pos={pp} view="side" project={proj} />}
         </g>
       })}
 

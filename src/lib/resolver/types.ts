@@ -1284,7 +1284,14 @@ export interface RawProfileOp {
   // set): the opening is cut through and this pane sits in its rebate.
   pane?:               DoorPane | null
 }
-export interface DoorPane { type: string; thickness_mm: number }
+// `rebate` = how far the tool set's rebate band runs OUT from the opening line on
+// each edge + its depth from the back; `clearance_mm` = pane gap each side. Both
+// absent on fronts resolved before F8 (the views then show the opening only).
+export interface DoorPane {
+  type: string; thickness_mm: number
+  clearance_mm?: number
+  rebate?: { top: number; bottom: number; left: number; right: number; depth: number } | null
+}
 export interface ResolvedDoorStyleInput {
   style_id:            string
   profile_id:          string | null

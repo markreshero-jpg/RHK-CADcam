@@ -43,7 +43,10 @@ The wall in the room is only there to hold the cupboard on the canvas.
 - Both TC-02 doors (314.5 x 2420) take the profile **Mirror inset — 60 sides, 100 bottom, 420 top**
   (library copy of "Mirror inset", Mirror Door tool set: 15.9 x 6.35 rebate from the back, opening
   cut through, 4mm mirror siliconed). The doors keep their 2 Pac style and colour (Face Grid → Profile).
-- Opening 194.5 x 1900 (top at 2000). Mirror to order: 223.3 x 1928.8 x 4mm, qty 2 (Reports → Glass Order).
+- Opening 194.5 x 1900 (top at 2000). ~~Mirror to order: 223.3 x 1928.8~~ (old 15.9 rebate, superseded).
+- **Since the 8 x 6 rebate (F7, 2026-11-25):** rebate pocket 210.5 x 1916 x 6 deep.
+  Mirror Door clearance changed 1.5 -> 1 each side in Settings (2026-11-25 16:46):
+  **Mirror to order: 208.5 x 1914 x 4mm, qty 2** (Reports → Glass Order). At 1.5 it was 207.5 x 1913.
 - The two dashed CAD mirror outlines were removed. The "MIRROR INSET" labels and note stay.
 - Script `z_plan_automation/_tmp-6583-mirror.mjs`.
 

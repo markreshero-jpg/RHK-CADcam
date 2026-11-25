@@ -1,5 +1,6 @@
 'use client'
 
+import { doorPaneRects, type DoorPaneRect } from '@/src/lib/doorProfile'
 import { useState } from 'react'
 import type {
   ResolvedCabinet, ResolvedSeamJoint, JointTypeOp,
@@ -127,7 +128,7 @@ const OP_LABELS: Record<string, string> = {
 
 // ── Tree node types ───────────────────────────────────────────────────────────
 
-type NodeKind = 'section' | 'part' | 'seam' | 'op' | 'slideop' | 'hinge' | 'hingeop'
+type NodeKind = 'section' | 'part' | 'seam' | 'op' | 'slideop' | 'hinge' | 'hingeop' | 'pane'
 
 type PartPayload = {
   kind:       'part'
@@ -152,6 +153,8 @@ type TreeNode = {
   | { kind: 'slideop'; drill: ResolvedSlideDrill }
   | { kind: 'hinge'; hinge: ResolvedHingeInstance }
   | { kind: 'hingeop'; drill: ResolvedHingeDrill }
+  // Bought-in glass / mirror pane sitting in the door's rebate (z_faced_doors F8).
+  | { kind: 'pane'; pane: DoorPaneRect; door: string }
 )
 
 const SLIDE_OP_LABELS: Record<string, string> = {
@@ -375,7 +378,16 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
           children: ops, expandable: ops.length > 0,
         })
       }
-      if (hinges.length) node.expandable = true
+      // Glass / mirror pane: a bought-in piece, not cut from the board — listed under its door.
+      const r1 = (n: number) => Math.round(n * 10) / 10
+      const panes = z.door_profile && z.face_type !== 'open' ? doorPaneRects(z.door_profile, { w: z.DX, h: z.DY }) : []
+      panes.forEach((p, pi) => node.children.push({
+        id: `pane_${z.row_index}_${z.col_index}_${pi}`, kind: 'pane', pane: p, door: node.label,
+        label: `${p.type} (bought in)`,
+        detail: p.glass ? `${r1(p.glass.w)} × ${r1(p.glass.h)} × ${p.thickness_mm}` : `opening ${r1(p.w)} × ${r1(p.h)}`,
+        children: [], expandable: false,
+      }))
+      if (hinges.length || panes.length) node.expandable = true
       return node
     })
     groups.push({ id: 'sec-face', kind: 'section', label: 'Face', detail: `${parts.length}`, children: parts, expandable: true })
@@ -386,10 +398,10 @@ function buildSections(rp: ResolvedCabinet, overrides: PartPosOverrides | undefi
 
 // ── Tree UI ───────────────────────────────────────────────────────────────────
 
-const KIND_ICON: Record<NodeKind, string> = { section: '▸', part: '▬', seam: '⟳', op: '•', slideop: '•', hinge: '◈', hingeop: '•' }
+const KIND_ICON: Record<NodeKind, string> = { section: '▸', part: '▬', seam: '⟳', op: '•', slideop: '•', hinge: '◈', hingeop: '•', pane: '▭' }
 const KIND_COLOR: Record<NodeKind, string> = {
   section: 'text-amber-400', part: 'text-gray-300', seam: 'text-violet-400', op: 'text-gray-500',
-  slideop: 'text-amber-500', hinge: 'text-purple-400', hingeop: 'text-purple-300',
+  slideop: 'text-amber-500', hinge: 'text-purple-400', hingeop: 'text-purple-300', pane: 'text-cyan-300',
 }
 
 // Compact rotation tag (parts carry AX/AY/AZ, ops carry their owner's ax/ay/az).
@@ -609,6 +621,35 @@ function NodeProps({ node, rp }: { node: TreeNode | null; rp: ResolvedCabinet })
           <PR label="Y" value={fmtMm(d.y)} unit="mm" />
           <PR label="Z" value={fmtMm(d.z)} unit="mm" />
         </dl>
+      </div>
+    )
+  }
+
+  if (node.kind === 'pane') {
+    const p = node.pane
+    const r1 = (n: number) => Math.round(n * 10) / 10
+    return (
+      <div className="p-4">
+        <h3 className="text-sm font-semibold text-gray-200 mb-1">{p.type}</h3>
+        <p className="text-[10px] text-gray-500 mb-3">Bought in, siliconed into the rebate from the back · {node.door}</p>
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 items-baseline">
+          {p.glass && <>
+            <Divider label="Order size" />
+            <PR label="Width"  value={r1(p.glass.w)} unit="mm" />
+            <PR label="Height" value={r1(p.glass.h)} unit="mm" />
+            <PR label="Thick"  value={p.thickness_mm} unit="mm" />
+          </>}
+          <Divider label="Opening (cut through)" />
+          <PR label="Width"  value={r1(p.w)} unit="mm" />
+          <PR label="Height" value={r1(p.h)} unit="mm" />
+          {p.rebate && <>
+            <Divider label="Rebate (from the back)" />
+            <PR label="Width"  value={r1(p.rebate.w)} unit="mm" />
+            <PR label="Height" value={r1(p.rebate.h)} unit="mm" />
+            <PR label="Depth"  value={r1(p.rebate.depth)} unit="mm" />
+          </>}
+        </dl>
+        {!p.glass && <p className="text-[10px] text-amber-400 mt-3">Save the cabinet to refresh the rebate and order size.</p>}
       </div>
     )
   }
