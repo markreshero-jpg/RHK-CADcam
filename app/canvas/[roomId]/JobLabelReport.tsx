@@ -30,25 +30,20 @@ function drawJobLabel(doc: JsPDF, d: JobLabel, ox: number, oy: number, W: number
   const maxW = 96 * kx
   doc.setTextColor(0)
 
-  // Job number, big.
-  doc.setFont('helvetica', 'bold')
-  let f = 26
-  fs(f)
-  while (f > 12 && doc.getTextWidth(d.jobNo) > maxW) { f -= 1; fs(f) }
-  doc.text(d.jobNo, X(3), Y(10.5))
-
-  // Job name: one line shrinking to 10 pt, else two lines at 9 pt.
-  doc.setFont('helvetica', 'normal')
-  f = 14
-  fs(f)
-  while (f > 10 && doc.getTextWidth(d.name) > maxW) { f -= 0.5; fs(f) }
-  if (doc.getTextWidth(d.name) <= maxW) {
-    doc.text(d.name, X(3), Y(19.5))
-  } else {
-    fs(9)
-    const lines: string[] = doc.splitTextToSize(d.name, maxW)
-    lines.slice(0, 2).forEach((ln, i) => doc.text(ln, X(3), Y(16.5 + i * 4.2)))
+  // One line: job number (bold) then name, shrinking together to fit the
+  // width, centred up and down in the 24 mm half (Mark 2026-11-26).
+  const gap = d.jobNo && d.name ? '  ' : ''
+  const width = () => {
+    doc.setFont('helvetica', 'bold'); const a = doc.getTextWidth(d.jobNo + gap)
+    doc.setFont('helvetica', 'normal'); return a + doc.getTextWidth(d.name)
   }
+  let f = 24
+  fs(f)
+  while (f > 7 && width() > maxW) { f -= 0.5; fs(f) }
+  const base = BAND / 2 + (f * 0.3528 * 0.72) / 2   // baseline: cap height centred
+  doc.setFont('helvetica', 'bold'); doc.text(d.jobNo + gap, X(3), Y(base))
+  const nx = X(3) + doc.getTextWidth(d.jobNo + gap)
+  doc.setFont('helvetica', 'normal'); doc.text(d.name, nx, Y(base))
 }
 
 function jobLabelsPdf(items: JobLabel[], st: LabelSettings): Promise<JsPDF> {
