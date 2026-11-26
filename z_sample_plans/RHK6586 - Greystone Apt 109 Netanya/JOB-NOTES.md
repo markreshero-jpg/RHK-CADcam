@@ -208,3 +208,4 @@ Everything for this job is in this folder (Mark).
 - One TEPF carrier TC-01 (620 x 615 x 3) holding **30 loose custom parts** 95 W x 115 H x 3, **MDF 3mm** (`9e6a1484`), no tape, laid 6 x 5 face-on. Each has a `custom_<id>` shape override: straight sides + bottom, **semicircle top R47.5** (assumed: the sketch top could be a flatter dome / two corner radii — TBC with Mark).
 - Trial headless nest (scratch only, not saved as a run): 30 parts on one 2415 x 1211 MDF 3mm sheet, arch tops cut (G2/G3). Elevation note: SLIDING DOOR PATCHES / QTY x30 / 95W x 115H ARCH TOP R47.5 / 3mm MDF.
 - Scripts `_tmp-6586-patches.mjs`, `_tmp-6586-patches-cad.mjs`.
+- **Then (Mark 2026-11-26): one piece only, Mark sets qty 30 in the optimiser.** 29 extra parts deleted; TC-01 carrier 95 x 115 x 3; shape = **top corners R47.5** (two corner arcs meeting at the top centre). Elevation note updated. Trial nest: 1 part, arcs cut. Script `_tmp-6586-patches-one.mjs`.
