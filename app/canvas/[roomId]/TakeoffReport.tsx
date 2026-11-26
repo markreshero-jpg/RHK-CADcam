@@ -66,7 +66,7 @@ function sumSheetLines(lists: SheetLine[][]): SheetLine[] {
     e.efficiency = (e.efficiency * e.sheets + l.efficiency * l.sheets) / Math.max(1, e.sheets + l.sheets)
     e.sheets += l.sheets; e.parts += l.parts; e.sheetEquiv += l.sheetEquiv
   }
-  return [...by.values()].sort((a, b) => a.material.localeCompare(b.material) || a.thickness - b.thickness)
+  return [...by.values()].sort((a, b) => a.material.localeCompare(b.material) || a.thickness - b.thickness || a.sheetW - b.sheetW)
 }
 
 /** Loads what the two reports need while `active`; nests once the parts are in. */

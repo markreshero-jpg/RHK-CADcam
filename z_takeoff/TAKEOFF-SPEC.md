@@ -82,10 +82,8 @@ Checks: `src/lib/takeoff/__tests__/hardware.test.ts`; real-job dry run
 | T6 | Rooms share pages on print, each kept whole (`break-inside: avoid`); Page per room tick box; check `z_plan_automation/verify-room-packing.mjs` (RHK6592 pick list 6 → 3 pages) | built 2026-11-02 |
 | T5 | Cut-length stickers: Hardware Pick List → **Cut stickers (n)** — one sticker per cut piece (hanging rails, linear handle strips): job, room, type, product + code, Cab #, cut length, n of N. Size / printer / nudge = Optimiser → Labels settings (102 × 48 default). Code `src/lib/takeoff/cutStickers.ts` (shared pager `labelPagesPdf` in optimiser/labels.ts). 2026-11-05: the button opens a print modal (`app/canvas/[roomId]/CutStickersModal.tsx`) sharing Stage 7's print panel (`src/components/labels/LabelPrintPanel.tsx`: size / printer / offset, preview, Print / Download PDF); pick by room, type or sticker number, numbers stay n of N of the whole list | built 2026-10-30, modal 2026-11-05, in-app check pending |
 | T7 | Job Reports › Hardware Pick List: **Rooms** tick row (☑ per room + All / None, same ticks as the drawing reports' room row, shared state). Only ticked rooms are listed; job totals, print and cut stickers follow. Room Reports unchanged (one room). Mark 2026-11-07 | built 2026-11-07, check pending |
+| T8 | Oversize pieces: parts too long for the material's sheet (e.g. a 2631 bulkhead cleat on a 2415 board) are nested again on the next board up — 3100 long, then 3600 (`OVERSIZE_LENGTHS` in `roomSheets.ts`, same width + trims) — and shown as their own sheet line with that size. Only parts too big for 3600 (or too wide) stay "Too big for a sheet". Mark 2026-11-26. Verified headless on RHK6581 Kitchen: 2631 cleats → 1 × 3100 Whiteboard | built 2026-11-26, in-app check pending |
 
 ## Open
 
-- Bulkhead cleats / fascias longer than the sheet (e.g. 2631 on a 2415 board)
-  show as "too big for a sheet" and aren't in the sheet count. Decide whether
-  they're bought as lengths (a takeoff line) or the board list needs a longer stock.
 - Derived hardware (legs, fasteners) if wanted later (D3). Shelf pins done (D3b).

@@ -4,6 +4,8 @@
 // locks and grain match blocks), and count sheets per material. Full sheets
 // only — offcuts are a production call, not a quoting one. The whole job is
 // also nested in one go, so the quote can see what cutting rooms together saves.
+// Parts too long for the material's own sheet are nested again on the next
+// board up (OVERSIZE_LENGTHS, Mark 2026-11-26) and shown as their own line.
 // ============================================================
 
 import { nest, type NestPartInput, type GroupStock, type SheetStock, type NestResult } from '../optimiser/nest'
@@ -23,7 +25,12 @@ export interface SheetLine {
   efficiency: number
   /** Part area as a fraction of one usable sheet (what a "part sheet" quote uses). */
   sheetEquiv: number
+  /** Set on a next-size-up line: only parts too long for the standard sheet are on it. */
+  oversize?: boolean
 }
+
+/** Longer boards to buy when a part won't fit the material's sheet (sheet length, mm). */
+export const OVERSIZE_LENGTHS = [3100, 3600]
 
 export interface RoomSheets { roomId: string; lines: SheetLine[]; unplaced: string[]; stale: string[] }
 
@@ -115,8 +122,59 @@ export function nestSheets(inp: SheetInputs, parts: OptiPart[]): { lines: SheetL
     const ua = usableArea(stock[line.groupKey].standard)
     line.sheetEquiv = ua ? (partArea.get(line.groupKey) ?? 0) / ua : 0
   }
-  const lines = [...byGroup.values()].sort((a, b) => a.material.localeCompare(b.material) || a.thickness - b.thickness)
-  return { lines, unplaced: res.unplaced.map(u => `${u.label} ${Math.round(u.w)}×${Math.round(u.h)}`), stale }
+
+  // Too long for the standard sheet: nest those parts on the next board up,
+  // smallest length first, so each material gets e.g. a "3100 × 1200" line.
+  // Parts in a grain-match block go on one at a time here (count only).
+  let left = res.unplaced
+  for (const len of OVERSIZE_LENGTHS) {
+    if (!left.length) break
+    const bigStock: Record<string, GroupStock> = {}
+    const tryParts: NestPartInput[] = []
+    for (const u of left) {
+      const gk = materialGroupKey(u.materialId, u.thickness)
+      const st = stock[gk]?.standard
+      if (!st || len <= st.w) continue
+      if (!bigStock[gk]) bigStock[gk] = { standard: { ...st, w: len, qty: null }, offcuts: [] }
+      tryParts.push(u)
+    }
+    if (!tryParts.length) continue
+    const big = nest(tryParts, bigStock, {
+      quality: inp.quality ?? 'balanced', allowRotation: true,
+      marginByMaterial: margins.byMaterial, defaultMargin: margins.fallback,
+    })
+    const out = new Set(big.unplaced.map(u => u.uid))
+    const bigLines = new Map<string, SheetLine>()
+    for (const s of big.sheets) {
+      const gk = materialGroupKey(s.materialId, s.thickness)
+      const base = byGroup.get(gk)
+      if (!base) continue
+      let l = bigLines.get(gk)
+      if (!l) {
+        l = { ...base, groupKey: `${gk}@${len}`, sheetW: len, sheets: 0, parts: 0, efficiency: 0, sheetEquiv: 0, oversize: true }
+        bigLines.set(gk, l)
+      }
+      l.sheets++; l.parts += s.placements.length; l.efficiency += s.efficiency
+    }
+    for (const [gk, l] of bigLines) {
+      l.efficiency /= l.sheets
+      const area = tryParts.filter(u => !out.has(u.uid) && materialGroupKey(u.materialId, u.thickness) === gk).reduce((a, u) => a + u.w * u.h, 0)
+      const ua = usableArea(bigStock[gk].standard)
+      l.sheetEquiv = ua ? area / ua : 0
+      byGroup.set(l.groupKey, l)
+      // The standard line no longer carries these parts.
+      const base = byGroup.get(gk)!
+      base.parts -= l.parts
+      const sua = usableArea(stock[gk].standard)
+      if (sua) base.sheetEquiv = Math.max(0, base.sheetEquiv - area / sua)
+    }
+    const tried = new Set(tryParts.map(u => u.uid))
+    left = left.filter(u => !tried.has(u.uid) || out.has(u.uid))
+  }
+  for (const [gk, l] of [...byGroup]) if (!l.oversize && l.sheets === 0 && l.parts <= 0) byGroup.delete(gk)
+
+  const lines = [...byGroup.values()].sort((a, b) => a.material.localeCompare(b.material) || a.thickness - b.thickness || a.sheetW - b.sheetW)
+  return { lines, unplaced: left.map(u => `${u.label} ${Math.round(u.w)}×${Math.round(u.h)}`), stale }
 }
 
 /** Per-room nests + one whole-job nest. */
