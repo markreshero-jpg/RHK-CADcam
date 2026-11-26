@@ -202,3 +202,9 @@ Everything for this job is in this folder (Mark).
 - KICK 3 moved 2.17 forward, same 772.64 (now ~7.8 oversize each end instead of 10, the cut one still fits).
 - WC-12 bulkhead not moved: fascia now 2.17 behind the pantry carcass (WC-07 mitre unchanged).
 - Script `z_plan_automation/_tmp-6586-kit-618.mjs` (snap / go).
+
+## 2026-11-26 (Mark) — Sliding Door Patches room
+- From Mark's sketch ("109 - Milross", 95 x 115, x30, 3mm MDF). Room **Sliding Door Patches** `af81945a-35e3-4de1-9342-8593ad96d376`, layout `z_plan_automation/layouts/rhk6586-greystone-sliding-door-patches.json`.
+- One TEPF carrier TC-01 (620 x 615 x 3) holding **30 loose custom parts** 95 W x 115 H x 3, **MDF 3mm** (`9e6a1484`), no tape, laid 6 x 5 face-on. Each has a `custom_<id>` shape override: straight sides + bottom, **semicircle top R47.5** (assumed: the sketch top could be a flatter dome / two corner radii — TBC with Mark).
+- Trial headless nest (scratch only, not saved as a run): 30 parts on one 2415 x 1211 MDF 3mm sheet, arch tops cut (G2/G3). Elevation note: SLIDING DOOR PATCHES / QTY x30 / 95W x 115H ARCH TOP R47.5 / 3mm MDF.
+- Scripts `_tmp-6586-patches.mjs`, `_tmp-6586-patches-cad.mjs`.

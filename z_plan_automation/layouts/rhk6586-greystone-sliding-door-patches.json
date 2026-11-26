@@ -1,0 +1,12 @@
+{
+  "projectId": "bada385f-41cf-411e-9536-d1e413e6d5ce",
+  "roomName": "Sliding Door Patches",
+  "roomHeight": 2400,
+  "walls": [
+    { "x": 0, "y": 1000, "length": 1000, "angle": 270 },
+    { "x": 0, "y": 0, "length": 1000, "angle": 0 }
+  ],
+  "cabinets": [
+    { "def": "TEPF", "wall": 2, "offset": 100, "dx": 620, "dy": 615, "dz": 3, "note": "LOOSE: 30 x sliding door patches 95 x 115 arch top, 3mm MDF" }
+  ]
+}
