@@ -40,6 +40,7 @@ import { useTakeoff, HardwarePickSheet, TakeoffSheet } from './TakeoffReport'
 import { hardwarePickPrintHtml, takeoffPrintHtml } from './TakeoffPrint'
 import { useGlassOrder, GlassOrderSheet, glassOrderPrintHtml } from './GlassOrderReport'
 import { usePaintShop, PaintShopSheet, paintShopPrintHtml } from './PaintShopReport'
+import JobLabelReport from './JobLabelReport'
 import { buildCutStickers } from '@/src/lib/takeoff/cutStickers'
 import CutStickersModal from './CutStickersModal'
 import { buildEdgebandReport, type EdgebandProduct, type EdgebandBoard } from '@/src/lib/optimiser/edgebandLength'
@@ -47,7 +48,7 @@ import { loadProjectParts } from '@/src/lib/optimiser/loadClient'
 import type { OptiPart } from '@/src/lib/optimiser/types'
 
 export type ReportScope = 'job' | 'room'
-export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length' | 'benchtop_quote' | 'hardware_pick' | 'takeoff' | 'glass_order' | 'paint_shop'
+export type ReportId = 'parts_list_summary' | 'benchtop_supply' | 'appliance_schedule' | 'opening_schedule' | 'plan_view_v2' | 'elevation_view_v2' | 'cabinet_sheets' | 'shop_drawings' | 'render_3d' | 'edgeband_length' | 'benchtop_quote' | 'hardware_pick' | 'takeoff' | 'glass_order' | 'paint_shop' | 'job_label'
 
 const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'shop_drawings',      label: 'Shop Drawings',       desc: 'One PDF per room: plan + elevations, one scale' },
@@ -59,6 +60,7 @@ const REPORTS: { id: ReportId; label: string; desc: string }[] = [
   { id: 'takeoff',            label: 'Takeoff',             desc: 'Per room: cabinets, sheets (nested), tape, hardware' },
   { id: 'glass_order',        label: 'Glass Order',         desc: 'Glass + mirror doors: sizes to order from the glazier' },
   { id: 'paint_shop',         label: 'Paint Shop Sheet',    desc: 'Satin Board: job, room, paint colour, gloss, date' },
+  { id: 'job_label',          label: 'Job Label',           desc: 'Job no + name on a 102 × 48 label, half height' },
   { id: 'appliance_schedule', label: 'Appliance Schedule',  desc: 'Appliances, sinks, taps · model · location' },
   { id: 'opening_schedule',   label: 'Door & Window Schedule', desc: 'Doors, windows, openings · size · sill · head' },
   { id: 'plan_view_v2',       label: 'Plan View',           desc: 'Scaled PDF, follows a layer set' },
@@ -792,7 +794,7 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
                   </button>
                 )}
                 {/* The plan / elevation / cabinet reports have their own Download + Print buttons in their toolbar. */}
-                {selectedReport !== 'plan_view_v2' && selectedReport !== 'benchtop_quote' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && (
+                {selectedReport !== 'plan_view_v2' && selectedReport !== 'benchtop_quote' && selectedReport !== 'elevation_view_v2' && selectedReport !== 'cabinet_sheets' && selectedReport !== 'shop_drawings' && selectedReport !== 'render_3d' && selectedReport !== 'job_label' && (
                   <button onClick={handlePrint}
                     className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors font-medium">
                     Print / PDF
@@ -882,6 +884,8 @@ export default function ReportsModal({ initialScope, initialReport, bt3d, btInfo
             <div className="flex-1 overflow-y-auto p-4">
               {loadingJob ? (
                 <div className="text-gray-500 text-center py-12 text-sm">Loading job data…</div>
+              ) : selectedReport === 'job_label' ? (
+                <JobLabelReport key={project?.id ?? 'none'} project={project} />
               ) : selectedReport === 'shop_drawings' ? (
                 <ShopDrawingsReport
                   key={reportKey}
