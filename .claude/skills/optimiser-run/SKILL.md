@@ -94,6 +94,10 @@ A tab reload loses the Stage 2–5 workspace (no persistence) — reopen a saved
 into `C:\Users\mark\SynologyDrive\CNCFiles\…` as above. `nestOnly: true` writes the nest input only (a
 quick look at the parts / sizes without making programs).
 
+**Re-nest one sheet (+ extra parts):** `"parts": ["<source_table>:<id>", …]` limits the run to those part uids.
+Uids change when a room is re-resolved, so take them from a fresh `nestOnly` run (filtered by cabinets), not the old
+.rhkrun - match by cabinet / label / size. `keepRun` takes the next run number; check the part count before delivering.
+
 **Two sheet sizes in one board** (RHK6468 R1, 2026-11-17: 2415 sheets plus a few 2750 / 3100 for the long parts):
 `"stock": {"<material NAME>": {"w": 3100, "h": 1211, "extra": [{"w": 2415, "h": 1211, "qty": 99}]}}`.
 Put the LONG size as the standard and the 2415 as `extra` with a big qty: extra sizes go in the offcut pool,
