@@ -6,7 +6,8 @@
   "Base: BFK 18 | B2D 984 x 855 (120 + 735) x 575, 2 adj shelves | BFK 18. 20 stone wall to wall 1020 x 600 (top of stone 875).",
   "Upper: unit hits the 2655 ceiling -> standard drop 30 + 30 BH (wall_cabinet_top 2625). WF 18 | WOPN 984 x 1750 x 400, no bottom (stands on the stone), 3 fixed shelves | WF 18. WFs = Mark's 18 shadowlines either side down to the bench, front flush with the box front (dz 380).",
   "Shelf gaps drawn 340/339/339 from the top + 600 at the bench don't close (90 short over the 1762). With the 30 BH: 1732 clear under the top, 1678 between 3 shelves -> 355/354/354/615 (each drawn gap +15, as close as it goes).",
-  "Vent holes '59 @ 5mm holes for vent' - location TBC (Mark)."
+  "Vent holes '59 @ 5mm holes for vent' - location TBC (Mark).",
+  "REV 1 (Mark 2026-11-26): every shelf double thickness - two 18 fixed shelves stacked (zero-height section between). Clear gaps 602/340/340/342 (_tmp-6614-dbl-shelves.mjs)."
  ],
  "projectName": "RHK6614 - The Hive Co - 189 Payne Rd The Gap",
  "roomId": "65c69db5-2aba-49e0-81c8-95c559968aa2",
@@ -14,28 +15,192 @@
  "roomHeight": 2655,
  "wallCabinetTop": 2625,
  "walls": [
-  { "x": 0, "y": 600, "length": 600, "angle": 270 },
-  { "x": 0, "y": 0, "length": 1020, "angle": 0 },
-  { "x": 1020, "y": 0, "length": 600, "angle": 90 }
+  {
+   "x": 0,
+   "y": 600,
+   "length": 600,
+   "angle": 270
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 1020,
+   "angle": 0
+  },
+  {
+   "x": 1020,
+   "y": 0,
+   "length": 600,
+   "angle": 90
+  }
  ],
  "cabinets": [
-  { "def": "BFK", "wall": 2, "offset": 0, "dx": 18, "dy": 855, "dz": 575, "note": "Base filler at the left wall, Elegant Oak" },
-  { "def": "B2D", "wall": 2, "offset": 18, "dx": 984, "dy": 855, "dz": 575,
-    "set": { "internal_grid": { "tree": { "type": "open", "fittings": [ { "type": "adj_shelf", "y_locked": false }, { "type": "adj_shelf", "y_locked": false } ] } } },
-    "note": "#1 base, 2 doors sharknose finger pull, 2 adj shelves. Vent holes TBC" },
-  { "def": "BFK", "wall": 2, "offset": 1002, "dx": 18, "dy": 855, "dz": 575, "note": "Base filler at the right wall, Elegant Oak" },
-  { "def": "WF", "wall": 2, "offset": 0, "dx": 18, "dy": 1750, "dz": 380, "note": "18 shadowline filler at the left wall, down to the bench" },
-  { "def": "WOPN", "wall": 2, "offset": 18, "dx": 984, "dy": 1750, "dz": 400,
-    "set": { "bottom_type": "none", "exposed_interior": true,
-      "internal_grid": { "tree": { "type": "hsplit", "children": [
-        { "size": 615, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
-        { "size": 354, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
-        { "size": 354, "separator": "fixed_shelf", "section": { "type": "open", "fittings": [] } },
-        { "section": { "type": "open", "fittings": [] } } ] } } },
-    "note": "#2 open shelving on the bench, Elegant Oak inside, no bottom, 3 fixed shelves (gaps 615/354/354/355 from the bench)" },
-  { "def": "WF", "wall": 2, "offset": 1002, "dx": 18, "dy": 1750, "dz": 380, "note": "18 shadowline filler at the right wall, down to the bench" },
-  { "def": "BH", "wall": 2, "offset": 0, "dx": 1020, "dy": 30, "dz": 400, "note": "30 BH 2625-2655 (CH 2655), flush with the carcass",
-    "set": { "bulkhead": { "front": "carcase", "auto_h": true, "cleat": true,
-      "left": { "on": false, "depth": 0, "joint": "mitre" }, "right": { "on": false, "depth": 0, "joint": "mitre" }, "bottom": { "on": false, "depth": 0, "joint": "mitre" } } } }
+  {
+   "def": "BFK",
+   "wall": 2,
+   "offset": 0,
+   "dx": 18,
+   "dy": 855,
+   "dz": 575,
+   "note": "Base filler at the left wall, Elegant Oak"
+  },
+  {
+   "def": "B2D",
+   "wall": 2,
+   "offset": 18,
+   "dx": 984,
+   "dy": 855,
+   "dz": 575,
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       },
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   },
+   "note": "#1 base, 2 doors sharknose finger pull, 2 adj shelves. Vent holes TBC"
+  },
+  {
+   "def": "BFK",
+   "wall": 2,
+   "offset": 1002,
+   "dx": 18,
+   "dy": 855,
+   "dz": 575,
+   "note": "Base filler at the right wall, Elegant Oak"
+  },
+  {
+   "def": "WF",
+   "wall": 2,
+   "offset": 0,
+   "dx": 18,
+   "dy": 1750,
+   "dz": 380,
+   "note": "18 shadowline filler at the left wall, down to the bench"
+  },
+  {
+   "def": "WOPN",
+   "wall": 2,
+   "offset": 18,
+   "dx": 984,
+   "dy": 1750,
+   "dz": 400,
+   "set": {
+    "bottom_type": "none",
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 602,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 0,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 340,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 0,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 340,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "size": 0,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   },
+   "note": "#2 open shelving on the bench, Elegant Oak inside, no bottom, 3 double shelves (2 x 18 fixed stacked = 36), clear gaps 602/340/340/342 from the bench"
+  },
+  {
+   "def": "WF",
+   "wall": 2,
+   "offset": 1002,
+   "dx": 18,
+   "dy": 1750,
+   "dz": 380,
+   "note": "18 shadowline filler at the right wall, down to the bench"
+  },
+  {
+   "def": "BH",
+   "wall": 2,
+   "offset": 0,
+   "dx": 1020,
+   "dy": 30,
+   "dz": 400,
+   "note": "30 BH 2625-2655 (CH 2655), flush with the carcass",
+   "set": {
+    "bulkhead": {
+     "front": "carcase",
+     "auto_h": true,
+     "cleat": true,
+     "left": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "right": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     },
+     "bottom": {
+      "on": false,
+      "depth": 0,
+      "joint": "mitre"
+     }
+    }
+   }
+  }
  ]
 }
