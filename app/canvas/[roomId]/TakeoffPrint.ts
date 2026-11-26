@@ -139,8 +139,8 @@ function sheetsHtml(b: Block): string {
   if (!b.sheets?.length) return '<p class="muted">No cut parts.</p>'
   const job = b.jobSheets
   return `<table>
-    <thead><tr><th>Material</th><th class="r">Thk</th><th>Sheet size</th><th class="r">Parts</th><th class="r">Sheets</th><th class="r">Sheet equiv.</th><th class="r">Yield</th>${job ? '<th class="r">Cut together</th>' : ''}</tr></thead>
-    <tbody>${b.sheets.map(l => `<tr><td>${esc(l.material)}</td><td class="num">${l.thickness}</td><td class="muted">${l.sheetW} × ${l.sheetH}</td>
+    <thead><tr><th>Material</th><th>Sheet (L × W × T)</th><th class="r">Parts</th><th class="r">Sheets</th><th class="r">Sheet equiv.</th><th class="r">Yield</th>${job ? '<th class="r">Cut together</th>' : ''}</tr></thead>
+    <tbody>${b.sheets.map(l => `<tr><td>${esc(l.material)}</td><td class="muted">${l.sheetW} × ${l.sheetH} × ${l.thickness}</td>
       <td class="num">${l.parts}</td><td class="num key">${l.sheets}</td><td class="num">${l.sheetEquiv.toFixed(2)}</td><td class="num muted">${pct(l.efficiency)}</td>
       ${job ? `<td class="num key">${job.find(j => j.groupKey === l.groupKey)?.sheets ?? '—'}</td>` : ''}</tr>`).join('')}</tbody>
   </table>${b.sheetNotes.map(n => `<p class="warn">⚠ ${esc(n)}</p>`).join('')}`

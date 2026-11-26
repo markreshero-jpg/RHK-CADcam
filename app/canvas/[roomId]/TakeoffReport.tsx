@@ -332,8 +332,8 @@ function SheetsTable({ lines, jobLines }: { lines: SheetLine[]; jobLines?: Sheet
     <table className="w-full text-[11px] border-collapse">
       <thead>
         <tr className="text-gray-500 text-[10px]">
-          {['Material', 'Thk', 'Sheet', 'Parts', 'Sheets', 'Sheet equiv.', 'Yield', ...(jobLines ? ['Cut together'] : [])].map((h, i) => (
-            <th key={h} className={`${TH} ${i >= 3 || i === 1 ? 'text-right' : 'text-left'}`}>{h}</th>
+          {['Material', 'Sheet (L×W×T)', 'Parts', 'Sheets', 'Sheet equiv.', 'Yield', ...(jobLines ? ['Cut together'] : [])].map((h, i) => (
+            <th key={h} className={`${TH} ${i >= 2 ? 'text-right' : 'text-left'}`}>{h}</th>
           ))}
         </tr>
       </thead>
@@ -341,8 +341,7 @@ function SheetsTable({ lines, jobLines }: { lines: SheetLine[]; jobLines?: Sheet
         {lines.map((l, i) => (
           <tr key={l.groupKey} className={rowCls(i)}>
             <td className="py-0.5 pr-3">{l.material}</td>
-            <td className="py-0.5 pr-3 text-right font-mono">{l.thickness}</td>
-            <td className="py-0.5 pr-3 font-mono text-gray-500">{l.sheetW}×{l.sheetH}</td>
+            <td className="py-0.5 pr-3 font-mono text-gray-500">{l.sheetW}×{l.sheetH}×{l.thickness}</td>
             <td className="py-0.5 pr-3 text-right font-mono">{l.parts}</td>
             <td className="py-0.5 pr-3 text-right font-mono font-semibold text-white">{l.sheets}</td>
             <td className="py-0.5 pr-3 text-right font-mono">{l.sheetEquiv.toFixed(2)}</td>
