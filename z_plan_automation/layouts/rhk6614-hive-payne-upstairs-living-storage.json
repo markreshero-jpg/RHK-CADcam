@@ -7,7 +7,8 @@
   "Upper: unit hits the 2655 ceiling -> standard drop 30 + 30 BH (wall_cabinet_top 2625). WF 18 | WOPN 984 x 1750 x 400, no bottom (stands on the stone), 3 fixed shelves | WF 18. WFs = Mark's 18 shadowlines either side down to the bench, front flush with the box front (dz 380).",
   "Shelf gaps drawn 340/339/339 from the top + 600 at the bench don't close (90 short over the 1762). With the 30 BH: 1732 clear under the top, 1678 between 3 shelves -> 355/354/354/615 (each drawn gap +15, as close as it goes).",
   "Vent holes '59 @ 5mm holes for vent' - location TBC (Mark).",
-  "REV 1 (Mark 2026-11-26): every shelf double thickness - two 18 fixed shelves stacked (zero-height section between). Clear gaps 602/340/340/342 (_tmp-6614-dbl-shelves.mjs)."
+  "REV 1 (Mark 2026-11-26): every shelf double thickness - two 18 fixed shelves stacked (zero-height section between). Clear gaps 602/340/340/342 (_tmp-6614-dbl-shelves.mjs).",
+  "REV 2 (Mark 2026-11-26): rev 1 undone - shelves back to single 18, gaps 615/354/354/355 (_tmp-6614-single-shelves.mjs)."
  ],
  "projectName": "RHK6614 - The Hive Co - 189 Payne Rd The Gap",
  "roomId": "65c69db5-2aba-49e0-81c8-95c559968aa2",
@@ -103,7 +104,7 @@
       "type": "hsplit",
       "children": [
        {
-        "size": 602,
+        "size": 615,
         "separator": "fixed_shelf",
         "section": {
          "type": "open",
@@ -111,7 +112,7 @@
         }
        },
        {
-        "size": 0,
+        "size": 354,
         "separator": "fixed_shelf",
         "section": {
          "type": "open",
@@ -119,31 +120,7 @@
         }
        },
        {
-        "size": 340,
-        "separator": "fixed_shelf",
-        "section": {
-         "type": "open",
-         "fittings": []
-        }
-       },
-       {
-        "size": 0,
-        "separator": "fixed_shelf",
-        "section": {
-         "type": "open",
-         "fittings": []
-        }
-       },
-       {
-        "size": 340,
-        "separator": "fixed_shelf",
-        "section": {
-         "type": "open",
-         "fittings": []
-        }
-       },
-       {
-        "size": 0,
+        "size": 354,
         "separator": "fixed_shelf",
         "section": {
          "type": "open",
@@ -160,7 +137,7 @@
      }
     }
    },
-   "note": "#2 open shelving on the bench, Elegant Oak inside, no bottom, 3 double shelves (2 x 18 fixed stacked = 36), clear gaps 602/340/340/342 from the bench"
+   "note": "#2 open shelving on the bench, Elegant Oak inside, no bottom, 3 fixed shelves 18, clear gaps 615/354/354/355 from the bench"
   },
   {
    "def": "WF",
