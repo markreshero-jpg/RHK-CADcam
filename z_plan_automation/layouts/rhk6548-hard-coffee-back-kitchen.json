@@ -1,0 +1,77 @@
+{
+ "_source": "Nathan Costello email 26/11/2026 2:45pm 'Hard coffee joinery' + JMF plans p07/p08 (ARCHITECTURALS/_SUPERSEEDED/hard coffee - Adobe cloud storage.pdf)",
+ "projectName": "RHK6548 - Costello - Hard Coffee",
+ "roomId": "e8b3c950-5be5-4e4a-9117-451395e9d2a1",
+ "roomName": "Back Kitchen",
+ "roomHeight": 2420,
+ "_notes": [
+  "Email: 1 x cabinet in white board, 490 D x 665 W x 2320 H, one fixed mid shelf, adj above + below.",
+  "Room colour = Whiteboard 16.5 (room override). Pair of full-height doors. Kick 100.",
+  "Post (_tmp-6548-post.mjs): hinges [100,560,1050,1650,2120] on both doors - auto hinges sat on adj shelf holes; 1050 is 52 under the fixed shelf. Doors push-to-open (tall handle schedule)."
+ ],
+ "walls": [
+  {
+   "x": 0,
+   "y": 490,
+   "length": 490,
+   "angle": 270
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 665,
+   "angle": 0
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "T2D",
+   "wall": 2,
+   "offset": 0,
+   "dx": 665,
+   "dy": 2320,
+   "dz": 490,
+   "set": {
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          },
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       }
+      ]
+     }
+    }
+   },
+   "note": "White board storage, pair of doors, fixed mid shelf, 2 adj above + 2 below"
+  }
+ ]
+}

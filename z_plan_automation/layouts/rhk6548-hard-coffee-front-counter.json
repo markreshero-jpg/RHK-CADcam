@@ -1,0 +1,253 @@
+{
+ "_source": "Nathan Costello email 26/11/2026 2:45pm 'Hard coffee joinery' + JMF plans p07/p08 (ARCHITECTURALS/_SUPERSEEDED/hard coffee - Adobe cloud storage.pdf)",
+ "projectName": "RHK6548 - Costello - Hard Coffee",
+ "roomId": "09786d9b-378e-42ed-9fc7-1aed4c7b21ab",
+ "roomName": "Front Counter",
+ "roomHeight": 2705,
+ "_notes": [
+  "REV (Mark 2026-11-26, overrides the plan read): left to right 1250 open shelf | 200 open shelf with 2 false fronts for cup dispensers | 300 RH hinged door set down 150 from the top (rubbish into the bin behind) | 500 fixed shelf for the microwave | 500 open shelf over a bottom drawer (no top drawer, per email). All exposed interiors. 545 deep, 755 high incl 100 kick. Total 2750.",
+  "Open boxes come out flush with the fronts (dz 565). Microwave shelf: 320 clear above (MW 48 x 36 x H29 on Counter Elev 3).",
+  "Post (_tmp-6548-fix1.mjs): BC-03 face grid = door row 505 locked (100-605, RH hinge, no handle) + open row above (150 rubbish gap). REVT rule did not move the door. Kicks not joined (open boxes 565 vs 545 carcasses)."
+ ],
+ "walls": [
+  {
+   "x": 0,
+   "y": 545,
+   "length": 545,
+   "angle": 270
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 2750,
+   "angle": 0
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 0,
+   "dx": 1250,
+   "dy": 755,
+   "dz": 565,
+   "set": {
+    "has_face": false,
+    "top_type": "full_top",
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    }
+   },
+   "note": "#1 open shelf cabinet, adj shelf"
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 1250,
+   "dx": 200,
+   "dy": 755,
+   "dz": 545,
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": [
+       {
+        "type": "adj_shelf",
+        "y_locked": false
+       }
+      ]
+     }
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "false_panel"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "false_panel"
+      }
+     ]
+    }
+   },
+   "note": "#2 open shelf, 2 false fronts for cup dispensers"
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 1450,
+   "dx": 300,
+   "dy": 755,
+   "dz": 545,
+   "rules": {
+    "REVT": 150
+   },
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "open",
+      "fittings": []
+     }
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "door",
+       "hinge_side": "right"
+      }
+     ]
+    }
+   },
+   "note": "#3 RH door set down 150 from the top - rubbish into the bin behind"
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 1750,
+   "dx": 500,
+   "dy": 755,
+   "dz": 565,
+   "set": {
+    "has_face": false,
+    "top_type": "full_top",
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 281,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   },
+   "note": "#4 microwave, fixed shelf, 320 clear above"
+  },
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 2250,
+   "dx": 500,
+   "dy": 755,
+   "dz": 545,
+   "set": {
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "size": 184,
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": [
+          {
+           "type": "adj_shelf",
+           "y_locked": false
+          }
+         ]
+        }
+       }
+      ]
+     }
+    },
+    "face_grid": {
+     "cols": [
+      {
+       "col_index": 0,
+       "width_locked": false
+      }
+     ],
+     "rows": [
+      {
+       "row_index": 0,
+       "height": 220,
+       "height_locked": true
+      },
+      {
+       "row_index": 1,
+       "height_locked": false
+      }
+     ],
+     "zones": [
+      {
+       "col_index": 0,
+       "row_index": 0,
+       "face_type": "drawer_face"
+      },
+      {
+       "col_index": 0,
+       "row_index": 1,
+       "face_type": "open"
+      }
+     ]
+    }
+   },
+   "note": "#5 open shelf over a bottom drawer"
+  }
+ ]
+}

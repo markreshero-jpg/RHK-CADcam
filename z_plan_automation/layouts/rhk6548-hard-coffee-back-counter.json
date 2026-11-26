@@ -1,0 +1,55 @@
+{
+ "_source": "Nathan Costello email 26/11/2026 2:45pm 'Hard coffee joinery' + JMF plans p07/p08 (ARCHITECTURALS/_SUPERSEEDED/hard coffee - Adobe cloud storage.pdf)",
+ "projectName": "RHK6548 - Costello - Hard Coffee",
+ "roomId": "d3c04ade-ba07-4462-a40c-2a4bd1952d31",
+ "roomName": "Back Counter",
+ "roomHeight": 2705,
+ "_notes": [
+  "Email: three-drawer cabinet 760 H x 600 OA incl gable left + possible filler right. Right end = nib wall (Counter Elevation 3).",
+  "Depth 545 (same as front counter) - TBC.",
+  "Post (_tmp-6548-post.mjs): kick joined (KICK 1 under BC-02 + BC-03), GM1 vertical grain match on BC-02."
+ ],
+ "walls": [
+  {
+   "x": 0,
+   "y": 0,
+   "length": 600,
+   "angle": 0
+  },
+  {
+   "x": 600,
+   "y": 0,
+   "length": 545,
+   "angle": 90
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "BEPF",
+   "wall": 1,
+   "offset": 0,
+   "dx": 18,
+   "dy": 760,
+   "dz": 545,
+   "note": "Gable left"
+  },
+  {
+   "def": "D3-SLL",
+   "wall": 1,
+   "offset": 18,
+   "dx": 562,
+   "dy": 760,
+   "dz": 545,
+   "note": "Three-drawer cabinet"
+  },
+  {
+   "def": "BFK",
+   "wall": 1,
+   "offset": 580,
+   "dx": 20,
+   "dy": 760,
+   "dz": 545,
+   "note": "Filler to the nib wall (possible, TBC)"
+  }
+ ]
+}

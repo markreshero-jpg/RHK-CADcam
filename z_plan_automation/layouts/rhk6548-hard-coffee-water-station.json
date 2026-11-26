@@ -1,0 +1,75 @@
+{
+ "_source": "Nathan Costello email 26/11/2026 2:45pm 'Hard coffee joinery' + JMF plans p07/p08 (ARCHITECTURALS/_SUPERSEEDED/hard coffee - Adobe cloud storage.pdf)",
+ "projectName": "RHK6548 - Costello - Hard Coffee",
+ "roomId": "2bed2187-0b9c-4cf3-9e3e-5d29be5538a0",
+ "roomName": "Water Station",
+ "roomHeight": 2705,
+ "_notes": [
+  "Mark 2026-11-26: cabinet 590 W x 770 H x 590 D, open shelf. Email: one fixed mid shelf, filler above to make 805.",
+  "Kick 100 (job). Stainless top by others.",
+  "Post (_tmp-6548-fix1.mjs): BC-02 filler part turned front-facing - 590 x 35 x 18 strip at 770-805, flush with the box front."
+ ],
+ "walls": [
+  {
+   "x": 0,
+   "y": 590,
+   "length": 590,
+   "angle": 270
+  },
+  {
+   "x": 0,
+   "y": 0,
+   "length": 590,
+   "angle": 0
+  }
+ ],
+ "cabinets": [
+  {
+   "def": "B1D",
+   "wall": 2,
+   "offset": 0,
+   "dx": 590,
+   "dy": 770,
+   "dz": 590,
+   "set": {
+    "has_face": false,
+    "top_type": "full_top",
+    "exposed_interior": true,
+    "internal_grid": {
+     "tree": {
+      "type": "hsplit",
+      "children": [
+       {
+        "separator": "fixed_shelf",
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       },
+       {
+        "section": {
+         "type": "open",
+         "fittings": []
+        }
+       }
+      ]
+     }
+    }
+   },
+   "note": "Water station, open shelf, 1 fixed mid shelf, Blonde Oak inside"
+  },
+  {
+   "def": "BFK",
+   "wall": 2,
+   "offset": 0,
+   "dx": 590,
+   "dy": 35,
+   "dz": 590,
+   "set": {
+    "has_toekick": false,
+    "pos_z": 770
+   },
+   "note": "35 filler over the water station to make 805"
+  }
+ ]
+}
