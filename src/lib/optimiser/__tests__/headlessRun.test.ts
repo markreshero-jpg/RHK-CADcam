@@ -33,7 +33,9 @@ vi.mock('@/src/lib/supabase', async () => {
   return { supabase }
 })
 
-interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean; nestOnly?: boolean; pairShapes?: boolean
+interface RunCfg { project: string; rooms?: string[]; cabinets?: string[]; materials?: string[]
+  // Part uids (source_table:id, as in a saved run's parts) — re-nest one sheet of a run plus a part or two (RHK6563 R4 2026-11-27).
+  parts?: string[]; out: string; quality?: 'fast' | 'balanced' | 'best'; roundTrip?: boolean; reresolve?: boolean; byMaterial?: boolean; keepRun?: boolean; nestOnly?: boolean; pairShapes?: boolean
   // Stage 3 stock per material NAME: standard sheet size / qty + extra full sheets of another size (RHK6468 2026-11-17:
   // 2415 sheets with a few 2750 / 3100 for the long parts). Extra sizes go in the offcut pool (opened first, only for a
   // part that fits, qty = how many) but stay isOffcut false so their programs are named as full sheets.
@@ -106,7 +108,8 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
       !list?.length || list.some(n => n.toLowerCase() === (v ?? '').toLowerCase())
     const matName = (id: string | null) => id ? snap.materials.find(m => m.id === id)?.name ?? null : null
     const runParts = snap.parts.filter(p => p.output_to_cnc && nameIn(cfg.rooms, p.room_name)
-      && nameIn(cfg.cabinets, p.cabinet_label) && nameIn(cfg.materials, matName(p.material_id)))
+      && nameIn(cfg.cabinets, p.cabinet_label) && nameIn(cfg.materials, matName(p.material_id))
+      && (!cfg.parts?.length || cfg.parts.includes(p.uid)))
     if (!runParts.length) throw new Error('no parts match the filters')
 
     // ── Stage 4 run() ──
