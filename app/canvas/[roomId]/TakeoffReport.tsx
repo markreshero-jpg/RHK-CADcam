@@ -5,7 +5,7 @@
 //  - Takeoff: per room, cabinet counts (base / wall / tall + end panels,
 //    fillers, bulkheads, shadowlines, floating shelves), finger pulls, sheets
 //    per material (each room nested on its own), edgetape metres, paint
-//    (Satin Board parts: colour, gloss, m² one face + edges at 0.05 m) and hardware;
+//    (Satin Board parts: colour, gloss, m² one face + edges at PAINT_EDGE_M) and hardware;
 //    then the job totals — for keying into the quoting system.
 // Rollups: src/lib/takeoff/hardware.ts (hardware + counts), roomSheets.ts (nest),
 // optimiser/edgebandLength.ts (tape). Hardware reads the resolved cabinets the
@@ -26,7 +26,7 @@ import {
   type HardwareProducts, type HardwareProduct, type HardwareLine, type FingerPullLine, type KindCount, type TakeoffCab,
 } from '@/src/lib/takeoff/hardware'
 import { nestRoomsAndJob, type SheetLine } from '@/src/lib/takeoff/roomSheets'
-import { sumPaintGroups, paintColourLabel, type PaintColourGroup } from '@/src/lib/takeoff/paint'
+import { sumPaintGroups, paintColourLabel, PAINT_EDGE_M, type PaintColourGroup } from '@/src/lib/takeoff/paint'
 import { usePaintShop } from './PaintShopReport'
 
 const m2 = (m: number) => m.toFixed(2)
@@ -439,7 +439,7 @@ function TakeoffBlock({ kinds, fingerPulls, sheets, jobSheets, sheetNotes, tape,
       {sheetNotes.map(n => <div key={n} className="text-[11px] text-amber-300">{n}</div>)}
       <SubHead>Edgetape</SubHead>
       {tape.length ? <TapeTable lines={tape} waste={waste} /> : <Empty>No edgebanded parts.</Empty>}
-      {paint && paint.length > 0 && <><SubHead>Paint</SubHead><PaintTable groups={paint} /></>}
+      {paint && paint.length > 0 && <><SubHead>Paint</SubHead><PaintTable groups={paint} /><div className="text-[10px] text-gray-500 mt-0.5">Satin Board parts · one face + every edge at {PAINT_EDGE_M} m wide (edge m² = perimeter × {PAINT_EDGE_M})</div></>}
       <SubHead>Hardware</SubHead>
       {hardware.length ? <HwTable lines={hardware} /> : <Empty>No hardware.</Empty>}
     </>

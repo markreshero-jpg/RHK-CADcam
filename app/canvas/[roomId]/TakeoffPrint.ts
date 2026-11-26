@@ -9,7 +9,7 @@ import type { HardwareLine, FingerPullLine, KindCount, HardwareGroup } from '@/s
 import { KIND_LABEL, GRIP_LABEL, lengthsText, unitLabel } from '@/src/lib/takeoff/hardware'
 import type { SheetLine } from '@/src/lib/takeoff/roomSheets'
 import type { EdgebandLine } from '@/src/lib/optimiser/edgebandLength'
-import { paintColourLabel, type PaintColourGroup } from '@/src/lib/takeoff/paint'
+import { paintColourLabel, PAINT_EDGE_M, type PaintColourGroup } from '@/src/lib/takeoff/paint'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const m2 = (m: number) => m.toFixed(2)
@@ -160,7 +160,7 @@ function paintHtml(b: Block): string {
     <thead><tr><th>Paint colour</th><th>Finish</th><th class="r">Parts</th><th class="r">Face m²</th><th class="r">Edges m²</th><th class="r">Total m²</th></tr></thead>
     <tbody>${(b.paint ?? []).map(g => `<tr><td${g.colour ? '' : ' style="color:#c00;font-weight:bold"'}>${esc(paintColourLabel(g.colour))}</td><td>${esc(g.colour?.finish || 'TBC')}</td>
       <td class="num">${g.qty}</td><td class="num">${m2(g.faceM2)}</td><td class="num">${m2(g.edgeM2)}</td><td class="num key">${m2(g.m2)}</td></tr>`).join('')}</tbody>
-  </table><p class="note" style="margin:3px 0 0">Satin Board parts · one face + every edge at 0.05 m</p>`
+  </table><p class="note" style="margin:3px 0 0">Satin Board parts · one face + every edge at ${PAINT_EDGE_M} m wide (edge m² = perimeter × ${PAINT_EDGE_M})</p>`
 }
 
 function hardwareHtml(b: Block): string {
