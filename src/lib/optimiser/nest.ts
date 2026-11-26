@@ -147,8 +147,9 @@ interface OpenSheet { stock: SheetStock; free: Rect[]; placed: Placed[]; uW: num
 
 // Placement rule: bl = lowest position then leftmost (tidy, fills from the
 // top-left in output); blt = lowest top edge then leftmost; bssf = best short-side fit; baf = best area fit
-// (both hunt the tightest hole).
-type Rule = 'bl' | 'blt' | 'bssf' | 'baf'
+// (both hunt the tightest hole). lb = leftmost then lowest (stacks columns from the
+// left edge) — only used to tidy the leftover sheet.
+type Rule = 'bl' | 'blt' | 'bssf' | 'baf' | 'lb'
 
 function makeOpen(stock: SheetStock, gap: number): OpenSheet {
   const u = usable(stock)
@@ -159,6 +160,7 @@ function makeOpen(stock: SheetStock, gap: number): OpenSheet {
 function slotScore(f: Rect, w: number, h: number, rule: Rule): [number, number] {
   if (rule === 'bl') return [f.y, f.x]          // ties keep the first orientation (as-is)
   if (rule === 'blt') return [f.y + h, f.x]
+  if (rule === 'lb') return [f.x, f.y]
   const dw = f.w - w, dh = f.h - h
   if (rule === 'bssf') return [Math.min(dw, dh), Math.max(dw, dh)]
   return [f.w * f.h - w * h, Math.min(dw, dh)]
@@ -322,6 +324,44 @@ function mergeInto(sheets: OpenSheet[], extra: Placed[], allowRot: boolean): Ope
   return null
 }
 
+// Tidy the leftover (part-full) sheet: the attempt that won on sheet count may
+// have left its parts spread right across it, which leaves no offcut worth
+// keeping (RHK6563 R3 Antique White sheet 3: 56 % full, parts edge to edge).
+// Re-pack just that sheet into the shortest length of board that holds it
+// (full height), and into the narrowest width (full length), and keep whichever
+// leaves the bigger clean strip — one straight cut and it goes back on the rack.
+const TIDY_STEP = 25   // mm
+
+function packWithin(o: OpenSheet, pool: NestPartInput[], w: number, h: number, allowRot: boolean): OpenSheet | null {
+  for (const k of KEYS) {
+    const s = sorted(pool, k)
+    for (const rule of TIDY_RULES) {
+      const fresh = makeOpen(o.stock, o.gap)
+      fresh.free = [{ x: 0, y: 0, w: w + o.gap, h: h + o.gap }]
+      if (s.every(p => tryPlace(fresh, p, allowRot, rule))) return fresh
+    }
+  }
+  return null
+}
+
+function tidyLeftover(o: OpenSheet, allowRot: boolean): OpenSheet {
+  if (o.placed.length < 2) return o
+  const pool = o.placed.map(p => p.part)
+  let maxX = 0, maxY = 0
+  for (const p of o.placed) { maxX = Math.max(maxX, p.x + p.w); maxY = Math.max(maxY, p.y + p.h) }
+  let best = o, bestFree = Math.max((o.uW - maxX) * o.uH, (o.uH - maxY) * o.uW)
+  // Shortest length first: nothing shorter than the parts' area can work.
+  for (let w = Math.ceil(o.area / o.uH / TIDY_STEP) * TIDY_STEP; (o.uW - w) * o.uH > bestFree + EPS; w += TIDY_STEP) {
+    const fresh = packWithin(o, pool, w, o.uH, allowRot)
+    if (fresh) { best = fresh; bestFree = (o.uW - w) * o.uH; break }
+  }
+  for (let h = Math.ceil(o.area / o.uW / TIDY_STEP) * TIDY_STEP; (o.uH - h) * o.uW > bestFree + EPS; h += TIDY_STEP) {
+    const fresh = packWithin(o, pool, o.uW, h, allowRot)
+    if (fresh) { best = fresh; bestFree = (o.uH - h) * o.uW; break }
+  }
+  return best
+}
+
 // ── Attempts ────────────────────────────────────────────────────
 
 function rng(seed: number) {
@@ -362,6 +402,7 @@ function perturb(parts: NestPartInput[], seed: number): NestPartInput[] {
 }
 
 const RULES: Rule[] = ['bl', 'blt', 'bssf', 'baf']
+const TIDY_RULES: Rule[] = [...RULES, 'lb']
 const RANDOM_TRIES = { fast: 0, balanced: 24, best: 200 } as const
 
 // Fast = one attempt; Balanced = every sort order × every rule (16) + 24 random;
@@ -439,7 +480,7 @@ export function nest(
     const ordered = [...(best?.open ?? [])]
     let ei = -1
     ordered.forEach((o, i) => { if (ei < 0 || fill(o) < fill(ordered[ei]) - EPS) ei = i })
-    if (ei >= 0) ordered.push(...ordered.splice(ei, 1))
+    if (ei >= 0) ordered.push(tidyLeftover(ordered.splice(ei, 1)[0], settings.allowRotation))
     for (const o of ordered) allSheets.push(toSheet(o, globalIndex++, matId, thickness))
     allUnplaced.push(...(best?.unplaced ?? []))
   }
