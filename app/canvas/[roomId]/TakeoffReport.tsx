@@ -5,7 +5,7 @@
 //  - Takeoff: per room, cabinet counts (base / wall / tall + end panels,
 //    fillers, bulkheads, shadowlines, floating shelves), finger pulls, sheets
 //    per material (each room nested on its own), edgetape metres, paint
-//    (Satin Board parts: colour, gloss, m² one face + edges at 0.1 m) and hardware;
+//    (Satin Board parts: colour, gloss, m² one face + edges at 0.05 m) and hardware;
 //    then the job totals — for keying into the quoting system.
 // Rollups: src/lib/takeoff/hardware.ts (hardware + counts), roomSheets.ts (nest),
 // optimiser/edgebandLength.ts (tape). Hardware reads the resolved cabinets the

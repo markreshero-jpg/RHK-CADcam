@@ -3,7 +3,7 @@
 // ============================================================
 // Reports → Paint Shop Sheet (z_paint_shop). A simple form per room + paint
 // colour: Job, Room, Paint colour, Gloss level, Parts, Paint area (one face +
-// edges at 0.1 m, Mark 2026-11-26), Date. Satin Board parts only;
+// edges at 0.05 m, Mark 2026-11-26), Date. Satin Board parts only;
 // which colours a room uses comes from src/lib/takeoff/paint.ts.
 // ============================================================
 

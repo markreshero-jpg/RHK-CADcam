@@ -160,7 +160,7 @@ function paintHtml(b: Block): string {
     <thead><tr><th>Paint colour</th><th>Finish</th><th class="r">Parts</th><th class="r">Face m²</th><th class="r">Edges m²</th><th class="r">Total m²</th></tr></thead>
     <tbody>${(b.paint ?? []).map(g => `<tr><td${g.colour ? '' : ' style="color:#c00;font-weight:bold"'}>${esc(paintColourLabel(g.colour))}</td><td>${esc(g.colour?.finish || 'TBC')}</td>
       <td class="num">${g.qty}</td><td class="num">${m2(g.faceM2)}</td><td class="num">${m2(g.edgeM2)}</td><td class="num key">${m2(g.m2)}</td></tr>`).join('')}</tbody>
-  </table><p class="note" style="margin:3px 0 0">Satin Board parts · one face + every edge at 0.1 m</p>`
+  </table><p class="note" style="margin:3px 0 0">Satin Board parts · one face + every edge at 0.05 m</p>`
 }
 
 function hardwareHtml(b: Block): string {

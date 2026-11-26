@@ -47,14 +47,14 @@ describe('paint shop rollup', () => {
     expect(groups.map(g => g.colourId)).toEqual(['alab', null])
   })
 
-  it('paint area = one face + every edge at 0.1 m', () => {
+  it('paint area = one face + every edge at 0.05 m', () => {
     const door = { roomId: 'r1', cabinetLabel: 'B1', part: 'Door', height: 720, width: 600, thickness: 18, colourId: null, front: true }
     const [g] = paintColourGroups([door, { ...door, cabinetLabel: 'B2' }], new Map())
     expect(g.faceM2).toBeCloseTo(2 * 0.432)
-    expect(g.edgeM2).toBeCloseTo(2 * 2.64 * 0.1)
-    expect(g.m2).toBeCloseTo(2 * (0.432 + 0.264))
+    expect(g.edgeM2).toBeCloseTo(2 * 2.64 * 0.05)
+    expect(g.m2).toBeCloseTo(2 * (0.432 + 0.132))
     const [job] = sumPaintGroups([[g], [g]])
     expect(job.qty).toBe(4)
-    expect(job.m2).toBeCloseTo(4 * 0.696)
+    expect(job.m2).toBeCloseTo(4 * 0.564)
   })
 })

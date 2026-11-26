@@ -11,7 +11,7 @@
 // until the cabinet is re-resolved.
 //
 // Paint area (Mark 2026-11-26): one face + every edge. Each edge counts as a
-// PAINT_EDGE_M wide strip (0.1 m, whatever the board thickness), so a part's
+// PAINT_EDGE_M wide strip (0.05 m, Mark 2026-11-26 — was 0.1, whatever the board thickness), so a part's
 // edge area = its perimeter (m) × 0.1.
 // ============================================================
 
@@ -32,8 +32,8 @@ export interface PaintPart {
   front: boolean
 }
 
-/** Paint allowance per edge, metres wide (an 18 mm edge is painted as 0.1 m). */
-export const PAINT_EDGE_M = 0.1
+/** Paint allowance per edge, metres wide (an 18 mm edge is painted as 0.05 m). */
+export const PAINT_EDGE_M = 0.05
 
 export interface PaintLine {
   part: string; height: number; width: number; thickness: number
