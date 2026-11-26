@@ -490,6 +490,13 @@ is, and which edge is the bottom, once the label is off.
     width when it puts them on the sheet (`mirrorsOnDrawerFront`, `drills.ts`).
     Stored rows stay front view. Doors and handle holes are unchanged.
     Tests: `drawerFrontMirror.test.ts`.
+  - **2026-11-26 (Mark, RHK6563 Study WC-01): doors + handle holes mirrored too.**
+    Unmirrored, a door came off the machine as a mirror image of the drawing: hinges
+    on the right side but the handle at the TOP of an overhead door (hinge cups 100
+    from each end hid it). Hinge cups, handle holes (doors and drawer fronts) and
+    bi-fold fittings now swap ends across the width on the sheet, like the runner
+    holes and the door profile's front cuts. Hand-added holes stay as they sit.
+    Stored rows stay front view; only the sheet / G-code changes.
 
 **D23. "No handle" on a front (Mark, 2026-10-31 — RHK6586 study drawer, opened from underneath).**
 - A zone's `handle_id` can be the sentinel `'none'` (`NO_HANDLE` in

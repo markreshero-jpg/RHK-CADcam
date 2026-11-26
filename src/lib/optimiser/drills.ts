@@ -128,13 +128,18 @@ export function onDownFace(part: Pick<PartRef, 'source_table' | 'source_part_key
   return outputFace != null && POS_FACES.has(outputFace) !== upPos
 }
 
-// Drawer front runner fixings and marker pricks are stored as seen from the FRONT
-// of the cabinet (what the drawing shows), but the front is machined back face up,
-// so left and right swap on the sheet. A centred pair of runners hides it; a scribed
-// cabinet's off-centre runners don't (RHK6570 Bed 3 BC-03, 106 + 31 from the edges).
-// Doors stay as they are: hinge cups are right on the door as cut (Mark, 2026-11-09).
+// Front drilling (runner fixings, marker pricks, hinge cups, handle holes, bi-fold
+// fittings) is stored as seen from the FRONT of the cabinet (what the drawing shows),
+// but doors and drawer fronts are machined back face up, so left and right swap on
+// the sheet — the same way the door profile's front cuts are stored (collectDoorProfileRoutes).
+// A centred pattern hides it; anything off-centre doesn't: a scribed cabinet's runners
+// (RHK6570 Bed 3 BC-03, 106 + 31 from the edges), and a door's handle — unmirrored, the
+// door came off the machine as a mirror image, hinges on the right side but the handle
+// at the TOP of an overhead door (RHK6563 Study WC-01, Mark 2026-11-26). Hinge cups
+// 100 from each end looked right either way, which is why doors were left alone on
+// 2026-11-09. Hand-added holes (no generated key) stay as they sit.
 export function mirrorsOnDrawerFront(part: Pick<PartRef, 'source_table'>, op: Pick<DrillOpRaw, 'operation_key'>): boolean {
-  return part.source_table === 'face_zones' && /^(slide_|df_marker_)/.test(op.operation_key ?? '')
+  return part.source_table === 'face_zones' && /^(slide_|df_marker_|hinge_|handle_|bifold_)/.test(op.operation_key ?? '')
 }
 
 // 6th face nesting (two-sided spec §0). Sheet program A runs face up as today; the
