@@ -9,6 +9,10 @@
 //             the room / job colour for the cabinet's class.
 // Fronts saved before door_colour_id existed fall back to the room / job colour
 // until the cabinet is re-resolved.
+//
+// Paint area (Mark 2026-11-26): one face + every edge. Each edge counts as a
+// PAINT_EDGE_M wide strip (0.1 m, whatever the board thickness), so a part's
+// edge area = its perimeter (m) × 0.1.
 // ============================================================
 
 import type { CabinetInstance, Room, Project } from '../types'
@@ -28,9 +32,18 @@ export interface PaintPart {
   front: boolean
 }
 
+/** Paint allowance per edge, metres wide (an 18 mm edge is painted as 0.1 m). */
+export const PAINT_EDGE_M = 0.1
+
 export interface PaintLine {
   part: string; height: number; width: number; thickness: number
-  qty: number; cabinets: string[]; m2: number
+  qty: number; cabinets: string[]
+  /** One face. */
+  faceM2: number
+  /** All 4 edges at PAINT_EDGE_M wide. */
+  edgeM2: number
+  /** faceM2 + edgeM2. */
+  m2: number
 }
 
 export interface PaintColourGroup {
@@ -38,7 +51,15 @@ export interface PaintColourGroup {
   colour: PaintColour | null
   lines: PaintLine[]
   qty: number
+  faceM2: number
+  edgeM2: number
   m2: number
+}
+
+/** "Brand Name Code" for a paint colour, brand left off when the name starts with it. */
+export function paintColourLabel(c: PaintColour | null): string {
+  if (!c) return 'COLOUR NOT CHOSEN'
+  return [c.brand && !c.name.toLowerCase().startsWith(c.brand.toLowerCase()) ? c.brand : null, c.name, c.code].filter(Boolean).join(' ')
 }
 
 const FACE: Record<string, string> = { door: 'Door', drawer_face: 'Drawer Front', false_panel: 'False Panel' }
@@ -86,21 +107,35 @@ export function buildPaintParts(
   return out
 }
 
-/** Group by colour, then same part + size into lines with a qty. Area = one face. */
+/** Group by colour, then same part + size into lines with a qty. Area = one face + edges. */
 export function paintColourGroups(parts: PaintPart[], colours: Map<string, PaintColour>): PaintColourGroup[] {
   const groups = new Map<string, PaintColourGroup>()
   for (const p of parts) {
     const gk = p.colourId ?? ''
     let g = groups.get(gk)
-    if (!g) { g = { colourId: p.colourId, colour: p.colourId ? colours.get(p.colourId) ?? null : null, lines: [], qty: 0, m2: 0 }; groups.set(gk, g) }
+    if (!g) { g = { colourId: p.colourId, colour: p.colourId ? colours.get(p.colourId) ?? null : null, lines: [], qty: 0, faceM2: 0, edgeM2: 0, m2: 0 }; groups.set(gk, g) }
     let l = g.lines.find(x => x.part === p.part && x.height === p.height && x.width === p.width && x.thickness === p.thickness)
-    if (!l) { l = { part: p.part, height: p.height, width: p.width, thickness: p.thickness, qty: 0, cabinets: [], m2: 0 }; g.lines.push(l) }
+    if (!l) { l = { part: p.part, height: p.height, width: p.width, thickness: p.thickness, qty: 0, cabinets: [], faceM2: 0, edgeM2: 0, m2: 0 }; g.lines.push(l) }
     l.qty++
     if (!l.cabinets.includes(p.cabinetLabel)) l.cabinets.push(p.cabinetLabel)
-    const a = (p.height * p.width) / 1e6
-    l.m2 += a; g.m2 += a; g.qty++
+    const face = (p.height * p.width) / 1e6
+    const edge = (2 * (p.height + p.width) / 1000) * PAINT_EDGE_M
+    l.faceM2 += face; l.edgeM2 += edge; l.m2 += face + edge
+    g.faceM2 += face; g.edgeM2 += edge; g.m2 += face + edge; g.qty++
   }
   for (const g of groups.values()) g.lines.sort((a, b) => a.part.localeCompare(b.part) || b.height - a.height || b.width - a.width)
   // Chosen colours by name, "colour not chosen" last.
   return [...groups.values()].sort((a, b) => (a.colour ? 0 : 1) - (b.colour ? 0 : 1) || (a.colour?.name ?? '').localeCompare(b.colour?.name ?? ''))
+}
+
+/** Add colour groups from several rooms into job totals, one per colour (lines dropped). */
+export function sumPaintGroups(lists: PaintColourGroup[][]): PaintColourGroup[] {
+  const by = new Map<string, PaintColourGroup>()
+  for (const g of lists.flat()) {
+    const k = g.colourId ?? ''
+    const e = by.get(k)
+    if (!e) { by.set(k, { ...g, lines: [] }); continue }
+    e.qty += g.qty; e.faceM2 += g.faceM2; e.edgeM2 += g.edgeM2; e.m2 += g.m2
+  }
+  return [...by.values()].sort((a, b) => (a.colour ? 0 : 1) - (b.colour ? 0 : 1) || (a.colour?.name ?? '').localeCompare(b.colour?.name ?? ''))
 }

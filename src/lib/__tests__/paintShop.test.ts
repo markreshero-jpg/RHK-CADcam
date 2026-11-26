@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPaintParts, paintColourGroups, type PaintColour } from '../takeoff/paint'
+import { buildPaintParts, paintColourGroups, sumPaintGroups, type PaintColour } from '../takeoff/paint'
 import type { ResolvedCabinet } from '../resolver/types'
 
 const zone = (o: Record<string, unknown>) => ({ face_type: 'door', DX: 450, DY: 720, DZ: 18, material_id: 'satin', ...o })
@@ -45,5 +45,16 @@ describe('paint shop rollup', () => {
     const resolved = new Map([['c1', cab('c1', [zone({}), zone({ door_colour_id: 'alab' })])]])
     const groups = paintColourGroups(buildPaintParts([{ id: 'c1', room_id: 'r1', label: 'B1', assembly_class: 'base' }], resolved, painted, new Map(), null), colours)
     expect(groups.map(g => g.colourId)).toEqual(['alab', null])
+  })
+
+  it('paint area = one face + every edge at 0.1 m', () => {
+    const door = { roomId: 'r1', cabinetLabel: 'B1', part: 'Door', height: 720, width: 600, thickness: 18, colourId: null, front: true }
+    const [g] = paintColourGroups([door, { ...door, cabinetLabel: 'B2' }], new Map())
+    expect(g.faceM2).toBeCloseTo(2 * 0.432)
+    expect(g.edgeM2).toBeCloseTo(2 * 2.64 * 0.1)
+    expect(g.m2).toBeCloseTo(2 * (0.432 + 0.264))
+    const [job] = sumPaintGroups([[g], [g]])
+    expect(job.qty).toBe(4)
+    expect(job.m2).toBeCloseTo(4 * 0.696)
   })
 })

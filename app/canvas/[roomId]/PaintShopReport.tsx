@@ -2,7 +2,8 @@
 
 // ============================================================
 // Reports → Paint Shop Sheet (z_paint_shop). A simple form per room + paint
-// colour: Job, Room, Paint colour, Gloss level, Date. Satin Board parts only;
+// colour: Job, Room, Paint colour, Gloss level, Parts, Paint area (one face +
+// edges at 0.1 m, Mark 2026-11-26), Date. Satin Board parts only;
 // which colours a room uses comes from src/lib/takeoff/paint.ts.
 // ============================================================
 
@@ -10,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/src/lib/supabase'
 import type { Room, Project, CabinetInstance } from '@/src/lib/types'
 import type { ResolvedCabinet } from '@/src/lib/resolver/types'
-import { buildPaintParts, paintColourGroups, type PaintColour, type PaintColourGroup } from '@/src/lib/takeoff/paint'
+import { buildPaintParts, paintColourGroups, paintColourLabel, type PaintColour, type PaintColourGroup } from '@/src/lib/takeoff/paint'
 
 export interface PaintShopData {
   rooms: { room: Room; groups: PaintColourGroup[] }[]
@@ -54,8 +55,12 @@ export function usePaintShop({ active, project, rooms, cabinets, resolved }: {
 }
 
 // One simple form per room + paint colour (Mark 2026-11-18): Job, Room, Paint
-// colour, Gloss level, Date — nothing else.
-export interface PaintForm { job: string; room: string; colour: string; gloss: string; date: string; missing: boolean }
+// colour, Gloss level, Parts, Paint area, Date.
+export interface PaintForm { job: string; room: string; colour: string; gloss: string; parts: string; area: string; date: string; missing: boolean }
+
+/** "4.82 m² (face 3.60 + edges 1.22)". */
+export const paintAreaText = (g: Pick<PaintColourGroup, 'm2' | 'faceM2' | 'edgeM2'>) =>
+  `${g.m2.toFixed(2)} m² (face ${g.faceM2.toFixed(2)} + edges ${g.edgeM2.toFixed(2)})`
 
 export function paintForms(data: PaintShopData | null, project: Project | null): PaintForm[] {
   if (!data) return []
@@ -63,13 +68,15 @@ export function paintForms(data: PaintShopData | null, project: Project | null):
   const date = new Date().toLocaleDateString('en-AU')
   return data.rooms.flatMap(r => r.groups.map(g => ({
     job, room: r.room.name, date,
-    colour: g.colour ? [g.colour.brand && !g.colour.name.toLowerCase().startsWith(g.colour.brand.toLowerCase()) ? g.colour.brand : null, g.colour.name, g.colour.code].filter(Boolean).join(' ') : 'COLOUR NOT CHOSEN',
+    colour: paintColourLabel(g.colour),
     gloss: g.colour?.finish || 'TBC',
+    parts: String(g.qty),
+    area: paintAreaText(g),
     missing: !g.colour,
   })))
 }
 
-const FIELDS: [keyof PaintForm, string][] = [['job', 'Job'], ['room', 'Room'], ['colour', 'Paint colour'], ['gloss', 'Gloss level'], ['date', 'Date']]
+const FIELDS: [keyof PaintForm, string][] = [['job', 'Job'], ['room', 'Room'], ['colour', 'Paint colour'], ['gloss', 'Gloss level'], ['parts', 'Parts'], ['area', 'Paint area'], ['date', 'Date']]
 
 export function PaintShopSheet({ data, project }: { data: PaintShopData | null; project: Project | null }) {
   if (!data) return <div className="text-gray-500 text-center py-12 text-sm">Loading…</div>

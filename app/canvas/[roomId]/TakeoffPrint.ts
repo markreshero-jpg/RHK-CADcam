@@ -9,6 +9,7 @@ import type { HardwareLine, FingerPullLine, KindCount, HardwareGroup } from '@/s
 import { KIND_LABEL, GRIP_LABEL, lengthsText, unitLabel } from '@/src/lib/takeoff/hardware'
 import type { SheetLine } from '@/src/lib/takeoff/roomSheets'
 import type { EdgebandLine } from '@/src/lib/optimiser/edgebandLength'
+import { paintColourLabel, type PaintColourGroup } from '@/src/lib/takeoff/paint'
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 const m2 = (m: number) => m.toFixed(2)
@@ -106,7 +107,7 @@ const CAB_KINDS = new Set(['base', 'wall', 'tall'])
 const codes = (k: KindCount) => k.codes.map(c => `${c.code}${c.count > 1 ? ` ×${c.count}` : ''}`).join(', ')
 const fingerTotal = (f: FingerPullLine[]) => f.reduce((a, l) => a + l.fronts, 0)
 
-interface Block { kinds: KindCount[]; fingerPulls: FingerPullLine[]; sheets: SheetLine[] | null; jobSheets?: SheetLine[] | null; sheetNotes: string[]; tape: EdgebandLine[]; hardware: HardwareLine[] }
+interface Block { kinds: KindCount[]; fingerPulls: FingerPullLine[]; sheets: SheetLine[] | null; jobSheets?: SheetLine[] | null; sheetNotes: string[]; tape: EdgebandLine[]; paint?: PaintColourGroup[] | null; hardware: HardwareLine[] }
 
 const cabCount = (b: Block) => b.kinds.filter(k => CAB_KINDS.has(k.kind)).reduce((a, k) => a + k.count, 0)
 const sheetCount = (b: Block) => (b.sheets ?? []).reduce((a, l) => a + l.sheets, 0)
@@ -154,6 +155,14 @@ function tapeHtml(b: Block, waste: number): string {
   </table>`
 }
 
+function paintHtml(b: Block): string {
+  return `<table>
+    <thead><tr><th>Paint colour</th><th>Finish</th><th class="r">Parts</th><th class="r">Face m²</th><th class="r">Edges m²</th><th class="r">Total m²</th></tr></thead>
+    <tbody>${(b.paint ?? []).map(g => `<tr><td${g.colour ? '' : ' style="color:#c00;font-weight:bold"'}>${esc(paintColourLabel(g.colour))}</td><td>${esc(g.colour?.finish || 'TBC')}</td>
+      <td class="num">${g.qty}</td><td class="num">${m2(g.faceM2)}</td><td class="num">${m2(g.edgeM2)}</td><td class="num key">${m2(g.m2)}</td></tr>`).join('')}</tbody>
+  </table><p class="note" style="margin:3px 0 0">Satin Board parts · one face + every edge at 0.1 m</p>`
+}
+
 function hardwareHtml(b: Block): string {
   if (!b.hardware.length) return '<p class="muted">No hardware.</p>'
   return `<table>
@@ -166,12 +175,12 @@ function hardwareHtml(b: Block): string {
 const sec = (title: string, body: string) => `<div class="sec"><h3>${title}</h3>${body}</div>`
 
 function blockHtml(b: Block, waste: number): string {
-  return sec('Cabinets', countsHtml(b)) + sec('Sheets', sheetsHtml(b)) + sec('Edgetape', tapeHtml(b, waste)) + sec('Hardware', hardwareHtml(b))
+  return sec('Cabinets', countsHtml(b)) + sec('Sheets', sheetsHtml(b)) + sec('Edgetape', tapeHtml(b, waste)) + (b.paint?.length ? sec('Paint', paintHtml(b)) : '') + sec('Hardware', hardwareHtml(b))
 }
 
 export function takeoffPrintHtml(data: TakeoffData | null, pagePerRoom = false): string {
   if (!data) return ''
-  const job: Block = { kinds: data.kinds, fingerPulls: data.fingerPulls, sheets: data.sheetsByRoom, jobSheets: data.sheetsJob, sheetNotes: [], tape: data.tape, hardware: data.hardware }
+  const job: Block = { kinds: data.kinds, fingerPulls: data.fingerPulls, sheets: data.sheetsByRoom, jobSheets: data.sheetsJob, sheetNotes: [], tape: data.tape, paint: data.paint, hardware: data.hardware }
   return `${CSS}<div class="tk${pagePerRoom ? ' pp' : ''}">${data.rooms.map(r => `
     <div class="room">${band(r.room.name, blockStats(r))}${blockHtml(r, data.tapeWaste)}</div>`).join('')}
     ${data.rooms.length > 1 ? `<div class="room">${band('Job totals', `${plural(data.rooms.length, 'room')} · ${blockStats(job)}`)}

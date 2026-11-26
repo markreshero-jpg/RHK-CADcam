@@ -27,6 +27,13 @@
      class colour until the cabinet is re-resolved.
    - No colour anywhere: a red **COLOUR NOT CHOSEN** block, listed last.
 4. Removed parts (hidden in all views) are left off.
+5. **Paint area** (Mark 2026-11-26): every Satin Board part counts **one face
+   + all 4 edges**, each edge as a **0.1 m wide** strip whatever the thickness
+   (an 18 mm edge is painted as 0.1 m). Edge m² = perimeter (m) × 0.1
+   (`PAINT_EDGE_M` in `src/lib/takeoff/paint.ts`). Shown on the Paint Shop
+   Sheet form (Parts, Paint area "4.82 m² (face 3.60 + edges 1.22)") and in the
+   Takeoff report's **Paint** section per room + job totals: colour, finish
+   (gloss), parts, face / edges / total m².
 
 ## Phases
 
@@ -36,5 +43,5 @@
   Check pending.
 - [ ] P2 — per-part paint colour override on non-front parts (end panel / kick /
   panel picks their own colour).
-- [ ] P3 — painted sides / edges column (one face vs both, edges) if the painter
-  wants it.
+- [x] P3 — paint m² (one face + edges at 0.1 m) on the Paint Shop Sheet and
+  the Takeoff (colour + finish + m²). Built 2026-11-26, in-app check pending.

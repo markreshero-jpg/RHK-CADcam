@@ -4,7 +4,8 @@
 //    the cabinets it goes in — for the floor to pick the job.
 //  - Takeoff: per room, cabinet counts (base / wall / tall + end panels,
 //    fillers, bulkheads, shadowlines, floating shelves), finger pulls, sheets
-//    per material (each room nested on its own), edgetape metres and hardware;
+//    per material (each room nested on its own), edgetape metres, paint
+//    (Satin Board parts: colour, gloss, m² one face + edges at 0.1 m) and hardware;
 //    then the job totals — for keying into the quoting system.
 // Rollups: src/lib/takeoff/hardware.ts (hardware + counts), roomSheets.ts (nest),
 // optimiser/edgebandLength.ts (tape). Hardware reads the resolved cabinets the
@@ -25,6 +26,8 @@ import {
   type HardwareProducts, type HardwareProduct, type HardwareLine, type FingerPullLine, type KindCount, type TakeoffCab,
 } from '@/src/lib/takeoff/hardware'
 import { nestRoomsAndJob, type SheetLine } from '@/src/lib/takeoff/roomSheets'
+import { sumPaintGroups, paintColourLabel, type PaintColourGroup } from '@/src/lib/takeoff/paint'
+import { usePaintShop } from './PaintShopReport'
 
 const m2 = (m: number) => m.toFixed(2)
 const pct = (v: number) => `${Math.round(v * 100)}%`
@@ -39,6 +42,8 @@ export interface TakeoffRoom {
   sheets: SheetLine[] | null          // null = still nesting
   sheetNotes: string[]
   tape: EdgebandLine[]
+  /** Satin Board paint per colour; null = still loading. */
+  paint: PaintColourGroup[] | null
 }
 
 export interface TakeoffData {
@@ -52,6 +57,7 @@ export interface TakeoffData {
   sheetsJob: SheetLine[] | null
   tape: EdgebandLine[]
   tapeWaste: number
+  paint: PaintColourGroup[] | null
 }
 
 type ProductRow = { id: string; name: string; brand?: string | null; supplier_code?: string | null; maker_code?: string | null }
@@ -174,6 +180,9 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
     return () => clearTimeout(t)
   }, [active, opti, roomKey, nested?.key])
 
+  // Paint (Satin Board parts) per room + colour, same rollup as the Paint Shop Sheet.
+  const paint = usePaintShop({ active, project, rooms, cabinets, resolved })
+
   const data = useMemo<TakeoffData | null>(() => {
     if (!codes || !products || seamsPending) return null   // shelf supports not in yet
     const ids = rooms.map(r => r.id)
@@ -196,6 +205,7 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
         sheets: ns ? ns.lines : null,
         sheetNotes: ns ? [...ns.unplaced.map(u => `Too big for a sheet: ${u}`), ...ns.stale.map(s => `Shape out of date, not nested: ${s}`)] : [],
         tape: eb?.rooms.find(r => r.roomId === room.id)?.lines ?? [],
+        paint: paint ? paint.rooms.find(r => r.room.id === room.id)?.groups ?? [] : null,
       }
     })
     return {
@@ -207,8 +217,9 @@ export function useTakeoff({ active, project, rooms, cabinets, resolved }: {
       sheetsJob: nest ? nest.job : null,
       tape: eb?.totals ?? [],
       tapeWaste,
+      paint: paint ? sumPaintGroups(paint.rooms.map(r => r.groups)) : null,
     }
-  }, [codes, products, seamsPending, rooms, cabinets, withMethodSeams, opti, nested, roomKey, tapeWaste])
+  }, [codes, products, seamsPending, rooms, cabinets, withMethodSeams, opti, nested, roomKey, tapeWaste, paint])
 
   return { data, loading: !data || !opti || seamsPending, nesting: !!opti && nested?.key !== roomKey }
 }
@@ -389,9 +400,35 @@ function HwTable({ lines }: { lines: HardwareLine[] }) {
   )
 }
 
-function TakeoffBlock({ kinds, fingerPulls, sheets, jobSheets, sheetNotes, tape, hardware, waste, nesting }: {
+function PaintTable({ groups }: { groups: PaintColourGroup[] }) {
+  return (
+    <table className="w-full text-[11px] border-collapse">
+      <thead>
+        <tr className="text-gray-500 text-[10px]">
+          {['Paint colour', 'Finish', 'Parts', 'Face m²', 'Edges m²', 'Total m²'].map((h, i) => (
+            <th key={h} className={`${TH} ${i >= 2 ? 'text-right' : 'text-left'}`}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {groups.map((g, i) => (
+          <tr key={g.colourId ?? '-'} className={rowCls(i)}>
+            <td className={`py-0.5 pr-3 ${g.colour ? '' : 'text-red-300'}`}>{paintColourLabel(g.colour)}</td>
+            <td className={`py-0.5 pr-3 ${g.colour?.finish ? '' : 'text-amber-300'}`}>{g.colour?.finish || 'TBC'}</td>
+            <td className="py-0.5 pr-3 text-right font-mono">{g.qty}</td>
+            <td className="py-0.5 pr-3 text-right font-mono">{m2(g.faceM2)}</td>
+            <td className="py-0.5 pr-3 text-right font-mono">{m2(g.edgeM2)}</td>
+            <td className="py-0.5 pr-3 text-right font-mono font-semibold text-white">{m2(g.m2)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+function TakeoffBlock({ kinds, fingerPulls, sheets, jobSheets, sheetNotes, tape, paint, hardware, waste, nesting }: {
   kinds: KindCount[]; fingerPulls: FingerPullLine[]; sheets: SheetLine[] | null; jobSheets?: SheetLine[] | null
-  sheetNotes: string[]; tape: EdgebandLine[]; hardware: HardwareLine[]; waste: number; nesting: boolean
+  sheetNotes: string[]; tape: EdgebandLine[]; paint: PaintColourGroup[] | null; hardware: HardwareLine[]; waste: number; nesting: boolean
 }) {
   return (
     <>
@@ -402,6 +439,7 @@ function TakeoffBlock({ kinds, fingerPulls, sheets, jobSheets, sheetNotes, tape,
       {sheetNotes.map(n => <div key={n} className="text-[11px] text-amber-300">{n}</div>)}
       <SubHead>Edgetape</SubHead>
       {tape.length ? <TapeTable lines={tape} waste={waste} /> : <Empty>No edgebanded parts.</Empty>}
+      {paint && paint.length > 0 && <><SubHead>Paint</SubHead><PaintTable groups={paint} /></>}
       <SubHead>Hardware</SubHead>
       {hardware.length ? <HwTable lines={hardware} /> : <Empty>No hardware.</Empty>}
     </>
@@ -416,14 +454,14 @@ export function TakeoffSheet({ data, nesting }: { data: TakeoffData | null; nest
         <div key={r.room.id}>
           <RoomHead name={r.room.name} />
           <TakeoffBlock kinds={r.kinds} fingerPulls={r.fingerPulls} sheets={r.sheets} sheetNotes={r.sheetNotes}
-            tape={r.tape} hardware={r.hardware} waste={data.tapeWaste} nesting={nesting} />
+            tape={r.tape} paint={r.paint} hardware={r.hardware} waste={data.tapeWaste} nesting={nesting} />
         </div>
       ))}
       {data.rooms.length > 1 && (
         <div>
           <RoomHead name="Job totals" sub="sheets = sum of the room nests · Cut together = all rooms nested as one" />
           <TakeoffBlock kinds={data.kinds} fingerPulls={data.fingerPulls} sheets={data.sheetsByRoom} jobSheets={data.sheetsJob} sheetNotes={[]}
-            tape={data.tape} hardware={data.hardware} waste={data.tapeWaste} nesting={nesting} />
+            tape={data.tape} paint={data.paint} hardware={data.hardware} waste={data.tapeWaste} nesting={nesting} />
         </div>
       )}
     </div>
