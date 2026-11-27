@@ -23,6 +23,18 @@ export const READ_TOOLS: Anthropic.Tool[] = [
     input_schema: { type: 'object', properties: {}, additionalProperties: false },
   },
   {
+    name: 'look_at_cad',
+    description: 'SEE the CAD drawn on this room\'s canvas as a picture: site sketches (freehand handwriting, numbers, shapes — only readable this way), lines, boxes, typed notes and dims, with a mm grid. view plan, or elevation + wall. Use it whenever the user mentions their sketch / drawing / notes on the canvas, or the room summary lists CAD and the question depends on it. Read handwriting carefully; sketches are not to scale, so trust written numbers.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        view: { type: 'string', enum: ['plan', 'elevation'] },
+        wall: { type: 'string', description: 'elevation: the wall name, e.g. "Wall 2"' },
+      },
+      required: ['view'], additionalProperties: false,
+    },
+  },
+  {
     name: 'find_library',
     description: 'Search the cabinet library for codes to place: by code or words (e.g. "end panel", "filler", "BEP", "drawer 600"). Returns code | class | default W×H×D | category.',
     input_schema: {
@@ -303,6 +315,21 @@ export async function runReadTool(name: string, input: unknown, ctx: ToolContext
     case 'get_kicks': return getKicks(ctx)
     case 'get_markup': return getMarkup(ctx)
     case 'get_cabinet_detail': return getCabinetDetail(ctx, (input ?? {}) as { label?: string })
+    case 'look_at_cad': return (await lookAtCad(ctx, input)).text
     default: throw new Error(`Unknown tool: ${name}`)
   }
+}
+
+async function lookAtCad(ctx: ToolContext, input: unknown) {
+  const i = (input ?? {}) as { view?: string; wall?: string }
+  const { loadCadPicture } = await import('./server/cadPicture')
+  return loadCadPicture(ctx.roomId, i.view === 'elevation' ? { view: 'elevation', wall: String(i.wall ?? '') } : { view: 'plan' })
+}
+
+/** As runReadTool, but look_at_cad comes back as the picture + its words (an image tool result). */
+export async function runReadToolContent(name: string, input: unknown, ctx: ToolContext): Promise<string | (Anthropic.TextBlockParam | Anthropic.ImageBlockParam)[]> {
+  if (name !== 'look_at_cad') return runReadTool(name, input, ctx)
+  const r = await lookAtCad(ctx, input)
+  if (!r.png) return r.text
+  return [{ type: 'image', source: { type: 'base64', media_type: 'image/png', data: r.png } }, { type: 'text', text: r.text }]
 }

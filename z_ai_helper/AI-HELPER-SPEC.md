@@ -651,7 +651,37 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     the middle drawer out" → removed, check flagged the locked 695 drawer now outside its
     bay and offered auto. Unit tests in interior.test.ts. ai_gaps "drawers inside a bay"
     marked built.
-- **Next:** kick pieces (the last open Can't do yet item) needs its own design — ask Mark.
+- **Kick pieces — design confirmed by Mark 2026-11-28 (not built yet):** tested from scratch
+  in RHK6542 DHID › Living Room (Wall 1 + Wall 2 @ 45°, B2D B2D | BFKANG | B2D): Join kicks
+  made a straight Wall-1-only KICK 1 (1751.7 face / sub / back, no bevels) and left the Wall 2
+  cabinet on its own kick. Decided: Join kicks takes in the next wall's cabinets that butt
+  through an angled filler; the face mitres at the filler's front corners (Greystone-style 45°
+  bevels); the back mitres where the walls meet. Build it in the app, then an AI step.
+- **Q9 reading CAD + site sketches (2026-11-28, Mark: "can we get the ai model to be able to
+  read cad, even my site sketches"):** sketches are freehand strokes (handwriting, no text), so
+  the model SEES them: `src/lib/ai/cadImage.ts` draws one view's CAD (plan, or a wall's
+  elevation — every kind: freehand / bulged lines, rects, ellipses, circles, arcs, clouds,
+  text, dims incl. special) as an SVG with a labelled mm grid and the walls faint behind;
+  `server/cadPicture.ts` makes the PNG (sharp, loaded lazily) and lists typed text / dims as
+  words (`cadText`).
+  - Chat: `look_at_cad` read tool (view plan | elevation + wall) returns an image tool result
+    (`runReadToolContent`); the room summary gets "CAD on this room's canvas: plan: 244 items
+    (244 hand-sketched strokes)…" so the model knows to look; prompt says to say what it read
+    and flag what it can't make out.
+  - ✏️ **Draw from my sketch** (panel button beside Attach plan, phone too): `/api/ai/draw`
+    `{ fromCad: true }` → DrawCtx.path `cad:` → runDrawTurn sends the plan + any elevations
+    with CAD as pictures instead of an upload; the rest of AI4 (questions, room_plan, checks,
+    Apply, one Undo) is unchanged.
+  - Checked headless: RHK6596 Laundry "what does my sketch say?" → read 805 washer/dryer space,
+    1970 bench BSK + B2D, 600 deep, 2 × W2D 300 deep, seen ends, CH 2430 (flagged vs the room's
+    2400), cornice 90, the 3-room spec box (20 stone, 2pac, small lip pull black), Caroma tub
+    re-used; listed the open widths (12 s, 9¢). Draw from my sketch on a copy of that sketch in
+    RHK1234 › "AI Sketch Test": asked kick / top line / wall length / seen ends, then drew
+    3 walls, BEPF + BSK 1000 + B2D 970, WEP + 2 × W2D 1000 / 970 × 300, washer in the 787 gap,
+    TBC clouds; applied clean (2 calls, 28¢). Sketches aren't to scale, so the walls follow the
+    written numbers and sit over one end of the sketch. Unit tests cadImage.test.ts; render
+    check headlessCad.test.ts (CAD_RUN), AI4_RUN takes `"sketch": true`.
+- **Next:** build the kick-pieces design above.
 
 ## Open items (check while building)
 

@@ -14,7 +14,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { supabase } from '@/src/lib/supabase'
 import { loadRoomSummary } from '../roomSummary'
-import { READ_TOOLS, findMaterial, runReadTool, type ToolContext } from '../readTools'
+import { READ_TOOLS, findMaterial, runReadTool, runReadToolContent, type ToolContext } from '../readTools'
 import { filterHasCriteria, MATERIAL_ROLES, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { findHandleSchedule, planBatch, runBatch, runJobBatch, type BatchOp } from './cabinetBatch'
 import { withSupabase } from './scope'
@@ -237,6 +237,7 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - resolve: re-resolve cabinets as they are (parts, drilling, hardware rebuilt) when the user asks or something looks stale. Changes already re-resolve what they touch — don't add it to those.
 - hinges: hinges per door — per_door 2 on a 2-door cabinet = 4 in all. null = back to the shop rules (by door height). Read get_cabinet_detail first for the doors and current hinges. If the count is light for the door height (shop rules: up to 900 → 2, 1800 → 3, 2400 → 4), do it but say so.
 - interior: shelves, bays and dividers of ONE cabinet. Read get_cabinet_detail first — it numbers the bays (bottom → top in a shelf split, left → right in a divider split) and gives the resolved shelf heights. Moves: size (a bay's height; null = fills the rest), adj_shelves (count in an open bay), add_shelf (kind fixed / adjustable, below = height of the bay under it), shelf_type, remove_shelf, add_divider (left = width), remove_bay, add_drawer (drawer inner / rollout; below = height of the open space under it in that bay — 0 = sits on the bay's bottom shelf / floor, leave out = halfway; height = box height), move_drawer (the bay the drawer is in; "up 50" / "down 30" = up 50 / up -30 — the way to move one: the bay under it grows, so the drawer's own bay moves with it; bottom = an exact box bottom in mm from the cabinet bottom, which locks it there but leaves the bays where they are, so only for a small nudge or when up is refused; null = auto; height = box height), remove_drawer (empty bays either side close up). Moving a drawer doesn't resize the bays round it — if it won't fit, the check after Apply says so. To move a fixed shelf, change the size of the bay under it (and the one above if that has a size too). Bay sizes are clear heights between boards — allow for the shelf thickness. After add / remove moves the bays re-number.
+- CAD / site sketches on the canvas: the room summary says when there is any. look_at_cad shows it as a picture — call it whenever the user talks about their sketch, drawing or notes, or the answer depends on what's drawn there (it's often hand-written: sizes, codes like W2D / B2D / BSK, "seen ends", ceiling heights, spec notes). Say what you read and flag anything you can't make out instead of guessing. To build a room from a sketch, the user presses "Draw from my sketch" in this panel (next to Attach plan).
 - You can NOT touch walls, benchtops, splashbacks, single kick pieces, hanging rails / accessories inside the interior, or front layouts yet — say so.
 - Whenever a request (or part of one) needs something no tool of yours can do, call report_gap for it first (once per missing feature), then tell the user. That list is what gets built next.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user FIRST, before any change_cabinets, with 2–4 short options (asking drops a proposal made earlier in the same message) (which cabinets? which side? what size? which end panel?). One question at a time.
@@ -580,7 +581,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
           const { data } = await supabase.from('handle_schedules').select('name').order('name')
           results.push({ type: 'tool_result', tool_use_id: u.id, content: (data ?? []).map(s => s.name).join('\n') || 'None.' })
         } else {
-          results.push({ type: 'tool_result', tool_use_id: u.id, content: await runReadTool(u.name, u.input, ctx) })
+          results.push({ type: 'tool_result', tool_use_id: u.id, content: await runReadToolContent(u.name, u.input, ctx) })
         }
       } catch (e) {
         results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${(e as Error).message}`, is_error: true })

@@ -367,6 +367,27 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
     }
   }
 
+  /** Q9: draw this room from the site sketch / CAD on its own canvas (no upload). */
+  async function drawFromSketch() {
+    if (busy) return
+    const message = input.trim()
+    recRef.current?.stop()
+    setInput('')
+    let k = key
+    try {
+      k = await ensureConv()
+      setErrFor(k, null); setBusyFor(k, 'Reading your sketch… (a minute or two)')
+      addMsg(k, { id: localId(), role: 'user', text: `✏️ Draw from my sketch${message ? `\n${message}` : ''}`, room_id: roomId })
+      addDrawReply(k, await post('/api/ai/draw', { roomId, fromCad: true, message, conversationId: k }))
+      useTutorial.getState().emit('ai_draw_read')
+    } catch (e) {
+      setErrFor(k, (e as Error).message)
+    } finally {
+      setBusyFor(k, null)
+      void loadConvs()
+    }
+  }
+
   async function act(m: Msg, kind: 'apply' | 'cancel' | 'undo') {
     if (busy || !convId) return
     const k = convId
@@ -420,6 +441,7 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
     : `Room: ${roomName}`
   const convTitle = (id: string) => convs.find(c => c.id === id)?.title ?? 'Chat'
   const attachTitle = 'Draw this room from a plan PDF or a site sketch photo (type any notes first, e.g. which page or wall)'
+  const sketchTitle = 'Draw this room from the sketch / CAD you drew on its plan (and elevations). Type any notes first, e.g. sizes the sketch leaves out'
 
   return (
     <aside className={phone
@@ -542,6 +564,12 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
               <Paperclip cls="w-5 h-5" /> Attach plan or photo — draw this room
             </button>
           )}
+          {phone && (
+            <button type="button" disabled={!!busy} onClick={() => void drawFromSketch()} title={sketchTitle}
+              className="w-full mb-2 flex items-center justify-center gap-2 py-2.5 rounded-lg border border-gray-600 text-gray-100 text-sm active:bg-gray-800 disabled:opacity-40">
+              ✏️ Draw from my sketch
+            </button>
+          )}
           <textarea value={input} onChange={e => setInput(e.target.value)} rows={2} disabled={!!busy}
             placeholder={listening ? 'Listening… talk, then check it and Send'
               : selectedIds.length ? `Ask about or change ${selectedLabels.length === 1 ? selectedLabels[0] : `these ${selectedLabels.length}`}…` : `Ask about ${roomName}…`}
@@ -552,6 +580,12 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
               <button type="button" disabled={!!busy} onClick={() => fileRef.current?.click()} title={attachTitle}
                 className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-gray-600 text-gray-100 text-xs hover:bg-gray-800 hover:border-gray-500 disabled:opacity-40">
                 <Paperclip /> Attach plan
+              </button>
+            )}
+            {!phone && (
+              <button type="button" disabled={!!busy} onClick={() => void drawFromSketch()} title={sketchTitle}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-gray-600 text-gray-100 text-xs hover:bg-gray-800 hover:border-gray-500 disabled:opacity-40">
+                ✏️ Draw from my sketch
               </button>
             )}
             {!phone && <span className="text-[10px] text-gray-600">Enter to send</span>}

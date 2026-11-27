@@ -152,5 +152,8 @@ export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryDa
 }
 
 export async function loadRoomSummary(roomId: string): Promise<string> {
-  return formatRoomSummary(await loadRoomSummaryData(roomId))
+  const { cadViews } = await import('./server/cadPicture')
+  const [data, cad] = await Promise.all([loadRoomSummaryData(roomId), cadViews(roomId).catch(() => '')])
+  // CAD on the canvas (z_ai_helper Q9): the model sees it only through look_at_cad.
+  return `${formatRoomSummary(data)}${cad && !cad.startsWith('No ') ? `\nCAD on this room's canvas (look_at_cad to see it): ${cad}` : ''}`
 }

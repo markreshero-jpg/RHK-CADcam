@@ -14,7 +14,7 @@ import { describe, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { basename } from 'node:path'
 
-interface Cfg { room: string; file: string; message?: string; apply?: boolean; compare?: string; answers?: string }
+interface Cfg { room: string; file?: string; /** Q9: draw from the room's own canvas sketch, no file */ sketch?: boolean; message?: string; apply?: boolean; compare?: string; answers?: string }
 const CFG: Cfg | null = process.env.AI4_RUN ? JSON.parse(process.env.AI4_RUN) : null
 
 describe.skipIf(!CFG)('AI4 draw from a plan', () => {
@@ -28,15 +28,18 @@ describe.skipIf(!CFG)('AI4 draw from a plan', () => {
     const { error } = await client.auth.signInWithPassword({ email: env.AUTOMATION_EMAIL, password: env.AUTOMATION_PASSWORD })
     if (error) throw error
     const { withSupabase, withSupabaseRead } = await import('../server/scope')
-    const { runDrawTurn, DRAW_BUCKET } = await import('../server/draw')
+    const { runDrawTurn, DRAW_BUCKET, CAD_SOURCE } = await import('../server/draw')
     const { runBatch } = await import('../server/cabinetBatch')
     const { loadRoomSummary } = await import('../roomSummary')
 
     const { data: room } = await client.from('rooms').select('project_id').eq('id', cfg.room).single()
-    const name = basename(cfg.file)
-    const path = `${room!.project_id}/${Date.now()}-${name.replace(/[^\w.-]+/g, '_')}`
-    const up = await client.storage.from(DRAW_BUCKET).upload(path, readFileSync(cfg.file), { contentType: name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png' })
-    if (up.error) throw up.error
+    const name = cfg.sketch ? 'sketch on the canvas' : basename(cfg.file!)
+    let path = CAD_SOURCE
+    if (!cfg.sketch) {
+      path = `${room!.project_id}/${Date.now()}-${name.replace(/[^\w.-]+/g, '_')}`
+      const up = await client.storage.from(DRAW_BUCKET).upload(path, readFileSync(cfg.file!), { contentType: name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png' })
+      if (up.error) throw up.error
+    }
 
     let ctx = { path, fileName: name, notes: cfg.message ?? '', qa: [] as { q: string; a: string }[] }
     let r = await withSupabaseRead(client, () => runDrawTurn({ projectId: room!.project_id, roomId: cfg.room, ctx }))

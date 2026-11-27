@@ -29,6 +29,8 @@ const PRICE = { input: 4, output: 20, cacheRead: 0.20, cacheWrite: 5 }
 const MAX_CALLS = 10
 const MAX_FIXES = 2
 export const DRAW_BUCKET = 'ai-uploads'
+/** DrawCtx.path for "Draw from my sketch": read the room's canvas CAD, not an upload (Q9). */
+export const CAD_SOURCE = 'cad:'
 
 const ASK_TOOL: Anthropic.Tool = {
   name: 'ask_questions',
@@ -218,25 +220,52 @@ function toOps(p: PlanIn, firstRoom: boolean): BatchOp[] {
   return ops
 }
 
+/** The uploaded plan / photo. */
+async function uploadSource(draw: DrawCtx): Promise<Anthropic.ContentBlockParam> {
+  const { data: file, error: dlErr } = await supabase.storage.from(DRAW_BUCKET).download(draw.path)
+  if (dlErr || !file) throw new Error(`Couldn't read the upload: ${dlErr?.message ?? 'not found'}`)
+  const data = Buffer.from(await file.arrayBuffer()).toString('base64')
+  const mime = file.type || (draw.fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png')
+  return mime === 'application/pdf'
+    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, cache_control: { type: 'ephemeral' } }
+    : { type: 'image', source: { type: 'base64', media_type: mime as 'image/png' | 'image/jpeg' | 'image/webp', data }, cache_control: { type: 'ephemeral' } }
+}
+
+/** "Draw from my sketch" (Q9): the room's plan CAD and any wall elevations with CAD, as pictures + words. */
+async function cadSources(roomId: string): Promise<Anthropic.ContentBlockParam[]> {
+  const { loadCadPicture } = await import('./cadPicture')
+  const [{ data: walls }, { data: elev }] = await Promise.all([
+    supabase.from('walls').select('id, name').eq('room_id', roomId),
+    supabase.from('room_annotations').select('wall_id').eq('room_id', roomId).eq('view', 'elevation'),
+  ])
+  const withCad = new Set(((elev ?? []) as { wall_id: string | null }[]).map(e => e.wall_id))
+  const views = [
+    { view: 'plan' as const },
+    ...((walls ?? []) as { id: string; name: string }[]).filter(w => withCad.has(w.id)).map(w => ({ view: 'elevation' as const, wall: w.name })),
+  ]
+  const out: Anthropic.ContentBlockParam[] = []
+  for (const v of views) {
+    const pic = await loadCadPicture(roomId, v)
+    if (pic.png) out.push({ type: 'image', source: { type: 'base64', media_type: 'image/png', data: pic.png } }, { type: 'text', text: pic.text })
+  }
+  if (!out.length) throw new Error("There's no sketch or CAD on this room's plan to draw from — sketch it on the plan first (CAD › Sketch), or attach a plan.")
+  out.push({ type: 'text', cache_control: { type: 'ephemeral' }, text: "That is the site sketch the user drew on this room's canvas (instead of a plan file). Its grid is room mm, so walls can follow the sketched lines, but sketches are not to scale: the written numbers win." })
+  return out
+}
+
 export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
   const t0 = Date.now()
   const { ctx: draw } = args
   const toolCtx: ToolContext = { projectId: args.projectId, roomId: args.roomId }
 
-  const { data: file, error: dlErr } = await supabase.storage.from(DRAW_BUCKET).download(draw.path)
-  if (dlErr || !file) throw new Error(`Couldn't read the upload: ${dlErr?.message ?? 'not found'}`)
-  const data = Buffer.from(await file.arrayBuffer()).toString('base64')
-  const mime = file.type || (draw.fileName.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/png')
-  const source: Anthropic.ContentBlockParam = mime === 'application/pdf'
-    ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data }, cache_control: { type: 'ephemeral' } }
-    : { type: 'image', source: { type: 'base64', media_type: mime as 'image/png' | 'image/jpeg' | 'image/webp', data }, cache_control: { type: 'ephemeral' } }
+  const sources = draw.path === CAD_SOURCE ? await cadSources(args.roomId) : [await uploadSource(draw)]
 
   const [summary, setup, aiCtx] = await Promise.all([loadRoomSummary(args.roomId), loadSetup(args.projectId, args.roomId), loadAiContext(args.projectId)])
   const answers = draw.qa.length
     ? `\n\nYou asked before drawing; the user answered:\n${draw.qa.map(x => `Q: ${x.q}\nA: ${x.a}`).join('\n')}\nDraw now to these answers (ask again only if something is still missing).`
     : ''
   // The user's turn: the file + note on the first go, the answer on a carry-on.
-  const said = draw.qa.length ? draw.qa[draw.qa.length - 1].a : `📎 ${draw.fileName}${draw.notes ? `\n${draw.notes}` : ''}`
+  const said = draw.qa.length ? draw.qa[draw.qa.length - 1].a : `${draw.path === CAD_SOURCE ? '✏️ Draw from my sketch' : `📎 ${draw.fileName}`}${draw.notes ? `\n${draw.notes}` : ''}`
   const conversationId = await ensureConversation(args.projectId, args.conversationId)
   const asked = await supabase.from('ai_messages').insert({ project_id: args.projectId, room_id: args.roomId, conversation_id: conversationId, role: 'user', scope: 'room', text: said })
   if (asked.error) throw new Error(`ai_messages: ${asked.error.message}`)
@@ -244,7 +273,7 @@ export async function runDrawTurn(args: DrawArgs): Promise<DrawResult> {
 
   const messages: Anthropic.MessageParam[] = [{
     role: 'user', content: [
-      source,
+      ...sources,
       { type: 'text', text: `${setup.text}\n\nThe room as it is now (draw into it — use its existing walls by name; add only walls that are missing; never touch what's there):\n<room_summary>\n${summary}\n</room_summary>${jobNotesBlock(aiCtx.jobNotes)}\n${draw.notes || 'Draw this room from the plan.'}${answers}` },
     ],
   }]

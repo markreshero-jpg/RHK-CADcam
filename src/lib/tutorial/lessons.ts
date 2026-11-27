@@ -2354,6 +2354,18 @@ export const LESSONS: TutorialLesson[] = [
       body: 'When you ask for something it has no tool for, it says so plainly (it never writes your request into the notes instead) and logs it. Settings → AI helper → Can\'t do yet lists them, most asked first; ▸ shows each request with its job and date. Mark a group Built once the AI can do it, or Ignore it.',
       done: c => c.path.startsWith('/settings') },
   ]},
+
+  // Appended 2026-11-28 (z_ai_helper Q9: the AI reads CAD and site sketches).
+  { id: 'ai_sketch', level: 'basics', topic: 'room', title: 'The AI reads your sketches and CAD',
+    blurb: 'Ask the AI about what you sketched or drew on the canvas, or have it draw the room from your sketch.',
+    keywords: 'ai sketch site sketch handwriting cad drawing read notes draw from my sketch measure up pencil freehand plan elevation', steps: [
+    { id: 'ask', title: 'Ask about your sketch',
+      body: 'Sketch the room on the plan (CAD → Sketch) the way you would on paper: walls, codes like W2D / B2D / BSK, sizes, "seen ends", ceiling height, a spec box. Open Ask AI and ask e.g. "what does my sketch say?" or "what width did I write for the tub cupboard?". It looks at the sketch as a picture, tells you what it read and says what it can\'t make out. Typed notes, dims and elevation CAD are read too ("look at the Wall 2 elevation").',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
+    { id: 'draw', title: 'Draw the room from it',
+      body: 'Press ✏️ Draw from my sketch (next to Attach plan; type any notes first, e.g. sizes the sketch leaves out). It asks what\'s missing (kick, top line, seen ends…), then lays out the walls and cabinets for you to Apply, with TBC clouds for anything unclear. Sketches aren\'t to scale, so it goes by the numbers you wrote: the drawn room may sit over one end of the sketch. One Undo takes it all off.',
+      canvas: true, done: (c, s) => ev(c, 'ai_draw_read') > ev(s, 'ai_draw_read') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
