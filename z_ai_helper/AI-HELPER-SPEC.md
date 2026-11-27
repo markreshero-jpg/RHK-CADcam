@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q6 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change; re-resolve, hinges, interior, back board) — remaining open items at the end
+Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q7 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change; re-resolve, hinges, interior, back board) — remaining open items at the end
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -620,7 +620,16 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
   floating base gets back scribe 0. Checked: asked about a filler at TC-01 and bulkheads over
   WC-01/02 → TFKW on the kick, BH at a 30 soffit + 10, bulkhead in the overhead colour, and it
   flagged WC-01's back scribe 18 against the overheads-0 rule.
-- **Next (Mark to pick):** Q7 log every "can't"; tutorial for Q4 / Q5.
+- **Q7 "Can't do yet" list (Mark: "start on seven"):** `ai_gaps`
+  (z_ai_helper/migration_ai_gaps.sql, job-access RLS; request, missing, status open / built
+  / ignored). The chat's `report_gap` tool logs each missing feature before it says it
+  can't (missing = a short fixed-wording name so reports group). Settings › AI helper ›
+  Can't do yet (app/settings/AiGapsList.tsx): grouped by missing, most asked first, ▸ shows
+  every request with job + date, Built / Ignore close a group, Reopen. Backfilled from the
+  real chats: kick pieces (RHK6586, open); part board (backs), hinge counts, shelf positions
+  (built by Q4). Checked headless: "move the bottom inner drawer in TC-01 up 50" → logged
+  "drawers inside a bay", told the user plainly. Settings page not yet seen in the browser.
+- **Next:** tutorial for Q4–Q7; then build from the Can't do yet list.
 
 ## Open items (check while building)
 

@@ -5,6 +5,7 @@
 // the AI has cost (ai_messages: this month against the cap, by job, by person, by model).
 
 import { useEffect, useMemo, useState } from 'react'
+import AiGapsList from './AiGapsList'
 import { supabase } from '@/src/lib/supabase'
 
 /** Monthly spend cap on the API key (set in the Anthropic Console; decision 6). */
@@ -119,6 +120,8 @@ export default function AiHelperSettings() {
           {msg && <span className="text-xs text-gray-300">{msg}</span>}
         </div>
       </section>
+
+      <AiGapsList />
 
       <section>
         <div className="flex items-center gap-2">
