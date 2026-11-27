@@ -7,6 +7,8 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
+> **2026-11-27: Phase 9 benchtop edit window** built (right-click → Edit…, double-click, Enter) — in-app check pending.
+>
 > **RESUME HERE** → Phase 7 / 7b committed (c7d1633). Phase 7c (Line + offset
 > tool, Shift-click → joints between separate tops) built 2026-10-15, uncommitted, awaiting
 > Mark's live try (headless check blocked: no AUTOMATION_* creds in .env.local). Then: the same picker for cabinet parts (needs saved per-part
@@ -716,6 +718,36 @@ defaults — **not locked** until Mark has tried it.
   headless in-app check not possible (no AUTOMATION_* creds).
 - Tutorial: **Auto-build benchtops** (basics ▸ benchtops).
 
+### Phase 9 — Benchtop edit window  `[x]` built (2026-11-27), in-app check pending
+Mark (2026-11-27): "benchtops to be able to right click edit and we can see them in a
+cabinet edit modal style window. can we use the same window?"
+
+- **W-a Same window — LOCKED (Mark)**: the cabinet editor's frame was lifted into
+  `EditModalShell.tsx` (backdrop, header, tab bar + toolbar, view area, w-72 panel /
+  phone drawer). `CabinetEditModal` and the new `BenchtopEditModal` both use it; the
+  cabinet editor's behaviour is unchanged.
+- **W-b Entry — LOCKED (Mark)**: right-click a top → **Edit…** (first in the menu),
+  **double-click a top** (was the full Shape Editor — that stays under right-click →
+  Open Shape Editor… and the panel's Shape Editor… button), or **Enter** on a selected
+  top. Bridge: `__canvasApi.openBenchtop(refOrId)`.
+- **W-c Tabs — LOCKED (Mark)**: **Top** (the top in its wall frame, back at the top:
+  edge lengths + profile per edge, wall dashed grey, joints red, cut-outs, overall
+  sizes), **Front** (BenchtopElevation of just this top on its anchor wall side, floor
+  to top, finished height dim; unanchored → message), **3D** (BenchtopMesh of just
+  this top, orbit, Wire toggle), **Parts** (`benchtop_resolved_parts` as a table, cut
+  list and supply items apart, Resolve Parts).
+- **W-d Panel** — the right side is the normal `BenchtopPanel` (built by CanvasClient's
+  `renderBenchtopPanel`, so the side bar and the window can't drift). Plan actions
+  (Move…, Edit edges…, Shape Editor…, draw a join / cut-out) close the window first and
+  switch to plan. The canvas side bar hides while the window shows that top.
+- **W-e Keys** — Esc closes; Delete / Backspace / Enter / F-keys are kept from the
+  canvas underneath (Delete would delete the top) unless a field has focus.
+- Display layers: like the cabinet editor, only the layer set's background / invert
+  (and colours) apply — the window always draws the top (`alwaysShowBenchtop`).
+- Not yet: fixture sink / cooktop cut-outs (CNC cutouts from fixtures) aren't drawn
+  on the Top tab — only `cutout_polygons`. Cabinets under the top aren't drawn.
+- Tutorial: **Edit a benchtop in its own window** (basics ▸ benchtops).
+
 ### Deferred
 Splashback module (own spec since 2026-11-14: `z_splashback/SPLASHBACK-SPEC.md`) · CNC machining of profiles · automatic panel splits ·
 sharing the profile library with cabinet-part shapes.
@@ -723,6 +755,8 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-11-27 — Phase 9 benchtop edit window (right-click → Edit… / double-click /
+  Enter): shared EditModalShell with the cabinet editor; Top / Front / 3D / Parts.
 - 2026-10-19 — Phase 8 auto-build tops (F4 → Auto-build tops…): runs per wall,
   overhang / gap / corner questions, click-through per top + corner. For Mark to try.
 - 2026-10-15 — Phase 7c: Line + offset draw tool (any wall angle) and

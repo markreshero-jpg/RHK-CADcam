@@ -25,6 +25,7 @@ All offsets = mm from the wall's start ("from left end").
   under those base cabinets / overheads (between their outer gables) + Scribe Bottom of its
   thickness on each (z_floating F7)
 - `openCabinet(refOrId)` — opens the cabinet edit modal
+- `openBenchtop(refOrId)` — opens the benchtop edit window (Top / Front / 3D / Parts), as right-click a top → Edit…
 - `getIssues()` — resolver report per cabinet (used by resolver-report.mjs)
 
 ## Gotchas

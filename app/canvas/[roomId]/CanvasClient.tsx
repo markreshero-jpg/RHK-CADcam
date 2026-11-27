@@ -117,6 +117,7 @@ import CabinetGroupPanel from './CabinetGroupPanel'
 import { detectNeighbours, type NeighbourPair } from '@/src/lib/neighbours'
 import CabinetResizePanel from './CabinetResizePanel'
 import CabinetEditModal from './CabinetEditModal'
+import BenchtopEditModal from './BenchtopEditModal'
 import JobPropertiesModal, { type JobPropertiesTab } from './JobPropertiesModal'
 import RoomPropertiesModal, { type RoomPropertiesTab } from './RoomPropertiesModal'
 import { type RoomSwitcherHandle } from './RoomSwitcher'
@@ -341,6 +342,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
   const [reportScope, setReportScope] = useState<ReportScope | null>(null)
   const [reportInitial, setReportInitial] = useState<ReportId | undefined>(undefined)
   const [editCabId, setEditCabId] = useState<string | null>(null)
+  // Benchtop edit window (cabinet-editor style, Mark 2026-11-27) — the selected top.
+  const [editBtId, setEditBtId] = useState<string | null>(null)
+  const editBtIdRef = useRef<string | null>(null)
+  editBtIdRef.current = editBtId
   const [viewFixtureId, setViewFixtureId] = useState<string | null>(null)
   const [editCabInitialView, setEditCabInitialView] = useState<'3d' | 'elevation' | 'joints'>('elevation')
   const [marquee, setMarquee] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null)
@@ -762,6 +767,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     snapSettings, setSnapResult,
     resolvedParts: planResolvedParts,
     defaultJoinType: b => btCatalog.methodFor(b)?.default_join_type ?? 'butt',
+    onOpenEdit: id => { setContextMenu(null); setSelected({ type: 'benchtop', id }); setEditBtId(id) },
   })
   const benchtopMenuOpenRef = useRef(false)
   benchtopMenuOpenRef.current = bt.benchtopMenuOpen
@@ -1278,6 +1284,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           && !isInput(e.target) && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement || (e.target instanceof HTMLElement && e.target.isContentEditable))
           && getUserPrefs().cabinetEnterEdit) {
         e.preventDefault(); setContextMenu(null); setEditCabId(selected.id); return
+      }
+      // Enter opens the benchtop edit window for the selected top (F4 Benchtop mode).
+      if (e.key === 'Enter' && selected?.type === 'benchtop' && (mode === 'benchtop_select' || mode === 'select') && !editBtIdRef.current && !bt.btMulti.length
+          && !e.ctrlKey && !e.metaKey && !e.altKey
+          && !isInput(e.target) && !(e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement || (e.target instanceof HTMLElement && e.target.isContentEditable))) {
+        e.preventDefault(); setContextMenu(null); setEditBtId(selected.id); return
       }
       if ((e.key === 'Delete' || e.key === 'Backspace') && !isInput(e.target)) {
         if (mode === 'draw_benchtop' && e.key === 'Backspace') { bt.undoVertex(); return }
@@ -2248,6 +2260,14 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           if (!cab) throw new Error(`Cabinet not found: ${ref}`)
           setEditCabId(cab.id)
           return { opened: cab.label, id: cab.id }
+        },
+        // Open the benchtop edit window — same path as right-click a top → Edit….
+        openBenchtop(ref: string) {
+          const b = benchtops.find(x => x.id === ref || x.label?.toLowerCase() === ref.toLowerCase())
+          if (!b) throw new Error(`Benchtop not found: ${ref}`)
+          setSelected({ type: 'benchtop', id: b.id })
+          setEditBtId(b.id)
+          return { opened: b.label, id: b.id }
         },
         // Plan Edit shape (z_cabinet_shape_edit E3), as right-click → Edit shape.
         editShape(ref: string) {
@@ -3353,6 +3373,57 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     return btOverhangs(selectedBtPos, under)
   })()
 
+  // The benchtop side bar — on the canvas, and as the right-hand panel of the benchtop
+  // edit window (BenchtopEditModal). In the window, actions that work on the plan
+  // (move, draw a join / cut-out, Edit edges, Shape Editor) close it first.
+  const renderBenchtopPanel = (b: BenchtopInstance, inModal: boolean, onResolved?: () => void) => {
+    const plan = (fn: () => void) => () => {
+      if (inModal) setEditBtId(null)
+      if (canvasView !== 'plan') switchView('plan')
+      fn()
+    }
+    return (
+    <BenchtopPanel
+      benchtop={b}
+      onUpdate={bt.handleUpdateBenchtop}
+      onDelete={bt.handleDeleteBenchtop}
+      onClose={inModal ? () => setEditBtId(null) : () => setSelected(null)}
+      filletRadius={bt.filletRadius}
+      setFilletRadius={bt.setFilletRadius}
+      onMirrorH={bt.handleMirrorH}
+      onMirrorV={bt.handleMirrorV}
+      onOffset={bt.handleOffset}
+      onRotate={bt.handleRotateByAngle}
+      onDeleteCutout={bt.handleDeleteCutout}
+      onDrawCutoutRect={plan(() => setMode('draw_benchtop_cutout_rect'))}
+      onDrawCutoutCircle={plan(() => setMode('draw_benchtop_cutout_circle'))}
+      profiles={btCatalog.profiles}
+      method={btCatalog.methodFor(b)}
+      onEditShape={id => { if (inModal) setEditBtId(null); bt.openShapeEditor(id) }}
+      onDrawJoin={plan(() => { bt.resetDraw(); setMode('draw_benchtop_join') })}
+      onDeleteJoin={bt.handleDeleteJoin}
+      onSetJoinType={bt.handleSetJoinType}
+      walls={walls}
+      position={selectedBtPos}
+      wallLength={walls.find(w => w.id === b.wall_id)?.length ?? null}
+      overhang={selectedBtOverhang}
+      onStretch={bt.handleStretch}
+      baseHeight={btBaseHeight}
+      thickness={btCatalog.thicknessFor(b)}
+      onSetPosition={bt.handleSetPosition}
+      onReanchor={bt.handleReanchor}
+      onMove={plan(() => bt.startMoveBenchtop())}
+      tapes={btCatalog.tapes}
+      tapeCtx={btCatalog.tapeContextFor(b)}
+      onEditEdges={id => { if (inModal) setEditBtId(null); startEdgeEdit(id) }}
+      edgesChanged={bt.edgesChangedId === b.id}
+      onResolved={() => { bt.setEdgesChangedId(null); onResolved?.() }}
+      topMaterialId={role => btCatalog.topOverrideFor(b.id, role)}
+      onSetTopMaterial={(role, id) => btCatalog.setTopOverride(b.id, role, id)}
+    />
+    )
+  }
+
   const multiSelectCabs = multiSelect.length >= 2 ? cabinets.filter(c => multiSelect.includes(c.id)) : []
   const canEqualize = multiSelectCabs.length >= 2 && new Set(multiSelectCabs.map(c => c.wall_id)).size === 1
 
@@ -3500,7 +3571,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
     : mode === 'draw_benchtop_u' ? (['U-shape: click start of arm 1 · Ctrl=ortho · Esc=cancel', 'Click inner corner 1', 'Click inner corner 2', 'Click end of arm 2'][bt.btUPoints.length] ?? 'Click end of arm 2')
     : mode === 'draw_benchtop_cutout_rect' ? (!bt.btCutoutStart ? 'Cutout: click first corner of rectangle · Esc=cancel' : 'Click opposite corner to finish cutout')
     : mode === 'benchtop_select' && bt.btMulti.length >= 2 ? `${bt.btMulti.length} benchtops picked · right-click one = Join benchtops · Shift-click = add / remove · click = pick one`
-    : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · Shift-click = pick several (then right-click = Join) · right-click = Edit shape / Edit edges · double-click = Shape Editor · cabinets are locked · F4 / Esc = back to cabinets'
+    : mode === 'benchtop_select' ? 'Benchtop mode: click a benchtop to select · Shift-click = pick several (then right-click = Join) · right-click = Edit… / Edit shape / Edit edges · double-click or Enter = edit window · cabinets are locked · F4 / Esc = back to cabinets'
     : mode === 'edit_benchtop_shape' ? (bt.shapeStretch ? 'Stretch: move the mouse (snaps) · click to place · or type the size in the panel · Esc = cancel the stretch'
       : 'Edit shape: click a line to stretch it · drag a line to move it · click a corner for X / Y · Shift-click a line = add corner · Enter = save · Esc = finish · Ctrl+Z = undo')
     : mode === 'edit_cabinet_shape' ? 'Edit shape: click an edge / corner dot to set its type or join · click the outline, then drag a corner or a side to reshape · Box = draw a new outline · L/R/F/G/H/J = tools · Enter / Esc = done · Ctrl+Z = undo'
@@ -3988,7 +4059,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
               btMoveBase={bt.btMoveBase}
               btMoveCursor={bt.btMoveCursor}
               btDepth={bt.btDepth}
-              onBenchtopDoubleClick={bt.openShapeEditor}
+              onBenchtopDoubleClick={id => { setContextMenu(null); setSelected({ type: 'benchtop', id }); setEditBtId(id) }}
               btShapeEdit={bt.shapeEdit}
               btEdgeHover={btEdgeHover}
               btEdgeEdit={mode === 'edit_benchtop_edges' ? bt.edgeEdit : null}
@@ -4557,46 +4628,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onClose={() => setSelected(null)}
           />
         )}
-        {mode !== 'place_definition' && mode !== 'edit_benchtop_shape' && mode !== 'edit_benchtop_edges' && selectedBenchtop && (
-          <BenchtopPanel
-            benchtop={selectedBenchtop}
-            onUpdate={bt.handleUpdateBenchtop}
-            onDelete={bt.handleDeleteBenchtop}
-            onClose={() => setSelected(null)}
-            filletRadius={bt.filletRadius}
-            setFilletRadius={bt.setFilletRadius}
-            onMirrorH={bt.handleMirrorH}
-            onMirrorV={bt.handleMirrorV}
-            onOffset={bt.handleOffset}
-            onRotate={bt.handleRotateByAngle}
-            onDeleteCutout={bt.handleDeleteCutout}
-            onDrawCutoutRect={() => setMode('draw_benchtop_cutout_rect')}
-            onDrawCutoutCircle={() => setMode('draw_benchtop_cutout_circle')}
-            profiles={btCatalog.profiles}
-            method={btCatalog.methodFor(selectedBenchtop)}
-            onEditShape={bt.openShapeEditor}
-            onDrawJoin={() => { bt.resetDraw(); setMode('draw_benchtop_join') }}
-            onDeleteJoin={bt.handleDeleteJoin}
-            onSetJoinType={bt.handleSetJoinType}
-            walls={walls}
-            position={selectedBtPos}
-            wallLength={walls.find(w => w.id === selectedBenchtop.wall_id)?.length ?? null}
-            overhang={selectedBtOverhang}
-            onStretch={bt.handleStretch}
-            baseHeight={btBaseHeight}
-            thickness={btCatalog.thicknessFor(selectedBenchtop)}
-            onSetPosition={bt.handleSetPosition}
-            onReanchor={bt.handleReanchor}
-            onMove={() => { if (canvasView !== 'plan') switchView('plan'); bt.startMoveBenchtop() }}
-            tapes={btCatalog.tapes}
-            tapeCtx={btCatalog.tapeContextFor(selectedBenchtop)}
-            onEditEdges={startEdgeEdit}
-            edgesChanged={bt.edgesChangedId === selectedBenchtop.id}
-            onResolved={() => bt.setEdgesChangedId(null)}
-            topMaterialId={role => btCatalog.topOverrideFor(selectedBenchtop.id, role)}
-            onSetTopMaterial={(role, id) => btCatalog.setTopOverride(selectedBenchtop.id, role, id)}
-          />
-        )}
+        {mode !== 'place_definition' && mode !== 'edit_benchtop_shape' && mode !== 'edit_benchtop_edges' && selectedBenchtop && editBtId !== selectedBenchtop.id && renderBenchtopPanel(selectedBenchtop, false)}
         {bt.shapeEditDraft && (() => {
           const method = btCatalog.methodFor(bt.shapeEditDraft)
           return (
@@ -4738,6 +4770,7 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             onDeleteBenchtopVertex: bt.handleDeleteBenchtopVertex,
             onRoundCorner: bt.handleRoundCorner,
             onChamfer: bt.handleChamfer,
+            onEditBenchtop: id => { setContextMenu(null); setSelected({ type: 'benchtop', id }); setEditBtId(id) },
             onEditBenchtopShape: id => { if (canvasView !== 'plan') switchView('plan'); bt.startShapeEdit(id) },
             onEditBenchtopEdges: startEdgeEdit,
             btJoinCount: contextMenu.benchtopId && bt.btMulti.includes(contextMenu.benchtopId) ? bt.btMulti.length : 0,
@@ -4838,6 +4871,24 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         )
       })()}
 
+      {editBtId && selectedBenchtop && selectedBenchtop.id === editBtId && (() => {
+        const b = selectedBenchtop
+        const aw = walls.find(w => w.id === b.wall_id)
+        return (
+          <BenchtopEditModal
+            benchtop={b}
+            walls={walls}
+            roomCx={centroid(walls)}
+            roomH={aw?.height ?? room.room_dy ?? 2400}
+            info={btInfo(b)}
+            profiles={btCatalog.profileById}
+            planLayers={planLayers} elevLayers={elevLayers}
+            panel={onResolved => renderBenchtopPanel(b, true, onResolved)}
+            onEdgesResolved={() => bt.setEdgesChangedId(null)}
+            onClose={() => setEditBtId(null)}
+          />
+        )
+      })()}
       {editCabId && (() => {
         const cab = cabinets.find(c => c.id === editCabId)
         if (!cab) return null

@@ -10,7 +10,7 @@ import { kickShapeEditable, shapeEditable } from './useCabinetShapeEdit'
 export function buildContextMenuGroups({
   cabId, wallId, elevWallId, elevWallT, benchtopId, vertexContext, fixtureId, fixture, canEqualize, clipboard, cabinets, multiSelect,
   onDeleteWall, onDeleteCabinet, onDeleteMultiple, onDeleteBenchtop, onDeleteBenchtopVertex, onRoundCorner, onChamfer,
-  onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
+  onEditBenchtop, onEditBenchtopShape, onEditBenchtopEdges, onOpenShapeEditor, btJoinCount, onJoinBenchtops,
   onCopy, onPaste, onEdit, onEqualizeWidths, onInsertCabinet, onInsertAdjacent, insertFavourites, onInsertDefinition, onEditInsertList, onSplit, onSplitHeight,
   onAlignLeft, onAlignRight, onSaveToLibrary, onReplace, onJoinKicks, onDetachKick, onSeparateKicks, onKickSettings,
   onUpdateBulkhead, onUpdateFloatShelf, onUpdateKick, onMoveLabel, onResetLabel, onAddUnderPanel, onEditShape, onEditKickShape, grainMatchItems,
@@ -57,6 +57,7 @@ export function buildContextMenuGroups({
   onDeleteBenchtopVertex?: (btId: string, vi: number) => void
   onRoundCorner?: (btId: string, vi: number) => void
   onChamfer?: (btId: string, vi: number) => void
+  onEditBenchtop?: (btId: string) => void        // the benchtop edit window (cabinet-editor style)
   onEditBenchtopShape?: (btId: string) => void   // Phase 6: reshape in the plan
   onEditBenchtopEdges?: (btId: string) => void   // Phase 7b: paint profiles / tape in the plan
   onOpenShapeEditor?: (btId: string) => void     // full Shape Editor screen
@@ -132,6 +133,7 @@ export function buildContextMenuGroups({
         ? [[{ label: 'Join benchtops (' + btJoinCount + ')…', onClick: onJoinBenchtops, color: 'blue' as const }]]
         : []),
       [
+        ...(onEditBenchtop ? [{ label: 'Edit…', onClick: () => onEditBenchtop(benchtopId), color: 'blue' as const }] : []),
         ...(onEditBenchtopShape ? [{ label: 'Edit shape', onClick: () => onEditBenchtopShape(benchtopId), color: 'blue' as const }] : []),
         ...(onEditBenchtopEdges ? [{ label: 'Edit edges', onClick: () => onEditBenchtopEdges(benchtopId), color: 'blue' as const }] : []),
         ...(onOpenShapeEditor ? [{ label: 'Open Shape Editor…', onClick: () => onOpenShapeEditor(benchtopId) }] : []),

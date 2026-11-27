@@ -21,7 +21,7 @@ import { PART_HIDE_VIEWS } from '@/src/lib/resolver/filterHidden'
 import { PartHideContext, type PartHideApi } from '@/src/components/PartHideTicks'
 import CalcInput from '@/src/components/CalcInput'
 import CabinetPanel from './CabinetPanel'
-import PhoneDrawerTab from './PhoneDrawerTab'
+import EditModalShell from './EditModalShell'
 import { useIsPhone } from '@/src/lib/usePhone'
 import Cabinet3DView, { buildPartMetaById } from './Cabinet3DView'
 import FacetFaceGridEditor from './FacetFaceGridEditor'
@@ -224,16 +224,6 @@ export default function CabinetEditModal({
   // Phones: the properties drawer starts shut so the cabinet has the whole screen (the
   // edge tab opens it; picking a part opens it too).
   const [panelHidden, setPanelHidden] = useState(phone)
-  // The phone drawer starts below the header + tabs so it never covers the close ✕.
-  const contentRef = useRef<HTMLDivElement>(null)
-  const [drawerTop, setDrawerTop] = useState(0)
-  useEffect(() => {
-    const el = contentRef.current
-    if (!phone || !el) return
-    const ro = new ResizeObserver(() => setDrawerTop(el.offsetTop))
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [phone])
   const [activeView, setActiveView]       = useState<ViewId>(initialView ?? 'elevation')
   // Wire/solid is tracked per-view (Top/Elevation/Side/3D each individual), seeded
   // from the user's default view styles. Other views fall back to wire (no effect).
@@ -594,76 +584,30 @@ export default function CabinetEditModal({
 
   return (
     <PartHideContext.Provider value={partHideApi}>
-    <div
-      className={`fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center touch-no-select ${phone ? '' : 'p-4'}`}
-      onPointerDown={onClose}
-    >
-      <div
-        className={phone
-          ? 'relative flex w-full h-dvh bg-gray-900 overflow-hidden'
-          : 'flex w-full h-full max-w-7xl max-h-[92vh] bg-gray-900 rounded-xl shadow-2xl overflow-hidden'}
-        onPointerDown={e => e.stopPropagation()}
-      >
-        {/* Left: view tabs + canvas */}
-        <div className="flex flex-col flex-1 overflow-hidden min-w-0">
-          {/* Header */}
-          <div className={`flex-none bg-gray-800 border-b border-gray-700 py-2 flex items-center justify-between gap-2 ${phone ? 'pl-3 pr-1.5' : 'px-4'}`}>
-            <div className={`flex items-baseline gap-3 min-w-0 ${phone ? 'overflow-hidden whitespace-nowrap' : ''}`}>
-              <span className="text-sm font-medium text-gray-200">
-                {cabinet.label ?? cabinet.assembly_class.replace(/_/g, ' ')}
-              </span>
-              <span className="text-xs text-gray-500 font-mono">
-                {cabinet.dx} × {cabinet.dy} × {cabinet.dz}mm
-              </span>
-              {!rp && resolving && (
-                <span className="text-[10px] text-sky-500 italic">resolving…</span>
-              )}
-              {!rp && !resolving && (
-                <span className="text-[10px] text-amber-600 italic">resolver data unavailable — showing approximate views</span>
-              )}
-            </div>
-            {phone ? (
-              <button onClick={onClose} title="Close" aria-label="Close"
-                className="flex-none w-9 h-9 rounded-lg flex items-center justify-center border border-gray-600 bg-gray-700/60 text-gray-200 active:bg-gray-600">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
-                  <path d="M4 4l8 8M12 4l-8 8" />
-                </svg>
-              </button>
-            ) : (
-              <button onClick={onClose} className="text-gray-500 hover:text-white text-lg leading-none px-1">✕</button>
-            )}
-          </div>
-          {/* Tabs */}
-          <div className={`flex-none bg-gray-800/60 border-b border-gray-700 py-1.5 flex items-center gap-1 ${phone ? 'px-2 overflow-x-auto [&>*]:shrink-0' : 'px-4'}`}>
-            {(cabinet.is_kick_assembly ? VIEWS.filter(v => !KICK_HIDDEN_VIEWS.has(v.id)) : VIEWS).map(v => {
-              const disabled = (v.id === 'parts' || v.id === '3d' || v.id === 'tree' || v.id === 'routes') && !rp
-              const overrideCount = v.id === 'overrides'
-                ? Object.keys(partOverrides).length + customParts.length
-                : 0
-              const errorCount = v.id === 'errors' ? (rp?.errors?.length ?? 0) : 0
-              const badge = overrideCount || errorCount
-              const isErr = v.id === 'errors' && errorCount > 0
-              return (
-                <button
-                  key={v.id}
-                  onClick={() => !disabled && setActiveView(v.id)}
-                  disabled={disabled}
-                  className={`px-3 py-1 text-xs rounded transition-colors ${
-                    activeView === v.id
-                      ? (isErr ? 'bg-red-600 text-white' : 'bg-blue-600 text-white')
-                      : disabled
-                      ? 'text-gray-600 cursor-not-allowed'
-                      : isErr
-                      ? 'text-red-400 hover:text-red-300 hover:bg-gray-700'
-                      : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'
-                  }`}
-                >
-                  {v.label}{badge > 0 ? ` (${badge})` : ''}
-                </button>
-              )
-            })}
-            {(isOrthoView || activeView === 'face' || activeView === 'interior' || activeView === '3d') && rp && (
-              <div className="ml-auto flex items-center gap-1.5">
+    <EditModalShell
+      onClose={onClose}
+      title={cabinet.label ?? cabinet.assembly_class.replace(/_/g, ' ')}
+      subtitle={`${cabinet.dx} × ${cabinet.dy} × ${cabinet.dz}mm`}
+      status={<>
+        {!rp && resolving && (
+          <span className="text-[10px] text-sky-500 italic">resolving…</span>
+        )}
+        {!rp && !resolving && (
+          <span className="text-[10px] text-amber-600 italic">resolver data unavailable — showing approximate views</span>
+        )}
+      </>}
+      tabs={(cabinet.is_kick_assembly ? VIEWS.filter(v => !KICK_HIDDEN_VIEWS.has(v.id)) : VIEWS).map(v => {
+        const errorCount = v.id === 'errors' ? (rp?.errors?.length ?? 0) : 0
+        return {
+          ...v,
+          disabled: (v.id === 'parts' || v.id === '3d' || v.id === 'tree' || v.id === 'routes') && !rp,
+          badge: v.id === 'overrides' ? Object.keys(partOverrides).length + customParts.length : errorCount,
+          error: v.id === 'errors' && errorCount > 0,
+        }
+      })}
+      activeTab={activeView}
+      onTab={setActiveView}
+      toolbar={(isOrthoView || activeView === 'face' || activeView === 'interior' || activeView === '3d') && rp ? (<>
                 {(activeView === 'elevation' || activeView === 'top' || activeView === 'side') && mcad.available && (
                   <button
                     onClick={() => mcad.toggle()}
@@ -725,17 +669,11 @@ export default function CabinetEditModal({
                     Drilling
                   </button>
                 )}
-              </div>
-            )}
-          </div>
-          {mcad.bar}
-          {/* CAD tools (z_item_cad) sit left of the view, as in the canvas sidebar. */}
-          <div className="flex-1 flex min-h-0">
-          {mcad.ribbon}
-          {/* Content */}
-          <div
-            ref={contentRef}
-            className={`flex-1 min-w-0 overflow-hidden relative ${
+      </>) : undefined}
+      aboveContent={mcad.bar}
+      // CAD tools (z_item_cad) sit left of the view, as in the canvas sidebar.
+      beside={mcad.ribbon}
+      contentClassName={
               activeView === 'parts'     ? 'bg-gray-900'
               : activeView === '3d'      ? 'bg-gray-950'
               : activeView === 'face'    ? 'bg-gray-950'
@@ -746,9 +684,90 @@ export default function CabinetEditModal({
               : activeView === 'errors'  ? 'bg-gray-900'
               : isDrawingView            ? ''
               : 'flex items-center justify-center bg-gray-950 p-6'
-            }`}
-            onClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null); setSelFixtureId(null) } : undefined}
-          >
+      }
+      onContentClick={isOrthoView ? () => { setSelectedSVGPart(null); setPicker(null); setSelFixtureId(null) } : undefined}
+      // Right: properties panel. Selecting a part swaps the cabinet info out
+      // for the part's panels; deselecting (click blank canvas) swaps it back.
+      panel={<>
+          {mcad.panel && <div className="absolute inset-0 z-20 flex [&>*]:w-full! [&>*]:border-l-0">{mcad.panel}</div>}
+          <div className={dockedPanelOpen ? 'hidden' : 'h-full overflow-y-auto'}>
+            <CabinetPanel
+              cabinet={cabinet}
+              wall={wall}
+              wallCabinets={wallCabinets}
+              room={null}
+              onUpdate={onUpdate}
+              onDelete={async id => { await onDelete(id); onClose() }}
+              hideWallPosition
+              hideDelete
+            />
+          </div>
+          {/* Docked part panels: ortho views render below; the 3D view portals its
+              panel (with joint/drawer controls) into this same host. */}
+          <div className={`absolute inset-0 z-10 overflow-y-auto ${dockedPanelOpen ? '' : 'pointer-events-none'}`}>
+            <div ref={setPanelHost} className="p-2 space-y-2">
+              {selectedSVGPart && isOrthoView && (
+                <>
+                  <PartPropertiesPanel
+                    className="relative w-full"
+                    part={selectedSVGPart}
+                    onClose={() => setSelectedSVGPart(null)}
+                    onEdgeChange={handleSVGEdgeChange}
+                    ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
+                    eb={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId] : undefined}
+                    comment={{ value: partComments[selectedSVGPart.id] ?? selectedSVGPart.comment ?? '', onChange: v => savePartComment(selectedSVGPart.id, v) }}
+                  />
+                  {/* A bought-in insert follows its door: no offset of its own (z_faced_doors F9). */}
+                  {!selectedSVGPart.id.startsWith('hw_insert_') && (
+                    <PartPosOverridePanel
+                      className="relative w-full"
+                      part={selectedSVGPart}
+                      cabinetId={cabinet.id}
+                      customParts={customParts}
+                      partOverrides={partOverrides}
+                      onOverridesChange={setPartOverrides}
+                      setCustomParts={setCustomParts}
+                    />
+                  )}
+                  {cutoutsPanelFor(selectedSVGPart.id)}
+                </>
+              )}
+            </div>
+          </div>
+      </>}
+      panelHidden={panelHidden}
+      onTogglePanel={() => setPanelHidden(h => !h)}
+      after={<>
+      {mcad.floating}
+      {/* Single-part operation editor — overlays the whole modal, cabinet kept underneath. */}
+      {editingPart && (
+        <PartEditor
+          cabinetId={cabinet.id}
+          part={editingPart}
+          ebSpec={(() => {
+            const eb = editingPart.materialId ? ebByMatId?.[editingPart.materialId] : undefined
+            // Colourless tape reads as the part's material face colour (matches ebFor).
+            return eb ? { thick: eb.thickness, color: eb.color ?? unpackMatCol(editingPart.materialId ? materialColours?.[editingPart.materialId] : undefined, '#c8b89a').face } : undefined
+          })()}
+          onClose={() => { setEditingPart(null); setEditShapeOnOpen(false) }}
+          // Shape Editor save flow (M3): bbox→size writes go through the same
+          // state the 3D view renders from; onPartMetaChange keeps the open
+          // editor's dims in step with the size it just wrote.
+          partOverrides={partOverrides}
+          onOverridesChange={setPartOverrides}
+          customParts={customParts}
+          setCustomParts={setCustomParts}
+          onPartMetaChange={setEditingPart}
+          partBase={baseDimsMap.get(editingPart.id)}
+          shapeOverrides={shapeOverrides}
+          onShapeOverridesChange={setShapeOverrides}
+          initialShapeOpen={editShapeOnOpen}
+          referenceOutlines={editShapeRefOutlines}
+          formulaScope={formulaScope}
+        />
+      )}
+      </>}
+    >
             {/* Drawing surface: keeps the layer set's colours in light mode (.canvas-keep-dark),
                 background + Invert colours from the set — same rule as the plan / elevation. */}
             {isDrawingView && <div
@@ -888,98 +907,7 @@ export default function CabinetEditModal({
                 onClose={() => setAddAt(null)}
               />
             )}
-          </div>
-          </div>
-        </div>
-
-        {/* Right: properties panel. Selecting a part swaps the cabinet info out
-            for the part's panels; deselecting (click blank canvas) swaps it back.
-            Phone: a drawer sliding via `right` (not a transform — that would trap
-            the fixed menus rendered inside), with an edge tab. */}
-        <div className={phone ? 'absolute bottom-0 z-20 flex items-start transition-[right] duration-200' : 'contents'}
-          style={phone ? { top: drawerTop, right: panelHidden ? 'calc(-1 * min(20rem, 86vw))' : 0 } : undefined}>
-        {phone && <PhoneDrawerTab hidden={panelHidden} onToggle={() => setPanelHidden(h => !h)} />}
-        <div className={phone
-          ? 'h-full w-[min(20rem,86vw)] bg-gray-900 border-l border-gray-700 shadow-2xl relative [&_.w-72]:w-full! [&_.w-72]:border-l-0'
-          : 'flex-none w-72 border-l border-gray-800 relative'}>
-          {mcad.panel && <div className="absolute inset-0 z-20 flex [&>*]:w-full! [&>*]:border-l-0">{mcad.panel}</div>}
-          <div className={dockedPanelOpen ? 'hidden' : 'h-full overflow-y-auto'}>
-            <CabinetPanel
-              cabinet={cabinet}
-              wall={wall}
-              wallCabinets={wallCabinets}
-              room={null}
-              onUpdate={onUpdate}
-              onDelete={async id => { await onDelete(id); onClose() }}
-              hideWallPosition
-              hideDelete
-            />
-          </div>
-          {/* Docked part panels: ortho views render below; the 3D view portals its
-              panel (with joint/drawer controls) into this same host. */}
-          <div className={`absolute inset-0 z-10 overflow-y-auto ${dockedPanelOpen ? '' : 'pointer-events-none'}`}>
-            <div ref={setPanelHost} className="p-2 space-y-2">
-              {selectedSVGPart && isOrthoView && (
-                <>
-                  <PartPropertiesPanel
-                    className="relative w-full"
-                    part={selectedSVGPart}
-                    onClose={() => setSelectedSVGPart(null)}
-                    onEdgeChange={handleSVGEdgeChange}
-                    ebThickness={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId]?.thickness : undefined}
-                    eb={selectedSVGPart.materialId ? ebByMatId?.[selectedSVGPart.materialId] : undefined}
-                    comment={{ value: partComments[selectedSVGPart.id] ?? selectedSVGPart.comment ?? '', onChange: v => savePartComment(selectedSVGPart.id, v) }}
-                  />
-                  {/* A bought-in insert follows its door: no offset of its own (z_faced_doors F9). */}
-                  {!selectedSVGPart.id.startsWith('hw_insert_') && (
-                    <PartPosOverridePanel
-                      className="relative w-full"
-                      part={selectedSVGPart}
-                      cabinetId={cabinet.id}
-                      customParts={customParts}
-                      partOverrides={partOverrides}
-                      onOverridesChange={setPartOverrides}
-                      setCustomParts={setCustomParts}
-                    />
-                  )}
-                  {cutoutsPanelFor(selectedSVGPart.id)}
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-        </div>
-      </div>
-
-      {mcad.floating}
-      {/* Single-part operation editor — overlays the whole modal, cabinet kept underneath. */}
-      {editingPart && (
-        <PartEditor
-          cabinetId={cabinet.id}
-          part={editingPart}
-          ebSpec={(() => {
-            const eb = editingPart.materialId ? ebByMatId?.[editingPart.materialId] : undefined
-            // Colourless tape reads as the part's material face colour (matches ebFor).
-            return eb ? { thick: eb.thickness, color: eb.color ?? unpackMatCol(editingPart.materialId ? materialColours?.[editingPart.materialId] : undefined, '#c8b89a').face } : undefined
-          })()}
-          onClose={() => { setEditingPart(null); setEditShapeOnOpen(false) }}
-          // Shape Editor save flow (M3): bbox→size writes go through the same
-          // state the 3D view renders from; onPartMetaChange keeps the open
-          // editor's dims in step with the size it just wrote.
-          partOverrides={partOverrides}
-          onOverridesChange={setPartOverrides}
-          customParts={customParts}
-          setCustomParts={setCustomParts}
-          onPartMetaChange={setEditingPart}
-          partBase={baseDimsMap.get(editingPart.id)}
-          shapeOverrides={shapeOverrides}
-          onShapeOverridesChange={setShapeOverrides}
-          initialShapeOpen={editShapeOnOpen}
-          referenceOutlines={editShapeRefOutlines}
-          formulaScope={formulaScope}
-        />
-      )}
-    </div>
+    </EditModalShell>
     </PartHideContext.Provider>
   )
 }

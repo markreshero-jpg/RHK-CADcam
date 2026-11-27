@@ -48,6 +48,8 @@ interface Params {
   resolvedParts?: Map<string, ResolvedCabinet>
   /** Join type a new join line starts with — the build method default (P-b). */
   defaultJoinType?: (bt: BenchtopInstance) => BenchtopJoinType
+  /** Double-click a top → the benchtop edit window (Mark 2026-11-27). Absent = the Shape Editor. */
+  onOpenEdit?: (id: string) => void
 }
 
 // ── Circle polygon approximation (32 pts, CCW for cutout hole) ───────────────
@@ -124,7 +126,7 @@ export function useBenchtopInteraction(p: Params) {
     selected,
     setSelected, setContextMenu, setMode,
     captureSnapshot,
-    snapSettings, setSnapResult, defaultJoinType, resolvedParts,
+    snapSettings, setSnapResult, defaultJoinType, resolvedParts, onOpenEdit,
   } = p
 
   // ── Draw state ────────────────────────────────────────────────────────────
@@ -873,7 +875,7 @@ export function useBenchtopInteraction(p: Params) {
       setBtMulti([])
       setSelected({ type: 'benchtop', id })
       const now = Date.now(), last = lastBtClickRef.current
-      if (last && last.id === id && now - last.t < 400) { lastBtClickRef.current = null; openShapeEditor(id) }
+      if (last && last.id === id && now - last.t < 400) { lastBtClickRef.current = null; if (onOpenEdit) onOpenEdit(id); else openShapeEditor(id) }
       else lastBtClickRef.current = { id, t: now }
       return true
     }

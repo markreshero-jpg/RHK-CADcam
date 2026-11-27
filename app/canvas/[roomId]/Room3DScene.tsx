@@ -225,7 +225,7 @@ function WallLabel({ wall, room, rc }: { wall: Wall; room: Room; rc: RoomRef }) 
 // its surface sits at topZ, plus waterfall legs and mitred aprons — built by
 // benchtopGeometries (src/lib/benchtopSolids.ts). Same plan → world mapping as WallMesh.
 
-function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, texture, alpha, wire = false }: {
+export function BenchtopMesh({ bt, info, profiles, selected, onSelect, color, texture, alpha, wire = false }: {
   bt: BenchtopInstance
   info: BtElevInfo
   profiles: Record<string, BenchtopEdgeProfile>
