@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q5 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change; re-resolve, hinges, interior, back board) — remaining open items at the end
+Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q6 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change; re-resolve, hinges, interior, back board) — remaining open items at the end
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -611,8 +611,16 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     inner drawers overflow … " + buttons "make bay 1 750 high again / take one inner
     drawer out / Leave it as is" (2.6¢); back Satin 18 → "✓ Checked: back 847×2117×18 …"
     and named the old hinge / shelf-hole clash as not caused by it (1.9¢).
-- **Next (Mark to pick):** Q6 more shop rules from the Claude Code memory; Q7 log every
-  "can't"; tutorial for Q4 / Q5.
+- **Q6 shop rules (Mark approved all 10, 2026-11-27):** appended to shop_settings.ai_rules
+  (Settings › AI helper, now 2,229 chars) from the Claude Code memory conventions: end panel
+  back edge untaped on a wall; 18 Satin Board no tape; tall fillers on the kick (TFK/TFKW);
+  "bulkheads" = BH at a 30 soffit, auto height + 10 past the ceiling; BH takes the overheads'
+  finish; wall-hung open boxes = WOPN, back scribe 0; hanging rails unlocked (centre-pillar
+  drop); native features, never hide / stretch parts; generic appliance notes; ask before a
+  floating base gets back scribe 0. Checked: asked about a filler at TC-01 and bulkheads over
+  WC-01/02 → TFKW on the kick, BH at a 30 soffit + 10, bulkhead in the overhead colour, and it
+  flagged WC-01's back scribe 18 against the overheads-0 rule.
+- **Next (Mark to pick):** Q7 log every "can't"; tutorial for Q4 / Q5.
 
 ## Open items (check while building)
 
