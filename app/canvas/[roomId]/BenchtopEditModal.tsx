@@ -7,14 +7,19 @@
 // Entry: right-click a top → Edit…, double-click a top, or Enter on a selected top.
 // Spec: z_benchtop_builder/BENCHTOP-SPEC.md Phase 9.
 
-import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei'
 import EditModalShell, { type ShellTab } from './EditModalShell'
 import BenchtopElevation, { btElevBands, type BtElevInfo } from './BenchtopElevation'
 import { BenchtopMesh } from './Room3DScene'
 import { useIsPhone } from '@/src/lib/usePhone'
+import { wheelZoomFactor } from '@/src/lib/wheelZoom'
+import { useViewBoxPinch } from './usePinchZoom'
 import { useTutorial } from '@/src/lib/tutorial/store'
+import CalcInput from '@/src/components/CalcInput'
+import { benchtopSectionSolids } from '@/src/lib/crossSectionRoom'
+import { sliceFaces, alongRange, type P2 } from '@/src/lib/crossSection'
 import type { BenchtopInstance, BenchtopEdgeProfile, Wall } from '@/src/lib/types'
 import type { Pt } from '@/src/lib/geometry'
 import type { LayerView } from '@/src/lib/displayLayers/resolve'
@@ -28,11 +33,12 @@ import type { ResolvedBenchtopPart } from '@/src/lib/benchtop-resolver/types'
 import { btLocal, type BtShapeEdit } from './canvasTypes'
 import { wallFrame } from '@/src/lib/benchtopAnchor'
 
-export type BtViewId = 'top' | 'front' | '3d' | 'parts'
+export type BtViewId = 'top' | 'front' | 'side' | '3d' | 'parts'
 
 const VIEWS: { id: BtViewId; label: string }[] = [
   { id: 'top',   label: 'Top' },
   { id: 'front', label: 'Front' },
+  { id: 'side',  label: 'Side' },
   { id: '3d',    label: '3D' },
   { id: 'parts', label: 'Parts' },
 ]
@@ -59,50 +65,72 @@ function alwaysShowBenchtop(l: LayerView): LayerView {
 
 type VB = { x: number; y: number; w: number; h: number }
 
-/** A drawing fitted to its box that zooms with the wheel (about the cursor) and pans
- *  with a drag; double-click fits it again. `children(k)` gets px per mm, so text and
- *  strokes stay the same screen size at any zoom. */
+/** A drawing fitted to its box that zooms with the wheel about the cursor (the same
+ *  feel as the cabinet editor's views: wheelZoomFactor, so touchpads / smooth mice
+ *  zoom smoothly and the invert-scroll pref is honoured), pinch-zooms on touch, pans
+ *  with a mouse drag, and double-click fits it again. The viewBox lives in a ref so
+ *  fast wheel events never work from a stale view. `children(k)` gets px per mm, so
+ *  text and strokes stay the same screen size at any zoom. */
 function PanZoomSvg({ fit, box, children }: { fit: VB; box: { w: number; h: number }; children: (k: number) => ReactNode }) {
   const svgRef = useRef<SVGSVGElement>(null)
-  const [z, setZ] = useState(1)
-  const [c, setC] = useState<{ x: number; y: number } | null>(null)
-  const [dragging, setDragging] = useState(false)
-  const cx = c?.x ?? fit.x + fit.w / 2, cy = c?.y ?? fit.y + fit.h / 2
-  const vb = { x: cx - fit.w / z / 2, y: cy - fit.h / z / 2, w: fit.w / z, h: fit.h / z }
-  const k = Math.min(box.w / vb.w, box.h / vb.h)
-  const live = useRef({ z, cx, cy, k })
-  useEffect(() => { live.current = { z, cx, cy, k } })
-  // Wheel needs a non-passive listener to stop the page scrolling.
+  // The view = the fit box widened to the window's shape, so nothing is letterboxed
+  // and the cursor maths below is exact.
+  const fitted = useMemo(() => {
+    const a = box.w / Math.max(1, box.h)
+    const w = Math.max(fit.w, fit.h * a), h = w / a
+    return { x: fit.x + fit.w / 2 - w / 2, y: fit.y + fit.h / 2 - h / 2, w, h }
+  }, [fit.x, fit.y, fit.w, fit.h, box.w, box.h])
+  const vbRef = useRef<VB>(fitted)
+  const [vb, setVbState] = useState<VB>(fitted)
+  const setVb = useCallback((v: VB) => { vbRef.current = v; setVbState(v) }, [])
+  // A new fit (the top changed size, the window resized) → fit again.
+  const fitKey = `${Math.round(fitted.x)},${Math.round(fitted.y)},${Math.round(fitted.w)},${Math.round(fitted.h)}`
+  const [lastKey, setLastKey] = useState(fitKey)
+  if (lastKey !== fitKey) { setLastKey(fitKey); setVbState(fitted) }
+  // The refit above sets state only; the ref follows after the render commits.
+  useEffect(() => { vbRef.current = vb }, [vb])
+  const minW = fitted.w / 60, maxW = fitted.w * 4
+
   useEffect(() => {
     const el = svgRef.current
     if (!el) return
     const onWheel = (e: WheelEvent) => {
       e.preventDefault()
-      const m = el.getScreenCTM()
-      if (!m) return
-      const pt = new DOMPoint(e.clientX, e.clientY).matrixTransform(m.inverse())
-      const { z: z0, cx: x0, cy: y0 } = live.current
-      const z1 = Math.min(200, Math.max(0.5, z0 * (e.deltaY < 0 ? 1.2 : 1 / 1.2)))
-      const f = z1 / z0
-      setZ(z1)
-      setC({ x: pt.x + (x0 - pt.x) / f, y: pt.y + (y0 - pt.y) / f })
+      const r = el.getBoundingClientRect()
+      const { x, y, w, h } = vbRef.current
+      if (!r.width || !w) return
+      // Cursor in drawing mm from the live view (getScreenCTM lags a render behind).
+      const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height
+      const cx = x + fx * w, cy = y + fy * h
+      const newW = Math.max(minW, Math.min(maxW, w / wheelZoomFactor(e)))
+      const newH = h * (newW / w)
+      setVb({ x: cx - fx * newW, y: cy - fy * newH, w: newW, h: newH })
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [])
-  const drag = useRef<{ x: number; y: number; cx: number; cy: number } | null>(null)
+  }, [minW, maxW, setVb])
+  useViewBoxPinch(svgRef, vbRef, setVb, minW, maxW)
+
+  const drag = useRef<{ x: number; y: number; vb: VB } | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const k = box.w / vb.w   // px per mm (the view has the window's shape)
   return (
     <svg ref={svgRef} width={box.w} height={box.h} viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`} className="block"
-      style={{ cursor: dragging ? 'grabbing' : 'grab', touchAction: 'none' }}
-      onPointerDown={e => { drag.current = { x: e.clientX, y: e.clientY, cx, cy }; setDragging(true); e.currentTarget.setPointerCapture(e.pointerId) }}
+      style={{ cursor: dragging ? 'grabbing' : 'grab' }}
+      onPointerDown={e => {
+        if (e.pointerType === 'touch' || e.button !== 0) return   // touch = the pinch hook
+        drag.current = { x: e.clientX, y: e.clientY, vb: vbRef.current }
+        setDragging(true); e.currentTarget.setPointerCapture(e.pointerId)
+      }}
       onPointerMove={e => {
         const d = drag.current
         if (!d) return
-        setC({ x: d.cx - (e.clientX - d.x) / k, y: d.cy - (e.clientY - d.y) / k })
+        const kk = box.w / d.vb.w
+        setVb({ ...d.vb, x: d.vb.x - (e.clientX - d.x) / kk, y: d.vb.y - (e.clientY - d.y) / kk })
       }}
       onPointerUp={() => { drag.current = null; setDragging(false) }}
       onPointerCancel={() => { drag.current = null; setDragging(false) }}
-      onDoubleClick={() => { setZ(1); setC(null) }}>
+      onDoubleClick={() => setVb(fitted)}>
       {children(k)}
     </svg>
   )
@@ -138,6 +166,8 @@ export default function BenchtopEditModal({
   const [panelHidden, setPanelHidden] = useState(phone)
   const [view, setView] = useState<BtViewId>(initialView ?? 'top')
   const [wire, setWire] = useState(false)
+  // Side = a section across the top at this distance from its left end (null = halfway).
+  const [cutAt, setCutAt] = useState<number | null>(null)
   // Bumped when either the panel or the Parts tab resolves, so both lists re-read.
   const [partsVer, setPartsVer] = useState(0)
   // Tutorial bt_edit_window.
@@ -164,16 +194,30 @@ export default function BenchtopEditModal({
   const frame = useMemo(() => viewFrame(benchtop, walls, roomCx), [benchtop, walls, roomCx])
   const size = useMemo(() => {
     const loc = outlinePoints(segs, 8).map(p => btLocal(frame, p))
-    if (!loc.length) return { L: 0, D: 0 }
+    if (!loc.length) return { L: 0, D: 0, x0: 0 }
     return {
+      x0: Math.min(...loc.map(p => p.x)),
       L: Math.round(Math.max(...loc.map(p => p.x)) - Math.min(...loc.map(p => p.x))),
       D: Math.round(Math.max(...loc.map(p => p.y)) - Math.min(...loc.map(p => p.y))),
     }
   }, [segs, frame])
 
   const drawingLayers = view === 'top' ? planLayers : elevLayers
-  const isDrawing = view === 'top' || view === 'front'
-  const tabs: ShellTab<BtViewId>[] = VIEWS.map(v => ({ ...v, disabled: (v.id === '3d' || v.id === 'top') && !bb }))
+  const isDrawing = view === 'top' || view === 'front' || view === 'side'
+  const tabs: ShellTab<BtViewId>[] = VIEWS.map(v => ({ ...v, disabled: (v.id === '3d' || v.id === 'top' || v.id === 'side') && !bb }))
+  // Cut position, mm from the top's left end (as seen from the room), kept inside the top.
+  const cut = Math.max(1, Math.min(size.L - 1, cutAt ?? size.L / 2))
+  const cutTools = (
+    <div className="flex items-center gap-1.5 text-[11px] text-gray-400" title="Where the side section cuts across the top — mm from its left end. It shows as A–A on the Top tab.">
+      <span>Cut A–A at</span>
+      <input type="range" min={1} max={Math.max(2, size.L - 1)} step={1} value={cut}
+        onChange={e => setCutAt(Number(e.target.value))} className="w-40 accent-amber-500" />
+      <CalcInput value={Math.round(cut)} decimals={0} min={1} max={Math.max(2, size.L - 1)} onCommit={v => setCutAt(v)}
+        className="w-16 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-right text-gray-200 focus:outline-none focus:border-blue-500" />
+      <span>from left</span>
+      {cutAt != null && <button onClick={() => setCutAt(null)} className="px-1.5 py-0.5 rounded hover:bg-gray-700 text-gray-400" title="Back to halfway">↺</button>}
+    </div>
+  )
 
   return (
     <EditModalShell
@@ -184,7 +228,7 @@ export default function BenchtopEditModal({
       tabs={tabs}
       activeTab={view}
       onTab={pickView}
-      toolbar={view === '3d' ? (
+      toolbar={view === 'side' ? cutTools : view === '3d' ? (
         <button onClick={() => setWire(w => !w)} title="Toggle wire / solid view"
           className={`px-2.5 py-1 text-xs rounded transition-colors ${wire ? 'bg-sky-700/80 text-sky-200 hover:bg-sky-600/80' : 'text-gray-400 hover:text-gray-200 hover:bg-gray-700'}`}>
           Wire
@@ -198,7 +242,8 @@ export default function BenchtopEditModal({
       {isDrawing && (
         <div className="w-full h-full canvas-keep-dark"
           style={{ background: drawingLayers?.background, filter: drawingLayers?.invert ? INVERT_FILTER : undefined }}>
-          {view === 'top' && <TopDrawing benchtop={shown} handCuts={(benchtop.cutout_polygons ?? []).length} cabs={cabs ?? []} frame={frame} info={info} profiles={profiles} layers={planLayers} />}
+          {view === 'top' && <TopDrawing benchtop={shown} handCuts={(benchtop.cutout_polygons ?? []).length} cabs={cabs ?? []} frame={frame} info={info} profiles={profiles} layers={planLayers} cut={size.x0 + cut} />}
+          {view === 'side' && <SideDrawing benchtop={shown} frame={frame} at={size.x0 + cut} roomH={roomH} info={info} profiles={profiles} layers={elevLayers} />}
           {view === 'front' && <FrontDrawing benchtop={shown} walls={walls} roomCx={roomCx} roomH={roomH} info={info} profiles={profiles} layers={elevLayers} />}
         </div>
       )}
@@ -230,8 +275,10 @@ function viewFrame(b: BenchtopInstance, walls: Wall[], roomCx: Pt): BtShapeEdit[
 }
 
 // ── Top: the top in its wall frame — edges by profile, joints, cut-outs, sizes ──
-function TopDrawing({ benchtop, handCuts, cabs, frame, info, profiles, layers }: {
+function TopDrawing({ benchtop, handCuts, cabs, frame, info, profiles, layers, cut }: {
   benchtop: BenchtopInstance
+  /** The Side tab's section line (local x). */
+  cut: number
   /** The first n cut-outs are hand-drawn; the rest come from fixtures (sink / cooktop). */
   handCuts: number
   cabs: BtEditCab[]
@@ -330,9 +377,16 @@ function TopDrawing({ benchtop, handCuts, cabs, frame, info, profiles, layers }:
         <text x={(minX + maxX) / 2} y={minY - px(40)} fontSize={fs} textAnchor="middle" fill="#6b7280" style={{ userSelect: 'none' }}>
           BACK{benchtop.wall_id ? ' (anchor wall)' : ''}
         </text>
+        {/* Side section line A–A */}
+        <g style={{ pointerEvents: 'none' }} stroke="#f59e0b" fill="#f59e0b">
+          <line x1={cut} y1={minY - px(14)} x2={cut} y2={maxY + px(14)} strokeWidth={px(1)} strokeDasharray={`${px(10)} ${px(3)} ${px(2)} ${px(3)}`} />
+          {[minY - px(22), maxY + px(32)].map((y, i) => (
+            <text key={i} x={cut + px(6)} y={y} fontSize={px(11)} stroke="none" fontWeight={600} style={{ userSelect: 'none' }}>A</text>
+          ))}
+        </g>
         </>
       }}</PanZoomSvg>
-      <p className="absolute bottom-2 left-3 text-[10px] text-gray-600 pointer-events-none">Wheel = zoom · drag = pan · double-click = fit</p>
+      <p className="absolute bottom-2 left-3 px-1 rounded bg-gray-950/80 text-[10px] text-gray-500 pointer-events-none">Wheel = zoom · drag = pan · double-click = fit</p>
     </div>
   )
 }
@@ -400,7 +454,76 @@ function FrontDrawing({ benchtop, walls, roomCx, roomH, info, profiles, layers }
         </text>
         </>
       }}</PanZoomSvg>
-      <p className="absolute bottom-2 left-3 text-[10px] text-gray-600 pointer-events-none">Wheel = zoom into the edge · drag = pan · double-click = fit</p>
+      <p className="absolute bottom-2 left-3 px-1 rounded bg-gray-950/80 text-[10px] text-gray-500 pointer-events-none">Wheel = zoom into the edge · drag = pan · double-click = fit</p>
+    </div>
+  )
+}
+
+// ── Side: a section across the top at A–A (z_section_view slicing of the same solids
+// as the 3D view): slab, build-up, aprons, set-back aprons, waterfall legs. Seen with
+// the wall on the left and the front on the right.
+function SideDrawing({ benchtop, frame, at, roomH, info, profiles, layers }: {
+  benchtop: BenchtopInstance
+  frame: BtShapeEdit['frame']
+  /** Cut position, local x (along the anchor wall). */
+  at: number
+  roomH: number
+  info: BtElevInfo
+  profiles: Record<string, BenchtopEdgeProfile>
+  layers?: LayerView
+}) {
+  const [boxRef, box] = useBoxSize()
+  const solids = useMemo(() => benchtopSectionSolids(benchtop, info, profiles), [benchtop, info, profiles])
+  const pl = { o: frame.o, d: frame.d, n: frame.n, at }
+  const loops: P2[][] = solids.flatMap(sol => {
+    const [lo, hi] = alongRange(sol.faces, frame.o, frame.d)
+    return at < lo || at > hi ? [] : sliceFaces(sol.faces, pl)
+  })
+  if (!loops.length) {
+    return <div ref={boxRef} className="w-full h-full flex items-center justify-center text-xs text-gray-500">The cut misses the top here — move it with the slider.</div>
+  }
+  const us = loops.flat().map(p => p.x), vs = loops.flat().map(p => p.y)
+  const u0 = Math.min(...us), u1 = Math.max(...us), v0 = Math.min(...vs), v1 = Math.max(...vs)
+  const D = u1 - u0
+  // y down in the SVG: y = roomH − height (as the elevation).
+  const Y = (v: number) => roomH - v
+  // Fit the section itself (the floor joins in when legs / aprons come near it).
+  const pad = Math.max(150, D * 0.35)
+  const yTop = Y(Math.max(v1, info.topZ)) - 140
+  const yBot = v0 < 400 ? roomH + 80 : Y(v0) + 160
+  const fit = { x: u0 - pad, y: yTop, w: D + 2 * pad, h: yBot - yTop }
+  const fill = layers?.colorOf('benchtops') ?? info.color ?? '#14b8a6'
+  const stroke = layers?.color('benchtops', '#14b8a6') ?? '#14b8a6'
+  const d = loops.map(l => 'M' + l.map(p => `${p.x.toFixed(1)},${Y(p.y).toFixed(1)}`).join('L') + 'Z').join('')
+  const T = Math.round(info.thick.total)
+  const lowest = Math.round(v0)
+  return (
+    <div ref={boxRef} className="w-full h-full relative">
+      <PanZoomSvg fit={fit} box={box}>{k => {
+        const px = (n: number) => n / k
+        const fs = px(11)
+        return <>
+          {/* floor */}
+          <line x1={fit.x - D * 10} y1={roomH} x2={fit.x + fit.w + D * 10} y2={roomH} stroke="#4b5563" strokeWidth={px(1)} />
+          <path d={d} fillRule="evenodd" fill={fill} fillOpacity={0.45} stroke={stroke} strokeWidth={px(1.5)} strokeLinejoin="round" />
+          {/* depth at the cut */}
+          <DimLine a={{ x: u0, y: Y(info.topZ) - px(30) }} b={{ x: u1, y: Y(info.topZ) - px(30) }} label={`${Math.round(D)}`} fs={fs} px={px} />
+          {/* height to the top + thickness / drop at the front */}
+          <text x={u1 + px(56)} y={Y(info.topZ)} fontSize={fs} fill="#e5e7eb" dominantBaseline="middle" style={{ userSelect: 'none' }}>
+            top at {Math.round(info.topZ)} · underside {Math.round(info.topZ - T)}
+          </text>
+          <DimLine a={{ x: u1 + px(24), y: Y(info.topZ) }} b={{ x: u1 + px(24), y: Y(info.topZ - T) }} label={`${T}`} fs={fs} px={px} vertical />
+          {Math.round(info.topZ) - lowest > T + 1 && lowest > 1 && (
+            <text x={u0 - px(8)} y={Y(lowest)} fontSize={px(10)} textAnchor="end" dominantBaseline="middle" fill="#9ca3af" style={{ userSelect: 'none' }}>
+              lowest {lowest} ({Math.round(info.topZ) - lowest} below the top)
+            </text>
+          )}
+          <text x={(u0 + u1) / 2} y={Y(info.topZ) - px(58)} fontSize={fs} textAnchor="middle" fill="#6b7280" style={{ userSelect: 'none' }}>
+            {benchtop.wall_id ? 'WALL ←' : 'BACK ←'} · section A–A · → FRONT
+          </text>
+        </>
+      }}</PanZoomSvg>
+      <p className="absolute bottom-2 left-3 px-1 rounded bg-gray-950/80 text-[10px] text-gray-500 pointer-events-none">Wheel = zoom · drag = pan · double-click = fit · move A–A with the slider above</p>
     </div>
   )
 }

@@ -2327,7 +2327,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'In Benchtop mode (F4), right-click a top and choose Edit…. Double-clicking a top, or selecting it and pressing Enter, does the same. It opens in the same window as the cabinet editor.',
       target: 'tool-benchtop', canvas: true, done: (c, s) => ev(c, 'bt_edit_open') > ev(s, 'bt_edit_open') },
     { id: 'tabs', title: 'Look round the tabs',
-      body: 'Top = the top from above, back at the top, each edge with its length and profile (dashed grey = wall, red = a joint with another top). Front = the top on its anchor wall’s elevation with the finished height. 3D = just this top; drag to turn it. Parts = its cut list and supply items; Resolve Parts rebuilds them.',
+      body: 'Top = the top from above, back at the top, each edge with its length and profile (dashed grey = wall, red = a joint with another top). Front = the top on its anchor wall’s elevation with the finished height. Side = a section across the top at A–A (move it with the slider; the line shows on Top): thickness, aprons and legs as they’re made. Wheel zooms, drag pans, double-click fits. 3D = just this top; drag to turn it. Parts = its cut list and supply items; Resolve Parts rebuilds them.',
       canvas: true, done: (c, s) => ev(c, 'bt_edit_tab') > ev(s, 'bt_edit_tab') },
     { id: 'panel', title: 'Change it from the panel',
       body: 'The right-hand panel is the usual benchtop side bar: size, height, build method, stone, position, edges and joins. Move…, Edit edges…, Shape Editor… and the join / cut-out tools work on the plan, so they close the window first. Esc or ✕ closes the window. The full Shape Editor is still under right-click → Open Shape Editor….',

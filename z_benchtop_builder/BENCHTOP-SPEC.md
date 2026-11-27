@@ -750,6 +750,15 @@ cabinet edit modal style window. can we use the same window?"
   tall, no kicks or overheads) within 100 of the top as dashed outlines with labels.
   Top and Front zoom with the wheel about the cursor, pan by dragging, double-click fits
   (`PanZoomSvg`) — so the edge of a long thin top can be read on Front.
+- **W-g (2026-11-28, Mark: "zoom a bit funny … add a side view")** — zoom rebuilt like
+  the cabinet editor's views: `wheelZoomFactor` (smooth on touchpads, honours invert
+  scroll, Ctrl fast / Shift fine), the view kept in a ref so fast wheel events never
+  work from a stale view (the first build used a fixed 1.2× per event + getScreenCTM,
+  which lurched and drifted), pinch on touch (`useViewBoxPinch`), mouse-drag pan.
+  **Side** tab = a true section across the top at **A–A** (slider + mm box in the tab
+  bar, default halfway; the line shows on Top): `benchtopSectionSolids` sliced with
+  `sliceFaces`, wall on the left, front on the right; depth at the cut, thickness,
+  top / underside heights, lowest point when aprons / legs drop below the slab.
 - Tutorial: **Edit a benchtop in its own window** (basics ▸ benchtops).
 
 ### Deferred
@@ -759,6 +768,8 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-11-28 — Phase 9 W-g: zoom rebuilt (wheelZoomFactor, ref-held view, pinch); Side tab =
+  section at A–A.
 - 2026-11-28 — Phase 9 W-f: fixture cut-outs + cabinets under on Top, zoom / pan on
   Top and Front.
 - 2026-11-27 — Phase 9 benchtop edit window (right-click → Edit… / double-click /
