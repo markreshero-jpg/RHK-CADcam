@@ -2239,6 +2239,13 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
           await handleJoinKicks(cab.id)
           return { joined: cab.label }
         },
+        // Right-click a run member → Separate kicks: dissolve its run, each cabinet gets its kick back.
+        async separateKicks(ref: string) {
+          const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())
+          if (!cab?.kick_run_id) throw new Error(`Not in a kick run: ${ref}`)
+          await handleSeparateKicks(cab.id)
+          return { separated: cab.label }
+        },
         // Right-click → Detach kick: one cabinet's kick as its own kick assembly.
         async detachKick(ref: string) {
           const cab = cabinets.find(c => c.id === ref || c.label?.toLowerCase() === ref.toLowerCase())

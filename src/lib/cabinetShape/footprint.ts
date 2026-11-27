@@ -134,6 +134,10 @@ export interface Footprint {
   kick_edges?: Record<string, KickEdgeChoice>
   /** How the toe kick's boards meet at each corner, keyed as `joins`. Absent = the kick's default. */
   kick_joins?: Record<string, JoinChoice>
+  /** Internal kick spreaders: across the width front-to-back (unset), or at TOESP
+   *  centres along each face, square to it ('along_fronts' — joined runs round an
+   *  angled corner, z_kick_join). */
+  kick_spreaders?: 'along_fronts'
 }
 
 /** What a toe kick builds on an edge. */

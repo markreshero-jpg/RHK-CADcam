@@ -1,5 +1,6 @@
 import type { CabinetInstance, Wall, Room } from '@/src/lib/types'
 import { cabT } from '@/src/lib/geometry'
+import { isAngledFiller, kickCornerShape, kickRunLegs } from '@/src/lib/kickRunCorner'
 import { dbJoinKickRun, dbSeparateKickRun, type KickRunMutation } from './canvasDB'
 import { confirmAction } from '@/src/components/ConfirmDeleteModal'
 
@@ -70,15 +71,21 @@ export function useKickRunOps(p: KickRunOpsParams) {
     const wall = walls.find(w => w.id === clicked?.wall_id)
     if (!clicked || !wall) return
 
-    const run = detectKickRun(clicked, cabinets, wall)
+    // Round an angled corner filler onto the next wall (z_kick_join, Mark 2026-11-28).
+    const legs = kickRunLegs(detectKickRun(clicked, cabinets, wall), wall, cabinets, walls,
+      (c, w) => detectKickRun(c, cabinets, w), eligibleForKickRun)
+    const run = legs.flatMap(l => l.members)
     if (run.length < 2) {
       window.alert('Joining kicks needs at least two adjacent base/tall cabinets in a straight run.')
       return
     }
+    const shape = kickCornerShape(legs, walls)
 
-    const depths = [...new Set(run.map(c => Math.round(c.dz)))].sort((a, b) => a - b)
+    // A corner run follows each wall's own cabinet depth, and the filler's angled front.
+    const depthOf = shape ? run.filter(c => !isAngledFiller(c)) : run
+    const depths = [...new Set(depthOf.map(c => Math.round(c.dz)))].sort((a, b) => a - b)
     if (depths.length > 1) {
-      const deepest = Math.round(Math.max(...run.map(c => c.dz)))
+      const deepest = Math.round(Math.max(...depthOf.map(c => c.dz)))
       const ok = await confirmAction({
         title: 'Join Kicks',
         message: `This run mixes cabinet depths (${depths.join('/')}mm). ` +
@@ -92,7 +99,7 @@ export function useKickRunOps(p: KickRunOpsParams) {
     const ids = run.map(c => c.id)
     // memberPatches in the mutation carry the detach transform (dy/pos_z/has_toekick
     // + kick_run_id) so we don't need to patch member state manually here.
-    applyKickMutation(await dbJoinKickRun(room.id, ids, label))
+    applyKickMutation(await dbJoinKickRun(room.id, ids, label, shape ?? undefined))
   }
 
   // Detach a SINGLE cabinet's kick into its own standalone kick assembly.

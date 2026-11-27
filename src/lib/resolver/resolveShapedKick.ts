@@ -302,12 +302,27 @@ export function resolveShapedKick(
     spreader(e.p0, f.u, f.n, KE, f.len / 2)
   })
 
-  // Internal spreaders at TOESP centres across the kick's width, front-to-back.
-  const xs = K.map(p => p.x)
-  const kx0 = Math.min(...xs), W = Math.max(...xs) - kx0
-  const qty = Math.max(0, Math.floor(W / r.TOESP) - 1)
-  const spacing = W / (qty + 1)
-  for (let i = 1; i <= qty; i++) spreader({ x: kx0 + spacing * i - TI / 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, KI)
+  if (fp.kick_spreaders === 'along_fronts') {
+    // A run round an angled corner (z_kick_join): spreaders at TOESP centres along
+    // each face, square to it, so the leg on the next wall gets its own.
+    edges.forEach((ed, i) => {
+      if (ed.kind !== 'front' || ed.none) return
+      const e = kEdge(K, i), f = edgeFrame(e)
+      const q = Math.max(0, Math.floor(f.len / r.TOESP) - 1)
+      const sp = f.len / (q + 1)
+      for (let j = 1; j <= q; j++) {
+        const at = sp * j - TI / 2
+        spreader({ x: e.p0.x + f.u.x * at, y: e.p0.y + f.u.y * at }, f.n, f.u, KI, TF + TI + TI)
+      }
+    })
+  } else {
+    // Internal spreaders at TOESP centres across the kick's width, front-to-back.
+    const xs = K.map(p => p.x)
+    const kx0 = Math.min(...xs), W = Math.max(...xs) - kx0
+    const qty = Math.max(0, Math.floor(W / r.TOESP) - 1)
+    const spacing = W / (qty + 1)
+    for (let i = 1; i <= qty; i++) spreader({ x: kx0 + spacing * i - TI / 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, KI)
+  }
 
   if (!parts.some(p => p.part_key === 'kick_front_face') && !Object.keys(fp.kick_edges ?? {}).length)
     errors.push({ code: 'SHAPE_NO_KICK_FRONT', message: 'Shape has no front edge for a toe kick face', part: 'toekick' })

@@ -395,3 +395,34 @@ sort of resolver rule and how each junction is joined?"
 **Known limits:** moving a run member still re-fits the assembly's dx without touching its footprint. Editing a plain
 assembly gives it a rectangle footprint, which moves it to the shaped kick (Kick Returns ticks stop applying). Angled
 board seams: only the straight face / sub front are cut at the run's seams, as before.
+
+## Kick round an angled filler — KA1 (built 2026-11-28, in-app check pending)
+
+Mark (AI helper "Can't do yet": "fix the kick join in the back corner on the angle", RHK6586). Tested from scratch
+in RHK6542 DHID › Living Room (Wall 1 3000 + Wall 2 1800 at 45°; B2D B2D | BFKANG | B2D): Join kicks only took
+Wall 1 and built a straight kick; the Wall 2 cabinet kept its own.
+
+**Locked decisions (Mark 2026-11-28)**
+- Join kicks carries on through an **angled corner filler** onto the next wall, taking the cabinets that butt the
+  filler's far side.
+- The **face mitres** at the filler's front corner (where the two walls' front lines meet — BFKANG's two 40 faces are
+  in line with them); the **back mitres** where the walls meet.
+
+**Built**
+- `src/lib/kickRunCorner.ts`: `kickRunLegs` (a run whose end member is a BFKANG — footprint preset / from_preset
+  `angled_filler` — at a wall end carries on along the wall joined there, head-to-tail walls, both directions, up to
+  4 legs) and `kickCornerShape` (the assembly's footprint: backs along each wall to where they cross, ends square to
+  their walls, fronts along each wall's cabinet fronts at that leg's depth, joined by the filler's own front edges;
+  points that are straight on are dropped). `kick_joins` back|back2 = mitre; faces mitre by default.
+- `useKickRunOps.handleJoinKicks` → `dbJoinKickRun(…, shape)`: the assembly gets that footprint and box (pos = the
+  first cabinet's back-left, wall = the first wall). The mixed-depth question leaves the filler out.
+- `footprint.kick_spreaders: 'along_fronts'` (set on these runs only): internal spreaders at TOESP centres along each
+  face, square to it, instead of across the overall width (`resolveShapedKick`). Other shaped kicks unchanged.
+- `syncKickAssembly` leaves a run on more than one wall alone (no straight re-fit): after moving its cabinets,
+  Separate and Join kicks again.
+- Bridge `separateKicks(ref)` for scripts. Tests `src/lib/__tests__/kickRunCorner.test.ts`.
+- Result on the test room: face 1272 (Wall 1, split 2 × 636.1) + 672.2 (Wall 2), 22.5° mitre at the front corner;
+  sub fronts 1279 + 679; backs 1523 + 923, 22.5° mitre in the wall corner; end spreaders square to each wall.
+
+**Not yet:** an AI step for it (the chat still logs "kick pieces"); walls that meet tail-to-tail; a filler that isn't
+BFKANG (a plain filler at a 90° corner is the normal L corner, untouched).

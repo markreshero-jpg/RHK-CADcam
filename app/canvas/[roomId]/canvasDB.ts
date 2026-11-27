@@ -6,6 +6,7 @@ import {
 } from '@/src/lib/libraryPartData'
 import { cabBottomZ } from '@/src/lib/geometry'
 import type { CustomOrient } from '@/src/lib/customPartBox'
+import type { KickCornerShape } from '@/src/lib/kickRunCorner'
 import { seedClassDepthParams, presetBox } from '@/src/lib/cabinetShape/presets'
 import { resolveCabinetFromDB, resolveCustomParts, getCachedInput, setCachedInput, applyEdgeOverridesFromCache, getCachedHidden } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveCabinet } from '@/src/lib/resolver/resolver'
@@ -1016,7 +1017,7 @@ export async function resolveKickRun(runId: string): Promise<Map<string, Resolve
 // positioned at the leftmost member's left edge, width = Σ member widths, depth =
 // deepest member. Null when fewer than 2 real members remain (run should dissolve).
 async function computeKickAssemblyGeom(runId: string): Promise<
-  { pos_x: number; pos_y: number; rotation: number; wall_id: string | null; dx: number; dz: number } | null
+  { pos_x: number; pos_y: number; rotation: number; wall_id: string | null; dx: number; dz: number; walls: number } | null
 > {
   const { data: linked } = await supabase
     .from('cabinet_instances')
@@ -1049,6 +1050,7 @@ async function computeKickAssemblyGeom(runId: string): Promise<
     wall_id:  wallId,
     dx:       rightT - leftT,
     dz:       Math.max(...sorted.map(m => Number(m.dz))),
+    walls:    new Set(members.map(m => m.wall_id)).size,
   }
 }
 
@@ -1056,7 +1058,9 @@ async function computeKickAssemblyGeom(runId: string): Promise<
 // member's kick into the run (option B — member becomes a kick-less carcase, raised
 // by its kick height), then create the standalone kick assembly sized to the run
 // and link it. Works for a single cabinet (memberIds length 1) or a whole run.
-export async function dbJoinKickRun(roomId: string, memberIds: string[], label: string): Promise<KickRunMutation> {
+// `shape` (kickCornerShape): a run round an angled corner filler — the assembly gets
+// that footprint and box instead of the straight one-wall fit.
+export async function dbJoinKickRun(roomId: string, memberIds: string[], label: string, shape?: KickCornerShape): Promise<KickRunMutation> {
   const { data: runRow, error } = await supabase
     .from('kick_runs').insert({ room_id: roomId, split_mode: 'equal' }).select('id').single()
   if (error || !runRow) { console.error('dbJoinKickRun create', error); return EMPTY_MUTATION() }
@@ -1071,8 +1075,9 @@ export async function dbJoinKickRun(roomId: string, memberIds: string[], label: 
   for (const mid of memberIds) kickHeights.push(await applyDetachTransform(mid))
   const assemblyKickH = kickHeights[0] ?? KICK_ASSEMBLY_DY
 
-  const geom = await computeKickAssemblyGeom(runId)
-  if (!geom) { console.error('dbJoinKickRun: no members'); return EMPTY_MUTATION() }
+  const straight = await computeKickAssemblyGeom(runId)
+  if (!straight) { console.error('dbJoinKickRun: no members'); return EMPTY_MUTATION() }
+  const geom = shape ? { pos_x: shape.pos_x, pos_y: shape.pos_y, rotation: shape.rotation, wall_id: shape.wall_id, dx: shape.dx, dz: shape.dz } : straight
   await supabase.from('kick_runs').update({ build_to_depth: geom.dz }).eq('id', runId)
 
   const { data: asm, error: aerr } = await supabase.from('cabinet_instances').insert({
@@ -1081,6 +1086,7 @@ export async function dbJoinKickRun(roomId: string, memberIds: string[], label: 
     dx: geom.dx, dy: assemblyKickH, dz: geom.dz,
     has_carcass: false, has_internal: false, has_face: false, has_toekick: true,
     is_kick_assembly: true, kick_run_id: runId,
+    ...(shape ? { footprint: shape.footprint } : {}),
   }).select('*').single()
   if (aerr || !asm) { console.error('dbJoinKickRun assembly', aerr); return EMPTY_MUTATION() }
 
@@ -1098,6 +1104,10 @@ export async function dbJoinKickRun(roomId: string, memberIds: string[], label: 
 export async function syncKickAssembly(runId: string): Promise<KickRunMutation> {
   const geom = await computeKickAssemblyGeom(runId)
   if (!geom) return dissolveKickRun(runId)
+  // A run round an angled corner (members on more than one wall) keeps the footprint
+  // and box it was joined with — the straight one-wall re-fit would break it. Re-join
+  // it (Separate, then Join kicks) after moving its cabinets.
+  if (geom.walls > 1) return { removedCabinetIds: [], resolved: await resolveKickRun(runId) }
 
   const { data: run } = await supabase.from('kick_runs').select('kick_cabinet_id').eq('id', runId).maybeSingle()
   const assemblyId = (run as { kick_cabinet_id?: string | null } | null)?.kick_cabinet_id ?? null

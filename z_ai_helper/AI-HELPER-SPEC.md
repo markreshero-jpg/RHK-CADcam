@@ -656,7 +656,9 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
   made a straight Wall-1-only KICK 1 (1751.7 face / sub / back, no bevels) and left the Wall 2
   cabinet on its own kick. Decided: Join kicks takes in the next wall's cabinets that butt
   through an angled filler; the face mitres at the filler's front corners (Greystone-style 45°
-  bevels); the back mitres where the walls meet. Build it in the app, then an AI step.
+  bevels); the back mitres where the walls meet. **Built in the app 2026-11-28** as KA1
+  (z_kick_join/KICK-JOIN-PLAN.md "Kick round an angled filler"); the AI step comes after Mark's
+  in-app check.
 - **Q9 reading CAD + site sketches (2026-11-28, Mark: "can we get the ai model to be able to
   read cad, even my site sketches"):** sketches are freehand strokes (handwriting, no text), so
   the model SEES them: `src/lib/ai/cadImage.ts` draws one view's CAD (plan, or a wall's
@@ -681,7 +683,7 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     TBC clouds; applied clean (2 calls, 28¢). Sketches aren't to scale, so the walls follow the
     written numbers and sit over one end of the sketch. Unit tests cadImage.test.ts; render
     check headlessCad.test.ts (CAD_RUN), AI4_RUN takes `"sketch": true`.
-- **Next:** build the kick-pieces design above.
+- **Next:** an AI step for joining kicks round an angled corner (after the KA1 in-app check).
 
 ## Open items (check while building)
 

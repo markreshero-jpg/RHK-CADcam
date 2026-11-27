@@ -2366,6 +2366,21 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Press ✏️ Draw from my sketch (next to Attach plan; type any notes first, e.g. sizes the sketch leaves out). It asks what\'s missing (kick, top line, seen ends…), then lays out the walls and cabinets for you to Apply, with TBC clouds for anything unclear. Sketches aren\'t to scale, so it goes by the numbers you wrote: the drawn room may sit over one end of the sketch. One Undo takes it all off.',
       canvas: true, done: (c, s) => ev(c, 'ai_draw_read') > ev(s, 'ai_draw_read') },
   ]},
+
+  // Appended 2026-11-28 (z_kick_join KA1: kick round an angled corner filler).
+  { id: 'kick_angle', level: 'intermediate', topic: 'cabinets', title: 'Join a kick round an angled corner',
+    blurb: 'One kick under two walls that meet at an angle, through the angled corner filler, mitred at the corners.',
+    keywords: 'kick toe kick angled corner 45 filler bfkang join run mitre back wall two walls', steps: [
+    { id: 'place', title: 'Butt the cabinets to the filler',
+      body: 'Put an angled corner filler (BFKANG) in the corner; it snaps to the angle. Butt the cabinets on each wall hard up to it, so there is no gap either side.',
+      canvas: true, done: c => hasBaseRun(c) },
+    { id: 'join', title: 'Right-click → Join kicks in run',
+      body: 'Right-click any base cabinet in the run and choose Join kicks in run. It carries on through the filler onto the next wall: one KICK n under both walls. The face runs along each wall\'s fronts and mitres where they meet; the back runs along both walls and mitres in the corner; the ends are square to their walls.',
+      canvas: true, done: (c, s) => kickRuns(c) > kickRuns(s) },
+    { id: 'check', title: 'Check it, and after a move re-join',
+      body: 'Layers → Kicks shows the kick in plan; the KICK n\'s Parts list the pieces with their mitres. If you move or resize a cabinet in the run afterwards, right-click → Separate kicks, then Join kicks again, so the kick follows the new layout.',
+      canvas: true, done: c => c.inCanvas },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`
