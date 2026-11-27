@@ -1,13 +1,16 @@
 // AI helper (z_ai_helper AI2): POST { messageId, cancel? } — Apply (or Cancel) the
 // change a chat message proposed. Re-expands the proposal against the room as it
-// is now, so it applies to what's there, not a stale preview.
+// is now, so it applies to what's there, not a stale preview. Then (Q5) one short
+// check compares the request with the cabinets as they now are and posts the
+// verdict to the chat (✓ / ⚠ with fix buttons); a failed check never fails the Apply.
 
 import { createServerClient } from '@/src/lib/supabase-server'
-import { withSupabase } from '@/src/lib/ai/server/scope'
+import { withSupabase, withSupabaseRead } from '@/src/lib/ai/server/scope'
+import { checkAfterApply } from '@/src/lib/ai/server/check'
 import { runBatch, runJobBatch } from '@/src/lib/ai/server/cabinetBatch'
 import type { Proposal } from '@/src/lib/ai/server/chat'
 
-export const maxDuration = 60
+export const maxDuration = 120
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { messageId?: string; cancel?: boolean } | null
@@ -35,6 +38,8 @@ export async function POST(request: Request) {
       : runBatch(p.roomId, ops, { description: p.description, onlyIds: p.onlyIds }))
     if (res.batchId) {
       await supabase.from('ai_messages').update({ proposal_status: 'applied', batch_id: res.batchId, changed: res.changed }).eq('id', msg.id)
+      const check = await withSupabaseRead(supabase, () => checkAfterApply({ messageId: msg.id, changed: res.changed, warnings: res.warnings, errors: res.errors, cabinetIds: res.cabinetIds }))
+      return Response.json({ ...res, check })
     }
     return Response.json(res)
   } catch (e) {

@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q4 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change; re-resolve, hinges, interior, back board) — remaining open items at the end
+Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q5 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change; re-resolve, hinges, interior, back board) — remaining open items at the end
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -598,8 +598,21 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     `interior.test.ts`. TC-01's hinge-plate / shelf-hole clash at 1996 is pre-existing.
   - Not done: single kick pieces (geometry, needs its own design); tutorial owed
     (lessons.ts has another session's edits in the tree).
-- **Next (Mark to pick):** Q5 re-read after Apply (would have caught the drawer
-  overflow); Q6 more shop rules from the Claude Code memory; Q7 log every "can't".
+- **Q5 check after Apply (Mark: "start item 5"):** `src/lib/ai/server/check.ts` —
+  after `/api/ai/apply` succeeds, one Opus call (effort medium, structured JSON: ok /
+  text / fixes) gets the request, the applied lines, the resolver errors / warnings and
+  get_cabinet_detail for up to 4 changed cabinets + the room summary, and posts a chat
+  message "✓ Checked: …" or "⚠ …" with fix buttons (question options; a button sends its
+  words as the next message, so the normal turn makes the fix; "Leave it as is" last). A
+  failed check never fails the Apply; the panel's raw warning bar is skipped when a check
+  came back. Auto-applied selection changes get the cabinets' resolved detail in the tool
+  result instead, inside the same turn. ~2–3¢ a check.
+  - Checked headless (scenario `check: true`, all undone): shelf drop on TC-01 → "⚠ …
+    inner drawers overflow … " + buttons "make bay 1 750 high again / take one inner
+    drawer out / Leave it as is" (2.6¢); back Satin 18 → "✓ Checked: back 847×2117×18 …"
+    and named the old hinge / shelf-hole clash as not caused by it (1.9¢).
+- **Next (Mark to pick):** Q6 more shop rules from the Claude Code memory; Q7 log every
+  "can't"; tutorial for Q4 / Q5.
 
 ## Open items (check while building)
 

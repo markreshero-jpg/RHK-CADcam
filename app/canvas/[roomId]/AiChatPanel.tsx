@@ -370,15 +370,16 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
   async function act(m: Msg, kind: 'apply' | 'cancel' | 'undo') {
     if (busy || !convId) return
     const k = convId
-    setErrFor(k, null); setBusyFor(k, kind === 'undo' ? 'Undoing…' : kind === 'apply' ? 'Applying…' : 'Cancelling…')
+    setErrFor(k, null); setBusyFor(k, kind === 'undo' ? 'Undoing…' : kind === 'apply' ? 'Applying, then checking…' : 'Cancelling…')
     try {
       const data = kind === 'undo'
         ? await post('/api/ai/undo', { messageId: m.id })
         : await post('/api/ai/apply', { messageId: m.id, cancel: kind === 'cancel' })
       if (data.cabinetIds?.length) onChanged(data.cabinetIds)
       if (kind !== 'cancel') useTutorial.getState().emit(kind === 'undo' ? 'ai_chat_undo' : 'ai_chat_edit')
+      // After an Apply the check message explains any resolver problems in words (Q5).
       const warn = [...(data.warnings ?? []), ...(data.errors ?? [])]
-      if (warn.length) setErrFor(k, warn.join('\n'))
+      if (warn.length && !data.check) setErrFor(k, warn.join('\n'))
       await loadMsgs(k)
     } catch (e) {
       setErrFor(k, (e as Error).message)

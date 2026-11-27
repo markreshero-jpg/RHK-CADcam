@@ -13,7 +13,9 @@ import { readFileSync } from 'node:fs'
 
 interface Cfg { room: string; build?: unknown[]; ask: string; selected?: string[]; apply?: boolean; undo?: boolean
   /** Print get_cabinet_detail for these labels after the change (before any undo). */
-  detail?: string[] }
+  detail?: string[]
+  /** After apply, run the check the apply route runs (z_ai_helper Q5) and print it. */
+  check?: boolean }
 const CFG: Cfg | null = process.env.SCENARIO_RUN ? JSON.parse(process.env.SCENARIO_RUN) : null
 
 describe.skipIf(!CFG)('chat scenario', () => {
@@ -61,6 +63,11 @@ describe.skipIf(!CFG)('chat scenario', () => {
       if (res.batchId && r.messageId) await client.from('ai_messages').update({ proposal_status: 'applied', batch_id: res.batchId, changed: res.changed }).eq('id', r.messageId)
       batchId = res.batchId
       console.log('── Applied ──\n' + res.changed.join('\n') + (res.warnings.length ? `\nwarnings: ${res.warnings.join(' | ')}` : ''))
+      if (cfg.check && r.messageId && res.batchId) {   // as /api/ai/apply does (Q5)
+        const { checkAfterApply } = await import('../server/check')
+        const c = await withSupabaseRead(client, () => checkAfterApply({ messageId: r.messageId!, changed: res.changed, warnings: res.warnings, errors: res.errors, cabinetIds: res.cabinetIds }))
+        console.log(`── Check ($${c?.costUsd.toFixed(4)}) ──\n${c?.text}${c?.fixes.length ? `\n   buttons: ${c.fixes.join(' / ')}` : ''}`)
+      }
     }
     console.log('── After ──\n' + brief(await summary()))
     if (cfg.detail?.length) {

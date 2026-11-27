@@ -28,7 +28,7 @@ export const STRONG_MODEL = 'claude-opus-5-5'
 const CHAT_EFFORT = 'high' as const
 const STRONG_EFFORT = 'xhigh' as const
 // $ per million tokens. Cache reads ~0.1×, writes 1.25× input.
-const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
+export const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
   'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.10, cacheWrite: 2.5 },
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.20, cacheWrite: 5 },
 }
@@ -488,7 +488,14 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
       out.proposal = undefined   // applied straight away: replaces an earlier proposal in this turn
       const res = await withSupabase(args.client, () => runBatch(args.roomId, ops, { description, onlyIds: selection }))
       out.changed = res.changed; out.batchId = res.batchId; out.cabinetIds = res.cabinetIds
-      return { text: ['Applied:', ...res.changed, ...res.warnings.map(w => `Warning: ${w}`), ...res.errors.map(e => `Resolver error: ${e}`)].join('\n') }
+      // Check after the change (Q5): the selected cabinets as they now are, resolved, for the model to
+      // compare with the request before it answers.
+      const after = await Promise.all(selLabels.slice(0, AUTO_APPLY_MAX).map(l => runReadTool('get_cabinet_detail', { label: l }, ctx)))
+      return { text: [
+        'Applied:', ...res.changed, ...res.warnings.map(w => `Warning: ${w}`), ...res.errors.map(e => `Resolver error: ${e}`),
+        '', 'The cabinets now (resolved) — check them against what the user asked before you answer; say plainly if anything is off:',
+        ...after,
+      ].join('\n') }
     }
     out.proposal = { roomId: args.roomId, ops, onlyIds: selection ?? undefined, description, lines: [...plan.lines, ...plan.warnings.map(w => `⚠ ${w}`)] }
     return { text: proposalText(out.proposal.lines) }
