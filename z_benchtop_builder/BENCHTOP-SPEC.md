@@ -7,7 +7,7 @@
 >
 > **Status legend**: `[ ]` not started · `[~]` in progress · `[x]` done · `[!]` blocked
 >
-> **2026-11-27: Phase 9 benchtop edit window** built (right-click → Edit…, double-click, Enter) — in-app check pending.
+> **2026-11-27: Phase 9 benchtop edit window** built (right-click → Edit…, double-click, Enter) — checked by Mark 2026-11-28 ("looks good").
 >
 > **RESUME HERE** → Phase 7 / 7b committed (c7d1633). Phase 7c (Line + offset
 > tool, Shift-click → joints between separate tops) built 2026-10-15, uncommitted, awaiting
@@ -718,7 +718,7 @@ defaults — **not locked** until Mark has tried it.
   headless in-app check not possible (no AUTOMATION_* creds).
 - Tutorial: **Auto-build benchtops** (basics ▸ benchtops).
 
-### Phase 9 — Benchtop edit window  `[x]` built (2026-11-27), in-app check pending
+### Phase 9 — Benchtop edit window  `[x]` done (2026-11-27), checked by Mark 2026-11-28
 Mark (2026-11-27): "benchtops to be able to right click edit and we can see them in a
 cabinet edit modal style window. can we use the same window?"
 
