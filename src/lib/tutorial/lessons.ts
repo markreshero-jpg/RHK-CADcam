@@ -2333,6 +2333,27 @@ export const LESSONS: TutorialLesson[] = [
       body: 'The right-hand panel is the usual benchtop side bar: size, height, build method, stone, position, edges and joins. Move…, Edit edges…, Shape Editor… and the join / cut-out tools work on the plan, so they close the window first. Esc or ✕ closes the window. The full Shape Editor is still under right-click → Open Shape Editor….',
       canvas: true, done: c => c.selected?.type === 'benchtop' },
   ]},
+
+  // Appended 2026-11-28 (z_ai_helper Q4–Q7: hinges / shelves / backs, check after Apply, Can't do yet).
+  { id: 'ai_inside', level: 'intermediate', topic: 'room', title: 'AI: hinges, shelves, backs, and its own check',
+    blurb: 'Have the AI change hinges per door, move shelves in a bay, change a back board or re-resolve, then check its own work.',
+    keywords: 'ai hinges hinge count per door shelf shelves adjustable fixed bay divider interior back board panel re-resolve resolve check checked warning fix buttons cant do yet missing feature list', steps: [
+    { id: 'hinges', title: 'Hinges and re-resolve',
+      body: 'Select a cabinet, open Ask AI and ask e.g. "2 hinges per door" or "re-resolve TC-01". Hinges are set the way the Front editor does it, spaced by the shop rule for that door height; "hinges back to the shop rules" undoes a manual count. The AI tells you if a door is too tall for the count you asked for.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
+    { id: 'interior', title: 'Shelves and bays',
+      body: 'Ask e.g. "drop the fixed shelf 100 and put 2 adjustables above it" or "add a divider in the top bay". It numbers the bays bottom to top, left to right (1, 2, 2.1…), the same as the Interior editor. Ask "what\'s inside TC-01?" to see the bays and shelf heights first. Drawers and rails inside a bay can\'t be moved by the AI yet.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
+    { id: 'back', title: 'A different back board',
+      body: 'Ask e.g. "back in Satin Board 18" for this cabinet, the room or the job. It changes the back panel\'s board only, not the carcass.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
+    { id: 'check', title: 'Read its check',
+      body: 'Every change it proposes says what will change and what it could NOT do. After you press Apply it re-reads the cabinets and posts "✓ Checked: …" or "⚠ …" with buttons, e.g. "make bay 1 750 high again" or "Leave it as is". A button sends those words as your next message, so it makes the fix the normal way, with its own Undo.',
+      canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
+    { id: 'gaps', title: 'What it can\'t do yet',
+      body: 'When you ask for something it has no tool for, it says so plainly (it never writes your request into the notes instead) and logs it. Settings → AI helper → Can\'t do yet lists them, most asked first; ▸ shows each request with its job and date. Mark a group Built once the AI can do it, or Ignore it.',
+      done: c => c.path.startsWith('/settings') },
+  ]},
 ]
 
 export const stepKey = (lesson: TutorialLesson, step: TutorialStep) => `${lesson.id}/${step.id}`

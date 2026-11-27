@@ -629,7 +629,9 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
   real chats: kick pieces (RHK6586, open); part board (backs), hinge counts, shelf positions
   (built by Q4). Checked headless: "move the bottom inner drawer in TC-01 up 50" → logged
   "drawers inside a bay", told the user plainly. Settings page not yet seen in the browser.
-- **Next:** tutorial for Q4–Q7; then build from the Can't do yet list.
+- **Tutorial (2026-11-28):** lesson `ai_inside` — hinges / re-resolve, shelves and bays,
+  back board, reading the check after Apply, the Can't do yet list.
+- **Next:** build from the Can't do yet list (drawers inside a bay; kick pieces).
 
 ## Open items (check while building)
 
