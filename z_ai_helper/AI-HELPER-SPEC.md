@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q3 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change) — remaining open items at the end
+Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q4 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change; re-resolve, hinges, interior, back board) — remaining open items at the end
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -574,9 +574,32 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
   canvas", nothing changed; "overheads 50 deeper + top shelf up 100" → 350 → 400 proposal,
   shelf flagged not done, bulkhead depth asked; push-to-open + a note applied with names,
   undone.
-- **Next (Mark to pick):** Q4 tools for what it can't do (re-resolve, shelf / hinge
-  settings, part boards such as backs, kick pieces); Q5 re-read after Apply; Q6 more shop
-  rules from the Claude Code memory; Q7 log every "can't" as a build list.
+- **Q4 new steps (Mark: "lets go item 4"):**
+  - `resolve` (labels) — re-resolve as they are; a `resolve` batch entry, nothing to undo.
+  - `hinges` (labels, `per_door` n | null, optional `door` row,col) — writes the door's
+    face_grid `zone.hinges` (manual, as the Front editor does), spaced like resolveHinges
+    with the shop rule's insets for that door height; null = back to the shop rules.
+    Shaped (faces) cabinets refused.
+  - `interior` (label + moves) — `src/lib/ai/interior.ts`, the Interior editor's tree moves
+    on numbered bays ("2.1"; bottom → top / left → right): size, adj_shelves, add_shelf
+    (below = height under it), shelf_type, remove_shelf (contents kept), add_divider,
+    remove_bay. Drawers / rails / accessories inside a bay are not editable yet.
+  - Colour role `back` → material_overrides.back (the resolver's back-panel role; else
+    the carcass board), cabinet / room / job.
+  - get_cabinet_detail shows hinges per door (count, positions, manual / shop rules), the
+    interior as numbered bays, and the resolved shelf heights.
+  - Resolver errors in a result must be told to the user; a question drops a half-made
+    proposal from the same message (ask first).
+  - Checked headless on Test Kitchen TC-01 (all undone): 2 hinges per door → 100 / 2050,
+    warned light for 2150 doors, Undo restored the manual 255 / 730 / 1264 / 1846;
+    "drop the fixed shelf 100, 2 adjustable above" → fixed 916.5 → 816.5, 3 → 2 adj (the
+    resolver then flagged the inner drawers overflowing the smaller bay — Q5 would catch
+    it); back Satin Board 18mm (back part 18 thick) + re-resolve WC-02. Unit tests
+    `interior.test.ts`. TC-01's hinge-plate / shelf-hole clash at 1996 is pre-existing.
+  - Not done: single kick pieces (geometry, needs its own design); tutorial owed
+    (lessons.ts has another session's edits in the tree).
+- **Next (Mark to pick):** Q5 re-read after Apply (would have caught the drawer
+  overflow); Q6 more shop rules from the Claude Code memory; Q7 log every "can't".
 
 ## Open items (check while building)
 

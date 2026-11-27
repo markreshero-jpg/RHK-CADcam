@@ -28,6 +28,8 @@ import { ensureJobCadLayers } from '@/src/lib/annotations/cadLayers'
 import { cabinetPlans, linkedPose } from '@/src/lib/fixtureLinks'
 import { defaultFixtureZ } from '@/src/lib/fixtureGeometry'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { HingeRuleInput } from '@/src/lib/resolver/types'
+import { applyInteriorActions, hingePositions, shortInterior, type InteriorAction } from '../interior'
 
 type Fields = Partial<CabinetInstance>
 type Row = Record<string, unknown>
@@ -59,6 +61,12 @@ export type BatchOp =
   /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
    *  material_id null = back to inherited. Kick face has no class. */
   | { op: 'set_material'; level: 'room' | 'job'; role: MaterialRole; classes?: ('base' | 'wall' | 'tall')[]; material_id: string | null }
+  /** Re-resolve cabinets as they are (z_ai_helper Q4) — parts, drilling, hardware rebuilt. */
+  | { op: 'resolve'; labels: string[] }
+  /** Hinges per door (face_grid zone.hinges, spaced with the shop rule's insets); null = back to the shop rules. door = row,col (else every door). */
+  | { op: 'hinges'; labels: string[]; per_door: number | null; door?: { row: number; col: number } }
+  /** Interior moves on one cabinet's section tree (shelves, bays, dividers) — see ../interior. */
+  | { op: 'interior'; label: string; actions: InteriorAction[] }
 
 export type MarkupLayer = 'general' | 'questions' | 'site' | 'electrical'
 export interface MarkupNote {
@@ -99,6 +107,8 @@ export type BatchEntry =
   /** A projects / rooms row's columns before → after (whole column values). */
   | { kind: 'props'; cabinet_id: ''; label: null; line: string; table: 'projects' | 'rooms' | 'walls'; row_id: string; before: Row; after: Row }
   | { kind: 'material'; cabinet_id: ''; label: null; line: string; table: string; match: Row; before: string | null; after: string | null; resolve_ids: string[] }
+  /** A plain re-resolve — nothing to put back on Undo. */
+  | { kind: 'resolve'; cabinet_id: string; label: string | null; line: string }
 
 export interface BatchResult {
   batchId: string | null
@@ -177,7 +187,7 @@ async function loadHandleNames() {
   for (const h of (data ?? []) as { id: string; name: string }[]) hsNames.set(h.id, h.name)
 }
 const hsName = (id: unknown) => typeof id === 'string' ? `"${hsNames.get(id) ?? 'another schedule'}"` : 'inherited'
-const ROLE_WORD: Record<string, string> = { door_face: 'fronts', interior: 'carcass', exposed: 'exposed', shelf: 'shelves', divider: 'dividers', face: 'kick face' }
+const ROLE_WORD: Record<string, string> = { door_face: 'fronts', interior: 'carcass', exposed: 'exposed', shelf: 'shelves', divider: 'dividers', back: 'back', face: 'kick face' }
 const CLASS_WORD: Record<string, string> = { base: 'bases', wall: 'overheads', tall: 'talls' }
 
 /** Every materials id an override object holds. */
@@ -206,6 +216,21 @@ function updateLine(c: CabinetInstance, u: Fields, walls: Wall[]): string | null
         if (x === 'handle_schedule_id') parts.push(`handles ${hsName(b[x])} → ${hsName(a[x])}`)
         else parts.push(`${x} ${b[x] === undefined ? 'inherited' : fmt(b[x])} → ${a[x] === undefined ? 'inherited' : fmt(a[x])}`)
       }
+      continue
+    }
+    if (k === 'internal_grid') {
+      if (canon(before) !== canon(after)) parts.push(`interior ${shortInterior(before)} → ${shortInterior(after)}`)
+      continue
+    }
+    if (k === 'face_grid') {
+      type Gz = { row_index: number; col_index: number; hinges?: number[] }
+      const bz = ((before as { zones?: Gz[] } | null)?.zones ?? []), az = ((after as { zones?: Gz[] } | null)?.zones ?? [])
+      const hw = (h?: number[]) => Array.isArray(h) ? `${h.length} at ${h.map(v => Math.round(v)).join(' / ')}` : 'shop rules'
+      for (const z of az) {
+        const b = bz.find(x => x.row_index === z.row_index && x.col_index === z.col_index)
+        if (canon(b?.hinges) !== canon(z.hinges)) parts.push(`door ${z.row_index},${z.col_index} hinges ${hw(b?.hinges)} → ${hw(z.hinges)}`)
+      }
+      if (canon(bz.map(z => ({ ...z, hinges: undefined }))) !== canon(az.map(z => ({ ...z, hinges: undefined })))) parts.push('fronts layout changed')
       continue
     }
     if (canon(before) !== canon(after)) parts.push(`${FIELD_WORD[k] ?? k} ${fmt(before)} → ${fmt(after)}`)
@@ -240,6 +265,7 @@ type PlannedStep =
   | { kind: 'markup'; rows: (Row & { _layer: MarkupLayer })[]; line: string }
   | { kind: 'fixture'; row: Row; line: string }
   | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
+  | { kind: 'resolve'; id: string; line: string }
 
 export interface BatchPlan {
   state: RoomState
@@ -306,6 +332,22 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
     ...ops.flatMap(o => o.op === 'update' ? Object.values(o.changes.materials ?? {}) : o.op === 'set_material' ? [o.material_id] : []),
     ...state.cabinets.flatMap(c => [...overrideIds(c.material_overrides), ...overrideIds(c.toekick_overrides)]),
   ])
+  // Hinge steps: each door's resolved size + hinge side, and the shop's hinge rules (insets per height).
+  const hingeLabels = new Set(ops.flatMap(o => o.op === 'hinges' ? o.labels.map(l => l.trim().toLowerCase()) : []))
+  const hingeIds = state.cabinets.filter(c => hingeLabels.has((c.label ?? '').toLowerCase())).map(c => c.id)
+  const doorZones = new Map<string, { row_index: number; col_index: number; dx: number; dy: number; hinge_side: string | null }[]>()
+  let hingeRules: HingeRuleInput[] = []
+  if (hingeIds.length) {
+    const [zq, rq] = await Promise.all([
+      supabase.from('face_zones').select('cabinet_instance_id, row_index, col_index, dx, dy, hinge_side, facet').in('cabinet_instance_id', hingeIds).eq('face_type', 'door'),
+      supabase.from('hinge_count_rules').select('max_height_mm, hinge_count, top_inset_mm, bottom_inset_mm').eq('active', true),
+    ])
+    for (const z of (zq.data ?? []) as (Row & { cabinet_instance_id: string; row_index: number; col_index: number; dx: number; dy: number; hinge_side: string | null; facet: string | null })[]) {
+      if (z.facet) continue
+      doorZones.set(z.cabinet_instance_id, [...(doorZones.get(z.cabinet_instance_id) ?? []), z])
+    }
+    hingeRules = ((rq.data ?? []) as Row[]).map(r => ({ max_height_mm: Number(r.max_height_mm), hinge_count: Number(r.hinge_count), top_inset_mm: Number(r.top_inset_mm ?? 100), bottom_inset_mm: Number(r.bottom_inset_mm ?? 100) }))
+  }
   let cabs: CabinetInstance[] = state.cabinets.map(c => ({ ...c }))
   const defNames = new Map(state.defNames)
   const steps: PlannedStep[] = [], lines: string[] = [], problems: string[] = [], warnings: string[] = []
@@ -341,6 +383,45 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         steps.push({ kind: 'update', id: c.id, patch: u })
         if (line) lines.push(line)
         if (!c.id.startsWith('new:')) touched.add(c.id)
+        cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
+      }
+    } else if (op.op === 'resolve' || op.op === 'hinges' || op.op === 'interior') {
+      const labels = op.op === 'interior' ? [op.label] : op.labels
+      for (const label of labels) {
+        const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(label).trim().toLowerCase())
+        if (!c) { problems.push(`${n}: no cabinet "${label}".`); continue }
+        if (c.id.startsWith('new:')) { problems.push(`${n}: ${c.label} is added in this same change — it resolves anyway; set its ${op.op} in a next message.`); continue }
+        if (outside(c)) { problems.push(`${n}: ${c.label} isn't selected — select it too, or deselect everything to work on the whole room.`); continue }
+        if (op.op === 'resolve') {
+          const line = `Re-resolve ${c.label}`
+          steps.push({ kind: 'resolve', id: c.id, line }); lines.push(line); touched.add(c.id)
+          continue
+        }
+        let u: Fields
+        if (op.op === 'hinges') {
+          if (c.faces) { problems.push(`${n}: ${c.label} is a shaped cabinet — set its hinges on the canvas (Faces editor).`); continue }
+          if (op.per_door !== null && !(Number.isInteger(op.per_door) && op.per_door >= 0 && op.per_door <= 8)) { problems.push(`${n}: per_door must be 0–8, or null for the shop rules.`); continue }
+          const grid = JSON.parse(JSON.stringify(c.face_grid ?? {})) as { zones?: (Row & { row_index: number; col_index: number; hinges?: number[] })[] }
+          const doors = (doorZones.get(c.id) ?? []).filter(z => !op.door || (z.row_index === op.door.row && z.col_index === op.door.col))
+          if (!doors.length) { problems.push(`${n}: ${c.label} has no ${op.door ? `door at ${op.door.row},${op.door.col}` : 'doors'} (resolved fronts).`); continue }
+          let bad = false
+          for (const d of doors) {
+            const gz = grid.zones?.find(z => z.row_index === d.row_index && z.col_index === d.col_index)
+            if (!gz) { problems.push(`${n}: ${c.label} door ${d.row_index},${d.col_index} isn't in its face grid — open it on the canvas once.`); bad = true; break }
+            if (op.per_door === null) delete gz.hinges
+            else gz.hinges = hingePositions(op.per_door, d.hinge_side === 'top' || d.hinge_side === 'bottom' ? Number(d.dx) : Number(d.dy), hingeRules)
+          }
+          if (bad) continue
+          u = { face_grid: grid as CabinetInstance['face_grid'] }
+        } else {
+          const r = applyInteriorActions(c.internal_grid, op.actions ?? [])
+          if ('error' in r) { problems.push(`${n}: ${c.label} — ${r.error}`); continue }
+          u = { internal_grid: r.grid as CabinetInstance['internal_grid'] }
+        }
+        if (canon((c as unknown as Row)[Object.keys(u)[0]]) === canon(Object.values(u)[0])) continue
+        steps.push({ kind: 'update', id: c.id, patch: u })
+        const line = updateLine(c, u, walls); if (line) lines.push(line)
+        touched.add(c.id)
         cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
       }
     } else if (op.op === 'delete') {
@@ -653,7 +734,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
     }
   }
 
-  return { state: { ...state, walls }, steps, lines, problems, warnings, touched: touched.size, onlyUpdates: steps.every(s => s.kind === 'update') }
+  return { state: { ...state, walls }, steps, lines, problems, warnings, touched: touched.size, onlyUpdates: steps.every(s => s.kind === 'update' || s.kind === 'resolve') }
 }
 
 // ── Apply ─────────────────────────────────────────────────────────────────────
@@ -847,6 +928,13 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       for (const id of s.resolveIds) { if (rows.has(id)) touched.add(id); else elsewhere.push(id) }
       continue
     }
+    if (s.kind === 'resolve') {
+      const c = rows.get(s.id)
+      if (!c) continue
+      touched.add(s.id)
+      entries.push({ kind: 'resolve', cabinet_id: s.id, label: c.label, line: s.line })
+      continue
+    }
     if (s.kind === 'update') {
       const id = idFor.get(s.id) ?? s.id
       const c = rows.get(id)
@@ -1027,8 +1115,8 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
       if (err && err.startsWith('cabinet_instances')) { errors.push(`${e.label}: restore failed — ${err}`); continue }
       if (err) warnings.push(`${e.label}: back, but some extras didn't restore (${err}).`)
       lines.push(`Restored ${e.label}`); touched.add(e.cabinet_id); changedIds.add(e.cabinet_id)
-    } else if (e.kind === 'batch') {
-      continue   // job batches are undone above, room by room
+    } else if (e.kind === 'batch' || e.kind === 'resolve') {
+      continue   // job batches are undone above, room by room; a re-resolve has nothing to put back
     } else {
       if (!cur) { warnings.push(`${e.label}: no longer in the room — skipped.`); continue }
       const keys = Object.keys(e.after)

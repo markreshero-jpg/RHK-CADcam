@@ -11,7 +11,9 @@
 import { describe, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 
-interface Cfg { room: string; build?: unknown[]; ask: string; selected?: string[]; apply?: boolean; undo?: boolean }
+interface Cfg { room: string; build?: unknown[]; ask: string; selected?: string[]; apply?: boolean; undo?: boolean
+  /** Print get_cabinet_detail for these labels after the change (before any undo). */
+  detail?: string[] }
 const CFG: Cfg | null = process.env.SCENARIO_RUN ? JSON.parse(process.env.SCENARIO_RUN) : null
 
 describe.skipIf(!CFG)('chat scenario', () => {
@@ -61,6 +63,10 @@ describe.skipIf(!CFG)('chat scenario', () => {
       console.log('── Applied ──\n' + res.changed.join('\n') + (res.warnings.length ? `\nwarnings: ${res.warnings.join(' | ')}` : ''))
     }
     console.log('── After ──\n' + brief(await summary()))
+    if (cfg.detail?.length) {
+      const { runReadTool } = await import('../readTools')
+      for (const label of cfg.detail) console.log(`── Detail ${label} ──\n` + await withSupabaseRead(client, () => runReadTool('get_cabinet_detail', { label }, { projectId: room!.project_id, roomId: cfg.room })))
+    }
     if (cfg.undo && batchId) {
       const u = await withSupabase(client, () => undoBatch(batchId!))
       if (r.messageId) await client.from('ai_messages').update({ undone_at: new Date().toISOString() }).eq('id', r.messageId)

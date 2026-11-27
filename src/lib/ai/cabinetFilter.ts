@@ -23,11 +23,13 @@ export const SCRIBE_KEY: Record<ScribeSide, string> = { left: 'SCRL', right: 'SC
 
 /** Board colour roles the AI can set. Cabinet: material_overrides (role → materials.id),
  *  kick face: toekick_overrides.face. Room / job: room_materials / job_materials rows. */
-export type MaterialRole = 'fronts' | 'carcass' | 'exposed' | 'shelf' | 'divider' | 'kick'
+export type MaterialRole = 'fronts' | 'carcass' | 'exposed' | 'shelf' | 'divider' | 'back' | 'kick'
 export const ROLE_KEY: Record<Exclude<MaterialRole, 'kick'>, string> = {
   fronts: 'door_face', carcass: 'interior', exposed: 'exposed', shelf: 'shelf', divider: 'divider',
+  // The back panel's own board (resolver role 'back'; else it takes the carcass board) — z_ai_helper Q4.
+  back: 'back',
 }
-export const MATERIAL_ROLES = ['fronts', 'carcass', 'exposed', 'shelf', 'divider', 'kick'] as const
+export const MATERIAL_ROLES = ['fronts', 'carcass', 'exposed', 'shelf', 'divider', 'back', 'kick'] as const
 
 /** Change whitelist (AI0 + AI2 + AI3b colours). */
 export interface CabinetChanges {

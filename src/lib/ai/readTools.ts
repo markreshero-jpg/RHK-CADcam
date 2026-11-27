@@ -7,6 +7,7 @@ import { supabase } from '@/src/lib/supabase'
 import type { CabinetInstance, RoomAnnotation, Wall } from '@/src/lib/types'
 import { cabWallPerp, cabinetCenterPt, centroid, wallInwardNormal } from '@/src/lib/geometry'
 import { wallOffset } from './roomSummary'
+import { renderInterior } from './interior'
 
 export interface ToolContext { projectId: string; roomId: string }
 
@@ -56,7 +57,7 @@ export const READ_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'get_cabinet_detail',
-    description: 'Full detail for one cabinet by label: size, position, neighbours, notes, every front (type, size, colour, handle, hinge side), carcass parts (size, board), custom parts (end panels, fillers) and fixtures on it.',
+    description: 'Full detail for one cabinet by label: size, position, neighbours, notes, every front (type, size, colour, handle, hinge side), hinges per door, the interior as numbered bays (shelves, drawers, rails) with the resolved shelf heights, carcass parts (size, board), custom parts (end panels, fillers) and fixtures on it. Read it before a hinges or interior step.',
     input_schema: {
       type: 'object',
       properties: { label: { type: 'string', description: 'Cabinet label, e.g. "BC-03"' } },
@@ -162,13 +163,25 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
   const c = cabinets.find(x => (x.label ?? '').toLowerCase() === want)
   if (!c) return `No cabinet "${input.label}" in this room. Labels: ${cabinets.map(x => x.label).join(', ')}`
   const w = walls.find(x => x.id === c.wall_id)
-  const [def, fronts, carcass, custom, fixtures] = await Promise.all([
+  const [def, fronts, carcass, custom, fixtures, inner, hingeRows] = await Promise.all([
     c.cabinet_definition_id ? supabase.from('cabinet_definitions').select('name').eq('id', c.cabinet_definition_id).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from('face_zones').select('facet, face_type, row_index, col_index, dx, dy, material_id, handle_hardware_id, hinge_side').eq('cabinet_instance_id', c.id),
     supabase.from('case_parts').select('part_key, dx, dy, dz, material_id').eq('cabinet_instance_id', c.id),
     supabase.from('cabinet_custom_parts').select('name, dx, dy, dz, material_id, visible').eq('cabinet_instance_id', c.id),
     supabase.from('room_fixtures').select('name, label, display_name').eq('cabinet_id', c.id),
+    supabase.from('internal_parts').select('part_type, y, dz, dx').eq('cabinet_instance_id', c.id).in('part_type', ['fixed_shelf', 'adj_shelf']).order('y'),
+    supabase.from('hinge_instances').select('facet, row_index, col_index, y_position_mm').eq('cabinet_instance_id', c.id).order('y_position_mm'),
   ])
+  // Hinges per door (main face), and whether they're manual (face grid) or the shop rules.
+  const manual = new Map(((c.face_grid as { zones?: { row_index: number; col_index: number; hinges?: number[] }[] } | null)?.zones ?? [])
+    .filter(z => Array.isArray(z.hinges)).map(z => [`${z.row_index},${z.col_index}`, true]))
+  const hingeBy = new Map<string, number[]>()
+  for (const h of (hingeRows.data ?? []) as { facet: string | null; row_index: number; col_index: number; y_position_mm: number }[]) {
+    if (h.facet) continue
+    const k = `${h.row_index},${h.col_index}`
+    hingeBy.set(k, [...(hingeBy.get(k) ?? []), Number(h.y_position_mm)])
+  }
+  const shelves = (inner.data ?? []) as { part_type: string; y: number; dz: number; dx: number }[]
   const fz = fronts.data ?? [], cp = carcass.data ?? [], cu = (custom.data ?? []).filter(p => p.visible !== false)
   const mats = await names('materials', [...fz, ...cp, ...cu].map(p => p.material_id))
   const handles = await names('hardware_handles', fz.map(f => f.handle_hardware_id))
@@ -185,6 +198,12 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
     ...fz.sort((a, b) => (a.facet ?? '').localeCompare(b.facet ?? '') || a.row_index - b.row_index || a.col_index - b.col_index).map(f =>
       `${f.facet ? `${f.facet} face` : 'main face'} | ${f.face_type} | ${f.row_index},${f.col_index} | ${r(f.dx)}×${r(f.dy)} | ${mats.get(f.material_id) ?? '-'} | ${handles.get(f.handle_hardware_id) ?? '-'} | ${f.face_type === 'door' ? f.hinge_side ?? '-' : '-'}`),
     ...(new Set(fz.map(f => f.facet ?? '')).size > 1 ? ['(Fronts on different faces are separate fronts, even when their row,col match.)'] : []),
+    ...(hingeBy.size ? ['', 'Hinges (door row,col | count | mm from the door bottom | set by):',
+      ...[...hingeBy].map(([k, ys]) => `${k} | ${ys.length} | ${ys.map(y => Math.round(y)).join(' / ')} | ${manual.has(k) ? 'manual (hinges step)' : 'shop rules'}`)] : []),
+    '', 'Interior (bays for the interior step; heights are the stored bay sizes):',
+    ...renderInterior(c.internal_grid),
+    ...(shelves.length ? ['Shelves as resolved (kind | underside mm from the cabinet bottom | thickness):',
+      ...shelves.map(s => `${s.part_type === 'fixed_shelf' ? 'fixed' : 'adjustable'} | ${r(s.y)} | ${r(s.dz)}`)] : []),
     '', 'Carcass parts (part | length × width × thickness | board):',
     ...cp.sort((a, b) => a.part_key.localeCompare(b.part_key)).map(p => `${p.part_key} | ${r(p.dy)}×${r(p.dx)}×${r(p.dz)} | ${mats.get(p.material_id) ?? '-'}`),
     ...(cu.length ? ['', 'Custom parts (name | size | board):', ...cu.map(p => `${p.name} | ${r(p.dx)}×${r(p.dy)}×${r(p.dz)} | ${mats.get(p.material_id) ?? '-'}`)] : []),

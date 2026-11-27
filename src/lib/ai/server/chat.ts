@@ -20,6 +20,7 @@ import { findHandleSchedule, planBatch, runBatch, runJobBatch, type BatchOp } fr
 import { withSupabase } from './scope'
 import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
 import { ensureConversation, touchConversation } from './conversations'
+import type { InteriorAction } from '../interior'
 
 /** Everyday model, and the one "Try harder" re-runs a message on. */
 export const CHAT_MODEL = 'claude-opus-5-5'
@@ -62,7 +63,7 @@ const FILTER_SCHEMA = {
 const EDIT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'change_cabinets',
-    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z for base / tall only, offset along the wall, notes, scribes, handle_schedule, wallz = one overhead own underside, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "set_properties" (room / job set-up: overhead top line or soffit, kick, class heights), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
+    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z for base / tall only, offset along the wall, notes, scribes, handle_schedule, wallz = one overhead own underside, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "set_properties" (room / job set-up: overhead top line or soffit, kick, class heights), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels), "resolve" (labels: re-resolve as they are), "hinges" (labels + per_door, optional door row,col), "interior" (label + interior moves on its numbered bays from get_cabinet_detail). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
     input_schema: {
       type: 'object',
       properties: {
@@ -72,7 +73,29 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
           items: {
             type: 'object',
             properties: {
-              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup', 'fixture'] },
+              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup', 'fixture', 'resolve', 'hinges', 'interior'] },
+              per_door: { type: ['integer', 'null'], description: 'hinges: hinges on each door (spaced with the shop insets); null = back to the shop rules' },
+              door: {
+                type: 'object', description: 'hinges: just this door (row,col from get_cabinet_detail); leave out for every door',
+                properties: { row: { type: 'integer' }, col: { type: 'integer' } }, required: ['row', 'col'], additionalProperties: false,
+              },
+              label: { type: 'string', description: 'interior: the cabinet' },
+              moves: {
+                type: 'array', description: 'interior: moves in order. bay = number from get_cabinet_detail ("2", "2.1"; "0" = the whole interior). After add_shelf / add_divider / remove_* the bays are re-numbered for the next move.',
+                items: {
+                  type: 'object',
+                  properties: {
+                    do: { type: 'string', enum: ['size', 'adj_shelves', 'add_shelf', 'shelf_type', 'remove_shelf', 'add_divider', 'remove_bay'], description: 'size = a bay\'s height (shelf split) / width (divider split), null = fills the rest; adj_shelves = how many adjustable shelves in an open bay; add_shelf = a shelf across an open bay (below = height of the new bay under it); shelf_type = what sits above a bay (fixed / adjustable / none); remove_shelf = the shelf above a bay; add_divider = a divider up through an open bay (left = width left of it); remove_bay' },
+                    bay: { type: 'string' },
+                    size: { type: ['number', 'null'] },
+                    count: { type: 'integer' },
+                    kind: { type: 'string', enum: ['fixed', 'adjustable', 'none'] },
+                    below: { type: 'number' },
+                    left: { type: 'number' },
+                  },
+                  required: ['do', 'bay'], additionalProperties: false,
+                },
+              },
               rooms: {
                 type: 'array', items: { type: 'string' },
                 description: 'Which rooms of the job this step is for (names from get_job_summary), or ["all"] for every room. Leave out = this room. A change touching other rooms always waits for Apply.',
@@ -131,7 +154,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
               overhead_top: { type: 'number', description: 'set_properties (room): overhead top line, mm UP from the floor' },
               soffit_drop: { type: 'number', description: 'set_properties (room): soffit, mm DOWN from the ceiling to the overhead tops (wins over overhead_top when set)' },
               wall_soffit_drop: { type: ['number', 'null'], description: 'set_properties with wall: THAT wall\'s own soffit drop (only its overheads / bulkheads follow); null = back to the room\'s' },
-              role: { type: 'string', enum: [...MATERIAL_ROLES], description: 'set_material: fronts (doors / drawers), carcass, exposed (end panels, fillers, open interiors), shelf, divider, kick (kick face)' },
+              role: { type: 'string', enum: [...MATERIAL_ROLES], description: 'set_material: fronts (doors / drawers), carcass, exposed (end panels, fillers, open interiors), shelf, divider, back (the back panel; else it takes the carcass board), kick (kick face)' },
               classes: { type: 'array', items: { type: 'string', enum: ['base', 'wall', 'tall'] }, description: 'set_material: which kinds (wall = overheads); leave out for all three' },
               material: { type: ['string', 'null'], description: 'set_material: board name from find_material; null = back to inherited' },
               code: { type: 'string', description: 'place: library code, e.g. "BEP"' },
@@ -147,7 +170,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
               dx: { type: 'number', description: 'place: width (else the library default)' },
               blind_width: { type: 'number', description: 'place BCNR/L or BCNR/R (blind corner): false panel width = return run carcass depth + its door thickness + 2 + 40 (e.g. 560 + 18 + 2 + 40 = 620)' },
               dy: { type: 'number', description: 'place: height (else matched to the next_to cabinet, or the library default)' },
-              labels: { type: 'array', items: { type: 'string' }, description: 'delete: cabinet labels' },
+              labels: { type: 'array', items: { type: 'string' }, description: 'delete / resolve / hinges: cabinet labels' },
             },
             required: ['op'], additionalProperties: false,
           },
@@ -190,19 +213,23 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - Colours (find_material first for the exact board name):
   · "all the overhead doors in Walnut" / "kicks black in this room" → set_material, level room (classes: wall; role fronts / kick). "…on the whole job" → level job.
   · "BC-03's doors in Walnut" (named or selected cabinets) → update with materials { fronts: … } — that cabinet's own colour, which wins over the room / job one.
-  · Roles: fronts = doors, drawer fronts and false fronts; carcass = cabinet interior; exposed = end panels, fillers, open interiors; shelf; divider; kick = kick face.
+  · Roles: fronts = doors, drawer fronts and false fronts; carcass = cabinet interior; exposed = end panels, fillers, open interiors; shelf; divider; back = the back panel only (else it follows carcass) — "backs in 18mm" = materials { back: <an 18mm board> }; kick = kick face.
   · Never guess a board: if find_material gives several close matches, ask_user with them as options.
 - fixture: a catalogue appliance / sink (find_fixture) — on a cabinet (sink on BSK, cooktop on its base, oven in UBO, rangehood under WRH; centred, linked so the benchtop cut-out follows), or in a gap on a wall + offset (dishwasher, fridge, washer).
 - markup: CAD notes on an elevation — a TBC cloud + question (layer questions), an appliance space (dashed box + label, layer general), site / install notes (layer site), lighting / power (electrical). x along the wall from its start, z height off the floor. They wait for Apply.
 - Other rooms of the job: get_job_summary lists them, get_room_summary reads one. A step with rooms: ["Laundry"] or ["all"] changes those rooms too (filters like class "base" apply in each room). It always waits for Apply, and one Undo reverts every room.
-- You can NOT touch walls, benchtops or splashbacks yet — say so.
-- Clear request → just do it, no questions. Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size? which end panel?). One question at a time.
+- resolve: re-resolve cabinets as they are (parts, drilling, hardware rebuilt) when the user asks or something looks stale. Changes already re-resolve what they touch — don't add it to those.
+- hinges: hinges per door — per_door 2 on a 2-door cabinet = 4 in all. null = back to the shop rules (by door height). Read get_cabinet_detail first for the doors and current hinges. If the count is light for the door height (shop rules: up to 900 → 2, 1800 → 3, 2400 → 4), do it but say so.
+- interior: shelves, bays and dividers of ONE cabinet. Read get_cabinet_detail first — it numbers the bays (bottom → top in a shelf split, left → right in a divider split) and gives the resolved shelf heights. Moves: size (a bay's height; null = fills the rest), adj_shelves (count in an open bay), add_shelf (kind fixed / adjustable, below = height of the bay under it), shelf_type, remove_shelf, add_divider (left = width), remove_bay. To move a fixed shelf, change the size of the bay under it (and the one above if that has a size too). Bay sizes are clear heights between boards — allow for the shelf thickness. After add / remove moves the bays re-number.
+- You can NOT touch walls, benchtops, splashbacks, single kick pieces, drawers / rails inside the interior, or front layouts yet — say so.
+- Clear request → just do it, no questions. Ambiguous or risky → ask_user FIRST, before any change_cabinets, with 2–4 short options (asking drops a proposal made earlier in the same message) (which cabinets? which side? what size? which end panel?). One question at a time.
 - After it, say in one to three short lines what changed (or what will change once they press Apply) and why, using the cabinet labels and the sizes. Undo is on the message.
 
 Doing what was asked (strict):
 - Do the real change or say plainly that you can't. NEVER put the request into a cabinet's notes (or any note) in place of doing it — e.g. "move the shelf 120 down", "only 4 hinges", "re-resolve" must not become edited note text. Notes change only when the user asks for a note.
-- If part of a request is beyond your tools (shelf / divider positions, hinge counts, one part's board such as the backs, single kick pieces, re-resolving, walls, benchtops, splashbacks), do the parts you can and then say clearly which part you did NOT do, so the user does it on the canvas. Don't hide it, don't call it done.
+- If part of a request is beyond your tools (single kick pieces, drawers / rails inside the interior, front layouts, walls, benchtops, splashbacks), do the parts you can and then say clearly which part you did NOT do, so the user does it on the canvas. Don't hide it, don't call it done.
 - Never claim a change that isn't in the change_cabinets result.
+- "Resolver error" / "Warning" lines in a result are real problems the change caused or found (e.g. a hinge plate over shelf holes): tell the user each one in plain words, and offer a fix if you have one.
 - Sizes are W×H×D: width = dx, height = dy, depth = dz.
 - Every size / offset in a change is the NEW value in mm, never the amount to add: "50 deeper" on a 350 deep cabinet = dz 400. Work it out from the summary.
 - A proposal comes back with its change lines — read them; if one isn't what the user asked, call change_cabinets again to replace it before you answer.
@@ -296,7 +323,7 @@ async function history(conversationId: string, roomId: string): Promise<Anthropi
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[] }
+interface StepIn { op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[]; per_door?: number | null; door?: { row: number; col: number }; label?: string; moves?: InteriorAction[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -402,7 +429,19 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         const labels = st.labels?.length ? st.labels : selection ? selLabels : []
         if (!labels.length) return { text: `Step ${i + 1}: delete needs labels.`, isError: true }
         ops.push({ op: 'delete', labels })
-      } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material or set_properties.`, isError: true }
+      } else if (st.op === 'resolve') {
+        const labels = st.labels?.length ? st.labels : selection ? selLabels : []
+        if (!labels.length) return { text: `Step ${i + 1}: resolve needs labels.`, isError: true }
+        ops.push({ op: 'resolve', labels })
+      } else if (st.op === 'hinges') {
+        const labels = st.labels?.length ? st.labels : selection ? selLabels : []
+        if (!labels.length || st.per_door === undefined) return { text: `Step ${i + 1}: hinges needs labels and per_door (a number, or null for the shop rules).`, isError: true }
+        ops.push({ op: 'hinges', labels, per_door: st.per_door, door: st.door })
+      } else if (st.op === 'interior') {
+        const label = st.label ?? (selLabels.length === 1 ? selLabels[0] : undefined)
+        if (!label || !st.moves?.length) return { text: `Step ${i + 1}: interior needs one cabinet label and its moves.`, isError: true }
+        ops.push({ op: 'interior', label, actions: st.moves })
+      } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material, set_properties, markup, fixture, resolve, hinges or interior.`, isError: true }
       for (let k = before; k < ops.length; k++) opRooms[k] = st.rooms?.length ? st.rooms : undefined
     }
     if (!ops.length) return { text: 'No steps.', isError: true }
@@ -489,6 +528,9 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     if (ask) {
       const q = ask.input as { question?: string; options?: string[] }
       out.question = { text: q.question ?? '', options: (q.options ?? []).slice(0, 4) }
+      // A question settles the change first: a half-made proposal from this turn is dropped
+      // (it would be answered in the next message anyway). An applied change stays.
+      out.proposal = undefined
       out.reply = [text, q.question].filter(Boolean).join('\n\n')
       toolCalls.push('ask_user')
       break
