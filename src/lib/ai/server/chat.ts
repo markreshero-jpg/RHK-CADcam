@@ -1,5 +1,5 @@
-// AI helper chat turn (z_ai_helper AI1–AI3) on Claude Sonnet 5.5 (Mark 2026-11-08 — Haiku
-// misread overhead / bulkhead edits; Try harder = Opus 5.5). One turn =
+// AI helper chat turn (z_ai_helper AI1–AI3) on Claude Opus 5.5, effort high (Mark 2026-11-27 —
+// Sonnet at medium effort was faking requests it had no tool for; Try harder = Opus at xhigh). One turn =
 // the room summary + the question + read-tool calls, and at most one change
 // (one or more steps — update / place / delete — applied and undone together):
 //   - Selection scope, updates only, ≤ AUTO_APPLY_MAX cabinets → applied straight away (Undo on the message)
@@ -22,14 +22,16 @@ import { jobNotesBlock, loadAiContext, systemBlocks } from '../shopRules'
 import { ensureConversation, touchConversation } from './conversations'
 
 /** Everyday model, and the one "Try harder" re-runs a message on. */
-export const CHAT_MODEL = 'claude-sonnet-5-5'
+export const CHAT_MODEL = 'claude-opus-5-5'
 export const STRONG_MODEL = 'claude-opus-5-5'
+const CHAT_EFFORT = 'high' as const
+const STRONG_EFFORT = 'xhigh' as const
 // $ per million tokens. Cache reads ~0.1×, writes 1.25× input.
 const PRICES: Record<string, { input: number; output: number; cacheRead: number; cacheWrite: number }> = {
-  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.20, cacheWrite: 2.5 },
+  'claude-sonnet-5-5': { input: 2, output: 10, cacheRead: 0.10, cacheWrite: 2.5 },
   'claude-opus-5-5': { input: 4, output: 20, cacheRead: 0.20, cacheWrite: 5 },
 }
-const MAX_CALLS = 6
+const MAX_CALLS = 12
 const HISTORY_TURNS = 6
 /** Locked decision 1: Selection edits on this many cabinets or fewer apply without asking. */
 export const AUTO_APPLY_MAX = 3
@@ -195,8 +197,15 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - Other rooms of the job: get_job_summary lists them, get_room_summary reads one. A step with rooms: ["Laundry"] or ["all"] changes those rooms too (filters like class "base" apply in each room). It always waits for Apply, and one Undo reverts every room.
 - You can NOT touch walls, benchtops or splashbacks yet — say so.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user first with 2–4 short options (which cabinets? which side? what size? which end panel?). One question at a time.
-- After it, say in one line what changed (or that it's waiting for Apply). Undo is on the message.
+- After it, say in one to three short lines what changed (or what will change once they press Apply) and why, using the cabinet labels and the sizes. Undo is on the message.
+
+Doing what was asked (strict):
+- Do the real change or say plainly that you can't. NEVER put the request into a cabinet's notes (or any note) in place of doing it — e.g. "move the shelf 120 down", "only 4 hinges", "re-resolve" must not become edited note text. Notes change only when the user asks for a note.
+- If part of a request is beyond your tools (shelf / divider positions, hinge counts, one part's board such as the backs, single kick pieces, re-resolving, walls, benchtops, splashbacks), do the parts you can and then say clearly which part you did NOT do, so the user does it on the canvas. Don't hide it, don't call it done.
+- Never claim a change that isn't in the change_cabinets result.
 - Sizes are W×H×D: width = dx, height = dy, depth = dz.
+- Every size / offset in a change is the NEW value in mm, never the amount to add: "50 deeper" on a 350 deep cabinet = dz 400. Work it out from the summary.
+- A proposal comes back with its change lines — read them; if one isn't what the user asked, call change_cabinets again to replace it before you answer.
 
 How overheads and bulkheads hang (get this right):
 - Overheads (wall cabinets) HANG from the room's overhead top line (the summary's first lines; a soffit drop from the ceiling wins over a top line from the floor). An overhead's underside = top line − its height. "Off the floor" (pos_z) does NOT move overheads.
@@ -325,15 +334,25 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
   const out: Omit<ChatTurnResult, 'messageId' | 'conversationId' | 'costUsd' | 'ms' | 'model' | 'toolCalls'> = { reply: '' }
   let edited = false
 
-  /** Run one change_cabinets call → tool result text, and maybe end the turn with a proposal. */
-  async function runEdit(input: EditInput): Promise<{ text: string; isError?: boolean; endTurn?: boolean }> {
-    if (edited) return { text: 'Only one change per message — finish this one, then the user can ask again.', isError: true }
+  /** A proposal's tool result: the model reads the lines back and may replace it before answering. */
+  const proposalText = (lines: string[]) => [
+    'Shown to the user for Apply — NOT done yet. Once applied it will:', ...lines, '',
+    'Check these lines against what the user asked. If any is wrong, call change_cabinets again — it replaces this proposal. If they are right, answer the user.',
+  ].join('\n')
+
+  /** Run one change_cabinets call → tool result text. A proposal can be replaced by a later call this turn; an applied change can't. */
+  async function runEdit(input: EditInput): Promise<{ text: string; isError?: boolean }> {
+    if (edited) return { text: 'Already applied — one change per message. Tell the user what was done; they can ask again.', isError: true }
     const ops: BatchOp[] = []
     const opRooms: (string[] | undefined)[] = []   // per op: target room names (undefined = this room)
     for (const [i, st] of (input.steps ?? []).entries()) {
       const before = ops.length
       if (st.op === 'update') {
         const { handle_schedule, materials, ...rest } = st.changes ?? {}
+        // Notes are not a stand-in for a change the tools can't make (Mark 2026-11-27: "4 hinges"
+        // became a note). Only when the user's own words ask for a note.
+        if (rest.notes !== undefined && !/\bnot(e|es|ed)\b/i.test(args.message))
+          return { text: `Step ${i + 1}: notes refused — the user didn't ask for a note. Don't write the request into notes instead of doing it. If no tool can do it, drop this step and tell the user plainly what you could not do.`, isError: true }
         const changes: CabinetChanges = { ...rest }
         if (materials) {
           changes.materials = {}
@@ -416,33 +435,35 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
       }
       if (problems.length) return { text: problems.join('\n'), isError: true }
       if (!lines.length) return { text: 'Nothing to change in those rooms.' }
-      edited = true
       out.proposal = { roomId: args.roomId, ops, groups, description: input.description?.trim() || 'Job change', lines }
-      return { text: 'Shown to the user for Apply.', endTurn: true }
+      return { text: proposalText(lines) }
     }
 
     const plan = await planBatch(args.roomId, ops, { onlyIds: selection ?? undefined })
     if (plan.problems.length) return { text: plan.problems.join('\n'), isError: true }
     if (!plan.steps.length) return { text: 'Nothing to change — already like that.' }
     const description = input.description?.trim() || 'AI change'
-    edited = true
 
     if (selection && plan.onlyUpdates && plan.touched <= AUTO_APPLY_MAX) {
+      edited = true
+      out.proposal = undefined   // applied straight away: replaces an earlier proposal in this turn
       const res = await withSupabase(args.client, () => runBatch(args.roomId, ops, { description, onlyIds: selection }))
       out.changed = res.changed; out.batchId = res.batchId; out.cabinetIds = res.cabinetIds
       return { text: ['Applied:', ...res.changed, ...res.warnings.map(w => `Warning: ${w}`), ...res.errors.map(e => `Resolver error: ${e}`)].join('\n') }
     }
     out.proposal = { roomId: args.roomId, ops, onlyIds: selection ?? undefined, description, lines: [...plan.lines, ...plan.warnings.map(w => `⚠ ${w}`)] }
-    return { text: 'Shown to the user for Apply.', endTurn: true }
+    return { text: proposalText(out.proposal.lines) }
   }
 
-  for (let i = 0; i < MAX_CALLS; i++) {
+  /** One model call; `noTools` = the closing explanation (tools stay listed so the cache holds). */
+  async function call(noTools = false) {
     const res = await anthropic.messages.create({
       model,
-      max_tokens: 4000,
+      max_tokens: 16000,
       system: systemBlocks(SYSTEM, aiCtx.rules),
       tools: [...READ_TOOLS, ...EDIT_TOOLS],
-      output_config: { effort: args.strong ? 'high' : 'medium' },
+      ...(noTools && { tool_choice: { type: 'none' as const } }),
+      output_config: { effort: args.strong ? STRONG_EFFORT : CHAT_EFFORT },
       messages,
     })
     usage.calls++
@@ -450,11 +471,19 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     usage.output += res.usage.output_tokens
     usage.cacheRead += res.usage.cache_read_input_tokens ?? 0
     usage.cacheWrite += res.usage.cache_creation_input_tokens ?? 0
+    return res
+  }
+  const textOf = (res: Anthropic.Message) => res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('\n').trim()
+
+  /** Set when the loop runs out of calls: the model then writes the answer, no tools. */
+  let wrapUp: string | null = null
+  for (let i = 0; i < MAX_CALLS; i++) {
+    const res = await call()
 
     if (res.stop_reason === 'refusal') { out.reply = "Sorry — I can't help with that one."; break }
-    const text = res.content.filter((b): b is Anthropic.TextBlock => b.type === 'text').map(b => b.text).join('\n').trim()
+    const text = textOf(res)
     const uses = res.content.filter((b): b is Anthropic.ToolUseBlock => b.type === 'tool_use')
-    if (res.stop_reason !== 'tool_use' || !uses.length) { out.reply = text || (out.changed?.length ? 'Done.' : '(no answer)'); break }
+    if (res.stop_reason !== 'tool_use' || !uses.length) { out.reply = text || (out.changed?.length ? 'Done.' : out.proposal ? "Here's what will change — press Apply to do it." : '(no answer)'); break }
 
     const ask = uses.find(u => u.name === 'ask_user')
     if (ask) {
@@ -466,14 +495,12 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
     }
 
     messages.push({ role: 'assistant', content: res.content })
-    let endTurn = false
     const results: Anthropic.ToolResultBlockParam[] = []
     for (const u of uses) {
       toolCalls.push(u.name)
       try {
         if (u.name === 'change_cabinets') {
           const r = await runEdit(u.input as EditInput)
-          endTurn ||= !!r.endTurn
           results.push({ type: 'tool_result', tool_use_id: u.id, content: r.text, ...(r.isError && { is_error: true }) })
         } else if (u.name === 'list_handle_schedules') {
           const { data } = await supabase.from('handle_schedules').select('name').order('name')
@@ -485,16 +512,27 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         results.push({ type: 'tool_result', tool_use_id: u.id, content: `Error: ${(e as Error).message}`, is_error: true })
       }
     }
-    if (endTurn) { out.reply = text || `Here's what will change — press Apply to do it.`; break }
     messages.push({ role: 'user', content: results })
-    if (i === MAX_CALLS - 1) out.reply = text || 'That took too many steps — try asking it more simply.'
+    if (i === MAX_CALLS - 1) { wrapUp = text; break }
+  }
+  if (wrapUp !== null) {
+    // Out of tool calls: one last call, no tools, so the user still gets a real answer
+    // (what will change, what it could not do) instead of "too many steps".
+    try {
+      const res = await call(true)
+      out.reply = (res.stop_reason !== 'refusal' && textOf(res)) || wrapUp
+    } catch (e) {
+      console.error('ai wrap-up:', (e as Error).message)
+      out.reply = wrapUp
+    }
+    if (!out.reply) out.reply = out.proposal ? `Here's what will change — press Apply to do it.` : 'That took too many steps — try asking it more simply.'
   }
 
   const costUsd = (usage.input * PRICE.input + usage.output * PRICE.output + usage.cacheRead * PRICE.cacheRead + usage.cacheWrite * PRICE.cacheWrite) / 1e6
   const ms = Date.now() - t0
   const { data: saved, error } = await supabase.from('ai_messages').insert({
     project_id: args.projectId, room_id: args.roomId, conversation_id: conversationId, role: 'assistant', text: out.reply, scope: selection ? 'selection' : 'room',
-    model, input_tokens: usage.input, output_tokens: usage.output,
+    model: args.strong ? `${model} ${STRONG_EFFORT}` : model, input_tokens: usage.input, output_tokens: usage.output,
     cache_read_tokens: usage.cacheRead, cache_write_tokens: usage.cacheWrite,
     api_calls: usage.calls, cost_usd: costUsd, ms,
     question: out.question ?? null,

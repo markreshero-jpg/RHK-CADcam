@@ -169,6 +169,14 @@ async function loadMaterialNames(ids: (string | null | undefined)[]) {
   for (const m of (data ?? []) as { id: string; name: string }[]) matNames.set(m.id, m.name)
 }
 const matName = (id: unknown) => typeof id === 'string' ? matNames.get(id) ?? 'unknown board' : 'inherited'
+/** handle_schedules.id → name, for change lines (filled by findHandleSchedule, which loads them all). */
+const hsNames = new Map<string, string>()
+async function loadHandleNames() {
+  if (hsNames.size) return
+  const { data } = await supabase.from('handle_schedules').select('id, name')
+  for (const h of (data ?? []) as { id: string; name: string }[]) hsNames.set(h.id, h.name)
+}
+const hsName = (id: unknown) => typeof id === 'string' ? `"${hsNames.get(id) ?? 'another schedule'}"` : 'inherited'
 const ROLE_WORD: Record<string, string> = { door_face: 'fronts', interior: 'carcass', exposed: 'exposed', shelf: 'shelves', divider: 'dividers', face: 'kick face' }
 const CLASS_WORD: Record<string, string> = { base: 'bases', wall: 'overheads', tall: 'talls' }
 
@@ -194,7 +202,9 @@ function updateLine(c: CabinetInstance, u: Fields, walls: Wall[]): string | null
     if (k === 'rule_overrides' || k === 'hardware_overrides') {
       const b = (before ?? {}) as Row, a = (after ?? {}) as Row
       for (const x of new Set([...Object.keys(b), ...Object.keys(a)])) {
-        if (canon(b[x]) !== canon(a[x])) parts.push(`${x} ${b[x] === undefined ? 'inherited' : fmt(b[x])} → ${a[x] === undefined ? 'inherited' : fmt(a[x])}`)
+        if (canon(b[x]) === canon(a[x])) continue
+        if (x === 'handle_schedule_id') parts.push(`handles ${hsName(b[x])} → ${hsName(a[x])}`)
+        else parts.push(`${x} ${b[x] === undefined ? 'inherited' : fmt(b[x])} → ${a[x] === undefined ? 'inherited' : fmt(a[x])}`)
       }
       continue
     }
@@ -213,6 +223,7 @@ const describe = (entries: BatchEntry[]) => entries.map(e => e.line).filter((l):
 export async function findHandleSchedule(name: string): Promise<{ id: string; name: string } | { error: string }> {
   const { data } = await supabase.from('handle_schedules').select('id, name').order('name')
   const all = (data ?? []) as { id: string; name: string }[]
+  for (const s of all) hsNames.set(s.id, s.name)
   const n = name.trim().toLowerCase()
   const hit = all.find(s => s.name.toLowerCase() === n) ?? (all.filter(s => s.name.toLowerCase().includes(n)).length === 1 ? all.find(s => s.name.toLowerCase().includes(n)) : undefined)
   return hit ?? { error: `No single handle schedule matches "${name}". Schedules: ${all.map(s => s.name).join(', ')}` }
@@ -290,6 +301,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
   const walls: Wall[] = state.walls.map(w => ({ ...w }))
   const defs = await loadDefinitions(ops.flatMap(o => o.op === 'place' ? [o.code] : []))
   const catalog = await loadFixtures(ops.flatMap(o => o.op === 'fixture' ? [o.item] : []))
+  await loadHandleNames()
   await loadMaterialNames([
     ...ops.flatMap(o => o.op === 'update' ? Object.values(o.changes.materials ?? {}) : o.op === 'set_material' ? [o.material_id] : []),
     ...state.cabinets.flatMap(c => [...overrideIds(c.material_overrides), ...overrideIds(c.toekick_overrides)]),
@@ -936,6 +948,7 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   const warnings: string[] = [], errors: string[] = [], lines: string[] = []
   const touched = new Set<string>(), changedIds = new Set<string>()
   const elsewhere: string[] = []
+  await loadHandleNames()
   await loadMaterialNames((batch.entries as BatchEntry[]).flatMap(e =>
     e.kind === 'material' ? [e.before, e.after] : e.kind === 'update' || !e.kind
       ? [...overrideIds((e as { before: Fields }).before.material_overrides), ...overrideIds((e as { before: Fields }).before.toekick_overrides),

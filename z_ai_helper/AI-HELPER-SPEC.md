@@ -1,6 +1,6 @@
 # AI Helper — In-App Chat That Changes Jobs
 
-Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08** (chat on Sonnet 5.5; markup, appliances, whole job, live refresh, phone) — remaining open items at the end
+Status: **AI0 – AI5 + follow-ups built and checked 2026-11-08**; **Q1–Q3 quality pass 2026-11-27** (chat on Opus 5.5 high, no fake fixes, explains every change) — remaining open items at the end
 Date: 2026-11-08
 Related: `.claude/skills/draw-plan/` (today's drawing workflow, run from Claude Code),
 `.claude/skills/draw-plan/references/canvas-api-bridge.md` (the dev-only
@@ -547,6 +547,36 @@ said it won't add duplicates (2.3¢ — plan cached).
 - **Attach plan:** paperclip icon + "Attach plan" (PC); full-width "Attach plan or photo
   — draw this room" on the phone.
 - No delete for chats yet (Undo links live on the messages). Tutorial `ai_chats`.
+
+## Quality pass Q1–Q3 (2026-11-27, Mark: "it's not as good as you in the terminal")
+
+Found in the real chats: requests with no tool behind them were faked or dropped —
+"take 120 off, keep the gap at the top shelf" changed the height and *rewrote the note*
+("shelf 420 down" → "300 down"); "re-resolve, only four hinges" just added "Hinges: 4" to
+the notes; most proposals said only "Here's what will change — press Apply"; handle
+changes showed raw ids. November total was US$1.54 for 83 questions, so cost wasn't the limit.
+
+- **Q1 No fake fixes.** Prompt: do the real change or say plainly it can't; never write a
+  request into notes; do the parts it can, then list what it did NOT do (shelf / divider
+  positions, hinge counts, one part's board, kick pieces, re-resolve, walls, benchtops).
+  Server: an update step with `notes` is refused unless the user's own words say note /
+  notes / noted.
+- **Q2 Explains every change.** A proposal no longer ends the turn: the model gets the
+  change lines back ("NOT done yet… check these against what was asked"), may call
+  `change_cabinets` again to replace a wrong proposal (an applied change can't be
+  replaced), then answers in 1–3 lines incl. what it couldn't do. Out of steps → one last
+  no-tools call for a real answer. Sizes in a change are the new value, never a delta
+  (caught live: "50 deeper" sent dz 50, now 400). Handle lines show schedule names.
+- **Q3 Model.** Everyday chat Opus 5.5 at effort high (was Sonnet medium); Try harder =
+  Opus xhigh, logged as `claude-opus-5-5 xhigh` (the panel's "tried harder" tag and the
+  cost view key on that); 12 calls a turn, 16K tokens. ~2–6¢ a question.
+- Checked headless on Test Kitchen: hinges + re-resolve → plain "can't, do it on the
+  canvas", nothing changed; "overheads 50 deeper + top shelf up 100" → 350 → 400 proposal,
+  shelf flagged not done, bulkhead depth asked; push-to-open + a note applied with names,
+  undone.
+- **Next (Mark to pick):** Q4 tools for what it can't do (re-resolve, shelf / hinge
+  settings, part boards such as backs, kick pieces); Q5 re-read after Apply; Q6 more shop
+  rules from the Claude Code memory; Q7 log every "can't" as a build list.
 
 ## Open items (check while building)
 

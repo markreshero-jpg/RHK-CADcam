@@ -516,12 +516,12 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
               </div>
               <div className="flex items-center gap-2 text-[10px] text-gray-600 mt-0.5">
                 {m.room_id && m.room_id !== roomId && <span>in {roomNames.get(m.room_id) ?? 'another room'}</span>}
-                {m.cost_usd != null && <span>{cents(Number(m.cost_usd))}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)}s` : ''}{m.model?.includes('opus') && !m.draw && !m.proposal?.description?.startsWith('Draw from') ? ' · tried harder' : ''}</span>}
+                {m.cost_usd != null && <span>{cents(Number(m.cost_usd))}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)}s` : ''}{m.model?.includes('xhigh') ? ' · tried harder' : ''}</span>}
                 {/* Try harder: the latest answer only, and not once it changed something */}
                 {/* (not on a drawing — that already ran on the top model) */}
-                {m.id === lastId && lastQuestion && !m.model?.includes('opus') && !m.draw && !m.changed?.length && m.proposal_status !== 'applied' && (
+                {m.id === lastId && lastQuestion && !m.model?.includes('xhigh') && !m.draw && !m.changed?.length && m.proposal_status !== 'applied' && (
                   <button disabled={!!busy} onClick={() => void send(lastQuestion, true)}
-                    title="Ask the same again on the strongest model (Opus): a few cents"
+                    title="Ask the same again with Opus thinking harder: a few cents"
                     className="text-blue-400 hover:text-blue-300 disabled:opacity-40">↻ Try harder</button>
                 )}
               </div>
