@@ -4877,6 +4877,10 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
         return (
           <BenchtopEditModal
             benchtop={b}
+            drawn={benchtopsDrawn.find(x => x.id === b.id)}
+            // Floor cabinets only (base / tall) — overheads sit over the top, not under it.
+            cabs={cabPlans.filter(p => !p.cab.is_kick_assembly && p.cab.assembly_class !== 'wall' && p.cab.assembly_class !== 'wall_corner')
+              .map(p => ({ id: p.cab.id, label: p.cab.label ?? null, pts: p.pts }))}
             walls={walls}
             roomCx={centroid(walls)}
             roomH={aw?.height ?? room.room_dy ?? 2400}

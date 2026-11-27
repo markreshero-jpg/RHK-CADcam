@@ -744,8 +744,12 @@ cabinet edit modal style window. can we use the same window?"
   canvas underneath (Delete would delete the top) unless a field has focus.
 - Display layers: like the cabinet editor, only the layer set's background / invert
   (and colours) apply — the window always draws the top (`alwaysShowBenchtop`).
-- Not yet: fixture sink / cooktop cut-outs (CNC cutouts from fixtures) aren't drawn
-  on the Top tab — only `cutout_polygons`. Cabinets under the top aren't drawn.
+- **W-f (2026-11-28)** — Top / Front / 3D draw the top with its fixtures' cut-outs
+  (`withFixtureCutouts`, as the plan does), each cut-out labelled with its size and
+  "cut-out" (hand-drawn) / "fixture cut-out". Top draws the floor cabinets (base /
+  tall, no kicks or overheads) within 100 of the top as dashed outlines with labels.
+  Top and Front zoom with the wheel about the cursor, pan by dragging, double-click fits
+  (`PanZoomSvg`) — so the edge of a long thin top can be read on Front.
 - Tutorial: **Edit a benchtop in its own window** (basics ▸ benchtops).
 
 ### Deferred
@@ -755,6 +759,8 @@ sharing the profile library with cabinet-part shapes.
 ---
 
 ## Session log
+- 2026-11-28 — Phase 9 W-f: fixture cut-outs + cabinets under on Top, zoom / pan on
+  Top and Front.
 - 2026-11-27 — Phase 9 benchtop edit window (right-click → Edit… / double-click /
   Enter): shared EditModalShell with the cabinet editor; Top / Front / 3D / Parts.
 - 2026-10-19 — Phase 8 auto-build tops (F4 → Auto-build tops…): runs per wall,
