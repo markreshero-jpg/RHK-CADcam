@@ -65,7 +65,7 @@ const BUY_DEFAULTS = { supplier_id: null, supplier_code: null, maker_code: null,
 const TABS: TabConfig[] = [
   {
     id: 'board', label: 'Board Stock', table: 'materials', initKey: 'board',
-    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, cnc_tool_id: null, feed_rate_pct: null, active: true },
+    defaults: { name: '', brand: null, finish: null, dz: 18, sheet_dx: 2400, sheet_dy: 1200, has_grain: false, face_colour: null, back_colour: null, edge_colour: null, cost_per_sheet: null, cnc_tool_id: null, feed_rate_pct: null, climb_cut: true, active: true },
     fields: [
       { key: 'name',           label: 'Name',     type: 'text',    w: 230 },
       { key: 'brand',          label: 'Brand',    type: 'text',    w: 110, placeholder: 'Laminex' },
@@ -79,6 +79,7 @@ const TABS: TabConfig[] = [
       { key: 'edge_colour',    label: 'Edge',     type: 'colour',  w: 90 },
       { key: 'cnc_tool_id',    label: 'Route tool', type: 'select', w: 150, options: [] },
       { key: 'feed_rate_pct',  label: 'Feed %',   type: 'number',  w: 60,  step: '1' },
+      { key: 'climb_cut',      label: 'Climb',    type: 'boolean', w: 48 },
       { key: 'cost_per_sheet', label: '$/sht',    type: 'number',  w: 72,  step: '0.01' },
       { key: 'active',         label: 'Active',   type: 'boolean', w: 48 },
     ],

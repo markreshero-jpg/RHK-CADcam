@@ -251,6 +251,8 @@ export default function Stage6Gcode() {
           : undefined)
         // Material-level feed override (% of the tool/profile base feed).
         if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) { post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100); post.material_feed_pct = mat.feed_rate_pct }
+        // Climb cut is a per-board tick (materials.climb_cut, default on); off = conventional.
+        if (mat && mat.climb_cut === false) post.milling_direction = 'conventional'
         const outlines = outlinesFor(sheet)
         const holes = holesFor(sheet)
         const programs = generateSheetPrograms({

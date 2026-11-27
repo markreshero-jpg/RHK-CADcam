@@ -84,7 +84,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
     }
     const norm = await loadProjectParts(cfg.project)
     const [matR, machR, profR, toolR] = await Promise.all([
-      supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct').eq('active', true).order('name'),
+      supabase.from('materials').select('id,name,dz,sheet_dx,sheet_dy,has_grain,grain_direction,trim_top,trim_bottom,trim_left,trim_right,pad,cnc_tool_id,feed_rate_pct,climb_cut').eq('active', true).order('name'),
       supabase.from('cnc_machines').select('id,name,brand,model,table_dx,table_dy,gcode_dialect,is_default').eq('active', true).order('name'),
       supabase.from('cnc_machine_profiles').select('id,cnc_machine_id,name,is_default,nest_pad,tool_entry_offset,margin_use_tool_dia,margin_use_entry_offset,deduct_edgeband,origin_corner'),
       supabase.from('cnc_tools').select('id,diameter').eq('active', true),
@@ -288,6 +288,7 @@ describe.skipIf(!CFG)('headless optimiser run', () => {
         ? { base_feed_rate: tool.base_feed_rate as number | null, base_spindle_speed: tool.base_spindle_speed as number | null, plunge_feed_rate: tool.plunge_feed_rate as number | null }
         : undefined)
       if (mat?.feed_rate_pct && mat.feed_rate_pct > 0) { post.base_feed_rate = Math.round(post.base_feed_rate * mat.feed_rate_pct / 100); post.material_feed_pct = mat.feed_rate_pct }
+      if (mat && mat.climb_cut === false) post.milling_direction = 'conventional'
       const programs = generateSheetPrograms({
         sheet, thickness: sheet.thickness, profile: post, drills, routes,
         toolNumber: toolNum(tool?.tool_number), drillToolNumber: 2,
