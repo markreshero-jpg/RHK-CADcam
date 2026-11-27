@@ -631,7 +631,27 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
   "drawers inside a bay", told the user plainly. Settings page not yet seen in the browser.
 - **Tutorial (2026-11-28):** lesson `ai_inside` — hinges / re-resolve, shelves and bays,
   back board, reading the check after Apply, the Can't do yet list.
-- **Next:** build from the Can't do yet list (drawers inside a bay; kick pieces).
+- **Q8 drawers inside a bay (2026-11-28, from the Can't do yet list):** interior moves
+  `add_drawer` (inner / rollout in its own auto-height bay, as the editor adds one; `below`
+  = space under it, 0 = on the bay's bottom, left out = halfway; `height` = box height),
+  `move_drawer` (`up` ± mm = the editor's gap drag: the bay under it grows, or a sized bay
+  above shrinks, and a locked box bottom shifts with it; `bottom` = exact locked box bottom
+  for small nudges / null = auto; `height`), `remove_drawer` (empty open bays joined with no
+  shelf merge back). Locked `bottom` alone leaves the bays where they are — the resolver
+  lays an auto-height bay out from its neighbours, not from the drawer's lock — so it can
+  overflow; `up` is the default.
+  - get_cabinet_detail shows each drawer: locked / auto box bottom, the auto one's box
+    bottom as resolved (front y − the front offset read off a locked drawer), and the
+    resolved front. Change lines list every drawer, and name nested bays that changed.
+  - FITTING_OVERFLOW message now gives the box and compartment positions when the box is
+    shorter than the bay but sits past its top (was "127mm exceeds 150mm").
+  - Checked headless on Test Kitchen TC-01 (all undone): "bottom inner drawer up 50" →
+    bay 1.1.1 2 → 52, front 170.5 → 220.5, no warning; "rollout at the bottom of bay 2" →
+    sits on the fixed shelf; "rollout 300 up" → asked (clashes with the adj shelf); "take
+    the middle drawer out" → removed, check flagged the locked 695 drawer now outside its
+    bay and offered auto. Unit tests in interior.test.ts. ai_gaps "drawers inside a bay"
+    marked built.
+- **Next:** kick pieces (the last open Can't do yet item) needs its own design — ask Mark.
 
 ## Open items (check while building)
 

@@ -85,13 +85,17 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                 items: {
                   type: 'object',
                   properties: {
-                    do: { type: 'string', enum: ['size', 'adj_shelves', 'add_shelf', 'shelf_type', 'remove_shelf', 'add_divider', 'remove_bay'], description: 'size = a bay\'s height (shelf split) / width (divider split), null = fills the rest; adj_shelves = how many adjustable shelves in an open bay; add_shelf = a shelf across an open bay (below = height of the new bay under it); shelf_type = what sits above a bay (fixed / adjustable / none); remove_shelf = the shelf above a bay; add_divider = a divider up through an open bay (left = width left of it); remove_bay' },
+                    do: { type: 'string', enum: ['size', 'adj_shelves', 'add_shelf', 'shelf_type', 'remove_shelf', 'add_divider', 'remove_bay', 'add_drawer', 'move_drawer', 'remove_drawer'], description: 'add_drawer = an inner drawer / rollout in an open bay (drawer, below = space under it, 0 = on the bottom, height = box height); move_drawer = the drawer in a bay: up = move it by mm (negative = down), bottom = exact box bottom mm from the cabinet bottom (null = auto), height = box height (null = default); remove_drawer = take it out; size = a bay\'s height (shelf split) / width (divider split), null = fills the rest; adj_shelves = how many adjustable shelves in an open bay; add_shelf = a shelf across an open bay (below = height of the new bay under it); shelf_type = what sits above a bay (fixed / adjustable / none); remove_shelf = the shelf above a bay; add_divider = a divider up through an open bay (left = width left of it); remove_bay' },
                     bay: { type: 'string' },
                     size: { type: ['number', 'null'] },
                     count: { type: 'integer' },
                     kind: { type: 'string', enum: ['fixed', 'adjustable', 'none'] },
                     below: { type: 'number' },
                     left: { type: 'number' },
+                    drawer: { type: 'string', enum: ['inner', 'rollout'] },
+                    up: { type: 'number' },
+                    height: { type: ['number', 'null'] },
+                    bottom: { type: ['number', 'null'] },
                   },
                   required: ['do', 'bay'], additionalProperties: false,
                 },
@@ -203,7 +207,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
       type: 'object',
       properties: {
         request: { type: 'string', description: 'What the user wanted, short, in their words, with the cabinet, e.g. "move the inner drawer in TC-01 up 50"' },
-        missing: { type: 'string', description: 'The missing feature as a short name, the same wording every time so reports group: e.g. "drawers inside a bay", "kick pieces", "front layout", "walls", "benchtops", "splashbacks", "accessories / rails", "edge tape per part", "part sizes"' },
+        missing: { type: 'string', description: 'The missing feature as a short name, the same wording every time so reports group: e.g. "hanging rails", "kick pieces", "front layout", "walls", "benchtops", "splashbacks", "accessories / rails", "edge tape per part", "part sizes"' },
       },
       required: ['request', 'missing'], additionalProperties: false,
     },
@@ -232,15 +236,15 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - Other rooms of the job: get_job_summary lists them, get_room_summary reads one. A step with rooms: ["Laundry"] or ["all"] changes those rooms too (filters like class "base" apply in each room). It always waits for Apply, and one Undo reverts every room.
 - resolve: re-resolve cabinets as they are (parts, drilling, hardware rebuilt) when the user asks or something looks stale. Changes already re-resolve what they touch — don't add it to those.
 - hinges: hinges per door — per_door 2 on a 2-door cabinet = 4 in all. null = back to the shop rules (by door height). Read get_cabinet_detail first for the doors and current hinges. If the count is light for the door height (shop rules: up to 900 → 2, 1800 → 3, 2400 → 4), do it but say so.
-- interior: shelves, bays and dividers of ONE cabinet. Read get_cabinet_detail first — it numbers the bays (bottom → top in a shelf split, left → right in a divider split) and gives the resolved shelf heights. Moves: size (a bay's height; null = fills the rest), adj_shelves (count in an open bay), add_shelf (kind fixed / adjustable, below = height of the bay under it), shelf_type, remove_shelf, add_divider (left = width), remove_bay. To move a fixed shelf, change the size of the bay under it (and the one above if that has a size too). Bay sizes are clear heights between boards — allow for the shelf thickness. After add / remove moves the bays re-number.
-- You can NOT touch walls, benchtops, splashbacks, single kick pieces, drawers / rails inside the interior, or front layouts yet — say so.
+- interior: shelves, bays and dividers of ONE cabinet. Read get_cabinet_detail first — it numbers the bays (bottom → top in a shelf split, left → right in a divider split) and gives the resolved shelf heights. Moves: size (a bay's height; null = fills the rest), adj_shelves (count in an open bay), add_shelf (kind fixed / adjustable, below = height of the bay under it), shelf_type, remove_shelf, add_divider (left = width), remove_bay, add_drawer (drawer inner / rollout; below = height of the open space under it in that bay — 0 = sits on the bay's bottom shelf / floor, leave out = halfway; height = box height), move_drawer (the bay the drawer is in; "up 50" / "down 30" = up 50 / up -30 — the way to move one: the bay under it grows, so the drawer's own bay moves with it; bottom = an exact box bottom in mm from the cabinet bottom, which locks it there but leaves the bays where they are, so only for a small nudge or when up is refused; null = auto; height = box height), remove_drawer (empty bays either side close up). Moving a drawer doesn't resize the bays round it — if it won't fit, the check after Apply says so. To move a fixed shelf, change the size of the bay under it (and the one above if that has a size too). Bay sizes are clear heights between boards — allow for the shelf thickness. After add / remove moves the bays re-number.
+- You can NOT touch walls, benchtops, splashbacks, single kick pieces, hanging rails / accessories inside the interior, or front layouts yet — say so.
 - Whenever a request (or part of one) needs something no tool of yours can do, call report_gap for it first (once per missing feature), then tell the user. That list is what gets built next.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user FIRST, before any change_cabinets, with 2–4 short options (asking drops a proposal made earlier in the same message) (which cabinets? which side? what size? which end panel?). One question at a time.
 - After it, say in one to three short lines what changed (or what will change once they press Apply) and why, using the cabinet labels and the sizes. Undo is on the message.
 
 Doing what was asked (strict):
 - Do the real change or say plainly that you can't. NEVER put the request into a cabinet's notes (or any note) in place of doing it — e.g. "move the shelf 120 down", "only 4 hinges", "re-resolve" must not become edited note text. Notes change only when the user asks for a note.
-- If part of a request is beyond your tools (single kick pieces, drawers / rails inside the interior, front layouts, walls, benchtops, splashbacks), do the parts you can and then say clearly which part you did NOT do, so the user does it on the canvas. Don't hide it, don't call it done.
+- If part of a request is beyond your tools (single kick pieces, hanging rails / accessories inside the interior, front layouts, walls, benchtops, splashbacks), do the parts you can and then say clearly which part you did NOT do, so the user does it on the canvas. Don't hide it, don't call it done.
 - Never claim a change that isn't in the change_cabinets result.
 - "Resolver error" / "Warning" lines in a result are real problems the change caused or found (e.g. a hinge plate over shelf holes): tell the user each one in plain words, and offer a fix if you have one.
 - Sizes are W×H×D: width = dx, height = dy, depth = dz.

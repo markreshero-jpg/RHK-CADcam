@@ -169,7 +169,7 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
     supabase.from('case_parts').select('part_key, dx, dy, dz, material_id').eq('cabinet_instance_id', c.id),
     supabase.from('cabinet_custom_parts').select('name, dx, dy, dz, material_id, visible').eq('cabinet_instance_id', c.id),
     supabase.from('room_fixtures').select('name, label, display_name').eq('cabinet_id', c.id),
-    supabase.from('internal_parts').select('part_type, y, dz, dx').eq('cabinet_instance_id', c.id).in('part_type', ['fixed_shelf', 'adj_shelf']).order('y'),
+    supabase.from('internal_parts').select('part_type, y, dz, dx').eq('cabinet_instance_id', c.id).in('part_type', ['fixed_shelf', 'adj_shelf', 'inner_drawer_front']).order('y'),
     supabase.from('hinge_instances').select('facet, row_index, col_index, y_position_mm').eq('cabinet_instance_id', c.id).order('y_position_mm'),
   ])
   // Hinges per door (main face), and whether they're manual (face grid) or the shop rules.
@@ -181,7 +181,9 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
     const k = `${h.row_index},${h.col_index}`
     hingeBy.set(k, [...(hingeBy.get(k) ?? []), Number(h.y_position_mm)])
   }
-  const shelves = (inner.data ?? []) as { part_type: string; y: number; dz: number; dx: number }[]
+  const innerRows = (inner.data ?? []) as { part_type: string; y: number; dz: number; dx: number }[]
+  const shelves = innerRows.filter(p => p.part_type !== 'inner_drawer_front')
+  const drawerFronts = innerRows.filter(p => p.part_type === 'inner_drawer_front').map(p => ({ y: Number(p.y), h: Number(p.dx) }))
   const fz = fronts.data ?? [], cp = carcass.data ?? [], cu = (custom.data ?? []).filter(p => p.visible !== false)
   const mats = await names('materials', [...fz, ...cp, ...cu].map(p => p.material_id))
   const handles = await names('hardware_handles', fz.map(f => f.handle_hardware_id))
@@ -200,8 +202,8 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
     ...(new Set(fz.map(f => f.facet ?? '')).size > 1 ? ['(Fronts on different faces are separate fronts, even when their row,col match.)'] : []),
     ...(hingeBy.size ? ['', 'Hinges (door row,col | count | mm from the door bottom | set by):',
       ...[...hingeBy].map(([k, ys]) => `${k} | ${ys.length} | ${ys.map(y => Math.round(y)).join(' / ')} | ${manual.has(k) ? 'manual (hinges step)' : 'shop rules'}`)] : []),
-    '', 'Interior (bays for the interior step; heights are the stored bay sizes):',
-    ...renderInterior(c.internal_grid),
+    '', 'Interior (bays for the interior step; heights are the stored bay sizes; drawer box bottoms are mm from the cabinet bottom):',
+    ...renderInterior(c.internal_grid, drawerFronts),
     ...(shelves.length ? ['Shelves as resolved (kind | underside mm from the cabinet bottom | thickness):',
       ...shelves.map(s => `${s.part_type === 'fixed_shelf' ? 'fixed' : 'adjustable'} | ${r(s.y)} | ${r(s.dz)}`)] : []),
     '', 'Carcass parts (part | length × width × thickness | board):',

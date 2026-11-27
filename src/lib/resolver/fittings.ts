@@ -244,7 +244,10 @@ function emitBoxStack(box: Box, items: BoxItem[], ctx: FittingCtx, cfg: BoxStack
     if (boxY + boxHeight > box.y + box.h + 0.5) {
       ctx.errors.push({
         code:    'FITTING_OVERFLOW',
-        message: `A ${cfg.sortKey.replace('_', ' ')} (${Math.round(boxHeight)}mm) exceeds the compartment height (${Math.round(box.h)}mm)`,
+        // Name the positions: a locked box can be shorter than its bay yet sit above it.
+        message: boxHeight > box.h + 0.5
+          ? `A ${cfg.sortKey.replace('_', ' ')} (${Math.round(boxHeight)}mm) exceeds the compartment height (${Math.round(box.h)}mm)`
+          : `A ${cfg.sortKey.replace('_', ' ')} (${Math.round(boxHeight)}mm box at ${Math.round(boxY)}–${Math.round(boxY + boxHeight)}mm${it.y_locked ? ', locked' : ''}) runs past the top of its compartment (${Math.round(box.y)}–${Math.round(box.y + box.h)}mm)`,
         part:    cfg.sortKey,
       })
     }

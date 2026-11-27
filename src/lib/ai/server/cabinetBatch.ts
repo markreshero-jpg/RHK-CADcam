@@ -29,7 +29,7 @@ import { cabinetPlans, linkedPose } from '@/src/lib/fixtureLinks'
 import { defaultFixtureZ } from '@/src/lib/fixtureGeometry'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { HingeRuleInput } from '@/src/lib/resolver/types'
-import { applyInteriorActions, hingePositions, shortInterior, type InteriorAction } from '../interior'
+import { applyInteriorActions, hingePositions, shortInterior, renderInterior, type InteriorAction } from '../interior'
 
 type Fields = Partial<CabinetInstance>
 type Row = Record<string, unknown>
@@ -219,7 +219,16 @@ function updateLine(c: CabinetInstance, u: Fields, walls: Wall[]): string | null
       continue
     }
     if (k === 'internal_grid') {
-      if (canon(before) !== canon(after)) parts.push(`interior ${shortInterior(before)} → ${shortInterior(after)}`)
+      if (canon(before) !== canon(after)) {
+        const sb = shortInterior(before), sa = shortInterior(after)
+        if (sb !== sa) parts.push(`interior ${sb} → ${sa}`)
+        else {
+          // A change deeper in the tree: name the bays that changed.
+          const bl = new Set(renderInterior(before).map(l => l.trim()))
+          const changed = renderInterior(after).map(l => l.trim()).filter(l => !bl.has(l) && l.startsWith('Bay '))
+          parts.push(`interior: ${changed.length ? changed.join('; ') : 'changed'}`)
+        }
+      }
       continue
     }
     if (k === 'face_grid') {

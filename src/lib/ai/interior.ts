@@ -18,6 +18,23 @@ type Path = number[]   // 0-based child indexes from the root
 
 const SEP_WORD: Record<SectionSeparator, string> = { fixed_shelf: 'fixed shelf', adj_shelf: 'adjustable shelf', none: 'no shelf (open)' }
 
+/** Resolved drawer fronts, bottom → top, for the detail readout (internal_parts inner_drawer_front: y, dx = height). */
+export interface ResolvedDrawerFront { y: number; h: number }
+
+const r1 = (n: number) => Math.round(n * 10) / 10
+
+function drawerWord(f: InternalFitting, front?: ResolvedDrawerFront, frontOffset = 0): string {
+  const name = f.type === 'inner_drawer' ? 'inner drawer' : 'rollout'
+  const d = f as { y_locked?: boolean; y_position?: number; height?: number }
+  const bits = [
+    d.y_locked && d.y_position != null ? `box bottom ${r1(d.y_position)} (locked)`
+      : front ? `box bottom auto, ${r1(front.y - frontOffset)} as resolved` : 'box bottom auto',
+    d.height != null ? `box ${r1(d.height)} high` : '',
+    front ? `front as resolved ${r1(front.y)}–${r1(front.y + front.h)} (${r1(front.h)} high)` : '',
+  ].filter(Boolean)
+  return `${name} [${bits.join(', ')}]`
+}
+
 function fittingWord(f: InternalFitting): string {
   if (f.type === 'inner_drawer') return 'inner drawer'
   if (f.type === 'pull_out') return 'rollout'
@@ -26,10 +43,13 @@ function fittingWord(f: InternalFitting): string {
   return 'adjustable shelf'
 }
 
-function contents(s: Section): string {
+const isDrawer = (f: InternalFitting) => f.type === 'inner_drawer' || f.type === 'pull_out'
+
+function contents(s: Section, fronts?: () => ResolvedDrawerFront | undefined, frontOffset = 0): string {
   if (s.type !== 'open') return s.type === 'hsplit' ? 'split by shelves:' : 'split by dividers:'
   const adj = s.fittings.filter(f => f.type === 'adj_shelf').length
-  const rest = s.fittings.filter(f => f.type !== 'adj_shelf').map(fittingWord)
+  const rest = s.fittings.filter(f => f.type !== 'adj_shelf').map(f =>
+    !fronts ? fittingWord(f) : isDrawer(f) ? drawerWord(f, f.type === 'inner_drawer' ? fronts() : undefined, frontOffset) : fittingWord(f))
   const parts = [...(adj ? [`${adj} adjustable shel${adj === 1 ? 'f' : 'ves'}`] : []), ...rest]
   return parts.length ? parts.join(', ') : 'empty'
 }
@@ -40,18 +60,44 @@ function sizeWord(c: SectionChild, axis: 'h' | 'v'): string {
   return (c.size != null ? `${c.size} ${axis === 'h' ? 'high' : 'wide'}` : 'fills the rest') + eg
 }
 
-/** The interior as numbered bays for the AI (get_cabinet_detail). */
-export function renderInterior(raw: unknown): string[] {
+/** Inner drawers in tree order; true when every one sits in a shelf-split chain (so tree order = bottom → top). */
+function innerDrawerOrder(root: Section): { count: number; stacked: boolean } {
+  let count = 0, stacked = true
+  const walk = (s: Section, underV: boolean) => {
+    if (s.type === 'open') { const n = s.fittings.filter(f => f.type === 'inner_drawer').length; count += n; if (n > 1 || (n && underV)) stacked = false; return }
+    s.children.forEach(c => walk(c.section, underV || s.type === 'vsplit'))
+  }
+  walk(root, false)
+  return { count, stacked }
+}
+
+/** The interior as numbered bays for the AI (get_cabinet_detail). `fronts` = the resolved
+ *  inner drawer fronts (any order); shown against each drawer when they can be matched. */
+export function renderInterior(raw: unknown, fronts?: ResolvedDrawerFront[]): string[] {
   const root = asTree(raw)
-  if (root.type === 'open') return [`Bay 0 (the whole interior): ${contents(root)}`]
-  const out: string[] = [`Bay 0 (the whole interior): ${contents(root)}`]
+  const order = innerDrawerOrder(root)
+  const sorted = [...(fronts ?? [])].sort((a, b) => a.y - b.y)
+  let next = 0
+  const matched = !!fronts && order.stacked && sorted.length === order.count
+  const pick = matched ? () => sorted[next++] : fronts ? () => undefined : undefined
+  // The front sits off the box bottom by the shop's IDB_FRONT_BOTTOM_ADJUST: read it off a locked drawer.
+  let off = 0
+  if (matched) {
+    const inner: InternalFitting[] = []
+    const all = (s: Section): void => { if (s.type === 'open') inner.push(...s.fittings.filter(f => f.type === 'inner_drawer')); else s.children.forEach(c => all(c.section)) }
+    all(root)
+    const i = inner.findIndex(f => (f as { y_locked?: boolean; y_position?: number }).y_locked && (f as { y_position?: number }).y_position != null)
+    if (i >= 0) off = r1(sorted[i].y - (inner[i] as { y_position: number }).y_position)
+  }
+  if (root.type === 'open') return [`Bay 0 (the whole interior): ${contents(root, pick, off)}`]
+  const out: string[] = [`Bay 0 (the whole interior): ${contents(root, pick, off)}`]
   const walk = (s: Section, prefix: string, depth: number) => {
     if (s.type === 'open') return
     const axis = s.type === 'hsplit' ? 'h' : 'v'
     s.children.forEach((c, i) => {
       const path = prefix ? `${prefix}.${i + 1}` : `${i + 1}`
       const pad = '  '.repeat(depth)
-      out.push(`${pad}Bay ${path} — ${sizeWord(c, axis)}: ${contents(c.section)}`)
+      out.push(`${pad}Bay ${path} — ${sizeWord(c, axis)}: ${contents(c.section, pick, off)}`)
       walk(c.section, path, depth + 1)
       if (i < s.children.length - 1) {
         out.push(axis === 'h'
@@ -67,14 +113,24 @@ export function renderInterior(raw: unknown): string[] {
 /** One-line summary for a change line: top-level bays bottom → top. */
 export function shortInterior(raw: unknown): string {
   const root = asTree(raw)
-  if (root.type === 'open') return `[${contents(root)}]`
+  // Every drawer / rollout in tree order: box bottom (or auto) and box height when set.
+  const ds: string[] = []
+  const walk = (s: Section) => s.type === 'open'
+    ? s.fittings.filter(isDrawer).forEach(f => {
+      const d = f as { type: string; y_locked?: boolean; y_position?: number; height?: number }
+      ds.push(`${d.type === 'pull_out' ? 'rollout' : 'drawer'} ${d.y_locked && d.y_position != null ? `at ${r1(d.y_position)}` : 'auto'}${d.height != null ? ` ${r1(d.height)} high` : ''}`)
+    })
+    : s.children.forEach(c => walk(c.section))
+  walk(root)
+  const tail = ds.length ? ` · ${ds.join(', ')}` : ''
+  if (root.type === 'open') return `[${contents(root)}]${tail}`
   const axis = root.type === 'hsplit' ? 'h' : 'v'
   return root.children.map((c, i) => {
     const sz = c.auto_height ? 'drawer bay' : c.size != null ? String(c.size) : 'fill'
     const what = c.section.type === 'open' ? contents(c.section) : c.section.type === 'hsplit' ? 'shelves' : 'dividers'
     const sep = i < root.children.length - 1 ? (axis === 'h' ? ` ${c.separator === 'adj_shelf' ? '‑adj‑' : c.separator === 'none' ? '·' : '═'} ` : ' | ') : ''
     return `[${sz}${what === 'empty' ? '' : ` ${what}`}]${sep}`
-  }).join('')
+  }).join('') + tail
 }
 
 function asTree(raw: unknown): Section {
@@ -99,6 +155,16 @@ export type InteriorAction =
   | { do: 'add_divider'; bay: string; left?: number }
   /** Take a bay out; the rest close up. */
   | { do: 'remove_bay'; bay: string }
+  /** An inner drawer / rollout in an open bay, as the Interior editor adds one: its own bay sized
+   *  to the drawer, open bays below and above with no shelf between. below = height of the space under it
+   *  (0 = it sits on the bay's bottom; leave out = halfway, as the editor does); height = box height. */
+  | { do: 'add_drawer'; bay: string; drawer?: 'inner' | 'rollout'; height?: number; below?: number }
+  /** The drawer / rollout in a bay: up = move it by this much (negative = down), as the editor's
+   *  gap drag does it (the bay under it grows); bottom = its box bottom, mm from the cabinet bottom (locks it;
+   *  null = back to auto); height = box height (null = from the slide / construction). */
+  | { do: 'move_drawer'; bay: string; up?: number; bottom?: number | null; height?: number | null }
+  /** Take the drawer / rollout out of a bay; empty open bays either side close up. */
+  | { do: 'remove_drawer'; bay: string }
 
 function parseBay(bay: string): Path | null {
   const b = String(bay).trim()
@@ -234,6 +300,82 @@ export function applyInteriorActions(raw: unknown, actions: InteriorAction[]): {
         const children = s.children.filter((_, i) => i !== path[path.length - 1])
         return !children.length ? EMPTY_SECTION : children.length === 1 ? children[0].section : { ...s, children }
       })
+    } else if (a.do === 'add_drawer') {
+      if (here.type !== 'open') return { error: `${at}: that bay is split — pick one of its bays.` }
+      if (a.height != null && !(a.height >= 40 && a.height <= 600)) return { error: `${at}: box height must be 40–600 mm.` }
+      if (a.below != null && !(a.below >= 0 && a.below < 4000)) return { error: `${at}: below must be 0–4000 mm (0 = on the bay's bottom).` }
+      const f = {
+        type: a.drawer === 'rollout' ? 'pull_out' : 'inner_drawer',
+        y_locked: false,
+        ...(a.height != null ? { height: r1(a.height) } : {}),
+      } as InternalFitting
+      const drawerBay: SectionChild = { section: { type: 'open', fittings: [f] }, auto_height: true, separator: 'none' }
+      tree = updateAtPath(tree, path, s => s.type !== 'open' ? s : {
+        type: 'hsplit', children: a.below === 0
+          // On the bay's bottom: what was in the bay goes above it.
+          ? [drawerBay, { section: s }]
+          : [{ section: s, separator: 'none', ...(a.below != null ? { size: r1(a.below) } : {}) }, drawerBay, newOpen()],
+      })
+    } else if (a.do === 'move_drawer' || a.do === 'remove_drawer') {
+      if (here.type !== 'open') return { error: `${at}: that bay is split — give the bay the drawer itself is in.` }
+      const ds = here.fittings.filter(isDrawer)
+      if (ds.length !== 1) return { error: `${at}: ${ds.length ? `bay ${a.bay} holds ${ds.length} drawers / rollouts — this move needs a bay with one` : `there's no drawer or rollout in bay ${a.bay}`}. ${renderInterior({ tree }).join(' / ')}` }
+      if (a.do === 'move_drawer') {
+        if (a.bottom === undefined && a.height === undefined && a.up === undefined) return { error: `${at}: give up, bottom and / or height.` }
+        if (a.up != null && a.bottom != null) return { error: `${at}: give up OR bottom, not both.` }
+        if (a.up != null && !(Math.abs(a.up) > 0 && Math.abs(a.up) < 2000)) return { error: `${at}: up must be a non-zero amount in mm (negative = down).` }
+        if (a.bottom != null && !(a.bottom >= 0 && a.bottom < 4000)) return { error: `${at}: bottom must be 0–4000 mm from the cabinet bottom.` }
+        if (a.height != null && !(a.height >= 40 && a.height <= 600)) return { error: `${at}: box height must be 40–600 mm.` }
+        const df = here.fittings.find(isDrawer) as { y_locked?: boolean; y_position?: number }
+        const locked = !!df.y_locked && df.y_position != null
+        if (a.up != null) {
+          // As dragging the gap in the Interior editor: the drawer's own bay (sized to the drawer)
+          // moves when the bay under it grows — or a sized bay above it shrinks.
+          const idx = path[path.length - 1]
+          const inAuto = parent?.type === 'hsplit' && parent.children[idx]?.auto_height
+          const below = inAuto ? parent.children[idx - 1] : undefined
+          const above = inAuto ? parent.children[idx + 1] : undefined
+          const nb = below?.size != null ? below.size + a.up : null
+          const na = nb == null && above?.size != null ? above.size - a.up : null
+          if (nb != null || na != null) {
+            if ((nb ?? na)! < 1) return { error: `${at}: that's more room than there is — the bay ${nb != null ? 'under' : 'over'} it is only ${(nb != null ? below!.size : above!.size)} high.` }
+            tree = setChildSize(tree, nb != null ? [...path.slice(0, -1), idx - 1] : [...path.slice(0, -1), idx + 1], nb ?? na)
+          } else if (!locked) {
+            return { error: `${at}: the drawer is on auto and neither bay next to it has a size — give bottom (its box bottom as resolved + the move) instead.` }
+          }
+        }
+        tree = updateAtPath(tree, path, s => s.type !== 'open' ? s : {
+          ...s, fittings: s.fittings.map(f => {
+            if (!isDrawer(f)) return f
+            const g = { ...f } as Record<string, unknown>
+            if (a.up != null && locked) g.y_position = r1(Number(g.y_position) + a.up)
+            if (a.bottom === null) { g.y_locked = false; delete g.y_position }
+            else if (a.bottom !== undefined) { g.y_locked = true; g.y_position = r1(a.bottom) }
+            if (a.height === null) delete g.height
+            else if (a.height !== undefined) g.height = r1(a.height)
+            return g as unknown as InternalFitting
+          }),
+        })
+      } else {
+        tree = updateAtPath(tree, path, s => s.type !== 'open' ? s : { ...s, fittings: s.fittings.filter(f => !isDrawer(f)) })
+        if (path.length) {
+          const parentPath = path.slice(0, -1), idx = path[path.length - 1]
+          tree = updateAtPath(tree, parentPath, s => {
+            if (s.type !== 'hsplit') return s
+            // The drawer's own bay goes (if now empty), then open bays joined with no shelf merge.
+            let kids = s.children.filter((c, i) => !(i === idx && c.auto_height && c.section.type === 'open' && !c.section.fittings.length))
+            const merged: SectionChild[] = []
+            for (const c of kids) {
+              const prev = merged[merged.length - 1]
+              if (prev && prev.separator === 'none' && prev.section.type === 'open' && c.section.type === 'open' && !prev.auto_height && !c.auto_height) {
+                merged[merged.length - 1] = { ...(c.separator ? { separator: c.separator } : {}), section: { type: 'open', fittings: [...prev.section.fittings, ...c.section.fittings] } }
+              } else merged.push(c)
+            }
+            kids = merged
+            return kids.length === 1 ? kids[0].section : { ...s, children: kids }
+          })
+        }
+      }
     } else return { error: `${at}: unknown move "${(a as { do: string }).do}".` }
   }
   grid.tree = tree

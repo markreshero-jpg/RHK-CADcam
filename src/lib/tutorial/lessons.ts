@@ -2342,7 +2342,7 @@ export const LESSONS: TutorialLesson[] = [
       body: 'Select a cabinet, open Ask AI and ask e.g. "2 hinges per door" or "re-resolve TC-01". Hinges are set the way the Front editor does it, spaced by the shop rule for that door height; "hinges back to the shop rules" undoes a manual count. The AI tells you if a door is too tall for the count you asked for.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_edit') > ev(s, 'ai_chat_edit') },
     { id: 'interior', title: 'Shelves and bays',
-      body: 'Ask e.g. "drop the fixed shelf 100 and put 2 adjustables above it" or "add a divider in the top bay". It numbers the bays bottom to top, left to right (1, 2, 2.1…), the same as the Interior editor. Ask "what\'s inside TC-01?" to see the bays and shelf heights first. Drawers and rails inside a bay can\'t be moved by the AI yet.',
+      body: 'Ask e.g. "drop the fixed shelf 100 and put 2 adjustables above it" or "add a divider in the top bay". It numbers the bays bottom to top, left to right (1, 2, 2.1…), the same as the Interior editor. Ask "what\'s inside TC-01?" to see the bays, shelf heights and drawers first. Drawers and rollouts too: "add a rollout on the fixed shelf", "move the bottom inner drawer up 50" (the space under it grows, as when you drag it in the editor), "take the middle drawer out". Hanging rails can\'t be changed by the AI yet.',
       canvas: true, done: (c, s) => ev(c, 'ai_chat_asked') > ev(s, 'ai_chat_asked') },
     { id: 'back', title: 'A different back board',
       body: 'Ask e.g. "back in Satin Board 18" for this cabinet, the room or the job. It changes the back panel\'s board only, not the carcass.',
