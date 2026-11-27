@@ -4,7 +4,7 @@
 // using nullish coalescing so explicit zeros are preserved.
 // ============================================================
 
-import { ConstructionRules, DEFAULT_RULES } from './types'
+import { ConstructionRules, DEFAULT_RULES, CabinetInput } from './types'
 
 // Each level provides a partial set of overrides.
 // Later levels take priority over earlier ones.
@@ -72,6 +72,46 @@ export function resolveReveal(
     default:
       return side === 'left' ? rules.REVENDL : rules.REVENDR
   }
+}
+
+export type InsetSide = 'left' | 'right' | 'top' | 'bottom'
+export type InsetReveals = Record<InsetSide, number>
+
+/**
+ * Inset fronts (D-INS): the reveal at each carcass edge that puts a front inside
+ * the opening — the panel it meets (gable incl. its scribe, bottom above SCRBT,
+ * top / on-edge front rail below SCRT) + INSGAP clearance. The kick is not in
+ * here: resolveFace adds TK under every face anyway.
+ */
+export function insetReveals(
+  cab: Pick<CabinetInput, 'material' | 'left_side_material' | 'right_side_material' | 'top_type' | 'bottom_type'>,
+  r: ConstructionRules,
+): InsetReveals {
+  const t = cab.material.DZ
+  const g = r.INSGAP ?? 2
+  const bottomType = cab.bottom_type ?? r.BOTTOM_TYPE ?? 'full'
+  const topType = cab.top_type ?? r.TOP_TYPE
+  // Front rail on edge = RD tall at the top front; a full top or flat rail = its thickness.
+  const topT = topType === 'none' ? 0
+    : topType !== 'full_top' && r.RAIL_ORIENT === 'vertical' ? r.RD : t
+  return {
+    left:   (r.SCRL ?? 0) + (cab.left_side_material  ?? cab.material).DZ + g,
+    right:  (r.SCRR ?? 0) + (cab.right_side_material ?? cab.material).DZ + g,
+    bottom: (r.SCRBT ?? 0) + (bottomType === 'none' ? 0 : t) + g,
+    top:    (r.SCRT ?? 0) + topT + g,
+  }
+}
+
+/** The cabinet's own rule layer: cab.cabinet_rules, else (an older cached input) the
+ *  keys where the merged rules differ from the cascade below the cabinet. */
+export function cabinetRuleLayer(cab: Pick<CabinetInput, 'cabinet_rules' | 'rules' | 'rules_base'>): Partial<ConstructionRules> {
+  if (cab.cabinet_rules) return cab.cabinet_rules
+  if (!cab.rules_base) return {}
+  const out: Record<string, unknown> = {}
+  for (const k of Object.keys(cab.rules) as (keyof ConstructionRules)[]) {
+    if (cab.rules[k] !== cab.rules_base[k]) out[k] = cab.rules[k]
+  }
+  return out as Partial<ConstructionRules>
 }
 
 // Resolve face Z position based on inset/overlay mode

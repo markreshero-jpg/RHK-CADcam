@@ -574,3 +574,28 @@ resolver carry, `collectPanelProfileRoutes`, Cabinet3DView / ElevationSVG overla
 sidebar **Panel Profile** select (panel items: no face, no carcass). Test
 `src/lib/optimiser/__tests__/panelProfileRoutes.test.ts`. Tutorial `panel_profile`.
 First job: RHK6592 kitchen BC-12 (right) + BC-01 (front, 3 pieces).
+
+## 15. INSET FRONTS — D-INS (built 2026-11-27, in-app check pending)
+
+Mark, RHK6548 Hard Coffee FC BC-03 (rubbish door flush with the carcass, inside the opening).
+
+**Locked decisions**
+- `FACINS` > 0 = inset (front face sits FACINS behind the carcass front). `0` = overlay. **0.01 = inset flush**
+  (0 can't mean flush: it's the overlay switch). UI shows < 0.1 as "Flush".
+- Set at job / room (Properties › Face Clearance), **per cabinet** (CabinetPanel › Fronts: Inherit / Overlay /
+  Inset + set back) and **per front** (Face grid › front › Inset: `zone.face_ins`, absent = the cabinet's).
+- Reveals follow the inset automatically (`insetReveals` in mergeRules): the panel at that edge + `INSGAP`
+  (new rule, default 2, Face Clearance group). Left / right = SCRL / SCRR + gable board; bottom = SCRBT +
+  bottom board (0 if Bottom Type none); top = SCRT + top board, or RD on an on-edge front rail (0 if none).
+  The kick is added under every face as before.
+- Overrides: on an inset cabinet a REVT / REVB / REVSL / REVSR typed **on that cabinet** wins (job / room
+  reveals are overlay reveals, ignored). `CabinetInput.cabinet_rules` carries the cabinet layer (loader + the
+  rule-override fast path; older cached inputs diff rules vs rules_base). Per front, `zone.ins_rev
+  {left,right,top,bottom}` overrides that carcass edge.
+- A front inset on an overlay cabinet pulls only the carcass edges it sits on (first / last column, bottom /
+  top row) in to panel + INSGAP. Seams between fronts keep their gaps; a grip edge keeps its finger gap.
+- Shaped facets keep their frame reveals (no auto inset there).
+- Existing per-front inset (RHK6542 Danny's Robe TC-03, face_ins 3.5) frozen with `ins_rev` 18.5 / 18.5.
+- Hinges: inset doors need full-crank (inset) hinge arms — not in the hinge library yet (Mark to add + GLB).
+  Drawer boxes behind an inset drawer front are not shortened yet — check before using inset drawer fronts.
+- Test: `src/lib/resolver/__tests__/insetFronts.test.ts`. Tutorial owed (event `face_inset_set` is emitted).

@@ -884,7 +884,7 @@ export async function dbUpdateCabinet(
     const cachedR = getCachedInput(id)
     if (cachedR?.rules_base && !cachedR.kick_run) {
       const ov = (u.rule_overrides ?? {}) as Partial<ConstructionRules>
-      const updated = { ...cachedR, rules: mergeRules(cachedR.rules_base, ov) }
+      const updated = { ...cachedR, rules: mergeRules(cachedR.rules_base, ov), cabinet_rules: ov }
       setCachedInput(id, updated)
       return resolveFromCachedInput(id, updated)
     }

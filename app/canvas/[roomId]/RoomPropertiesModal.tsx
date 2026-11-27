@@ -84,6 +84,7 @@ const RULE_LABELS: Record<RuleKey, string> = {
   BINGAP:  'Gap Above Bin (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
+  INSGAP:  'Inset Clearance (mm)',
   ANGLE_JOIN: 'Angled Panel Join',
 }
 
@@ -99,7 +100,7 @@ const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   // Face Reveals (CLASS_RULE_KEYS) render per class — see ClassRulesTable.
   { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ', 'RAILSB', 'RAILSBX', 'RAILSBFR'] },
   { label: 'Bins',               keys: ['BINUP', 'BINGAP'] },
-  { label: 'Face Clearance',    keys: ['FACBUF', 'FACINS'] },
+  { label: 'Face Clearance',    keys: ['FACBUF', 'FACINS', 'INSGAP'] },
   { label: 'Shaped Cabinets',   keys: ['ANGLE_JOIN'] },
 ]
 

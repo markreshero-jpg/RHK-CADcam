@@ -1,4 +1,4 @@
-// RHK6548 Hard Coffee markup (2026-11-27): spec block + SITE NOTES (plan), colour callouts, TBC clouds, site notes (elevation)
+// RHK6548 Hard Coffee markup (2026-11-27; rev 4: cup dispensers out, BC-03 inset): spec block + SITE NOTES (plan), colour callouts, TBC clouds, site notes (elevation)
 // for Water Station / Front Counter / Back Counter / Back Kitchen. Redo removes only its own untouched auto rows.
 import fs from 'node:fs'
 import { createClient } from '@supabase/supabase-js'
@@ -34,16 +34,15 @@ const ROOMS = [
   { R: '09786d9b-378e-42ed-9fc7-1aed4c7b21ab', wall: 'Wall 2', len: 2750, top: 2100, spec: { fronts: OAK, carcass: OAK + ' (exposed interiors)' },
     site: ['SITE NOTES', NOKICK, 'Cabinets 737 + 18 shadowline = 755 overall', 'Stainless top by others', 'Customer-side cladding not included'],
     notes: [
-      [Q, 1500, 1350, 650, 'CUP DISPENSERS - MAKE / MODEL + CUT-OUT SIZES TBC'],
       [Q, 1250, 2000, 600, 'MICROWAVE - MODEL TBC. 320 CLEAR ALLOWED ABOVE FIXED SHELF'],
       [Q, 1000, 1550, 480, '128 HANDLE - MAKE / FINISH TBC'],
       [G, 800, 2700, 746, '18 SHADOWLINE FULL WIDTH - BLONDE OAK. STAINLESS TOP BY OTHERS'],
       [G, 600, 2600, 350, 'OPEN SHELVING + EXPOSED INTERIORS - BLONDE OAK WOODMATT'],
-      [S, 400, 1600, 660, 'DOOR 150 BELOW CABINET TOP - RUBBISH DROP TO BIN BEHIND'],
+      [S, 400, 1600, 660, 'INSET DOOR FLUSH WITH CARCASS, 150 BELOW TOP - RUBBISH DROP'],
       [S, 200, 2400, 110, 'INNER DRAWER - FRONT 25 BELOW SHELF, NO HANDLE'],
       [S, 0, 600, 20, 'SITS ON EXISTING SITE KICK - NO KICK SUPPLIED'],
     ],
-    clouds: [[1260, 360, 1440, 745], [1765, 380, 2235, 735], [1500, 380, 1600, 580]] },
+    clouds: [[1765, 380, 2235, 735], [1500, 380, 1600, 580]] },
   { R: 'd3c04ade-ba07-4462-a40c-2a4bd1952d31', wall: 'Wall 1', len: 600, top: 1300, spec: { fronts: OAK, carcass: WB },
     site: ['SITE NOTES', NOKICK, 'Cabinet 742 + 18 shadowline = 760 overall', 'Stainless top by others', '20 filler to nib wall'],
     notes: [

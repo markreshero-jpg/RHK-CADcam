@@ -12,7 +12,7 @@ import { intElevRect, dbElevRect, slideElevRect, TapePolys } from './cabinetEdit
 import type { EbByMatId } from './useMaterialColours'
 import { normalizeSection } from './InternalGridEditor'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { mergeRules, resolveReveal } from '@/src/lib/resolver/mergeRules'
+import { mergeRules, resolveReveal, insetReveals } from '@/src/lib/resolver/mergeRules'
 import type { ConstructionRules } from '@/src/lib/resolver/types'
 import { handleShapes } from '@/src/lib/handleGeometry'
 import { NO_HANDLE } from '@/src/lib/resolver/resolveHandles'
@@ -108,11 +108,17 @@ function computeDisplay(
   r: ConstructionRules,
   hasToeKick: boolean,
   toeKickH: number,
+  inset?: { left: number; right: number; top: number; bottom: number } | null,
 ): GridDisplay {
   const cabDX = cabinet.dx, cabDY = cabinet.dy
-  const { REVT, REVB, GAPR, GAPC } = r
-  const REVL = resolveReveal('left',  cabinet.left_neighbour_type  ?? 'wall', r)
-  const REVR = resolveReveal('right', cabinet.right_neighbour_type ?? 'wall', r)
+  const { GAPR, GAPC } = r
+  // Inset cabinet (D-INS): the panel + INSGAP reveals unless typed on the cabinet,
+  // same as resolveFace.
+  const own = (cabinet.rule_overrides ?? {}) as Partial<ConstructionRules>
+  const REVT = inset ? (own.REVT ?? inset.top) : r.REVT
+  const REVB = inset ? (own.REVB ?? inset.bottom) : r.REVB
+  const REVL = inset ? (own.REVSL ?? inset.left)  : resolveReveal('left',  cabinet.left_neighbour_type  ?? 'wall', r)
+  const REVR = inset ? (own.REVSR ?? inset.right) : resolveReveal('right', cabinet.right_neighbour_type ?? 'wall', r)
 
   const faceW = cabDX - REVL - REVR
   const faceH = cabDY - (hasToeKick ? toeKickH : 0) - REVT - REVB
@@ -235,7 +241,9 @@ export default function FaceGridEditor({
   // matching the resolved Elevation view. Wall units, kick-run members (their
   // kick belongs to the run) and floating cabinets have none.
   const hasToeKick = (isBase || isTall) && cabinet.has_toekick && !rules.FLOAT
-  const d = computeDisplay(grid, cabinet, rules, hasToeKick, rules.TOEH)
+  const cachedIn = getCachedInput(cabinet.id)
+  const insAuto = rules.FACINS > 0 && cachedIn ? insetReveals(cachedIn, rules) : null
+  const d = computeDisplay(grid, cabinet, rules, hasToeKick, rules.TOEH, insAuto)
 
   async function save(next: FaceGridInput) {
     setGrid(next)
@@ -498,6 +506,33 @@ export default function FaceGridEditor({
     })
     if (key === 'handle_length' && value !== null) useTutorial.getState().emit('handle_length_set')   // tutorial linear_handles
     if (key === 'handle_id' && value === NO_HANDLE) useTutorial.getState().emit('no_handle_set')   // tutorial no_handle
+  }
+
+  // Per-front inset (D-INS): face_ins (absent = the cabinet's, 0 = overlay,
+  // 0.01 = inset flush, more = set back) + ins_rev reveals at the carcass edges.
+  function setZoneInset(rowIdx: number, colIdx: number, faceIns: number | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const rest = { ...z }; delete rest.face_ins
+        if (faceIns === null || faceIns <= 0) delete rest.ins_rev
+        return faceIns === null ? rest : { ...rest, face_ins: faceIns }
+      }),
+    })
+    if (faceIns !== null && faceIns > 0) useTutorial.getState().emit('face_inset_set')   // tutorial inset_fronts
+  }
+  function setZoneInsRev(rowIdx: number, colIdx: number, side: 'left' | 'right' | 'top' | 'bottom', v: number | null) {
+    save({
+      ...grid,
+      zones: grid.zones.map(z => {
+        if (z.row_index !== rowIdx || z.col_index !== colIdx) return z
+        const rev = { ...(z.ins_rev ?? {}) }
+        if (v === null) delete rev[side]; else rev[side] = v
+        const rest = { ...z }; delete rest.ins_rev
+        return Object.keys(rev).length ? { ...rest, ins_rev: rev } : rest
+      }),
+    })
   }
 
   // Per-front VJ line layout (z_doorFace_module VJ cascade). null = inherit.
@@ -1358,6 +1393,86 @@ export default function FaceGridEditor({
 
                   </div>
                 </details>)}
+
+                {/* Inset (D-INS): this front over the carcass or inside the opening.
+                    Inherit = the cabinet's setting. Reveals at the carcass edges
+                    default to the panel there + INSGAP; type one to override. */}
+                {gz.face_type !== 'open' && (() => {
+                  const cabIns = (rules.FACINS ?? 0) > 0
+                  const fi = gz.face_ins
+                  const on = (fi ?? rules.FACINS ?? 0) > 0
+                  const auto = cachedIn ? insetReveals(cachedIn, rules) : null
+                  const edges = ([
+                    ['left', 'Left', gz.col_index === 0],
+                    ['right', 'Right', gz.col_index === grid.cols.length - 1],
+                    ['bottom', 'Bottom', gz.row_index === 0],
+                    ['top', 'Top', gz.row_index === grid.rows.length - 1],
+                  ] as const).filter(e => e[2])
+                  return (
+                    <details open={on} className="rounded border border-gray-700 bg-gray-900/40" data-tour="door-face-inset">
+                      <summary className="cursor-pointer select-none px-2 py-1.5 text-gray-200 font-medium">Inset{on ? ' — on' : ''}</summary>
+                      <div className="px-2 pb-2 space-y-2">
+                        <select
+                          value={fi == null ? '' : fi > 0 ? 'inset' : 'overlay'}
+                          onChange={e => {
+                            const v = e.target.value
+                            setZoneInset(gz.row_index, gz.col_index, v === '' ? null : v === 'overlay' ? 0 : (fi && fi > 0 ? fi : 0.01))
+                          }}
+                          className={inp.replace(' text-right', '')}>
+                          <option value="">Inherit cabinet ({cabIns ? 'Inset' : 'Overlay'})</option>
+                          <option value="overlay">Overlay</option>
+                          <option value="inset">Inset</option>
+                        </select>
+                        {on && (<>
+                          <div className="flex items-center gap-1">
+                            <span className="text-gray-500 text-[13px] w-28 shrink-0">Set back</span>
+                            <input
+                              key={`fi-${gz.row_index}-${gz.col_index}-${fi ?? ''}`}
+                              type="number" step={0.5}
+                              defaultValue={fi != null && fi >= 0.1 ? fi : ''}
+                              placeholder={(fi ?? rules.FACINS) >= 0.1 ? String(fi ?? rules.FACINS) : 'Flush'}
+                              title="How far the front face sits back from the carcass front. Blank = flush."
+                              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                              onBlur={e => {
+                                const v = parseFloat(e.target.value)
+                                const next = isNaN(v) || v < 0.1 ? 0.01 : v
+                                if (next !== fi) setZoneInset(gz.row_index, gz.col_index, next)
+                              }}
+                              className={inp} />
+                            <span className="text-gray-600 text-xs shrink-0">mm</span>
+                          </div>
+                          {edges.length > 0 && <p className="text-gray-600 text-xs">Reveals at the carcass (blank = panel + {rules.INSGAP ?? 2})</p>}
+                          {edges.map(([side, label]) => {
+                            const cur = gz.ins_rev?.[side]
+                            return (
+                              <div key={side} className="flex items-center gap-1">
+                                <span className="text-gray-500 text-[13px] w-28 shrink-0">{label}</span>
+                                <input
+                                  key={`ir-${side}-${gz.row_index}-${gz.col_index}-${cur ?? ''}`}
+                                  type="number" step={0.5} defaultValue={cur ?? ''}
+                                  placeholder={auto ? String(auto[side]) : ''}
+                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                                  onBlur={e => {
+                                    const v = parseFloat(e.target.value)
+                                    const next = isNaN(v) ? null : v
+                                    if (next !== (cur ?? null)) setZoneInsRev(gz.row_index, gz.col_index, side, next)
+                                  }}
+                                  className={`${inp}${cur != null ? ' !border-amber-500 !text-amber-300' : ''}`} />
+                                <span className="text-gray-600 text-xs shrink-0">mm</span>
+                                {cur != null && (
+                                  <button type="button" title="Back to panel + clearance"
+                                    onClick={() => setZoneInsRev(gz.row_index, gz.col_index, side, null)}
+                                    className="text-amber-400 hover:text-amber-200 text-[13px] shrink-0">↺</button>
+                                )}
+                              </div>
+                            )
+                          })}
+                          <p className="text-gray-600 text-xs">Inset doors need full-crank (inset) hinges.</p>
+                        </>)}
+                      </div>
+                    </details>
+                  )
+                })()}
 
                 {gz.face_type !== 'open' && (<details open className="rounded border border-gray-700 bg-gray-900/40">
                   <summary className="cursor-pointer select-none px-2 py-1.5 text-gray-200 font-medium">Style and colour</summary>

@@ -6,7 +6,7 @@ import { supabase } from '@/src/lib/supabase'
 import { Room, Wall, CabinetInstance, NeighbourType, TopType, BottomType, ToeType } from '@/src/lib/types'
 import { cabT, findFreeSlot, cabsBlock, cabBottomZ, wallZOf, slideAlongWall, cabWallGap, cabWallSide, wallAnchorPoint, type RoomRef } from '@/src/lib/geometry'
 import { getCachedInput } from '@/src/lib/resolver/resolveCabinetFromDB'
-import { resolveReveal } from '@/src/lib/resolver/mergeRules'
+import { resolveReveal, insetReveals } from '@/src/lib/resolver/mergeRules'
 import { DEFAULT_RULES, type ConstructionRules } from '@/src/lib/resolver/types'
 import type { NeighbourPair } from '@/src/lib/neighbours'
 import { useTutorial } from '@/src/lib/tutorial/store'
@@ -372,17 +372,52 @@ export default function CabinetPanel({ cabinet, wall, wallCabinets, room, roomRe
             if (v === undefined) delete next[key]; else next[key] = v
             void onUpdate(cabinet.id, { rule_overrides: next })
           }
+          // Inset fronts (D-INS): FACINS > 0 sits the fronts inside the opening and
+          // the reveals default to the panel at each edge + INSGAP (shown greyed).
+          // 0.01 = flush with the carcass front; more = set back that far.
+          const inset = (base.FACINS ?? 0) > 0
+          const insetOwn = typeof ov.FACINS === 'number'
+          const cached = getCachedInput(cabinet.id)
+          const insAuto = cached ? insetReveals(cached, base) : null
           const fields: { key: string; label: string; inherited: number }[] = [
-            { key: 'REVT',  label: 'Top',    inherited: base.REVT },
-            { key: 'REVB',  label: 'Bottom', inherited: base.REVB },
+            { key: 'REVT',  label: 'Top',    inherited: inset && insAuto ? insAuto.top : base.REVT },
+            { key: 'REVB',  label: 'Bottom', inherited: inset && insAuto ? insAuto.bottom : base.REVB },
             { key: 'GAPC',  label: 'Door gap',   inherited: base.GAPC },
-            { key: 'REVSL', label: 'Left',   inherited: resolveReveal('left',  cabinet.left_neighbour_type  ?? 'wall', { ...base, REVSL: undefined }) },
-            { key: 'REVSR', label: 'Right',  inherited: resolveReveal('right', cabinet.right_neighbour_type ?? 'wall', { ...base, REVSR: undefined }) },
+            { key: 'REVSL', label: 'Left',   inherited: inset && insAuto ? insAuto.left : resolveReveal('left',  cabinet.left_neighbour_type  ?? 'wall', { ...base, REVSL: undefined }) },
+            { key: 'REVSR', label: 'Right',  inherited: inset && insAuto ? insAuto.right : resolveReveal('right', cabinet.right_neighbour_type ?? 'wall', { ...base, REVSR: undefined }) },
             { key: 'GAPR',  label: 'Row gap',    inherited: base.GAPR },
           ]
+          const inheritedIns = (cached?.rules_base?.FACINS ?? 0) > 0
           return (
             <div>
-              <p className={lbl}>Reveals (mm)</p>
+              <p className={lbl}>Fronts</p>
+              <div className="grid grid-cols-2 gap-1.5 mb-2" data-tour="cabinet-face-inset">
+                <select
+                  value={!insetOwn ? '' : (ov.FACINS as number) > 0 ? 'inset' : 'overlay'}
+                  onChange={e => {
+                    const v = e.target.value
+                    patch('FACINS', v === '' ? undefined : v === 'overlay' ? 0 : (inset && base.FACINS > 0 ? base.FACINS : 0.01))
+                    if (v === 'inset') useTutorial.getState().emit('face_inset_set')   // tutorial inset_fronts
+                  }}
+                  title="Inset = fronts sit inside the opening, reveals = panel + clearance. Overlay = over the carcass."
+                  className={inp}>
+                  <option value="">Inherit ({inheritedIns ? 'Inset' : 'Overlay'})</option>
+                  <option value="overlay">Overlay</option>
+                  <option value="inset">Inset</option>
+                </select>
+                {inset && (
+                  <CalcInput
+                    value={insetOwn && (ov.FACINS as number) >= 0.1 ? ov.FACINS as number : null}
+                    decimals={1}
+                    placeholder={base.FACINS < 0.1 ? 'Flush' : `Set back ${base.FACINS}`}
+                    title="How far the front face sits back from the carcass front. Blank / 0 = flush."
+                    onCommit={v => patch('FACINS', v && v >= 0.1 ? v : 0.01)}
+                    onClear={() => patch('FACINS', 0.01)}
+                    className={inp + ' text-right'}
+                  />
+                )}
+              </div>
+              <p className={lbl}>Reveals (mm){inset ? ' — inset: panel + ' + (base.INSGAP ?? 2) : ''}</p>
               <div className="grid grid-cols-3 gap-1">
                 {fields.map(({ key, label, inherited }) => {
                   const cur = typeof ov[key] === 'number' ? ov[key] as number : null

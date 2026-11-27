@@ -1069,6 +1069,7 @@ export async function loadCabinetInputFromRow(cab: any, opts: { persisted?: bool
     hardware_overrides:        (cab.hardware_overrides ?? {}) as Record<string, unknown>,
     rules,
     rules_base:                rulesBase,
+    cabinet_rules:             (cab.rule_overrides ?? {}) as Partial<ConstructionRules>,
     carcase_joints:   cabJoints,
     joint_defaults:   jointDefaults,
     joint_type_ops:   jointTypeOps,

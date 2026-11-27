@@ -66,6 +66,7 @@ export const RULE_LABELS: Record<RuleKey, string> = {
   BINGAP:  'Gap Above Bin (mm)',
   FACBUF:  'Face Buffer (mm)',
   FACINS:  'Face Inset (mm)',
+  INSGAP:  'Inset Clearance (mm)',
   BOTTOM_JOIN:      'Bottom Join',
   BOTTOM_BACK_JOIN: 'Bottom / Back Join',
   BACK_JOIN:        'Back Join',
@@ -86,7 +87,7 @@ export const RULE_GROUPS: { label: string; keys: RuleKey[] }[] = [
   { label: 'Face Reveals',       keys: ['REVT', 'REVB', 'REVL', 'REVR', 'REVENDL', 'REVENDR', 'GAPC', 'GAPR', 'FPGAP'] },
   { label: 'Finger Pull Rails', keys: ['RAILH', 'RAILUP', 'RAILCUT', 'RAILBLK', 'RAILBLKD', 'RAILBLKZ', 'RAILSB', 'RAILSBX', 'RAILSBFR'] },
   { label: 'Bins',               keys: ['BINUP', 'BINGAP'] },
-  { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS'] },
+  { label: 'Face Clearance',     keys: ['FACBUF', 'FACINS', 'INSGAP'] },
   { label: 'Joinery',            keys: ['BOTTOM_JOIN', 'BOTTOM_BACK_JOIN', 'BACK_JOIN', 'TOP_BACK_JOIN', 'RAIL_JOIN', 'ANGLE_JOIN'] },
 ]
 

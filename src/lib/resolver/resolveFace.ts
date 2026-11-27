@@ -9,7 +9,7 @@ import {
   FaceRowInput, FaceColInput, FaceZoneInput,
   edgeSidesToBanding, DEFAULT_EDGING, EdgingDefaults
 } from './types'
-import { resolveReveal, resolveFaceZ } from './mergeRules'
+import { resolveReveal, resolveFaceZ, insetReveals, cabinetRuleLayer, InsetSide } from './mergeRules'
 import { evaluateProfileOps, mergeVjLayout } from '../doorProfile'
 import { fingerGap } from './resolveHandles'
 
@@ -61,8 +61,19 @@ export function resolveFace(
   const FT  = cab.door_material.DZ   // face material thickness
 
   // ── Resolve reveals ───────────────────────────────────────────
-  const revL = frame ? frame.revL : resolveReveal('left',  cab.left_neighbour,  r)
-  const revR = frame ? frame.revR : resolveReveal('right', cab.right_neighbour, r)
+  // Inset fronts (D-INS): a cabinet whose FACINS > 0 lays its grid out inside
+  // the opening — each edge's reveal is the panel there + INSGAP — unless a
+  // reveal is typed on this cabinet. Job / room reveals are overlay reveals, so
+  // they don't apply. Shaped facets keep their own frame reveals.
+  const cabInset = !frame && r.FACINS > 0
+  const ins = !frame ? insetReveals(cab, r) : null
+  const cov = cabinetRuleLayer(cab)
+  const revL = frame ? frame.revL
+    : cabInset ? (cov.REVSL ?? ins!.left)
+    : resolveReveal('left',  cab.left_neighbour,  r)
+  const revR = frame ? frame.revR
+    : cabInset ? (cov.REVSR ?? ins!.right)
+    : resolveReveal('right', cab.right_neighbour, r)
   // ── Finger gaps (z_handles D4) ────────────────────────────────
   // A front whose grip needs finger room (sharknose, rail) gets the FPGAP
   // finger gap at its grip edge instead of the usual reveal / row gap. Rows run
@@ -84,8 +95,8 @@ export function resolveFace(
     m.set(zn.row_index, Math.max(m.get(zn.row_index) ?? 0, fg.gap))
   }
   const topRow = cab.face_grid.rows.length - 1
-  const revT = fgAbove.get(topRow) ?? r.REVT
-  const revB = fgBelow.get(0)      ?? r.REVB
+  const revT = fgAbove.get(topRow) ?? (cabInset ? (cov.REVT ?? ins!.top)    : r.REVT)
+  const revB = fgBelow.get(0)      ?? (cabInset ? (cov.REVB ?? ins!.bottom) : r.REVB)
   /** Gap between row i and row i + 1. */
   const rowGap = (i: number) => {
     const a = fgAbove.get(i), b = fgBelow.get(i + 1)
@@ -224,9 +235,9 @@ export function resolveFace(
       continue
     }
 
-    const zoneW  = col.width
+    let   zoneW  = col.width
     let   zoneH  = row.height
-    const zoneX  = colOffsets[zone.col_index]
+    let   zoneX  = colOffsets[zone.col_index]
     let   zoneY  = rowOffsets[zone.row_index]
 
     // A front wanting a smaller finger gap than its seam was laid out at grows
@@ -240,6 +251,34 @@ export function resolveFace(
       if (extra > EPS) {
         zoneH += extra
         if (fg.edge === 'bottom') zoneY -= extra
+      }
+    }
+
+    // Inset front at the carcass edges (D-INS): a front set inset on its own
+    // (face_ins > 0 on an overlay cabinet) pulls each carcass edge it sits on in
+    // to the panel there + INSGAP; ins_rev overrides any edge, on an inset
+    // cabinet too. Inner seams (between fronts) keep their gaps; a grip edge
+    // keeps its finger gap.
+    if (ins && (zone.face_ins ?? r.FACINS) > 0) {
+      const edgeRev: Record<InsetSide, number> = { left: revL, right: revR, top: revT, bottom: revB }
+      const atEdge: Record<InsetSide, boolean> = {
+        left: zone.col_index === 0, right: zone.col_index === nCols - 1,
+        bottom: zone.row_index === 0, top: zone.row_index === topRow,
+      }
+      for (const side of ['left', 'right', 'top', 'bottom'] as InsetSide[]) {
+        if (!atEdge[side] || fg?.edge === side) continue
+        const own = zone.ins_rev?.[side]
+        if (own == null && cabInset) continue
+        const d = (own ?? ins[side]) - edgeRev[side]
+        if (Math.abs(d) < EPS) continue
+        if (side === 'left')   { zoneX += d; zoneW -= d }
+        if (side === 'right')  zoneW -= d
+        if (side === 'bottom') { zoneY += d; zoneH -= d }
+        if (side === 'top')    zoneH -= d
+      }
+      if (zoneW <= 0 || zoneH <= 0) {
+        errors.push({ code: 'FACE_INSET_TOO_SMALL', message: `Inset front [${zone.row_index},${zone.col_index}] has no size left after its reveals`, part: 'face_zone' })
+        continue
       }
     }
 

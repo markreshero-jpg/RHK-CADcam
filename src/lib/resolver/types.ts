@@ -251,7 +251,12 @@ export interface ConstructionRules {
 
   // Face position
   FACBUF:   number   // buffer pad clearance (overlay mode)
-  FACINS:   number   // inset depth (0 = overlay)
+  FACINS:   number   // inset depth (0 = overlay; 0.01 = inset, front flush with the carcass)
+  // Inset fronts (z_doorFace_module D-INS): clearance between an inset front and
+  // the panel it sits against. The front's reveals default to that panel's
+  // thickness + INSGAP (gable / bottom / top or rail); a cabinet REVSL / REVSR /
+  // REVT / REVB or a front's ins_rev overrides them.
+  INSGAP:   number
 
   // Handles (z_handles D13): drill handle holes. Unset = true. Set false at
   // job / room / cabinet via rule_overrides; a front can override it again.
@@ -338,7 +343,7 @@ export const DEFAULT_RULES: ConstructionRules = {
   REVENDL: 2, REVENDR: 2, GAPC: 2, GAPR: 2, FPGAP: 20, RAILH: 45, RAILUP: 5, RAILCUT: 5, RAILBLK: 15, RAILBLKD: 10, RAILBLKZ: 12,
   RAILSB: 16.5, RAILSBX: 10, RAILSBFR: 50,
   BINUP: 140, BINGAP: 10,
-  FACBUF: 2, FACINS: 0,
+  FACBUF: 2, FACINS: 0, INSGAP: 2,
   BOTTOM_JOIN: 'sides_outside', BOTTOM_BACK_JOIN: 'back_on_bottom',
   BACK_JOIN: 'between_sides', TOP_BACK_JOIN: 'butts_into_back', RAIL_JOIN: 'between_sides',
   ANGLE_JOIN: 'butt_bevel',
@@ -945,6 +950,10 @@ export interface CabinetInput {
   // instead of reloading the whole cascade — see dbUpdateCabinet's fast path.
   // Only set by loadCabinetInput; the resolver itself never reads it.
   rules_base?:     ConstructionRules
+  // The cabinet's own rule_overrides layer on its own. Inset fronts use it to tell
+  // a reveal typed on this cabinet (wins) from a job / room overlay reveal (the
+  // inset reveal replaces it). Set by loadCabinetInput + the rule-override fast path.
+  cabinet_rules?:  Partial<ConstructionRules>
 
   // Joint assignments (resolved before passing to resolver)
   carcase_joints?:   Record<string, SeamJointAssign> // per-cabinet overrides: seamKey → joint/suppress/rows (see SeamJointAssign)
@@ -1340,8 +1349,11 @@ export interface FaceZoneInput {
   col_index:  number
   face_type:  'door' | 'drawer_face' | 'false_panel' | 'open'
   hinge_side?: 'left' | 'right' | 'top' | 'bottom'
-  face_ins?:  number   // per-zone inset override
+  face_ins?:  number   // per-zone inset override (0 = overlay, > 0 = inset; 0.01 = flush)
   face_buf?:  number   // per-zone buffer override
+  // Inset front's own reveals at the carcass edges (left / right = first / last
+  // column, bottom / top = first / last row). Unset = the panel there + INSGAP.
+  ins_rev?:   { left?: number; right?: number; top?: number; bottom?: number }
   drawer_type_config?: DrawerTypeConfig  // only used when face_type === 'drawer_face'
   // Per-drawer box raise (mm, − = down): moves the runners + box (and the
   // front-fixing hole datum) on top of DB_RUNNER_RAISE. A drop may take the box
