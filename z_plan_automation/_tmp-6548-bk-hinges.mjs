@@ -1,5 +1,5 @@
 // RHK6548 BK TC-01 (Mark 2026-11-27): hinges re-set after the 665 widen - stale locked rows had the top hinge at 1650.
-// Manual hinges on both doors, top one 100 from the 2320 door top.  node _tmp-6548-bk-hinges.mjs "100,560,1050,1650,2220"
+// Manual hinges on both doors: 4, 100 from top + bottom, middles clear of the shelf-hole banks (Mark).  node _tmp-6548-bk-hinges.mjs "100,880,1420,2220"
 import fs from 'node:fs'
 import puppeteer from 'puppeteer-core'
 import { createClient } from '@supabase/supabase-js'
@@ -9,7 +9,7 @@ await sb.auth.signInWithPassword({ email: env.AUTOMATION_EMAIL, password: env.AU
 const chk = (w, r) => { if (r.error) throw new Error(w + ': ' + r.error.message); return r.data }
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const BK = 'e8b3c950-5be5-4e4a-9117-451395e9d2a1'
-const H = (process.argv[2] ?? '100,560,1050,1650,2220').split(',').map(Number)
+const H = (process.argv[2] ?? "100,880,1420,2220").split(',').map(Number)
 const c = chk('c', await sb.from('cabinet_instances').select('id,face_grid').eq('room_id', BK).eq('label', 'TC-01').single())
 const fg = structuredClone(c.face_grid); fg.zones = fg.zones.map(z => z.face_type === 'door' ? { ...z, hinges: H } : z)
 chk('fg', await sb.from('cabinet_instances').update({ face_grid: fg }).eq('id', c.id))
