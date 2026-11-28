@@ -729,6 +729,15 @@ blocks (Mark: later).
   deleting walls is still hand work), clockwise, Wall N names. Checked headless (AI Sketch
   Test): "900 wall from the end of Wall 2, turning left" → Wall 4 900 @ 180° from 1720,-630;
   applied + undone. Vaguer asks ("carrying on from Wall 2") get a which-way question.
+- **R5 copy cabinets from another room (built):** "once the vanity's right we'll duplicate it
+  for the Ensuite" — no tool could. `copy` step {from_room, labels, wall, offset?}: the source
+  rows as the canvas paste does (all settings; grain group + kick run cleared) placed along the
+  wall here at the same spacing (and stand-off), then `dbCopyCabinetChildren` (custom parts,
+  shapes, drilling, hides) instead of the definition's parts; overlap check as place; one wall
+  face at a time; warns that fixtures on them and joined kicks don't come across. Walls first in
+  the same change when the room has none. Checked headless: empty RHK1234 room ← AI Sketch Test
+  "duplicate the overheads and base run, same walls" → 3 walls, top line 2340 (to match), 6
+  copies @ the same offsets with their fronts / handles, check ✓; undone (the empty "AI Copy Test" room is left in RHK1234).
 
 ## Open items (check while building)
 

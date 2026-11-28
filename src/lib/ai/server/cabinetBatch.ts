@@ -19,10 +19,10 @@ import { detectNeighbours } from '@/src/lib/neighbours'
 import { panelLinkSignature } from '@/src/lib/rangehoodLink'
 import { carcassesOverPanel, isUnderPanel, underPanelRun, UNDER_PANEL_DEF, withoutScribe } from '@/src/lib/underPanel'
 import { loadCabinetInputFromRow } from '@/src/lib/resolver/loadCabinetInput'
-import { cabBottomZ, centroid, nextLabel, wallAnchorPoint, wallCabTop, wallDir } from '@/src/lib/geometry'
+import { cabBottomZ, cabT, cabWallGap, cabWallSide, centroid, nextLabel, wallAnchorPoint, wallCabTop, wallDir } from '@/src/lib/geometry'
 import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
 import { parseKit } from '@/src/lib/cabinetKit'
-import { buildInstanceFromDefinition, dbInsertDefinitionParts } from '@/app/canvas/[roomId]/canvasDB'
+import { buildInstanceFromDefinition, dbCopyCabinetChildren, dbInsertDefinitionParts } from '@/app/canvas/[roomId]/canvasDB'
 import { matchCabinets, patchFor, validateChanges, ROLE_KEY, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { wallOffset } from '../roomSummary'
 import { ensureJobCadLayers } from '@/src/lib/annotations/cadLayers'
@@ -75,6 +75,10 @@ export type BatchOp =
    *  kick), board thickness from their exposed board, and a bottom scribe of that on each.
    *  set_back = mm its front sits behind theirs (dz less). */
   | { op: 'under_panel'; labels: string[]; set_back?: number; thickness?: number }
+  /** Copy cabinets from another room of the job onto a wall here (as the canvas's copy / paste:
+   *  every setting, custom parts, shapes, drilling), keeping their spacing. offset = where the
+   *  first one starts on `wall` (default: the same offset as in the source room). */
+  | { op: 'copy'; from_room: string; labels: string[]; wall: string; offset?: number }
 
 export type MarkupLayer = 'general' | 'questions' | 'site' | 'electrical'
 export interface MarkupNote {
@@ -275,7 +279,9 @@ export async function findHandleSchedule(name: string): Promise<{ id: string; na
 
 type PlannedStep =
   | { kind: 'update'; id: string; patch: Fields }
-  | { kind: 'insert'; tempId: string; row: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>; defId: string; line: string }
+  | { kind: 'insert'; tempId: string; row: Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>; defId: string; line: string
+      /** A copy: its custom parts / shapes / drilling come from this cabinet, not the definition. */
+      copyFrom?: string }
   | { kind: 'delete'; id: string; line: string }
   | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
   | { kind: 'wall'; tempId: string; row: Omit<Wall, 'id' | 'created_at'>; line: string }
@@ -673,6 +679,61 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           if (keep.length) warnings.push(`${keep.join(', ')} ${keep.length === 1 ? 'has its' : 'have their'} own ${CLASS_WORD[cls!]} ${ROLE_WORD[key]} — unchanged there.`)
         }
       }
+    } else if (op.op === 'copy') {
+      const { data: srcRoom } = await supabase.from('rooms').select('id, name').eq('project_id', room.project_id).ilike('name', (op.from_room ?? '').trim()).maybeSingle()
+      if (!srcRoom) { problems.push(`${n}: no room "${op.from_room}" in this job.`); continue }
+      if (srcRoom.id === room.id) { problems.push(`${n}: that's this room — use place / update here.`); continue }
+      const wall = walls.find(x => x.name.toLowerCase() === (op.wall ?? '').trim().toLowerCase())
+      if (!wall) { problems.push(`${n}: say which wall here to copy onto (${walls.map(w => w.name).join(', ') || 'this room has no walls yet — add them first'}).`); continue }
+      const [{ data: sc }, { data: sw }] = await Promise.all([
+        supabase.from('cabinet_instances').select('*').eq('room_id', srcRoom.id),
+        supabase.from('walls').select('*').eq('room_id', srcRoom.id),
+      ])
+      const srcCabs = (sc ?? []) as CabinetInstance[], srcWalls = (sw ?? []) as Wall[]
+      const want = new Set((op.labels ?? []).map(l => String(l).trim().toLowerCase()))
+      const picked = srcCabs.filter(c => want.has((c.label ?? '').toLowerCase()))
+      const missing = [...want].filter(l => !picked.some(c => (c.label ?? '').toLowerCase() === l))
+      if (!want.size || missing.length) { problems.push(`${n}: ${srcRoom.name} has no ${missing.join(', ') || 'labels given'} (it has ${srcCabs.filter(c => !c.is_kick_assembly).map(c => c.label).join(', ')}).`); continue }
+      const kick = picked.filter(c => c.is_kick_assembly)
+      if (kick.length) { problems.push(`${n}: ${kick.map(c => c.label).join(', ')} ${kick.length === 1 ? 'is a joined kick' : 'are joined kicks'} — leave ${kick.length === 1 ? 'it' : 'them'} out and join the kick again here.`); continue }
+      const sWall = srcWalls.find(w => w.id === picked[0].wall_id)
+      if (!sWall || picked.some(c => c.wall_id !== sWall.id || cabWallSide(c, sWall) !== 'face')) { problems.push(`${n}: copy cabinets from one wall's face at a time.`); continue }
+      const sorted = [...picked].sort((a, b) => cabT(a, sWall) - cabT(b, sWall))
+      const baseT = cabT(sorted[0], sWall)
+      const start = op.offset ?? Math.round(baseT)
+      const end = start + Math.max(...sorted.map(c => cabT(c, sWall) - baseT + c.dx))
+      if (start < 0 || end > wall.length + 1) { problems.push(`${n}: they run ${Math.round(start)}–${Math.round(end)}, past ${wall.name} (${Math.round(wall.length)} long).`); continue }
+      const sRef = centroid(srcWalls), ref = centroid(walls)
+      const { data: srcDefs } = await supabase.from('cabinet_definitions').select('id, name').in('id', [...new Set(sorted.map(c => c.cabinet_definition_id).filter((x): x is string => !!x))])
+      for (const d of (srcDefs ?? []) as { id: string; name: string }[]) defNames.set(d.id, d.name)
+      const added: string[] = []
+      for (const src of sorted) {
+        const t = start + (cabT(src, sWall) - baseT)
+        const p = wallAnchorPoint(wall, t, false, ref, cabWallGap(src, sWall, sRef))
+        const label = nextLabel(cabs, src.assembly_class)
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { id, created_at, updated_at, ...rest } = src
+        const row = { ...rest, room_id: room.id, wall_id: wall.id, label, pos_x: p.x, pos_y: p.y, rotation: wall.angle,
+          grain_match_group_id: null, kick_run_id: null } as Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>
+        const tempId = `new:${steps.length}`
+        const code = (src.cabinet_definition_id && defNames.get(src.cabinet_definition_id)) || ''
+        const line = `Add ${label} (copy of ${srcRoom.name} ${src.label}${code ? `, ${code}` : ''}, ${Math.round(src.dx)}×${Math.round(src.dy)}×${Math.round(src.dz)}) on ${wall.name} @ ${Math.round(t)}`
+        steps.push({ kind: 'insert', tempId, row, defId: src.cabinet_definition_id ?? '', line, copyFrom: src.id })
+        lines.push(line); added.push(label)
+        // Same overlap check as place.
+        const z0 = cabBottomZ(row as CabinetInstance, room, wall), z1 = z0 + row.dy
+        const hit = cabs.filter(x => x.wall_id === wall.id && !x.is_kick_assembly && x.rotation === row.rotation).filter(x => {
+          const o = wallOffset(x, wall), xz = cabBottomZ(x, room, wall)
+          return o < t + row.dx - 1 && o + x.dx > t + 1 && xz < z1 - 1 && xz + x.dy > z0 + 1
+        })
+        if (hit.length) warnings.push(`${label} overlaps ${hit.map(x => x.label).join(', ')} — move them first, or check it.`)
+        cabs.push({ ...(row as CabinetInstance), id: tempId, created_at: '', updated_at: '' })
+      }
+      // What doesn't come across.
+      const fx = await supabase.from('room_fixtures').select('cabinet_id').in('cabinet_id', sorted.map(c => c.id))
+      const withFx = new Set(((fx.data ?? []) as { cabinet_id: string }[]).map(f => f.cabinet_id))
+      if (withFx.size) warnings.push(`Fixtures on ${sorted.filter(c => withFx.has(c.id)).map(c => c.label).join(', ')} (sink / basin / appliance) aren't copied — add them here with a fixture step.`)
+      if (sorted.some(c => c.kick_run_id)) warnings.push(`The joined kick under them isn't copied — join the kick on ${added.join(', ')} here.`)
     } else if (op.op === 'under_panel') {
       const sel: CabinetInstance[] = []
       for (const l of op.labels ?? []) {
@@ -1028,7 +1089,8 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       const c = data as CabinetInstance
       idFor.set(s.tempId, c.id)
       rows.set(c.id, c)
-      await dbInsertDefinitionParts(s.defId, c.id)   // end panels / fillers that come with it
+      if (s.copyFrom) await dbCopyCabinetChildren(s.copyFrom, c.id)   // as the canvas paste
+      else await dbInsertDefinitionParts(s.defId, c.id)   // end panels / fillers that come with it
       entries.push({ kind: 'insert', cabinet_id: c.id, label: c.label, line: s.line })
       touched.add(c.id)
     } else {
