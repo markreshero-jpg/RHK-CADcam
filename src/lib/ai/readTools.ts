@@ -60,7 +60,7 @@ export const READ_TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'find_material',
-    description: 'Search the board colours (materials) by name, colour or brand, e.g. "walnut", "boston oak", "whiteboard 16.5", "teak 33". Returns name | thickness. Use the exact name in change_cabinets.',
+    description: 'Search the board colours (materials) by name, colour or brand, e.g. "walnut", "boston oak", "whiteboard 16.5", "teak 33". Returns name | thickness | note. A board marked "board only = colour TBC" has colours under it ("<board> – White" …): pick the board itself when the colour is TBC, a colour when the user names one. Use the exact name in change_cabinets.',
     input_schema: {
       type: 'object',
       properties: { search: { type: 'string' } },
@@ -280,7 +280,16 @@ async function findMaterialTool(input: { search?: string }): Promise<string> {
   if (!q) return 'Give a colour or board name to search for.'
   const hits = await searchMaterials(q)
   if (!hits.length) return `No board matches "${q}". Try fewer words.`
-  return ['name | thickness', ...hits.slice(0, 25).map(h => `${h.name} | ${r(h.dz)}`), ...(hits.length > 25 ? [`…and ${hits.length - 25} more — narrow it.`] : [])].join('\n')
+  // Colour ranges (z_ai_helper R2): a board with colours under it, picked as itself, = colour TBC.
+  const { data: kids } = await supabase.from('materials').select('parent_id, colour_name, is_default_colour').eq('active', true).in('parent_id', hits.slice(0, 25).map(h => h.id))
+  const range = new Map<string, { n: number; def: string | null }>()
+  for (const k of (kids ?? []) as { parent_id: string; colour_name: string | null; is_default_colour: boolean }[]) {
+    const e = range.get(k.parent_id) ?? { n: 0, def: null }
+    e.n++; if (k.is_default_colour) e.def = k.colour_name
+    range.set(k.parent_id, e)
+  }
+  const note = (id: string) => { const e = range.get(id); return e ? ` | board only = colour TBC (${e.n} colours; shows ${e.def ?? 'its default'} until one is picked)` : '' }
+  return ['name | thickness | note', ...hits.slice(0, 25).map(h => `${h.name} | ${r(h.dz)}${note(h.id)}`),...(hits.length > 25 ? [`…and ${hits.length - 25} more — narrow it.`] : [])].join('\n')
 }
 
 async function findFixture(input: { search?: string }): Promise<string> {

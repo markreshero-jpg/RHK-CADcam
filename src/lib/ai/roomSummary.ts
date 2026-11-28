@@ -82,6 +82,14 @@ export function formatRoomSummary(d: RoomSummaryData): string {
     ].join(' | '))
   }
 
+  // Colour TBC (z_ai_helper R2): a board with colours picked without one resolves in its
+  // default colour (e.g. White) with a COLOUR_NOT_CHOSEN warning — that is "colour TBC", not White.
+  const tbc = colourTbc(d.cabinets)
+  if (tbc.length) {
+    lines.push('', 'Colour TBC (board chosen, colour not picked yet — drawn in its default colour until it is; that is NOT a chosen colour):')
+    for (const t of tbc) lines.push(`${t.what}: ${t.board}, showing ${t.shows} (${t.labels.join(', ')})`)
+  }
+
   if (d.fixtures.length) {
     lines.push('', 'Fixtures (name | on cabinet):')
     const labelById = new Map(d.cabinets.map(c => [c.id, c.label]))
@@ -106,6 +114,25 @@ export function formatRoomSummary(d: RoomSummaryData): string {
     }
   }
   return lines.join('\n')
+}
+
+/** COLOUR_NOT_CHOSEN warnings from each cabinet's last resolve, grouped by part + board. */
+export function colourTbc(cabs: { label: string | null }[]) {
+  const by = new Map<string, { what: string; board: string; shows: string; labels: string[] }>()
+  for (const c of cabs) {
+    const ws = ((c as { resolved_drawer_hw?: unknown }).resolved_drawer_hw as { warnings?: { code?: string; message?: string }[] } | null)?.warnings ?? []
+    for (const w of ws) {
+      if (w.code !== 'COLOUR_NOT_CHOSEN' || !w.message) continue
+      // "Doors: Satin Board 18mm has colours but none was chosen. Using the default, White."
+      const m = /^([^:]+):\s*(.+?) has colours but none was chosen\.\s*Using the default, ([^.]+)\./.exec(w.message)
+      if (!m) continue
+      const k = `${m[1]}|${m[2]}`
+      const e = by.get(k) ?? { what: m[1], board: m[2], shows: m[3], labels: [] }
+      if (c.label && !e.labels.includes(c.label)) e.labels.push(c.label)
+      by.set(k, e)
+    }
+  }
+  return [...by.values()]
 }
 
 /** Load everything formatRoomSummary needs for one room (8 reads, run in parallel where possible). */

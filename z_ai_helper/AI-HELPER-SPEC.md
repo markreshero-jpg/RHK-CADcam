@@ -708,6 +708,15 @@ blocks (Mark: later).
     overheads, set back 20, scribe on the bottoms" → WC-04 WUP 1970×16.5×280 @ 805, underside
     1640 (= WC-02/03), SCRBT 16.5 on both. RHK6596 Laundry WC-04 fixed: pos_z 0 → 1353 (WALLZ
     cleared), as an AI batch (Undo-able).
+- **R2 colour TBC (built):** a board with a colour range picked as itself ("Satin Board 18mm")
+  resolves in its default colour (White) with COLOUR_NOT_CHOSEN — that IS colour TBC. The chat
+  didn't know: it called it "not 2pac", then set the job to "– White" outright. Now the room
+  summary lists "Colour TBC" (part · board · showing · labels) from each cabinet's resolve
+  warnings (`colourTbc`); find_material marks such boards "board only = colour TBC (N colours;
+  shows White…)"; chat + check prompts say keep the board on its own until a colour is named and
+  copy specs room → room as-is. Checked headless: "all fronts 18mm 2pac, colour TBC" → Satin Board
+  18mm + TBC cloud, check ✓ "colour TBC (showing White)". RHK6596 job fronts + exposed
+  "– White" → "Satin Board 18mm" (batch 55700e51), matching the Laundry's.
 
 ## Open items (check while building)
 
