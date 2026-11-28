@@ -63,7 +63,7 @@ const FILTER_SCHEMA = {
 const EDIT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'change_cabinets',
-    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z for base / tall / under panels, offset along the wall, notes, scribes, handle_schedule, wallz = one overhead own underside, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "set_properties" (room / job set-up: ceiling, overhead top line or soffit, kick, class heights), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels), "resolve" (labels: re-resolve as they are), "hinges" (labels + per_door, optional door row,col), "interior" (label + interior moves on its numbered bays from get_cabinet_detail), "under_panel" (labels of the base cabinets / overheads it goes under, optional set_back), "wall" (a new wall: x, y start, length, angle), "copy" (cabinets from another room onto a wall here). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
+    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z for base / tall / under panels, offset along the wall, notes, scribes, handle_schedule, wallz = one overhead own underside, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "set_properties" (room / job set-up: ceiling, overhead top line or soffit, kick, class heights), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels), "resolve" (labels: re-resolve as they are), "hinges" (labels + per_door, optional door row,col), "interior" (label + interior moves on its numbered bays from get_cabinet_detail), "under_panel" (labels of the base cabinets / overheads it goes under, optional set_back), "wall" (a new wall: x, y start, length, angle), "copy" (cabinets from another room onto a wall here), "handle_schedule" (a new schedule copied from one, optionally its handle in a new finish, set on the room / job). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
     input_schema: {
       type: 'object',
       properties: {
@@ -73,7 +73,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
           items: {
             type: 'object',
             properties: {
-              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup', 'fixture', 'resolve', 'hinges', 'interior', 'under_panel', 'wall', 'copy'] },
+              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup', 'fixture', 'resolve', 'hinges', 'interior', 'under_panel', 'wall', 'copy', 'handle_schedule'] },
               per_door: { type: ['integer', 'null'], description: 'hinges: hinges on each door (spaced with the shop insets); null = back to the shop rules' },
               door: {
                 type: 'object', description: 'hinges: just this door (row,col from get_cabinet_detail); leave out for every door',
@@ -151,7 +151,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                 },
                 additionalProperties: false,
               },
-              level: { type: 'string', enum: ['room', 'job'], description: 'set_material / set_properties: this room, or the whole job' },
+              level: { type: 'string', enum: ['room', 'job'], description: 'set_material / set_properties / handle_schedule: this room, or the whole job' },
               kick: { type: 'number', description: 'set_properties: kick height' },
               base_dy: { type: 'number', description: 'set_properties: base class height (incl. kick)' },
               tall_dy: { type: 'number', description: 'set_properties: tall class height' },
@@ -178,7 +178,9 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
               dy: { type: 'number', description: 'place: height (else matched to the next_to cabinet, or the library default)' },
               labels: { type: 'array', items: { type: 'string' }, description: 'delete / resolve / hinges: cabinet labels; under_panel: the cabinets it goes under; copy: labels in from_room' },
               from_room: { type: 'string', description: 'copy: the room (name) to copy the cabinets from' },
-              name: { type: 'string', description: 'wall: its name, e.g. "Wall 4" (leave out = next Wall N / Island N)' },
+              from_schedule: { type: 'string', description: 'handle_schedule: the schedule to copy (list_handle_schedules); leave out = the one this room uses' },
+              finish: { type: 'string', description: 'handle_schedule: copy that schedule\u2019s handle in this finish first, e.g. "Matt Black"' },
+              name: { type: 'string', description: 'wall: its name, e.g. "Wall 4" (leave out = next Wall N / Island N); handle_schedule: the new schedule name' },
               x: { type: 'number', description: 'wall: start point x (plan mm, +x right)' },
               y: { type: 'number', description: 'wall: start point y (plan mm, +y DOWN the plan)' },
               length: { type: 'number', description: 'wall: length (mm)' },
@@ -256,6 +258,7 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - Overlap warnings in a proposal, and ⚠ lines in the check after Apply, are real until a fresh get_cabinet_detail shows otherwise. Never explain one away from what you expect the numbers to be.
 - wall: ADD a wall (x, y start; length; angle 0 = right, 90 = down the plan; wall_type; wall_height only if it differs from the ceiling). The summary gives each wall's start → end, so a new wall that carries on from Wall 2 starts at Wall 2's end; walls run clockwise round the room. Name it as the canvas would (Wall N / Island N). Walls take the room's default thickness. A room with no walls: ask for the sizes, or point them at "Draw from my sketch" when there is a sketch. You can't move, resize or delete walls — say so.
 - copy: copy cabinets from another room of the job onto a wall here — "duplicate the Bathroom vanity into the Ensuite". from_room + its labels (get_room_summary of that room for them; take the whole run incl. end panels, one wall at a time), wall here, offset = where the first one starts (leave out = same as there). Everything comes across (sizes, colours, fronts, interiors, scribes). Fixtures (basins, sinks) and joined kicks don't: say so, and add the fixtures with a fixture step when the catalogue has them. If this room has no walls, add them first in the same change (wall steps before the copy) — ask the sizes if you don't know them.
+- handle_schedule: when the handle asked for isn't a schedule (list_handle_schedules), make one: copy the closest schedule (from_schedule — same handle in another finish, e.g. "small black lip pull" = "Lip Pull 50 Brushed Nickel" with finish "Black"), name it after the handle ("Lip Pull 50 Black"), level room / job to put it on. It copies the handle product in the new finish (same sizes and holes) — say the shop must check its supplier code, cost and that the finish exists. A different handle shape / size the shop doesn't have = can't (report_gap): the shop adds the product in Settings.
 - You can NOT move / resize / delete walls, or touch benchtops, splashbacks, single kick pieces, hanging rails / accessories inside the interior, or front layouts yet — say so.
 - Whenever a request (or part of one) needs something no tool of yours can do, call report_gap for it first (once per missing feature), then tell the user. That list is what gets built next.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user FIRST, before any change_cabinets, with 2–4 short options (asking drops a proposal made earlier in the same message) (which cabinets? which side? what size? which end panel?). One question at a time.
@@ -359,7 +362,7 @@ async function history(conversationId: string, roomId: string): Promise<Anthropi
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { existing?: string; from_room?: string; name?: string; x?: number; y?: number; length?: number; angle?: number; wall_type?: 'standard' | 'island'; wall_height?: number; ceiling?: number; set_back?: number; thickness?: number; op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[]; per_door?: number | null; door?: { row: number; col: number }; label?: string; moves?: InteriorAction[] }
+interface StepIn { from_schedule?: string; finish?: string; existing?: string; from_room?: string; name?: string; x?: number; y?: number; length?: number; angle?: number; wall_type?: 'standard' | 'island'; wall_height?: number; ceiling?: number; set_back?: number; thickness?: number; op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[]; per_door?: number | null; door?: { row: number; col: number }; label?: string; moves?: InteriorAction[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -477,6 +480,9 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         const label = st.label ?? (selLabels.length === 1 ? selLabels[0] : undefined)
         if (!label || !st.moves?.length) return { text: `Step ${i + 1}: interior needs one cabinet label and its moves.`, isError: true }
         ops.push({ op: 'interior', label, actions: st.moves })
+      } else if (st.op === 'handle_schedule') {
+        if (!st.name) return { text: `Step ${i + 1}: handle_schedule needs a name for the new schedule.`, isError: true }
+        ops.push({ op: 'handle_schedule', name: st.name, from_schedule: st.from_schedule, finish: st.finish, level: st.level })
       } else if (st.op === 'copy') {
         if (!st.from_room || !st.labels?.length || !st.wall) return { text: `Step ${i + 1}: copy needs from_room, the labels there, and the wall here.`, isError: true }
         ops.push({ op: 'copy', from_room: st.from_room, labels: st.labels, wall: st.wall, offset: st.offset })
@@ -487,7 +493,7 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         const labels = st.labels?.length ? st.labels : selection ? selLabels : []
         if (!labels.length) return { text: `Step ${i + 1}: under_panel needs the labels of the cabinets it goes under.`, isError: true }
         ops.push({ op: 'under_panel', labels, set_back: st.set_back, thickness: st.thickness })
-      } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material, set_properties, markup, fixture, resolve, hinges, interior, under_panel, wall or copy.`, isError: true }
+      } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material, set_properties, markup, fixture, resolve, hinges, interior, under_panel, wall, copy or handle_schedule.`, isError: true }
       for (let k = before; k < ops.length; k++) opRooms[k] = st.rooms?.length ? st.rooms : undefined
     }
     if (!ops.length) return { text: 'No steps.', isError: true }

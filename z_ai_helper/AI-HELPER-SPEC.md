@@ -738,6 +738,17 @@ blocks (Mark: later).
   - Prompt: sinks / basins always on their cabinet; an unknown basin model → catalogue stand-in +
     TBC cloud. Checked on RHK6596 Laundry: "the laundry tub needs to be on BC-02" → moved, linked
     (link 488 / 280 = centred), check ✓ — kept (Mark's fix).
+- **R7 handle schedules (built):** "small lip pull, black" — the shop only had Lip Pull 50
+  Brushed Nickel and the chat couldn't add one. `handle_schedule` step {name, from_schedule?
+  (default: the room's), finish?, level?}: finish copies the schedule's main handle product in
+  that finish (same sizes / holes; supplier code, maker code, cost cleared; a note says to check
+  them), the new schedule copies the role entries (old main handle → new; push-to-open etc.
+  kept), level room / job sets rooms / projects.handle_schedule_id (other rooms re-resolve on a
+  job set). Undo puts the room / job back, removes the schedule unless something uses it since,
+  and removes the copied product after the re-resolve. Checked headless (AI Sketch Test, applied
+  + undone): "small lip pull in black / Matt Black" → new schedule set on the room, all 8 doors
+  Lip Pull 50 Black. "Lip Pull 50 Black (small)" from the first test is left in Settings › Handles
+  for RHK6596 (supplier code / cost to fill in).
 - **R5 copy cabinets from another room (built):** "once the vanity's right we'll duplicate it
   for the Ensuite" — no tool could. `copy` step {from_room, labels, wall, offset?}: the source
   rows as the canvas paste does (all settings; grain group + kick run cleared) placed along the

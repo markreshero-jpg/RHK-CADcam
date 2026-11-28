@@ -81,6 +81,11 @@ export type BatchOp =
    *  every setting, custom parts, shapes, drilling), keeping their spacing. offset = where the
    *  first one starts on `wall` (default: the same offset as in the source room). */
   | { op: 'copy'; from_room: string; labels: string[]; wall: string; offset?: number }
+  /** A new handle schedule (z_handles), copied from one the shop has (its roles / positions;
+   *  default: the one this room uses). finish = first copy that schedule's handle product in this
+   *  finish (same sizes / holes — supplier code and cost left for the shop). level = set it on
+   *  this room or the whole job. */
+  | { op: 'handle_schedule'; name: string; from_schedule?: string; finish?: string; level?: 'room' | 'job' }
 
 export type MarkupLayer = 'general' | 'questions' | 'site' | 'electrical'
 export interface MarkupNote {
@@ -123,6 +128,9 @@ export type BatchEntry =
   /** A projects / rooms row's columns before → after (whole column values). */
   | { kind: 'props'; cabinet_id: ''; label: null; line: string; table: 'projects' | 'rooms' | 'walls'; row_id: string; before: Row; after: Row }
   | { kind: 'material'; cabinet_id: ''; label: null; line: string; table: string; match: Row; before: string | null; after: string | null; resolve_ids: string[] }
+  /** A handle schedule the AI made (+ the handle product it copied, if any) and where it was set. */
+  | { kind: 'handle_schedule'; cabinet_id: ''; label: null; line: string; schedule_id: string; handle_id: string | null
+      set: { table: 'rooms' | 'projects'; row_id: string; before: string | null } | null }
   /** A plain re-resolve — nothing to put back on Undo. */
   | { kind: 'resolve'; cabinet_id: string; label: string | null; line: string }
 
@@ -293,6 +301,8 @@ type PlannedStep =
   | { kind: 'fixture'; row: Row; line: string; updateId?: string; before?: Row }
   | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
   | { kind: 'resolve'; id: string; line: string }
+  | { kind: 'handle_schedule'; line: string; handle: Row | null; schedule: Row; entries: Row[]; mainFrom: string | null
+      set: { table: 'rooms' | 'projects'; rowId: string; before: string | null } | null }
 
 export interface BatchPlan {
   state: RoomState
@@ -712,6 +722,57 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           if (keep.length) warnings.push(`${keep.join(', ')} ${keep.length === 1 ? 'has its' : 'have their'} own ${CLASS_WORD[cls!]} ${ROLE_WORD[key]} — unchanged there.`)
         }
       }
+    } else if (op.op === 'handle_schedule') {
+      const name = (op.name ?? '').trim()
+      if (!name) { problems.push(`${n}: the new schedule needs a name.`); continue }
+      const [{ data: sAll }, { data: hAll }] = await Promise.all([
+        supabase.from('handle_schedules').select('id, name, handle_id, description'),
+        supabase.from('hardware_handles').select('*').eq('active', true),
+      ])
+      const scheds = (sAll ?? []) as { id: string; name: string; handle_id: string | null; description: string | null }[]
+      const handles = (hAll ?? []) as Row[]
+      if (scheds.some(s => s.name.toLowerCase() === name.toLowerCase())) { problems.push(`${n}: there's already a handle schedule "${name}" — use it (handle_schedule in update) instead.`); continue }
+      let from = op.from_schedule ? scheds.find(s => s.name.toLowerCase() === op.from_schedule!.trim().toLowerCase())
+        ?? (scheds.filter(s => s.name.toLowerCase().includes(op.from_schedule!.trim().toLowerCase())).length === 1 ? scheds.find(s => s.name.toLowerCase().includes(op.from_schedule!.trim().toLowerCase())) : undefined) : undefined
+      if (op.from_schedule && !from) { problems.push(`${n}: no single schedule "${op.from_schedule}" (${scheds.map(s => s.name).join(', ')}).`); continue }
+      if (!from) {
+        const proj = state.project as { handle_schedule_id?: string | null } | null
+        const { data: shop } = await supabase.from('shop_settings').select('handle_schedule_id').limit(1).maybeSingle()
+        const id = (room as { handle_schedule_id?: string | null }).handle_schedule_id ?? proj?.handle_schedule_id ?? (shop as { handle_schedule_id?: string | null } | null)?.handle_schedule_id
+        from = scheds.find(s => s.id === id)
+        if (!from) { problems.push(`${n}: say which schedule to copy (from_schedule): ${scheds.map(s => s.name).join(', ')}.`); continue }
+      }
+      const { data: ents } = await supabase.from('handle_schedule_entries').select('role, handle_id, offset_from_edge_mm, inset_from_side_mm, orientation, height_aff_mm').eq('schedule_id', from.id)
+      const srcHandle = handles.find(h => h.id === from!.handle_id) ?? null
+      let handle: Row | null = null, useId = from.handle_id, handleWord = String(srcHandle?.name ?? 'its handle')
+      if (op.finish) {
+        if (!srcHandle) { problems.push(`${n}: ${from.name} has no main handle to copy in ${op.finish}.`); continue }
+        const fin = op.finish.trim()
+        const oldFin = String(srcHandle.finish ?? '')
+        const hName = oldFin && String(srcHandle.name).includes(oldFin) ? String(srcHandle.name).replace(oldFin, fin) : `${srcHandle.name} ${fin}`
+        const have = handles.find(h => String(h.name).toLowerCase() === hName.toLowerCase())
+        if (have) { useId = have.id as string; handleWord = hName }
+        else {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, created_at, updated_at, ...rest } = srcHandle
+          handle = { ...rest, name: hName, finish: fin, supplier_code: null, maker_code: null, cost_per_unit: null,
+            notes: `Copied from "${srcHandle.name}" by the AI helper in ${fin} — check the supplier code, cost and that it comes in this finish.` }
+          useId = null; handleWord = `${hName} (new — copy of ${srcHandle.name})`
+        }
+      }
+      let set: { table: 'rooms' | 'projects'; rowId: string; before: string | null } | null = null
+      if (op.level) {
+        if (only) { problems.push(`${n}: setting a room / job handle schedule changes every cabinet — deselect everything first.`); continue }
+        set = op.level === 'job'
+          ? { table: 'projects', rowId: room.project_id, before: (state.project as { handle_schedule_id?: string | null } | null)?.handle_schedule_id ?? null }
+          : { table: 'rooms', rowId: room.id, before: (room as { handle_schedule_id?: string | null }).handle_schedule_id ?? null }
+      }
+      const line = `New handle schedule "${name}": ${from.name}'s roles with ${handleWord}${set ? ` — set on the ${op.level === 'job' ? 'whole job' : `room ${room.name}`}` : ''}`
+      steps.push({ kind: 'handle_schedule', line, handle, mainFrom: from.handle_id,
+        schedule: { name, description: `Copy of ${from.name}${op.finish ? ` in ${op.finish}` : ''} (AI helper)`, is_default: false, active: true, handle_id: useId },
+        entries: (ents ?? []) as Row[], set })
+      lines.push(line)
+      if (set && op.level === 'job') warnings.push('Rooms with their own handle schedule keep it.')
     } else if (op.op === 'copy') {
       const { data: srcRoom } = await supabase.from('rooms').select('id, name').eq('project_id', room.project_id).ilike('name', (op.from_room ?? '').trim()).maybeSingle()
       if (!srcRoom) { problems.push(`${n}: no room "${op.from_room}" in this job.`); continue }
@@ -1080,6 +1141,40 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       entries.push({ kind: 'markup', cabinet_id: '', label: null, line: s.line, annotation_ids: ((data ?? []) as { id: string }[]).map(a => a.id) })
       continue
     }
+    if (s.kind === 'handle_schedule') {
+      let handleId: string | null = null
+      if (s.handle) {
+        const { data, error } = await supabase.from('hardware_handles').insert(s.handle).select('id').single()
+        if (error || !data) { errors.push(`${s.line}: handle add failed — ${error?.message}`); continue }
+        handleId = data.id as string
+      }
+      const main = (s.schedule.handle_id as string | null) ?? handleId
+      const { data: sd, error: se } = await supabase.from('handle_schedules').insert({ ...s.schedule, handle_id: main }).select('id').single()
+      if (se || !sd) { errors.push(`${s.line}: schedule add failed — ${se?.message}`); continue }
+      const sid = sd.id as string
+      // The copied roles: the old main handle becomes the new one; push-to-open / none etc. stay.
+      if (s.entries.length) {
+        const { error: ee } = await supabase.from('handle_schedule_entries').insert(s.entries.map(e => ({ ...e, schedule_id: sid, handle_id: e.handle_id === s.mainFrom ? main : e.handle_id })))
+        if (ee) errors.push(`${s.line}: roles copy failed — ${ee.message}`)
+      }
+      if (s.set) {
+        invalidateResolverCaches()
+        const { error: ue } = await supabase.from(s.set.table).update({ handle_schedule_id: sid }).eq('id', s.set.rowId)
+        if (ue) errors.push(`${s.line}: setting it failed — ${ue.message}`)
+        else if (s.set.table === 'projects') {
+          const { data: all } = await supabase.from('rooms').select('id').eq('project_id', plan.state.room.project_id)
+          const others = ((all ?? []) as { id: string }[]).map(r => r.id).filter(id => id !== plan.state.room.id)
+          if (others.length) {
+            const { data: oc } = await supabase.from('cabinet_instances').select('id').in('room_id', others)
+            elsewhere.push(...((oc ?? []) as { id: string }[]).map(c => c.id))
+          }
+        }
+        for (const c of rows.values()) touched.add(c.id)
+      }
+      entries.push({ kind: 'handle_schedule', cabinet_id: '', label: null, line: s.line, schedule_id: sid, handle_id: handleId,
+        set: s.set ? { table: s.set.table, row_id: s.set.rowId, before: s.set.before } : null })
+      continue
+    }
     if (s.kind === 'props') {
       invalidateResolverCaches()   // the cascade every cabinet reads
       const { error } = await supabase.from(s.table).update(s.after).eq('id', s.rowId)
@@ -1208,6 +1303,7 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   const state = await loadRoomState(batch.room_id)
+  const dropHandles: string[] = []
   const warnings: string[] = [], errors: string[] = [], lines: string[] = []
   const touched = new Set<string>(), changedIds = new Set<string>()
   const elsewhere: string[] = []
@@ -1248,6 +1344,33 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
         if (ae) { errors.push(`${e.line}: remove failed — ${ae.message}`); continue }
         lines.push(`Removed ${e.line.split(':')[0]}`)
       }
+      continue
+    }
+    if (e.kind === 'handle_schedule') {
+      invalidateResolverCaches()
+      if (e.set) {
+        const { data: cur } = await supabase.from(e.set.table).select('handle_schedule_id').eq('id', e.set.row_id).maybeSingle()
+        if ((cur as { handle_schedule_id?: string | null } | null)?.handle_schedule_id === e.schedule_id) {
+          await supabase.from(e.set.table).update({ handle_schedule_id: e.set.before }).eq('id', e.set.row_id)
+          for (const c of state.cabinets) { touched.add(c.id); changedIds.add(c.id) }
+          if (e.set.table === 'projects') {
+            const { data: oc } = await supabase.from('cabinet_instances').select('id, room_id').neq('room_id', state.room.id).in('room_id', ((await supabase.from('rooms').select('id').eq('project_id', state.room.project_id)).data ?? []).map(r => r.id as string))
+            elsewhere.push(...((oc ?? []) as { id: string }[]).map(c => c.id))
+          }
+        }
+      }
+      // Keep the schedule if anything else uses it now.
+      const [{ count: rc }, { count: pc }, { data: cabUse }] = await Promise.all([
+        supabase.from('rooms').select('id', { count: 'exact', head: true }).eq('handle_schedule_id', e.schedule_id),
+        supabase.from('projects').select('id', { count: 'exact', head: true }).eq('handle_schedule_id', e.schedule_id),
+        supabase.from('cabinet_instances').select('id').contains('hardware_overrides', { handle_schedule_id: e.schedule_id }).limit(1),
+      ])
+      if ((rc ?? 0) + (pc ?? 0) + (cabUse?.length ?? 0) > 0) { warnings.push(`${e.line.split(':')[0]} is in use since — kept.`); continue }
+      await supabase.from('handle_schedule_entries').delete().eq('schedule_id', e.schedule_id)
+      const { error: de } = await supabase.from('handle_schedules').delete().eq('id', e.schedule_id)
+      if (de) { errors.push(`${e.line}: remove failed — ${de.message}`); continue }
+      if (e.handle_id) dropHandles.push(e.handle_id)   // after the re-resolve: faces still point at it
+      lines.push(`Removed ${e.line.split(':')[0]}`)
       continue
     }
     if (e.kind === 'props') {
@@ -1312,6 +1435,10 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   await settle(batch.room_id, state.cabinets, touched, record, warnings, errors, elsewhere)
+  for (const id of dropHandles) {
+    const { error: he } = await supabase.from('hardware_handles').delete().eq('id', id)
+    if (he) warnings.push(`The copied handle product is still in use — left in Settings › Handles (${he.message}).`)
+  }
   await supabase.from('ai_batches').update({ undone_at: new Date().toISOString(), undone_by: (await supabase.auth.getUser()).data.user?.id ?? null }).eq('id', batchId)
   const undoId = lines.length ? await saveBatch(state.room, `Undo: ${batch.description}`, 'undo', undoEntries, warnings) : null
   return { batchId: undoId, changed: lines, warnings, errors, cabinetIds: [...changedIds] }
