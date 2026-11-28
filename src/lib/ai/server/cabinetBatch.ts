@@ -12,7 +12,7 @@
 // Run inside withSupabase() (./scope) so it acts as the signed-in user.
 
 import { supabase } from '@/src/lib/supabase'
-import type { CabinetDefinition, CabinetInstance, Room, Wall } from '@/src/lib/types'
+import type { CabinetDefinition, CabinetInstance, Room, RoomAnnotation, Wall } from '@/src/lib/types'
 import { invalidateResolverCaches, resolveCabinetFromDB } from '@/src/lib/resolver/resolveCabinetFromDB'
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { detectNeighbours } from '@/src/lib/neighbours'
@@ -26,6 +26,7 @@ import { buildInstanceFromDefinition, dbCopyCabinetChildren, dbInsertDefinitionP
 import { matchCabinets, patchFor, validateChanges, ROLE_KEY, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { wallOffset } from '../roomSummary'
 import { ensureJobCadLayers } from '@/src/lib/annotations/cadLayers'
+import { annotationsBounds, blockInsertPoint, placeBlockItems, tagBlockItems, type CadBlockItem } from '@/src/lib/annotations/blocks'
 import { cabinetPlans, linkedPose } from '@/src/lib/fixtureLinks'
 import { defaultFixtureZ } from '@/src/lib/fixtureGeometry'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -89,6 +90,10 @@ export type BatchOp =
   /** Benchtops over base cabinets, as F4 → Auto-build tops (z_benchtop_builder Phase 8): one top
    *  per wall run, its rules and defaults. labels = only over these (default every base cabinet
    *  without a top); method / schedule = names (default the room → job → shop one). */
+  /** A library spec block (cad_blocks, default "Spec block") on the plan, as Insert › block: right of
+   *  the walls, clear of other notes. sections = the template sections to keep, in its order (text =
+   *  typed lines instead of its {fields}); a heading the template hasn't got goes on the end. */
+  | { op: 'spec_block'; block?: string; sections: { heading: string; text?: string }[] }
   | { op: 'benchtops'; labels?: string[]; method?: string; schedule?: string; front_overhang?: number; end_overhang?: number; corner?: 'mitre' | 'butt' }
 
 export type MarkupLayer = 'general' | 'questions' | 'site' | 'electrical'
@@ -729,6 +734,44 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           if (keep.length) warnings.push(`${keep.join(', ')} ${keep.length === 1 ? 'has its' : 'have their'} own ${CLASS_WORD[cls!]} ${ROLE_WORD[key]} — unchanged there.`)
         }
       }
+    } else if (op.op === 'spec_block') {
+      const name = (op.block ?? 'Spec block').trim()
+      const { data: blk } = await supabase.from('cad_blocks').select('name, items').ilike('name', name).maybeSingle()
+      const items = ((blk as { items?: CadBlockItem[] } | null)?.items ?? [])
+      const tpl = items.find(i => i.kind === 'text' && i.text)
+      if (!blk || !tpl) { problems.push(`${n}: no CAD block "${name}" with text in the library.`); continue }
+      const { data: planNotes } = await supabase.from('room_annotations').select('kind, geom, text, style').eq('room_id', room.id).eq('view', 'plan')
+      const notes = (planNotes ?? []) as Pick<RoomAnnotation, 'kind' | 'geom' | 'text' | 'style'>[]
+      if (notes.some(a => (a.style as { block?: string } | null)?.block?.toLowerCase() === (blk as { name: string }).name.toLowerCase())) {
+        problems.push(`${n}: this room already has a ${(blk as { name: string }).name} on the plan — change it on the canvas (or delete it there first).`); continue
+      }
+      // Template → title + sections (heading line, then its lines), split on blank lines.
+      const chunks = String(tpl.text).replace(/\r/g, '').split(/\n\s*\n/)
+      const title = chunks[0]
+      const tSecs = chunks.slice(1).map(c => { const [h, ...rest] = c.split('\n'); return { heading: h.trim(), body: rest.join('\n') } })
+      const want = (op.sections ?? []).filter(s => s.heading?.trim())
+      if (!want.length) { problems.push(`${n}: say which sections to keep (${tSecs.map(s => s.heading).join(', ')}).`); continue }
+      const key = (h: string) => h.trim().toUpperCase()
+      const byKey = new Map(want.map(s => [key(s.heading), s]))
+      const kept = tSecs.filter(s => byKey.has(key(s.heading))).map(s => ({ heading: s.heading, body: byKey.get(key(s.heading))!.text?.trim() || s.body }))
+      const extra = want.filter(s => !tSecs.some(t => key(t.heading) === key(s.heading))).map(s => ({ heading: key(s.heading), body: (s.text ?? '').trim() }))
+      if (extra.some(s => !s.body)) { problems.push(`${n}: ${extra.filter(s => !s.body).map(s => s.heading).join(', ')} isn't in the template — give its text.`); continue }
+      const text = [title, ...[...kept, ...extra].map(s => `${s.heading}\n${s.body}`)].join('\n\n')
+      const k = Number(room.annotation_scale ?? 20)
+      const ws = walls.filter(w => w.wall_type !== 'island' && !w.id.startsWith('newwall:'))
+      const t = Math.max(0, ...ws.map(w => w.thickness))
+      const xs = ws.flatMap(w => [w.pos_x, w.pos_x + w.length * Math.cos(w.angle * Math.PI / 180)])
+      const ys = ws.flatMap(w => [w.pos_y, w.pos_y + w.length * Math.sin(w.angle * Math.PI / 180)])
+      const wb = ws.length ? { minX: Math.min(...xs) - t, minY: Math.min(...ys) - t, maxX: Math.max(...xs) + t, maxY: Math.max(...ys) + t } : { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+      const one: CadBlockItem[] = [{ ...tpl, text }]
+      const existing = notes.map(a => annotationsBounds([a], k)).filter((x): x is NonNullable<typeof x> => !!x)
+      const at = blockInsertPoint(one, wb, existing, k)
+      const placed = tagBlockItems(placeBlockItems(one, at, k), (blk as { name: string }).name)
+      const rows = placed.map((it, j) => ({ room_id: room.id, view: 'plan', wall_id: null, wall_side: null, cabinet_id: null, sheet_view: null,
+        kind: it.kind, geom: it.geom, text: it.text, style: it.style, sort_order: 1000 + j, _layer: null as unknown as MarkupLayer }))
+      const line = `${(blk as { name: string }).name} on the plan: ${[...kept, ...extra].map(s => `${s.heading} (${/\{\w+\}/.test(s.body) ? 'live' : `"${s.body.replace(/\n/g, ' / ')}"`})`).join(', ')}`
+      steps.push({ kind: 'markup', rows, line })
+      lines.push(line)
     } else if (op.op === 'benchtops') {
       if (cabs.some(c => c.id.startsWith('new:'))) { problems.push(`${n}: build the tops in a next message, once the cabinets added here are in.`); continue }
       const [{ data: fx }, { data: bts }, { data: methods }, { data: scheds }] = await Promise.all([

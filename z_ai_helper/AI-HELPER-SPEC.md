@@ -738,6 +738,16 @@ blocks (Mark: later).
   - Prompt: sinks / basins always on their cabinet; an unknown basin model → catalogue stand-in +
     TBC cloud. Checked on RHK6596 Laundry: "the laundry tub needs to be on BC-02" → moved, linked
     (link 488 / 280 = centred), check ✓ — kept (Mark's fix).
+- **R9 spec blocks (built):** "add CAD spec blocks" got loose notes. `spec_block` step {block?
+  (default "Spec block"), sections [{heading, text?}]}: the library block's text split into
+  title + sections, only the sections asked for kept in template order (text = typed lines in
+  place of the live {fields}; a heading the template hasn't got goes last), tagged
+  `style.block`, placed on the plan with `blockInsertPoint` right of the walls clear of other
+  notes (room annotation_scale), as Insert › block. One per room (refused when the plan has
+  one). Undo = the markup undo (removed unless edited). Prompt carries Mark's spec-block rules
+  (BENCHTOP / FRONTS + PANELS / CARCASS, + BASIN; no HANDLES / DRAWERS / HARDWARE; TBC colours
+  typed; OVERHEADS last; site info → SITE NOTES on the Site notes layer). Checked headless (AI
+  Sketch Test, applied + undone). ai_gaps "benchtops" + "spec blocks" marked built.
 - **R8 benchtops (built):** "draw 20 mm stone tops, colour TBC" was logged as a gap. `benchtops`
   step {labels?, method?, schedule?, front_overhang?, end_overhang?, corner?} runs F4 → Auto-build
   tops' planner (`planAutoBuild`, Phase 8 rules A-a…A-d) server-side with the dialog's defaults
