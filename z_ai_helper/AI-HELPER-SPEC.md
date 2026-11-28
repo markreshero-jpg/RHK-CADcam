@@ -695,6 +695,11 @@ Not started. Each also has an open `ai_gaps` row (the chat logs its own as it hi
 | T2 | RHK9999 BBQ, BC-01 | "re-hinge BC-01 so it is on the right" | **hinge side** — can't swap L/R | Single door sink cupboard, hinged left. |
 | T3 | RHK9999 BBQ | asked about BC-01 while BC-10 was selected | **selection scope** — told Mark to select BC-01 first | When the user names a cabinet, work on it even if another is selected (selection = default, not a lock). |
 | T4 | RHK6586 | "fix the kick join in the back corner on the angle" | **kick pieces** | App side done (KA1 + KA2, Mark checked 2026-11-28); needs the AI step (join kicks round an angled filler). |
+| T3+ | RHK9999 BBQ | "delete shelf from BC-01" (BC-10 selected) | same as T3 | Hit again — Mark had to ask twice. The chat knew the fix and still refused. Top of the list. |
+| T5 | RHK9999 BBQ | "change benchtop waterfall end on left to no waterfall end" | **edit a built benchtop** — waterfall ends | Benchtop 1 has mitred waterfalls both ends. |
+| T6 | RHK9999 BBQ | "change the benchtop thickness" | **edit a built benchtop** — build method / thickness | Also the summary doesn't show a top's thickness or top-of-bench height when it's on the room / job default method, so the chat couldn't say how thick Benchtop 2 is. |
+| T7 | RHK6596 Bathroom | "remove all clouds in cad" | **delete markup** | The chat also quoted the shop rule *never delete CAD someone else drew* (DB trigger). Decide: allow deleting markup when the user asks for it in their own words (undoable), or keep it canvas-only. |
+| T8 | RHK6596 Bathroom | (the chat spotted it) top 110 above the 820 cabinets | **bug from R8** — the benchtops step built the Bathroom top at the 930 default underside, not on the 820 cabinets | Mark fixed it via the chat (room base height → 820). Fix: benchtops step sits a top on its cabinets' top when they're not the base height (set height_mm), and the summary flags a top floating above its cabinets as well as one cut into them. |
 
 ## Benchtop heights + cabinet-into-top clash (RHK9999 chat, 2026-11-28)
 
