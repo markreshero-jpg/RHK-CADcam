@@ -105,6 +105,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                 description: 'Which rooms of the job this step is for (names from get_job_summary), or ["all"] for every room. Leave out = this room. A change touching other rooms always waits for Apply.',
               },
               item: { type: 'string', description: 'fixture: catalogue item name (find_fixture)' },
+              existing: { type: 'string', description: 'fixture: move a fixture ALREADY in this room (its name from the summary) — e.g. onto the cabinet it belongs on — instead of adding one' },
               on: { type: 'string', description: 'fixture: cabinet label it sits on / in (sink, cooktop, oven, rangehood) — centred' },
               along: { type: 'number', description: 'fixture on a cabinet: mm from its centre along the width (+ = right as you face it)' },
               from_back: { type: 'number', description: 'fixture: centre mm from the cabinet back (default half its depth)' },
@@ -243,7 +244,7 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
   · Roles: fronts = doors, drawer fronts and false fronts; carcass = cabinet interior; exposed = end panels, fillers, open interiors; shelf; divider; back = the back panel only (else it follows carcass) — "backs in 18mm" = materials { back: <an 18mm board> }; kick = kick face.
   · Never guess a board: if find_material gives several close matches, ask_user with them as options.
   · Colour TBC: boards with a colour range ("Satin Board 18mm" → "Satin Board 18mm – White", …) — the board on its own means the colour is TBC. The app then draws it in the range's default colour (White) and the summary lists it under "Colour TBC"; that is NOT White chosen, so don't call it wrong or "not 2pac". Keep the board on its own (with a TBC cloud) until the user names the colour. Never swap it for "– White" unless they say White. Copying one room's spec to another = the same boards exactly as they are.
-- fixture: a catalogue appliance / sink (find_fixture) — on a cabinet (sink on BSK, cooktop on its base, oven in UBO, rangehood under WRH; centred, linked so the benchtop cut-out follows), or in a gap on a wall + offset (dishwasher, fridge, washer).
+- fixture: a catalogue appliance / sink / basin (find_fixture) — on a cabinet (sink on BSK, basin on the vanity sink base, cooktop on its base, oven in UBO, rangehood under WRH; centred, linked so the benchtop cut-out follows), or in a gap on a wall + offset (dishwasher, fridge, washer). A sink / basin always goes ON its cabinet. One already in the room but not on its cabinet (the summary's Fixtures list shows "on cabinet -"): existing = its name + on = the cabinet, to move and link it. The basin model unknown → find_fixture for a stand-in (e.g. a generic / round basin), place it, and TBC-cloud the model; say it's a stand-in.
 - markup: CAD notes on an elevation — a TBC cloud + question (layer questions), an appliance space (dashed box + label, layer general), site / install notes (layer site), lighting / power (electrical). x along the wall from its start, z height off the floor. They wait for Apply.
 - Other rooms of the job: get_job_summary lists them, get_room_summary reads one. A step with rooms: ["Laundry"] or ["all"] changes those rooms too (filters like class "base" apply in each room). It always waits for Apply, and one Undo reverts every room.
 - resolve: re-resolve cabinets as they are (parts, drilling, hardware rebuilt) when the user asks or something looks stale. Changes already re-resolve what they touch — don't add it to those.
@@ -358,7 +359,7 @@ async function history(conversationId: string, roomId: string): Promise<Anthropi
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { from_room?: string; name?: string; x?: number; y?: number; length?: number; angle?: number; wall_type?: 'standard' | 'island'; wall_height?: number; ceiling?: number; set_back?: number; thickness?: number; op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[]; per_door?: number | null; door?: { row: number; col: number }; label?: string; moves?: InteriorAction[] }
+interface StepIn { existing?: string; from_room?: string; name?: string; x?: number; y?: number; length?: number; angle?: number; wall_type?: 'standard' | 'island'; wall_height?: number; ceiling?: number; set_back?: number; thickness?: number; op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[]; per_door?: number | null; door?: { row: number; col: number }; label?: string; moves?: InteriorAction[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -450,8 +451,8 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         }
         ops.push({ op: 'set_material', level: st.level, role: st.role as MaterialRole, classes: st.classes, material_id: id })
       } else if (st.op === 'fixture') {
-        if (!st.item) return { text: `Step ${i + 1}: fixture needs an item.`, isError: true }
-        ops.push({ op: 'fixture', item: st.item, on: st.on, along: st.along, from_back: st.from_back, wall: st.wall, offset: st.offset, back: st.back })
+        if (!st.item && !st.existing) return { text: `Step ${i + 1}: fixture needs an item (or existing).`, isError: true }
+        ops.push({ op: 'fixture', item: st.item ?? '', existing: st.existing, on: st.on, along: st.along, from_back: st.from_back, wall: st.wall, offset: st.offset, back: st.back })
       } else if (st.op === 'markup') {
         if (!st.notes?.length) return { text: `Step ${i + 1}: markup needs notes.`, isError: true }
         ops.push({ op: 'markup', notes: st.notes })

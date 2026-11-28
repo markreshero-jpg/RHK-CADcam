@@ -59,7 +59,9 @@ export type BatchOp =
   | { op: 'markup'; notes: MarkupNote[] }
   /** A catalogue fixture (sink, cooktop, oven, dishwasher, fridge…): on a cabinet (centred, linked
    *  so the benchtop cut-out follows), or in a gap on a wall (floor items, unlinked). */
-  | { op: 'fixture'; item: string; on?: string; along?: number; from_back?: number; wall?: string; offset?: number; back?: boolean }
+  | { op: 'fixture'; item: string; on?: string; along?: number; from_back?: number; wall?: string; offset?: number; back?: boolean
+      /** Move a fixture already in this room (its label / name) instead of adding one — e.g. onto the cabinet it belongs on. */
+      existing?: string }
   | { op: 'wall'; name?: string; x: number; y: number; length: number; angle: number; type?: 'standard' | 'island'; thickness?: number; height?: number | null }
   /** A class board colour for the whole room or job (Materials tab: Doors / drawers, Interior…).
    *  material_id null = back to inherited. Kick face has no class. */
@@ -111,7 +113,9 @@ export type BatchEntry =
   | { kind: 'delete'; cabinet_id: string; label: string | null; line: string; snapshot: DeleteSnapshot }
   /** A room / job colour row: `match` = its key columns; before / after = material_id (null = no row). */
   | { kind: 'wall'; cabinet_id: ''; label: null; line: string; wall_id: string }
-  | { kind: 'fixture'; cabinet_id: ''; label: null; line: string; fixture_id: string }
+  | { kind: 'fixture'; cabinet_id: ''; label: null; line: string; fixture_id: string
+      /** A moved fixture: its fields before (Undo puts them back instead of removing it). */
+      before?: Row }
   /** A job-wide change: one batch per room, under this parent (Undo undoes each). */
   | { kind: 'batch'; cabinet_id: ''; label: null; line: string; batch_id: string; room_name: string }
   /** CAD notes the AI drew (Undo removes them unless someone edited them since). */
@@ -286,7 +290,7 @@ type PlannedStep =
   | { kind: 'material'; table: string; match: Row; before: string | null; after: string | null; line: string; resolveIds: string[] }
   | { kind: 'wall'; tempId: string; row: Omit<Wall, 'id' | 'created_at'>; line: string }
   | { kind: 'markup'; rows: (Row & { _layer: MarkupLayer })[]; line: string }
-  | { kind: 'fixture'; row: Row; line: string }
+  | { kind: 'fixture'; row: Row; line: string; updateId?: string; before?: Row }
   | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
   | { kind: 'resolve'; id: string; line: string }
 
@@ -349,7 +353,10 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
   // Walls as the steps go: planned walls (temp id "newwall:…") join so later steps can use them.
   const walls: Wall[] = state.walls.map(w => ({ ...w }))
   const defs = await loadDefinitions(ops.flatMap(o => o.op === 'place' ? [o.code] : o.op === 'under_panel' ? Object.values(UNDER_PANEL_DEF) : []))
-  const catalog = await loadFixtures(ops.flatMap(o => o.op === 'fixture' ? [o.item] : []))
+  const catalog = await loadFixtures(ops.flatMap(o => o.op === 'fixture' && !o.existing ? [o.item] : []))
+  // Fixtures already in the room, for fixture steps that move one (existing).
+  const roomFixtures = ops.some(o => o.op === 'fixture' && o.existing)
+    ? ((await supabase.from('room_fixtures').select('*').eq('room_id', room.id)).data ?? []) as Row[] : []
   await loadHandleNames()
   await loadMaterialNames([
     ...ops.flatMap(o => o.op === 'update' ? Object.values(o.changes.materials ?? {}) : o.op === 'set_material' ? [o.material_id] : []),
@@ -480,20 +487,38 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         cabs = cabs.filter(x => x.id !== c.id)
       }
     } else if (op.op === 'fixture') {
-      const item = catalog.get(op.item.trim().toLowerCase())
-      if (!item || typeof item === 'string') { problems.push(`${n}: ${item ?? `no catalogue item "${op.item}"`}`); continue }
+      let fop = op
+      let item: Row | string | undefined, moving: Row | undefined
+      if (fop.existing) {
+        const q = fop.existing.trim().toLowerCase()
+        const name = (f: Row) => [f.label, f.display_name, f.name].filter(Boolean).map(v => String(v).toLowerCase())
+        const hits = roomFixtures.filter(f => name(f).some(v => v === q)).length ? roomFixtures.filter(f => name(f).some(v => v === q))
+          : roomFixtures.filter(f => name(f).some(v => v.includes(q)))
+        if (hits.length !== 1) { problems.push(`${n}: ${hits.length ? `"${fop.existing}" matches ${hits.length} fixtures` : `no fixture "${fop.existing}" in this room`} (${roomFixtures.map(f => f.label || f.display_name || f.name).join(', ') || 'none'}).`); continue }
+        item = moving = hits[0]
+      } else item = catalog.get(fop.item.trim().toLowerCase())
+      if (!item || typeof item === 'string') { problems.push(`${n}: ${item ?? `no catalogue item "${fop.item}"`}`); continue }
       const w = Number(item.width), d = Number(item.depth)
       const mount = String(item.mount) as 'floor' | 'under_bench' | 'benchtop' | 'wall'
+      // A bench item put in a gap by wall + offset that is really over a base cabinet goes ON it
+      // (linked, so the top's cut-out follows) — RHK6596: the laundry sink sat on Wall 1 unlinked.
+      if (!fop.on && fop.wall && fop.offset != null && !fop.back && (mount === 'benchtop' || mount === 'under_bench')) {
+        const wl = walls.find(x => x.name.toLowerCase() === fop.wall!.trim().toLowerCase())
+        const mid = fop.offset + w / 2
+        const under = wl && cabs.find(c => c.wall_id === wl.id && cabWallSide(c, wl) === 'face' && !c.is_kick_assembly && !c.assembly_class.startsWith('wall')
+          && c.has_carcass && wallOffset(c, wl) < mid && wallOffset(c, wl) + c.dx > mid)
+        if (under) fop = { ...fop, on: under.label ?? undefined, along: Math.round(mid - (wallOffset(under, wl!) + under.dx / 2)), wall: undefined, offset: undefined }
+      }
       let pose: { x: number; y: number; rotation: number; wall_id: string }
       let link: { cabinet_id: string | null; link_x: number; link_z: number; link_rot: number } = { cabinet_id: null, link_x: 0, link_z: 0, link_rot: 0 }
       let z = defaultFixtureZ(mount, item.mount_height as number | null)
       let where: string
-      if (op.on) {
-        const cab = cabs.find(x => (x.label ?? '').toLowerCase() === op.on!.trim().toLowerCase())
-        if (!cab) { problems.push(`${n}: no cabinet "${op.on}" to put ${item.name} on.`); continue }
+      if (fop.on) {
+        const cab = cabs.find(x => (x.label ?? '').toLowerCase() === fop.on!.trim().toLowerCase())
+        if (!cab) { problems.push(`${n}: no cabinet "${fop.on}" to put ${item.name} on.`); continue }
         const p = cabinetPlans([cab], walls, centroid(walls))[0]
         if (!p) { problems.push(`${n}: ${cab.label} isn't on a wall.`); continue }
-        const l = { link_x: cab.dx / 2 + (op.along ?? 0), link_z: op.from_back ?? cab.dz / 2, link_rot: 0 }
+        const l = { link_x: cab.dx / 2 + (fop.along ?? 0), link_z: fop.from_back ?? cab.dz / 2, link_rot: 0 }
         pose = linkedPose(l, p, w, d)
         // Benchtop / under-bench items link to base / tall cabinets, wall items to wall cabinets (as linkFor).
         const wallCab = cab.assembly_class.startsWith('wall')
@@ -501,20 +526,28 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         const top = cabBottomZ(cab, room, p.wall) + cab.dy
         if (mount === 'benchtop') z = top + 20 - (Number(item.bench_drop) || 0)   // on a 20 top until the benchtop is drawn
         else if (mount === 'wall' && wallCab) z = Math.max(0, cabBottomZ(cab, room, p.wall) - Number(item.height))
-        where = `on ${cab.label}${op.along ? ` (${op.along > 0 ? '+' : ''}${op.along} from centre)` : ''}`
+        where = `on ${cab.label}${fop.along ? ` (${fop.along > 0 ? '+' : ''}${fop.along} from centre)` : ''}`
       } else {
-        const wall = walls.find(x => x.name.toLowerCase() === (op.wall ?? '').trim().toLowerCase())
-        if (!wall || op.offset == null) { problems.push(`${n}: ${item.name} needs a cabinet to sit on (on) or a wall + offset for its gap.`); continue }
+        const wall = walls.find(x => x.name.toLowerCase() === (fop.wall ?? '').trim().toLowerCase())
+        if (!wall || fop.offset == null) { problems.push(`${n}: ${item.name} needs a cabinet to sit on (on) or a wall + offset for its gap.`); continue }
         // A stand-in "cabinet" the size of the item in the gap gives the same frame a cabinet there would.
-        const back = !!op.back
-        const at = wallAnchorPoint(wall, op.offset, back, centroid(walls))
+        const back = !!fop.back
+        const at = wallAnchorPoint(wall, fop.offset, back, centroid(walls))
         const gap = { id: 'gap', wall_id: wall.id, pos_x: at.x, pos_y: at.y, rotation: back ? wall.angle + 180 : wall.angle, dx: w, dz: d, assembly_class: 'base' } as unknown as CabinetInstance
         const p = cabinetPlans([gap], walls, centroid(walls))[0]
-        pose = linkedPose({ link_x: w / 2, link_z: d / 2 + (op.from_back ?? 0), link_rot: 0 }, p, w, d)
-        where = `${wall.name}${back ? ' back' : ''} @ ${Math.round(op.offset)}`
+        pose = linkedPose({ link_x: w / 2, link_z: d / 2 + (fop.from_back ?? 0), link_rot: 0 }, p, w, d)
+        where = `${wall.name}${back ? ' back' : ''} @ ${Math.round(fop.offset)}`
+      }
+      const placed: Row = { x: pose.x, y: pose.y, rotation: pose.rotation, wall_id: pose.wall_id, z: Math.round(z * 10) / 10, ...link, link_zone: null }
+      if (moving) {
+        const before = Object.fromEntries(Object.keys(placed).map(k => [k, moving![k] ?? null]))
+        const line = `Move ${moving.label || moving.display_name || moving.name} ${where}${link.cabinet_id ? ' (linked — benchtop cut-out follows)' : ''}`
+        steps.push({ kind: 'fixture', row: placed, line, updateId: moving.id as string, before })
+        lines.push(line)
+        continue
       }
       const body = Object.fromEntries(FIXTURE_BODY_KEYS.map(k => [k, item[k] ?? null]))
-      const row: Row = { room_id: room.id, catalog_id: item.id, ...body, x: pose.x, y: pose.y, rotation: pose.rotation, wall_id: pose.wall_id, z: Math.round(z * 10) / 10, ...link, link_zone: null }
+      const row: Row = { room_id: room.id, catalog_id: item.id, ...body, ...placed }
       const line = `Add ${item.name} ${where}${link.cabinet_id ? ' (linked — benchtop cut-out follows)' : ''}`
       steps.push({ kind: 'fixture', row, line })
       lines.push(line)
@@ -1027,6 +1060,12 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       const cabId = s.row.cabinet_id ? idFor.get(s.row.cabinet_id as string) ?? s.row.cabinet_id : null
       const wallId = idFor.get(s.row.wall_id as string) ?? s.row.wall_id
       if (String(cabId ?? '').startsWith('new:') || String(wallId).startsWith('newwall:')) { errors.push(`${s.line}: what it sits on wasn't added — skipped.`); continue }
+      if (s.updateId) {
+        const { error } = await supabase.from('room_fixtures').update({ ...s.row, cabinet_id: cabId, wall_id: wallId }).eq('id', s.updateId)
+        if (error) { errors.push(`${s.line}: save failed — ${error.message}`); continue }
+        entries.push({ kind: 'fixture', cabinet_id: '', label: null, line: s.line, fixture_id: s.updateId, before: s.before })
+        continue
+      }
       const { data, error } = await supabase.from('room_fixtures').insert({ ...s.row, cabinet_id: cabId, wall_id: wallId }).select('id').single()
       if (error || !data) { errors.push(`${s.line}: save failed — ${error?.message}`); continue }
       entries.push({ kind: 'fixture', cabinet_id: '', label: null, line: s.line, fixture_id: data.id as string })
@@ -1186,6 +1225,12 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
   }
 
   for (const e of entries) {
+    if (e.kind === 'fixture' && e.before) {
+      const { error: fe } = await supabase.from('room_fixtures').update(e.before).eq('id', e.fixture_id)
+      if (fe) { errors.push(`${e.line}: put back failed — ${fe.message}`); continue }
+      lines.push(`Put back ${e.line.replace(/^Move /, '').split(' on ')[0]}`)
+      continue
+    }
     if (e.kind === 'fixture') {
       const { error: fe } = await supabase.from('room_fixtures').delete().eq('id', e.fixture_id)
       if (fe) { errors.push(`${e.line}: remove failed — ${fe.message}`); continue }

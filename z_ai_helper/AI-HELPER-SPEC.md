@@ -729,6 +729,15 @@ blocks (Mark: later).
   deleting walls is still hand work), clockwise, Wall N names. Checked headless (AI Sketch
   Test): "900 wall from the end of Wall 2, turning left" → Wall 4 900 @ 180° from 1720,-630;
   applied + undone. Vaguer asks ("carrying on from Wall 2") get a which-way question.
+- **R6 fixtures (built):** Draw from my sketch put the Laundry tub on Wall 1 by offset, unlinked
+  (a top's cut-out wouldn't follow), and the chat couldn't move it. Now:
+  - fixture step `existing` = move a fixture already in the room (label / name) — usually onto
+    its cabinet (`on`), linked; Undo puts its old pose back (entry `before`).
+  - A benchtop / under-bench item given by wall + offset that lands over a base cabinet goes ON
+    that cabinet (along = offset from its centre), so the draw path links sinks itself.
+  - Prompt: sinks / basins always on their cabinet; an unknown basin model → catalogue stand-in +
+    TBC cloud. Checked on RHK6596 Laundry: "the laundry tub needs to be on BC-02" → moved, linked
+    (link 488 / 280 = centred), check ✓ — kept (Mark's fix).
 - **R5 copy cabinets from another room (built):** "once the vanity's right we'll duplicate it
   for the Ensuite" — no tool could. `copy` step {from_room, labels, wall, offset?}: the source
   rows as the canvas paste does (all settings; grain group + kick run cleared) placed along the
