@@ -722,6 +722,13 @@ blocks (Mark: later).
   `ceiling` (rooms.room_dy, 1500–6000; bulkheads on height-to-ceiling re-fit); room_plan
   setup.ceiling; draw set-up lists "Ceiling: N (room)" and says to use setup.ceiling rather than
   only wall heights; chat schema + description. RHK6596 Laundry ceiling 2400 → 2430 (batch 07640bce).
+- **R4 walls in chat (built):** the chat said "I can't add walls" — the batch had a `wall` step
+  (AI4) but the chat tool didn't offer it. Now `wall` {name?, x, y, length, angle, wall_type,
+  wall_height?} in change_cabinets; the room summary's wall lines give "start → end" (plan mm,
+  +y down) and own height so a new wall chains on; prompt: add only (moving / resizing /
+  deleting walls is still hand work), clockwise, Wall N names. Checked headless (AI Sketch
+  Test): "900 wall from the end of Wall 2, turning left" → Wall 4 900 @ 180° from 1720,-630;
+  applied + undone. Vaguer asks ("carrying on from Wall 2") get a which-way question.
 
 ## Open items (check while building)
 

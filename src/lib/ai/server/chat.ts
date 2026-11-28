@@ -63,7 +63,7 @@ const FILTER_SCHEMA = {
 const EDIT_TOOLS: Anthropic.Tool[] = [
   {
     name: 'change_cabinets',
-    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z for base / tall / under panels, offset along the wall, notes, scribes, handle_schedule, wallz = one overhead own underside, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "set_properties" (room / job set-up: ceiling, overhead top line or soffit, kick, class heights), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels), "resolve" (labels: re-resolve as they are), "hinges" (labels + per_door, optional door row,col), "interior" (label + interior moves on its numbered bays from get_cabinet_detail), "under_panel" (labels of the base cabinets / overheads it goes under, optional set_back). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
+    description: 'Make one change to the room as ordered steps, applied and undone together. Steps: "update" (filter + changes: width dx, height dy, depth dz, off-floor pos_z for base / tall / under panels, offset along the wall, notes, scribes, handle_schedule, wallz = one overhead own underside, materials = the cabinets own colours), "set_material" (a colour for a kind of cabinet across the room or the whole job), "set_properties" (room / job set-up: ceiling, overhead top line or soffit, kick, class heights), "place" (a library code from find_library, next_to a cabinet on its left/right, or on a wall at an offset), "delete" (labels), "resolve" (labels: re-resolve as they are), "hinges" (labels + per_door, optional door row,col), "interior" (label + interior moves on its numbered bays from get_cabinet_detail), "under_panel" (labels of the base cabinets / overheads it goes under, optional set_back), "wall" (a new wall: x, y start, length, angle). E.g. delete BC-04 then update BC-05 / BC-06 offsets to close the gap. Call it once per message.',
     input_schema: {
       type: 'object',
       properties: {
@@ -73,7 +73,7 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
           items: {
             type: 'object',
             properties: {
-              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup', 'fixture', 'resolve', 'hinges', 'interior', 'under_panel'] },
+              op: { type: 'string', enum: ['update', 'place', 'delete', 'set_material', 'set_properties', 'markup', 'fixture', 'resolve', 'hinges', 'interior', 'under_panel', 'wall'] },
               per_door: { type: ['integer', 'null'], description: 'hinges: hinges on each door (spaced with the shop insets); null = back to the shop rules' },
               door: {
                 type: 'object', description: 'hinges: just this door (row,col from get_cabinet_detail); leave out for every door',
@@ -176,6 +176,13 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
               blind_width: { type: 'number', description: 'place BCNR/L or BCNR/R (blind corner): false panel width = return run carcass depth + its door thickness + 2 + 40 (e.g. 560 + 18 + 2 + 40 = 620)' },
               dy: { type: 'number', description: 'place: height (else matched to the next_to cabinet, or the library default)' },
               labels: { type: 'array', items: { type: 'string' }, description: 'delete / resolve / hinges: cabinet labels; under_panel: the cabinets it goes under' },
+              name: { type: 'string', description: 'wall: its name, e.g. "Wall 4" (leave out = next Wall N / Island N)' },
+              x: { type: 'number', description: 'wall: start point x (plan mm, +x right)' },
+              y: { type: 'number', description: 'wall: start point y (plan mm, +y DOWN the plan)' },
+              length: { type: 'number', description: 'wall: length (mm)' },
+              angle: { type: 'number', description: 'wall: direction in degrees — 0 = +x (right), 90 = +y (down the plan), 180 = left, 270 = up' },
+              wall_type: { type: 'string', enum: ['standard', 'island'], description: 'wall: standard, or island (a run with no wall behind)' },
+              wall_height: { type: 'number', description: 'wall: its own height (leave out = the room ceiling)' },
               set_back: { type: 'number', description: 'under_panel: mm its front sits back from the cabinet fronts (e.g. 20); leave out = flush' },
               thickness: { type: 'number', description: 'under_panel: panel thickness; leave out = their exposed board thickness' },
             },
@@ -245,14 +252,15 @@ Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - under_panel: an under panel (WUP under overheads, BUP under bases) — give the cabinets it runs under. It is placed the way the canvas does it: between their outer gables, its underside at theirs (flush with the door bottoms), thickness = their exposed board, and a bottom scribe of that thickness on each so the fronts run down over its edge. "set back 20" = set_back 20. Never place WUP / BUP with place, and never set scribes for it yourself.
 - An under panel (and a floating shelf) sits at its OWN height off the floor (pos_z = its underside) — not the top line, not wallz. To move one up / down, update pos_z. get_cabinet_detail's "Height" line is where any cabinet really sits.
 - Overlap warnings in a proposal, and ⚠ lines in the check after Apply, are real until a fresh get_cabinet_detail shows otherwise. Never explain one away from what you expect the numbers to be.
-- You can NOT touch walls, benchtops, splashbacks, single kick pieces, hanging rails / accessories inside the interior, or front layouts yet — say so.
+- wall: ADD a wall (x, y start; length; angle 0 = right, 90 = down the plan; wall_type; wall_height only if it differs from the ceiling). The summary gives each wall's start → end, so a new wall that carries on from Wall 2 starts at Wall 2's end; walls run clockwise round the room. Name it as the canvas would (Wall N / Island N). Walls take the room's default thickness. A room with no walls: ask for the sizes, or point them at "Draw from my sketch" when there is a sketch. You can't move, resize or delete walls — say so.
+- You can NOT move / resize / delete walls, or touch benchtops, splashbacks, single kick pieces, hanging rails / accessories inside the interior, or front layouts yet — say so.
 - Whenever a request (or part of one) needs something no tool of yours can do, call report_gap for it first (once per missing feature), then tell the user. That list is what gets built next.
 - Clear request → just do it, no questions. Ambiguous or risky → ask_user FIRST, before any change_cabinets, with 2–4 short options (asking drops a proposal made earlier in the same message) (which cabinets? which side? what size? which end panel?). One question at a time.
 - After it, say in one to three short lines what changed (or what will change once they press Apply) and why, using the cabinet labels and the sizes. Undo is on the message.
 
 Doing what was asked (strict):
 - Do the real change or say plainly that you can't. NEVER put the request into a cabinet's notes (or any note) in place of doing it — e.g. "move the shelf 120 down", "only 4 hinges", "re-resolve" must not become edited note text. Notes change only when the user asks for a note.
-- If part of a request is beyond your tools (single kick pieces, hanging rails / accessories inside the interior, front layouts, walls, benchtops, splashbacks), do the parts you can and then say clearly which part you did NOT do, so the user does it on the canvas. Don't hide it, don't call it done.
+- If part of a request is beyond your tools (single kick pieces, hanging rails / accessories inside the interior, front layouts, moving / deleting walls, benchtops, splashbacks), do the parts you can and then say clearly which part you did NOT do, so the user does it on the canvas. Don't hide it, don't call it done.
 - Never claim a change that isn't in the change_cabinets result.
 - "Resolver error" / "Warning" lines in a result are real problems the change caused or found (e.g. a hinge plate over shelf holes): tell the user each one in plain words, and offer a fix if you have one.
 - Sizes are W×H×D: width = dx, height = dy, depth = dz.
@@ -348,7 +356,7 @@ async function history(conversationId: string, roomId: string): Promise<Anthropi
 }
 
 type ChangesIn = Omit<CabinetChanges, 'materials'> & { handle_schedule?: string | null; materials?: Partial<Record<MaterialRole, string | null>> }
-interface StepIn { ceiling?: number; set_back?: number; thickness?: number; op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[]; per_door?: number | null; door?: { row: number; col: number }; label?: string; moves?: InteriorAction[] }
+interface StepIn { name?: string; x?: number; y?: number; length?: number; angle?: number; wall_type?: 'standard' | 'island'; wall_height?: number; ceiling?: number; set_back?: number; thickness?: number; op?: string; rooms?: string[]; item?: string; on?: string; along?: number; from_back?: number; notes?: import('./cabinetBatch').MarkupNote[]; blind_width?: number; wall_soffit_drop?: number | null; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; overhead_top?: number; soffit_drop?: number; level?: 'room' | 'job'; role?: string; classes?: ('base' | 'wall' | 'tall')[]; material?: string | null; filter?: CabinetFilter; changes?: ChangesIn; code?: string; wall?: string; offset?: number; at_end?: 'left' | 'right'; back?: boolean; dy?: number; next_to?: { label: string; side: 'left' | 'right' }; dx?: number; labels?: string[]; per_door?: number | null; door?: { row: number; col: number }; label?: string; moves?: InteriorAction[] }
 interface EditInput { description?: string; steps?: StepIn[] }
 
 export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
@@ -466,11 +474,14 @@ export async function runChatTurn(args: ChatTurnArgs): Promise<ChatTurnResult> {
         const label = st.label ?? (selLabels.length === 1 ? selLabels[0] : undefined)
         if (!label || !st.moves?.length) return { text: `Step ${i + 1}: interior needs one cabinet label and its moves.`, isError: true }
         ops.push({ op: 'interior', label, actions: st.moves })
+      } else if (st.op === 'wall') {
+        if (st.x == null || st.y == null || st.length == null || st.angle == null) return { text: `Step ${i + 1}: a wall needs x, y, length and angle.`, isError: true }
+        ops.push({ op: 'wall', name: st.name, x: st.x, y: st.y, length: st.length, angle: st.angle, type: st.wall_type, height: st.wall_height ?? null })
       } else if (st.op === 'under_panel') {
         const labels = st.labels?.length ? st.labels : selection ? selLabels : []
         if (!labels.length) return { text: `Step ${i + 1}: under_panel needs the labels of the cabinets it goes under.`, isError: true }
         ops.push({ op: 'under_panel', labels, set_back: st.set_back, thickness: st.thickness })
-      } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material, set_properties, markup, fixture, resolve, hinges, interior or under_panel.`, isError: true }
+      } else return { text: `Step ${i + 1}: op must be update, place, delete, set_material, set_properties, markup, fixture, resolve, hinges, interior, under_panel or wall.`, isError: true }
       for (let k = before; k < ops.length; k++) opRooms[k] = st.rooms?.length ? st.rooms : undefined
     }
     if (!ops.length) return { text: 'No steps.', isError: true }

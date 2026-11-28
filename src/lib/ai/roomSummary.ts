@@ -47,9 +47,10 @@ export function formatRoomSummary(d: RoomSummaryData): string {
   const lines: string[] = [
     `Room: ${d.room.name}`,
     `Ceiling ${d.room.room_dy ?? 'not set'} · overhead top line ${Math.round(top)} from the floor${d.room.soffit_height != null ? ` (soffit ${d.room.soffit_height} down from the ceiling)` : d.room.wall_cabinet_top != null ? '' : ' (default)'} — overheads hang from it.`,
-    '', 'Walls (name | length | angle | type):']
+    '', 'Walls (name | length | angle | type | start → end, plan mm: +x right, +y down):']
   for (const w of [...d.walls].sort((a, b) => a.sort_order - b.sort_order)) {
-    lines.push(`${w.name} | ${Math.round(w.length)} | ${Math.round(w.angle)}° | ${w.wall_type}`)
+    const a = (w.angle * Math.PI) / 180, r1 = (v: number) => Math.round(v * 10) / 10
+    lines.push(`${w.name} | ${Math.round(w.length)} | ${Math.round(w.angle)}° | ${w.wall_type}${w.height != null ? ` | ${Math.round(Number(w.height))} high` : ''} | ${r1(w.pos_x)},${r1(w.pos_y)} → ${r1(w.pos_x + w.length * Math.cos(a))},${r1(w.pos_y + w.length * Math.sin(a))}`)
   }
 
   lines.push('', 'Cabinets (label | code | class | wall [back] @ offset | W×H×D | underside off floor | fronts | carcass):')
