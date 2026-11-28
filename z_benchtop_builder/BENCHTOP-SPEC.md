@@ -717,6 +717,8 @@ defaults — **not locked** until Mark has tried it.
   three live rooms (L + two-sided island; pie corner + peninsula + fridge) —
   headless in-app check not possible (no AUTOMATION_* creds).
 - Tutorial: **Auto-build benchtops** (basics ▸ benchtops).
+- **AI helper (2026-11-28, z_ai_helper R8):** the chat's `benchtops` step runs `planAutoBuild`
+  server-side with these defaults (no click-through) and sets the asked build method / schedule.
 
 ### Phase 9 — Benchtop edit window  `[x]` done (2026-11-27), checked by Mark 2026-11-28
 Mark (2026-11-27): "benchtops to be able to right click edit and we can see them in a

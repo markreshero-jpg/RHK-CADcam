@@ -86,6 +86,10 @@ export type BatchOp =
    *  finish (same sizes / holes — supplier code and cost left for the shop). level = set it on
    *  this room or the whole job. */
   | { op: 'handle_schedule'; name: string; from_schedule?: string; finish?: string; level?: 'room' | 'job' }
+  /** Benchtops over base cabinets, as F4 → Auto-build tops (z_benchtop_builder Phase 8): one top
+   *  per wall run, its rules and defaults. labels = only over these (default every base cabinet
+   *  without a top); method / schedule = names (default the room → job → shop one). */
+  | { op: 'benchtops'; labels?: string[]; method?: string; schedule?: string; front_overhang?: number; end_overhang?: number; corner?: 'mitre' | 'butt' }
 
 export type MarkupLayer = 'general' | 'questions' | 'site' | 'electrical'
 export interface MarkupNote {
@@ -131,6 +135,8 @@ export type BatchEntry =
   /** A handle schedule the AI made (+ the handle product it copied, if any) and where it was set. */
   | { kind: 'handle_schedule'; cabinet_id: ''; label: null; line: string; schedule_id: string; handle_id: string | null
       set: { table: 'rooms' | 'projects'; row_id: string; before: string | null } | null }
+  /** Benchtops the AI added (Undo removes them unless edited since). */
+  | { kind: 'benchtops'; cabinet_id: ''; label: null; line: string; benchtop_ids: string[] }
   /** A plain re-resolve — nothing to put back on Undo. */
   | { kind: 'resolve'; cabinet_id: string; label: string | null; line: string }
 
@@ -301,6 +307,7 @@ type PlannedStep =
   | { kind: 'fixture'; row: Row; line: string; updateId?: string; before?: Row }
   | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
   | { kind: 'resolve'; id: string; line: string }
+  | { kind: 'benchtops'; rows: Row[]; line: string }
   | { kind: 'handle_schedule'; line: string; handle: Row | null; schedule: Row; entries: Row[]; mainFrom: string | null
       set: { table: 'rooms' | 'projects'; rowId: string; before: string | null } | null }
 
@@ -722,6 +729,58 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           if (keep.length) warnings.push(`${keep.join(', ')} ${keep.length === 1 ? 'has its' : 'have their'} own ${CLASS_WORD[cls!]} ${ROLE_WORD[key]} — unchanged there.`)
         }
       }
+    } else if (op.op === 'benchtops') {
+      if (cabs.some(c => c.id.startsWith('new:'))) { problems.push(`${n}: build the tops in a next message, once the cabinets added here are in.`); continue }
+      const [{ data: fx }, { data: bts }, { data: methods }, { data: scheds }] = await Promise.all([
+        supabase.from('room_fixtures').select('*').eq('room_id', room.id),
+        supabase.from('benchtop_instances').select('*').eq('room_id', room.id),
+        supabase.from('benchtop_build_methods').select('id, name'),
+        supabase.from('benchtop_schedules').select('id, name').eq('active', true),
+      ])
+      const pickBy = (rows: { id: string; name: string }[] | null, want: string | undefined, what: string): string | null | { error: string } => {
+        if (!want) return null
+        const q = want.trim().toLowerCase(), all = rows ?? []
+        const hit = all.find(r => r.name.toLowerCase() === q) ?? (all.filter(r => r.name.toLowerCase().includes(q)).length === 1 ? all.find(r => r.name.toLowerCase().includes(q)) : undefined)
+        return hit ? hit.id : { error: `no single benchtop ${what} "${want}" (${all.map(r => r.name).join('; ')})` }
+      }
+      const methodId = pickBy(methods as { id: string; name: string }[] | null, op.method, 'build method')
+      const schedId = pickBy(scheds as { id: string; name: string }[] | null, op.schedule, 'schedule')
+      if (methodId && typeof methodId === 'object') { problems.push(`${n}: ${methodId.error}.`); continue }
+      if (schedId && typeof schedId === 'object') { problems.push(`${n}: ${schedId.error}.`); continue }
+      let cabIds: string[] | null = null
+      if (op.labels?.length) {
+        const sel = op.labels.map(l => cabs.find(c => (c.label ?? '').toLowerCase() === String(l).trim().toLowerCase()))
+        if (sel.some(c => !c)) { problems.push(`${n}: no cabinet ${op.labels.filter((_, k) => !sel[k]).join(', ')}.`); continue }
+        cabIds = (sel as CabinetInstance[]).map(c => c.id)
+      } else if (only) cabIds = [...only]
+      const { loadRoomHandleSchedule } = await import('@/src/lib/resolver/loadCabinetInput')
+      const { btFrontOverhang } = await import('@/src/lib/benchtopSeed')
+      const { planAutoBuild } = await import('@/src/lib/benchtopAutoBuild')
+      const { shapeWrite } = await import('@/src/lib/benchtopGeometry')
+      const { autoAnchor } = await import('@/src/lib/benchtopAnchor')
+      const front = op.front_overhang ?? btFrontOverhang(await loadRoomHandleSchedule(room.id, room.project_id).catch(() => ({})))
+      const plan = planAutoBuild(
+        { walls, cabinets: cabs, fixtures: (fx ?? []) as never, benchtops: (bts ?? []) as never, cabIds },
+        { frontOverhang: front, endOverhang: op.end_overhang ?? 0, bridgeGap: 650, corner: op.corner ?? 'mitre', islandBackOverhang: 0, skipCovered: true,
+          waterfall: 'none', waterfallJoin: 'mitre', waterfallProfileId: null, waterfallOverhang: 20, edgeProfileId: null },
+      )
+      const tops = plan.tops.filter(t => !t.skip)
+      if (!tops.length) { problems.push(`${n}: no tops to build — ${plan.warnings.join(' ') || (bts?.length ? 'the base cabinets already have tops' : 'no base cabinets on a wall')}.`); continue }
+      const label = (c: string) => cabs.find(x => x.id === c)?.label ?? '?'
+      const rows: Row[] = tops.map((t, k) => ({
+        room_id: room.id, label: `Benchtop ${(bts?.length ?? 0) + k + 1}`, ...shapeWrite(t.segs), ...(autoAnchor(t.segs, walls, centroid(walls)) ?? {}),
+        joins: [], cutout_polygons: [], benchtop_build_method_id: methodId, benchtop_schedule_id: schedId, notes: 'Built by the AI helper (auto-build)',
+      }))
+      const mName = methodId ? (methods as { id: string; name: string }[]).find(m => m.id === methodId)?.name : null
+      const sName = schedId ? (scheds as { id: string; name: string }[]).find(m => m.id === schedId)?.name : null
+      const line = [
+        `Add ${tops.length} benchtop${tops.length > 1 ? 's' : ''}${mName || sName ? ` — ${[mName, sName].filter(Boolean).join(', ')}` : ' (room / job default method)'}, front overhang ${front}:`,
+        ...tops.map((t, k) => `  ${rows[k].label}: ${t.wallName}, ${Math.round(t.length)} × ${Math.round(t.depth)} over ${t.cabIds.map(label).join(', ')} (ends ${t.ends.join(' / ')})`),
+        ...plan.corners.map(c => `  Corner ${c.kind === 'T' ? 'tee' : 'joint'}: ${c.choice}`),
+      ].join('\n')
+      steps.push({ kind: 'benchtops', rows, line })
+      lines.push(line)
+      warnings.push(...plan.warnings)
     } else if (op.op === 'handle_schedule') {
       const name = (op.name ?? '').trim()
       if (!name) { problems.push(`${n}: the new schedule needs a name.`); continue }
@@ -1141,6 +1200,12 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       entries.push({ kind: 'markup', cabinet_id: '', label: null, line: s.line, annotation_ids: ((data ?? []) as { id: string }[]).map(a => a.id) })
       continue
     }
+    if (s.kind === 'benchtops') {
+      const { data, error } = await supabase.from('benchtop_instances').insert(s.rows).select('id')
+      if (error || !data) { errors.push(`Benchtops: add failed — ${error?.message}`); continue }
+      entries.push({ kind: 'benchtops', cabinet_id: '', label: null, line: s.line, benchtop_ids: (data as { id: string }[]).map(b => b.id) })
+      continue
+    }
     if (s.kind === 'handle_schedule') {
       let handleId: string | null = null
       if (s.handle) {
@@ -1343,6 +1408,18 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
         const { error: ae } = await supabase.from('room_annotations').delete().in('id', untouched)
         if (ae) { errors.push(`${e.line}: remove failed — ${ae.message}`); continue }
         lines.push(`Removed ${e.line.split(':')[0]}`)
+      }
+      continue
+    }
+    if (e.kind === 'benchtops') {
+      const { data: cur } = await supabase.from('benchtop_instances').select('id, created_at, updated_at').in('id', e.benchtop_ids)
+      const rows = (cur ?? []) as { id: string; created_at: string; updated_at: string }[]
+      const untouched = rows.filter(b => Math.abs(new Date(b.updated_at).getTime() - new Date(b.created_at).getTime()) < 5000).map(b => b.id)
+      if (untouched.length < rows.length) warnings.push(`${rows.length - untouched.length} benchtop${rows.length - untouched.length > 1 ? 's were' : ' was'} edited since — left in place.`)
+      if (untouched.length) {
+        const { error: be } = await supabase.from('benchtop_instances').delete().in('id', untouched)
+        if (be) { errors.push(`Benchtops: remove failed — ${be.message}`); continue }
+        lines.push(`Removed ${untouched.length} benchtop${untouched.length > 1 ? 's' : ''}`)
       }
       continue
     }

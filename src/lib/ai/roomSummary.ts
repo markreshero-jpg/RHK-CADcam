@@ -24,6 +24,8 @@ export interface RoomSummaryData {
   /** Splashbacks (z_splashback) + the names of the schedules set on them. */
   splashbacks?: Pick<SplashbackInstance, 'id' | 'label' | 'wall_id' | 'wall_side' | 'segments' | 'splashback_schedule_id'>[]
   sbScheduleNames?: Map<string, string>
+  /** Benchtops (z_benchtop_builder): label, anchor wall, method / schedule names. */
+  benchtops?: { label: string | null; wall_id: string | null; method: string | null; schedule: string | null }[]
 }
 
 /** Offset of a cabinet along its wall (mm from the wall's start), as getState() reports it. */
@@ -83,6 +85,11 @@ export function formatRoomSummary(d: RoomSummaryData): string {
     ].join(' | '))
   }
 
+  if (d.benchtops?.length) {
+    lines.push('', 'Benchtops (label | wall | build method | schedule):')
+    for (const b of d.benchtops) lines.push(`${b.label ?? 'Benchtop'} | ${(b.wall_id && wallById.get(b.wall_id)?.name) || '-'} | ${b.method ?? 'room / job default'} | ${b.schedule ?? 'room / job default'}`)
+  } else if (d.cabinets.some(c => c.assembly_class === 'base' || c.assembly_class === 'base_corner')) lines.push('', 'Benchtops: none yet.')
+
   // Colour TBC (z_ai_helper R2): a board with colours picked without one resolves in its
   // default colour (e.g. White) with a COLOUR_NOT_CHOSEN warning — that is "colour TBC", not White.
   const tbc = colourTbc(d.cabinets)
@@ -117,6 +124,18 @@ export function formatRoomSummary(d: RoomSummaryData): string {
   return lines.join('\n')
 }
 
+async function benchtopRows(rows: { label: string | null; wall_id: string | null; benchtop_build_method_id: string | null; benchtop_schedule_id: string | null }[]) {
+  if (!rows.length) return []
+  const ids = (k: 'benchtop_build_method_id' | 'benchtop_schedule_id') => [...new Set(rows.map(r => r[k]).filter((x): x is string => !!x))]
+  const [m, s] = await Promise.all([
+    ids('benchtop_build_method_id').length ? supabase.from('benchtop_build_methods').select('id, name').in('id', ids('benchtop_build_method_id')) : Promise.resolve({ data: [] }),
+    ids('benchtop_schedule_id').length ? supabase.from('benchtop_schedules').select('id, name').in('id', ids('benchtop_schedule_id')) : Promise.resolve({ data: [] }),
+  ])
+  const mn = new Map(((m.data ?? []) as { id: string; name: string }[]).map(x => [x.id, x.name]))
+  const sn = new Map(((s.data ?? []) as { id: string; name: string }[]).map(x => [x.id, x.name]))
+  return rows.map(r => ({ label: r.label, wall_id: r.wall_id, method: r.benchtop_build_method_id ? mn.get(r.benchtop_build_method_id) ?? null : null, schedule: r.benchtop_schedule_id ? sn.get(r.benchtop_schedule_id) ?? null : null }))
+}
+
 /** COLOUR_NOT_CHOSEN warnings from each cabinet's last resolve, grouped by part + board. */
 export function colourTbc(cabs: { label: string | null }[]) {
   const by = new Map<string, { what: string; board: string; shows: string; labels: string[] }>()
@@ -138,13 +157,14 @@ export function colourTbc(cabs: { label: string | null }[]) {
 
 /** Load everything formatRoomSummary needs for one room (8 reads, run in parallel where possible). */
 export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryData> {
-  const [roomQ, wallsQ, cabsQ, fixQ, sbQ, sbSchedQ] = await Promise.all([
+  const [roomQ, wallsQ, cabsQ, fixQ, sbQ, sbSchedQ, btQ] = await Promise.all([
     supabase.from('rooms').select('*').eq('id', roomId).single(),
     supabase.from('walls').select('*').eq('room_id', roomId),
     supabase.from('cabinet_instances').select('*').eq('room_id', roomId),
     supabase.from('room_fixtures').select('id, label, display_name, name, cabinet_id').eq('room_id', roomId),
     supabase.from('splashback_instances').select('id, label, wall_id, wall_side, segments, splashback_schedule_id').eq('room_id', roomId),
     supabase.from('splashback_schedules').select('id, name'),
+    supabase.from('benchtop_instances').select('label, wall_id, benchtop_build_method_id, benchtop_schedule_id').eq('room_id', roomId).order('label'),
   ])
   if (roomQ.error) throw new Error(`room ${roomId}: ${roomQ.error.message}`)
   const cabinets = (cabsQ.data ?? []) as CabinetInstance[]
@@ -176,6 +196,7 @@ export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryDa
     handleNames: names(handlesQ.data as { id: string; name: string }[] | null),
     splashbacks: (sbQ.data ?? []) as RoomSummaryData['splashbacks'],
     sbScheduleNames: names(sbSchedQ.data as { id: string; name: string }[] | null),
+    benchtops: await benchtopRows((btQ.data ?? []) as { label: string | null; wall_id: string | null; benchtop_build_method_id: string | null; benchtop_schedule_id: string | null }[]),
   }
 }
 

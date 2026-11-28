@@ -738,6 +738,17 @@ blocks (Mark: later).
   - Prompt: sinks / basins always on their cabinet; an unknown basin model → catalogue stand-in +
     TBC cloud. Checked on RHK6596 Laundry: "the laundry tub needs to be on BC-02" → moved, linked
     (link 488 / 280 = centred), check ✓ — kept (Mark's fix).
+- **R8 benchtops (built):** "draw 20 mm stone tops, colour TBC" was logged as a gap. `benchtops`
+  step {labels?, method?, schedule?, front_overhang?, end_overhang?, corner?} runs F4 → Auto-build
+  tops' planner (`planAutoBuild`, Phase 8 rules A-a…A-d) server-side with the dialog's defaults
+  (front = btFrontOverhang of the room's handle schedule, bridge 650, mitre corners, skip covered
+  cabinets, no waterfalls), anchors each top (`autoAnchor`), sets the named build method /
+  schedule on each, one insert; Undo removes the tops unless edited since. Fixture cut-outs come
+  from linked fixtures (R6). Room summary lists Benchtops (label | wall | method | schedule) or
+  "none yet". Editing built tops (shape, waterfalls, joins) stays F4. Checked headless (AI Sketch
+  Test, applied + undone) and built for RHK6596 (Mark's ask): Laundry 1970 × 600 over BC-01–03
+  (tub cut-out), Bathroom 1200 × 540 over BC-01–04 — 20mm Stone, "20mm Reconstituted Stone –
+  Colour TBC" (batches e1335dc3, 117e9694).
 - **R7 handle schedules (built):** "small lip pull, black" — the shop only had Lip Pull 50
   Brushed Nickel and the chat couldn't add one. `handle_schedule` step {name, from_schedule?
   (default: the room's), finish?, level?}: finish copies the schedule's main handle product in
