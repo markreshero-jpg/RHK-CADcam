@@ -308,12 +308,20 @@ export function resolveShapedKick(
     edges.forEach((ed, i) => {
       if (ed.kind !== 'front' || ed.none) return
       const e = kEdge(K, i), f = edgeFrame(e)
-      const q = Math.max(0, Math.floor(f.len / r.TOESP) - 1)
-      const sp = f.len / (q + 1)
-      for (let j = 1; j <= q; j++) {
-        const at = sp * j - TI / 2
-        spreader({ x: e.p0.x + f.u.x * at, y: e.p0.y + f.u.y * at }, f.n, f.u, KI, TF + TI + TI)
-      }
+      const at0 = (at: number) => spreader({ x: e.p0.x + f.u.x * at, y: e.p0.y + f.u.y * at }, f.n, f.u, KI, TF + TI + TI)
+      // Where this face meets the next leg's face (the angled corner), a spreader on this
+      // leg right behind the corner of the sub fronts (KA2, Mark 2026-11-28: it was open there).
+      const tOf = (v: ShapePt) => (v.x - e.p0.x) * f.u.x + (v.y - e.p0.y) * f.u.y
+      const prevFront = edges[(i - 1 + n) % n].kind === 'front' && !edges[(i - 1 + n) % n].none
+      const nextFront = edges[(i + 1) % n].kind === 'front' && !edges[(i + 1) % n].none
+      let lo = 0, hi = f.len
+      if (prevFront) { const t = Math.max(0, tOf(KI[i])); if (t + TI < f.len) { at0(t); lo = t } }
+      if (nextFront) { const t = Math.min(f.len, tOf(KI[(i + 1) % n])) - TI; if (t > lo + TI) { at0(t); hi = t + TI } }
+      // The rest at TOESP centres between them.
+      const span = hi - lo
+      const q = Math.max(0, Math.floor(span / r.TOESP) - 1)
+      const sp = span / (q + 1)
+      for (let j = 1; j <= q; j++) at0(lo + sp * j - TI / 2)
     })
   } else {
     // Internal spreaders at TOESP centres across the kick's width, front-to-back.

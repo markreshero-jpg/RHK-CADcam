@@ -424,5 +424,10 @@ Wall 1 and built a straight kick; the Wall 2 cabinet kept its own.
 - Result on the test room: face 1272 (Wall 1, split 2 × 636.1) + 672.2 (Wall 2), 22.5° mitre at the front corner;
   sub fronts 1279 + 679; backs 1523 + 923, 22.5° mitre in the wall corner; end spreaders square to each wall.
 
+**KA2 (2026-11-28, Mark's check):** the corner was open — the TOESP spacing per face left no spreader near the mitre
+(DHID: nothing from 624 on Wall 1 to Wall 2's end spreader). Now each leg gets a spreader right behind the corner of the
+sub fronts (where the inner lines cross), square to its own face, and the rest are spaced at TOESP between those and
+the end spreaders. DHID KICK 1 re-resolved: 1249 on Wall 1 + 1694/194 on Wall 2. In-app check pending.
+
 **Not yet:** an AI step for it (the chat still logs "kick pieces"); walls that meet tail-to-tail; a filler that isn't
 BFKANG (a plain filler at a 90° corner is the normal L corner, untouched).
