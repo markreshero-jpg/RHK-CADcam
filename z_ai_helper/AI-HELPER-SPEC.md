@@ -685,6 +685,17 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     check headlessCad.test.ts (CAD_RUN), AI4_RUN takes `"sketch": true`.
 - **Next:** an AI step for joining kicks round an angled corner (after the KA1 in-app check).
 
+## To build — Mark's running list (from his chats; add as he finds more)
+
+Not started. Each also has an open `ai_gaps` row (the chat logs its own as it hits them).
+
+| # | From | Ask | What the chat can't do | Notes |
+|---|------|-----|------------------------|-------|
+| T1 | RHK9999 BBQ, BC-10 | "space the hinges further apart, lower to the bottom and higher to the top" | **hinge positions** — only hinge count | 270 high doors got hinges at 100 / 170 (70 apart): the hinge rule's 100 top / bottom inset pushes them to the middle on a short door. Two fixes to decide: a per-door hinge position step, and/or the shop rule using a smaller inset on short doors. |
+| T2 | RHK9999 BBQ, BC-01 | "re-hinge BC-01 so it is on the right" | **hinge side** — can't swap L/R | Single door sink cupboard, hinged left. |
+| T3 | RHK9999 BBQ | asked about BC-01 while BC-10 was selected | **selection scope** — told Mark to select BC-01 first | When the user names a cabinet, work on it even if another is selected (selection = default, not a lock). |
+| T4 | RHK6586 | "fix the kick join in the back corner on the angle" | **kick pieces** | App side done (KA1 + KA2, Mark checked 2026-11-28); needs the AI step (join kicks round an angled filler). |
+
 ## Benchtop heights + cabinet-into-top clash (RHK9999 chat, 2026-11-28)
 
 Mark asked if BC-10 (under the dropped Egg top) was into the stone; the chat couldn't see benchtop heights and asked
