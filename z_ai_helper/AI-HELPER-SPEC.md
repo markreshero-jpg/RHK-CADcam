@@ -711,6 +711,17 @@ page), and each message has a **Copy** button (text + its change lines). Check i
 - Checked headless on RHK1234 (applied + undone exactly) and plan-only on RHK6603 WIR (BFKW beside BC-02 → 100 / 867,
   no kick, 560; TC-01 split → copy 819×1933×460). In-app check pending.
 
+## Built 2026-11-28 — RHK6603 WIR chat, round 2
+
+- **Split shares out the bays:** an interior split by dividers into one bay per piece gives each piece its own bay
+  (TC-01's 2 bays → 1 each; before, both halves kept both bays, 12 drawers where there were 6). Otherwise a warning;
+  copied notes get a warning too.
+- **Interior on a cabinet added in the same change** (the split's new piece) — no more "next message".
+- **Per-cabinet kick:** update `kick` true / false (has_toekick; height and off-floor kept, so the carcass runs down
+  over where the kick was — TC-05 on BC-08's plinth) and `kick_height` (rule TOEH, null = the room / job).
+  Refused for joined-kick members / assemblies. The chat had offered the room kick at 0 instead.
+- Checked headless on RHK1234 (applied + undone exactly).
+
 ## To build — Mark's running list (from his chats; add as he finds more)
 
 Open unless marked built. Each also has an `ai_gaps` row (the chat logs its own as it hits them).

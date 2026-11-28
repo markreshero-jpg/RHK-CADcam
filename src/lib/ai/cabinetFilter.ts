@@ -46,6 +46,11 @@ export interface CabinetChanges {
   notes?: string | null
   /** mm per side; null = back to the inherited (room / job) scribe. */
   scribes?: Partial<Record<ScribeSide, number | null>>
+  /** The cabinet's own kick on / off (has_toekick) — it keeps its height and height off the floor,
+   *  so the carcass runs down over where the kick was (TC-05 on a plinth, RHK6603). */
+  kick?: boolean
+  /** This cabinet's own kick height (rule TOEH); null = back to the room / job kick. */
+  kick_height?: number | null
   /** Front reveals, mm; null = back to the room / job (class) reveal. */
   reveals?: Partial<Record<RevealSide, number | null>>
   /** handle_schedules id (the server turns the name into it); null = inherit room / job. */
@@ -56,7 +61,7 @@ export interface CabinetChanges {
   materials?: Partial<Record<MaterialRole, string | null>>
 }
 
-export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'reveals', 'handle_schedule_id', 'materials', 'wallz'] as const
+export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'reveals', 'kick', 'kick_height', 'handle_schedule_id', 'materials', 'wallz'] as const
 
 export interface MatchContext {
   walls: Wall[]
@@ -114,6 +119,8 @@ export function validateChanges(ch: CabinetChanges): string[] {
     if (!(side in SCRIBE_KEY)) errs.push(`unknown scribe side "${side}" (left, right, top, bottom, back)`)
     else if (v !== null && !(Number.isFinite(v) && v >= 0 && v <= 200)) errs.push(`scribe ${side} must be 0–200 mm`)
   }
+  if (ch.kick !== undefined && typeof ch.kick !== 'boolean') errs.push('kick must be true (on) or false (off)')
+  if (ch.kick_height != null && !(Number.isFinite(ch.kick_height) && ch.kick_height >= 20 && ch.kick_height <= 400)) errs.push('kick_height must be 20–400 mm (to take the kick off, kick: false)')
   for (const [side, v] of Object.entries(ch.reveals ?? {})) {
     if (!(side in REVEAL_KEY)) errs.push(`unknown reveal "${side}" (top, bottom, left, right, door_gap, row_gap)`)
     else if (v !== null && !(Number.isFinite(v) && v >= 0 && v <= 50)) errs.push(`reveal ${side} must be 0–50 mm (a reveal can't go below 0)`)
@@ -144,6 +151,15 @@ export function patchFor(c: CabinetInstance, ch: CabinetChanges, walls: Wall[]):
       if (v === null) delete next[key]; else next[key] = Math.round(v * 10) / 10
     }
     if (JSON.stringify(next) !== JSON.stringify(cur)) u.rule_overrides = next
+  }
+  if (ch.kick !== undefined && !!c.has_toekick !== ch.kick) u.has_toekick = ch.kick
+  if (ch.kick_height !== undefined) {
+    const cur = (u.rule_overrides ?? c.rule_overrides ?? {}) as Record<string, unknown>
+    if ((cur.TOEH ?? null) !== ch.kick_height) {
+      const next = { ...cur }
+      if (ch.kick_height === null) delete next.TOEH; else next.TOEH = Math.round(ch.kick_height * 10) / 10
+      u.rule_overrides = next
+    }
   }
   if (ch.reveals) {
     const cur = (u.rule_overrides ?? c.rule_overrides ?? {}) as Record<string, unknown>

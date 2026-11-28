@@ -145,6 +145,8 @@ const EDIT_TOOLS: Anthropic.Tool[] = [
                     properties: Object.fromEntries(['left', 'right', 'top', 'bottom', 'back'].map(k => [k, { type: ['number', 'null'] }])),
                     additionalProperties: false,
                   },
+                  kick: { type: 'boolean', description: 'This cabinet own kick on (true) / off (false) — it keeps its height and off-floor height (the carcass runs down over where the kick was)' },
+                  kick_height: { type: ['number', 'null'], description: 'This cabinet own kick height (mm); null = the room / job kick' },
                   reveals: {
                     type: 'object', description: 'Front reveals in mm (gap from the front edge to the carcass edge; door_gap between doors, row_gap between rows); null = back to the room / job reveal',
                     properties: Object.fromEntries(['top', 'bottom', 'left', 'right', 'door_gap', 'row_gap'].map(k => [k, { type: ['number', 'null'] }])),
@@ -255,7 +257,9 @@ Scope: each message says the scope. "Selection" = the cabinets the user has sele
 
 Changing cabinets (change_cabinets — one call per message, as ordered steps):
 - update: width, height, depth, height off the floor, position along the wall (offset), notes, scribes, reveals, handle schedule.
+- kick: one cabinet's own kick — "take the kick off TC-05" / "it should be without a kick" = update kick false (it stays where it is; the carcass fills down to its underside, e.g. a tall standing on a base box / plinth). kick_height = that cabinet's own kick height (not the room's — never change the room kick for one cabinet). A cabinet in a joined kick can't: its kick is the joined one.
 - reveals: a front's gap to the carcass edge — "2mm bottom reveal on WC-04" = update reveals { bottom: 2 }. Not scribes (a scribe is extra board, never below 0).
+- split + interior: a cabinet whose interior has one bay per piece (e.g. 2 bays side by side split in 2) gives each piece its own bay. Otherwise fix each piece with interior steps in the SAME call (the new piece's label is in the plan, e.g. TC-07) — don't leave it for a next message.
 - split: "split TC-03 into a shelving cabinet and an open cabinet" / "it's too wide, make it two" = split with the widths (left → right as you face it, adding up to its width; halves unless told). The new pieces are copies (same fronts, kick, colours, interior), then change each piece in later steps of the same call (interior, fronts). Never place a library cabinet for a split.
 - fronts: doors off / open cabinet = fronts face_type open (every front, or door row,col); put a door back = face_type door; "re-hinge BC-01 on the right" = fronts hinge_side right. Read get_cabinet_detail for the rows / cols.
 - join_kicks: "join the kicks" / "join all kicks" / "run KICK 1 under BC-09" = join_kicks — with labels (one cabinet per run, e.g. ["BC-09"]) or none for every run in the room. It takes the whole touching run of floor cabinets on the wall (round an angled corner filler onto the next wall too), and a joined kick already in it is re-joined with the new ones as one kick, keeping its name and colours. A cabinet added in this same change can't join yet — join in the next message. Separating kicks and kick seams / single pieces are still canvas only.

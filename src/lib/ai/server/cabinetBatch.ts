@@ -31,7 +31,7 @@ import { annotationsBounds, blockInsertPoint, placeBlockItems, tagBlockItems, ty
 import { cabinetPlans, linkedPose } from '@/src/lib/fixtureLinks'
 import { defaultFixtureZ } from '@/src/lib/fixtureGeometry'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { HingeRuleInput } from '@/src/lib/resolver/types'
+import type { HingeRuleInput, Section } from '@/src/lib/resolver/types'
 import { applyInteriorActions, hingePositions, shortInterior, renderInterior, type InteriorAction } from '../interior'
 
 type Fields = Partial<CabinetInstance>
@@ -247,7 +247,7 @@ const CLASS_WORD: Record<string, string> = { base: 'bases', wall: 'overheads', t
 /** Every materials id an override object holds. */
 const overrideIds = (o: unknown) => Object.values((o ?? {}) as Row).filter((v): v is string => typeof v === 'string')
 
-const FIELD_WORD: Record<string, string> = { dx: 'width', dy: 'height', dz: 'depth', pos_z: 'off floor', left_neighbour_type: 'left neighbour', right_neighbour_type: 'right neighbour' }
+const FIELD_WORD: Record<string, string> = { has_toekick: 'own kick', dx: 'width', dy: 'height', dz: 'depth', pos_z: 'off floor', left_neighbour_type: 'left neighbour', right_neighbour_type: 'right neighbour' }
 
 /** "BC-03: height 720 → 900, offset 1200 → 600, SCRR inherited → 20". */
 function updateLine(c: CabinetInstance, u: Fields, walls: Wall[]): string | null {
@@ -460,6 +460,12 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         problems.push(`${n}: ${panels.map(c => c.label).join(', ')} ${panels.length === 1 ? 'is an under panel — it sits' : 'are under panels — they sit'} at ${panels.length === 1 ? 'its' : 'their'} own "off the floor" height, so set pos_z (the underside, mm from the floor), not wallz.`)
         continue
       }
+      if (op.changes.kick !== undefined || op.changes.kick_height !== undefined) {
+        const runs = matched.filter(c => c.kick_run_id || c.is_kick_assembly)
+        if (runs.length) { problems.push(`${n}: ${runs.map(c => c.label).join(', ')} ${runs.length === 1 ? 'is' : 'are'} in a joined kick — its kick is the joined one; separate it on the canvas first (or change the room kick).`); continue }
+        const up = matched.filter(c => !(c.assembly_class === 'base' || c.assembly_class === 'tall' || c.assembly_class === 'base_corner' || c.assembly_class === 'tall_corner'))
+        if (up.length) { problems.push(`${n}: ${up.map(c => c.label).join(', ')} ${up.length === 1 ? 'has' : 'have'} no kick (overheads).`); continue }
+      }
       const autoBh = matched.filter(c => (c.bulkhead as { auto_h?: boolean } | null)?.auto_h)
       if (op.changes.dy !== undefined && autoBh.length) {
         problems.push(`${n}: ${autoBh.map(c => c.label).join(', ')} ${autoBh.length === 1 ? 'is a bulkhead' : 'are bulkheads'} on height-to-ceiling — ${autoBh.length === 1 ? 'it fills' : 'they fill'} from the overhead top line to the ceiling. To make ${autoBh.length === 1 ? 'it' : 'them'} smaller, raise the room's overhead top line (set_properties) and ${autoBh.length === 1 ? 'it re-fits' : 'they re-fit'}.`)
@@ -479,7 +485,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       for (const label of labels) {
         const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(label).trim().toLowerCase())
         if (!c) { problems.push(`${n}: no cabinet "${label}".`); continue }
-        if (c.id.startsWith('new:')) { problems.push(`${n}: ${c.label} is added in this same change — it resolves anyway; set its ${op.op} in a next message.`); continue }
+        if (c.id.startsWith('new:') && op.op !== 'interior') { problems.push(`${n}: ${c.label} is added in this same change — it resolves anyway; set its ${op.op} in a next message.`); continue }
         if (outside(c)) beyond.add(c.label ?? '')
         if (op.op === 'resolve') {
           const line = `Re-resolve ${c.label}`
@@ -577,11 +583,17 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       const added: string[] = []
       let along = 0
       const lo = wallOffset(c, wall)
+      // Its interior split by dividers into one bay per piece → each piece gets its own bay
+      // (RHK6603 TC-01: both halves kept the 2-bay interior, 12 drawers where there were 6).
+      const grid = (c.internal_grid ?? null) as { tree?: Section } | null
+      const bays = grid?.tree?.type === 'vsplit' && grid.tree.children.length === widths.length ? grid.tree.children.map(ch => ch.section) : null
+      const bayFor = (k: number) => bays ? { ...grid, tree: bays[back ? seq.length - 1 - k : k] } as unknown as CabinetInstance['internal_grid'] : undefined
       for (const [k, w] of seq.entries()) {
         const p = { x: c.pos_x + along * d.x, y: c.pos_y + along * d.y }
         if (k === mine) {
           const u: Fields = { dx: Math.round(w * 10) / 10 }
           if (along) { u.pos_x = p.x; u.pos_y = p.y }
+          if (bays) u.internal_grid = bayFor(k)
           steps.push({ kind: 'update', id: c.id, patch: u })
           const l = updateLine(c, u, walls); if (l) lines.push(l)
           touched.add(c.id)
@@ -591,7 +603,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { id, created_at, updated_at, ...rest } = c
           // Same kick run: the joined kick under it doesn't change (same total width).
-          const row = { ...rest, label, dx: Math.round(w * 10) / 10, pos_x: p.x, pos_y: p.y, grain_match_group_id: null } as Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>
+          const row = { ...rest, label, dx: Math.round(w * 10) / 10, pos_x: p.x, pos_y: p.y, grain_match_group_id: null, ...(bays ? { internal_grid: bayFor(k) } : {}) } as Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>
           const tempId = `new:${steps.length}`
           const line = `Add ${label} (copy of ${c.label}${code ? `, ${code}` : ''}, ${Math.round(row.dx)}×${Math.round(row.dy)}×${Math.round(row.dz)}) on ${wall.name}${back ? ' back' : ''} @ ${Math.round(lo + along)}`
           steps.push({ kind: 'insert', tempId, row, defId: c.cabinet_definition_id ?? '', line, copyFrom: c.id })
@@ -603,6 +615,9 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       lines.splice(lines.length - seq.length, 0, `Split ${c.label} (${Math.round(c.dx)} wide) into ${widths.map(w => Math.round(w * 10) / 10).join(' + ')}: ${c.label} keeps ${Math.round(widths[0] * 10) / 10}, ${added.join(', ')} ${added.length === 1 ? 'is a copy' : 'are copies'} of it`)
       const fx = await supabase.from('room_fixtures').select('id').eq('cabinet_id', c.id)
       if ((fx.data ?? []).length) warnings.push(`${c.label} has a fixture on it — it stays on ${c.label}; move it with a fixture step if it belongs on ${added.join(' / ')}.`)
+      if (bays) lines.push(`  ${c.label}'s ${bays.length} bays: one each (${widths.map((_, i) => `bay ${i + 1} → ${i === 0 ? c.label : added[i - 1]}`).join(', ')})`)
+      else if (grid?.tree?.type === 'vsplit') warnings.push(`${c.label}'s interior has ${grid.tree.children.length} bays side by side, not one per piece — each piece keeps all of them; fix each with interior steps in this same change.`)
+      if (c.notes) warnings.push(`${c.label}'s notes are copied as they are ("${String(c.notes).slice(0, 60)}") — say if they describe the old layout.`)
       if (c.face_grid && ((c.face_grid as { cols?: unknown[] }).cols?.length ?? 0) > 1) warnings.push(`${c.label} has ${((c.face_grid as { cols?: unknown[] }).cols ?? []).length} front columns — each piece keeps them; change the fronts (fronts step) if a piece should have fewer.`)
     } else if (op.op === 'join_kicks') {
       // As the canvas (useKickRunOps): floor units with a ladder kick; members of a joined kick count too.
