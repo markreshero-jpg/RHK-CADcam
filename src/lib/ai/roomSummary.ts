@@ -5,9 +5,11 @@
 // detail when it needs it. Output order is deterministic so it prompt-caches.
 
 import { supabase } from '@/src/lib/supabase'
-import type { CabinetInstance, Wall, Room, RoomFixture, SplashbackInstance } from '@/src/lib/types'
+import type { BenchtopInstance, CabinetInstance, Project, Wall, Room, RoomFixture, SplashbackInstance } from '@/src/lib/types'
 import { sbBounds } from '@/src/lib/splashbackGeometry'
-import { cabBottomZ, cabWallSide, wallCabTop } from '@/src/lib/geometry'
+import { cabBottomZ, cabWallPerp, cabWallSide, cabinetCenterPt, centroid, wallCabTop, wallInwardNormal } from '@/src/lib/geometry'
+import { btSegments, outlinePoints } from '@/src/lib/benchtopGeometry'
+import { resolveClassDims, shopDimsFromSettings } from '@/src/lib/resolver/resolveClassDims'
 
 export interface RoomSummaryData {
   room: Room
@@ -25,7 +27,19 @@ export interface RoomSummaryData {
   splashbacks?: Pick<SplashbackInstance, 'id' | 'label' | 'wall_id' | 'wall_side' | 'segments' | 'splashback_schedule_id'>[]
   sbScheduleNames?: Map<string, string>
   /** Benchtops (z_benchtop_builder): label, anchor wall, method / schedule names. */
-  benchtops?: { label: string | null; wall_id: string | null; method: string | null; schedule: string | null }[]
+  benchtops?: BtRow[]
+}
+
+/** A benchtop for the summary: underside = height_mm (set on the top) or the base cabinet height. */
+export interface BtRow { label: string | null; wall_id: string | null; method: string | null; schedule: string | null; underside: number; own: boolean; outline: { x: number; y: number }[] }
+
+const inPoly = (p: { x: number; y: number }, poly: { x: number; y: number }[]) => {
+  let inside = false
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j]
+    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside
+  }
+  return inside
 }
 
 /** Offset of a cabinet along its wall (mm from the wall's start), as getState() reports it. */
@@ -86,8 +100,31 @@ export function formatRoomSummary(d: RoomSummaryData): string {
   }
 
   if (d.benchtops?.length) {
-    lines.push('', 'Benchtops (label | wall | build method | schedule):')
-    for (const b of d.benchtops) lines.push(`${b.label ?? 'Benchtop'} | ${(b.wall_id && wallById.get(b.wall_id)?.name) || '-'} | ${b.method ?? 'room / job default'} | ${b.schedule ?? 'room / job default'}`)
+    // Each base cabinet sits under the LOWEST top over it (plan centre inside the top's outline)
+    // whose underside is above the cabinet's underside — e.g. a dropped top for a BBQ / Egg well.
+    const ref = centroid(d.walls)
+    const under = new Map<BtRow, CabinetInstance[]>(d.benchtops.map(b => [b, []]))
+    const clashes: string[] = []
+    for (const c of [...d.cabinets].sort(byLabel)) {
+      if (!c.cabinet_definition_id || !(c.assembly_class === 'base' || c.assembly_class === 'base_corner')) continue
+      const w = c.wall_id ? wallById.get(c.wall_id) : undefined
+      if (!w) continue
+      const ctr = cabinetCenterPt(c, w, cabWallPerp(c, w, wallInwardNormal(w, ref)))
+      const bot = cabBottomZ(c, d.room, w)
+      const bt = d.benchtops.filter(b => b.outline.length >= 3 && b.underside > bot + 1 && inPoly(ctr, b.outline)).sort((a, b) => a.underside - b.underside)[0]
+      if (!bt) continue
+      under.get(bt)!.push(c)
+      const topZ = bot + c.dy
+      if (topZ > bt.underside + 0.5) clashes.push(`${c.label} top is at ${Math.round(topZ)}, ${Math.round(topZ - bt.underside)} into ${bt.label ?? 'the benchtop'} (underside ${Math.round(bt.underside)}) → make ${c.label} ${Math.round(bt.underside - bot)} high to sit under it.`)
+    }
+    lines.push('', 'Benchtops (label | wall | underside off floor | over | build method | schedule):')
+    for (const b of d.benchtops) lines.push([
+      b.label ?? 'Benchtop', (b.wall_id && wallById.get(b.wall_id)?.name) || '-',
+      `${Math.round(b.underside)}${b.own ? ' (set on the top)' : ' (base cabinet height)'}`,
+      under.get(b)!.map(c => c.label).join(', ') || '-',
+      b.method ?? 'room / job default', b.schedule ?? 'room / job default',
+    ].join(' | '))
+    if (clashes.length) lines.push('CLASH — cabinet into a benchtop:', ...clashes.map(s => `- ${s}`))
   } else if (d.cabinets.some(c => c.assembly_class === 'base' || c.assembly_class === 'base_corner')) lines.push('', 'Benchtops: none yet.')
 
   // Colour TBC (z_ai_helper R2): a board with colours picked without one resolves in its
@@ -124,8 +161,16 @@ export function formatRoomSummary(d: RoomSummaryData): string {
   return lines.join('\n')
 }
 
-async function benchtopRows(rows: { label: string | null; wall_id: string | null; benchtop_build_method_id: string | null; benchtop_schedule_id: string | null }[]) {
+type BtDb = { label: string | null; wall_id: string | null; benchtop_build_method_id: string | null; benchtop_schedule_id: string | null; height_mm: number | string | null } & Pick<BenchtopInstance, 'segments' | 'polygon' | 'arc_segments' | 'edge_tags'>
+
+async function benchtopRows(rows: BtDb[], room: Room): Promise<BtRow[]> {
   if (!rows.length) return []
+  // Underside default = the base cabinet height (room → job → shop), as the benchtop resolver.
+  const [{ data: prj }, { data: shop }] = await Promise.all([
+    supabase.from('projects').select('*').eq('id', room.project_id).maybeSingle(),
+    supabase.from('shop_settings').select('*').limit(1).maybeSingle(),
+  ])
+  const baseH = resolveClassDims('base', { room, project: prj as Project | null, shop: shopDimsFromSettings(shop as Record<string, unknown> | null) }).dy ?? 900
   const ids = (k: 'benchtop_build_method_id' | 'benchtop_schedule_id') => [...new Set(rows.map(r => r[k]).filter((x): x is string => !!x))]
   const [m, s] = await Promise.all([
     ids('benchtop_build_method_id').length ? supabase.from('benchtop_build_methods').select('id, name').in('id', ids('benchtop_build_method_id')) : Promise.resolve({ data: [] }),
@@ -133,7 +178,13 @@ async function benchtopRows(rows: { label: string | null; wall_id: string | null
   ])
   const mn = new Map(((m.data ?? []) as { id: string; name: string }[]).map(x => [x.id, x.name]))
   const sn = new Map(((s.data ?? []) as { id: string; name: string }[]).map(x => [x.id, x.name]))
-  return rows.map(r => ({ label: r.label, wall_id: r.wall_id, method: r.benchtop_build_method_id ? mn.get(r.benchtop_build_method_id) ?? null : null, schedule: r.benchtop_schedule_id ? sn.get(r.benchtop_schedule_id) ?? null : null }))
+  return rows.map(r => ({
+    label: r.label, wall_id: r.wall_id,
+    method: r.benchtop_build_method_id ? mn.get(r.benchtop_build_method_id) ?? null : null,
+    schedule: r.benchtop_schedule_id ? sn.get(r.benchtop_schedule_id) ?? null : null,
+    underside: r.height_mm != null ? Number(r.height_mm) : baseH, own: r.height_mm != null,
+    outline: outlinePoints(btSegments(r), 4),
+  }))
 }
 
 /** COLOUR_NOT_CHOSEN warnings from each cabinet's last resolve, grouped by part + board. */
@@ -164,7 +215,7 @@ export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryDa
     supabase.from('room_fixtures').select('id, label, display_name, name, cabinet_id').eq('room_id', roomId),
     supabase.from('splashback_instances').select('id, label, wall_id, wall_side, segments, splashback_schedule_id').eq('room_id', roomId),
     supabase.from('splashback_schedules').select('id, name'),
-    supabase.from('benchtop_instances').select('label, wall_id, benchtop_build_method_id, benchtop_schedule_id').eq('room_id', roomId).order('label'),
+    supabase.from('benchtop_instances').select('label, wall_id, benchtop_build_method_id, benchtop_schedule_id, height_mm, segments, polygon, arc_segments, edge_tags').eq('room_id', roomId).order('label'),
   ])
   if (roomQ.error) throw new Error(`room ${roomId}: ${roomQ.error.message}`)
   const cabinets = (cabsQ.data ?? []) as CabinetInstance[]
@@ -196,7 +247,7 @@ export async function loadRoomSummaryData(roomId: string): Promise<RoomSummaryDa
     handleNames: names(handlesQ.data as { id: string; name: string }[] | null),
     splashbacks: (sbQ.data ?? []) as RoomSummaryData['splashbacks'],
     sbScheduleNames: names(sbSchedQ.data as { id: string; name: string }[] | null),
-    benchtops: await benchtopRows((btQ.data ?? []) as { label: string | null; wall_id: string | null; benchtop_build_method_id: string | null; benchtop_schedule_id: string | null }[]),
+    benchtops: await benchtopRows((btQ.data ?? []) as BtDb[], roomQ.data as Room),
   }
 }
 

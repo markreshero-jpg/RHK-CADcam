@@ -685,6 +685,16 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     check headlessCad.test.ts (CAD_RUN), AI4_RUN takes `"sketch": true`.
 - **Next:** an AI step for joining kicks round an angled corner (after the KA1 in-app check).
 
+## Benchtop heights + cabinet-into-top clash (RHK9999 chat, 2026-11-28)
+
+Mark asked if BC-10 (under the dropped Egg top) was into the stone; the chat couldn't see benchtop heights and asked
+for a number twice. Now the room summary's Benchtops list gives each top's **underside** (height_mm, else the base
+cabinet height room → job → shop, as the benchtop resolver) and the base cabinets **under** it (plan centre inside the
+outline; each cabinet goes to the lowest top above its underside, so a dropped top claims the cabinet below it). A
+cabinet whose top is above that underside gets a `CLASH — cabinet into a benchtop` line with the height that fits; the
+chat fixes it with update dy (never moves the top) and the checker reports any clash left. Tested in RHK1234
+(920 → 900, check ✓, undone). ai_gaps "benchtop heights" → built.
+
 ## RHK6596 chat review fixes (2026-11-28, Mark: "read the conversation inside RHK6596 … see
 what the agent isn't capable of"; "fix in the order you suggest")
 Order agreed: R1 under panel · R2 colour TBC · R3 ceiling from the sketch · R4 walls in chat ·
