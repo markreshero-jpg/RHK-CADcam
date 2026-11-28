@@ -21,6 +21,11 @@ export type ScribeSide = 'left' | 'right' | 'top' | 'bottom' | 'back'
 /** Scribe side → rule_overrides key (cabinet panel "Scribes (mm)"). */
 export const SCRIBE_KEY: Record<ScribeSide, string> = { left: 'SCRL', right: 'SCRR', top: 'SCRT', bottom: 'SCRBT', back: 'SCRBK' }
 
+/** Front reveals (cabinet sidebar › Reveals): side → rule_overrides key. left / right = the
+ *  cabinet's own side reveal (REVSL / REVSR wins over the neighbour-detected one). */
+export type RevealSide = 'top' | 'bottom' | 'left' | 'right' | 'door_gap' | 'row_gap'
+export const REVEAL_KEY: Record<RevealSide, string> = { top: 'REVT', bottom: 'REVB', left: 'REVSL', right: 'REVSR', door_gap: 'GAPC', row_gap: 'GAPR' }
+
 /** Board colour roles the AI can set. Cabinet: material_overrides (role → materials.id),
  *  kick face: toekick_overrides.face. Room / job: room_materials / job_materials rows. */
 export type MaterialRole = 'fronts' | 'carcass' | 'exposed' | 'shelf' | 'divider' | 'back' | 'kick'
@@ -41,6 +46,8 @@ export interface CabinetChanges {
   notes?: string | null
   /** mm per side; null = back to the inherited (room / job) scribe. */
   scribes?: Partial<Record<ScribeSide, number | null>>
+  /** Front reveals, mm; null = back to the room / job (class) reveal. */
+  reveals?: Partial<Record<RevealSide, number | null>>
   /** handle_schedules id (the server turns the name into it); null = inherit room / job. */
   handle_schedule_id?: string | null
   /** An overhead's own underside, mm from the floor (rule WALLZ) instead of hanging from the room's top line; null = hang again. */
@@ -49,7 +56,7 @@ export interface CabinetChanges {
   materials?: Partial<Record<MaterialRole, string | null>>
 }
 
-export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'handle_schedule_id', 'materials', 'wallz'] as const
+export const CHANGE_KEYS = ['dx', 'dy', 'dz', 'pos_z', 'offset', 'notes', 'scribes', 'reveals', 'handle_schedule_id', 'materials', 'wallz'] as const
 
 export interface MatchContext {
   walls: Wall[]
@@ -107,6 +114,10 @@ export function validateChanges(ch: CabinetChanges): string[] {
     if (!(side in SCRIBE_KEY)) errs.push(`unknown scribe side "${side}" (left, right, top, bottom, back)`)
     else if (v !== null && !(Number.isFinite(v) && v >= 0 && v <= 200)) errs.push(`scribe ${side} must be 0–200 mm`)
   }
+  for (const [side, v] of Object.entries(ch.reveals ?? {})) {
+    if (!(side in REVEAL_KEY)) errs.push(`unknown reveal "${side}" (top, bottom, left, right, door_gap, row_gap)`)
+    else if (v !== null && !(Number.isFinite(v) && v >= 0 && v <= 50)) errs.push(`reveal ${side} must be 0–50 mm (a reveal can't go below 0)`)
+  }
   return errs
 }
 
@@ -133,6 +144,15 @@ export function patchFor(c: CabinetInstance, ch: CabinetChanges, walls: Wall[]):
       if (v === null) delete next[key]; else next[key] = Math.round(v * 10) / 10
     }
     if (JSON.stringify(next) !== JSON.stringify(cur)) u.rule_overrides = next
+  }
+  if (ch.reveals) {
+    const cur = (u.rule_overrides ?? c.rule_overrides ?? {}) as Record<string, unknown>
+    const next = { ...cur }
+    for (const [side, v] of Object.entries(ch.reveals) as [RevealSide, number | null][]) {
+      const key = REVEAL_KEY[side]
+      if (v === null) delete next[key]; else next[key] = Math.round(v * 10) / 10
+    }
+    if (JSON.stringify(next) !== JSON.stringify(c.rule_overrides ?? {})) u.rule_overrides = next
   }
   if (ch.materials) {
     const merge = (cur: Record<string, unknown>, key: string, v: string | null) => {

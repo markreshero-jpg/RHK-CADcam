@@ -70,7 +70,16 @@ export type BatchOp =
   /** Re-resolve cabinets as they are (z_ai_helper Q4) — parts, drilling, hardware rebuilt. */
   | { op: 'resolve'; labels: string[] }
   /** Hinges per door (face_grid zone.hinges, spaced with the shop rule's insets); null = back to the shop rules. door = row,col (else every door). */
-  | { op: 'hinges'; labels: string[]; per_door: number | null; door?: { row: number; col: number } }
+  | { op: 'hinges'; labels: string[]; per_door: number | null; door?: { row: number; col: number }
+      /** Exact positions (mm from the door bottom) instead of spacing per_door with the shop insets. */
+      at?: number[] }
+  /** One cabinet's fronts (face_grid zones): open = no front (doors off); door / false_panel; hinge side
+   *  of a door. door = row,col (else every front — hinge_side: every door). */
+  | { op: 'fronts'; label: string; door?: { row: number; col: number }; face_type?: 'open' | 'door' | 'false_panel'; hinge_side?: 'left' | 'right' | 'top' | 'bottom' }
+  /** Split a cabinet across its width (as cutting it in two on the canvas): it keeps the first
+   *  width (left as you face it), each other width is a COPY of it to its right — fronts, kick,
+   *  colours, rules, interior. widths add up to its width. */
+  | { op: 'split'; label: string; widths: number[] }
   /** Interior moves on one cabinet's section tree (shelves, bays, dividers) — see ../interior. */
   | { op: 'interior'; label: string; actions: InteriorAction[] }
   /** Under panel (z_floating F7/F8) under these base cabinets or overheads, as the canvas's
@@ -267,14 +276,21 @@ function updateLine(c: CabinetInstance, u: Fields, walls: Wall[]): string | null
       continue
     }
     if (k === 'face_grid') {
-      type Gz = { row_index: number; col_index: number; hinges?: number[] }
+      type Gz = { row_index: number; col_index: number; hinges?: number[]; face_type?: string; hinge_side?: string }
       const bz = ((before as { zones?: Gz[] } | null)?.zones ?? []), az = ((after as { zones?: Gz[] } | null)?.zones ?? [])
       const hw = (h?: number[]) => Array.isArray(h) ? `${h.length} at ${h.map(v => Math.round(v)).join(' / ')}` : 'shop rules'
+      const ft = (t?: string) => (t ?? '?').replace('_face', '').replace('_', ' ')
+      let told = false
       for (const z of az) {
         const b = bz.find(x => x.row_index === z.row_index && x.col_index === z.col_index)
-        if (canon(b?.hinges) !== canon(z.hinges)) parts.push(`door ${z.row_index},${z.col_index} hinges ${hw(b?.hinges)} → ${hw(z.hinges)}`)
+        const at = `${z.row_index},${z.col_index}`
+        if (canon(b?.hinges) !== canon(z.hinges)) parts.push(`door ${at} hinges ${hw(b?.hinges)} → ${hw(z.hinges)}`)
+        if (b && b.face_type !== z.face_type) { parts.push(`front ${at} ${ft(b.face_type)} → ${ft(z.face_type)}`); told = true }
+        else if (b && z.face_type === 'door' && b.hinge_side !== z.hinge_side) { parts.push(`door ${at} hinged ${b.hinge_side ?? 'auto'} → ${z.hinge_side ?? 'auto'}`); told = true }
       }
-      if (canon(bz.map(z => ({ ...z, hinges: undefined }))) !== canon(az.map(z => ({ ...z, hinges: undefined })))) parts.push('fronts layout changed')
+      const bare = (zs: Gz[]) => canon(zs.map(z => ({ ...z, hinges: undefined, face_type: undefined, hinge_side: undefined, drawer_type_config: undefined })))
+      if (!told && canon(bz.map(z => ({ ...z, hinges: undefined }))) !== canon(az.map(z => ({ ...z, hinges: undefined })))) parts.push('fronts layout changed')
+      else if (told && bare(bz) !== bare(az)) parts.push('fronts layout changed')
       continue
     }
     if (canon(before) !== canon(after)) parts.push(`${FIELD_WORD[k] ?? k} ${fmt(before)} → ${fmt(after)}`)
@@ -325,6 +341,8 @@ export interface BatchPlan {
   /** Existing cabinets the plan changes or deletes (for the auto-apply limit). */
   touched: number
   onlyUpdates: boolean
+  /** Cabinets outside the selection the plan works on (named by the user) — never auto-applied. */
+  beyond: string[]
 }
 
 // The catalogue body a placed fixture copies (as useFixtureInteraction's BODY_KEYS — shapes
@@ -406,6 +424,9 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
   const touched = new Set<string>()
   const only = opts.onlyIds ? new Set(opts.onlyIds) : null
   const outside = (c: CabinetInstance) => !!only && !only.has(c.id) && !c.id.startsWith('new:')
+  // Selection is the default target, not a lock (T3): a cabinet the user names is worked on even
+  // when another is selected — the change then waits for Apply instead of applying straight away.
+  const beyond = new Set<string>()
 
   for (const [i, op] of ops.entries()) {
     const n = `Step ${i + 1}`
@@ -414,8 +435,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       if (errs.length) { problems.push(`${n}: ${errs.join('; ')}`); continue }
       const matched = matchCabinets(op.filter, cabs, { walls, defNames })
       if (!matched.length) { problems.push(`${n}: no cabinets match.`); continue }
-      const out = matched.filter(outside)
-      if (out.length) { problems.push(`${n}: ${out.map(c => c.label).join(', ')} isn't selected — select it too, or deselect everything to work on the whole room.`); continue }
+      for (const c of matched.filter(outside)) beyond.add(c.label ?? '')
       // Overheads hang from the room's top line: "off the floor" doesn't move them, and a
       // bulkhead on height-to-ceiling is re-fitted to the gap above that line.
       const hanging = matched.filter(c => c.assembly_class.startsWith('wall') && !c.bulkhead && !c.float_shelf && !(c.rule_overrides as Row | null)?.UNDER_PANEL)
@@ -449,7 +469,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(label).trim().toLowerCase())
         if (!c) { problems.push(`${n}: no cabinet "${label}".`); continue }
         if (c.id.startsWith('new:')) { problems.push(`${n}: ${c.label} is added in this same change — it resolves anyway; set its ${op.op} in a next message.`); continue }
-        if (outside(c)) { problems.push(`${n}: ${c.label} isn't selected — select it too, or deselect everything to work on the whole room.`); continue }
+        if (outside(c)) beyond.add(c.label ?? '')
         if (op.op === 'resolve') {
           const line = `Re-resolve ${c.label}`
           steps.push({ kind: 'resolve', id: c.id, line }); lines.push(line); touched.add(c.id)
@@ -458,7 +478,9 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         let u: Fields
         if (op.op === 'hinges') {
           if (c.faces) { problems.push(`${n}: ${c.label} is a shaped cabinet — set its hinges on the canvas (Faces editor).`); continue }
-          if (op.per_door !== null && !(Number.isInteger(op.per_door) && op.per_door >= 0 && op.per_door <= 8)) { problems.push(`${n}: per_door must be 0–8, or null for the shop rules.`); continue }
+          if (op.at?.length) {
+            if (op.at.some(v => !(Number.isFinite(v) && v > 0)) || op.at.length > 8) { problems.push(`${n}: hinge positions must be 1–8 numbers, mm from the door bottom.`); continue }
+          } else if (op.per_door !== null && !(Number.isInteger(op.per_door) && op.per_door >= 0 && op.per_door <= 8)) { problems.push(`${n}: per_door must be 0–8, or null for the shop rules.`); continue }
           const grid = JSON.parse(JSON.stringify(c.face_grid ?? {})) as { zones?: (Row & { row_index: number; col_index: number; hinges?: number[] })[] }
           const doors = (doorZones.get(c.id) ?? []).filter(z => !op.door || (z.row_index === op.door.row && z.col_index === op.door.col))
           if (!doors.length) { problems.push(`${n}: ${c.label} has no ${op.door ? `door at ${op.door.row},${op.door.col}` : 'doors'} (resolved fronts).`); continue }
@@ -466,7 +488,13 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           for (const d of doors) {
             const gz = grid.zones?.find(z => z.row_index === d.row_index && z.col_index === d.col_index)
             if (!gz) { problems.push(`${n}: ${c.label} door ${d.row_index},${d.col_index} isn't in its face grid — open it on the canvas once.`); bad = true; break }
-            if (op.per_door === null) delete gz.hinges
+            const span = d.hinge_side === 'top' || d.hinge_side === 'bottom' ? Number(d.dx) : Number(d.dy)
+            if (op.at?.length) {
+              const at = [...op.at].map(v => Math.round(v * 10) / 10).sort((a, b) => a - b)
+              // A hinge cup is 35 across: keep its centre 25 in from each end of the door.
+              if (at[0] < 25 || at[at.length - 1] > span - 25) { problems.push(`${n}: ${c.label} door ${d.row_index},${d.col_index} is ${Math.round(span)} — hinges must sit 25–${Math.round(span - 25)} from its bottom.`); bad = true; break }
+              gz.hinges = at
+            } else if (op.per_door === null) delete gz.hinges
             else gz.hinges = hingePositions(op.per_door, d.hinge_side === 'top' || d.hinge_side === 'bottom' ? Number(d.dx) : Number(d.dy), hingeRules)
           }
           if (bad) continue
@@ -482,12 +510,95 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         touched.add(c.id)
         cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
       }
+    } else if (op.op === 'fronts') {
+      const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(op.label ?? '').trim().toLowerCase())
+      if (!c) { problems.push(`${n}: no cabinet "${op.label}".`); continue }
+      if (outside(c)) beyond.add(c.label ?? '')
+      if (c.faces) { problems.push(`${n}: ${c.label} is a shaped cabinet — change its fronts on the canvas (Faces editor).`); continue }
+      if (!op.face_type && !op.hinge_side) { problems.push(`${n}: fronts needs face_type (open / door / false_panel) or hinge_side.`); continue }
+      type Zn = Row & { row_index: number; col_index: number; face_type: string; hinge_side?: string; hinges?: number[] }
+      const grid = JSON.parse(JSON.stringify(c.face_grid ?? {})) as { zones?: Zn[] }
+      const zones = (grid.zones ?? []).filter(z => !op.door || (z.row_index === op.door.row && z.col_index === op.door.col))
+      if (!zones.length) { problems.push(`${n}: ${c.label} has no ${op.door ? `front at ${op.door.row},${op.door.col}` : 'fronts'} in its face grid.`); continue }
+      const what: string[] = []
+      let bad = false
+      for (const z of zones) {
+        const at = `${z.row_index},${z.col_index}`
+        if (op.face_type && z.face_type !== op.face_type) {
+          if (op.face_type !== 'open' && z.face_type === 'drawer_face') { problems.push(`${n}: ${c.label} ${at} is a drawer — change drawers to doors on the canvas.`); bad = true; break }
+          what.push(`front ${at} ${z.face_type.replace('_face', '').replace('_', ' ')} → ${op.face_type.replace('_', ' ')}`)
+          z.face_type = op.face_type
+          if (op.face_type !== 'door') { delete z.hinges; delete z.hinge_side }
+          delete z.drawer_type_config
+        }
+        if (op.hinge_side && z.face_type === 'door' && z.hinge_side !== op.hinge_side) {
+          what.push(`door ${at} hinged ${z.hinge_side ?? 'auto'} → ${op.hinge_side}`)
+          z.hinge_side = op.hinge_side
+        }
+      }
+      if (bad) continue
+      if (op.hinge_side && !zones.some(z => z.face_type === 'door')) { problems.push(`${n}: ${c.label} has no door there to hinge.`); continue }
+      if (!what.length) continue
+      const u: Fields = { face_grid: grid as CabinetInstance['face_grid'] }
+      steps.push({ kind: 'update', id: c.id, patch: u })
+      lines.push(`${c.label}: ${what.join(', ')}`)
+      if (!c.id.startsWith('new:')) touched.add(c.id)
+      cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
+    } else if (op.op === 'split') {
+      const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(op.label ?? '').trim().toLowerCase())
+      if (!c) { problems.push(`${n}: no cabinet "${op.label}".`); continue }
+      if (c.id.startsWith('new:')) { problems.push(`${n}: ${c.label} is added in this same change — place it at the sizes you want instead.`); continue }
+      if (outside(c)) beyond.add(c.label ?? '')
+      if (c.is_kick_assembly) { problems.push(`${n}: ${c.label} is a joined kick — split the cabinets, not the kick.`); continue }
+      if (c.faces || c.footprint) { problems.push(`${n}: ${c.label} is a shaped cabinet — split it on the canvas.`); continue }
+      const wall = walls.find(w => w.id === c.wall_id)
+      if (!wall) { problems.push(`${n}: ${c.label} isn't on a wall.`); continue }
+      const widths = (op.widths ?? []).map(Number)
+      if (widths.length < 2 || widths.some(w => !(w >= 50))) { problems.push(`${n}: split needs 2 or more widths, each at least 50.`); continue }
+      const sum = widths.reduce((a, b) => a + b, 0)
+      if (Math.abs(sum - c.dx) > 1) { problems.push(`${n}: the widths add up to ${Math.round(sum * 10) / 10}, but ${c.label} is ${Math.round(c.dx * 10) / 10} wide — make them add up to it.`); continue }
+      // Facing the front, "left" is the low end along the wall — the high end for a back-face cabinet.
+      const back = Math.abs((((c.rotation - wall.angle) % 360) + 360) % 360 - 180) < 90
+      const seq = back ? [...widths].reverse() : widths       // low → high along the wall
+      const mine = back ? seq.length - 1 : 0                   // the cabinet keeps the left piece
+      const d = wallDir(wall)
+      const code = (c.cabinet_definition_id && defNames.get(c.cabinet_definition_id)) || ''
+      const added: string[] = []
+      let along = 0
+      const lo = wallOffset(c, wall)
+      for (const [k, w] of seq.entries()) {
+        const p = { x: c.pos_x + along * d.x, y: c.pos_y + along * d.y }
+        if (k === mine) {
+          const u: Fields = { dx: Math.round(w * 10) / 10 }
+          if (along) { u.pos_x = p.x; u.pos_y = p.y }
+          steps.push({ kind: 'update', id: c.id, patch: u })
+          const l = updateLine(c, u, walls); if (l) lines.push(l)
+          touched.add(c.id)
+          cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
+        } else {
+          const label = nextLabel(cabs, c.assembly_class)
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, created_at, updated_at, ...rest } = c
+          // Same kick run: the joined kick under it doesn't change (same total width).
+          const row = { ...rest, label, dx: Math.round(w * 10) / 10, pos_x: p.x, pos_y: p.y, grain_match_group_id: null } as Omit<CabinetInstance, 'id' | 'created_at' | 'updated_at'>
+          const tempId = `new:${steps.length}`
+          const line = `Add ${label} (copy of ${c.label}${code ? `, ${code}` : ''}, ${Math.round(row.dx)}×${Math.round(row.dy)}×${Math.round(row.dz)}) on ${wall.name}${back ? ' back' : ''} @ ${Math.round(lo + along)}`
+          steps.push({ kind: 'insert', tempId, row, defId: c.cabinet_definition_id ?? '', line, copyFrom: c.id })
+          lines.push(line); added.push(label)
+          cabs.push({ ...(row as CabinetInstance), id: tempId, created_at: '', updated_at: '' })
+        }
+        along += w
+      }
+      lines.splice(lines.length - seq.length, 0, `Split ${c.label} (${Math.round(c.dx)} wide) into ${widths.map(w => Math.round(w * 10) / 10).join(' + ')}: ${c.label} keeps ${Math.round(widths[0] * 10) / 10}, ${added.join(', ')} ${added.length === 1 ? 'is a copy' : 'are copies'} of it`)
+      const fx = await supabase.from('room_fixtures').select('id').eq('cabinet_id', c.id)
+      if ((fx.data ?? []).length) warnings.push(`${c.label} has a fixture on it — it stays on ${c.label}; move it with a fixture step if it belongs on ${added.join(' / ')}.`)
+      if (c.face_grid && ((c.face_grid as { cols?: unknown[] }).cols?.length ?? 0) > 1) warnings.push(`${c.label} has ${((c.face_grid as { cols?: unknown[] }).cols ?? []).length} front columns — each piece keeps them; change the fronts (fronts step) if a piece should have fewer.`)
     } else if (op.op === 'delete') {
       for (const label of op.labels) {
         const c = cabs.find(x => (x.label ?? '').toLowerCase() === label.trim().toLowerCase())
         if (!c) { problems.push(`${n}: no cabinet "${label}".`); continue }
         if (c.id.startsWith('new:')) { problems.push(`${n}: ${c.label} is added in this same change — leave it out instead.`); continue }
-        if (outside(c)) { problems.push(`${n}: ${c.label} isn't selected — select it to delete it.`); continue }
+        if (outside(c)) beyond.add(c.label ?? '')
         if (c.is_kick_assembly || c.kick_run_id) { problems.push(`${n}: ${c.label} is in a joined kick run — separate the kick first, or delete it by hand.`); continue }
         const cad = state.sheetCad.get(c.id)
         if (cad) { problems.push(`${n}: ${c.label} has ${cad} CAD item${cad > 1 ? 's' : ''} drawn on its cabinet sheet — delete it by hand if you mean it (that CAD goes with it).`); continue }
@@ -935,8 +1046,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       for (const l of op.labels ?? []) {
         const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(l).trim().toLowerCase())
         if (!c) problems.push(`${n}: no cabinet "${l}".`)
-        else if (outside(c)) problems.push(`${n}: ${c.label} isn't selected — select it too, or deselect everything to work on the whole room.`)
-        else sel.push(c)
+        else { if (outside(c)) beyond.add(c.label ?? ''); sel.push(c) }
       }
       if (sel.length !== (op.labels ?? []).length) continue
       // Kick height and exposed board as each cabinet resolves (the canvas reads its resolve cache).
@@ -1025,14 +1135,27 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       // Against a cabinet of the same kind (an end panel / filler on an overhead, a base…),
       // it takes that cabinet's height and height off the floor — a 600 overhead gets a 600 panel.
       const sameKind = (a: string, b: string) => a.replace('_corner', '') === b.replace('_corner', '')
+      // Its underside and top line too, even when a height is given (T14): a cabinet on a joined kick
+      // is a kick-less carcass raised by the kick, so the new one is too (and joins that kick); one on
+      // its own kick stands on the floor like it; one floating / without a kick takes its underside.
       let matched = ''
-      if (against && sameKind(against.assembly_class, def.assembly_class) && !row.bulkhead && !row.float_shelf && op.dy == null) {
-        if (row.dy !== against.dy || (row.pos_z ?? 0) !== (against.pos_z ?? 0)) matched = `, height matched to ${against.label}`
-        row.dy = against.dy
+      let joinKick = ''
+      if (against && sameKind(against.assembly_class, def.assembly_class) && !row.bulkhead && !row.float_shelf) {
+        const was = `${row.dy}/${row.pos_z ?? 0}/${row.has_toekick}`
+        const top = (against.pos_z ?? 0) + against.dy
+        if (!against.has_toekick) row.has_toekick = false
         row.pos_z = against.pos_z ?? 0
+        row.dy = op.dy ?? (top - row.pos_z)
+        // Same depth as the run it joins (a BFKW at the library 580 beside 560 bases stuck out) —
+        // not end panels (BEP / WEP / TEPF…), which often run past the doors.
+        if (op.dz == null && !/EP/i.test(def.name)) row.dz = against.dz
         if (against.rule_overrides?.WALLZ != null) row.rule_overrides = { ...(row.rule_overrides ?? {}), WALLZ: against.rule_overrides.WALLZ }
-      }
-      if (op.dy != null) row.dy = op.dy
+        if (against.kick_run_id && !against.is_kick_assembly) {
+          row.kick_run_id = null
+          joinKick = cabs.find(x => x.is_kick_assembly && x.kick_run_id === against!.kick_run_id)?.label ?? 'the joined kick'
+        }
+        if (`${row.dy}/${row.pos_z ?? 0}/${row.has_toekick}` !== was) matched = `, underside ${Math.round(row.pos_z ?? 0)} / top ${Math.round((row.pos_z ?? 0) + row.dy)}${row.has_toekick ? '' : ', no kick of its own'} as ${against.label}`
+      } else if (op.dy != null) row.dy = op.dy
       if (op.dz != null && op.dz > 0) row.dz = op.dz
       // Blind corner: the false panel column takes the blind width (locked).
       if (op.blind_width != null) {
@@ -1060,12 +1183,13 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         return o < hi - 1 && o + x.dx > lo + 1 && xz < z1 - 1 && xz + x.dy > z0 + 1 && (x.rotation === row.rotation)
       })
       if (hit.length) warnings.push(`${label} overlaps ${hit.map(x => x.label).join(', ')} — move them first, or check it.`)
+      if (joinKick) warnings.push(`${label} sits on ${joinKick}'s line but isn't in it yet — join it into the kick on the canvas (select ${joinKick} + ${label} › Join kicks) so the kick runs under it.`)
       defNames.set(def.id, def.name)
       cabs.push({ ...(row as CabinetInstance), id: tempId, created_at: '', updated_at: '' })
     }
   }
 
-  return { state: { ...state, walls }, steps, lines, problems, warnings, touched: touched.size, onlyUpdates: steps.every(s => s.kind === 'update' || s.kind === 'resolve') }
+  return { state: { ...state, walls }, steps, lines, problems, warnings, touched: touched.size, onlyUpdates: steps.every(s => s.kind === 'update' || s.kind === 'resolve'), beyond: [...beyond].filter(Boolean) }
 }
 
 // ── Apply ─────────────────────────────────────────────────────────────────────

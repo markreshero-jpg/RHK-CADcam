@@ -691,15 +691,35 @@ Mark: highlight + copy text from the chat. The canvas Ctrl+C / Ctrl+X copied the
 highlighted — now highlighted text wins. The messages area is `.text-select` (selectable inside the touch `touch-no-select`
 page), and each message has a **Copy** button (text + its change lines). Check in the app pending.
 
+## Built 2026-11-28 — running list round 1 (T1, T2, T3, T9, T10, T12, T14)
+
+- **T3 selection = default, not a lock.** `planBatch` no longer refuses a named cabinet outside the selection;
+  it lists it in `plan.beyond`, and the chat only auto-applies when `beyond` is empty (else it waits for Apply).
+  The Scope rule in the system prompt says: a cabinet the user names is worked on even when another is selected.
+- **T9 `split` step** (label + widths left → right as you face it, adding up to its width): the cabinet keeps the
+  first width, each other width is a copy of it (copyFrom — fronts, kick, kick run, colours, rules, interior).
+  Never a fresh library cabinet. Warns when it has several front columns or a fixture.
+- **T10 / T2 `fronts` step** (label, optional door row,col): face_type open (doors off) / door / false_panel
+  on face_grid zones; hinge_side left / right / top / bottom on doors. A drawer can't become a door here.
+- **T1 `hinges` at** — exact positions from the door bottom (25 in from each end, min).
+- **T12 reveals** in update changes: top REVT, bottom REVB, left REVSL, right REVSR, door_gap GAPC, row_gap GAPR
+  (the cabinet sidebar's Reveals keys); 0–50, null = back to the class reveal.
+- **T14 place next_to** takes the neighbour's underside, top line and kick set-up even when a height is given:
+  beside a cabinet on a joined kick → no kick of its own, raised like it, plus a warning to join it into that kick;
+  and its depth (not end panels — codes with EP). The AI is told not to pass dy for next_to.
+- Change lines name front changes (front 0,1 door → open, door 0,0 hinged left → right) instead of "fronts layout changed".
+- Checked headless on RHK1234 (applied + undone exactly) and plan-only on RHK6603 WIR (BFKW beside BC-02 → 100 / 867,
+  no kick, 560; TC-01 split → copy 819×1933×460). In-app check pending.
+
 ## To build — Mark's running list (from his chats; add as he finds more)
 
-Not started. Each also has an open `ai_gaps` row (the chat logs its own as it hits them).
+Open unless marked built. Each also has an `ai_gaps` row (the chat logs its own as it hits them).
 
 | # | From | Ask | What the chat can't do | Notes |
 |---|------|-----|------------------------|-------|
-| T1 | RHK9999 BBQ, BC-10 | "space the hinges further apart, lower to the bottom and higher to the top" | **hinge positions** — only hinge count | 270 high doors got hinges at 100 / 170 (70 apart): the hinge rule's 100 top / bottom inset pushes them to the middle on a short door. Two fixes to decide: a per-door hinge position step, and/or the shop rule using a smaller inset on short doors. |
-| T2 | RHK9999 BBQ, BC-01 | "re-hinge BC-01 so it is on the right" | **hinge side** — can't swap L/R | Single door sink cupboard, hinged left. |
-| T3 | RHK9999 BBQ | asked about BC-01 while BC-10 was selected | **selection scope** — told Mark to select BC-01 first | When the user names a cabinet, work on it even if another is selected (selection = default, not a lock). |
+| T1 ✓ built (hinges at) | RHK9999 BBQ, BC-10 | "space the hinges further apart, lower to the bottom and higher to the top" | **hinge positions** — only hinge count | 270 high doors got hinges at 100 / 170 (70 apart): the hinge rule's 100 top / bottom inset pushes them to the middle on a short door. Two fixes to decide: a per-door hinge position step, and/or the shop rule using a smaller inset on short doors. |
+| T2 ✓ built (fronts hinge_side) | RHK9999 BBQ, BC-01 | "re-hinge BC-01 so it is on the right" | **hinge side** — can't swap L/R | Single door sink cupboard, hinged left. |
+| T3 ✓ built | RHK9999 BBQ | asked about BC-01 while BC-10 was selected | **selection scope** — told Mark to select BC-01 first | When the user names a cabinet, work on it even if another is selected (selection = default, not a lock). |
 | T4 | RHK6586 | "fix the kick join in the back corner on the angle" | **kick pieces** | App side done (KA1 + KA2, Mark checked 2026-11-28); needs the AI step (join kicks round an angled filler). |
 | T3+ | RHK9999 BBQ | "delete shelf from BC-01" (BC-10 selected) | same as T3 | Hit again — Mark had to ask twice. The chat knew the fix and still refused. Top of the list. |
 | T5 | RHK9999 BBQ | "change benchtop waterfall end on left to no waterfall end" | **edit a built benchtop** — waterfall ends | Benchtop 1 has mitred waterfalls both ends. |
@@ -707,12 +727,12 @@ Not started. Each also has an open `ai_gaps` row (the chat logs its own as it hi
 | T7 | RHK6596 Bathroom | "remove all clouds in cad" | **delete markup** | The chat also quoted the shop rule *never delete CAD someone else drew* (DB trigger). Decide: allow deleting markup when the user asks for it in their own words (undoable), or keep it canvas-only. |
 | T8 | RHK6596 Bathroom | (the chat spotted it) top 110 above the 820 cabinets | **bug from R8** — the benchtops step built the Bathroom top at the 930 default underside, not on the 820 cabinets | Mark fixed it via the chat (room base height → 820). Fix: benchtops step sits a top on its cabinets' top when they're not the base height (set height_mm), and the summary flags a top floating above its cabinets as well as one cut into them. |
 | T3++ | RHK6603 WIR | TC-05 / WC-04–08 asks with TC-02 selected | same as T3 | Twice more (4 times in total today). |
-| T9 | RHK6603 WIR | "split this cabinet so it's a shelving cabinet and a tall open cabinet" | **bug — split places a fresh library cabinet** | The new TC-05 came in as a library T2D with 2 doors, hinges and its own kick (has_toekick on), though TC-03 has no fronts, no kick and sits on the BC-08 plinth at 100. It also printed 819×1933×**580** in the change line but 460 in the text (it's 460). Fix: the split's new half is a copy of the cabinet being split (copyFrom, R5), so it keeps the fronts, kick, materials and rules. |
-| T10 | RHK6603 WIR | "TC-05: remove both doors so it's an open cabinet" | **front layouts** (doors off / open) | ai_gaps "front layouts". |
+| T9 ✓ built (split) | RHK6603 WIR | "split this cabinet so it's a shelving cabinet and a tall open cabinet" | **bug — split places a fresh library cabinet** | The new TC-05 came in as a library T2D with 2 doors, hinges and its own kick (has_toekick on), though TC-03 has no fronts, no kick and sits on the BC-08 plinth at 100. It also printed 819×1933×**580** in the change line but 460 in the text (it's 460). Fix: the split's new half is a copy of the cabinet being split (copyFrom, R5), so it keeps the fronts, kick, materials and rules. |
+| T10 ✓ built (fronts open) | RHK6603 WIR | "TC-05: remove both doors so it's an open cabinet" | **front layouts** (doors off / open) | ai_gaps "front layouts". |
 | T11 | RHK6603 WIR | "make a TOPN and save it to the library" | **library cabinets** — make / save a definition | Nothing in the library for a tall open box (only WOPN, FLSHLF). The chat shouldn't do library edits. Instead I could add TOPN to the library for you (T2D, no fronts). |
-| T12 | RHK6603 WIR | "2mm bottom reveals on the wall cabinets above the talls" | **front reveals** | The chat first offered a −2 bottom scribe (scribes can't go below 0), then said it had no reveal fields. Needs the reveal fields per cabinet / front (z_class_reveals). |
+| T12 ✓ built (reveals) | RHK6603 WIR | "2mm bottom reveals on the wall cabinets above the talls" | **front reveals** | The chat first offered a −2 bottom scribe (scribes can't go below 0), then said it had no reveal fields. Needs the reveal fields per cabinet / front (z_class_reveals). |
 | T13 | RHK6603 WIR | "join all kicks" | **join kicks** (plain runs, not just the angle in T4) | Also found: two kicks under TC-05 (its own, plus the BC-08 plinth): see T9. KICK 1 needs to stretch under the new BC-09 (2890 → 2960). |
-| T14 | RHK6603 WIR | "add BFKW next to BC-05" | **bug — place doesn't match the neighbour** | BC-09 went on the floor at 767 high while BC-05 sits at 100 (top 867). Fix: a cabinet placed next to another takes its underside / top line. |
+| T14 ✓ built | RHK6603 WIR | "add BFKW next to BC-05" | **bug — place doesn't match the neighbour** | BC-09 went on the floor at 767 high while BC-05 sits at 100 (top 867). Fix: a cabinet placed next to another takes its underside / top line. |
 | T15 | RHK6603 WIR | "BFKW has a kick on it. It should start at 0mm off floor and go to underside of bench" | **question** | BC-09 is now 0 → 867 with its own kick, filler board 70×767 (the checker called it "100 short"). BC-01, the other BFKW, sits at 100 with no kick (filler 767). Mark to say which is right for a BFKW: the filler board to the floor (867), or 767 on its own kick. Then the chat and checker get that rule. |
 
 ## Benchtop heights + cabinet-into-top clash (RHK9999 chat, 2026-11-28)
