@@ -4,8 +4,8 @@
 
 import type Anthropic from '@anthropic-ai/sdk'
 import { supabase } from '@/src/lib/supabase'
-import type { CabinetInstance, RoomAnnotation, Wall } from '@/src/lib/types'
-import { cabWallPerp, cabinetCenterPt, centroid, wallInwardNormal } from '@/src/lib/geometry'
+import type { CabinetInstance, Room, RoomAnnotation, Wall } from '@/src/lib/types'
+import { cabBottomZ, cabWallPerp, cabinetCenterPt, centroid, wallInwardNormal, wallZOf } from '@/src/lib/geometry'
 import { wallOffset } from './roomSummary'
 import { renderInterior } from './interior'
 
@@ -175,7 +175,7 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
   const c = cabinets.find(x => (x.label ?? '').toLowerCase() === want)
   if (!c) return `No cabinet "${input.label}" in this room. Labels: ${cabinets.map(x => x.label).join(', ')}`
   const w = walls.find(x => x.id === c.wall_id)
-  const [def, fronts, carcass, custom, fixtures, inner, hingeRows] = await Promise.all([
+  const [def, fronts, carcass, custom, fixtures, inner, hingeRows, roomRow] = await Promise.all([
     c.cabinet_definition_id ? supabase.from('cabinet_definitions').select('name').eq('id', c.cabinet_definition_id).maybeSingle() : Promise.resolve({ data: null }),
     supabase.from('face_zones').select('facet, face_type, row_index, col_index, dx, dy, material_id, handle_hardware_id, hinge_side').eq('cabinet_instance_id', c.id),
     supabase.from('case_parts').select('part_key, dx, dy, dz, material_id').eq('cabinet_instance_id', c.id),
@@ -183,7 +183,16 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
     supabase.from('room_fixtures').select('name, label, display_name').eq('cabinet_id', c.id),
     supabase.from('internal_parts').select('part_type, y, dz, dx').eq('cabinet_instance_id', c.id).in('part_type', ['fixed_shelf', 'adj_shelf', 'inner_drawer_front']).order('y'),
     supabase.from('hinge_instances').select('facet, row_index, col_index, y_position_mm').eq('cabinet_instance_id', c.id).order('y_position_mm'),
+    supabase.from('rooms').select('*').eq('id', ctx.roomId).maybeSingle(),
   ])
+  // Where it really sits — the one rule every view uses (overheads hang from the top line,
+  // under panels / floating shelves sit at their own pos_z). pos_z alone misleads for overheads.
+  const bottom = roomRow.data ? cabBottomZ(c, roomRow.data as Room, w) : Number(c.pos_z ?? 0)
+  const sits = c.rule_overrides?.UNDER_PANEL ? 'under panel: sits at its own "off the floor" height (pos_z)'
+    : c.float_shelf ? 'floating shelf: sits at its own pos_z'
+    : c.bulkhead ? 'bulkhead: hangs from the ceiling'
+    : c.assembly_class.startsWith('wall') ? (wallZOf(c) != null ? 'own underside (wallz)' : 'hangs from the overhead top line')
+    : 'stands on the floor at pos_z'
   // Hinges per door (main face), and whether they're manual (face grid) or the shop rules.
   const manual = new Map(((c.face_grid as { zones?: { row_index: number; col_index: number; hinges?: number[] }[] } | null)?.zones ?? [])
     .filter(z => Array.isArray(z.hinges)).map(z => [`${z.row_index},${z.col_index}`, true]))
@@ -202,7 +211,8 @@ async function getCabinetDetail(ctx: ToolContext, input: { label?: string }): Pr
   const rules = Object.keys(c.rule_overrides ?? {})
   return [
     `${c.label} — ${(def.data as { name?: string } | null)?.name ?? '?'} (${c.assembly_class})`,
-    `Size W×H×D: ${r(c.dx)}×${r(c.dy)}×${r(c.dz)}, ${r(c.pos_z ?? 0)} off the floor`,
+    `Size W×H×D: ${r(c.dx)}×${r(c.dy)}×${r(c.dz)}`,
+    `Height: underside ${r(bottom)}, top ${r(bottom + Number(c.dy))} from the floor (${sits})`,
     `Position: ${w ? `${w.name} @ ${wallOffset(c, w)}` : 'not on a wall'}; neighbours left ${c.left_neighbour_type ?? '-'}, right ${c.right_neighbour_type ?? '-'}`,
     c.notes ? `Notes: ${c.notes}` : '',
     rules.length ? `Rule overrides: ${rules.map(k => `${k}=${JSON.stringify((c.rule_overrides as Record<string, unknown>)[k])}`).join(', ')}` : '',

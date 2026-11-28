@@ -17,7 +17,8 @@ import { invalidateResolverCaches, resolveCabinetFromDB } from '@/src/lib/resolv
 import { resolveClassDims, shopDimsFromSettings, type ShopDimDefaults } from '@/src/lib/resolver/resolveClassDims'
 import { detectNeighbours } from '@/src/lib/neighbours'
 import { panelLinkSignature } from '@/src/lib/rangehoodLink'
-import { carcassesOverPanel, isUnderPanel, withoutScribe } from '@/src/lib/underPanel'
+import { carcassesOverPanel, isUnderPanel, underPanelRun, UNDER_PANEL_DEF, withoutScribe } from '@/src/lib/underPanel'
+import { loadCabinetInputFromRow } from '@/src/lib/resolver/loadCabinetInput'
 import { cabBottomZ, centroid, nextLabel, wallAnchorPoint, wallCabTop, wallDir } from '@/src/lib/geometry'
 import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
 import { parseKit } from '@/src/lib/cabinetKit'
@@ -67,6 +68,11 @@ export type BatchOp =
   | { op: 'hinges'; labels: string[]; per_door: number | null; door?: { row: number; col: number } }
   /** Interior moves on one cabinet's section tree (shelves, bays, dividers) — see ../interior. */
   | { op: 'interior'; label: string; actions: InteriorAction[] }
+  /** Under panel (z_floating F7/F8) under these base cabinets or overheads, as the canvas's
+   *  "Add under panel": one BUP / WUP between their outer gables, at their underside (above any
+   *  kick), board thickness from their exposed board, and a bottom scribe of that on each.
+   *  set_back = mm its front sits behind theirs (dz less). */
+  | { op: 'under_panel'; labels: string[]; set_back?: number; thickness?: number }
 
 export type MarkupLayer = 'general' | 'questions' | 'site' | 'electrical'
 export interface MarkupNote {
@@ -334,7 +340,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
   const { room } = state
   // Walls as the steps go: planned walls (temp id "newwall:…") join so later steps can use them.
   const walls: Wall[] = state.walls.map(w => ({ ...w }))
-  const defs = await loadDefinitions(ops.flatMap(o => o.op === 'place' ? [o.code] : []))
+  const defs = await loadDefinitions(ops.flatMap(o => o.op === 'place' ? [o.code] : o.op === 'under_panel' ? Object.values(UNDER_PANEL_DEF) : []))
   const catalog = await loadFixtures(ops.flatMap(o => o.op === 'fixture' ? [o.item] : []))
   await loadHandleNames()
   await loadMaterialNames([
@@ -378,6 +384,12 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       const hanging = matched.filter(c => c.assembly_class.startsWith('wall') && !c.bulkhead && !c.float_shelf && !(c.rule_overrides as Row | null)?.UNDER_PANEL)
       if (op.changes.pos_z !== undefined && hanging.length) {
         problems.push(`${n}: ${hanging.map(c => c.label).join(', ')} hang from the room's overhead top line, so "off the floor" won't move them. To move ALL overheads up or down, change the room's overhead top line (set_properties overhead_top / soffit_drop); for one cupboard, set its own underside (changes.wallz).`)
+        continue
+      }
+      // An under panel sits at its own pos_z: its "own underside" (wallz) does nothing.
+      const panels = matched.filter(isUnderPanel)
+      if (op.changes.wallz != null && panels.length) {
+        problems.push(`${n}: ${panels.map(c => c.label).join(', ')} ${panels.length === 1 ? 'is an under panel — it sits' : 'are under panels — they sit'} at ${panels.length === 1 ? 'its' : 'their'} own "off the floor" height, so set pos_z (the underside, mm from the floor), not wallz.`)
         continue
       }
       const autoBh = matched.filter(c => (c.bulkhead as { auto_h?: boolean } | null)?.auto_h)
@@ -655,10 +667,57 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           if (keep.length) warnings.push(`${keep.join(', ')} ${keep.length === 1 ? 'has its' : 'have their'} own ${CLASS_WORD[cls!]} ${ROLE_WORD[key]} — unchanged there.`)
         }
       }
+    } else if (op.op === 'under_panel') {
+      const sel: CabinetInstance[] = []
+      for (const l of op.labels ?? []) {
+        const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(l).trim().toLowerCase())
+        if (!c) problems.push(`${n}: no cabinet "${l}".`)
+        else if (outside(c)) problems.push(`${n}: ${c.label} isn't selected — select it too, or deselect everything to work on the whole room.`)
+        else sel.push(c)
+      }
+      if (sel.length !== (op.labels ?? []).length) continue
+      // Kick height and exposed board as each cabinet resolves (the canvas reads its resolve cache).
+      const inputs = new Map(await Promise.all(sel.map(async c => [c.id, await loadCabinetInputFromRow(c).catch(() => null)] as const)))
+      const kickOf = (c: CabinetInstance) => c.has_toekick && !c.rule_overrides?.FLOAT ? Number(inputs.get(c.id)?.rules?.TOEH ?? 0) : 0
+      const run = underPanelRun(sel, room, walls, kickOf)
+      if (typeof run === 'string') { problems.push(`${n}: ${run}`); continue }
+      const wall = walls.find(w => w.id === run.anchor.wall_id)
+      const def = defs.get(UNDER_PANEL_DEF[run.kind].toLowerCase())
+      if (!wall || !def) { problems.push(`${n}: no ${UNDER_PANEL_DEF[run.kind]} under panel in the library.`); continue }
+      const lo = wallOffset(run.anchor, wall), hi = lo + run.dx
+      const dup = cabs.filter(x => isUnderPanel(x) && x.wall_id === wall.id && x.assembly_class === def.assembly_class)
+        .filter(x => { const o = wallOffset(x, wall); return o < hi - 1 && o + x.dx > lo + 1 })
+      if (dup.length) { problems.push(`${n}: ${dup.map(x => x.label).join(', ')} is already an under panel there — delete it first (one step before this), or move it with pos_z.`); continue }
+      const t = op.thickness ?? Number(inputs.get(run.anchor.id)?.exposed_material?.DZ ?? 18)
+      const setBack = Math.max(0, op.set_back ?? 0)
+      if (!(t > 0 && t < 100) || setBack >= run.dz - 50) { problems.push(`${n}: thickness ${t} / set back ${setBack} don't fit a ${Math.round(run.dz)} deep run.`); continue }
+      const label = nextLabel(cabs, def.assembly_class)
+      const row = buildInstanceFromDefinition(def, {
+        room_id: room.id, wall_id: wall.id, label, pos_x: run.anchor.pos_x, pos_y: run.anchor.pos_y,
+        rotation: run.anchor.rotation, dx: run.dx, cascade_dy: t, cascade_dz: run.dz - setBack,
+      })
+      row.dx = run.dx; row.dy = t; row.dz = run.dz - setBack; row.pos_z = Math.round(run.z * 10) / 10
+      row.rule_overrides = { ...(row.rule_overrides ?? {}), UNDER_PANEL: true }
+      const tempId = `new:${steps.length}`
+      const line = `Add ${label} (${def.name} under panel, ${Math.round(row.dx)}×${fmt(t)}×${Math.round(row.dz)}${setBack ? `, set back ${setBack}` : ''}) on ${wall.name} @ ${lo}, underside ${Math.round(row.pos_z)} (under ${run.carcasses.map(c => c.label).join(', ')})`
+      steps.push({ kind: 'insert', tempId, row, defId: def.id, line })
+      lines.push(line)
+      defNames.set(def.id, def.name)
+      cabs.push({ ...(row as CabinetInstance), id: tempId, created_at: '', updated_at: '' })
+      // Each carcass over it scribes up its thickness (fronts run down over its edge).
+      for (const c of run.carcasses) {
+        if (Number(c.rule_overrides?.SCRBT) === t) continue
+        const u = { rule_overrides: { ...(c.rule_overrides ?? {}), SCRBT: t } as CabinetInstance['rule_overrides'] }
+        steps.push({ kind: 'update', id: c.id, patch: u })
+        const l = updateLine(c, u, walls); if (l) lines.push(l)
+        if (!c.id.startsWith('new:')) touched.add(c.id)
+        cabs = cabs.map(x => x.id === c.id ? { ...x, ...u } : x)
+      }
     } else if (op.op === 'place') {
       const def = defs.get(op.code.trim().toLowerCase())
       if (!def) { problems.push(`${n}: no library cabinet "${op.code}" — use find_library for the code.`); continue }
       if (parseKit(def.kit)) { problems.push(`${n}: ${def.name} is a kit (several cabinets) — place it by hand.`); continue }
+      if (Object.values(UNDER_PANEL_DEF).includes(def.name.toUpperCase())) { problems.push(`${n}: ${def.name} is an under panel — use the under_panel step with the cabinets it goes under (it sets its length, height and their scribes).`); continue }
       if ((def.footprint as { preset?: string } | null)?.preset === 'angled_filler') { problems.push(`${n}: ${def.name} is an angled corner filler — place it by hand (it snaps into the corner).`); continue }
 
       const cascade = resolveClassDims(def.assembly_class, { room, project: state.project as never, shop: state.shop })

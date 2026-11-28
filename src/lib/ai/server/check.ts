@@ -24,6 +24,7 @@ Decide whether the cabinets now match what the user asked and are buildable.
 - ok = false when something doesn't match the request, or a resolver error / warning is a real problem caused by the change (e.g. a drawer no longer fits its bay, parts overlap, a hinge sits on shelf holes). Then text = 1–3 short lines: what's wrong, in plain workshop words with the numbers.
 - A problem that was clearly there before and not caused by this change: mention it in one short line at most, it doesn't make ok false.
 - fixes: when ok is false, 1–3 short button labels for fixes the helper can do with cabinet changes (sizes, offsets, colours, hinges per door, interior bays / shelves, re-resolve), written as an instruction naming the cabinet, e.g. "TC-01: make bay 1 750 high again". Always add "Leave it as is" last. When ok is true, no fixes.
+How cabinets sit: a cabinet's "Height" line (underside / top from the floor) is where it really is. An overhead's doors run its full height from its underside; a bottom scribe (SCRBT) lifts only its carcass bottom that far, so an under panel of that thickness at the overhead underside sits inside the scribe — panel bottom flush with the door bottoms is RIGHT, not a clash.
 Plain, short, like a workshop foreman. Sizes in mm. Never invent numbers that aren't in the data.`
 
 const SCHEMA = {

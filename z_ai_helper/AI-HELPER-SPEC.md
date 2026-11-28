@@ -685,6 +685,30 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     check headlessCad.test.ts (CAD_RUN), AI4_RUN takes `"sketch": true`.
 - **Next:** an AI step for joining kicks round an angled corner (after the KA1 in-app check).
 
+## RHK6596 chat review fixes (2026-11-28, Mark: "read the conversation inside RHK6596 … see
+what the agent isn't capable of"; "fix in the order you suggest")
+Order agreed: R1 under panel · R2 colour TBC · R3 ceiling from the sketch · R4 walls in chat ·
+R5 copy cabinets to another room · R6 fixtures · R7 handle schedules · R8 benchtops · R9 spec
+blocks (Mark: later).
+- **R1 under panel (built):** the chat placed a WUP with `place` (pos_z 0 → on the floor behind
+  the bases), then set its `wallz` — which under panels ignore (they sit at their own pos_z,
+  `cabBottomZ`) — and twice told Mark it was right, explaining away the overlap warning and the
+  check's ⚠. Now:
+  - `under_panel` batch step {labels, set_back?, thickness?} = the canvas's Add under panel
+    (`underPanelRun`): between the outer gables, underside at theirs (above any kick), thickness
+    from their exposed board (resolver input), SCRBT of that on each carcass; set_back takes dz
+    off. Refuses a second panel over the same span. `place` refuses BUP / WUP.
+  - `update` refuses `wallz` on an under panel (use pos_z); pos_z already moves them.
+  - get_cabinet_detail: "Height: underside N, top N from the floor (how it sits)" from
+    cabBottomZ instead of the raw pos_z ("0 off the floor" misled on overheads).
+  - Prompt: under_panel rules; overlap warnings / check ⚠ are real until a fresh detail says not.
+    Check prompt: a bottom scribe lifts only the carcass, so a panel at the overhead underside is
+    flush with the doors, not a clash.
+  - Checked headless (RHK1234 AI Sketch Test, applied + undone): "add an under panel under the
+    overheads, set back 20, scribe on the bottoms" → WC-04 WUP 1970×16.5×280 @ 805, underside
+    1640 (= WC-02/03), SCRBT 16.5 on both. RHK6596 Laundry WC-04 fixed: pos_z 0 → 1353 (WALLZ
+    cleared), as an AI batch (Undo-able).
+
 ## Open items (check while building)
 
 - Plan-view markup (only elevations so far); WCNR (overhead blind corner).
