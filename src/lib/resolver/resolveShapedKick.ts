@@ -308,7 +308,10 @@ export function resolveShapedKick(
     edges.forEach((ed, i) => {
       if (ed.kind !== 'front' || ed.none) return
       const e = kEdge(K, i), f = edgeFrame(e)
-      const at0 = (at: number) => spreader({ x: e.p0.x + f.u.x * at, y: e.p0.y + f.u.y * at }, f.n, f.u, KI, TF + TI + TI)
+      // away = brace on the -u side (a corner at this face's far end: the brace goes away from it, not into the mitre).
+      const at0 = (at: number, away = false) => away
+        ? spreader({ x: e.p0.x + f.u.x * (at + TI), y: e.p0.y + f.u.y * (at + TI) }, f.n, { x: -f.u.x, y: -f.u.y }, KI, TF + TI + TI)
+        : spreader({ x: e.p0.x + f.u.x * at, y: e.p0.y + f.u.y * at }, f.n, f.u, KI, TF + TI + TI)
       // Where this face meets the next leg's face (the angled corner), a spreader on this
       // leg right behind the corner of the sub fronts (KA2, Mark 2026-11-28: it was open there).
       const tOf = (v: ShapePt) => (v.x - e.p0.x) * f.u.x + (v.y - e.p0.y) * f.u.y
@@ -316,7 +319,7 @@ export function resolveShapedKick(
       const nextFront = edges[(i + 1) % n].kind === 'front' && !edges[(i + 1) % n].none
       let lo = 0, hi = f.len
       if (prevFront) { const t = Math.max(0, tOf(KI[i])); if (t + TI < f.len) { at0(t); lo = t } }
-      if (nextFront) { const t = Math.min(f.len, tOf(KI[(i + 1) % n])) - TI; if (t > lo + TI) { at0(t); hi = t + TI } }
+      if (nextFront) { const t = Math.min(f.len, tOf(KI[(i + 1) % n])) - TI; if (t > lo + TI) { at0(t, true); hi = t + TI } }
       // The rest at TOESP centres between them.
       const span = hi - lo
       const q = Math.max(0, Math.floor(span / r.TOESP) - 1)
