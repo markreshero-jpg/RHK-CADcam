@@ -70,6 +70,7 @@ const PLAN_TOOL: Anthropic.Tool = {
           wall_dy: { type: 'number', description: 'Overhead height (mm)' },
           soffit_drop: { type: 'number', description: 'Soffit: mm DOWN from the ceiling to the overhead tops' },
           overhead_top: { type: 'number', description: 'Overhead top line: mm UP from the floor (when there is no soffit)' },
+          ceiling: { type: 'number', description: 'Room ceiling height (mm) when the plan / sketch gives one ("CH 2430") and it differs from the room ceiling' },
         },
         additionalProperties: false,
       },
@@ -159,7 +160,7 @@ export interface DrawResult {
 
 const anthropic = new Anthropic()   // ANTHROPIC_API_KEY from the server env
 
-interface Setup { kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number }
+interface Setup { kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number; ceiling?: number }
 interface PlanIn {
   setup?: Setup
   walls?: { name: string; x: number; y: number; length: number; angle: number; type: 'standard' | 'island'; height?: number }[]
@@ -198,7 +199,8 @@ async function loadSetup(projectId: string, roomId: string) {
     `- Base height (incl. kick): ${val(dyOf(r.class_dimension_defaults, 'base'), dyOf(j.class_dimension_defaults, 'base'))}`,
     `- Tall height (incl. kick): ${val(dyOf(r.class_dimension_defaults, 'tall'), dyOf(j.class_dimension_defaults, 'tall'))}`,
     `- Overhead height: ${val(dyOf(r.class_dimension_defaults, 'wall'), dyOf(j.class_dimension_defaults, 'wall'))}`,
-    `- Overhead top line: ${top}${r.room_dy ? ` · ceiling ${r.room_dy}` : ''}`,
+    `- Overhead top line: ${top}`,
+    `- Ceiling: ${r.room_dy ?? 'NOT SET'} (room) — if the plan / sketch gives a different ceiling height, put it in setup.ceiling; don't just give the walls that height`,
     `New set-up values will be saved to the ${firstRoom ? 'JOB (this is its first room)' : 'ROOM (other rooms already have cabinets)'}.`,
   ].join('\n')
   return { text, firstRoom }
@@ -210,7 +212,8 @@ function toOps(p: PlanIn, firstRoom: boolean): BatchOp[] {
   // Heights and kick go to the job on its first room, else the room; the top line is always the room's.
   const classy = { kick: s.kick, base_dy: s.base_dy, tall_dy: s.tall_dy, wall_dy: s.wall_dy }
   if (Object.values(classy).some(v => v != null)) ops.push({ op: 'set_properties', level: firstRoom ? 'job' : 'room', ...classy })
-  if (s.soffit_drop != null || s.overhead_top != null) ops.push({ op: 'set_properties', level: 'room', soffit_drop: s.soffit_drop, overhead_top: s.overhead_top })
+  // The ceiling is the room's (Q-R3: the RHK6596 sketch said CH 2430, the room stayed 2400).
+  if (s.soffit_drop != null || s.overhead_top != null || s.ceiling != null) ops.push({ op: 'set_properties', level: 'room', soffit_drop: s.soffit_drop, overhead_top: s.overhead_top, ceiling: s.ceiling })
   ops.push(
     ...(p.walls ?? []).map(w => ({ op: 'wall' as const, name: w.name, x: w.x, y: w.y, length: w.length, angle: w.angle, type: w.type, height: w.height ?? null })),
     ...(p.items ?? []).map(i => ({ op: 'place' as const, code: i.code, wall: i.wall, back: !!i.back, offset: i.offset, dx: i.dx, dy: i.dy, dz: i.dz, blind_width: i.blind_width })),

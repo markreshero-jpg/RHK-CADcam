@@ -717,6 +717,11 @@ blocks (Mark: later).
   copy specs room → room as-is. Checked headless: "all fronts 18mm 2pac, colour TBC" → Satin Board
   18mm + TBC cloud, check ✓ "colour TBC (showing White)". RHK6596 job fronts + exposed
   "– White" → "Satin Board 18mm" (batch 55700e51), matching the Laundry's.
+- **R3 ceiling (built):** the sketch said CH 2430; Draw from my sketch gave the walls 2430 but
+  left the room at 2400, and the chat had no way to set it. `set_properties` (room) takes
+  `ceiling` (rooms.room_dy, 1500–6000; bulkheads on height-to-ceiling re-fit); room_plan
+  setup.ceiling; draw set-up lists "Ceiling: N (room)" and says to use setup.ceiling rather than
+  only wall heights; chat schema + description. RHK6596 Laundry ceiling 2400 → 2430 (batch 07640bce).
 
 ## Open items (check while building)
 

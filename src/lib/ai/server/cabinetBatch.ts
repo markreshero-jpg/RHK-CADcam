@@ -50,6 +50,8 @@ export type BatchOp =
   /** Job / room set-up the drawing needs (Job / Room properties): kick height (rule TOEH),
    *  class heights (class_dimension_defaults), the room's soffit drop or overhead top line. */
   | { op: 'set_properties'; level: 'job' | 'room'; kick?: number; base_dy?: number; tall_dy?: number; wall_dy?: number; soffit_drop?: number; overhead_top?: number
+      /** The room's ceiling height (rooms.room_dy) — walls without their own height, bulkheads and soffits follow it. */
+      ceiling?: number
       /** One wall's own soffit drop (walls.soffit_height, null = the room's) — only that wall's overheads / bulkheads follow. */
       wall?: string; wall_soffit_drop?: number | null }
   /** CAD markup on a wall's elevation (z_CAD_tool/MARKUP-STANDARD.md): notes on their
@@ -569,7 +571,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       const job = op.level === 'job'
       const target = (job ? state.project : room) as Row | null
       if (!target) { problems.push(`${n}: no ${op.level} to set.`); continue }
-      if (!job && (op.kick == null && op.base_dy == null && op.tall_dy == null && op.wall_dy == null && op.soffit_drop == null && op.overhead_top == null)) continue
+      if (!job && (op.kick == null && op.base_dy == null && op.tall_dy == null && op.wall_dy == null && op.soffit_drop == null && op.overhead_top == null && op.ceiling == null)) continue
       const before: Row = {}, after: Row = {}, parts: string[] = []
       const ro = { ...((target.rule_overrides ?? {}) as Row) }
       if (op.kick != null && ro.TOEH !== op.kick) { parts.push(`kick ${ro.TOEH ?? 'not set'} → ${op.kick}`); ro.TOEH = op.kick; before.rule_overrides = target.rule_overrides ?? {}; after.rule_overrides = ro }
@@ -584,9 +586,13 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       if (cdChanged) { before.class_dimension_defaults = target.class_dimension_defaults ?? {}; after.class_dimension_defaults = cd }
       if (!job) {
         if (op.soffit_drop != null && room.soffit_height !== op.soffit_drop) { parts.push(`soffit drop ${room.soffit_height ?? 'not set'} → ${op.soffit_drop}`); before.soffit_height = room.soffit_height ?? null; after.soffit_height = op.soffit_drop }
+        if (op.ceiling != null) {
+          if (!(op.ceiling >= 1500 && op.ceiling <= 6000)) { problems.push(`${n}: ceiling must be 1500–6000 mm.`); continue }
+          if (Number(room.room_dy) !== op.ceiling) { parts.push(`ceiling ${room.room_dy ?? 'not set'} → ${op.ceiling}`); before.room_dy = room.room_dy ?? null; after.room_dy = op.ceiling }
+        }
         if (op.overhead_top != null && room.wall_cabinet_top !== op.overhead_top) { parts.push(`overhead top line ${room.wall_cabinet_top ?? 'not set'} → ${op.overhead_top}`); before.wall_cabinet_top = room.wall_cabinet_top ?? null; after.wall_cabinet_top = op.overhead_top }
-      } else if (op.soffit_drop != null || op.overhead_top != null) {
-        problems.push(`${n}: the soffit / overhead top line is set on the room, not the job.`); continue
+      } else if (op.soffit_drop != null || op.overhead_top != null || op.ceiling != null) {
+        problems.push(`${n}: the ceiling / soffit / overhead top line is set on the room, not the job.`); continue
       }
       if (!parts.length) continue
       const line = `${job ? 'Job' : `Room ${room.name}`} · ${parts.join(', ')}`
@@ -595,7 +601,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       // Later steps (placements) take their class sizes from the new values.
       Object.assign(target, after)
       // Bulkheads on height-to-ceiling follow the room's top line / soffit (as the canvas does).
-      if (!job && ('wall_cabinet_top' in after || 'soffit_height' in after)) {
+      if (!job && ('wall_cabinet_top' in after || 'soffit_height' in after || 'room_dy' in after)) {
         for (const c of cabs.filter(x => (x.bulkhead as { auto_h?: boolean } | null)?.auto_h)) {
           const h = bulkheadAutoHeight(walls.find(w => w.id === c.wall_id), room, c.bulkhead)
           if (!(h > 0) || Math.abs(h - c.dy) < 0.5) continue
