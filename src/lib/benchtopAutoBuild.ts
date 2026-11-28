@@ -19,8 +19,8 @@
 // Pure: the dialog calls planAutoBuild live as the answers change.
 
 import type { Pt } from './geometry'
-import { centroid, cabWallPerp, cabWallSide, wallInwardNormal } from './geometry'
-import type { CabinetInstance, Wall, BenchtopSegment, BenchtopInstance, RoomFixture } from './types'
+import { centroid, cabWallPerp, cabWallSide, wallInwardNormal, cabBottomZ } from './geometry'
+import type { CabinetInstance, Wall, BenchtopSegment, BenchtopInstance, RoomFixture, Room } from './types'
 import { cabinetSeedOutline, unionOutlines, simplifyLoop, type RoleEdge } from './benchtopSeed'
 import { wallFrame, alongOf, offOf, type WallFrame } from './benchtopAnchor'
 import { btSegments, outlinePoints } from './benchtopGeometry'
@@ -53,6 +53,17 @@ export interface AutoBuildSettings {
 }
 
 export type EndKind = 'open' | 'wall' | 'corner' | 'tee' | 'tall' | 'appliance'
+
+/** A built top's own underside (benchtop_instances.height_mm): the highest carcass top under it,
+ *  when that isn't the base class height the top would otherwise sit at (z_ai_helper T8 — 820
+ *  vanities under a top left at the 930 default). null = sits at the base height. */
+export function autoTopUnderside(cabIds: string[], cabinets: CabinetInstance[], room: Room, walls: Wall[], baseHeight: number): number | null {
+  const tops = cabIds.map(id => cabinets.find(c => c.id === id)).filter((c): c is CabinetInstance => !!c)
+    .map(c => cabBottomZ(c, room, walls.find(w => w.id === c.wall_id)) + Number(c.dy))
+  if (!tops.length) return null
+  const z = Math.round(Math.max(...tops) * 10) / 10
+  return Math.abs(z - baseHeight) > 0.5 ? z : null
+}
 
 /** Per-top answers from the click-through. Unset = the general setting. */
 export interface TopOverride {

@@ -125,6 +125,16 @@ export function formatRoomSummary(d: RoomSummaryData): string {
       b.method ?? 'room / job default', b.schedule ?? 'room / job default',
     ].join(' | '))
     if (clashes.length) lines.push('CLASH — cabinet into a benchtop:', ...clashes.map(s => `- ${s}`))
+    // The other way round (T8): a top floating above every cabinet under it.
+    const gaps: string[] = []
+    for (const b of d.benchtops) {
+      const cs = under.get(b)!
+      if (!cs.length) continue
+      const tops = cs.map(c => ({ c, z: cabBottomZ(c, d.room, c.wall_id ? wallById.get(c.wall_id) : undefined) + c.dy }))
+      const hi = Math.max(...tops.map(t => t.z))
+      if (b.underside - hi > 2) gaps.push(`${b.label ?? 'Benchtop'} underside is ${Math.round(b.underside)}${b.own ? ' (set on the top)' : ' (base cabinet height)'}, ${Math.round(b.underside - hi)} above its cabinets (top ${Math.round(hi)}: ${tops.filter(t => t.z > hi - 0.5).map(t => t.c.label).join(', ')}) → ${b.own ? 'the top needs its height set to' : "set the room's base height to"} ${Math.round(hi)}, or the cabinets made taller.`)
+    }
+    if (gaps.length) lines.push('GAP — benchtop floating above its cabinets:', ...gaps.map(s => `- ${s}`))
   } else if (d.cabinets.some(c => c.assembly_class === 'base' || c.assembly_class === 'base_corner')) lines.push('', 'Benchtops: none yet.')
 
   // Colour TBC (z_ai_helper R2): a board with colours picked without one resolves in its

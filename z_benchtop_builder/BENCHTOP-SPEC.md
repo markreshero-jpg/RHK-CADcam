@@ -670,6 +670,8 @@ option window pops up for user to choose what join type".
   line rect at 45°).
 
 ### Phase 8 — Auto-build tops  `[~]` built (2026-10-19), Mark trying it
+
+2026-11-28: each auto-built top sits on its cabinets — height_mm = the highest carcass top under it when that isn't the base class height (`autoTopUnderside`, src/lib/benchtopAutoBuild.ts); null = the base height as before. Canvas F4 and the AI benchtops step both.
 Mark (2026-10-19): "auto build benchtops function in F4 … prompt the user a few
 questions about overhangs, joint types etc. it can be a click through as you build
 each top … lets try it and i'll see if i like it". Rules below are Claude's

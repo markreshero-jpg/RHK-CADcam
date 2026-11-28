@@ -44,7 +44,7 @@ export default function BenchtopAutoBuildDialog({
   defaultProfileId: string | null
   /** Top thickness (a waterfall leg's too) — how far a waterfall end runs past the cabinets. */
   thickness: number
-  onBuild: (tops: BenchtopSegment[][]) => void
+  onBuild: (tops: { segs: BenchtopSegment[]; cabIds: string[] }[]) => void
   onCancel: () => void
 }) {
   const wfProfiles = profiles.filter(p => p.active !== false && p.generates === 'waterfall')
@@ -77,7 +77,7 @@ export default function BenchtopAutoBuildDialog({
   const at = Math.max(0, pages.findIndex(p => p.k === page.k && (!('i' in p) || ('i' in page && p.i === page.i))))
   const cur = pages[at] ?? pages[0]
   const last = at === pages.length - 1
-  const build = () => { if (building.length) onBuild(building.map(t => t.segs)) }
+  const build = () => { if (building.length) onBuild(building.map(t => ({ segs: t.segs, cabIds: t.cabIds }))) }
   const next = () => (last ? build() : setPage(pages[at + 1]))
   const back = () => setPage(pages[Math.max(0, at - 1)])
 

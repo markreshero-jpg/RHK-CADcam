@@ -493,11 +493,11 @@ export function useBenchtopInteraction(p: Params) {
 
   // ── Auto-build (Phase 8) ──
   // Every top from the auto-build dialog in one insert — one undo step.
-  async function commitAutoBuild(list: BenchtopSegment[][]) {
+  async function commitAutoBuild(list: { segs: BenchtopSegment[]; height_mm: number | null }[]) {
     if (!list.length) return
     captureSnapshot()
-    const rows = list.map((segs, k) => ({
-      room_id: room.id, label: `Benchtop ${benchtops.length + k + 1}`, ...shapeWrite(segs), ...(anchorOf(segs) ?? {}),
+    const rows = list.map(({ segs, height_mm }, k) => ({
+      room_id: room.id, label: `Benchtop ${benchtops.length + k + 1}`, ...shapeWrite(segs), ...(anchorOf(segs) ?? {}), height_mm,
       joins: [] as BenchtopJoinLine[], cutout_polygons: [] as Array<Array<{ x: number; y: number }>>,
       benchtop_build_method_id: null, benchtop_schedule_id: null, notes: null,
     }))

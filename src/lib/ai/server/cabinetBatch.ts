@@ -912,6 +912,8 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       const { planAutoBuild } = await import('@/src/lib/benchtopAutoBuild')
       const { shapeWrite } = await import('@/src/lib/benchtopGeometry')
       const { autoAnchor } = await import('@/src/lib/benchtopAnchor')
+      const { autoTopUnderside } = await import('@/src/lib/benchtopAutoBuild')
+      const baseH = resolveClassDims('base', { room, project: state.project as never, shop: state.shop }).dy
       const front = op.front_overhang ?? btFrontOverhang(await loadRoomHandleSchedule(room.id, room.project_id).catch(() => ({})))
       const plan = planAutoBuild(
         { walls, cabinets: cabs, fixtures: (fx ?? []) as never, benchtops: (bts ?? []) as never, cabIds },
@@ -921,15 +923,17 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       const tops = plan.tops.filter(t => !t.skip)
       if (!tops.length) { problems.push(`${n}: no tops to build — ${plan.warnings.join(' ') || (bts?.length ? 'the base cabinets already have tops' : 'no base cabinets on a wall')}.`); continue }
       const label = (c: string) => cabs.find(x => x.id === c)?.label ?? '?'
+      // Each top sits on its cabinets' carcass top, not the base class height (T8).
+      const heights = tops.map(t => autoTopUnderside(t.cabIds, cabs, room, walls, baseH))
       const rows: Row[] = tops.map((t, k) => ({
-        room_id: room.id, label: `Benchtop ${(bts?.length ?? 0) + k + 1}`, ...shapeWrite(t.segs), ...(autoAnchor(t.segs, walls, centroid(walls)) ?? {}),
+        room_id: room.id, label: `Benchtop ${(bts?.length ?? 0) + k + 1}`, ...shapeWrite(t.segs), ...(autoAnchor(t.segs, walls, centroid(walls)) ?? {}), height_mm: heights[k],
         joins: [], cutout_polygons: [], benchtop_build_method_id: methodId, benchtop_schedule_id: schedId, notes: 'Built by the AI helper (auto-build)',
       }))
       const mName = methodId ? (methods as { id: string; name: string }[]).find(m => m.id === methodId)?.name : null
       const sName = schedId ? (scheds as { id: string; name: string }[]).find(m => m.id === schedId)?.name : null
       const line = [
         `Add ${tops.length} benchtop${tops.length > 1 ? 's' : ''}${mName || sName ? ` — ${[mName, sName].filter(Boolean).join(', ')}` : ' (room / job default method)'}, front overhang ${front}:`,
-        ...tops.map((t, k) => `  ${rows[k].label}: ${t.wallName}, ${Math.round(t.length)} × ${Math.round(t.depth)} over ${t.cabIds.map(label).join(', ')} (ends ${t.ends.join(' / ')})`),
+        ...tops.map((t, k) => `  ${rows[k].label}: ${t.wallName}, ${Math.round(t.length)} × ${Math.round(t.depth)} over ${t.cabIds.map(label).join(', ')} (ends ${t.ends.join(' / ')}), underside ${Math.round(heights[k] ?? baseH)}${heights[k] != null ? ' (on the cabinets, not the base height)' : ''}`),
         ...plan.corners.map(c => `  Corner ${c.kind === 'T' ? 'tee' : 'joint'}: ${c.choice}`),
       ].join('\n')
       steps.push({ kind: 'benchtops', rows, line })

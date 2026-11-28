@@ -129,6 +129,7 @@ import BenchtopPanel from './BenchtopPanel'
 import BenchtopShapeEditPanel, { SaveShapePrompt } from './BenchtopShapeEditPanel'
 import BenchtopJoinDialog from './BenchtopJoinDialog'
 import BenchtopAutoBuildDialog from './BenchtopAutoBuildDialog'
+import { autoTopUnderside } from '@/src/lib/benchtopAutoBuild'
 import SplashbackAutoBuildDialog from './SplashbackAutoBuildDialog'
 import { autoBuildSplashbacks, type AutoSbPiece } from '@/src/lib/splashbackAutoBuild'
 import BenchtopEdgeEditPanel from './BenchtopEdgeEditPanel'
@@ -4561,7 +4562,12 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
             profiles={btCatalog.profiles}
             defaultProfileId={btCatalog.defaultProfileIdFor(NEW_TOP)}
             thickness={Math.round(btCatalog.thicknessFor(NEW_TOP).total)}
-            onBuild={tops => { setAutoBuild(null); void bt.commitAutoBuild(tops); useTutorial.getState().emit('bt_autobuild') }}
+            onBuild={tops => {
+              setAutoBuild(null)
+              // Each top sits on its cabinets (their carcass top), not the base class height (T8).
+              void bt.commitAutoBuild(tops.map(t => ({ segs: t.segs, height_mm: autoTopUnderside(t.cabIds, cabinets, room, walls, btBaseHeight) })))
+              useTutorial.getState().emit('bt_autobuild')
+            }}
             onCancel={() => setAutoBuild(null)}
           />
         )}
