@@ -22,7 +22,8 @@ import { loadCabinetInputFromRow } from '@/src/lib/resolver/loadCabinetInput'
 import { cabBottomZ, cabT, cabWallGap, cabWallSide, centroid, nextLabel, wallAnchorPoint, wallCabTop, wallDir } from '@/src/lib/geometry'
 import { bulkheadAutoHeight } from '@/src/lib/bulkhead'
 import { parseKit } from '@/src/lib/cabinetKit'
-import { buildInstanceFromDefinition, dbCopyCabinetChildren, dbInsertDefinitionParts } from '@/app/canvas/[roomId]/canvasDB'
+import { buildInstanceFromDefinition, dbCopyCabinetChildren, dbInsertDefinitionParts, dbJoinKickRun, dbSeparateKickRun, syncKickAssembly } from '@/app/canvas/[roomId]/canvasDB'
+import { kickCornerShape, kickRunLegs, type KickCornerShape } from '@/src/lib/kickRunCorner'
 import { matchCabinets, patchFor, validateChanges, ROLE_KEY, type CabinetChanges, type CabinetFilter, type MaterialRole } from '../cabinetFilter'
 import { wallOffset } from '../roomSummary'
 import { ensureJobCadLayers } from '@/src/lib/annotations/cadLayers'
@@ -80,6 +81,11 @@ export type BatchOp =
    *  width (left as you face it), each other width is a COPY of it to its right — fronts, kick,
    *  colours, rules, interior. widths add up to its width. */
   | { op: 'split'; label: string; widths: number[] }
+  /** Join kicks (as the canvas's Join kicks, z_kick_join): the touching run of floor cabinets
+   *  each named one is in — round an angled corner filler too — becomes one kick. Joined kicks
+   *  already in it are separated and re-joined as one (keeping the first one's name / colours).
+   *  No labels = every run in the room. */
+  | { op: 'join_kicks'; labels?: string[] }
   /** Interior moves on one cabinet's section tree (shelves, bays, dividers) — see ../interior. */
   | { op: 'interior'; label: string; actions: InteriorAction[] }
   /** Under panel (z_floating F7/F8) under these base cabinets or overheads, as the canvas's
@@ -151,6 +157,9 @@ export type BatchEntry =
       set: { table: 'rooms' | 'projects'; row_id: string; before: string | null } | null }
   /** Benchtops the AI added (Undo removes them unless edited since). */
   | { kind: 'benchtops'; cabinet_id: ''; label: null; line: string; benchtop_ids: string[] }
+  /** Kicks the AI joined: the new run + its assembly, and what was there (Undo puts it back, same ids). */
+  | { kind: 'kick_join'; cabinet_id: ''; label: null; line: string; run_id: string; assembly_id: string
+      members: Row[]; old_runs: Row[]; old_assemblies: DeleteSnapshot[] }
   /** A plain re-resolve — nothing to put back on Undo. */
   | { kind: 'resolve'; cabinet_id: string; label: string | null; line: string }
 
@@ -205,6 +214,7 @@ async function loadRoomState(roomId: string): Promise<RoomState> {
 const pick = (c: CabinetInstance, keys: string[]): Fields =>
   Object.fromEntries(keys.map(k => [k, (c as unknown as Row)[k] ?? null])) as Fields
 
+const byLabelNum = (a: { label: string | null }, b: { label: string | null }) => (a.label ?? '').localeCompare(b.label ?? '', undefined, { numeric: true })
 const fmt = (v: unknown) => typeof v === 'number' ? String(Math.round(v * 10) / 10) : JSON.stringify(v)
 
 /** JSON with sorted keys — jsonb columns come back in their own key order. */
@@ -329,6 +339,7 @@ type PlannedStep =
   | { kind: 'props'; table: 'projects' | 'rooms' | 'walls'; rowId: string; before: Row; after: Row; line: string }
   | { kind: 'resolve'; id: string; line: string }
   | { kind: 'benchtops'; rows: Row[]; line: string }
+  | { kind: 'kick_join'; memberIds: string[]; runIds: string[]; label: string; shape: KickCornerShape | null; line: string }
   | { kind: 'handle_schedule'; line: string; handle: Row | null; schedule: Row; entries: Row[]; mainFrom: string | null
       set: { table: 'rooms' | 'projects'; rowId: string; before: string | null } | null }
 
@@ -593,6 +604,74 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       const fx = await supabase.from('room_fixtures').select('id').eq('cabinet_id', c.id)
       if ((fx.data ?? []).length) warnings.push(`${c.label} has a fixture on it — it stays on ${c.label}; move it with a fixture step if it belongs on ${added.join(' / ')}.`)
       if (c.face_grid && ((c.face_grid as { cols?: unknown[] }).cols?.length ?? 0) > 1) warnings.push(`${c.label} has ${((c.face_grid as { cols?: unknown[] }).cols ?? []).length} front columns — each piece keeps them; change the fronts (fronts step) if a piece should have fewer.`)
+    } else if (op.op === 'join_kicks') {
+      // As the canvas (useKickRunOps): floor units with a ladder kick; members of a joined kick count too.
+      const floor = (c: CabinetInstance) => !c.is_kick_assembly && (c.assembly_class === 'base' || c.assembly_class === 'tall')
+        && c.toe_type !== 'leg' && c.toe_type !== 'none' && !c.curved_end && !c.float_shelf && !isUnderPanel(c) && !(c.rule_overrides as Row | null)?.FLOAT
+      // Its own kick must stand on the floor — raised, it sits on something else (TC-05 on BC-08's plinth, RHK6603).
+      const can = (c: CabinetInstance) => floor(c) && (c.has_toekick ? Number(c.pos_z ?? 0) < 1 : !!c.kick_run_id)
+      const facing = (c: CabinetInstance) => ((Math.round(Number(c.rotation ?? 0)) % 360) + 360) % 360
+      const straight = (seed: CabinetInstance, w: Wall): CabinetInstance[] => {
+        if (!can(seed)) return []
+        const on = cabs.filter(c => c.wall_id === w.id && can(c) && facing(c) === facing(seed))
+          .map(c => ({ c, t0: cabT(c, w), t1: cabT(c, w) + c.dx })).sort((a, b) => a.t0 - b.t0)
+        const i = on.findIndex(x => x.c.id === seed.id)
+        if (i < 0) return []
+        const run = [on[i]]
+        for (let j = i - 1; j >= 0; j--) { if (run[0].t0 - on[j].t1 <= 2) run.unshift(on[j]); else break }
+        for (let j = i + 1; j < on.length; j++) { if (on[j].t0 - run[run.length - 1].t1 <= 2) run.push(on[j]); else break }
+        return run.map(x => x.c)
+      }
+      const named = !!op.labels?.length
+      const seeds: CabinetInstance[] = []
+      for (const l of op.labels ?? []) {
+        const c = cabs.find(x => (x.label ?? '').toLowerCase() === String(l).trim().toLowerCase())
+        if (!c) { problems.push(`${n}: no cabinet "${l}".`); continue }
+        const asm = c.is_kick_assembly ? cabs.find(x => x.kick_run_id === c.kick_run_id && !x.is_kick_assembly) : c
+        if (asm) seeds.push(asm)
+      }
+      if (named && seeds.length !== op.labels!.length) continue
+      const done = new Set<string>()
+      const newKicks: string[] = []
+      const before = steps.length
+      for (const seed of named ? seeds : cabs.filter(can)) {
+        if (done.has(seed.id)) continue
+        const wall = walls.find(w => w.id === seed.wall_id)
+        if (!wall || !can(seed)) { if (named) problems.push(`${n}: ${seed.label} has no kick to join (${!wall ? 'not on a wall' : 'legs / no kick / floating'}).`); continue }
+        const legs = kickRunLegs(straight(seed, wall), wall, cabs, walls, straight, can)
+        const run = legs.flatMap(l => l.members)
+        const runIds = [...new Set(run.map(c => c.kick_run_id).filter((x): x is string => !!x))]
+        // A joined kick comes along whole.
+        for (const c of cabs) if (c.kick_run_id && runIds.includes(c.kick_run_id) && !c.is_kick_assembly && !run.some(r => r.id === c.id)) run.push(c)
+        run.forEach(c => done.add(c.id))
+        if (run.length < 2) { if (named) problems.push(`${n}: ${seed.label} has no cabinet touching it to join a kick with.`); continue }
+        const oldAsm = cabs.filter(c => c.is_kick_assembly && c.kick_run_id && runIds.includes(c.kick_run_id)).sort(byLabelNum)
+        if (runIds.length === 1 && run.every(c => c.kick_run_id === runIds[0])) { if (named) warnings.push(`${run.map(c => c.label).join(', ')} already share one kick (${oldAsm[0]?.label ?? 'joined'}).`); continue }
+        const fresh = run.filter(c => c.id.startsWith('new:'))
+        if (fresh.length) { problems.push(`${n}: ${fresh.map(c => c.label).join(', ')} ${fresh.length === 1 ? 'is' : 'are'} added in this same change — join the kick in a next message, once ${fresh.length === 1 ? 'it is' : 'they are'} in.`); continue }
+        const cad = oldAsm.filter(a => state.sheetCad.get(a.id))
+        if (cad.length) { problems.push(`${n}: ${cad.map(a => a.label).join(', ')} has CAD drawn on its sheet — re-join that kick on the canvas.`); continue }
+        for (const c of run) if (outside(c)) beyond.add(c.label ?? '')
+        const shape = kickCornerShape(legs, walls)
+        let label = oldAsm[0]?.label
+        if (!label) {
+          const taken = new Set([...cabs.filter(c => c.is_kick_assembly).map(c => c.label), ...newKicks])
+          let k = 1
+          while (taken.has(`KICK ${k}`)) k++
+          label = `KICK ${k}`
+          newKicks.push(label)
+        }
+        const depths = [...new Set(run.map(c => Math.round(c.dz)))]
+        if (depths.length > 1 && !shape) warnings.push(`${label} mixes cabinet depths (${depths.sort((a, b) => a - b).join('/')}) — it's built to the deepest (${Math.max(...depths)}), as the canvas does.`)
+        const order = legs.flatMap(l => [...l.members].sort((a, b) => cabT(a, l.wall) - cabT(b, l.wall)))
+        const rest = run.filter(c => !order.some(o => o.id === c.id))
+        const span = legs.map(l => Math.round(Math.max(...l.members.map(c => cabT(c, l.wall) + c.dx)) - Math.min(...l.members.map(c => cabT(c, l.wall)))))
+        const line = `Join kicks: ${[...order, ...rest].map(c => c.label).join(', ')} → ${label}, ${span.join(' + ')} long${shape ? ' (round the angled corner)' : ''}${oldAsm.length ? ` — was ${oldAsm.map(a => `${a.label} ${Math.round(a.dx)}`).join(' + ')}${run.some(c => !c.kick_run_id) ? ` + ${run.filter(c => !c.kick_run_id).map(c => c.label).join(', ')} on ${run.filter(c => !c.kick_run_id).length === 1 ? 'its' : 'their'} own kick` : ''}` : ''}`
+        steps.push({ kind: 'kick_join', memberIds: run.map(c => c.id), runIds, label, shape, line })
+        lines.push(line)
+        for (const c of [...run, ...oldAsm]) if (!c.id.startsWith('new:')) touched.add(c.id)
+      }
+      if (steps.length === before && !problems.length && !named) problems.push(`${n}: no kicks to join — every run is already one kick (or has no kick).`)
     } else if (op.op === 'delete') {
       for (const label of op.labels) {
         const c = cabs.find(x => (x.label ?? '').toLowerCase() === label.trim().toLowerCase())
@@ -1147,9 +1226,12 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
       if (against && sameKind(against.assembly_class, def.assembly_class) && !row.bulkhead && !row.float_shelf) {
         const was = `${row.dy}/${row.pos_z ?? 0}/${row.has_toekick}`
         const top = (against.pos_z ?? 0) + against.dy
-        if (!against.has_toekick) row.has_toekick = false
-        row.pos_z = against.pos_z ?? 0
-        row.dy = op.dy ?? (top - row.pos_z)
+        // Beside a joined-kick member it comes in on its own kick, floor to the same top, so
+        // join_kicks can take it into that kick (it then becomes a member like the rest).
+        const onRun = !!against.kick_run_id && !against.is_kick_assembly && !against.has_toekick && row.has_toekick
+        if (!against.has_toekick && !onRun) row.has_toekick = false
+        row.pos_z = onRun ? 0 : against.pos_z ?? 0
+        row.dy = op.dy != null ? op.dy + (onRun ? (against.pos_z ?? 0) : 0) : top - row.pos_z
         // Same depth as the run it joins (a BFKW at the library 580 beside 560 bases stuck out) —
         // not end panels (BEP / WEP / TEPF…), which often run past the doors.
         if (op.dz == null && !/EP/i.test(def.name)) row.dz = against.dz
@@ -1158,7 +1240,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
           row.kick_run_id = null
           joinKick = cabs.find(x => x.is_kick_assembly && x.kick_run_id === against!.kick_run_id)?.label ?? 'the joined kick'
         }
-        if (`${row.dy}/${row.pos_z ?? 0}/${row.has_toekick}` !== was) matched = `, underside ${Math.round(row.pos_z ?? 0)} / top ${Math.round((row.pos_z ?? 0) + row.dy)}${row.has_toekick ? '' : ', no kick of its own'} as ${against.label}`
+        if (`${row.dy}/${row.pos_z ?? 0}/${row.has_toekick}` !== was) matched = `, ${onRun ? `on its own kick for now, top ${Math.round(row.dy)}` : `underside ${Math.round(row.pos_z ?? 0)} / top ${Math.round((row.pos_z ?? 0) + row.dy)}${row.has_toekick ? '' : ', no kick of its own'}`} as ${against.label}`
       } else if (op.dy != null) row.dy = op.dy
       if (op.dz != null && op.dz > 0) row.dz = op.dz
       // Blind corner: the false panel column takes the blind width (locked).
@@ -1187,7 +1269,7 @@ export async function planBatch(roomId: string, ops: BatchOp[], opts: { onlyIds?
         return o < hi - 1 && o + x.dx > lo + 1 && xz < z1 - 1 && xz + x.dy > z0 + 1 && (x.rotation === row.rotation)
       })
       if (hit.length) warnings.push(`${label} overlaps ${hit.map(x => x.label).join(', ')} — move them first, or check it.`)
-      if (joinKick) warnings.push(`${label} sits on ${joinKick}'s line but isn't in it yet — join it into the kick on the canvas (select ${joinKick} + ${label} › Join kicks) so the kick runs under it.`)
+      if (joinKick) warnings.push(`${label} isn't in ${joinKick} yet (it has its own kick for now) — join it in with a join_kicks step in the next message (or Join kicks on the canvas), then it sits on ${joinKick} like the rest.`)
       defNames.set(def.id, def.name)
       cabs.push({ ...(row as CabinetInstance), id: tempId, created_at: '', updated_at: '' })
     }
@@ -1300,6 +1382,16 @@ async function settle(roomId: string, before: CabinetInstance[], touched: Set<st
   }
 }
 
+/** Re-fit joined kicks to their members (width / position / depth), as the canvas does after a move. */
+async function refitKicks(runIds: Set<string>, touched: Set<string>) {
+  for (const id of runIds) {
+    const { data } = await supabase.from('kick_runs').select('id, kick_cabinet_id').eq('id', id).maybeSingle()
+    if (!data) continue
+    await syncKickAssembly(id)
+    if (data.kick_cabinet_id) touched.add(data.kick_cabinet_id as string)
+  }
+}
+
 /** Write a room / job colour row: a material sets it, null removes it (back to inherited). */
 async function writeMaterialRow(table: string, match: Row, materialId: string | null): Promise<string | null> {
   // Room / job colours feed every cabinet's cascade: resolves after this must re-read them.
@@ -1335,6 +1427,7 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
   const updates = new Map<string, Extract<BatchEntry, { before: Fields }>>()
   const touched = new Set<string>()
   const elsewhere: string[] = []
+  const refit = new Set<string>()   // kick runs whose members moved
 
   const record = (c: CabinetInstance, u: Fields) => {
     let e = updates.get(c.id)
@@ -1369,6 +1462,32 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       const { data, error } = await supabase.from('room_annotations').insert(rows).select('id')
       if (error) { errors.push(`${s.line}: save failed — ${error.message}`); continue }
       entries.push({ kind: 'markup', cabinet_id: '', label: null, line: s.line, annotation_ids: ((data ?? []) as { id: string }[]).map(a => a.id) })
+      continue
+    }
+    if (s.kind === 'kick_join') {
+      const ids = s.memberIds.map(id => idFor.get(id) ?? id)
+      const { data: mem } = await supabase.from('cabinet_instances').select('id, label, dy, pos_z, has_toekick, kick_run_id, rule_overrides').in('id', ids)
+      const { data: oldRuns } = s.runIds.length ? await supabase.from('kick_runs').select('*').in('id', s.runIds) : { data: [] as Row[] }
+      const asmIds = ((oldRuns ?? []) as Row[]).map(r => r.kick_cabinet_id as string | null).filter((x): x is string => !!x)
+      const { data: asmRows } = asmIds.length ? await supabase.from('cabinet_instances').select('*').in('id', asmIds) : { data: [] as Row[] }
+      const oldAsm = await Promise.all(((asmRows ?? []) as CabinetInstance[]).map(a => snapshotForDelete(a)))
+      for (const r of s.runIds) await dbSeparateKickRun(r)
+      const m = await dbJoinKickRun(plan.state.room.id, ids, s.label, s.shape ?? undefined)
+      const asm = m.addedAssembly
+      if (!asm || !asm.kick_run_id) { errors.push(`${s.line}: the join failed — the kicks were separated; join them on the canvas.`); continue }
+      // The kick it replaces: its run settings and its own colours / rules carry over.
+      const first = ((oldRuns ?? []) as Row[]).find(r => r.kick_cabinet_id === (asmRows?.[0] as Row | undefined)?.id) ?? (oldRuns ?? [])[0] as Row | undefined
+      const firstAsm = ((asmRows ?? []) as Row[]).find(a => a.id === first?.kick_cabinet_id)
+      if (first) {
+        await supabase.from('kick_runs').update({ max_segment_length: first.max_segment_length, split_mode: first.split_mode }).eq('id', asm.kick_run_id)
+        if (((first.face_splits as unknown[] | null) ?? []).length || ((first.sub_splits as unknown[] | null) ?? []).length)
+          warnings.push(`${s.label}: its own seam positions were set by hand — they're back to the run's split rule; check the seams.`)
+      }
+      if (firstAsm) await supabase.from('cabinet_instances').update({ toekick_overrides: firstAsm.toekick_overrides, material_overrides: firstAsm.material_overrides, rule_overrides: firstAsm.rule_overrides, notes: firstAsm.notes }).eq('id', asm.id)
+      entries.push({ kind: 'kick_join', cabinet_id: '', label: null, line: s.line, run_id: asm.kick_run_id, assembly_id: asm.id,
+        members: (mem ?? []) as Row[], old_runs: (oldRuns ?? []) as Row[], old_assemblies: oldAsm })
+      for (const id of [...ids, asm.id]) touched.add(id)
+      for (const a of asmIds) touched.delete(a)
       continue
     }
     if (s.kind === 'benchtops') {
@@ -1449,8 +1568,8 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
       if (!s.id.startsWith('new:')) record(c, s.patch)
       rows.set(id, { ...c, ...s.patch })
       touched.add(id)
-      const moved = ['dx', 'dy', 'dz', 'pos_x', 'pos_y', 'pos_z'].some(k => k in s.patch)
-      if (moved && c.kick_run_id) warnings.push(`${c.label} is in a joined kick run — the joined kick isn't re-fitted (as on the canvas); check it.`)
+      // A member moved / resized: its joined kick re-fits after the steps (as the canvas does).
+      if (['dx', 'dz', 'pos_x', 'pos_y'].some(k => k in s.patch) && c.kick_run_id && !c.is_kick_assembly) refit.add(c.kick_run_id)
     } else if (s.kind === 'insert') {
       const wallId = s.row.wall_id ? idFor.get(s.row.wall_id) ?? s.row.wall_id : s.row.wall_id
       if (wallId?.startsWith('newwall:')) { errors.push(`${s.row.label}: its wall wasn't added — skipped.`); continue }
@@ -1477,6 +1596,7 @@ export async function runBatch(roomId: string, ops: BatchOp[], args: { descripti
     const c = plan.state.cabinets.find(x => x.id === e.cabinet_id)
     e.line = c ? updateLine(c, e.after, plan.state.walls) ?? undefined : undefined
   }
+  await refitKicks(refit, touched)
 
   await settle(roomId, plan.state.cabinets, touched, record, warnings, errors, elsewhere)
   for (const e of updates.values()) {   // neighbour re-detects joined in during settle
@@ -1582,6 +1702,36 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
       }
       continue
     }
+    if (e.kind === 'kick_join') {
+      const { data: now } = await supabase.from('cabinet_instances').select('id').eq('kick_run_id', e.run_id)
+      const want = new Set([...e.members.map(m => m.id as string), e.assembly_id])
+      const ids = ((now ?? []) as { id: string }[]).map(c => c.id)
+      if (ids.length !== want.size || ids.some(id => !want.has(id))) { warnings.push(`${e.line.split(' → ')[0]}: that kick was changed since — left as is.`); continue }
+      await supabase.from('cabinet_instances').update({ kick_run_id: null }).eq('kick_run_id', e.run_id)
+      await supabase.from('kick_runs').update({ kick_cabinet_id: null }).eq('id', e.run_id)
+      const { error: de } = await supabase.from('cabinet_instances').delete().eq('id', e.assembly_id)
+      if (de) { errors.push(`${e.line}: undo failed — ${de.message}`); continue }
+      await supabase.from('kick_runs').delete().eq('id', e.run_id)
+      for (const r of e.old_runs) {
+        const { error: re } = await supabase.from('kick_runs').insert({ ...r, kick_cabinet_id: null })
+        if (re) errors.push(`${e.line}: old kick run restore failed — ${re.message}`)
+      }
+      for (const a of e.old_assemblies) {
+        const err = await restoreDeleted(a)
+        if (err) warnings.push(`${a.row.label}: back, but ${err}`)
+        touched.add(a.row.id as string); changedIds.add(a.row.id as string)
+      }
+      for (const r of e.old_runs) if (r.kick_cabinet_id) await supabase.from('kick_runs').update({ kick_cabinet_id: r.kick_cabinet_id }).eq('id', r.id as string)
+      for (const m of e.members) {
+        const { id, label: _l, ...u } = m   // eslint-disable-line @typescript-eslint/no-unused-vars
+        const { error: ue } = await supabase.from('cabinet_instances').update(u).eq('id', id as string)
+        if (ue) errors.push(`${m.label}: kick undo failed — ${ue.message}`)
+        touched.add(id as string); changedIds.add(id as string)
+      }
+      changedIds.add(e.assembly_id)
+      lines.push(`Kicks back as before: ${e.old_assemblies.length ? e.old_assemblies.map(a => a.row.label).join(', ') : 'each cabinet on its own kick'}`)
+      continue
+    }
     if (e.kind === 'benchtops') {
       const { data: cur } = await supabase.from('benchtop_instances').select('id, created_at, updated_at').in('id', e.benchtop_ids)
       const rows = (cur ?? []) as { id: string; created_at: string; updated_at: string }[]
@@ -1682,6 +1832,11 @@ export async function undoBatch(batchId: string): Promise<BatchResult> {
     }
   }
 
+  // Members put back where they were: their joined kicks re-fit too.
+  if (touched.size) {
+    const { data: kr } = await supabase.from('cabinet_instances').select('kick_run_id').in('id', [...touched]).eq('is_kick_assembly', false).not('kick_run_id', 'is', null)
+    await refitKicks(new Set(((kr ?? []) as { kick_run_id: string }[]).map(r => r.kick_run_id)), touched)
+  }
   await settle(batch.room_id, state.cabinets, touched, record, warnings, errors, elsewhere)
   for (const id of dropHandles) {
     const { error: he } = await supabase.from('hardware_handles').delete().eq('id', id)

@@ -432,3 +432,7 @@ mitre (fixed same day — Wall 2's ran across it). DHID KICK 1 re-resolved: 1249
 
 **Not yet:** an AI step for it (the chat still logs "kick pieces"); walls that meet tail-to-tail; a filler that isn't
 BFKANG (a plain filler at a 90° corner is the normal L corner, untouched).
+
+## AI chat: join_kicks (2026-11-28)
+
+The Ask AI `join_kicks` step (src/lib/ai/server/cabinetBatch.ts) joins the touching run of floor cabinets each named one is in, round an angled corner filler via kickRunLegs / kickCornerShape, as Join kicks does. Unlike the canvas it can take in a joined kick that is already there: it separates that run and re-joins all of them as one, keeping its label, max segment / split mode and the assembly's colours / rules / notes (hand-set seam positions are reset, with a warning). A floor unit on its own kick but raised off the floor (sitting on a plinth) is left out. Undo deletes the new run + assembly and restores the old runs, assemblies (same ids) and members' dy / pos_z / has_toekick / kick_run_id / rule_overrides. A step that moves / resizes a member re-fits its kick (syncKickAssembly), as the canvas does after a move.
