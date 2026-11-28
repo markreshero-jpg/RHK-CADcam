@@ -152,6 +152,16 @@ const localId = (suffix = '') => `local-${Date.now()}${suffix}`
 /** Key for a new chat that hasn't been saved yet (it is, on its first message). */
 const NEW = '__new'
 
+/** Copies a message's text (with its change lines) — handy on a phone / tablet where dragging a selection is fiddly. */
+function CopyBtn({ text }: { text: string }) {
+  const [done, setDone] = useState(false)
+  return (
+    <button type="button" title="Copy this message"
+      onClick={() => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1200) }) }}
+      className="text-gray-500 hover:text-gray-300 select-none">{done ? '✓ Copied' : 'Copy'}</button>
+  )
+}
+
 export default function AiChatPanel({ projectId, roomId, roomName, phone = false, selectedIds, selectedLabels, onChanged, onClose }: {
   projectId: string; roomId: string; roomName: string
   /** Phone (z_mobile): the panel covers the screen instead of docking on the right. */
@@ -472,7 +482,8 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
       </div>
 
       <div className="relative flex-1 min-h-0 flex flex-col">
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+        {/* text-select: chat text highlights + copies, even on touch (the canvas turns selection off there). */}
+        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-3 text-select">
           {!msgs.length && !busy && (
             <div className="text-gray-400 space-y-2">
               <p>Ask about this room — sizes, colours, kicks, what&apos;s TBC — or ask for a change: sizes, position, colours, scribes, handles, add an end panel, delete a cabinet. Select cabinets to keep it to those.</p>
@@ -486,7 +497,10 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
           {msgs.map(m => m.role === 'user' ? (
             <div key={m.id} id={`aimsg-${m.id}`} className="ml-8">
               <div className={`rounded-lg bg-blue-600/20 border px-3 py-2 whitespace-pre-wrap transition-colors ${flash === m.id ? 'border-amber-400' : 'border-blue-500/30'}`}>{m.text}</div>
-              {m.room_id && m.room_id !== roomId && <div className="text-[10px] text-gray-600 text-right mt-0.5">in {roomNames.get(m.room_id) ?? 'another room'}</div>}
+              <div className="flex justify-end gap-2 text-[10px] text-gray-600 mt-0.5">
+                {m.room_id && m.room_id !== roomId && <span>in {roomNames.get(m.room_id) ?? 'another room'}</span>}
+                <CopyBtn text={m.text} />
+              </div>
             </div>
           ) : (
             <div key={m.id} id={`aimsg-${m.id}`} className="mr-4">
@@ -539,6 +553,7 @@ export default function AiChatPanel({ projectId, roomId, roomName, phone = false
               </div>
               <div className="flex items-center gap-2 text-[10px] text-gray-600 mt-0.5">
                 {m.room_id && m.room_id !== roomId && <span>in {roomNames.get(m.room_id) ?? 'another room'}</span>}
+                <CopyBtn text={[m.text, ...((m.proposal_status === 'applied' && m.changed?.length ? m.changed : m.proposal?.lines ?? m.changed) ?? [])].join('\n')} />
                 {m.cost_usd != null && <span>{cents(Number(m.cost_usd))}{m.ms ? ` · ${(m.ms / 1000).toFixed(1)}s` : ''}{m.model?.includes('xhigh') ? ' · tried harder' : ''}</span>}
                 {/* Try harder: the latest answer only, and not once it changed something */}
                 {/* (not on a drawing — that already ran on the top model) */}

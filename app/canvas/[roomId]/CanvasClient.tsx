@@ -1332,6 +1332,8 @@ export default function CanvasClient({ project: initProject, room: initRoom, wal
       if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return
       if (isField(e.target)) return
       const k = e.key.toLowerCase()
+      // Highlighted text (the AI chat, a report) copies as text, not the selected cabinets.
+      if ((k === 'c' || k === 'x') && (window.getSelection()?.toString() ?? '').trim()) return
       if (k === 'c') {
         if (getSelectedCabinets().length) { e.preventDefault(); copySelectedCabinets() }
       } else if (k === 'x') {

@@ -685,6 +685,12 @@ changes showed raw ids. November total was US$1.54 for 83 questions, so cost was
     check headlessCad.test.ts (CAD_RUN), AI4_RUN takes `"sketch": true`.
 - **Next:** an AI step for joining kicks round an angled corner (after the KA1 in-app check).
 
+## Chat text copy (2026-11-28)
+
+Mark: highlight + copy text from the chat. The canvas Ctrl+C / Ctrl+X copied the selected cabinets even with text
+highlighted — now highlighted text wins. The messages area is `.text-select` (selectable inside the touch `touch-no-select`
+page), and each message has a **Copy** button (text + its change lines). Check in the app pending.
+
 ## To build — Mark's running list (from his chats; add as he finds more)
 
 Not started. Each also has an open `ai_gaps` row (the chat logs its own as it hits them).
